@@ -1,0 +1,486 @@
+"""YouTubeResolver - download and transcode YouTube audio to MP3."""
+
+lazy import asyncio
+lazy import importlib.util
+lazy import json
+lazy import math
+lazy import re
+lazy import shutil
+lazy import sys
+lazy from collections.abc import Awaitable, Callable, Sequence
+lazy from dataclasses import dataclass
+lazy from pathlib import Path
+lazy from typing import Any, cast
+
+lazy from ... import protocols
+lazy from ...schemas.themes import ThemeSearchResult
+lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, ffprobe_duration
+lazy from ...utils.errors import public_error_message
+lazy from ...utils.process import PROBE_SLOTS, run_process
+lazy from ...utils.progress import StageProgress
+lazy from ...utils.security import sanitise_error
+lazy from ...utils.temporary import operation_directory
+lazy from ...utils.threads import owned_thread
+
+# Maximum wall-clock time allowed for each subprocess stage
+_INFO_TIMEOUT = 30  # seconds - just a JSON metadata fetch
+_DOWNLOAD_TIMEOUT = 300  # seconds - audio download
+_TRANSCODE_TIMEOUT = 120  # seconds - ffmpeg transcode
+
+#: LAME VBR quality themes are encoded at: V2, LAME's recommended transparent
+#: setting. The YouTube source is already lossy, so a higher one only adds bytes.
+_MP3_VBR_QUALITY = "2"
+
+#: EBU R128 targets a theme is levelled to when loudness normalisation is on:
+#: integrated loudness (LUFS), true peak (dBTP) and loudness range (LU).
+_LOUDNORM_TARGET = "I=-16:TP=-1.5:LRA=11"
+
+#: Sample rate a levelled theme is written at. loudnorm works at 192 kHz and
+#: would output that rate; YouTube's Opus audio is 48 kHz.
+_LEVELLED_SAMPLE_RATE = "48000"
+
+#: The JSON block loudnorm prints after measuring.
+_LOUDNORM_JSON_RE = re.compile(r'\{[^{}]*"input_i"[^{}]*\}')
+
+#: Marks yt-dlp's progress lines, so they stand out from its other output.
+_PROGRESS_PREFIX = "[progress]"
+
+#: How many lines of output a failed process is described by.
+_YTDLP_COMMAND = (
+    sys.executable,
+    "-m",
+    "yt_dlp",
+    "--ignore-config",
+    "--js-runtimes",
+    "deno",
+)
+
+#: Programs theme downloads run, each with the flag that prints its version.
+THEME_TOOLS = frozendict(
+    {"deno": "--version", "ffmpeg": "-version", "ffprobe": "-version"}  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+)
+#: Python packages theme downloads import or run.
+THEME_PACKAGES = ("yt_dlp", "yt_dlp_ejs")
+
+
+def theme_runtime_available() -> bool:
+    """Return whether every local theme-download dependency is available."""
+    return all(shutil.which(tool) for tool in THEME_TOOLS) and all(
+        importlib.util.find_spec(package) for package in THEME_PACKAGES
+    )
+
+
+class DurationError(Exception):
+    """Audio duration outside allowed range."""
+
+
+class DownloadError(Exception):
+    """Yt-dlp download failed."""
+
+
+class TranscodeError(Exception):
+    """Ffmpeg transcode failed."""
+
+
+@dataclass(slots=True, frozen=True)
+class ThemeAudio:
+    """A downloaded theme, transcoded to MP3."""
+
+    audio_bytes: bytes
+    title: str | None
+    duration: int
+
+
+def _parse_search_output(stdout: bytes) -> list[ThemeSearchResult]:
+    """Parse yt-dlp flat-playlist JSON output lines."""
+    seen_ids: set[str] = set()
+    results: list[ThemeSearchResult] = []
+    for line in stdout.decode().strip().split("\n"):
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(raw, dict):
+            continue
+        data = cast("dict[str, Any]", raw)
+        video_id = data.get("id")
+        if not video_id or video_id in seen_ids:
+            continue
+        seen_ids.add(video_id)
+        results.append(
+            ThemeSearchResult(
+                id=video_id,
+                title=data.get("title", ""),
+                channel=data.get("channel", data.get("uploader", "")),
+                duration=data.get("duration", 0),
+                thumbnail=data.get("thumbnail"),
+                url=f"https://www.youtube.com/watch?v={video_id}",
+            )
+        )
+    return results
+
+
+class YouTubeResolver:
+    """Downloads audio from YouTube and transcodes it to VBR MP3."""
+
+    def __init__(self, config_dir: Path) -> None:
+        self._config_dir = config_dir
+
+    async def search(
+        self,
+        query: str = "",
+        limit: int = 10,
+        video_ids: Sequence[str] | None = None,
+    ) -> list[ThemeSearchResult]:
+        """Search YouTube for videos matching query or explicit video IDs."""
+        targets: list[str] = []
+        cleaned_query = query.strip()
+        if cleaned_query:
+            targets.append(f"ytsearch{limit}:{cleaned_query}")
+        if video_ids:
+            for vid in video_ids:
+                cleaned_vid = vid.strip()
+                if cleaned_vid:
+                    targets.append(f"https://www.youtube.com/watch?v={cleaned_vid}")
+
+        if not targets:
+            return []
+
+        cmd = [
+            *_YTDLP_COMMAND,
+            *targets,
+            "--dump-json",
+            "--flat-playlist",
+            "--no-download",
+            "--ignore-errors",
+        ]
+        try:
+            async with PROBE_SLOTS:
+                result = await run_process(cmd, deadline=_INFO_TIMEOUT)
+            if result.returncode != 0:
+                raise ValueError("YouTube search failed")
+            stdout = result.stdout
+
+            return _parse_search_output(stdout)
+        except (OSError, UnicodeDecodeError) as e:
+            raise ValueError(f"YouTube search failed: {public_error_message(e)}") from e
+
+    async def download_audio(
+        self,
+        youtube_id: str,
+        min_duration: int,
+        max_duration: int,
+        progress_callback: protocols.ProgressCallback | None = None,
+        *,
+        normalize_loudness: bool,
+    ) -> ThemeAudio:
+        """
+        Download audio from YouTube, validate duration, transcode to MP3.
+
+        With *normalize_loudness*, the theme is levelled to
+        :data:`_LOUDNORM_TARGET` on the way.
+
+        Raises:
+            DownloadError: When the audio cannot be fetched.
+            DurationError: When the audio is outside the allowed range.
+            TranscodeError: When the transcode fails.
+        """
+        report = progress_callback or _discard_progress
+        url = f"https://www.youtube.com/watch?v={youtube_id}"
+
+        await report(5, "checking")
+        info = await self._video_info(url)
+        duration = int(info.get("duration") or 0)
+        if duration < min_duration:
+            raise DurationError(
+                f"Duration {duration}s is below minimum {min_duration}s"
+            )
+        if duration > max_duration:
+            raise DurationError(f"Duration {duration}s exceeds maximum {max_duration}s")
+
+        title = info.get("title", "")
+        with operation_directory(self._config_dir) as tmp_dir:
+            source = await self._download_source(url, tmp_dir, report)
+            mp3_path = await self._transcode(
+                source,
+                tmp_dir,
+                duration,
+                report,
+                youtube_id=youtube_id,
+                title=title or None,
+                normalize_loudness=normalize_loudness,
+            )
+            if (await owned_thread(mp3_path.stat)).st_size > MAX_REMOTE_AUDIO_BYTES:
+                raise DownloadError("Theme output exceeds 50 MiB limit")
+            actual_duration = await ffprobe_duration(mp3_path)
+            if (
+                actual_duration is None
+                or not min_duration <= actual_duration <= max_duration
+            ):
+                raise DurationError("Downloaded audio has invalid duration")
+            duration = round(actual_duration)
+            await report(95, "finalizing")
+            return ThemeAudio(
+                audio_bytes=await owned_thread(mp3_path.read_bytes),
+                title=title or None,
+                duration=duration,
+            )
+
+    @staticmethod
+    async def _video_info(url: str) -> dict[str, Any]:
+        """Return yt-dlp's metadata for one video.
+
+        Raises:
+            DownloadError: When the metadata cannot be fetched.
+        """
+        try:
+            async with PROBE_SLOTS:
+                result = await run_process(
+                    [*_YTDLP_COMMAND, "--dump-json", "--no-download", url],
+                    deadline=_INFO_TIMEOUT,
+                )
+        except TimeoutError as exc:
+            raise DownloadError("Timed out fetching video info") from exc
+        if result.returncode != 0:
+            raise DownloadError("Failed to get video info")
+        return json.loads(result.stdout)
+
+    @staticmethod
+    async def _download_source(
+        url: str,
+        tmp_dir: Path,
+        report: protocols.ProgressCallback,
+    ) -> Path:
+        """Download the audio stream, reporting the progress yt-dlp prints.
+
+        Raises:
+            DownloadError: When the download fails, times out, or writes no file.
+        """
+        stage = StageProgress(report, stage="downloading", start=10, end=70)
+        await stage.report(0)
+
+        async def on_line(line: str) -> None:
+            if (fraction := _ytdlp_fraction(line)) is not None:
+                await stage.report(fraction)
+
+        try:
+            async with asyncio.timeout(_DOWNLOAD_TIMEOUT):
+                code, tail = await _stream_process(
+                    [
+                        *_YTDLP_COMMAND,
+                        "--max-filesize",
+                        str(MAX_REMOTE_AUDIO_BYTES),
+                        "-x",  # extract audio
+                        "--audio-format",
+                        "best",
+                        "--newline",  # one progress line per update
+                        "--progress-template",
+                        f"download:{_PROGRESS_PREFIX} %(progress._percent_str)s",
+                        "-o",
+                        f"{tmp_dir / 'audio'}.%(ext)s",
+                        url,
+                    ],
+                    on_line=on_line,
+                )
+        except TimeoutError as exc:
+            raise DownloadError("Timed out downloading audio") from exc
+        if code != 0:
+            raise DownloadError(f"Download failed: {sanitise_error(tail)[:200]}")
+
+        def _find_audio() -> Path | None:
+            for path in tmp_dir.iterdir():
+                if path.stem == "audio":
+                    return path
+            return None
+
+        audio_path = await owned_thread(_find_audio)
+        if audio_path is not None:
+            if (await owned_thread(audio_path.stat)).st_size > MAX_REMOTE_AUDIO_BYTES:
+                raise DownloadError("Theme source exceeds 50 MiB limit")
+            return audio_path
+        raise DownloadError("Downloaded file not found")
+
+    @staticmethod
+    async def _transcode(
+        source: Path,
+        tmp_dir: Path,
+        duration: int,
+        report: protocols.ProgressCallback,
+        *,
+        youtube_id: str | None = None,
+        title: str | None = None,
+        normalize_loudness: bool,
+    ) -> Path:
+        """Transcode to VBR MP3, reporting the progress ffmpeg prints.
+
+        Only the first audio stream is kept, and only Overture's own tags are
+        written, so the file does not depend on what the source carried.
+
+        Raises:
+            TranscodeError: When the transcode fails, times out, or writes no file.
+        """
+        levelling: list[str] = []
+        if normalize_loudness:
+            await report(70, "measuring")
+            measured = await _measure_loudness(source)
+            levelling = [
+                "-af",
+                f"loudnorm={_LOUDNORM_TARGET}:{measured}:linear=true",
+                "-ar",
+                _LEVELLED_SAMPLE_RATE,
+            ]
+        stage = StageProgress(report, stage="transcoding", start=70, end=95)
+        await stage.report(0)
+        mp3_path = tmp_dir / "theme.mp3"
+
+        async def on_line(line: str) -> None:
+            if (fraction := _ffmpeg_fraction(line, duration)) is not None:
+                await stage.report(fraction)
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-nostats",
+            "-progress",
+            "pipe:1",  # machine-readable progress, one key per line
+            "-i",
+            str(source),
+            "-map",
+            "0:a:0",
+            "-map_metadata",
+            "-1",
+            *levelling,
+            "-c:a",
+            "libmp3lame",
+            "-q:a",
+            _MP3_VBR_QUALITY,
+            "-id3v2_version",
+            "3",
+        ]
+        if title:
+            cmd.extend(["-metadata", f"title={title}"])
+        if youtube_id:
+            cmd.extend(["-metadata", f"comment=overture:youtube_id={youtube_id}"])
+        cmd.append(str(mp3_path))
+
+        try:
+            async with asyncio.timeout(_TRANSCODE_TIMEOUT):
+                code, tail = await _stream_process(
+                    cmd,
+                    on_line=on_line,
+                )
+        except TimeoutError as exc:
+            raise TranscodeError("Timed out transcoding audio") from exc
+        if code != 0:
+            raise TranscodeError(f"Transcode failed: {sanitise_error(tail)[:200]}")
+        mp3_exists = await owned_thread(mp3_path.is_file)
+        if not mp3_exists:
+            raise TranscodeError("MP3 output file not found")
+        return mp3_path
+
+
+async def _measure_loudness(source: Path) -> str:
+    """Measure *source* against the loudnorm target; return the second pass's options.
+
+    Raises:
+        TranscodeError: When ffmpeg fails, times out, or measures no loudness.
+    """
+    try:
+        result = await run_process(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostdin",
+                "-nostats",
+                "-i",
+                str(source),
+                "-map",
+                "0:a:0",
+                "-af",
+                f"loudnorm={_LOUDNORM_TARGET}:print_format=json",
+                "-f",
+                "null",
+                "-",
+            ],
+            deadline=_TRANSCODE_TIMEOUT,
+        )
+    except TimeoutError as exc:
+        raise TranscodeError("Timed out measuring loudness") from exc
+    if result.returncode != 0:
+        raise TranscodeError(
+            f"Loudness measurement failed: {sanitise_error(result.error_tail)[:200]}"
+        )
+    return _loudnorm_measurement(result.error_tail)
+
+
+def _loudnorm_measurement(output: str) -> str:
+    """Return the measured-value options from loudnorm's printed JSON.
+
+    Raises:
+        TranscodeError: When the output holds no finite measurement, as for
+            silent audio.
+    """
+    blocks = _LOUDNORM_JSON_RE.findall(output)
+    if not blocks:
+        raise TranscodeError("Loudness measurement printed no result")
+    measured = cast("dict[str, str]", json.loads(blocks[-1]))
+    options = {
+        "measured_I": measured.get("input_i"),
+        "measured_TP": measured.get("input_tp"),
+        "measured_LRA": measured.get("input_lra"),
+        "measured_thresh": measured.get("input_thresh"),
+        "offset": measured.get("target_offset"),
+    }
+    try:
+        values = {name: float(value or "nan") for name, value in options.items()}
+    except ValueError as exc:
+        raise TranscodeError("Loudness measurement is not a number") from exc
+    if not all(math.isfinite(value) for value in values.values()):
+        raise TranscodeError("Audio is too quiet to measure its loudness")
+    return ":".join(f"{name}={value}" for name, value in values.items())
+
+
+async def _discard_progress(percent: int, stage: str) -> None:
+    """Ignore progress, for a caller that asked for none."""
+
+
+def _ytdlp_fraction(line: str) -> float | None:
+    """Return how far along one yt-dlp progress line is, if it is one."""
+    if not line.startswith(_PROGRESS_PREFIX):
+        return None
+    try:
+        return float(line.removeprefix(_PROGRESS_PREFIX).strip().rstrip("%")) / 100
+    except ValueError:
+        return None
+
+
+def _ffmpeg_fraction(line: str, duration: int) -> float | None:
+    """Return how far along one ffmpeg progress line is, if it is one."""
+    key, _, value = line.partition("=")
+    if key != "out_time_us" or not duration:
+        return None
+    try:
+        return int(value) / (duration * 1_000_000)
+    except ValueError:
+        return None
+
+
+async def _stream_process(
+    cmd: list[str],
+    *,
+    on_line: Callable[[str], Awaitable[None]],
+) -> tuple[int, str]:
+    """Run one process to completion, reporting every line it writes.
+
+    Both output streams are merged so that one reader drains them: progress
+    and errors arrive the same way, and neither pipe can fill and deadlock.
+
+    Returns:
+        The exit code, and the last lines of output to describe a failure by.
+    """
+    result = await run_process(
+        cmd, deadline=_DOWNLOAD_TIMEOUT, on_line=on_line, capture=False
+    )
+    return result.returncode, result.error_tail

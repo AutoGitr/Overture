@@ -1,0 +1,106 @@
+<script lang="ts">
+  import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+  import type { Snippet } from "svelte";
+  import PopupShell from "../components/PopupShell.svelte";
+  import AssetsTab from "../components/operations/AssetsTab.svelte";
+  import RenamerTab from "../components/operations/RenamerTab.svelte";
+  import ServerAuditTab from "../components/operations/ServerAuditTab.svelte";
+  import SyncTab from "../components/operations/SyncTab.svelte";
+  import { OPERATION_TABS, OPERATIONS } from "../stores/operations";
+  import { uiState, type OperationsTab } from "../stores/uiState.svelte";
+
+  let { initialTab }: { initialTab?: OperationsTab } = $props();
+
+  const PANELS = {
+    assets: AssetsTab,
+    sync: SyncTab,
+    renamer: RenamerTab,
+    audit: ServerAuditTab,
+  } as const satisfies Record<OperationsTab, unknown>;
+
+  $effect.pre(() => {
+    if (initialTab) {
+      uiState.operationsTab = initialTab;
+    }
+  });
+
+  let activeTab = $derived(uiState.operationsTab);
+  let active = $derived(OPERATIONS[activeTab]);
+  let footers = $state<Partial<Record<OperationsTab, Snippet>>>({});
+</script>
+
+<!-- Each tab shows its results exactly while its job has a run, so the popup
+     reads the same job state to size itself: layout and content change in the
+     same render and cannot disagree for a frame. -->
+<PopupShell
+  title="Operations"
+  width="min(780px,94vw)"
+  fill={active.hasRun}
+  onclose={() => uiState.closePopup()}
+>
+  {#snippet icon()}
+    <active.icon size={18} />
+  {/snippet}
+
+  {#snippet about()}
+    {active.about}
+    Work keeps running when this window is closed.
+  {/snippet}
+
+  <div class="popup-tab-nav" role="tablist" aria-label="Operation modes">
+    {#each OPERATION_TABS as tab (tab)}
+      {@const operation = OPERATIONS[tab]}
+      <button
+        type="button"
+        id="operations-tab-{tab}"
+        class="popup-tab-btn"
+        class:active={activeTab === tab}
+        onclick={() => (uiState.operationsTab = tab)}
+        role="tab"
+        aria-selected={activeTab === tab}
+        aria-controls="operations-panel-{tab}"
+      >
+        <operation.icon size={15} />
+        <span>{operation.label}</span>
+        {#if operation.running}
+          <span class="tab-badge" title="Running">
+            <LoaderCircle size={13} class="animate-spin text-accent" />
+          </span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+
+  {#each OPERATION_TABS as tab (tab)}
+    {@const Panel = PANELS[tab]}
+    <div
+      class="tab-panel"
+      hidden={activeTab !== tab}
+      role="tabpanel"
+      id="operations-panel-{tab}"
+      aria-labelledby="operations-tab-{tab}"
+    >
+      <Panel isActive={activeTab === tab} onfooterchange={(footer) => (footers[tab] = footer)} />
+    </div>
+  {/each}
+
+  {#snippet footer()}
+    {@const activeFooter = footers[activeTab]}
+    {#if activeFooter}
+      {@render activeFooter()}
+    {/if}
+  {/snippet}
+</PopupShell>
+
+<style>
+  .tab-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .tab-panel[hidden] {
+    display: none !important;
+  }
+</style>

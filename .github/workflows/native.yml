@@ -1,0 +1,80 @@
+name: Native Linux qualification
+
+# Qualify packaging and runtime dependency changes before release.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - pyproject.toml
+      - uv.lock
+      - packaging/linux/**
+      - scripts/container_smoke.py
+      - .github/workflows/native.yml
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the self-contained archive
+        run: |
+          docker buildx build --platform linux/amd64 --target native-artifact \
+            --output type=local,dest=dist --provenance=false \
+            --cache-from type=gha,scope=native \
+            --cache-to type=gha,scope=native,mode=max,ignore-error=true .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-archive
+          path: dist/
+          if-no-files-found: error
+
+  systemd:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest supported and latest Ubuntu LTS and Debian stable releases.
+        distribution: ["ubuntu:22.04", "ubuntu:26.04", "debian:12", "debian:13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Download the exact archive being qualified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name native-archive --dir dist
+      - name: Qualify installation, upgrades, service boot and removal offline
+        env:
+          DISTRIBUTION: ${{ matrix.distribution }}
+        run: |
+          set -euo pipefail
+          docker build --build-arg "DISTRIBUTION=$DISTRIBUTION" -f packaging/linux/test.Dockerfile -t native-test .
+          mkdir -p extracted
+          tar -xzf dist/overture-*-linux-x86_64.tar.gz -C extracted
+          docker run -d --name native-test --privileged --cgroupns=private \
+            --network none --tmpfs /run --tmpfs /tmp native-test
+          trap 'docker exec native-test journalctl -u overture --no-pager || true; docker rm -f native-test' EXIT
+          docker exec native-test mkdir -p /srv/release
+          docker cp extracted/. native-test:/srv/release/
+          docker exec native-test bash /srv/test.sh
+          # Restart the container's init system to exercise enabled service boot.
+          docker restart --timeout 60 native-test
+          docker exec native-test bash /srv/test.sh after-restart

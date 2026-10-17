@@ -1,0 +1,66 @@
+# ── Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# ── UV
+.uv-cache/
+.uv-python/
+
+# ── Ruff / Pylance
+.ruff_cache/
+pyrightconfig.json
+
+# ── Testing
+.pytest_cache/
+.pytest-run-tmp/
+.pytest-tmp/
+.coverage
+htmlcov/
+coverage.xml
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+
+# ── Bun / Node
+node_modules/
+.uv-cache/
+.bun-cache/
+
+# ── Svelte / Build
+dist/
+src/overture/frontend/
+dist-ssr/
+.svelte-kit/
+output.css
+*.css.map
+frontend/tsconfig.tsbuildinfo
+
+# ── Environment / Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS
+.DS_Store
+Thumbs.db
+
+# ── Runtime / Misc
+*.db
+*.log
+gunicorn.ctl
+.todo.md
+/openapi/*-openapi.json

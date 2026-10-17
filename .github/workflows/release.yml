@@ -1,0 +1,286 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, for example v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  native:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/native.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  release-validation:
+    uses: ./.github/workflows/release-validation.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  publish:
+    needs: [quality, native, release-validation]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Verify the release tag is on the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          WORKFLOW_REF: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$WORKFLOW_REF" != "$DEFAULT_BRANCH" ]; then
+            echo "Run the release workflow from $DEFAULT_BRANCH, not $WORKFLOW_REF." >&2
+            exit 1
+          fi
+          comparison=$(gh api "repos/$REPOSITORY/compare/$TAG...$DEFAULT_BRANCH" --jq '.status')
+          if [ "$comparison" != ahead ] && [ "$comparison" != identical ]; then
+            echo "$TAG is not reachable from $DEFAULT_BRANCH." >&2
+            exit 1
+          fi
+
+      - name: Checkout the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+
+      - name: Validate tag and release metadata
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          uv run --locked python -m scripts.release_metadata --tag "$TAG" --github-output "$GITHUB_OUTPUT"
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "created=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create image metadata
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.release.outputs.image }}
+          tags: |
+            type=raw,value=${{ steps.release.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.created=${{ steps.release.outputs.created }}
+            org.opencontainers.image.revision=${{ steps.release.outputs.revision }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+
+      - name: Refuse to overwrite release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub release $TAG already exists." >&2
+            exit 1
+          fi
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "Container tag $IMAGE:$VERSION already exists." >&2
+            exit 1
+          fi
+
+      - name: Build the arm64 release image for security scanning
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          platforms: linux/arm64
+          tags: overture:release-scan-arm64
+          build-args: |
+            APP_VERSION=${{ steps.release.outputs.version }}
+            BUILD_DATE=${{ steps.release.outputs.created }}
+            VCS_REF=${{ steps.release.outputs.revision }}
+          cache-from: type=gha,scope=release-arm64
+          cache-to: type=gha,scope=release-arm64,mode=max,ignore-error=true
+
+      - name: Block fixable High and Critical arm64 image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: overture:release-scan-arm64
+          scanners: vuln
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Build and publish the multi-platform image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.release.outputs.version }}
+            BUILD_DATE=${{ steps.release.outputs.created }}
+            VCS_REF=${{ steps.release.outputs.revision }}
+          cache-from: |
+            type=gha,scope=container-smoke
+            type=gha,scope=release-arm64
+          provenance: mode=max
+          sbom: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign and verify the immutable image digest
+        env:
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: |
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign verify "$IMAGE@$DIGEST" \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+
+      - name: Generate SPDX SBOMs for both platforms
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          for architecture in amd64 arm64; do
+            "$SYFT" scan --from registry --platform "linux/$architecture" \
+              "$IMAGE@$DIGEST" \
+              --output "spdx-json=overture-${VERSION}-linux-${architecture}.spdx.json"
+          done
+
+      - name: Verify both published platforms
+        env:
+          APP_PASSWORD_HASH: $argon2id$v=19$m=19456,t=2,p=1$5PshSM2LkBARR0U/VapWcQ$Cyx+v2jMhbD55bxzEKRR07qFy3RE6MU1+PXxS/nJfK4
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          MEDIA_SERVER: plex
+          MEDIA_SERVER_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          MEDIA_SERVER_URL: http://127.0.0.1:32400
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          for architecture in amd64 arm64; do
+            container="overture-release-$architecture"
+            volume="overture-release-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            cleanup() {
+              docker rm --force "$container" >/dev/null 2>&1 || true
+              docker volume rm "$volume" >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+            docker volume create "$volume" >/dev/null
+            docker run --detach --platform "linux/$architecture" --name "$container" \
+              --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
+              --cap-drop ALL --security-opt no-new-privileges:true \
+              --publish 127.0.0.1:5885:5885 \
+              --volume "$volume:/config" \
+              --env APP_PASSWORD_HASH --env MEDIA_SERVER \
+              --env MEDIA_SERVER_URL --env MEDIA_SERVER_API_KEY \
+              "$IMAGE@$DIGEST" >/dev/null
+
+            for _ in $(seq 1 90); do
+              if curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null
+            docker exec --interactive "$container" python - \
+              --expected-version "$VERSION" < scripts/container_smoke.py
+            test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container")" = "$VERSION"
+            cleanup
+            trap - EXIT
+          done
+
+      - name: Write release artifact metadata
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: |
+          printf '%s@%s\n' "$IMAGE" "$DIGEST" > image-digest.txt
+
+      - name: Download the qualified native archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name native-archive --dir native-release
+
+      - name: Sign native artifacts
+        run: |
+          for artifact in native-release/*; do
+            cosign sign-blob --yes --bundle "$artifact.sigstore.json" "$artifact"
+          done
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --verify-tag \
+            --title "Overture $VERSION" \
+            --generate-notes \
+            image-digest.txt \
+            "overture-${VERSION}-linux-amd64.spdx.json" \
+            "overture-${VERSION}-linux-arm64.spdx.json" \
+            native-release/* \
+            LICENSE \
+            licenses/THIRD_PARTY_NOTICES.md

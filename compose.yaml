@@ -1,0 +1,35 @@
+services:
+  overture:
+    image: "ghcr.io/autogitr/overture:latest"
+    container_name: "overture"
+    restart: "unless-stopped"
+    user: "1000:1000"
+    cap_drop:
+      - "ALL"
+    security_opt:
+      - "no-new-privileges:true"
+    read_only: true
+    init: true
+    ports:
+      - "127.0.0.1:5885:5885"
+    env_file: ".env"
+    volumes:
+      - "./config:/config"
+      # The container path must be the one your media server reports for your media.
+      - "/path/to/media:/media"
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "3"
+        max-size: "10m"
+    cpus: 2.0
+    mem_limit: "2g"
+    mem_reservation: "512m"
+    pids_limit: 256
+    stop_grace_period: "60s"
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536

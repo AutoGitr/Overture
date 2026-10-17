@@ -1,0 +1,124 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "abandonments:recommended",
+    ":configMigration"
+  ],
+  "pinDigests": true,
+  "dependencyDashboard": true,
+  "rangeStrategy": "pin",
+  "labels": ["deps"],
+  "prConcurrentLimit": 2,
+  "prHourlyLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "schedule": ["* 5 * * 2"],
+  "internalChecksFilter": "strict",
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["* 5 * * 1"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "minimumReleaseAge": null,
+    "schedule": ["at any time"],
+    "vulnerabilityFixStrategy": "lowest"
+  },
+  "packageRules": [
+    {
+      "description": "Ignore Overture's own compose file",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/autogitr/overture"],
+      "enabled": false
+    },
+    {
+      "description": "setup-uv accepts a release version, not a Git commit digest",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["astral-sh/uv"],
+      "pinDigests": false
+    },
+    {
+      "description": "svelte-check's default compiler integration requires TypeScript 6",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Patch consumers of the js-yaml 4 API without forcing a major API change",
+      "matchPackageNames": ["js-yaml"],
+      "allowedVersions": "<5"
+    },
+    {
+      "description": "Keep the oldest supported Ubuntu LTS qualification image; newer Ubuntu and Debian are tested in the workflow matrix",
+      "matchFileNames": ["packaging/linux/test.Dockerfile"],
+      "matchPackageNames": ["ubuntu"],
+      "allowedVersions": "22.04"
+    },
+    {
+      "matchPackageNames": ["python"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "Python Version"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "addLabels": ["ci"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions Updates",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchDatasources": ["github-runners"],
+      "enabled": true,
+      "groupName": "GitHub runners",
+      "minimumReleaseAge": null,
+      "automerge": false
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Docker Infrastructure"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Backend Core"
+    },
+    {
+      "matchFileNames": ["frontend/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Frontend Core"
+    },
+    {
+      "matchPackageNames": [
+        "/eslint/",
+        "/prettier/",
+        "/vitest/",
+        "/pytest/",
+        "/ruff/",
+        "/pyright/",
+        "/testing-library/"
+      ],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Tooling, Linters & Testing Rules"
+    },
+    {
+      "matchUpdateTypes": ["pin", "patch", "digest", "pinDigest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "schedule": ["at any time"]
+    },
+    {
+      "matchUpdateTypes": ["pin", "digest", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "7 days"
+    }
+  ]
+}

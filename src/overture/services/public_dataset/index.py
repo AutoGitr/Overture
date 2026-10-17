@@ -1,0 +1,124 @@
+"""OvertureDB resolution for a batch of media items, done once."""
+
+lazy from collections.abc import Iterable, Mapping, Sequence
+lazy from dataclasses import dataclass
+lazy from typing import Self
+
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
+lazy from ...config import Settings
+lazy from ...db.models.media_item import MediaItem
+lazy from ...db.models.public_dataset import PublicDatasetItem
+lazy from ...db.models.season import Season
+lazy from ...domain import ArtType, ThemeBulkSource
+lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+
+
+def catalog_art_url(
+    public_item: PublicDatasetItem,
+    season_posters: Mapping[int, str],
+    art_type: ArtType,
+    season_num: int | None,
+) -> str | None:
+    """Return the entry's URL for one art slot; *season_posters* by number."""
+    if art_type is ArtType.POSTER:
+        return public_item.poster_url
+    if art_type is ArtType.BACKGROUND:
+        return public_item.background_url
+    if art_type is ArtType.SEASON_POSTER and season_num is not None:
+        return season_posters.get(season_num)
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class PublicDatasetIndex:
+    """What OvertureDB holds for a known set of local media items.
+
+    :func:`build` resolves a batch in two queries; each per-target artwork
+    lookup then reads this index without further database access.
+
+    An index built while the dataset is disabled is empty, so a caller that
+    asks it questions gets the same answer as one that checked the schedule
+    first: nothing on offer.
+    """
+
+    items: dict[int, PublicDatasetItem]
+    season_posters: dict[int, dict[int, str]]
+
+    @classmethod
+    def empty(cls) -> Self:
+        """Return an index that holds nothing, for disabled or skipped runs."""
+        return cls({}, {})
+
+    @classmethod
+    async def build(
+        cls, session: AsyncSession, items: Sequence[MediaItem], *, app_config: Settings
+    ) -> Self:
+        """Resolve the dataset's rows for *items*, or nothing when disabled."""
+        schedule = await load_schedule(
+            session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
+        )
+        if not schedule.enabled or not items:
+            return cls.empty()
+
+        repository = PublicDatasetRepository(session)
+        matched = await repository.items_by_media_item_id(items)
+        season_posters = await repository.season_posters_by_item_ids(
+            {
+                public_item.id
+                for public_item in matched.values()
+                if public_item.id is not None
+            }
+        )
+        return cls(matched, season_posters)
+
+    def art_url(
+        self,
+        item: MediaItem,
+        art_type: ArtType,
+        *,
+        season: Season | None = None,
+    ) -> str | None:
+        """Return the dataset's URL for one art slot, if it has one."""
+        public_item = self.items.get(item.id) if item.id is not None else None
+        if public_item is None or public_item.id is None:
+            return None
+        return catalog_art_url(
+            public_item,
+            self.season_posters.get(public_item.id, {}),
+            art_type,
+            season.season_num if season else None,
+        )
+
+    def youtube_id(
+        self, item: MediaItem, sources: Iterable[ThemeBulkSource]
+    ) -> str | None:
+        """Return the first theme video ID a catalog in *sources* holds for *item*.
+
+        Sources that are not catalogs hold no themes here.
+        """
+        public_item = self.items.get(item.id) if item.id is not None else None
+        if not public_item:
+            return None
+        return next(
+            (
+                youtube_id
+                for source in sources
+                if (youtube_id := _catalog_youtube_id(public_item, source))
+            ),
+            None,
+        )
+
+
+def _catalog_youtube_id(
+    public_item: PublicDatasetItem, source: ThemeBulkSource
+) -> str | None:
+    """Return one catalog's theme video ID for an entry."""
+    match source:
+        case ThemeBulkSource.OVERTUREDB:
+            return public_item.youtube_id_overturedb
+        case ThemeBulkSource.THEMERRDB:
+            return public_item.youtube_id_themerrdb
+        case ThemeBulkSource.YOUTUBE_SEARCH:
+            return None

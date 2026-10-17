@@ -1,0 +1,69 @@
+# https://github.com/AutoGitr/Overture/blob/main/compose.dev.yaml
+services:
+  overture:
+    image: "overture:latest"
+    build:
+      context: "."
+      dockerfile: "Dockerfile"
+    container_name: "overture"
+    restart: "unless-stopped"
+    user: "${PUID:?PUID is required}:${PGID:?PGID is required}"
+    read_only: true
+    init: true
+    networks:
+      - "proxy"
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-5885}:5885"
+    environment:
+      APP_PASSWORD_HASH: "${APP_PASSWORD_HASH:-}"
+      APP_URL: "${APP_URL:-}"
+      ART_DOWNLOAD_WORKERS: "${ART_DOWNLOAD_WORKERS:-1}"
+      AUTH_MODE: "${AUTH_MODE:-password}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      LOG_COLOUR: "${LOG_COLOUR:-true}"
+      MEDIA_SERVER: "${MEDIA_SERVER:?MEDIA_SERVER is required}"
+      MEDIA_SERVER_API_KEY: "${MEDIA_SERVER_API_KEY:?MEDIA_SERVER_API_KEY is required}"
+      MEDIA_SERVER_URL: "${MEDIA_SERVER_URL:?MEDIA_SERVER_URL is required}"
+      MEDIA_SERVER_VERIFY_TLS: "${MEDIA_SERVER_VERIFY_TLS:-true}"
+      OIDC_AUTO_LOGIN: "${OIDC_AUTO_LOGIN:-false}"
+      OIDC_CLIENT_ID: "${OIDC_CLIENT_ID:-}"
+      OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-}"
+      OIDC_DISPLAY_NAME: "${OIDC_DISPLAY_NAME:-Sign in with SSO}"
+      OIDC_ISSUER_URL: "${OIDC_ISSUER_URL:-}"
+      PHASH_WORKERS: "${PHASH_WORKERS:-1}"
+      SESSION_EXPIRY_DAYS: "${SESSION_EXPIRY_DAYS:-7}"
+      THEME_DOWNLOAD_WORKERS: "${THEME_DOWNLOAD_WORKERS:-1}"
+      TMDB_API_KEY: "${TMDB_API_KEY:-}"
+      TRUSTED_PROXY_CIDRS: "${TRUSTED_PROXY_CIDRS:-}"
+      TZ: "${TZ:?TZ is required}"
+    volumes:
+      - "${APPDATA_PATH:-/mnt/cache/appdata}/overture:/config"
+      - "${STORAGE_PATH:-/mnt/user}/data/media:/data/media"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "3"
+        max-size: "10m"
+    labels:
+      kuma.overture.http.name: "Overture"
+      kuma.overture.http.url: "https://overture.${TRAEFIK_DOMAIN:?TRAEFIK_DOMAIN is required}"
+      net.unraid.docker.icon: "https://dashboardicons.com/api/icons/external/simpleicons/blackmagicdesign/dark.png" # temp
+      net.unraid.docker.webui: "https://overture.${TRAEFIK_DOMAIN:?TRAEFIK_DOMAIN is required}"
+      traefik.enable: "true"
+      traefik.http.routers.overture.middlewares: "local-ipallowlist@file"
+      traefik.http.routers.overture.rule: "Host(`overture.${TRAEFIK_DOMAIN:?TRAEFIK_DOMAIN is required}`)"
+      traefik.http.services.overture.loadbalancer.server.port: "5885"
+    cpus: 2.0
+    mem_limit: "2g"
+    mem_reservation: "512m"
+    pids_limit: 256
+    pull_policy: "build"
+    stop_grace_period: "60s"
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536
+
+networks:
+  proxy:
+    external: true

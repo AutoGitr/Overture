@@ -1,0 +1,23 @@
+name: Theme download canary
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  youtube:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify YouTube extraction with the released runtime
+        run: >-
+          docker run --rm --pull always --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m
+          --cap-drop ALL --security-opt no-new-privileges:true
+          --entrypoint yt-dlp ghcr.io/autogitr/overture:latest
+          --ignore-config --js-runtimes deno --no-download --no-playlist
+          --print id https://www.youtube.com/watch?v=jNQXAC9IVRw
