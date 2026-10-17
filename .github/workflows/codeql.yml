@@ -2,8 +2,28 @@ name: CodeQL
 
 on:
   pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "packaging/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "frontend/**"
+      - ".github/workflows/**"
+      - ".github/codeql/**"
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "packaging/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "frontend/**"
+      - ".github/workflows/**"
+      - ".github/codeql/**"
   schedule:
     # Catches newly disclosed vulnerable coding patterns in code that
     # hasn't changed recently. Offset from the Trivy and Renovate schedules.

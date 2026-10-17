@@ -1,15 +1,7 @@
 name: Native Linux qualification
 
-# Qualify packaging and runtime dependency changes before release.
+# Qualify packaging and runtime dependency changes during release.
 on:
-  pull_request:
-    paths:
-      - Dockerfile
-      - pyproject.toml
-      - uv.lock
-      - packaging/linux/**
-      - scripts/container_smoke.py
-      - .github/workflows/native.yml
   workflow_call:
     inputs:
       ref:

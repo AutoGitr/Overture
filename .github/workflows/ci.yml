@@ -45,34 +45,37 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
-          if [ "$EVENT_NAME" != "pull_request" ] || [ -z "$BASE_REF" ]; then
+          all_true() {
             echo "dockerfile=true" >> "$GITHUB_OUTPUT"
             echo "backend=true" >> "$GITHUB_OUTPUT"
             echo "frontend=true" >> "$GITHUB_OUTPUT"
             echo "contracts=true" >> "$GITHUB_OUTPUT"
             echo "container=true" >> "$GITHUB_OUTPUT"
+          }
+
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$BASE_REF" ]; then
+            if ! git rev-parse --verify "origin/$BASE_REF" >/dev/null 2>&1; then
+              git fetch origin "$BASE_REF" --depth=1
+            fi
+            DIFF=$(git diff --name-only "origin/$BASE_REF"...HEAD || git diff --name-only "origin/$BASE_REF")
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            DIFF=$(git diff --name-only "$BEFORE_SHA" "$HEAD_SHA")
+          else
+            all_true
             exit 0
           fi
-
-          if ! git rev-parse --verify "origin/$BASE_REF" >/dev/null 2>&1; then
-            git fetch origin "$BASE_REF" --depth=1
-          fi
-
-          DIFF=$(git diff --name-only "origin/$BASE_REF"...HEAD || git diff --name-only "origin/$BASE_REF")
 
           has_changed() {
             echo "$DIFF" | grep -E "$1" >/dev/null 2>&1
           }
 
-          if has_changed '^\.github/'; then
-            echo "dockerfile=true" >> "$GITHUB_OUTPUT"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "contracts=true" >> "$GITHUB_OUTPUT"
-            echo "container=true" >> "$GITHUB_OUTPUT"
+          if has_changed '^\.github/workflows/ci\.yml$'; then
+            all_true
             exit 0
           fi
 
@@ -82,7 +85,7 @@ jobs:
             echo "dockerfile=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if has_changed '^(src/|tests/|pyproject\.toml|uv\.lock|\.python-version|alembic\.ini|scripts/)'; then
+          if has_changed '^(src/|tests/|packaging/.+\.py$|\.github/workflows/|pyproject\.toml$|uv\.lock$|\.python-version$|alembic\.ini$|scripts/|\.github/(README|SECURITY|SUPPORT)\.md$|\.github/labels\.json$|\.github/release\.yml$|\.github/renovate\.json$)'; then
             echo "backend=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
@@ -100,7 +103,7 @@ jobs:
             echo "contracts=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if has_changed '^(Dockerfile$|\.dockerignore$|compose.*\.yaml$|packaging/|scripts/container_smoke\.py$|src/|frontend/|pyproject\.toml$|uv\.lock$|\.python-version$|licenses/|LICENSE$|\.github/README\.md$)'; then
+          if has_changed '^(Dockerfile$|\.dockerignore$|compose\.yaml$|\.env\.example$|packaging/|scripts/container_smoke\.py$|src/|frontend/|pyproject\.toml$|uv\.lock$|\.python-version$|licenses/|LICENSE$|\.github/README\.md$)'; then
             echo "container=true" >> "$GITHUB_OUTPUT"
           else
             echo "container=false" >> "$GITHUB_OUTPUT"
@@ -317,15 +320,13 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
-      - name: Validate production and development Compose configurations
-        env:
-          PUID: "1000"
-          PGID: "1000"
-          TRAEFIK_DOMAIN: example.invalid
+      - name: Validate Compose configuration
         run: |
           cp .env.example .env
           docker compose config --quiet
-          docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+          # Required settings may instead be supplied by mounted Docker secrets.
+          MEDIA_SERVER= MEDIA_SERVER_API_KEY= MEDIA_SERVER_URL= docker compose config --quiet
+          rm .env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -348,7 +349,8 @@ jobs:
             | docker run --rm -i overture:smoke password hash --password-stdin)
           [[ $line == "APP_PASSWORD_HASH='\$argon2id\$"*"'" ]]
           # Compose must pass the pasted line through without interpolating its $ signs.
-          echo "$line" > .env
+          cp .env.example .env
+          printf '\n%s\n' "$line" >> .env
           rendered=$(docker compose config --format json \
             | jq -r .services.overture.environment.APP_PASSWORD_HASH)
           rm .env

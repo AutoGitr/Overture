@@ -5,9 +5,9 @@ Thanks for helping! Overture is a FastAPI backend (`src/overture/`, tested in
 [OvertureDB](https://github.com/AutoGitr/OvertureDB), checked out beside this
 repository as `../OvertureDB`.
 
-Overture is pre-release: change behaviour directly instead of keeping old
-behaviour around, migrate stored data, and add tests for what you change. The
-linters and type checkers enforce the code style.
+Keep settings, the database and the API compatible within a major version,
+migrate stored data, and add tests for what you change. The linters and type
+checkers enforce the code style.
 
 ## Setup
 

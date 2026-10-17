@@ -10,9 +10,9 @@ _Artwork and theme manager for Plex, Jellyfin and Emby_
 
 [![Release](https://img.shields.io/github/v/release/AutoGitr/Overture?color=2ea44f&label=Release)](https://github.com/AutoGitr/Overture/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/AutoGitr/Overture/ci.yml?label=CI)](https://github.com/AutoGitr/Overture/actions)
-[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Svelte](https://img.shields.io/badge/Svelte-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev)
+[![Python](https://img.shields.io/badge/Python-3.15-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.143-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-337ab7)](../LICENSE)
 
 [Features](#features) • [Using Overture](#using-overture) • [Install](#install) • [Configuration](#configuration) • [Authentication](#authentication) • [Maintenance](#maintenance) • [Contributing](#contributing)
@@ -145,18 +145,19 @@ Shows/Breaking Bad (2008)/Season 01/Breaking Bad - S01E01.mkv
 <details open>
 <summary><b>Docker</b> (Linux <code>amd64</code> and <code>arm64</code>)</summary>
 
-1. Download [`compose.yaml`](../compose.yaml) and [`.env.example`](../.env.example),
-   and rename `.env.example` to `.env`.
-2. Configure your environment in `.env` (see [Configuration](#configuration)).
-3. In `compose.yaml`, map your paths under volumes:
+1. Download [`compose.yaml`](../compose.yaml).
+2. Configure your environment (see [Configuration](#configuration)) in either of two ways:
+   - **With an `.env` file:** download [`.env.example`](../.env.example), rename it to `.env`, and set your values in `.env`.
+   - **Directly in `compose.yaml`:** remove `env_file: ".env"` and set your values under `environment:` in `compose.yaml`.
+3. In `compose.yaml`, map your paths under `volumes`:
 
    ```yaml
    services:
-      overture:
-        volumes:
-          - "./config:/config"
-          # The container path must be the one your media server reports for your media.
-          - "/path/to/media:/media"
+     overture:
+       volumes:
+         - "./config:/config"
+         # The container path must be the one your media server reports for your media.
+         - "/path/to/media:/media"
    ```
 
    > [!IMPORTANT]
@@ -168,7 +169,7 @@ Shows/Breaking Bad (2008)/Season 01/Breaking Bad - S01E01.mkv
    mkdir -p config && sudo chown 1000:1000 config
    ```
 
-5. When using password authentication (`AUTH_MODE=password` or `both`), generate a password hash and set `APP_PASSWORD_HASH` in `.env`:
+5. When using password authentication (`AUTH_MODE=password` or `both`), generate a password hash and set `APP_PASSWORD_HASH` in `.env` or `compose.yaml` (see [Password](#password)):
 
    ```sh
    docker run --rm -it ghcr.io/autogitr/overture password hash
@@ -267,9 +268,9 @@ Overture follows Plex's secure `*.plex.direct` address when the server uses one.
 ## Configuration
 
 These variables set up the connection, sign-in and runtime; everything else is
-set in the web interface. Docker reads them from `.env`, and the
-[Linux service](#linux-service) from its settings file. Empty values count as
-unset.
+set in the web interface. Docker reads them from `.env` or `compose.yaml`, and
+the [Linux service](#linux-service) from its settings file. Empty values count
+as unset.
 
 | Variable                  | Required           | Default                   | Description                                                                                                                |
 | ------------------------- | ------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -334,9 +335,12 @@ Overture supports four authentication modes configured with `AUTH_MODE`:
 When `AUTH_MODE` is `password` or `both`, a password hash is required.
 
 `overture password hash` asks for a password twice and prints a line such as
-`APP_PASSWORD_HASH='$argon2id$...'`. Paste the whole line, quotes included, in
-place of the old one. Any non-empty password up to 1,024 bytes works; use 15
-characters or more. Hashes from other Argon2id tools also work.
+`APP_PASSWORD_HASH='$argon2id$...'`. In `.env` or `overture.env`, paste the
+whole line, quotes included, in place of the old one. If setting
+`APP_PASSWORD_HASH` directly under `environment:` in `compose.yaml`, double each
+`$` (`$$argon2id$$...`) so Compose does not expand it as a variable. Any
+non-empty password up to 1,024 bytes works; use 15 characters or more. Hashes
+from other Argon2id tools also work.
 
 ```sh
 docker run --rm -it ghcr.io/autogitr/overture password hash # Docker
@@ -422,7 +426,8 @@ services:
 
 Any setting can come from a
 [Compose secret](https://docs.docker.com/compose/how-tos/use-secrets/) named after
-it in lowercase. Leave the setting empty in `.env`.
+it in lowercase. Leave the setting empty in `.env` and `compose.yaml`.
+Overture validates required settings after loading the mounted secrets.
 
 ```yaml
 services:

@@ -76,8 +76,8 @@ Run `npx` commands that skills show through Bun (`bunx playwright cli`,
   behaviour lives. Tests are deterministic and never touch the real network or
   DNS. Fix a failing test by fixing the code or updating it to the new intent,
   never by weakening it.
-- **No legacy shims.** This is pre-release software: no compatibility layers,
-  deprecated parameters or fallbacks for old data shapes. Migrate stored data.
+- **Compatibility.** Keep settings and the API compatible within a major version.
+  Migrate stored data rather than adding runtime fallbacks for old data shapes.
 - **Comments explain why**: an invariant, a security boundary or an upstream
   quirk. Never narrate the code or its history.
 - **Suppressions.** `# noqa`, `# type: ignore` and `# pyright: ignore` only for an

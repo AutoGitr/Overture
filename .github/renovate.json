@@ -51,12 +51,6 @@
       "allowedVersions": "<5"
     },
     {
-      "description": "Keep the oldest supported Ubuntu LTS qualification image; newer Ubuntu and Debian are tested in the workflow matrix",
-      "matchFileNames": ["packaging/linux/test.Dockerfile"],
-      "matchPackageNames": ["ubuntu"],
-      "allowedVersions": "22.04"
-    },
-    {
       "matchPackageNames": ["python"],
       "matchUpdateTypes": ["minor"],
       "groupName": "Python Version"

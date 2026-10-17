@@ -130,6 +130,9 @@ def test_runner_updates_are_enabled_without_automatic_os_upgrades() -> None:
         ("frontend/bun.lock", {"frontend", "contracts", "container"}),
         (".agents/skills.json", {"contracts"}),
         ("openapi/overture.json", {"contracts"}),
+        ("packaging/linux/build.py", {"backend", "container"}),
+        (".github/workflows/native.yml", {"backend"}),
+        (".github/workflows/codeql.yml", {"backend"}),
     ],
 )
 def test_ci_filters_cover_build_and_contract_inputs(
