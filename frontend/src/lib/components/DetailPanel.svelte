@@ -1,0 +1,322 @@
+<script lang="ts">
+  import Clapperboard from "@lucide/svelte/icons/clapperboard";
+  import Database from "@lucide/svelte/icons/database";
+  import Eye from "@lucide/svelte/icons/eye";
+  import EyeOff from "@lucide/svelte/icons/eye-off";
+  import Image from "@lucide/svelte/icons/image";
+  import Layers from "@lucide/svelte/icons/layers";
+  import MonitorPlay from "@lucide/svelte/icons/monitor-play";
+  import MountainSnow from "@lucide/svelte/icons/mountain-snow";
+  import Music from "@lucide/svelte/icons/music";
+  import Trash from "@lucide/svelte/icons/trash";
+  import { createQuery } from "@tanstack/svelte-query";
+  import githubIcon from "../../assets/icons/github.svg";
+  import type { ArtType, MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
+  import { createSeasonsQuery } from "../rest/queries";
+  import {
+    getPublicDatasetRecordOptions,
+    getPublicDatasetStatusOptions,
+  } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import {
+    goToItemArt,
+    goToItemThemes,
+    viewArtType,
+    type ArtSubTab,
+    type ItemView,
+  } from "../router/routes";
+  import { artPreviewState } from "../stores/artPreviewState.svelte";
+  import { downloadState } from "../stores/downloadState.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
+  import { uiState } from "../stores/uiState.svelte";
+  import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
+  import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
+  import {
+    buildContributionIssueUrl,
+    hasContributionValues,
+    selectionMatchesPublicDataset,
+  } from "../utils/publicDataset";
+  import { hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
+  import ArtPanel from "./ArtPanel.svelte";
+  import DetailPanelBase from "./DetailPanelBase.svelte";
+  import IdBadge from "./IdBadge.svelte";
+  import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
+  import PasteArtButton from "./PasteArtButton.svelte";
+  import SeasonGrid from "./SeasonGrid.svelte";
+  import StatusTab from "./StatusTab.svelte";
+  import ThemePanel from "./ThemePanel.svelte";
+  import DataStatus from "./DataStatus.svelte";
+
+  let {
+    item = null,
+    preview = null,
+    view = { mode: "art", artSubTab: "poster", drillSeasonNum: null },
+  }: {
+    item?: MediaItemRead | null;
+    /** A TMDB title open before its first selection stores it as an item. */
+    preview?: TmdbItemPreview | null;
+    view?: ItemView;
+  } = $props();
+
+  const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
+  let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
+
+  const actions = new ItemRecordActions(() => item);
+  // A TMDB title shows like an item; only a stored item has records to manage.
+  let subject = $derived(item ?? preview);
+  let artType = $derived(viewArtType(view));
+  const seasonsQuery = createSeasonsQuery(() => item);
+  let seasons = $derived(seasonsQuery.data ?? []);
+  let drillSeason = $derived(
+    view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
+  );
+  const publicDatasetRecordQuery = createQuery(() => ({
+    ...getPublicDatasetRecordOptions({ path: { item_id: item?.id ?? 0 } }),
+    enabled: datasetEnabled && !!item?.id,
+  }));
+  let publicDatasetRecord = $derived(
+    publicDatasetRecordQuery.data?.found ? publicDatasetRecordQuery.data : null,
+  );
+  let publicDatasetRecordLoaded = $derived(
+    !datasetEnabled || !item?.id || publicDatasetRecordQuery.isSuccess,
+  );
+  /** Which art tabs hold a saved selection to forget. */
+  let savedArt = $derived({
+    poster: !!item?.poster_url,
+    background: !!item?.background_url,
+    seasons: seasons.some((season) => !!season.poster_url),
+  });
+
+  let repoUrl = $derived(datasetQuery.data?.repo_url ?? "");
+  let contributionUrl = $derived(
+    item && repoUrl ? buildContributionIssueUrl(repoUrl, item, seasons) : "",
+  );
+  let contributionMatchesOvertureDb = $derived(
+    selectionMatchesPublicDataset(item, seasons, publicDatasetRecord),
+  );
+  let showContributionLink = $derived(
+    !!contributionUrl &&
+      hasContributionValues(item, seasons) &&
+      publicDatasetRecordLoaded &&
+      !contributionMatchesOvertureDb,
+  );
+
+  function openContributionIssue(event: MouseEvent) {
+    event.preventDefault();
+    window.open(contributionUrl, "_blank", "noopener,noreferrer");
+  }
+
+  // -- Art sub-tab config ---------------------------------------------------
+  const subTabConfig: {
+    key: ArtSubTab;
+    label: string;
+    icon: typeof Image;
+    artType: ArtType;
+    statusField: "poster_status" | "background_status" | "season_posters_status";
+    showOnly?: boolean;
+  }[] = [
+    {
+      key: "poster",
+      label: "Poster",
+      icon: Image,
+      artType: "poster",
+      statusField: "poster_status",
+    },
+    {
+      key: "background",
+      label: "Background",
+      icon: MountainSnow,
+      artType: "background",
+      statusField: "background_status",
+    },
+    {
+      key: "seasons",
+      label: "Seasons",
+      icon: Layers,
+      artType: "season_poster",
+      statusField: "season_posters_status",
+      showOnly: true,
+    },
+  ];
+  let visibleSubTabs = $derived(
+    subTabConfig.filter((t) => {
+      if (t.showOnly && subject?.media_type !== "show") return false;
+      return true;
+    }),
+  );
+
+  // A choice being fetched shows its preview until the item shows the file.
+  let backgroundUrl = $derived(
+    item
+      ? (artPreviewState.previewFor(item, "background") ?? itemArtDisplayUrl(item, "background"))
+      : (preview?.background_url ?? null),
+  );
+  let posterUrl = $derived(
+    item
+      ? (artPreviewState.previewFor(item, "poster") ?? itemArtDisplayUrl(item, "poster"))
+      : preview
+        ? remotePosterUrl(preview)
+        : null,
+  );
+  let subjectKey = $derived(
+    item ? `item:${item.id}` : preview ? `tmdb:${preview.media_type}:${preview.tmdb_id}` : null,
+  );
+
+  function selectArtSubTab(tab: ArtSubTab) {
+    if (subject) goToItemArt(subject, tab);
+  }
+</script>
+
+<DetailPanelBase
+  isEmpty={!subject}
+  {subjectKey}
+  {backgroundUrl}
+  posterHref={item?.server_link ?? null}
+  posterLinkTitle={item?.server_link ? `Open in ${settingsState.media_server_name}` : null}
+  emptyMessage="Select a {uiState.sidebarTab === 'movie' ? 'movie' : 'show'} from the sidebar"
+  {posterUrl}
+  title={subject?.title ?? ""}
+>
+  {#snippet emptyIcon()}
+    {#if uiState.sidebarTab === "movie"}
+      <Clapperboard size={64} />
+    {:else}
+      <MonitorPlay size={64} />
+    {/if}
+  {/snippet}
+
+  {#snippet posterIcon()}
+    {#if subject?.media_type === "movie"}
+      <Clapperboard size={48} />
+    {:else}
+      <Layers size={48} />
+    {/if}
+  {/snippet}
+
+  {#snippet meta()}
+    {#if subject?.year}
+      <span class="detail-year">{subject.year}</span>
+    {/if}
+  {/snippet}
+
+  {#snippet badges()}
+    <ExternalLinkBadges {subject} mode={view.mode} {artType} season={drillSeason} />
+    {#if showContributionLink}
+      <IdBadge
+        href={contributionUrl}
+        title="Contribute to OvertureDB"
+        icon={githubIcon}
+        alt="GitHub"
+        onclick={openContributionIssue}
+      />
+    {/if}
+  {/snippet}
+
+  {#snippet tabs()}
+    <StatusTab
+      icon={Image}
+      label="Art"
+      active={view.mode === "art"}
+      status={item && statusTone(item.art_status, downloadState.isDownloadingType(item.id, "art"))}
+      onselect={() => selectArtSubTab("poster")}
+      clearLabel="Clear all art"
+      onclear={Object.values(savedArt).some(Boolean) ? () => actions.clearAllArt() : null}
+      clearDisabled={actions.clearingArt}
+    />
+    <StatusTab
+      icon={Music}
+      label="Themes"
+      active={view.mode === "themes"}
+      status={item &&
+        statusTone(item.theme_status, downloadState.isDownloadingType(item.id, "theme"))}
+      onselect={() => {
+        if (subject) goToItemThemes(subject);
+      }}
+      clearLabel="Clear theme"
+      onclear={hasThemeAttributes(item) ? () => actions.clearTheme() : null}
+      clearDisabled={actions.themeBusy}
+    />
+    <!-- A TMDB title has no record until its first selection stores it. -->
+    {#if item}
+      <button
+        class="tab-item"
+        onclick={() => uiState.openPopupByName("database")}
+        title="Open Database Record"
+      >
+        <Database size={16} /><span>Database</span>
+      </button>
+      <button
+        class={["tab-item", { danger: !item.monitored }]}
+        onclick={() => actions.toggleMonitored()}
+        title={item.monitored ? "Monitored - click to unmonitor" : "Unmonitored - click to monitor"}
+        disabled={actions.monitoring}
+      >
+        {#if item.monitored}
+          <Eye size={16} />
+        {:else}
+          <EyeOff size={16} />
+        {/if}
+      </button>
+      <button
+        class="tab-item danger"
+        onclick={() => actions.delete()}
+        title="Delete Item from Database"
+        disabled={actions.deleting}
+      >
+        <Trash size={16} />
+      </button>
+    {/if}
+  {/snippet}
+
+  {#snippet subtabs()}
+    {#each visibleSubTabs as tab (tab.key)}
+      <StatusTab
+        icon={tab.icon}
+        label={tab.label}
+        active={view.mode === "art" && view.artSubTab === tab.key}
+        status={item &&
+          statusTone(
+            item[tab.statusField],
+            downloadState.isDownloadingType(item.id, "art", tab.artType),
+          )}
+        onselect={() => selectArtSubTab(tab.key)}
+        clearLabel="Clear {tab.label.toLowerCase()}"
+        onclear={savedArt[tab.key] ? () => actions.clearArt(tab.key) : null}
+        clearDisabled={actions.clearingArt}
+      />
+    {/each}
+  {/snippet}
+
+  {#snippet subtabActions()}
+    <PasteArtButton />
+  {/snippet}
+
+  {#snippet content()}
+    {#if datasetEnabled && item}
+      <DataStatus
+        label="OvertureDB record"
+        error={publicDatasetRecordQuery.error}
+        hasData={publicDatasetRecordQuery.data !== undefined}
+        loading={publicDatasetRecordQuery.isFetching}
+        onretry={() => publicDatasetRecordQuery.refetch()}
+      />
+    {/if}
+    {#if view.mode === "art"}
+      {#if view.artSubTab === "seasons" && view.drillSeasonNum === null}
+        <SeasonGrid {item} {preview} />
+      {:else}
+        <ArtPanel {item} {preview} {artType} drillSeasonNum={view.drillSeasonNum} />
+      {/if}
+    {:else}
+      {#key subjectKey}
+        <ThemePanel {item} {preview} />
+      {/key}
+    {/if}
+  {/snippet}
+</DetailPanelBase>
+
+<style>
+  .detail-year {
+    font-size: var(--text-lg);
+    font-family: var(--font-mono);
+  }
+</style>

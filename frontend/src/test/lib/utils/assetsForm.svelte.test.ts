@@ -1,0 +1,111 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import type { LibrarySectionRead } from "../../../generated/rest/types.gen";
+import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
+import { AssetsForm } from "../../../lib/utils/assetsForm.svelte";
+import { bulkAssetsSchedule } from "../../helpers/fixtures";
+
+const movies: LibrarySectionRead[] = [{ id: "1", title: "Movies", count: 10 }];
+const shows: LibrarySectionRead[] = [{ id: "2", title: "Shows", count: 4 }];
+
+function form({ dataset = true, loaded = true } = {}) {
+  return new AssetsForm({
+    movieLibraries: () => movies,
+    showLibraries: () => shows,
+    librariesLoaded: () => loaded,
+    publicDatasetEnabled: () => dataset,
+  });
+}
+
+describe("AssetsForm", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sidebarState.current = null;
+  });
+
+  it("can run only once libraries, art types and sources are chosen", () => {
+    const assets = form();
+    assets.config.enableThemes = false;
+    expect(assets.canRun).toBe(false);
+
+    assets.toggleLibrary("1");
+    expect(assets.canRun).toBe(false);
+
+    assets.toggleArtType("poster");
+    expect(assets.canRun).toBe(true);
+    expect(assets.request()).toMatchObject({
+      library_ids: ["1"],
+      art: { art_types: ["poster"] },
+      themes: null,
+    });
+  });
+
+  it("drops season posters while no show library is selected", () => {
+    const assets = form();
+    assets.toggleLibrary("1");
+    assets.toggleArtType("season_poster");
+    expect(assets.artTypesToRun).toEqual([]);
+
+    assets.toggleLibrary("2");
+    expect(assets.hasShowLibraries).toBe(true);
+    expect(assets.artTypesToRun).toEqual(["season_poster"]);
+  });
+
+  it("leaves OvertureDB sources out while the catalog is off, without unselecting them", () => {
+    const assets = form({ dataset: false });
+
+    assets.toggleArtSource("overturedb");
+
+    expect(assets.config.selectedArtSources).toContain("overturedb");
+    expect(assets.activeArtSources).not.toContain("overturedb");
+    expect(assets.disabledSources).toContain("overturedb");
+  });
+
+  it("selects every library, or the sidebar's items instead", () => {
+    const assets = form();
+    assets.toggleAll(true);
+    expect(assets.selectedLibraries).toEqual(["1", "2"]);
+
+    assets.config.useSidebarItems = true;
+    sidebarState.current = { type: "show", itemIds: [5, 6] };
+    expect(assets.hasSelectedLibraries).toBe(true);
+    expect(assets.hasShowLibraries).toBe(true);
+    expect(assets.request()).toMatchObject({ library_ids: [], item_ids: [5, 6] });
+
+    assets.toggleLibrary("1");
+    expect(assets.config.useSidebarItems).toBe(false);
+    expect(assets.selectedLibraries).toEqual(["1"]);
+  });
+
+  it("loads a saved schedule's options for editing", () => {
+    const assets = form();
+    const schedule = bulkAssetsSchedule({
+      config: {
+        library_ids: ["2", "gone"],
+        item_ids: null,
+        include_unmonitored: true,
+        overwrite_existing: true,
+        retry_saved_downloads: false,
+        skip_recent_val: 3,
+        skip_recent_unit: "days",
+        art: { art_types: ["background"], source_order: ["local_art_matching"], threshold: 4 },
+        themes: null,
+      },
+    });
+
+    assets.applySchedule(schedule);
+
+    expect(assets.config).toMatchObject({
+      selectedLibraries: ["2"],
+      includeUnmonitored: true,
+      overwriteExisting: true,
+      skipRecentVal: 3,
+      skipRecentUnit: "days",
+      enableArt: true,
+      enableThemes: false,
+      artTypes: ["background"],
+      selectedArtSources: ["local_art_matching"],
+      threshold: 4,
+      scheduleCronExpression: "0 4 * * *",
+    });
+  });
+});

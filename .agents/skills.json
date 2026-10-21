@@ -1,0 +1,65 @@
+{
+  "skills": {
+    "fastapi": {
+      "python": "fastapi"
+    },
+    "sqlmodel": {
+      "python": "sqlmodel"
+    },
+    "uv": {
+      "github": "astral-sh/claude-code-plugins",
+      "path": "plugins/astral/skills/uv",
+      "commit": "f3ce88a7ba830f53afd6d944c1d0278ed318e142",
+      "sha256": "5913492afeab0ce6c183c9e8e0e79b04f77def81fdf80184e9d52fcf77d9a88f"
+    },
+    "ruff": {
+      "github": "astral-sh/claude-code-plugins",
+      "path": "plugins/astral/skills/ruff",
+      "commit": "f3ce88a7ba830f53afd6d944c1d0278ed318e142",
+      "sha256": "a5a1950d035854b4df1eec4d09a3a53915a18193e27a0e735719a1aa6e22602a"
+    },
+    "svelte-core-bestpractices": {
+      "github": "sveltejs/ai-tools",
+      "path": "tools/skills/svelte-core-bestpractices",
+      "commit": "6b5d0dab3c9c083387247ab20dc684573481076b",
+      "sha256": "32070b91f54f92dba3f6e1739d82bf944c14e7a4a75cfe609a59bf1117c34338"
+    },
+    "svelte-code-writer": {
+      "github": "sveltejs/ai-tools",
+      "path": "tools/skills/svelte-code-writer",
+      "commit": "6b5d0dab3c9c083387247ab20dc684573481076b",
+      "sha256": "663cabf66d45cbacc551bf682910dcadf21ac2c77da8bf58629aa7952007cead"
+    },
+    "svelte-query": {
+      "local": true
+    },
+    "vitest": {
+      "github": "antfu/skills",
+      "path": "skills/vitest",
+      "commit": "e53a142a2420e8cd812cfe9ed0484ab01bc856aa",
+      "sha256": "fbe54c4c65d1e97c2fedc5c46381efc90d301a9d05b92690e2f577bfb907ab0c"
+    },
+    "playwright-best-practices": {
+      "github": "currents-dev/playwright-best-practices-skill",
+      "path": "playwright-best-practices",
+      "commit": "283d5cbc5d11aac1abda058b16ad22c317d54dc0",
+      "sha256": "2b333994f6aeca15b2a3f46b327d817b4a497d9f10d6100abc0e4d07b32c0b0a"
+    },
+    "playwright-cli": {
+      "npm": "playwright-core",
+      "path": "lib/tools/skills/playwright-cli"
+    },
+    "playwright-trace": {
+      "npm": "playwright-core",
+      "path": "lib/tools/skills/playwright-trace"
+    }
+  },
+  "agents": {
+    "svelte-file-editor": {
+      "github": "sveltejs/ai-tools",
+      "path": "tools/agents/svelte-file-editor.md",
+      "commit": "6b5d0dab3c9c083387247ab20dc684573481076b",
+      "sha256": "d743b86e6377aaaa4185441163af142c4030b04025e48d954143bdfa12dc0610"
+    }
+  }
+}

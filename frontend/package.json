@@ -1,0 +1,69 @@
+{
+  "name": "overture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.3",
+  "engines": {
+    "bun": "1.4.3"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "generate:brand": "bun scripts/generate-brand.ts",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format:check": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.app.json && tsc --build tsconfig.node.json",
+    "generate:contracts": "uv run --directory .. python -m scripts.contracts",
+    "check:contracts": "uv run --directory .. python -m scripts.contracts --check",
+    "skills:sync": "uv run --directory .. python -m scripts.sync_skills",
+    "skills:check": "uv run --directory .. python -m scripts.sync_skills --check",
+    "skills:update": "uv run --directory .. python -m scripts.sync_skills --update",
+    "test": "bun run test:unit",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:e2e": "bun run build && playwright test",
+    "test:oidc": "bun run build && playwright test --config playwright.oidc.config.ts",
+    "verify": "bun run typecheck && bun run test:unit && bun run build",
+    "ci": "bun run typecheck && bun run lint && bun run format:check && bun run test:coverage && bun run build",
+    "ci:e2e": "bun run test:e2e"
+  },
+  "dependencies": {
+    "@tanstack/svelte-query": "6.3.4",
+    "sv-router": "0.19.0"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@hey-api/openapi-ts": "0.99.0",
+    "@lucide/svelte": "1.59.0",
+    "@playwright/test": "1.64.1",
+    "@resvg/resvg-js": "2.6.2",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/svelte": "5.4.2",
+    "@tsconfig/svelte": "5.0.8",
+    "@types/node": "26.6.5",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-svelte": "3.23.1",
+    "globals": "17.13.0",
+    "jsdom": "30.1.3",
+    "prettier": "3.9.10",
+    "prettier-plugin-svelte": "4.1.1",
+    "svelte": "5.57.2",
+    "svelte-check": "4.7.7",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "5.0.5"
+  }
+}

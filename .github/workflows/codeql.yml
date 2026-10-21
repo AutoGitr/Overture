@@ -1,0 +1,79 @@
+name: CodeQL
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "packaging/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "frontend/**"
+      - ".github/workflows/**"
+      - ".github/codeql/**"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "packaging/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "frontend/**"
+      - ".github/workflows/**"
+      - ".github/codeql/**"
+  schedule:
+    # Catches newly disclosed vulnerable coding patterns in code that
+    # hasn't changed recently. Offset from the Trivy and Renovate schedules.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: actions
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          category: "/language:${{ matrix.language }}"

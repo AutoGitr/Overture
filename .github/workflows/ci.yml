@@ -1,0 +1,472 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to validate
+        required: false
+        type: string
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      dockerfile: ${{ steps.filter.outputs.dockerfile }}
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      container: ${{ steps.filter.outputs.container }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Evaluate changed paths
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          all_true() {
+            echo "dockerfile=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "contracts=true" >> "$GITHUB_OUTPUT"
+            echo "container=true" >> "$GITHUB_OUTPUT"
+          }
+
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$BASE_REF" ]; then
+            if ! git rev-parse --verify "origin/$BASE_REF" >/dev/null 2>&1; then
+              git fetch origin "$BASE_REF" --depth=1
+            fi
+            DIFF=$(git diff --name-only "origin/$BASE_REF"...HEAD || git diff --name-only "origin/$BASE_REF")
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            DIFF=$(git diff --name-only "$BEFORE_SHA" "$HEAD_SHA")
+          else
+            all_true
+            exit 0
+          fi
+
+          has_changed() {
+            echo "$DIFF" | grep -E "$1" >/dev/null 2>&1
+          }
+
+          if has_changed '^\.github/workflows/ci\.yml$'; then
+            all_true
+            exit 0
+          fi
+
+          if has_changed '^(Dockerfile|\.hadolint)'; then
+            echo "dockerfile=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerfile=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if has_changed '^(src/|tests/|packaging/.+\.py$|\.github/workflows/|pyproject\.toml$|uv\.lock$|\.python-version$|alembic\.ini$|scripts/|\.github/(README|SECURITY|SUPPORT)\.md$|\.github/labels\.json$|\.github/release\.yml$|\.github/renovate\.json$)'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if has_changed '^frontend/'; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if has_changed '^(src/|schema/|scripts/|openapi/|frontend/|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/)'; then
+            echo "contracts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "contracts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if has_changed '^(Dockerfile$|\.dockerignore$|compose\.yaml$|\.env\.example$|packaging/|scripts/container_smoke\.py$|src/|frontend/|pyproject\.toml$|uv\.lock$|\.python-version$|licenses/|LICENSE$|\.github/README\.md$)'; then
+            echo "container=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "container=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  dockerfile-lint:
+    name: Lint Dockerfile
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.dockerfile == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
+
+  backend-checks:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+
+      - name: Install backend dependencies
+        run: uv sync --locked --group dev
+
+      - name: Audit locked backend dependencies
+        run: uv audit --locked
+
+      - name: Validate release metadata and required operator documents
+        run: uv run --locked python -m scripts.release_metadata
+
+      - name: Prepare pinned provider specifications
+        run: uv run --locked python -m scripts.provider_specs
+
+      - name: Ruff check
+        run: uv run --locked ruff check
+
+      - name: Ruff format check
+        run: uv run --locked ruff format --check
+
+      - name: Pyright
+        run: uv run --locked python -m pyright
+
+      - name: Run tests with coverage
+        run: uv run --locked python -m pytest --cov --cov-report=term-missing --cov-report=html
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-coverage
+          path: htmlcov
+          retention-days: 14
+
+  frontend-checks:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Audit locked frontend dependencies
+        run: bun audit
+
+      - name: Verify (typecheck, lint, format, coverage, build)
+        run: bun run ci
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          retention-days: 14
+
+  contract-checks:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+
+      - name: Install backend dependencies
+        run: uv sync --locked --group dev
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Check generated contracts
+        run: uv run --locked python -m scripts.contracts --check
+
+      # Overture vendors the catalog contract; a change made only in
+      # OvertureDB must fail here rather than at the next catalog sync.
+      - name: Checkout OvertureDB
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AutoGitr/OvertureDB
+          path: OvertureDB
+          persist-credentials: false
+
+      - name: Check the vendored OvertureDB contract
+        run: uv run --locked python -m scripts.dataset_contract OvertureDB --check
+
+      - name: Check agent skills
+        run: uv run --locked python -m scripts.sync_skills --check
+
+  frontend-e2e:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        run: bun run test:e2e
+
+      - name: Set up uv for OIDC browser tests
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+
+      - name: Install the OIDC test backend
+        run: uv sync --project .. --locked --group dev
+
+      - name: Run OIDC browser tests against the backend
+        run: bun run test:oidc
+
+  container-smoke:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.container == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Validate Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          # Required settings may instead be supplied by mounted Docker secrets.
+          MEDIA_SERVER= MEDIA_SERVER_API_KEY= MEDIA_SERVER_URL= docker compose config --quiet
+          rm .env
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build production image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: overture:smoke
+          cache-from: type=gha,scope=container-smoke
+          cache-to: type=gha,scope=container-smoke,mode=max,ignore-error=true
+
+      - name: Verify hash generation and literal Compose hash handling
+        run: |
+          set -euo pipefail
+          unset APP_PASSWORD_HASH
+          # The documented command, run against the image just built.
+          line=$(echo smoke-password-long \
+            | docker run --rm -i overture:smoke password hash --password-stdin)
+          [[ $line == "APP_PASSWORD_HASH='\$argon2id\$"*"'" ]]
+          # Compose must pass the pasted line through without interpolating its $ signs.
+          cp .env.example .env
+          printf '\n%s\n' "$line" >> .env
+          rendered=$(docker compose config --format json \
+            | jq -r .services.overture.environment.APP_PASSWORD_HASH)
+          rm .env
+          # Compose config escapes literal $ as $$ to prevent downstream interpolation.
+          normalized="${rendered//\$\$/\$}"
+          [[ "APP_PASSWORD_HASH='$normalized'" == "$line" ]]
+
+      - name: Verify startup, authenticated boundaries, persistence, and restart
+        env:
+          APP_PASSWORD_HASH: $argon2id$v=19$m=19456,t=2,p=1$5PshSM2LkBARR0U/VapWcQ$Cyx+v2jMhbD55bxzEKRR07qFy3RE6MU1+PXxS/nJfK4
+          MEDIA_SERVER: plex
+          MEDIA_SERVER_URL: http://127.0.0.1:32400
+          MEDIA_SERVER_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        run: |
+          set -euo pipefail
+
+          container="overture-smoke"
+          volume="overture-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          cleanup() {
+            docker rm --force "$container" >/dev/null 2>&1 || true
+            docker volume rm "$volume" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker volume create "$volume" >/dev/null
+
+          start() {
+            docker run --detach --name "$container" \
+              --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
+              --cap-drop ALL --security-opt no-new-privileges:true \
+              --publish 127.0.0.1:5885:5885 \
+              --volume "$volume:/config" \
+              --env APP_PASSWORD_HASH \
+              --env MEDIA_SERVER \
+              --env MEDIA_SERVER_URL \
+              --env MEDIA_SERVER_API_KEY \
+              overture:smoke >/dev/null
+
+            for _ in $(seq 1 60); do
+              if curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null; then
+                return 0
+              fi
+              if [ "$(docker inspect --format '{{.State.Running}}' "$container")" != true ]; then
+                docker logs "$container"
+                return 1
+              fi
+              sleep 1
+            done
+            docker logs "$container"
+            return 1
+          }
+
+          verify() {
+            docker exec --interactive "$container" python - "$@" < scripts/container_smoke.py
+          }
+
+          start
+          curl --fail --silent http://127.0.0.1:5885/ | grep -q '<title>Overture</title>'
+          docker exec "$container" overture check
+          verify --expected-tab art --set-tab themes
+          docker stop --time 30 "$container" >/dev/null
+          docker rm "$container" >/dev/null
+
+          start
+          verify --expected-tab themes
+
+      - name: Block fixable High and Critical image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: overture:smoke
+          scanners: vuln
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  ci-result:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    needs:
+      - changes
+      - dockerfile-lint
+      - backend-checks
+      - frontend-checks
+      - contract-checks
+      - frontend-e2e
+      - container-smoke
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Check CI result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DOCKERFILE_RESULT: ${{ needs.dockerfile-lint.result }}
+          BACKEND_RESULT: ${{ needs.backend-checks.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-checks.result }}
+          CONTRACT_RESULT: ${{ needs.contract-checks.result }}
+          E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          CONTAINER_RESULT: ${{ needs.container-smoke.result }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "Change detection job failed."
+            exit 1
+          fi
+
+          for result in "$DOCKERFILE_RESULT" "$BACKEND_RESULT" "$FRONTEND_RESULT" "$CONTRACT_RESULT" "$E2E_RESULT" "$CONTAINER_RESULT"; do
+            case "$result" in
+              success|skipped)
+                ;;
+              *)
+                echo "One or more CI jobs did not pass."
+                echo "dockerfile-lint=$DOCKERFILE_RESULT"
+                echo "backend-checks=$BACKEND_RESULT"
+                echo "frontend-checks=$FRONTEND_RESULT"
+                echo "contract-checks=$CONTRACT_RESULT"
+                echo "frontend-e2e=$E2E_RESULT"
+                echo "container-smoke=$CONTAINER_RESULT"
+                exit 1
+                ;;
+            esac
+          done
