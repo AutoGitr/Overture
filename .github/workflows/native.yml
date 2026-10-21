@@ -1,6 +1,6 @@
 name: Native Linux qualification
 
-# Qualify packaging and runtime dependency changes during release.
+# Qualify packaging and runtime dependency changes in CI and during release.
 on:
   workflow_call:
     inputs:

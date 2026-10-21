@@ -57,11 +57,43 @@ def test_workflows_pin_actions_bound_runtime_and_do_not_persist_credentials() ->
             _assert_job_steps(job["steps"], required_uv)
 
 
-def test_codeql_scans_python_typescript_and_actions() -> None:
+_CODEQL_EXCLUDED = re.compile(r"grep -Ev '([^']+)' <<< \"\$changed\"")
+_CODEQL_LANGUAGE = re.compile(
+    r"grep -Eq '([^']+)' <<< \"\$code\"; then\s+languages\+=\('\"([\w-]+)\"'\)"
+)
+NO_LANGUAGE: frozenset[str] = frozenset()
+
+
+@pytest.mark.parametrize(
+    ("path", "languages"),
+    [
+        ("src/overture/main.py", frozenset({"python"})),
+        ("scripts/release_metadata.py", frozenset({"python"})),
+        ("frontend/src/App.svelte", frozenset({"javascript-typescript"})),
+        ("frontend/vite.config.ts", frozenset({"javascript-typescript"})),
+        (".github/workflows/ci.yml", frozenset({"actions"})),
+        ("tests/test_api.py", NO_LANGUAGE),
+        ("frontend/src/test/e2e/fixtures.ts", NO_LANGUAGE),
+        ("frontend/package.json", NO_LANGUAGE),
+        ("uv.lock", NO_LANGUAGE),
+        (".github/README.md", NO_LANGUAGE),
+        ("Dockerfile", NO_LANGUAGE),
+    ],
+)
+def test_codeql_analyses_only_the_languages_a_change_touches(
+    path: str, languages: frozenset[str]
+) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/codeql.yml").read_text())
-    matrix = workflow["jobs"]["analyze"]["strategy"]["matrix"]["include"]
-    languages = {entry["language"] for entry in matrix}
-    assert languages == {"python", "javascript-typescript", "actions"}
+    script = workflow["jobs"]["languages"]["steps"][1]["run"]
+    assert """all='["python","javascript-typescript","actions"]'""" in script
+    excluded = _CODEQL_EXCLUDED.search(script)
+    assert excluded
+    selected = {
+        language
+        for pattern, language in _CODEQL_LANGUAGE.findall(script)
+        if re.search(pattern, path) and not re.search(excluded[1], path)
+    }
+    assert selected == languages
 
 
 def test_release_workflow_triggers_on_semver_tags_and_dispatch() -> None:
@@ -112,31 +144,47 @@ def test_runner_updates_are_enabled_without_automatic_os_upgrades() -> None:
     assert rule["minimumReleaseAge"] is None
 
 
+APP = {"backend", "contracts", "container", "e2e", "release-validation"}
+WEB = {"frontend", "container", "e2e", "release-validation"}
+DEPENDENCIES = APP | {"native"}
+
+
 @pytest.mark.parametrize(
-    ("path", "required"),
+    ("path", "selected"),
     [
-        ("src/overture/main.py", {"backend", "contracts", "container"}),
-        ("pyproject.toml", {"backend", "contracts", "container"}),
-        ("uv.lock", {"backend", "contracts", "container"}),
-        ("frontend/package.json", {"frontend", "contracts", "container"}),
-        ("frontend/bun.lock", {"frontend", "contracts", "container"}),
+        ("src/overture/main.py", APP),
+        ("pyproject.toml", DEPENDENCIES),
+        ("uv.lock", DEPENDENCIES),
+        ("frontend/src/App.svelte", WEB),
+        ("frontend/package.json", WEB | {"contracts"}),
+        ("frontend/bun.lock", WEB | {"contracts"}),
+        ("frontend/src/generated/rest/types.gen.ts", WEB | {"contracts"}),
+        ("scripts/contracts.py", {"backend", "contracts"}),
+        ("scripts/release_metadata.py", {"backend"}),
+        ("frontend/index.html", WEB | {"backend"}),
+        ("tests/test_api.py", {"backend"}),
+        ("tests/test_release/test_capacity.py", {"backend", "release-validation"}),
         (".agents/skills.json", {"contracts"}),
         ("openapi/overture.json", {"contracts"}),
-        ("packaging/linux/build.py", {"backend", "container"}),
-        (".github/workflows/native.yml", {"backend"}),
+        ("Dockerfile", {"dockerfile", "backend", "container", "native"}),
+        ("compose.yaml", {"backend", "container"}),
+        ("packaging/linux/build.py", {"backend", "native"}),
+        ("packaging/linux/test.Dockerfile", {"native"}),
+        (".github/workflows/native.yml", {"backend", "native"}),
         (".github/workflows/codeql.yml", {"backend"}),
+        (".github/CHANGELOG.md", {"backend"}),
+        ("AGENTS.md", {"backend"}),
     ],
 )
-def test_ci_filters_cover_build_and_contract_inputs(
-    path: str, required: set[str]
+def test_ci_runs_exactly_the_jobs_a_change_affects(
+    path: str, selected: set[str]
 ) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
     script = workflow["jobs"]["changes"]["steps"][1]["run"]
     filters = re.findall(
-        r"if has_changed '([^']+)'; then\s+echo \"(\w+)=true\"", script
+        r"if has_changed '([^']+)'; then\s+echo \"([\w-]+)=true\"", script
     )
-    selected = {job for pattern, job in filters if re.search(pattern, path)}
-    assert required <= selected
+    assert {job for pattern, job in filters if re.search(pattern, path)} == selected
 
 
 def test_async_database_dependency_is_declared_and_locked() -> None:

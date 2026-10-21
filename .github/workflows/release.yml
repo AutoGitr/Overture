@@ -20,6 +20,10 @@ concurrency:
 
 jobs:
   quality:
+    # CI's own native job, skipped here, still needs this to be granted.
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/ci.yml
     with:
       ref: refs/tags/${{ inputs.tag || github.ref_name }}

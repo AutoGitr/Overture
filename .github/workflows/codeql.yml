@@ -2,28 +2,8 @@ name: CodeQL
 
 on:
   pull_request:
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "scripts/**"
-      - "packaging/**/*.py"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "frontend/**"
-      - ".github/workflows/**"
-      - ".github/codeql/**"
   push:
     branches: [main]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "scripts/**"
-      - "packaging/**/*.py"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "frontend/**"
-      - ".github/workflows/**"
-      - ".github/codeql/**"
   schedule:
     # Catches newly disclosed vulnerable coding patterns in code that
     # hasn't changed recently. Offset from the Trivy and Renovate schedules.
@@ -38,8 +18,60 @@ permissions:
   contents: read
 
 jobs:
+  languages:
+    name: Detect changed languages
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      languages: ${{ steps.detect.outputs.languages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Each language is analysed only when its code changes; the weekly run
+      # and a manual run analyse all of them.
+      - name: Select the languages to analyse
+        id: detect
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          all='["python","javascript-typescript","actions"]'
+          if [ "$EVENT_NAME" = pull_request ]; then
+            changed=$(git diff --name-only "origin/$BASE_REF"...HEAD)
+          elif [ "$EVENT_NAME" = push ] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$BEFORE_SHA" HEAD)
+          else
+            echo "languages=$all" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if grep -Eq '^\.github/(workflows/codeql\.yml|codeql/)' <<< "$changed"; then
+            echo "languages=$all" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The analysis leaves tests out, so they never start one.
+          code=$(grep -Ev '^(tests/|frontend/src/test/)' <<< "$changed" || true)
+          languages=()
+          if grep -Eq '^(src/|scripts/|packaging/.+\.py$)' <<< "$code"; then
+            languages+=('"python"')
+          fi
+          if grep -Eq '^frontend/(src/|[^/]+\.(ts|js|mjs|cjs)$)' <<< "$code"; then
+            languages+=('"javascript-typescript"')
+          fi
+          if grep -Eq '^\.github/workflows/' <<< "$code"; then
+            languages+=('"actions"')
+          fi
+          echo "languages=[$(IFS=,; echo "${languages[*]}")]" >> "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: languages
+    if: needs.languages.outputs.languages != '[]'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
 
@@ -51,13 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - language: python
-            build-mode: none
-          - language: javascript-typescript
-            build-mode: none
-          - language: actions
-            build-mode: none
+        language: ${{ fromJSON(needs.languages.outputs.languages) }}
 
     steps:
       - name: Checkout
@@ -69,7 +95,7 @@ jobs:
         uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
           queries: security-extended
 

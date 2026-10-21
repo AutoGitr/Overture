@@ -138,8 +138,10 @@ Never delete untagged versions of the `overture` package: a release is an index
 with one image and one attestation manifest per platform, and only the index is
 tagged.
 
-Repository settings: protect `main` and `v*` tags, require the CI, CodeQL and
-Trivy checks, and keep Actions permissions read-only by default. Repository
+Repository settings: protect `main` and `v*` tags, require only the `ci-result`
+check, which passes once every CI job a change needs has passed, and keep Actions
+permissions read-only by default. CodeQL analyses only the languages a change
+touches, so it is not a required check. Repository
 labels are defined in `.github/labels.json`. Preview changes with
 `uv run --locked python -m scripts.sync_labels`; use `--apply` to reconcile them
 or `--check` to detect drift.

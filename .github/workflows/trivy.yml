@@ -6,30 +6,17 @@ name: Trivy
 # inside the built image (e.g. apt packages, or whatever the python/bun
 # base images pull in). Trivy covers both and blocks fixed High or Critical
 # findings while still uploading the complete result to the Security tab.
-# CI scans every image it builds; the weekly image scan covers what users run.
+# CI audits locked dependencies and scans every image it builds whenever they
+# change; this weekly run catches what was disclosed since, in the repository
+# and in the image users run.
 
 on:
-  pull_request:
-    paths:
-      - pyproject.toml
-      - uv.lock
-      - frontend/package.json
-      - frontend/bun.lock
-      - .github/workflows/trivy.yml
-  push:
-    branches: [main]
-    paths:
-      - pyproject.toml
-      - uv.lock
-      - frontend/package.json
-      - frontend/bun.lock
-      - .github/workflows/trivy.yml
   schedule:
     - cron: "43 3 * * 1"
   workflow_dispatch:
 
 concurrency:
-  group: trivy-${{ github.event.pull_request.number || github.ref }}
+  group: trivy
   cancel-in-progress: true
 
 permissions:
@@ -73,7 +60,6 @@ jobs:
 
   trivy-image:
     name: Container image scan
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
 
