@@ -33,7 +33,7 @@
     "ci:e2e": "bun run test:e2e"
   },
   "dependencies": {
-    "@tanstack/svelte-query": "6.3.4",
+    "@tanstack/svelte-query": "6.3.5",
     "sv-router": "0.19.0"
   },
   "overrides": {
@@ -42,7 +42,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@hey-api/openapi-ts": "0.99.0",
-    "@lucide/svelte": "1.59.0",
+    "@lucide/svelte": "1.61.0",
     "@playwright/test": "1.64.1",
     "@resvg/resvg-js": "2.6.2",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
@@ -62,7 +62,7 @@
     "svelte-check": "4.7.7",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2",
-    "vite": "8.3.4",
+    "vite": "8.3.5",
     "vite-plugin-pwa": "2.0.0",
     "vitest": "5.0.5"
   }
