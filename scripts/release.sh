@@ -33,8 +33,11 @@ if git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null \
     exit 1
 fi
 
+# The tree was clean, so a failed or interrupted check leaves nothing to keep.
+trap 'git checkout -- .' EXIT
 uv run --locked python -m scripts.release_metadata --prepare "$VERSION"
 bash scripts/pre-commit-check.sh
+trap - EXIT
 
 git commit --all --gpg-sign --message "chore: release $TAG"
 git tag --sign "$TAG" --message "Release $TAG"
