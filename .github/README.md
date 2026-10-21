@@ -499,6 +499,9 @@ the catalog. Imported ThemerrDB choices are maintained upstream in ThemerrDB.
 The REST API is described in [`openapi/overture.json`](https://github.com/AutoGitr/Overture/blob/main/openapi/overture.json)
 and served at `/api/docs` for authenticated users.
 
+Required JSON request bodies reject `null`. To stop all bulk asset jobs,
+`POST /api/bulk/assets/stop` accepts an omitted body, `null`, or `{}`.
+
 ## Maintenance
 
 ### Upgrade

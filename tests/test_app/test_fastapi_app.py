@@ -56,6 +56,44 @@ def test_health_returns_public_status_and_request_id(client: TestClient) -> None
     )
 
 
+@pytest.mark.parametrize("query", ["", "?limit=1", "?limit=50"])
+def test_theme_search_accepts_defaults_and_limit_boundaries(
+    authenticated_client: TestClient, query: str
+) -> None:
+    response = authenticated_client.get(f"/api/themes/search{query}")
+    assert response.status_code == 200
+    assert response.json() == {"results": []}
+
+
+@pytest.mark.parametrize("query", ["limit=0", "limit=51", "video_ids=invalid"])
+def test_theme_search_preserves_model_field_constraints(
+    authenticated_client: TestClient, query: str
+) -> None:
+    response = authenticated_client.get(f"/api/themes/search?{query}")
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("content", ["", "null", "{}"])
+def test_bulk_stop_accepts_omitted_null_and_default_bodies(
+    authenticated_client: TestClient, auth_headers: dict[str, str], content: str
+) -> None:
+    response = authenticated_client.post(
+        "/api/bulk/assets/stop",
+        content=content,
+        headers={**auth_headers, "Content-Type": "application/json"},
+    )
+    assert response.status_code == 200
+
+
+def test_login_rejects_explicit_null_body(client: TestClient) -> None:
+    response = client.post(
+        "/api/auth/login",
+        content="null",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+
+
 def test_docs_and_openapi_require_authentication(
     client: TestClient, *, session_token: str
 ) -> None:

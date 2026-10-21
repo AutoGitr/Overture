@@ -16,6 +16,12 @@ Install the exact versions the project pins: Python in `.python-version`,
 [Bun](https://bun.sh) as `packageManager` in `frontend/package.json`. CI and the
 container build use the same versions. Docker is only needed for container and native builds.
 
+Python is pinned exactly in `requires-python`, `.python-version` and the Docker
+image. Update them together, including `uv.lock`; patch releases go through CI
+before adoption. Renovate's pinning policy is intentional. A security update
+can arrive separately from its tool's Docker update, so check both pins even
+when Renovate normally groups them.
+
 ```sh
 uv sync --locked --group dev
 uv run python -m scripts.provider_specs   # pinned media server API specs for tests

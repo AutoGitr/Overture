@@ -17,8 +17,10 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_the_container_builds_with_the_pinned_uv_python_and_bun() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text()
     with (ROOT / "pyproject.toml").open("rb") as project_file:
-        uv = tomllib.load(project_file)["tool"]["uv"]["required-version"]
+        project = tomllib.load(project_file)
+    uv = project["tool"]["uv"]["required-version"]
     python = (ROOT / ".python-version").read_text().strip()
+    assert project["project"]["requires-python"] == f"=={python}"
     package = json.loads((ROOT / "frontend/package.json").read_text())
     bun = package["packageManager"].removeprefix("bun@")
     assert package["engines"]["bun"] == bun
