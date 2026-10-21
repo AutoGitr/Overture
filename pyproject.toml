@@ -12,7 +12,7 @@ overture = "overture.cli:main"
 
 [project]
 name = "overture"
-version = "1.0.0"
+version = "1.0.1"
 description = "Overture Backend"
 readme = ".github/README.md"
 license = "AGPL-3.0-only"
