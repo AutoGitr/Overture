@@ -164,9 +164,9 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
-          version: "0.13.1"
+          version: "0.13.4"
 
       - name: Install backend dependencies
         run: uv sync --locked --group dev
@@ -251,9 +251,9 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
-          version: "0.13.1"
+          version: "0.13.4"
 
       - name: Install backend dependencies
         run: uv sync --locked --group dev
@@ -316,9 +316,9 @@ jobs:
         run: bun run test:e2e
 
       - name: Set up uv for OIDC browser tests
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
-          version: "0.13.1"
+          version: "0.13.4"
 
       - name: Install the OIDC test backend
         run: uv sync --project .. --locked --group dev
@@ -439,7 +439,7 @@ jobs:
       - name: Block fixable High and Critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.76.0
+          version: v0.76.1
           scan-type: image
           image-ref: overture:smoke
           scanners: vuln
