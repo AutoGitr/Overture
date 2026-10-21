@@ -112,12 +112,16 @@ Release `main` with one command:
 bash scripts/release.sh X.Y.Z
 ```
 
-It checks that `main` matches `origin` and that every check on it passed, that
-`X.Y.Z` is the next patch, minor or major version after the newest one in use,
-and that a ruleset still protects `v*` tags. It then sets the version across `pyproject.toml`, `uv.lock`, `frontend/package.json` and
-`openapi/overture.json`, moves the `[Unreleased]` entries of
-[CHANGELOG.md](CHANGELOG.md) under `## [X.Y.Z] - <date>`, runs the full
-check, then pushes a signed release commit and `vX.Y.Z` tag together.
+It checks that `main` matches `origin` and that every workflow its push started
+passed, that `X.Y.Z` is the next patch, minor or major version after the newest
+one in use, and that a ruleset still protects `v*` tags. It then starts the
+**Release check** workflow on that commit: the native Linux qualification and
+the capacity and soak validation, which CI leaves to releases. While that runs,
+it sets the version across `pyproject.toml`, `uv.lock`, `frontend/package.json`
+and `openapi/overture.json`, moves the `[Unreleased]` entries of
+[CHANGELOG.md](CHANGELOG.md) under `## [X.Y.Z] - <date>` and runs the full local
+check. Once the Release check has passed, it pushes a signed release commit and
+`vX.Y.Z` tag together.
 
 The workflow runs CI, native Linux qualification and release validation, builds
 the native archive, pushes the `amd64` and `arm64` image by digest, scans and

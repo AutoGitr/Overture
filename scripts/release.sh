@@ -73,20 +73,50 @@ if ! grep -qx deletion <<< "$tag_rules" || ! grep -qx update <<< "$tag_rules"; t
 fi
 
 # A version is lost if the Release workflow fails on what the tag builds, so
-# only tag on top of a commit whose checks, CI among them, all passed.
+# only tag a commit whose push workflows, CI among them, all passed.
+sha="$(git rev-parse HEAD)"
 read -r ci_passed unfinished < <(
-    gh api "repos/{owner}/{repo}/commits/$(git rev-parse HEAD)/check-runs?per_page=100" \
-        --jq '"\([.check_runs[] | select(.name == "ci-result" and .conclusion == "success")] | length) \([.check_runs[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral"))] | length)"'
+    gh run list --commit "$sha" --event push --json workflowName,status,conclusion \
+        --jq '"\([.[] | select(.workflowName == "CI" and .conclusion == "success")] | length) \([.[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped"))] | length)"'
 )
 if [ "$ci_passed" -eq 0 ] || [ "$unfinished" -ne 0 ]; then
     echo "The checks on main have not all passed yet; wait for them or fix main." >&2
     exit 1
 fi
 
+# The native qualification and release validation run only for releases. They
+# run remotely while the local check runs, and must pass before tagging.
+check_run="$(
+    gh run list --workflow release-check.yml --commit "$sha" --status success \
+        --limit 1 --json databaseId --jq '.[0].databaseId // empty'
+)"
+if [ -z "$check_run" ]; then
+    started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    gh workflow run release-check.yml --ref main
+    for _ in $(seq 1 30); do
+        check_run="$(
+            gh run list --workflow release-check.yml --commit "$sha" --limit 1 \
+                --json databaseId,createdAt \
+                --jq ".[] | select(.createdAt >= \"$started\") | .databaseId"
+        )"
+        [ -n "$check_run" ] && break
+        sleep 2
+    done
+    if [ -z "$check_run" ]; then
+        echo "The Release check workflow did not start." >&2
+        exit 1
+    fi
+fi
+
 # The tree was clean, so a failed or interrupted check leaves nothing to keep.
 trap 'git checkout -- .' EXIT
 uv run --locked python -m scripts.release_metadata --prepare "$VERSION"
 bash scripts/pre-commit-check.sh
+echo "Waiting for the Release check: $(gh run view "$check_run" --json url --jq .url)"
+if ! gh run watch "$check_run" --exit-status >/dev/null; then
+    echo "The Release check failed; fix main and release again." >&2
+    exit 1
+fi
 trap - EXIT
 
 git commit --all --gpg-sign --message "chore: release $TAG"

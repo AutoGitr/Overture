@@ -34,7 +34,6 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       container: ${{ steps.filter.outputs.container }}
       native: ${{ steps.filter.outputs.native }}
-      release-validation: ${{ steps.filter.outputs.release-validation }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,7 +53,7 @@ jobs:
           set -euo pipefail
 
           all_true() {
-            for output in dockerfile backend frontend e2e contracts container native release-validation; do
+            for output in dockerfile backend frontend e2e contracts container; do
               echo "$output=true" >> "$GITHUB_OUTPUT"
             done
           }
@@ -118,18 +117,12 @@ jobs:
             echo "container=false" >> "$GITHUB_OUTPUT"
           fi
 
-          # What the native archive bundles beyond the application code, which
-          # the other jobs already test.
-          if has_changed '^(packaging/linux/|Dockerfile$|\.dockerignore$|scripts/container_smoke\.py$|pyproject\.toml$|uv\.lock$|\.python-version$|licenses/|LICENSE$|\.github/workflows/native\.yml$)'; then
+          # Packaging changes only; scripts/release.sh runs the full native
+          # qualification before each release.
+          if has_changed '^(packaging/linux/|\.github/workflows/native\.yml$)'; then
             echo "native=true" >> "$GITHUB_OUTPUT"
           else
             echo "native=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if has_changed '^(src/|frontend/|tests/test_release/|pyproject\.toml$|uv\.lock$|\.python-version$|\.github/workflows/release-validation\.yml$)'; then
-            echo "release-validation=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "release-validation=false" >> "$GITHUB_OUTPUT"
           fi
 
   dockerfile-lint:
@@ -442,8 +435,6 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-  # The Release workflow runs these two itself, so they run here only on their
-  # own, where they qualify main before release.sh tags it.
   native:
     needs: changes
     if: needs.changes.outputs.native == 'true' && !inputs.ref
@@ -451,11 +442,6 @@ jobs:
       contents: read
       actions: read
     uses: ./.github/workflows/native.yml
-
-  release-validation:
-    needs: changes
-    if: needs.changes.outputs.release-validation == 'true' && !inputs.ref && github.event_name != 'pull_request'
-    uses: ./.github/workflows/release-validation.yml
 
   ci-result:
     runs-on: ubuntu-26.04
@@ -469,7 +455,6 @@ jobs:
       - frontend-e2e
       - container-smoke
       - native
-      - release-validation
     if: ${{ !cancelled() }}
     steps:
       - name: Check CI result
@@ -482,7 +467,6 @@ jobs:
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           CONTAINER_RESULT: ${{ needs.container-smoke.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
-          RELEASE_VALIDATION_RESULT: ${{ needs.release-validation.result }}
         run: |
           set -euo pipefail
 
@@ -491,7 +475,7 @@ jobs:
             exit 1
           fi
 
-          for result in "$DOCKERFILE_RESULT" "$BACKEND_RESULT" "$FRONTEND_RESULT" "$CONTRACT_RESULT" "$E2E_RESULT" "$CONTAINER_RESULT" "$NATIVE_RESULT" "$RELEASE_VALIDATION_RESULT"; do
+          for result in "$DOCKERFILE_RESULT" "$BACKEND_RESULT" "$FRONTEND_RESULT" "$CONTRACT_RESULT" "$E2E_RESULT" "$CONTAINER_RESULT" "$NATIVE_RESULT"; do
             case "$result" in
               success|skipped)
                 ;;
@@ -504,7 +488,6 @@ jobs:
                 echo "frontend-e2e=$E2E_RESULT"
                 echo "container-smoke=$CONTAINER_RESULT"
                 echo "native=$NATIVE_RESULT"
-                echo "release-validation=$RELEASE_VALIDATION_RESULT"
                 exit 1
                 ;;
             esac

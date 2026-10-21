@@ -152,9 +152,9 @@ def test_runner_updates_are_enabled_without_automatic_os_upgrades() -> None:
     assert rule["minimumReleaseAge"] is None
 
 
-APP = {"backend", "contracts", "container", "e2e", "release-validation"}
-WEB = {"frontend", "container", "e2e", "release-validation"}
-DEPENDENCIES = APP | {"native"}
+APP = {"backend", "contracts", "container", "e2e"}
+WEB = {"frontend", "container", "e2e"}
+DEPENDENCIES = APP
 
 
 @pytest.mark.parametrize(
@@ -171,10 +171,10 @@ DEPENDENCIES = APP | {"native"}
         ("scripts/release_metadata.py", {"backend"}),
         ("frontend/index.html", WEB | {"backend"}),
         ("tests/test_api.py", {"backend"}),
-        ("tests/test_release/test_capacity.py", {"backend", "release-validation"}),
+        ("tests/test_release/test_capacity.py", {"backend"}),
         (".agents/skills.json", {"contracts"}),
         ("openapi/overture.json", {"contracts"}),
-        ("Dockerfile", {"dockerfile", "backend", "container", "native"}),
+        ("Dockerfile", {"dockerfile", "backend", "container"}),
         ("compose.yaml", {"backend", "container"}),
         ("packaging/linux/build.py", {"backend", "native"}),
         ("packaging/linux/test.Dockerfile", {"native"}),
