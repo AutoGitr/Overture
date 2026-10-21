@@ -178,7 +178,7 @@ jobs:
           TRIVY_PLATFORM: linux/amd64
         with:
           # renovate: datasource=github-releases depName=aquasecurity/trivy
-          version: v0.75.0
+          version: v0.76.0
           scan-type: image
           image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
           scanners: vuln
