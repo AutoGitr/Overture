@@ -14,6 +14,7 @@
   "minimumReleaseAge": "3 days",
   "schedule": ["* 5 * * 2"],
   "internalChecksFilter": "strict",
+  "rebaseWhen": "conflicted",
   "osvVulnerabilityAlerts": true,
   "lockFileMaintenance": {
     "enabled": true,
@@ -56,11 +57,11 @@
       "groupName": "Python Version"
     },
     {
-      "matchManagers": ["github-actions"],
+      "matchManagers": ["github-actions", "custom.regex"],
       "addLabels": ["ci"]
     },
     {
-      "matchManagers": ["github-actions"],
+      "matchManagers": ["github-actions", "custom.regex"],
       "groupName": "GitHub Actions Updates",
       "matchUpdateTypes": ["minor", "patch"]
     },
