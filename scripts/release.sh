@@ -32,6 +32,16 @@ if git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null \
     echo "$TAG already exists." >&2
     exit 1
 fi
+# A version is lost if the Release workflow fails on what the tag builds, so
+# only tag on top of a commit whose checks, CI among them, all passed.
+read -r ci_passed unfinished < <(
+    gh api "repos/{owner}/{repo}/commits/$(git rev-parse HEAD)/check-runs?per_page=100" \
+        --jq '"\([.check_runs[] | select(.name == "ci-result" and .conclusion == "success")] | length) \([.check_runs[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral"))] | length)"'
+)
+if [ "$ci_passed" -eq 0 ] || [ "$unfinished" -ne 0 ]; then
+    echo "The checks on main have not all passed yet; wait for them or fix main." >&2
+    exit 1
+fi
 
 # The tree was clean, so a failed or interrupted check leaves nothing to keep.
 trap 'git checkout -- .' EXIT

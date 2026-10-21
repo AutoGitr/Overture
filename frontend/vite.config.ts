@@ -16,9 +16,9 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       manifest: {
         id: "/",
-        name: "Overture - Media Art & Theme Manager",
+        name: "Overture",
         short_name: "Overture",
-        description: "Art and theme management for Plex, Jellyfin, and Emby",
+        description: "Artwork and theme manager for Plex, Jellyfin and Emby",
         start_url: "/",
         scope: "/",
         display: "standalone",

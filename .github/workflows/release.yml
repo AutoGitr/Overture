@@ -92,6 +92,10 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          # renovate: datasource=docker depName=tonistiigi/binfmt versioning=regex:^qemu-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+          image: tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          cache-image: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -109,7 +113,8 @@ jobs:
           username: autogitr
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Create image metadata
+      # The Dockerfile owns the image labels; this only names the tags.
+      - name: Create image tags
         id: metadata
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
@@ -117,12 +122,10 @@ jobs:
             ${{ steps.release.outputs.image }}
             ${{ steps.release.outputs.dockerhub_image }}
           tags: |
-            type=raw,value=${{ steps.release.outputs.version }}
+            type=semver,pattern={{version}},value=${{ steps.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.release.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.release.outputs.version }}
             type=raw,value=latest
-          labels: |
-            org.opencontainers.image.created=${{ steps.release.outputs.created }}
-            org.opencontainers.image.revision=${{ steps.release.outputs.revision }}
-            org.opencontainers.image.version=${{ steps.release.outputs.version }}
 
       - name: Refuse to overwrite release artifacts
         env:
@@ -145,31 +148,6 @@ jobs:
             exit 1
           fi
 
-      - name: Build the arm64 release image for security scanning
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          load: true
-          platforms: linux/arm64
-          tags: overture:release-scan-arm64
-          build-args: |
-            APP_VERSION=${{ steps.release.outputs.version }}
-            BUILD_DATE=${{ steps.release.outputs.created }}
-            VCS_REF=${{ steps.release.outputs.revision }}
-          cache-from: type=gha,scope=release-arm64
-          cache-to: type=gha,scope=release-arm64,mode=max,ignore-error=true
-
-      - name: Block fixable High and Critical arm64 image vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: image
-          image-ref: overture:release-scan-arm64
-          scanners: vuln
-          format: table
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
-
       # The image is pushed by digest only and tagged once every check passed,
       # so a failed run leaves no version tag behind and can run again.
       - name: Build and push the multi-platform image by digest
@@ -179,19 +157,52 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           outputs: type=image,"name=${{ steps.release.outputs.image }},docker.io/${{ steps.release.outputs.dockerhub_image }}",push-by-digest=true,name-canonical=true,push=true
-          labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.release.outputs.version }}
             BUILD_DATE=${{ steps.release.outputs.created }}
             VCS_REF=${{ steps.release.outputs.revision }}
           cache-from: |
             type=gha,scope=container-smoke
-            type=gha,scope=release-arm64
+            type=gha,scope=release
+          cache-to: type=gha,scope=release,mode=max,ignore-error=true
           provenance: mode=max
           sbom: true
 
+      - name: Block fixable High and Critical amd64 image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/amd64
+        with:
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
+          version: v0.75.0
+          scan-type: image
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Block fixable High and Critical arm64 image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          skip-setup-trivy: true
+          scan-type: image
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # cosign 3.0 cannot verify signatures kept in COSIGN_REPOSITORY.
+          # renovate: datasource=github-releases depName=sigstore/cosign
+          cosign-release: v3.1.3
 
       - name: Sign and verify the immutable image digest
         env:
@@ -199,39 +210,45 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
           DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
           IMAGE: ${{ steps.release.outputs.image }}
+          SIGNATURES: ${{ steps.release.outputs.signatures }}
         run: |
-          for target in "$IMAGE@$DIGEST" "docker.io/$DOCKERHUB_IMAGE@$DIGEST"; do
-            cosign sign --yes "$target"
+          # Verifies with the Docker config in $2, or the logged-in default.
+          sign_and_verify() {
+            cosign sign --yes "$1"
             # Docker Hub lists a new signature among the image's referrers
             # a few seconds after accepting it.
             for attempt in 1 2 3 4 5 6; do
-              if cosign verify "$target" \
+              if DOCKER_CONFIG="${2:-$HOME/.docker}" cosign verify "$1" \
                 --certificate-identity "$CERTIFICATE_IDENTITY" \
                 --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
-                break
+                return
               fi
               if [ "$attempt" -eq 6 ]; then
+                echo "Verifying $1 failed; check that its packages are public." >&2
                 exit 1
               fi
               sleep 10
             done
-          done
+          }
+          # Kept apart so the signature tag does not become the package's
+          # newest version on its GHCR page. Verified without credentials, as
+          # a user would, because a new GHCR package starts private.
+          anonymous="$RUNNER_TEMP/anonymous-docker-config"
+          mkdir -p "$anonymous"
+          COSIGN_REPOSITORY="$SIGNATURES" sign_and_verify "$IMAGE@$DIGEST" "$anonymous"
+          sign_and_verify "docker.io/$DOCKERHUB_IMAGE@$DIGEST"
 
-      - name: Install Syft
-        id: syft
-        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-
-      - name: Generate SPDX SBOMs for both platforms
+      - name: Export the SPDX SBOMs of both platforms
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
           IMAGE: ${{ steps.release.outputs.image }}
-          SYFT: ${{ steps.syft.outputs.cmd }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           for architecture in amd64 arm64; do
-            "$SYFT" scan --from registry --platform "linux/$architecture" \
-              "$IMAGE@$DIGEST" \
-              --output "spdx-json=overture-${VERSION}-linux-${architecture}.spdx.json"
+            sbom="overture-${VERSION}-linux-${architecture}.spdx.json"
+            docker buildx imagetools inspect "$IMAGE@$DIGEST" \
+              --format "{{ json (index .SBOM \"linux/$architecture\").SPDX }}" > "$sbom"
+            jq --exit-status .spdxVersion "$sbom" >/dev/null
           done
 
       - name: Verify both published platforms
@@ -286,8 +303,12 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
           DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
           IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           printf '%s@%s\n%s@%s\n' "$IMAGE" "$DIGEST" "docker.io/$DOCKERHUB_IMAGE" "$DIGEST" > image-digest.txt
+          printf '\n### Container images\n\n- `%s:%s`\n- `docker.io/%s:%s`\n\nBoth are `%s`. [Verify a release](%s) shows how to check the signatures.\n' \
+            "$IMAGE" "$VERSION" "$DOCKERHUB_IMAGE" "$VERSION" "$DIGEST" \
+            "https://github.com/AutoGitr/Overture#verify-a-release" >> release-notes.md
 
       - name: Download the qualified native archive
         env:
@@ -331,3 +352,4 @@ jobs:
             native-release/* \
             LICENSE \
             licenses/THIRD_PARTY_NOTICES.md
+

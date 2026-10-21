@@ -251,7 +251,7 @@ Every change that needs a migration must ship with one:
 
 ## Changelog
 
-`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+`.github/CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and becomes the release notes.
 
 - A change users notice adds an entry under `## [Unreleased]` in the same

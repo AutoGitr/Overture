@@ -114,5 +114,15 @@
       "matchUpdateTypes": ["major"],
       "minimumReleaseAge": "7 days"
     }
+  ],
+  "customManagers": [
+    {
+      "description": "Tool versions passed to workflow actions, marked by a renovate comment",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+[\\w-]+: (?:[\\w./-]+:)?(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ]
+    }
   ]
 }

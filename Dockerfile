@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 COPY frontend/ .
 RUN bun run build
 
-FROM python:3.15.0-slim@sha256:2da676046630d7bf14c6764ae1143dc7fa0377a53f94bf5a642f0b214aca5bce AS python-base
+FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS python-base
 
 FROM astral/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 AS uv
 
@@ -50,7 +50,8 @@ COPY LICENSE ./
 COPY --from=frontend /src/overture/frontend ./src/overture/frontend
 RUN --mount=from=uv,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable && \
+    uv build --wheel --out-dir /dist
 
 # The native archive: python-build-standalone with the same locked packages and tools.
 FROM application AS native-build
@@ -100,7 +101,13 @@ COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
 
 WORKDIR /app
 
-COPY --from=application /app/.venv ./.venv
+COPY --from=backend-deps /app/.venv ./.venv
+# Overture gets its own small layer, so an update that keeps the dependencies
+# downloads only that.
+RUN --mount=from=uv,source=/uv,target=/bin/uv \
+    --mount=from=application,source=/dist,target=/dist \
+    uv pip install --python .venv/bin/python --no-deps --no-cache \
+        --compile-bytecode --link-mode copy /dist/overture-*.whl
 COPY --from=backend-deps /licenses/python/ /usr/share/licenses/overture/dependencies/python/
 COPY --from=frontend /licenses/frontend/ /usr/share/licenses/overture/dependencies/frontend/
 COPY LICENSE /usr/share/licenses/overture/
@@ -112,7 +119,7 @@ ARG BUILD_DATE=unknown
 ARG VCS_REF=unknown
 
 LABEL org.opencontainers.image.title="Overture" \
-      org.opencontainers.image.description="Media artwork and theme manager" \
+      org.opencontainers.image.description="Artwork and theme manager for Plex, Jellyfin and Emby" \
       org.opencontainers.image.source="https://github.com/AutoGitr/Overture" \
       org.opencontainers.image.url="https://github.com/AutoGitr/Overture" \
       org.opencontainers.image.documentation="https://github.com/AutoGitr/Overture#readme" \

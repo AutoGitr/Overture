@@ -149,7 +149,7 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Audit locked backend dependencies
-        run: uv audit --locked
+        run: uv audit --locked --preview-features audit-command
 
       - name: Validate release metadata and required operator documents
         run: uv run --locked python -m scripts.release_metadata
@@ -416,6 +416,8 @@ jobs:
       - name: Block fixable High and Critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
+          version: v0.75.0
           scan-type: image
           image-ref: overture:smoke
           scanners: vuln

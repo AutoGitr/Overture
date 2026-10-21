@@ -60,7 +60,7 @@
   <div class="login-card panel">
     <div class="login-header">
       <ProductBrand as="h1" size="lg" />
-      <p class="login-subtitle">Media Art & Theme Manager</p>
+      <p class="login-subtitle">Artwork and theme manager</p>
     </div>
 
     {#if error}

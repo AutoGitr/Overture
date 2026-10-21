@@ -32,7 +32,8 @@ def run(*command: str | Path, cwd: Path | None = None) -> str:
 
 def install_runtime(runtime: Path, project: Path, work: Path) -> None:
     """Install a relocatable interpreter, then the locked packages and Overture."""
-    run("uv", "python", "install", "--install-dir", work, platform.python_version())
+    version = platform.python_version()
+    run("uv", "python", "install", "--no-bin", "--install-dir", work, version)
     (interpreter,) = (
         path
         for path in work.iterdir()

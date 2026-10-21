@@ -11,8 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 #: The container image every release is published as.
 IMAGE = "ghcr.io/autogitr/overture"
 DOCKERHUB_IMAGE = "autogitr/overture"
+#: GHCR has no referrers API, so signatures there would otherwise be tags of IMAGE.
+SIGNATURES = f"{IMAGE}-signatures"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-CHANGELOG = "CHANGELOG.md"
+CHANGELOG = ".github/CHANGELOG.md"
 #: The change types Keep a Changelog groups a release's entries under.
 CHANGE_TYPES = frozenset(
     {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
@@ -205,6 +207,7 @@ def main() -> int:
             output.write(f"version={version}\n")
             output.write(f"image={IMAGE}\n")
             output.write(f"dockerhub_image={DOCKERHUB_IMAGE}\n")
+            output.write(f"signatures={SIGNATURES}\n")
     return 0
 
 

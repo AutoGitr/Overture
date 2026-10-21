@@ -1,4 +1,9 @@
 import { test as base, expect, type Page, type WebSocketRoute } from "@playwright/test";
+import type {
+  FolderRootsResponse,
+  JobLogPage,
+  ThemeSearchResponse,
+} from "../../generated/rest/types.gen";
 import { appSettings, publicDatasetStatus as datasetStatus } from "../helpers/fixtures";
 
 export { expect };
@@ -79,6 +84,11 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
   backend: [
     async ({ page }, use) => {
       let authenticated = false;
+      // Registered first, so it answers only what no other route does, and the
+      // preview server never proxies a request to a backend that may be running.
+      await page.route("**/api/**", (route) =>
+        route.fulfill({ status: 404, json: { detail: "Not mocked" } }),
+      );
       await page.route("**/api/auth/config", (route) =>
         route.fulfill({
           json: {
@@ -141,6 +151,18 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       );
       await page.route("**/api/realtime/snapshot", (route) =>
         route.fulfill({ json: realtimeSnapshot }),
+      );
+      await page.route("**/api/library/folder-roots", (route) =>
+        route.fulfill({ json: { movies: [], shows: [] } satisfies FolderRootsResponse }),
+      );
+      await page.route("**/api/job-snapshots/log/*", (route) => {
+        const runId = new URL(route.request().url()).pathname.split("/").at(-1) ?? "";
+        return route.fulfill({
+          json: { items: [], offset: 0, run_id: runId, total: 0 } satisfies JobLogPage,
+        });
+      });
+      await page.route("**/api/themes/search?**", (route) =>
+        route.fulfill({ json: { results: [] } satisfies ThemeSearchResponse }),
       );
       await use();
     },

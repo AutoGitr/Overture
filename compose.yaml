@@ -1,6 +1,6 @@
 services:
   overture:
-    image: "ghcr.io/autogitr/overture:latest"
+    image: "ghcr.io/autogitr/overture:1"
     container_name: "overture"
     restart: "unless-stopped"
     user: "1000:1000"

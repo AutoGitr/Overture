@@ -92,7 +92,7 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
   the title.
 - Update the [README](README.md) when behaviour changes.
 - Describe changes users notice under `## [Unreleased]` in
-  [CHANGELOG.md](../CHANGELOG.md), in the same commit.
+  [CHANGELOG.md](CHANGELOG.md), in the same commit.
 - Leave out credentials and private media details. Report vulnerabilities as
   described in [SECURITY.md](SECURITY.md).
 
@@ -105,26 +105,37 @@ it. Overture follows [Semantic Versioning](https://semver.org/):
 - **MINOR** (`1.x.0`): Backward-compatible new features or settings (`feat:`).
 - **MAJOR** (`x.0.0`): Breaking database, API, or environment changes (`feat!:`, `BREAKING CHANGE:`).
 
-Once CI, CodeQL and Trivy pass on `main`, release it with one command:
+Release `main` with one command:
 
 ```sh
 bash scripts/release.sh X.Y.Z
 ```
 
-It checks that `main` matches `origin`, sets the version across
-`pyproject.toml`, `uv.lock`, `frontend/package.json` and
+It checks that `main` matches `origin` and that every check on it passed, sets
+the version across `pyproject.toml`, `uv.lock`, `frontend/package.json` and
 `openapi/overture.json`, moves the `[Unreleased]` entries of
-[CHANGELOG.md](../CHANGELOG.md) under `## [X.Y.Z] - <date>`, runs the full
+[CHANGELOG.md](CHANGELOG.md) under `## [X.Y.Z] - <date>`, runs the full
 check, then pushes a signed release commit and `vX.Y.Z` tag together.
 
 The workflow runs CI, native Linux qualification and release validation, builds
-and scans the `amd64` and `arm64` images and the native archive, pushes the
-image by digest, signs it, attaches SBOMs and provenance, and smoke-tests both
-platforms. Only then does it add the container tags (`X.Y.Z` and `latest`) and
-create the GitHub release, whose notes are the version's changelog section.
+the native archive, pushes the `amd64` and `arm64` image by digest, scans and
+signs it, attaches SBOMs and provenance, and smoke-tests both platforms. Only
+then does it add the container tags (`X.Y.Z`, `X.Y`, `X` and `latest`) and
+create the GitHub release, whose notes are the version's changelog section
+followed by the image digest.
+
 If the run fails before that, fix the workflow on `main` and run **Release**
 from `main` with the tag as input; it rebuilds the tagged source. Never move or
 reuse a published version: publish a patch release to fix a bad one.
+
+GHCR signatures go to the `ghcr.io/autogitr/overture-signatures` package. The
+workflow verifies the GHCR image and its signature without credentials, as a
+user would, so it stops when either package is private. A package created by
+the workflow can start private: make it public once and rerun the failed job.
+
+Never delete untagged versions of the `overture` package: a release is an index
+with one image and one attestation manifest per platform, and only the index is
+tagged.
 
 Repository settings: protect `main` and `v*` tags, require the CI, CodeQL and
 Trivy checks, and keep Actions permissions read-only by default. Repository

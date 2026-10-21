@@ -7,13 +7,13 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-10-21
-
 ### Added
 
-- First release: choose artwork and theme songs for Plex, Jellyfin and Emby
+- First stable public release of Overture: choose artwork and theme songs for Plex, Jellyfin and Emby
   libraries from your media server, TMDB, OvertureDB, ThemerrDB and YouTube,
   saved as files beside your media.
 - Scheduled syncs and artwork and theme runs, Renamer and Audit.
-- Signed multi-platform container images on GHCR and Docker Hub, and a native
-  Linux archive with a systemd service.
+- Multi-platform container images on GHCR and Docker Hub, tagged with the full,
+  minor and major version, and a native Linux archive with a systemd service.
+- Signed images and release files, with SBOMs and build provenance; the README
+  explains how to verify them.

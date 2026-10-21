@@ -92,7 +92,11 @@ Overture instance against a given media or config folder.
 
 ### Docker
 
-For Linux `amd64` and `arm64`.
+For Linux `amd64` and `arm64`. The image is `ghcr.io/autogitr/overture`, also
+on Docker Hub as `autogitr/overture`. A tag such as `1.2.3` is one release,
+`1.2` and `1` follow the newest release in that line, and `latest` follows the
+newest release. The supplied Compose file uses `1`, which gets every update
+without a breaking change.
 
 1. Download [`compose.yaml`](https://github.com/AutoGitr/Overture/blob/main/compose.yaml).
 2. Configure your environment (see [Configuration](#configuration)) in either of two ways:
@@ -142,8 +146,8 @@ Ubuntu 22.04+, RHEL 8+, Fedora or Arch; the installer checks this.
 
 1. Download the archive and its `.sha256` file from the
    [latest release](https://github.com/AutoGitr/Overture/releases/latest), then
-   check and install it. Each archive also has a Sigstore bundle for
-   `cosign verify-blob`.
+   check and install it. Each archive also has a Sigstore bundle to
+   [verify](#verify-a-release) it with.
 
    ```sh
    sha256sum --check overture-<version>-linux-x86_64.tar.gz.sha256
@@ -499,7 +503,9 @@ and served at `/api/docs` for authenticated users.
 
 ### Upgrade
 
-Read the [release notes](https://github.com/AutoGitr/Overture/releases) first.
+Read the [changelog](https://github.com/AutoGitr/Overture/blob/main/.github/CHANGELOG.md)
+first; each [release](https://github.com/AutoGitr/Overture/releases) carries its
+section.
 
 - **Docker:** run `docker compose pull && docker compose up -d`.
 - **Linux service:** extract the new archive and run its `install.sh`. If the new
@@ -508,10 +514,39 @@ Read the [release notes](https://github.com/AutoGitr/Overture/releases) first.
 
 The database upgrades on start, after a [backup](#backup-and-restore). An
 upgraded database opens only in that version or newer, so to go back, restore
-that backup and run the old version: its version tag in place of `latest` in
+that backup and run the old version: its version tag in place of `1` in
 `compose.yaml` for Docker, or
 `sudo ln -sfn /opt/overture/<previous-version> /opt/overture/current` for the
 service.
+
+### Verify a release
+
+Each release is signed by its GitHub workflow with Sigstore. Check an image
+with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1
+or newer before you run it, and the native archive before you install it:
+
+```sh
+IDENTITY='^https://github.com/AutoGitr/Overture/\.github/workflows/release\.yml@refs/(tags/v.+|heads/main)$'
+ISSUER=https://token.actions.githubusercontent.com
+
+# GHCR keeps the signatures in a package of their own.
+COSIGN_REPOSITORY=ghcr.io/autogitr/overture-signatures cosign verify \
+  ghcr.io/autogitr/overture:<version> \
+  --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+cosign verify docker.io/autogitr/overture:<version> \
+  --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+
+cosign verify-blob overture-<version>-linux-x86_64.tar.gz \
+  --bundle overture-<version>-linux-x86_64.tar.gz.sigstore.json \
+  --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+
+# Every file attached to the release
+gh release verify v<version> --repo AutoGitr/Overture
+```
+
+The release notes list the image digest. The image
+carries its SPDX SBOM and build provenance, and the SBOMs are also attached to
+the release.
 
 ### Backup and restore
 
