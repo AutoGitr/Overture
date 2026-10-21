@@ -46,11 +46,6 @@
       "allowedVersions": "<5"
     },
     {
-      "matchPackageNames": ["python"],
-      "matchUpdateTypes": ["minor"],
-      "groupName": "Python Version"
-    },
-    {
       "matchManagers": ["github-actions", "custom.regex"],
       "addLabels": ["ci"]
     },
@@ -98,6 +93,16 @@
       "description": "uv must be the same version everywhere: required-version, which CI reads, and the image that builds the container",
       "matchPackageNames": ["uv", "astral/uv"],
       "groupName": "uv"
+    },
+    {
+      "description": "Python must be the same version in .python-version and the image that builds the container",
+      "matchPackageNames": ["python"],
+      "groupName": "Python Version"
+    },
+    {
+      "description": "Bun must be the same version in package.json, which CI reads, and the image that builds the web interface",
+      "matchPackageNames": ["bun", "oven/bun"],
+      "groupName": "Bun"
     },
     {
       "matchUpdateTypes": ["pin", "patch", "digest", "pinDigest"],

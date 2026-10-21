@@ -11,9 +11,10 @@ checkers enforce the code style.
 
 ## Setup
 
-Install the exact versions the project pins: Python and
-[uv](https://docs.astral.sh/uv/) in `pyproject.toml`, [Bun](https://bun.sh) in
-`frontend/package.json`. Docker is only needed for container and native builds.
+Install the exact versions the project pins: Python in `.python-version`,
+[uv](https://docs.astral.sh/uv/) as `required-version` in `pyproject.toml`, and
+[Bun](https://bun.sh) as `packageManager` in `frontend/package.json`. CI and the
+container build use the same versions. Docker is only needed for container and native builds.
 
 ```sh
 uv sync --locked --group dev

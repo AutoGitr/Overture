@@ -14,13 +14,17 @@ lazy from scripts.sync_labels import load_labels
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_the_container_builds_with_the_required_uv() -> None:
+def test_the_container_builds_with_the_pinned_uv_python_and_bun() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text()
     with (ROOT / "pyproject.toml").open("rb") as project_file:
-        required = tomllib.load(project_file)["tool"]["uv"]["required-version"]
-    images = re.findall(
-        r"(?m)^FROM astral/uv:([^@\s]+)@", (ROOT / "Dockerfile").read_text()
-    )
-    assert images == [required]
+        uv = tomllib.load(project_file)["tool"]["uv"]["required-version"]
+    python = (ROOT / ".python-version").read_text().strip()
+    package = json.loads((ROOT / "frontend/package.json").read_text())
+    bun = package["packageManager"].removeprefix("bun@")
+    assert package["engines"]["bun"] == bun
+    assert re.findall(r"(?m)^FROM astral/uv:([^@\s]+)@", dockerfile) == [uv]
+    assert re.findall(r"(?m)^FROM python:([^-@\s]+)-slim@", dockerfile) == [python]
+    assert re.findall(r"oven/bun:([^-@\s]+)-slim@", dockerfile) == [bun]
 
 
 def _assert_job_steps(steps: list[dict[str, Any]]) -> None:
@@ -34,6 +38,8 @@ def _assert_job_steps(steps: list[dict[str, Any]]) -> None:
             # setup-uv installs the required-version from pyproject.toml, and
             # uv reads Python's version from .python-version.
             assert "with" not in step
+        if uses.startswith("oven-sh/setup-bun@"):
+            assert step["with"] == {"bun-version-file": "frontend/package.json"}
         run = step.get("run", "")
         assert "${{" not in run
         assert not re.search(r"uv run (?!\-\-locked)", run)
