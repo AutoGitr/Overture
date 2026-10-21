@@ -7,6 +7,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-21
+
 ### Added
 
 - First release: choose artwork and theme songs for Plex, Jellyfin and Emby
