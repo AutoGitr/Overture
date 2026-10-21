@@ -14,14 +14,16 @@ lazy from scripts.sync_labels import load_labels
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _required_uv_version() -> str:
+def test_the_container_builds_with_the_required_uv() -> None:
     with (ROOT / "pyproject.toml").open("rb") as project_file:
-        version = tomllib.load(project_file)["tool"]["uv"]["required-version"]
-    assert isinstance(version, str)
-    return version
+        required = tomllib.load(project_file)["tool"]["uv"]["required-version"]
+    images = re.findall(
+        r"(?m)^FROM astral/uv:([^@\s]+)@", (ROOT / "Dockerfile").read_text()
+    )
+    assert images == [required]
 
 
-def _assert_job_steps(steps: list[dict[str, Any]], required_uv: str) -> None:
+def _assert_job_steps(steps: list[dict[str, Any]]) -> None:
     for step in steps:
         uses = step.get("uses", "")
         if uses:
@@ -29,15 +31,15 @@ def _assert_job_steps(steps: list[dict[str, Any]], required_uv: str) -> None:
         if uses.startswith("actions/checkout@"):
             assert step["with"]["persist-credentials"] is False
         if uses.startswith("astral-sh/setup-uv@"):
+            # setup-uv installs the required-version from pyproject.toml, and
             # uv reads Python's version from .python-version.
-            assert step["with"] == {"version": required_uv}
+            assert "with" not in step
         run = step.get("run", "")
         assert "${{" not in run
         assert not re.search(r"uv run (?!\-\-locked)", run)
 
 
 def test_workflows_pin_actions_bound_runtime_and_do_not_persist_credentials() -> None:
-    required_uv = _required_uv_version()
     for path in (ROOT / ".github/workflows").glob("*.yml"):
         raw = path.read_text()
         workflow = yaml.safe_load(raw)
@@ -54,7 +56,7 @@ def test_workflows_pin_actions_bound_runtime_and_do_not_persist_credentials() ->
                 continue
             assert re.fullmatch(r"ubuntu-\d{2}\.04", job["runs-on"])
             assert job["timeout-minutes"] <= 40
-            _assert_job_steps(job["steps"], required_uv)
+            _assert_job_steps(job["steps"])
 
 
 _CODEQL_EXCLUDED = re.compile(r"grep -Ev '([^']+)' <<< \"\$changed\"")
