@@ -41,7 +41,7 @@ jobs:
       - name: Run Trivy (filesystem)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.75.0
+          version: v0.76.0
           scan-type: fs
           scan-ref: .
           format: sarif
@@ -75,7 +75,7 @@ jobs:
       - name: Run Trivy (image)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.75.0
+          version: v0.76.0
           scan-type: image
           image-ref: ghcr.io/autogitr/overture:latest
           scanners: vuln
