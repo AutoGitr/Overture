@@ -2,8 +2,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../frontend/public/brand/overture-logo-stacked-dark.svg" />
-  <img src="../frontend/public/brand/overture-logo-stacked-light.svg" alt="Overture" width="260" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AutoGitr/Overture/main/frontend/public/brand/overture-logo-stacked-dark.svg" />
+  <img src="https://raw.githubusercontent.com/AutoGitr/Overture/main/frontend/public/brand/overture-logo-stacked-light.svg" alt="Overture" width="260" />
 </picture>
 
 _Artwork and theme manager for Plex, Jellyfin and Emby_
@@ -13,7 +13,7 @@ _Artwork and theme manager for Plex, Jellyfin and Emby_
 [![Python](https://img.shields.io/badge/Python-3.15-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.143-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev)
-[![License](https://img.shields.io/badge/License-AGPL--3.0-337ab7)](../LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-337ab7)](https://github.com/AutoGitr/Overture/blob/main/LICENSE)
 
 [Features](#features) &#9679; [Use cases](#use-cases) &#9679; [Installation](#installation) &#9679; [Using Overture](#using-overture) &#9679; [Maintenance](#maintenance) &#9679; [Contributing](#contributing)
 
@@ -94,9 +94,9 @@ Overture instance against a given media or config folder.
 
 For Linux `amd64` and `arm64`.
 
-1. Download [`compose.yaml`](../compose.yaml).
+1. Download [`compose.yaml`](https://github.com/AutoGitr/Overture/blob/main/compose.yaml).
 2. Configure your environment (see [Configuration](#configuration)) in either of two ways:
-   - **With an `.env` file:** download [`.env.example`](../.env.example), rename it to `.env`, and set your values in `.env`.
+   - **With an `.env` file:** download [`.env.example`](https://github.com/AutoGitr/Overture/blob/main/.env.example), rename it to `.env`, and set your values in `.env`.
    - **Directly in `compose.yaml`:** remove `env_file: ".env"` and set your values under `environment:` in `compose.yaml`.
 3. In `compose.yaml`, map your paths under `volumes`. Each container path must
    match the path your media server reports: if Plex sees
@@ -492,7 +492,7 @@ the catalog. Imported ThemerrDB choices are maintained upstream in ThemerrDB.
 
 ### REST API
 
-The REST API is described in [`openapi/overture.json`](../openapi/overture.json)
+The REST API is described in [`openapi/overture.json`](https://github.com/AutoGitr/Overture/blob/main/openapi/overture.json)
 and served at `/api/docs` for authenticated users.
 
 ## Maintenance
@@ -576,7 +576,7 @@ and `sudo userdel overture`.
 
 Share artwork and theme selections with
 [OvertureDB](#overturedb), or help improve Overture itself. See the
-[contributor guide](CONTRIBUTING.md) for development setup, checks and pull
-requests. Report security issues [privately](SECURITY.md).
+[contributor guide](https://github.com/AutoGitr/Overture/blob/main/.github/CONTRIBUTING.md) for development setup, checks and pull
+requests. Report security issues [privately](https://github.com/AutoGitr/Overture/blob/main/.github/SECURITY.md).
 
-Overture is licensed under [AGPL-3.0](../LICENSE).
+Overture is licensed under [AGPL-3.0](https://github.com/AutoGitr/Overture/blob/main/LICENSE).
