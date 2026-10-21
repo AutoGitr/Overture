@@ -111,8 +111,9 @@ Release `main` with one command:
 bash scripts/release.sh X.Y.Z
 ```
 
-It checks that `main` matches `origin` and that every check on it passed, sets
-the version across `pyproject.toml`, `uv.lock`, `frontend/package.json` and
+It checks that `main` matches `origin` and that every check on it passed, that
+`X.Y.Z` is the next patch, minor or major version after the newest one in use,
+and that a ruleset still protects `v*` tags. It then sets the version across `pyproject.toml`, `uv.lock`, `frontend/package.json` and
 `openapi/overture.json`, moves the `[Unreleased]` entries of
 [CHANGELOG.md](CHANGELOG.md) under `## [X.Y.Z] - <date>`, runs the full
 check, then pushes a signed release commit and `vX.Y.Z` tag together.

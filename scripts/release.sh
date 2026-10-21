@@ -10,9 +10,22 @@ if [ $# -ne 1 ]; then
 fi
 VERSION="${1#v}"
 TAG="v$VERSION"
+SEMVER='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+if [[ ! "$VERSION" =~ $SEMVER ]]; then
+    echo "$VERSION is not a stable semantic version (X.Y.Z)." >&2
+    exit 2
+fi
 
 cd "$(git rev-parse --show-toplevel)"
 
+if ! gh auth status >/dev/null 2>&1; then
+    echo "Sign in to GitHub with 'gh auth login' first." >&2
+    exit 1
+fi
+if [ -z "$(git config --get user.signingkey)" ]; then
+    echo "Set user.signingkey: main and release tags must be signed." >&2
+    exit 1
+fi
 if [ "$(git branch --show-current)" != main ]; then
     echo "Release from main." >&2
     exit 1
@@ -26,12 +39,39 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
     echo "main differs from origin/main; pull or push first." >&2
     exit 1
 fi
-# Release tags are protected and cannot be moved or deleted once pushed.
-if git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null \
-    || git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-    echo "$TAG already exists." >&2
+
+# The next version follows the newest one in use, whether as the project
+# version or as a release tag, so a typo can neither go back nor skip ahead.
+current="$(uv run --locked python -m scripts.release_metadata)"
+newest="$(
+    {
+        echo "$current"
+        git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/v##' | grep -E "$SEMVER" || true
+    } | sort -V | tail -n 1
+)"
+IFS=. read -r major minor patch <<< "$newest"
+allowed="$major.$minor.$((patch + 1)) $major.$((minor + 1)).0 $((major + 1)).0.0"
+if [[ " $allowed " != *" $VERSION "* ]]; then
+    echo "$VERSION does not follow $newest; release one of: $allowed." >&2
     exit 1
 fi
+if git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null; then
+    echo "A local $TAG tag is left from an earlier attempt; delete it with 'git tag -d $TAG'." >&2
+    exit 1
+fi
+
+# Release tags must be impossible to move or delete once pushed.
+tag_rules=""
+for id in $(gh api "repos/{owner}/{repo}/rulesets" \
+    --jq '.[] | select(.target == "tag" and .enforcement == "active") | .id'); do
+    tag_rules+="$(gh api "repos/{owner}/{repo}/rulesets/$id" \
+        --jq 'select(.conditions.ref_name.include | index("refs/tags/v*")) | .rules[].type')"$'\n'
+done
+if ! grep -qx deletion <<< "$tag_rules" || ! grep -qx update <<< "$tag_rules"; then
+    echo "No active ruleset stops v* tags from being moved or deleted; enable it first." >&2
+    exit 1
+fi
+
 # A version is lost if the Release workflow fails on what the tag builds, so
 # only tag on top of a commit whose checks, CI among them, all passed.
 read -r ci_passed unfinished < <(
