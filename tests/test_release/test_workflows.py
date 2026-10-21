@@ -72,10 +72,10 @@ def test_release_workflow_triggers_on_semver_tags_and_dispatch() -> None:
     assert set(triggers) == {"push", "workflow_dispatch"}
     assert triggers["push"]["tags"] == ["v[0-9]+.[0-9]+.[0-9]+"]
     assert "release.yml@${{ github.ref }}" in raw
-    assert "--generate-notes" in raw
+    assert "--notes-file release-notes.md" in raw
 
 
-def test_labels_in_templates_release_notes_and_renovate_exist_in_manifest() -> None:
+def test_labels_in_templates_and_renovate_exist_in_manifest() -> None:
     labels = load_labels()
     names = {label["name"] for label in labels}
     assert len(names) == len(labels)
@@ -83,14 +83,6 @@ def test_labels_in_templates_release_notes_and_renovate_exist_in_manifest() -> N
     for path in (ROOT / ".github/ISSUE_TEMPLATE").glob("*.yml"):
         form = yaml.safe_load(path.read_text())
         assert set(form.get("labels", [])) <= names
-
-    release_notes = yaml.safe_load((ROOT / ".github/release.yml").read_text())[
-        "changelog"
-    ]
-    assert set(release_notes["exclude"]["labels"]) <= names
-    for category in release_notes["categories"]:
-        category_labels = set(category.get("labels", [])) - {"*"}
-        assert category_labels <= names
 
     renovate = json.loads((ROOT / ".github/renovate.json").read_text())
     assert set(renovate["labels"]) <= names

@@ -249,6 +249,21 @@ Every change that needs a migration must ship with one:
 - Leave staging and commits to the user unless asked, and never push or
   otherwise publish to a remote.
 
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and becomes the release notes.
+
+- A change users notice adds an entry under `## [Unreleased]` in the same
+  commit: behaviour, settings, API, database, packaging, security fixes and
+  dependency updates that fix something. Skip refactors, tests, CI and
+  contributor docs.
+- File it under `### Added`, `Changed`, `Deprecated`, `Removed`, `Fixed` or
+  `Security`, and write one line for the person running Overture: what changed
+  for them and what they must do, not how it was implemented.
+- Never edit released sections; `scripts/release.sh` moves `[Unreleased]`
+  under the new version.
+
 ## Before finishing
 
 - Run `scripts/pre-commit-check.sh --fix`. It formats, regenerates the

@@ -4,6 +4,7 @@ lazy import argparse
 lazy import json
 lazy import re
 lazy import tomllib
+lazy from datetime import UTC, date, datetime
 lazy from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,16 +12,25 @@ ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "ghcr.io/autogitr/overture"
 DOCKERHUB_IMAGE = "autogitr/overture"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+CHANGELOG = "CHANGELOG.md"
+#: The change types Keep a Changelog groups a release's entries under.
+CHANGE_TYPES = frozenset(
+    {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
+)
 REQUIRED_RELEASE_FILES = (
+    CHANGELOG,
     ".github/README.md",
     ".github/SECURITY.md",
     ".github/SUPPORT.md",
     ".github/labels.json",
-    ".github/release.yml",
     "licenses/THIRD_PARTY_NOTICES.md",
 )
 _PYPROJECT_VERSION = re.compile(r'(?m)^version = "[^"]+"$')
 _UV_LOCK_OVERTURE_VERSION = re.compile(r'(?m)^(name = "overture"\nversion = )"[^"]+"$')
+_UNRELEASED = "Unreleased"
+_CHANGELOG_SECTION = re.compile(r"(?m)^## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?$")
+_CHANGELOG_GROUP = re.compile(r"(?m)^### (.+)$")
+_CHANGELOG_ENTRY = re.compile(r"(?m)^- \S")
 
 
 def _parse_semver(value: object, *, label: str = "version") -> str:
@@ -57,6 +67,40 @@ def _openapi_version(root: Path) -> str | None:
     return version if isinstance(version, str) else None
 
 
+def _changelog_sections(root: Path) -> dict[str, str]:
+    """Return each changelog section's body by version, starting with Unreleased."""
+    text = (root / CHANGELOG).read_text()
+    matches = list(_CHANGELOG_SECTION.finditer(text))
+    if not matches or matches[0].group(1) != _UNRELEASED or matches[0].group(2):
+        raise ValueError(f"{CHANGELOG} must start with a ## [{_UNRELEASED}] section")
+    ends = [match.start() for match in matches[1:]] + [len(text)]
+    sections: dict[str, str] = {}
+    for match, end in zip(matches, ends, strict=True):
+        name, released = match.groups()
+        if name in sections:
+            raise ValueError(f"{CHANGELOG} has more than one {name} section")
+        if name != _UNRELEASED:
+            _parse_semver(name, label=f"{CHANGELOG} section {name!r}")
+            if released is None:
+                raise ValueError(f"{CHANGELOG} section {name} has no release date")
+        body = text[match.end() : end].strip()
+        unknown = set(_CHANGELOG_GROUP.findall(body)) - CHANGE_TYPES
+        if unknown:
+            raise ValueError(
+                f"{CHANGELOG} section {name} has unknown change types: "
+                + ", ".join(sorted(unknown))
+            )
+        sections[name] = body
+    return sections
+
+
+def release_notes(version: str, root: Path = ROOT) -> str:
+    notes = _changelog_sections(root).get(version, "")
+    if not _CHANGELOG_ENTRY.search(notes):
+        raise ValueError(f"{CHANGELOG} has no entries for {version}")
+    return f"{notes}\n"
+
+
 def validate_release(root: Path = ROOT, *, tag: str | None = None) -> str:
     version = project_version(root)
     if tag is not None and tag != f"v{version}":
@@ -65,6 +109,10 @@ def validate_release(root: Path = ROOT, *, tag: str | None = None) -> str:
     missing = [name for name in REQUIRED_RELEASE_FILES if not (root / name).is_file()]
     if missing:
         raise ValueError("missing release files: " + ", ".join(missing))
+    if tag is None:
+        _changelog_sections(root)
+    else:
+        release_notes(version, root)
 
     for label, actual in (
         ("frontend/package.json", _frontend_version(root)),
@@ -78,8 +126,22 @@ def validate_release(root: Path = ROOT, *, tag: str | None = None) -> str:
     return version
 
 
-def set_release_version(raw_version: str, root: Path = ROOT) -> str:
+def prepare_release(raw_version: str, root: Path = ROOT, *, today: date) -> str:
+    """Set the version everywhere and move the unreleased changes under it."""
     version = _parse_semver(raw_version.removeprefix("v"))
+    sections = _changelog_sections(root)
+    if version in sections:
+        raise ValueError(f"{CHANGELOG} already has a {version} section")
+    if not _CHANGELOG_ENTRY.search(sections[_UNRELEASED]):
+        raise ValueError(f"{CHANGELOG} has no unreleased entries")
+    changelog_path = root / CHANGELOG
+    heading = f"## [{_UNRELEASED}]"
+    changelog_path.write_text(
+        changelog_path.read_text().replace(
+            heading, f"{heading}\n\n## [{version}] - {today.isoformat()}", 1
+        ),
+        newline="\n",
+    )
 
     pyproject_path = root / "pyproject.toml"
     pyproject_text, count = _PYPROJECT_VERSION.subn(
@@ -111,19 +173,30 @@ def set_release_version(raw_version: str, root: Path = ROOT) -> str:
         f"{json.dumps(openapi, sort_keys=True, indent=2)}\n", newline="\n"
     )
 
-    return validate_release(root)
+    return validate_release(root, tag=f"v{version}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--set", metavar="VERSION", help="Set the release version.")
+    parser.add_argument(
+        "--prepare",
+        metavar="VERSION",
+        help="Set the version and release the unreleased changelog entries.",
+    )
     parser.add_argument("--tag")
+    parser.add_argument(
+        "--notes-file", type=Path, help="Write the tag's changelog section here."
+    )
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
+    if args.notes_file and args.tag is None:
+        parser.error("--notes-file requires --tag")
     try:
-        if args.set is not None:
-            set_release_version(args.set)
+        if args.prepare is not None:
+            prepare_release(args.prepare, today=datetime.now(UTC).date())
         version = validate_release(tag=args.tag)
+        if args.notes_file:
+            args.notes_file.write_text(release_notes(version), newline="\n")
     except (KeyError, OSError, ValueError, tomllib.TOMLDecodeError) as exc:
         parser.error(str(exc))
     print(version)

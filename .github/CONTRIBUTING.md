@@ -91,6 +91,8 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
   such as `fix(sync): keep seasons of unconnected shows`; the squash commit uses
   the title.
 - Update the [README](README.md) when behaviour changes.
+- Describe changes users notice under `## [Unreleased]` in
+  [CHANGELOG.md](../CHANGELOG.md), in the same commit.
 - Leave out credentials and private media details. Report vulnerabilities as
   described in [SECURITY.md](SECURITY.md).
 
@@ -103,29 +105,26 @@ it. Overture follows [Semantic Versioning](https://semver.org/):
 - **MINOR** (`1.x.0`): Backward-compatible new features or settings (`feat:`).
 - **MAJOR** (`x.0.0`): Breaking database, API, or environment changes (`feat!:`, `BREAKING CHANGE:`).
 
-1. Set the version across `pyproject.toml`, `uv.lock`, `frontend/package.json`
-   and `openapi/overture.json`:
+Once CI, CodeQL and Trivy pass on `main`, release it with one command:
 
-   ```sh
-   uv run python -m scripts.release_metadata --set X.Y.Z
-   bash scripts/pre-commit-check.sh
-   ```
+```sh
+bash scripts/release.sh X.Y.Z
+```
 
-2. Merge the version commit to `main` and wait for CI, CodeQL and Trivy to pass.
-3. Tag the `main` commit and push the tag:
-
-   ```sh
-   git tag -s vX.Y.Z -m "Release vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
+It checks that `main` matches `origin`, sets the version across
+`pyproject.toml`, `uv.lock`, `frontend/package.json` and
+`openapi/overture.json`, moves the `[Unreleased]` entries of
+[CHANGELOG.md](../CHANGELOG.md) under `## [X.Y.Z] - <date>`, runs the full
+check, then pushes a signed release commit and `vX.Y.Z` tag together.
 
 The workflow runs CI, native Linux qualification and release validation, builds
-and scans the `amd64` and `arm64` images and the native archive, signs them,
-attaches SBOMs and provenance, smoke-tests both platforms, and publishes the
-container tags (`X.Y.Z` and `latest`) and the GitHub release with generated
-release notes (`.github/release.yml`). Edit the release in GitHub if extra
-upgrade notes are needed. Never move or reuse a version tag: publish a patch
-release to fix a bad one.
+and scans the `amd64` and `arm64` images and the native archive, pushes the
+image by digest, signs it, attaches SBOMs and provenance, and smoke-tests both
+platforms. Only then does it add the container tags (`X.Y.Z` and `latest`) and
+create the GitHub release, whose notes are the version's changelog section.
+If the run fails before that, fix the workflow on `main` and run **Release**
+from `main` with the tag as input; it rebuilds the tagged source. Never move or
+reuse a published version: publish a patch release to fix a bad one.
 
 Repository settings: protect `main` and `v*` tags, require the CI, CodeQL and
 Trivy checks, and keep Actions permissions read-only by default. Repository

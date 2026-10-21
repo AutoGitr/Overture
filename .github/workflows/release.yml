@@ -85,7 +85,8 @@ jobs:
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          uv run --locked python -m scripts.release_metadata --tag "$TAG" --github-output "$GITHUB_OUTPUT"
+          uv run --locked python -m scripts.release_metadata --tag "$TAG" \
+            --notes-file release-notes.md --github-output "$GITHUB_OUTPUT"
           echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "created=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -169,14 +170,15 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      - name: Build and publish the multi-platform image
+      # The image is pushed by digest only and tagged once every check passed,
+      # so a failed run leaves no version tag behind and can run again.
+      - name: Build and push the multi-platform image by digest
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.metadata.outputs.tags }}
+          outputs: type=image,"name=${{ steps.release.outputs.image }},docker.io/${{ steps.release.outputs.dockerhub_image }}",push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.release.outputs.version }}
@@ -200,9 +202,19 @@ jobs:
         run: |
           for target in "$IMAGE@$DIGEST" "docker.io/$DOCKERHUB_IMAGE@$DIGEST"; do
             cosign sign --yes "$target"
-            cosign verify "$target" \
-              --certificate-identity "$CERTIFICATE_IDENTITY" \
-              --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+            # Docker Hub lists a new signature among the image's referrers
+            # a few seconds after accepting it.
+            for attempt in 1 2 3 4 5 6; do
+              if cosign verify "$target" \
+                --certificate-identity "$CERTIFICATE_IDENTITY" \
+                --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+                break
+              fi
+              if [ "$attempt" -eq 6 ]; then
+                exit 1
+              fi
+              sleep 10
+            done
           done
 
       - name: Install Syft
@@ -235,7 +247,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker buildx imagetools inspect "$DOCKERHUB_IMAGE:$VERSION" >/dev/null
+          docker buildx imagetools inspect "docker.io/$DOCKERHUB_IMAGE@$DIGEST" >/dev/null
 
           for architecture in amd64 arm64; do
             container="overture-release-$architecture"
@@ -288,6 +300,16 @@ jobs:
             cosign sign-blob --yes --bundle "$artifact.sigstore.json" "$artifact"
           done
 
+      - name: Tag the published image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          for tag in $TAGS; do
+            docker buildx imagetools create --tag "$tag" "${tag%:*}@$DIGEST"
+            test "$(docker buildx imagetools inspect "$tag" --format '{{ .Manifest.Digest }}')" = "$DIGEST"
+          done
+
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -297,7 +319,7 @@ jobs:
           gh release create "$TAG" \
             --verify-tag \
             --title "Overture $VERSION" \
-            --generate-notes \
+            --notes-file release-notes.md \
             image-digest.txt \
             "overture-${VERSION}-linux-amd64.spdx.json" \
             "overture-${VERSION}-linux-arm64.spdx.json" \
