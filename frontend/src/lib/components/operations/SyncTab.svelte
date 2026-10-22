@@ -69,6 +69,7 @@
     themerrdb_overturedb: "ThemerrDB -> OvertureDB",
   };
 
+  const scheduleTypeId = $props.id();
   const libraryKeys = (available: ServerLibraryRead[]) => available.map((library) => library.key);
 
   const librariesQuery = createQuery(() => ({
@@ -227,7 +228,6 @@
 {#if !hasResults}
   <CardColumn>
     <div class="option-card">
-      <span class="form-label">Libraries</span>
       <LibraryChecklist
         movieLibraries={movieChecklistLibraries}
         showLibraries={showChecklistLibraries}
@@ -251,18 +251,21 @@
     >
       {#snippet settings()}
         <div class="schedule-config">
-          <label class="form-row justify-between">
-            <span>Schedule type</span>
-            <select class="select-compact" bind:value={scheduleMode}>
+          <div class="form-row">
+            <label for={scheduleTypeId}>Schedule type</label>
+            {#if scheduleMode === "incremental"}
+              <span class="hint">adds new items only; Run Now always syncs fully</span>
+            {/if}
+            <select
+              id={scheduleTypeId}
+              class="select-compact type-select"
+              bind:value={scheduleMode}
+            >
               <option value="full">{MODE_LABELS.full}</option>
               <option value="incremental">{MODE_LABELS.incremental}</option>
             </select>
-          </label>
+          </div>
           {#if scheduleMode === "incremental"}
-            <div class="schedule-meta">
-              Only adds new items. The first run sets a starting point; Run Now is always a full
-              sync.
-            </div>
             <label
               class={[
                 "form-row justify-between",
@@ -293,17 +296,13 @@
                 {/each}
               </select>
             </label>
-            {#if !publicDatasetStatusError}
-              <div class="schedule-meta">
-                {publicDatasetEnabled
-                  ? "Only fills in missing files; existing files are kept."
-                  : "Enable OvertureDB to use these."}
-              </div>
+            {#if !publicDatasetEnabled && !publicDatasetStatusError}
+              <p class="hint">Enable OvertureDB to use these.</p>
             {/if}
           {/if}
           {#if publicDatasetStatusError}
-            <div class="schedule-meta">
-              <span class="sync-error">{publicDatasetStatusError}</span>
+            <div class="heading-row">
+              <span class="option-error">{publicDatasetStatusError}</span>
               <button class="btn btn-ghost btn-sm" onclick={() => datasetStatusQuery.refetch()}>
                 Retry
               </button>
@@ -399,10 +398,10 @@
   .schedule-config {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
-  .schedule-meta {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
+
+  .type-select {
+    margin-left: auto;
   }
 </style>

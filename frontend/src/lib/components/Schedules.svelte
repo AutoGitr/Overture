@@ -67,184 +67,169 @@
 </script>
 
 <section class="option-card" aria-label="Schedules">
-  <div class="schedules-header">
-    <span class="form-label">Schedules</span>
+  <div class="heading-row">
+    <span class="form-label">{controller.isEditing ? "Edit schedule" : "New schedule"}</span>
     {#if controller.isEditing}
       <button type="button" class="btn btn-ghost btn-sm" onclick={() => controller.clearEdit()}>
         New schedule
       </button>
     {/if}
   </div>
-  <DataStatus
-    label="Schedules"
-    error={controller.error}
-    loading={controller.fetching}
-    hasData={controller.schedules.length > 0}
-    onretry={() => controller.reload()}
-  />
-  {#if controller.loading}
-    <div class="option-note">Loading schedules...</div>
-  {:else if controller.schedules.length === 0}
-    <!-- Without a list, the status above says why. -->
-    {#if !controller.error}
-      <div class="option-note">{emptyMessage}</div>
-    {/if}
+  {#if unavailable}
+    <p class="hint">{unavailable}</p>
   {:else}
-    <p class="option-note">Play runs a schedule now with its saved options, even when disabled.</p>
-    <div class="schedule-list">
-      {#each controller.schedules as schedule (schedule.id)}
-        {@const expanded = controller.isExpanded(schedule.id)}
-        {@const running = schedule.run_status === "running"}
-        <div class="schedule-row">
-          <div class="schedule-main">
-            <div class="schedule-title-row">
-              <label class="checkbox-group schedule-enabled">
-                <input
-                  type="checkbox"
-                  checked={schedule.enabled}
-                  onchange={(event) =>
-                    void controller.setEnabled(schedule, checkedFromEvent(event))}
-                />
-                <span>{schedule.name}</span>
-              </label>
-              <span class={["badge", { "badge-success": schedule.enabled }]}>
-                {schedule.enabled ? "Enabled" : "Disabled"}
-              </span>
-              {@render badges(schedule)}
-              {#if schedule.run_status !== "idle"}
-                <span
-                  class={[
-                    "badge",
-                    {
-                      "badge-accent": schedule.run_status === "running",
-                      "badge-warning": schedule.run_status !== "running",
-                    },
-                  ]}
-                  role="status">{runLabel(schedule)}</span
-                >
-              {/if}
-            </div>
-            <div class="schedule-meta">
-              <span>{schedule.cron_expression}</span>
-              <span>Next: {formatScheduleDate(schedule.next_run, schedule.timezone)}</span>
-            </div>
-            {#if expanded}
-              <div class="schedule-details">
-                {@render details(schedule)}
-                <div>
-                  Last run: {formatScheduleDate(schedule.last_run_at, schedule.timezone)}
-                </div>
-              </div>
-            {/if}
-          </div>
-          <div class="schedule-actions">
-            <button
-              type="button"
-              class={["btn btn-ghost btn-icon", { active: expanded }]}
-              title={expanded ? "Hide schedule" : "View schedule"}
-              aria-label={expanded ? "Hide schedule" : "View schedule"}
-              aria-expanded={expanded}
-              onclick={() => controller.toggleExpanded(schedule.id)}
-            >
-              {#if expanded}
-                <EyeOff size={15} />
-              {:else}
-                <Eye size={15} />
-              {/if}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-icon"
-              title="Edit schedule"
-              aria-label="Edit schedule"
-              onclick={() => onedit(schedule)}
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-icon"
-              title={running ? "Schedule is running" : "Run schedule"}
-              aria-label="Run schedule"
-              onclick={() => void controller.runNow(schedule)}
-              disabled={controller.runPending}
-            >
-              {#if running}
-                <LoaderCircle size={15} class="animate-spin" />
-              {:else}
-                <Play size={15} />
-              {/if}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-icon text-danger"
-              title="Remove schedule"
-              aria-label="Remove schedule"
-              onclick={() => void controller.remove(schedule)}
-              disabled={controller.removePending}
-            >
-              <Trash size={15} />
-            </button>
-          </div>
-        </div>
-      {/each}
-    </div>
+    <label class="form-row">
+      <span class="field-label">Name</span>
+      <input
+        type="text"
+        class="text-input"
+        bind:value={controller.name}
+        placeholder={namePlaceholder}
+      />
+    </label>
+    {@render settings?.()}
+    <CronScheduleField value={cronExpression} onchange={oncronchange} {presets} />
   {/if}
 
-  <div class="schedule-form">
-    <span class="part-label">{controller.isEditing ? "Edit schedule" : "New schedule"}</span>
-    {#if unavailable}
-      <div class="option-note">{unavailable}</div>
-    {:else}
-      <label class="field-block">
-        <span>Name</span>
-        <input type="text" bind:value={controller.name} placeholder={namePlaceholder} />
-      </label>
-      {@render settings?.()}
-      <CronScheduleField value={cronExpression} onchange={oncronchange} {presets} />
+  <div class="saved">
+    <div class="heading-row">
+      <span class="form-label">Saved schedules</span>
+      {#if controller.loading}
+        <span class="hint">Loading...</span>
+      {:else if controller.schedules.length === 0 && !controller.error}
+        <!-- Without a list, the status below says why. -->
+        <span class="hint">{emptyMessage}</span>
+      {/if}
+    </div>
+    <DataStatus
+      label="Schedules"
+      error={controller.error}
+      loading={controller.fetching}
+      hasData={controller.schedules.length > 0}
+      onretry={() => controller.reload()}
+    />
+    {#if !controller.loading && controller.schedules.length > 0}
+      <div class="schedule-list">
+        {#each controller.schedules as schedule (schedule.id)}
+          {@const expanded = controller.isExpanded(schedule.id)}
+          {@const running = schedule.run_status === "running"}
+          <div class="schedule-row">
+            <div class="schedule-main">
+              <div class="schedule-title-row">
+                <label class="checkbox-group schedule-enabled">
+                  <input
+                    type="checkbox"
+                    checked={schedule.enabled}
+                    onchange={(event) =>
+                      void controller.setEnabled(schedule, checkedFromEvent(event))}
+                  />
+                  <span>{schedule.name}</span>
+                </label>
+                <span class={["badge", { "badge-success": schedule.enabled }]}>
+                  {schedule.enabled ? "Enabled" : "Disabled"}
+                </span>
+                {@render badges(schedule)}
+                {#if schedule.run_status !== "idle"}
+                  <span
+                    class={[
+                      "badge",
+                      {
+                        "badge-accent": schedule.run_status === "running",
+                        "badge-warning": schedule.run_status !== "running",
+                      },
+                    ]}
+                    role="status">{runLabel(schedule)}</span
+                  >
+                {/if}
+              </div>
+              <div class="schedule-meta">
+                <span>{schedule.cron_expression}</span>
+                <span>Next: {formatScheduleDate(schedule.next_run, schedule.timezone)}</span>
+              </div>
+              {#if expanded}
+                <div class="schedule-details">
+                  {@render details(schedule)}
+                  <div>
+                    Last run: {formatScheduleDate(schedule.last_run_at, schedule.timezone)}
+                  </div>
+                </div>
+              {/if}
+            </div>
+            <div class="schedule-actions">
+              <button
+                type="button"
+                class={["btn btn-ghost btn-icon", { active: expanded }]}
+                title={expanded ? "Hide schedule" : "View schedule"}
+                aria-label={expanded ? "Hide schedule" : "View schedule"}
+                aria-expanded={expanded}
+                onclick={() => controller.toggleExpanded(schedule.id)}
+              >
+                {#if expanded}
+                  <EyeOff size={15} />
+                {:else}
+                  <Eye size={15} />
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-icon"
+                title="Edit schedule"
+                aria-label="Edit schedule"
+                onclick={() => onedit(schedule)}
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-icon"
+                title={running ? "Schedule is running" : "Run now with its saved options"}
+                aria-label="Run schedule"
+                onclick={() => void controller.runNow(schedule)}
+                disabled={controller.runPending}
+              >
+                {#if running}
+                  <LoaderCircle size={15} class="animate-spin" />
+                {:else}
+                  <Play size={15} />
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-icon text-danger"
+                title="Remove schedule"
+                aria-label="Remove schedule"
+                onclick={() => void controller.remove(schedule)}
+                disabled={controller.removePending}
+              >
+                <Trash size={15} />
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
     {/if}
   </div>
 </section>
 
 <style>
-  .schedules-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
-
-  .schedule-form {
+  .saved {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    margin-top: var(--space-2);
+    gap: var(--space-2);
+    margin-top: var(--space-1);
     padding-top: var(--space-3);
     border-top: var(--border-subtle);
   }
 
-  .part-label {
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-
-  .field-block {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    min-width: 0;
-  }
-
-  .field-block input {
-    width: 100%;
+  /* As wide as the cron field's label, so both inputs start together. */
+  .field-label {
+    min-width: 8.5em;
   }
 
   .schedule-list {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    margin-top: var(--space-2);
   }
 
   .schedule-row {

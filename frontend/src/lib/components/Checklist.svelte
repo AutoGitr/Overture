@@ -15,8 +15,10 @@
 
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import CheckboxList from "./CheckboxList.svelte";
 
   let {
+    label,
     groups,
     allSelected,
     selectAllDisabled = false,
@@ -24,6 +26,8 @@
     ontoggleall,
     notice,
   }: {
+    /** Names the list, on the row its select-all control shares. */
+    label: string;
     groups: ChecklistGroup[];
     allSelected: boolean;
     selectAllDisabled?: boolean;
@@ -36,66 +40,49 @@
   let shownGroups = $derived(groups.filter((group) => group.options.length > 0));
 </script>
 
-<div class="controls">
-  <label class="checkbox-group">
-    <input
-      type="checkbox"
-      checked={allSelected}
-      disabled={selectAllDisabled}
-      onchange={(event) => ontoggleall(event.currentTarget.checked)}
-    />
-    <span>{allSelected ? "Deselect All" : "Select All"}</span>
-  </label>
-</div>
-<div class="list">
+<div class="checklist">
+  <div class="heading-row">
+    <span class="form-label">{label}</span>
+    <label class="checkbox-group">
+      <input
+        type="checkbox"
+        checked={allSelected}
+        disabled={selectAllDisabled}
+        onchange={(event) => ontoggleall(event.currentTarget.checked)}
+      />
+      <span>{allSelected ? "Deselect All" : "Select All"}</span>
+    </label>
+  </div>
   {#if notice}
     {@render notice()}
   {:else}
-    {#each shownGroups as group, index (group.key)}
-      <div class={["heading", { spaced: index > 0 }]}>{group.label}</div>
-      {#each group.options as option (option.id)}
-        <label class="checkbox-group">
-          <input
-            type="checkbox"
-            checked={option.checked}
-            onchange={() => ontoggle(group.key, option.id)}
-          />
-          <span>
-            {option.label}
-            {#if option.count != null}
-              <span class="item-count">{option.count}</span>
-            {/if}
-          </span>
-        </label>
-      {/each}
+    {#each shownGroups as group (group.key)}
+      <div class="group">
+        <span class="caps-label">{group.label}</span>
+        <CheckboxList
+          options={group.options.map((option) => ({
+            value: option.id,
+            label: option.label,
+            count: option.count ?? undefined,
+          }))}
+          selected={group.options.filter((option) => option.checked).map((option) => option.id)}
+          ontoggle={(id) => ontoggle(group.key, id)}
+        />
+      </div>
     {/each}
   {/if}
 </div>
 
 <style>
-  .controls {
-    margin-bottom: var(--space-2);
-  }
-
-  .list {
+  .checklist {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    max-height: 180px;
-    overflow-y: auto;
-    padding-right: var(--space-2);
   }
 
-  .heading {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--space-1);
-  }
-
-  .spaced {
-    margin-top: var(--space-3);
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
   }
 </style>

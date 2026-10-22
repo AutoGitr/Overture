@@ -36,7 +36,7 @@
       <span class="tab-label">{tab.label}</span>
       {#if tab.running}
         <span class="tab-badge" title="Running">
-          <LoaderCircle size={13} class="animate-spin text-accent" />
+          <LoaderCircle size={13} class="animate-spin" />
         </span>
       {/if}
     </button>
@@ -63,7 +63,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
+    padding: 6px var(--space-3);
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -80,11 +80,8 @@
   }
 
   .popup-tab.active {
-    color: var(--accent);
-    background: var(--accent-muted);
-    box-shadow:
-      inset 0 0 0 1px var(--accent-border),
-      0 0 14px var(--accent-glow);
+    color: var(--accent-text);
+    background: var(--accent);
     font-weight: 600;
   }
 

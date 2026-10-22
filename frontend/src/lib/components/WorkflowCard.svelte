@@ -19,7 +19,7 @@
 </script>
 
 <section class={["option-card workflow-card", kind]} aria-label={title}>
-  <div class="workflow-header">
+  <div class="heading-row">
     <span class="form-label">{title}</span>
     <label class="checkbox-group">
       <input type="checkbox" bind:checked={enabled} aria-controls={bodyId} />
@@ -37,7 +37,7 @@
   .workflow-card {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
 
   .art {
@@ -48,15 +48,7 @@
     --section-accent: var(--asset-theme);
   }
 
-  .workflow-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
-
-  .workflow-header .form-label {
-    margin: 0;
+  .heading-row .form-label {
     color: var(--section-accent);
   }
 

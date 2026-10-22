@@ -30,7 +30,7 @@
   .card-column > :global(*) {
     min-width: 0;
     margin: 0;
-    padding: var(--space-4) var(--popup-pad);
+    padding: var(--space-3) var(--popup-pad);
     background: none;
     border: 0;
     border-radius: 0;

@@ -22,8 +22,8 @@
     /** Fixed-height parts shown above the lists, such as running downloads. */
     sections?: Snippet;
     /**
-     * The run's findings: exactly two elements, a fixed head and a list that
-     * shares the room the popup gives with the log, like `JobResultsList`.
+     * The run's findings: a fixed head and a list that shares the room the
+     * popup gives with the log, like `JobResultsList`.
      */
     children?: Snippet;
   } = $props();
@@ -33,7 +33,8 @@
 
 <!-- One run's results: its rows are rows of the grid that holds every run
      shown, so the lists of all of them share the popup's room, each asking
-     for its own height and getting its share of what the screen allows. -->
+     for its own height and getting its share of what the screen allows. It
+     spans as many rows as it may have; one left out takes no room. -->
 <section class="job-panel" aria-label={title} style:grid-row="span {children ? 5 : 3}">
   <div class="job-panel-top">
     {#if title}
@@ -55,14 +56,14 @@
     {@render sections?.()}
   </div>
   {@render children?.()}
-  <JobLog feed={job.log} filling={running} />
+  <JobLog feed={job.log} />
 </section>
 
 <style>
   .job-panel {
     display: grid;
     grid-template-rows: subgrid;
-    row-gap: var(--space-3);
+    row-gap: 0;
     min-width: 0;
     padding: var(--space-3);
     border: var(--border-subtle);
@@ -71,10 +72,14 @@
     box-shadow: inset 3px 0 0 var(--job-accent, var(--accent));
   }
 
+  .job-panel > :global(* + *) {
+    margin-top: var(--space-2);
+  }
+
   .job-panel-top {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
 
   .job-panel .progress-bar-fill {

@@ -118,7 +118,7 @@
         <span>
           {labels[source] ?? source}
           {#if disabled}
-            <span class="muted-text">- enable OvertureDB first</span>
+            <span class="hint">- enable OvertureDB first</span>
           {/if}
         </span>
       </label>
@@ -130,15 +130,14 @@
   .source-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
+    gap: var(--space-1);
   }
 
   .source-row {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2);
+    padding: 2px var(--space-2);
     border: var(--border-subtle);
     border-radius: var(--radius-sm);
     background: var(--bg-secondary);

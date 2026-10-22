@@ -30,6 +30,7 @@
     itemSize: number;
     /** What a finding is called, in the plural. */
     noun: string;
+    /** What a finished run's selection holds. */
     subtitle: string;
     emptyLabel: string;
     showEmpty: boolean;
@@ -54,10 +55,9 @@
 </script>
 
 <!-- Two rows of its job panel: a fixed head, and a list that asks for its
-     rows' height (all the room it may get while running, so it never grows
-     row by row) and takes what the popup gives, past which it scrolls. -->
+     rows' height and takes what the popup gives, past which it scrolls. -->
 <div class="findings-head">
-  <div class="findings-header">
+  <div class="heading-row">
     <label class="checkbox-group">
       <input
         type="checkbox"
@@ -71,20 +71,23 @@
         {itemCount === total ? `${total} ${noun}` : `${itemCount} of ${total} ${noun} shown`}
       </span>
     </label>
-    <span class="findings-subtitle">
-      {subtitle}
-      {#if hiddenSelectedCount > 0}
-        <span class="hidden-selected">
-          &middot; {hiddenSelectedCount} more checked but hidden, so left out
-        </span>
-      {/if}
-    </span>
+    {#if !running && total > 0}
+      <span class="hint">
+        {subtitle}
+        {#if hiddenSelectedCount > 0}
+          <span class="hidden-selected">
+            &middot; {hiddenSelectedCount} more checked but hidden, so left out
+          </span>
+        {/if}
+      </span>
+    {/if}
   </div>
   <ResultFilters label="Show {noun} by kind" {groups} ontoggle={onToggleGroup} />
 </div>
 <div
-  class="findings-body"
-  style:--findings-rows-height={running ? "100dvh" : `${itemCount * itemSize}px`}
+  class={["findings-body", { listed: itemCount > 0 }]}
+  style:--findings-rows-height="{itemCount * itemSize}px"
+  style:--findings-row-height="{itemSize}px"
 >
   {#if itemCount > 0}
     <VirtualList {itemCount} {itemSize} overscanCount={3} followEnd={running} {row} />
@@ -117,33 +120,22 @@
     gap: var(--space-2);
   }
 
-  .findings-header {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-3);
-    min-height: 28px;
-  }
-
-  .findings-subtitle {
-    margin-left: auto;
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-  }
-
   .hidden-selected {
     color: var(--warning);
   }
 
   /* Its height is the room its grid row gets: the strut below is the height
-     it asks for and six rem the least it takes. The rows, empty text and
-     error share the strut's cell. */
+     it asks for, and a list gives way down to two rows. The rows, empty text
+     and error share the strut's cell. */
   .findings-body {
     position: relative;
     display: grid;
     grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-    min-height: 6rem;
     border-top: var(--border-subtle);
+  }
+
+  .findings-body.listed {
+    min-height: min(var(--findings-rows-height), 2 * var(--findings-row-height));
   }
 
   .findings-body::before {
@@ -160,7 +152,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
+    padding: var(--space-2);
     color: var(--text-secondary);
     font-size: var(--text-sm);
     text-align: center;

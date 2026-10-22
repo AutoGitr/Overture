@@ -27,29 +27,20 @@
 </script>
 
 <hr />
-<div>
-  <label class={["checkbox-group", { muted }]}>
-    <input
-      type="checkbox"
-      {checked}
-      disabled={!count && !checked}
-      onchange={(event) => onchange(event.currentTarget.checked)}
-    />
-    <span
-      >Current sidebar items
-      {#if sidebarItems}
-        <span class="item-count">{count.toLocaleString()} {noun}</span>
-      {/if}
-    </span>
-  </label>
-  <div class="option-note">
-    {#if sidebarItems}
-      Uses the items matching the sidebar's filters and search instead of the selection above.
-    {:else}
-      Show movies or shows in the sidebar to use this.
-    {/if}
-  </div>
-</div>
+<label class={["checkbox-group", { muted }]}>
+  <input
+    type="checkbox"
+    {checked}
+    disabled={!count && !checked}
+    onchange={(event) => onchange(event.currentTarget.checked)}
+  />
+  <span>Current sidebar items</span>
+  {#if sidebarItems}
+    <span class="item-count">{count.toLocaleString()} {noun}</span>
+  {:else}
+    <span class="hint">Show movies or shows in the sidebar to use this.</span>
+  {/if}
+</label>
 
 <style>
   .muted {
@@ -57,8 +48,9 @@
   }
 
   hr {
+    width: 100%;
+    margin: 0;
     border: 0;
     border-top: var(--border-subtle);
-    margin: var(--space-3) 0;
   }
 </style>

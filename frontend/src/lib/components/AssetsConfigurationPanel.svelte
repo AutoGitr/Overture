@@ -28,7 +28,6 @@
 </script>
 
 <div class="option-card">
-  <span class="form-label">Libraries</span>
   <div class={{ muted: config.useSidebarItems }}>
     <LibraryChecklist
       movieLibraries={form.movieLibraries}
@@ -52,31 +51,33 @@
 
 <div class="option-card">
   <span class="form-label">Options</span>
-  <label class="checkbox-group">
-    <input type="checkbox" bind:checked={config.includeUnmonitored} />
-    <span>Include unmonitored items</span>
-  </label>
-  <label class="checkbox-group">
-    <input
-      type="checkbox"
-      bind:checked={config.overwriteExisting}
-      aria-label="Overwrite existing"
-      aria-describedby="{hintId}-overwrite"
-    />
-    <span>Overwrite existing</span>
-    <span class="inline-hint" id="{hintId}-overwrite">Search again and replace files</span>
-  </label>
-  <label class="checkbox-group">
-    <input
-      type="checkbox"
-      bind:checked={config.retrySavedDownloads}
-      disabled={config.overwriteExisting}
-      aria-label="Retry saved downloads"
-      aria-describedby="{hintId}-retry"
-    />
-    <span>Retry saved downloads</span>
-    <span class="inline-hint" id="{hintId}-retry">Missing files only</span>
-  </label>
+  <div class="filter-options">
+    <label class="checkbox-group">
+      <input type="checkbox" bind:checked={config.includeUnmonitored} />
+      <span>Include unmonitored items</span>
+    </label>
+    <label class="checkbox-group">
+      <input
+        type="checkbox"
+        bind:checked={config.overwriteExisting}
+        aria-label="Overwrite existing"
+        aria-describedby="{hintId}-overwrite"
+      />
+      <span>Overwrite existing</span>
+      <span class="hint" id="{hintId}-overwrite">Search again and replace files</span>
+    </label>
+    <label class="checkbox-group">
+      <input
+        type="checkbox"
+        bind:checked={config.retrySavedDownloads}
+        disabled={config.overwriteExisting}
+        aria-label="Retry saved downloads"
+        aria-describedby="{hintId}-retry"
+      />
+      <span>Retry saved downloads</span>
+      <span class="hint" id="{hintId}-retry">Missing files only</span>
+    </label>
+  </div>
   <div class="form-row skip-row">
     <span>Skip items checked within</span>
     <input
@@ -91,7 +92,7 @@
       <option value="hours">hours</option>
       <option value="days">days</option>
     </select>
-    <span class="inline-hint">0 = off</span>
+    <span class="hint">0 = off</span>
   </div>
 </div>
 
@@ -116,16 +117,11 @@
 {/if}
 
 <style>
-  .checkbox-group {
-    flex-wrap: wrap;
-  }
-
   .muted {
     opacity: 0.5;
   }
 
   .skip-row {
-    margin-bottom: 0;
     flex-wrap: wrap;
   }
 </style>

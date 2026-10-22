@@ -5,24 +5,16 @@
 </script>
 
 <div class="section">
-  <div class="section-heading">
+  <div class="heading-row">
     <span class="form-label">{label}</span>
     {#if note}
-      <span class="text-muted">{note}</span>
+      <span class="hint">{note}</span>
     {/if}
   </div>
   {@render children()}
 </div>
 
 <style>
-  .section-heading {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--space-1) var(--space-3);
-    font-size: var(--text-sm);
-  }
-
   .section {
     display: flex;
     flex-direction: column;

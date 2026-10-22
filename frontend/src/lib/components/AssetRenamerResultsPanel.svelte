@@ -22,9 +22,7 @@
     total={assetManagerState.items.length}
     itemSize={72}
     noun="issues"
-    subtitle={assetManagerState.running
-      ? "Results update live while scanning"
-      : `${selectedCount} selected for rename`}
+    subtitle="{selectedCount} selected for rename"
     emptyLabel="All assets are correctly named!"
     showEmpty={Boolean(assetManagerState.finished_at)}
     {selectedCount}

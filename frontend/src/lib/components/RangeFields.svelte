@@ -17,11 +17,25 @@
 <div class="range">
   <div class="field">
     <label class="form-label" for="{id}-min">{minLabel}</label>
-    <input id="{id}-min" type="number" class="number-input" min="1" bind:value={min} />
+    <input
+      id="{id}-min"
+      type="number"
+      class="number-input"
+      min="1"
+      placeholder="No limit"
+      bind:value={min}
+    />
   </div>
   <div class="field">
     <label class="form-label" for="{id}-max">{maxLabel}</label>
-    <input id="{id}-max" type="number" class="number-input" min="1" bind:value={max} />
+    <input
+      id="{id}-max"
+      type="number"
+      class="number-input"
+      min="1"
+      placeholder="No limit"
+      bind:value={max}
+    />
   </div>
 </div>
 
@@ -44,7 +58,6 @@
     min-width: 0;
     width: 80px;
     padding: var(--space-1) var(--space-2);
-    font-size: var(--text-sm);
   }
 
   @media (max-width: 480px) {

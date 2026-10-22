@@ -196,14 +196,14 @@
 </script>
 
 <section class="option-card action-card" aria-label="Bulk operations">
-  <h3 class="form-label">Bulk operations</h3>
-  <p class="card-hint">
-    {matchCount}
-    {noun} match the filters above and the current search.
-  </p>
-  {#if !resultsReady}
-    <p class="card-hint">Matching {noun} are unavailable or still loading.</p>
-  {/if}
+  <div class="heading-row">
+    <h3 class="form-label">Bulk operations</h3>
+    <span class="hint">
+      {resultsReady
+        ? `For the ${matchCount} ${noun} the filters and search match. Local files are kept.`
+        : `Matching ${noun} are unavailable or still loading.`}
+    </span>
+  </div>
   <div class="action-card-buttons">
     <button
       type="button"
@@ -229,12 +229,11 @@
         Unmonitor <span class="operation-count">{monitoredCount}</span>
       {/if}
     </button>
-  </div>
-  {#if forItems}
-    <div class="action-card-buttons">
+    {#if forItems}
       <button
         type="button"
         class="btn btn-secondary btn-sm"
+        title="Season posters included"
         onclick={() => runItemOperation("artwork")}
         disabled={matchCount === 0 || busy || !resultsReady}
       >
@@ -243,25 +242,22 @@
       <button
         type="button"
         class="btn btn-secondary btn-sm"
+        title="Clears the saved YouTube details"
         onclick={() => runItemOperation("themes")}
         disabled={itemsWithThemes.length === 0 || busy || !resultsReady}
       >
         Clear theme selections <span class="operation-count">{itemsWithThemes.length}</span>
       </button>
-    </div>
-    <p class="card-hint">
-      Artwork clearing covers all matching {noun}, including season posters. Theme clearing only
-      affects saved YouTube details. Local files are kept.
-    </p>
-    <button
-      type="button"
-      class="btn btn-danger btn-sm"
-      onclick={() => runItemOperation("delete")}
-      disabled={matchCount === 0 || busy || !resultsReady}
-    >
-      Delete from Overture <span class="operation-count">{matchCount}</span>
-    </button>
-  {/if}
+      <button
+        type="button"
+        class="btn btn-danger btn-sm"
+        onclick={() => runItemOperation("delete")}
+        disabled={matchCount === 0 || busy || !resultsReady}
+      >
+        Delete from Overture <span class="operation-count">{matchCount}</span>
+      </button>
+    {/if}
+  </div>
   {#if running && running.operation !== "monitor" && running.operation !== "unmonitor"}
     <p class="action-feedback" role="status">
       {running.operation === "delete"
@@ -277,11 +273,7 @@
   .action-card {
     border: var(--border-muted);
   }
-  .card-hint {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-    margin: 0;
-  }
+
   .action-card-buttons {
     display: flex;
     flex-wrap: wrap;

@@ -51,18 +51,19 @@
 
 {#snippet status()}
   {#if loading}
-    <span class="muted-text">Loading libraries...</span>
+    <span class="hint">Loading libraries...</span>
   {:else if error}
     <p role="alert">{error}</p>
     {#if onretry}
       <button class="btn btn-ghost btn-sm" onclick={onretry}>Retry</button>
     {/if}
   {:else}
-    <span class="muted-text">{emptyMessage}</span>
+    <span class="hint">{emptyMessage}</span>
   {/if}
 {/snippet}
 
 <Checklist
+  label="Libraries"
   {groups}
   {allSelected}
   selectAllDisabled={loading || !!error || libraryIds.length === 0}

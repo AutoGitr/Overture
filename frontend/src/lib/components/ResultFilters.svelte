@@ -14,22 +14,23 @@
 </script>
 
 <!-- Each kind of result, with how many there are, shown or hidden in one
-     press. The row is there before the first result, so results arriving
-     never move what follows it. -->
-<div class="result-filters" role="group" aria-label={label}>
-  {#each groups as group (group.key)}
-    <button
-      type="button"
-      class={["result-filter", group.tone]}
-      aria-pressed={group.shown}
-      title={group.shown ? `Hide ${group.label}` : `Show ${group.label}`}
-      onclick={() => ontoggle(group.key)}
-    >
-      <span class="result-label">{group.label}</span>
-      <span class="result-count">{group.count}</span>
-    </button>
-  {/each}
-</div>
+     press; nothing until there is a first result. -->
+{#if groups.length > 0}
+  <div class="result-filters" role="group" aria-label={label}>
+    {#each groups as group (group.key)}
+      <button
+        type="button"
+        class={["result-filter", group.tone]}
+        aria-pressed={group.shown}
+        title={group.shown ? `Hide ${group.label}` : `Show ${group.label}`}
+        onclick={() => ontoggle(group.key)}
+      >
+        <span class="result-label">{group.label}</span>
+        <span class="result-count">{group.count}</span>
+      </button>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .result-filters {
@@ -37,7 +38,6 @@
     flex-wrap: wrap;
     gap: var(--space-1);
     min-width: 0;
-    min-height: 22px;
   }
 
   .result-filter {

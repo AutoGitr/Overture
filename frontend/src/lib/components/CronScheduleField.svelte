@@ -22,11 +22,11 @@
   } = $props();
 </script>
 
-<label class="cron-field">
-  <span>{label}</span>
+<label class="form-row">
+  <span class="cron-label">{label}</span>
   <input
     type="text"
-    class="text-input"
+    class="text-input text-input-mono"
     {value}
     {placeholder}
     {disabled}
@@ -45,23 +45,22 @@
       {preset.label}
     </button>
   {/each}
+  <span class="hint">minute hour day month weekday</span>
 </div>
 
-<p class="hint">
-  Five fields: minute hour day month weekday. Example:
-  <code>0 3 * * *</code> runs daily at 03:00.
-</p>
-
 <style>
-  .cron-field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+  .cron-label {
+    min-width: 8.5em;
   }
 
   .preset-row {
     display: flex;
-    gap: var(--space-2);
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
     flex-wrap: wrap;
+  }
+
+  .preset-row .hint {
+    margin-left: auto;
   }
 </style>

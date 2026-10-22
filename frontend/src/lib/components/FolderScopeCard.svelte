@@ -37,8 +37,8 @@
   );
 </script>
 
-{#snippet noFolders()}
-  <span class="muted-text">No media folders found.</span>
+{#snippet folderNotice()}
+  <span class="hint">{scope.query.data ? "No media folders found." : "Loading folders..."}</span>
 {/snippet}
 
 <DataStatus
@@ -49,19 +49,16 @@
   onretry={() => scope.query.refetch()}
 />
 <div class="option-card">
-  <span class="form-label">Folders</span>
   <div style:opacity={scope.useSidebarItems ? 0.5 : undefined}>
-    {#if scope.query.data}
-      <Checklist
-        {groups}
-        {allSelected}
-        selectAllDisabled={totalFolders === 0}
-        notice={totalFolders === 0 ? noFolders : undefined}
-        ontoggle={(groupKey, folder) =>
-          scope.toggle(folder, groupKey === "show" ? "show" : "movie")}
-        ontoggleall={(checked) => scope.toggleAll(checked)}
-      />
-    {/if}
+    <Checklist
+      label="Folders"
+      {groups}
+      {allSelected}
+      selectAllDisabled={totalFolders === 0}
+      notice={totalFolders === 0 ? folderNotice : undefined}
+      ontoggle={(groupKey, folder) => scope.toggle(folder, groupKey === "show" ? "show" : "movie")}
+      ontoggleall={(checked) => scope.toggleAll(checked)}
+    />
   </div>
   <SidebarItemsOption
     checked={scope.useSidebarItems}

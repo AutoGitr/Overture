@@ -49,10 +49,10 @@
 
 {#if shown}
   <section class={["downloads", lane]} aria-label={label}>
-    <header class="downloads-header">
+    <header class="heading-row downloads-header">
       <span class="form-label">{label}</span>
       {#if queue.waiting > 0}
-        <span class="downloads-note" role="status">{queue.waiting} queued</span>
+        <span class="hint" role="status">{queue.waiting} queued</span>
       {/if}
     </header>
     {#each rows as job, slot (job?.job_id ?? `slot-${slot}`)}
@@ -95,20 +95,11 @@
   }
 
   .downloads-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
     height: 24px;
   }
 
   .downloads-header .form-label {
     color: var(--download-accent);
-  }
-
-  .downloads-note {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
   }
 
   /* Every row shares one column grid, so titles, kinds and steps line up
@@ -120,7 +111,7 @@
     grid-template-columns: 12px minmax(0, 1fr) 7.5rem 9rem;
     align-items: center;
     gap: var(--space-2);
-    height: 32px;
+    height: 28px;
     padding: 0 var(--space-3);
     overflow: hidden;
     font-size: var(--text-xs);

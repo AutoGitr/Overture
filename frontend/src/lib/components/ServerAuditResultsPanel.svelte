@@ -55,9 +55,7 @@
     total={serverAuditState.items.length}
     itemSize={76}
     noun="results"
-    subtitle={serverAuditState.running
-      ? "Results update live while auditing"
-      : `${selectedArtCount} art, ${selectedThemeCount} theme selected`}
+    subtitle="{selectedArtCount} art, {selectedThemeCount} theme selected"
     emptyLabel="No audit results."
     showEmpty={Boolean(serverAuditState.finished_at)}
     selectedCount={serverAuditState.selectedItems.length}

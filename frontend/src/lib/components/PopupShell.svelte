@@ -28,10 +28,7 @@
     size?: "dialog" | "form" | "wide";
     /** Optional glyph rendered before the title. */
     icon?: Snippet;
-    /**
-     * A `PopupTabs` shown under the title, part of the header that never
-     * scrolls. Its active tab then carries the glow the title has without it.
-     */
+    /** A `PopupTabs` shown under the title, part of the header that never scrolls. */
     tabs?: Snippet;
     info?: Snippet;
     /** What the popup is for, shown only when asked for from the header. */
@@ -77,7 +74,7 @@
   <div class={["popup-content", size]}>
     <div class="popup-header">
       <div class="header-row">
-        <div class={["header-title", { glow: !tabs }]}>
+        <div class="header-title">
           {@render icon?.()}
           <h2 id={titleId}>{title}</h2>
         </div>
@@ -208,8 +205,8 @@
   .popup-header {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-4) var(--popup-pad) var(--space-3);
+    gap: var(--space-2);
+    padding: var(--space-3) var(--popup-pad);
     flex-shrink: 0;
     border-bottom: var(--border-subtle);
   }
@@ -230,13 +227,6 @@
 
   .header-title :global(svg) {
     color: var(--accent);
-  }
-
-  /* A soft light behind the icon and title; with tabs the active one has it. */
-  .header-title.glow {
-    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-4));
-    padding: var(--space-2) var(--space-4);
-    background: radial-gradient(closest-side, var(--accent-glow), transparent);
   }
 
   .header-buttons {
@@ -312,8 +302,10 @@
     line-height: 1.5;
   }
 
+  /* One text size for every row, label and field in a popup. */
   .popup-body-content {
     padding: var(--space-2) var(--popup-pad);
+    font-size: var(--text-sm);
   }
 
   .popup-info + .popup-body-content {

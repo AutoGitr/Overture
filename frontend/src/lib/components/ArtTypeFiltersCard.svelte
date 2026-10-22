@@ -44,22 +44,22 @@
       />
       <span>Themes</span>
     </label>
+    <ArtTypeGroup
+      label="Shows only"
+      note={hasShowFolders ? null : "select show folders to enable"}
+      disabled={!hasShowFolders}
+    >
+      {#each SEASON_ART_TYPES as artType (artType)}
+        <label class="checkbox-group">
+          <input
+            type="checkbox"
+            checked={artTypes.includes(artType)}
+            disabled={!hasSelectedFolders || !hasShowFolders}
+            onchange={() => ontoggletype(artType)}
+          />
+          <span>{ASSET_LABELS[artType]}</span>
+        </label>
+      {/each}
+    </ArtTypeGroup>
   </div>
-  <ArtTypeGroup
-    label="Shows only"
-    note={hasShowFolders ? null : "select show folders to enable"}
-    disabled={!hasShowFolders}
-  >
-    {#each SEASON_ART_TYPES as artType (artType)}
-      <label class="checkbox-group">
-        <input
-          type="checkbox"
-          checked={artTypes.includes(artType)}
-          disabled={!hasSelectedFolders || !hasShowFolders}
-          onchange={() => ontoggletype(artType)}
-        />
-        <span>{ASSET_LABELS[artType]}</span>
-      </label>
-    {/each}
-  </ArtTypeGroup>
 </div>

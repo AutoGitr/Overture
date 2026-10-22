@@ -64,7 +64,6 @@
   --accent-hover: oklch(from var(--accent) calc(l + clamp(-0.06, (0.68 - l) * 1000, 0.06)) c h);
   --accent-muted: oklch(from var(--accent) l c h / 0.15);
   --accent-border: oklch(from var(--accent) l c h / 0.45);
-  --accent-glow: oklch(from var(--accent) l c h / 0.3);
   --accent-gradient: linear-gradient(
     135deg,
     var(--accent),
@@ -84,11 +83,12 @@
   --info-muted: oklch(from var(--info) l c h / 0.15);
   --violet-muted: oklch(from var(--violet) l c h / 0.15);
 
-  /* -- Colors: Asset kinds, the same wherever art or themes appear -- */
+  /* -- Colors: Asset kinds, the same wherever art or themes appear: a cool
+     blue and a warm pink, apart from each other and from the status tones -- */
   --asset-art: var(--info);
   --asset-art-muted: var(--info-muted);
-  --asset-theme: var(--violet);
-  --asset-theme-muted: var(--violet-muted);
+  --asset-theme: oklch(75% 0.15 350);
+  --asset-theme-muted: oklch(from var(--asset-theme) l c h / 0.15);
 
   /* -- Typography -- */
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -216,23 +216,94 @@ textarea {
   font-family: inherit;
   font-size: inherit;
   color: var(--text-primary);
+  touch-action: manipulation;
+}
+
+/* Fields: text-like inputs, selects and text areas. */
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]),
+select,
+textarea {
   background: var(--bg-tertiary);
   border: var(--border-muted);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   outline: none;
-  touch-action: manipulation;
 }
 
 select {
   border-color: var(--accent);
 }
 
-input:focus,
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]):focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+/* A box that fills with the accent when checked; the ring shows only for
+   keyboard focus, so a click leaves no mark. */
+input[type="checkbox"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1.5px solid var(--text-tertiary);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--accent-text);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5.2 4 7.6 8.5 2.6' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  scale: 0;
+  transition: scale 0.12s ease;
+}
+
+input[type="checkbox"]:indeterminate::before {
+  mask: none;
+  height: 2px;
+  border-radius: 1px;
+}
+
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+input[type="checkbox"]:checked::before,
+input[type="checkbox"]:indeterminate::before {
+  scale: 1;
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
 }
 
 input::placeholder {
@@ -537,23 +608,9 @@ img {
   opacity: 0.72;
 }
 
-.option-note,
 .option-error {
-  margin-top: var(--space-1);
   font-size: var(--text-xs);
-}
-
-.option-note {
-  color: var(--text-secondary);
-}
-
-.option-error {
   color: var(--danger);
-}
-
-.muted-text {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
 }
 
 .item-count {
@@ -564,16 +621,30 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
-.inline-hint {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  font-weight: 400;
-}
-
 .form-label {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* A heading row: a label first, what goes with it pushed to the end, and
+   wrapping only when the row is full. */
+.heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+/* A small heading for a group of options. */
+.caps-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .form-row {
@@ -589,13 +660,6 @@ img {
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: 500;
-}
-
-.checkbox-group input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 .number-input {
@@ -616,17 +680,16 @@ img {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  margin-top: var(--space-2);
 }
 
-.form-hint,
+/* Every small explanation or status beside or under a control. */
 .hint {
+  margin: 0;
   font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin-top: var(--space-1);
+  font-weight: 400;
+  color: var(--text-tertiary);
 }
 
-.form-hint code,
 .hint code {
   font-family: var(--font-mono, monospace);
   background: var(--bg-tertiary);
@@ -636,11 +699,6 @@ img {
 
 .text-input {
   width: 100%;
-  background: var(--bg-tertiary);
-  border: var(--border-subtle);
-  color: var(--text-primary);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
 }
 
@@ -653,11 +711,12 @@ img {
   padding: var(--space-1) var(--space-2);
 }
 
+/* A row of options that wraps only when it is full. */
 .filter-options {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
-  margin-top: var(--space-2);
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
 }
 
 /* ==============================================================
@@ -844,7 +903,6 @@ img {
 
   /* -- Colors: Accent -- */
   --accent: oklch(from var(--accent-color) min(l, 0.52) c h);
-  --accent-glow: oklch(from var(--accent) l c h / 0.16);
 
   /* -- Colors: Status (WCAG AA as text on light surfaces: L at most ~0.56) -- */
   --success: oklch(52% 0.12 163);
@@ -852,6 +910,7 @@ img {
   --danger: oklch(54% 0.21 27);
   --info: oklch(52% 0.14 245);
   --violet: oklch(49% 0.18 293);
+  --asset-theme: oklch(52% 0.19 350);
   --success-muted: oklch(from var(--success) l c h / 0.12);
   --warning-muted: oklch(from var(--warning) l c h / 0.12);
   --danger-muted: oklch(from var(--danger) l c h / 0.12);

@@ -147,14 +147,14 @@
             </div>
           </div>
         {:else}
-          <span class="dataset-empty">No synced file statistics yet.</span>
+          <span class="hint">No synced file statistics yet.</span>
         {/if}
       </div>
     {/if}
     <div class="option-card">
       <span class="form-label">Bulk contribution</span>
       <div class="options-col">
-        <span class="dataset-empty">
+        <span class="hint">
           Export all saved artwork, season posters, and theme selections as a ZIP. Check the export
           report, then attach the ZIP to a Bulk contribution issue on GitHub. Only selections
           missing from OvertureDB are added.
@@ -292,10 +292,6 @@
   .dataset-error {
     font-size: var(--text-xs);
     color: var(--danger);
-  }
-  .dataset-empty {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
   }
   .stats-grid {
     display: grid;

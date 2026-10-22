@@ -29,20 +29,19 @@
 </div>
 
 <style>
+  /* Columns as many as fit, so options wrap only when the row is full. */
   .list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
     gap: var(--space-2) var(--space-4);
-    max-height: 24vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
 
   .label {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    font-size: var(--text-sm);
+    min-width: 0;
+    overflow-wrap: anywhere;
     color: var(--text-secondary);
   }
 

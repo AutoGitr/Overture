@@ -135,9 +135,7 @@
       <div class="option-card">
         <div class="form-row justify-between">
           <label class="form-label" for="theme-search-format">Theme Search Query</label>
-          <span class="inline-hint"
-            >Variables: <code>{"{title}"}</code> <code>{"{year}"}</code></span
-          >
+          <span class="hint">Variables: <code>{"{title}"}</code> <code>{"{year}"}</code></span>
         </div>
         <input
           id="theme-search-format"
@@ -152,9 +150,9 @@
         </label>
       </div>
 
-      <div class="option-card number-card duration-range">
+      <div class="option-card duration-range">
         <div class="duration-field">
-          <label class="form-label" for="min-theme-duration">Min Theme Duration (seconds)</label>
+          <label for="min-theme-duration">Min Theme Duration (seconds)</label>
           <input
             id="min-theme-duration"
             type="number"
@@ -164,7 +162,7 @@
           />
         </div>
         <div class="duration-field">
-          <label class="form-label" for="max-theme-duration">Max Theme Duration (seconds)</label>
+          <label for="max-theme-duration">Max Theme Duration (seconds)</label>
           <input
             id="max-theme-duration"
             type="number"
@@ -279,19 +277,14 @@
     margin-left: -8px;
   }
 
-  .number-card .number-input {
-    width: 100%;
-    min-width: 0;
-  }
   .duration-range {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
-    align-content: start;
+    display: flex;
+    flex-flow: row wrap;
+    gap: var(--space-2) var(--space-6);
   }
   .duration-field {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    align-items: center;
+    gap: var(--space-3);
   }
 </style>

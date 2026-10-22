@@ -15,37 +15,29 @@
   } = $props();
 </script>
 
+<!-- Its options in a row after its label; it sits in a row of groups. -->
 <div class={["group", { disabled }]}>
   {#if label}
-    <div class="label">
+    <span class="caps-label">
       {label}
       {#if note}
         <span class="note">- {note}</span>
       {/if}
-    </div>
+    </span>
   {/if}
-  <div class="filter-options">
-    {@render children()}
-  </div>
+  {@render children()}
 </div>
 
 <style>
   .group {
-    margin-top: var(--space-3);
-    margin-bottom: var(--space-3);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
   }
 
   .disabled {
     opacity: 0.45;
-  }
-
-  .label {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--space-2);
   }
 
   .note {

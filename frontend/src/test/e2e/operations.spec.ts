@@ -53,22 +53,24 @@ test("assets keeps every part of its results in place while downloads come and g
   const downloads = art.getByRole("region", { name: "Downloads" });
   const rows = downloads.locator(".download-title");
   await expect(rows).toHaveText(["Alien", "Brazil"]);
+  // The popup grows with its log and stays centred, so places are measured
+  // from the panel's top.
+  const offset = async (box: { y: number } | null) => box!.y - (await art.boundingBox())!.y;
   const dialogBox = await dialog.locator(".popup-content").boundingBox();
-  const logBox = await log.boundingBox();
-  const brazil = await rows.nth(1).boundingBox();
+  const logTop = await offset(await log.boundingBox());
+  const brazil = await offset(await rows.nth(1).boundingBox());
 
   // A finished download leaves its row idle; the next one takes that row.
   emitDownload("first", "Alien", "completed");
   emitRun("progress", 1, "Alien");
   await expect(rows).toHaveText(["Idle", "Brazil"]);
-  expect(await rows.nth(1).boundingBox()).toEqual(brazil);
-  expect(await log.boundingBox()).toEqual(logBox);
+  expect(await offset(await rows.nth(1).boundingBox())).toBe(brazil);
+  expect(await offset(await log.boundingBox())).toBe(logTop);
 
   emitDownload("third", "Casablanca", "started");
   await expect(rows).toHaveText(["Casablanca", "Brazil"]);
-  expect(await rows.nth(1).boundingBox()).toEqual(brazil);
-  expect(await log.boundingBox()).toEqual(logBox);
-  expect(await dialog.locator(".popup-content").boundingBox()).toEqual(dialogBox);
+  expect(await offset(await rows.nth(1).boundingBox())).toBe(brazil);
+  expect(await offset(await log.boundingBox())).toBe(logTop);
   await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*2$/);
 
   emitDownload("second", "Brazil", "completed");
@@ -77,9 +79,9 @@ test("assets keeps every part of its results in place while downloads come and g
   await expect(downloads).toHaveCount(0);
   await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*0$/);
   await expect(dialog.getByRole("button", { name: "Clear Results" })).toBeVisible();
-  // A finished log keeps only its lines' height; the popup stays centred.
+  // Finished downloads give their rows back; the popup stays centred.
   const finalBox = await dialog.locator(".popup-content").boundingBox();
-  expect(finalBox!.height).toBeLessThan(dialogBox!.height);
+  expect(finalBox!.height).toBeLessThan(dialogBox!.height + 3 * 24);
   expect(finalBox!.y + finalBox!.height / 2).toBeCloseTo(dialogBox!.y + dialogBox!.height / 2, 0);
 });
 
@@ -114,11 +116,10 @@ test("the operations popup stays centred, as tall as each tab needs", async ({
   });
   await dialog.getByRole("tab", { name: "Sync" }).click();
   await expect(dialog.getByRole("log")).toBeVisible();
-  // A running log takes the room the screen has, so the body never scrolls.
+  // A log asks only for its lines, so an empty one leaves the popup short.
   expect(await placement()).toEqual(columns);
   expect(await body.evaluate((el) => el.scrollHeight - el.clientHeight)).toBe(0);
-  const box = (await content.boundingBox())!;
-  expect(viewport.height - box.height).toBeLessThanOrEqual(2 * 12 + 2);
+  expect((await dialog.getByRole("log").boundingBox())!.height).toBeLessThan(3 * 24);
 });
 
 test("restart restores stopped results and active download blocks sync", async ({

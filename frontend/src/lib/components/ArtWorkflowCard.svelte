@@ -36,20 +36,22 @@
 
 <WorkflowCard title="Art" kind="art" bind:enabled={config.enableArt}>
   <WorkflowSection label="Types">
-    <ArtTypeGroup>
-      {#each ITEM_ART_TYPES as artType (artType)}
-        {@render typeOption(artType, hasSelectedLibraries)}
-      {/each}
-    </ArtTypeGroup>
-    <ArtTypeGroup
-      label="Shows only"
-      note={hasShowLibraries ? null : "no shows selected"}
-      disabled={!seasonTypesEnabled}
-    >
-      {#each SEASON_ART_TYPES as artType (artType)}
-        {@render typeOption(artType, seasonTypesEnabled)}
-      {/each}
-    </ArtTypeGroup>
+    <div class="filter-options">
+      <ArtTypeGroup>
+        {#each ITEM_ART_TYPES as artType (artType)}
+          {@render typeOption(artType, hasSelectedLibraries)}
+        {/each}
+      </ArtTypeGroup>
+      <ArtTypeGroup
+        label="Shows only"
+        note={hasShowLibraries ? null : "no shows selected"}
+        disabled={!seasonTypesEnabled}
+      >
+        {#each SEASON_ART_TYPES as artType (artType)}
+          {@render typeOption(artType, seasonTypesEnabled)}
+        {/each}
+      </ArtTypeGroup>
+    </div>
   </WorkflowSection>
 
   <WorkflowSection label="Sources" note="First match wins, top to bottom.">

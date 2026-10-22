@@ -103,15 +103,15 @@
     {#if librariesQuery.isError}
       <div class="option-card">
         <span class="form-label">Libraries</span>
-        <p class="filter-hint">
+        <p class="hint">
           {errorMessage(librariesQuery.error, "Failed to load libraries")}
         </p>
       </div>
     {:else if libraries.length > 1}
       <div class="option-card">
-        <div class="option-header">
+        <div class="heading-row">
           <span class="form-label">Libraries</span>
-          <p class="filter-hint">
+          <p class="hint">
             {filters.libraryIds.length === 0
               ? "Showing all libraries"
               : `${filters.libraryIds.length} of ${libraries.length} selected`}
@@ -188,7 +188,7 @@
       <section class="option-card filter-section art" aria-label="Art">
         <span class="form-label">Art</span>
         <div class="filter-part">
-          <div class="option-header">
+          <div class="heading-row">
             <span class="part-label">Resolution</span>
             <SegmentedControl
               --segmented-width="auto"
@@ -204,14 +204,11 @@
             bind:min={draft.resolution.min}
             bind:max={draft.resolution.max}
           />
-          <p class="filter-hint">
-            Leave a limit empty for no limit. Artwork without a known width is hidden while either
-            limit is set.
-          </p>
+          <p class="hint">Artwork without a known width is hidden while a limit is set.</p>
         </div>
 
         <div class="filter-part">
-          <div class="option-header">
+          <div class="heading-row">
             <span class="part-label">Source</span>
             <SegmentedControl
               --segmented-width="auto"
@@ -221,11 +218,6 @@
               bind:value={draft.artSource.artType}
             />
           </div>
-          <p class="filter-hint">
-            {draft.artSource.sources.length === 0
-              ? "Showing all sources"
-              : `Showing items whose ${draft.artSource.artType === "any" ? "poster or background" : draft.artSource.artType} came from any selected source`}
-          </p>
           <CheckboxList
             options={sidebarDomain.ART_SOURCES.map((source) => ({
               value: source,
@@ -235,7 +227,7 @@
             ontoggle={(source) =>
               (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
           />
-          <p class="filter-hint">
+          <p class="hint">
             Artwork the OvertureDB entry lists counts as OvertureDB, whichever site hosts it.
           </p>
         </div>
@@ -252,20 +244,12 @@
           bind:min={draft.themeLength.min}
           bind:max={draft.themeLength.max}
         />
-        <p class="filter-hint">
-          Leave a limit empty for no limit. Themes without a known length are hidden while either
-          limit is set.
-        </p>
+        <p class="hint">Themes without a known length are hidden while a limit is set.</p>
       </div>
 
       {#if uiState.sidebarMode === "items"}
         <div class="filter-part">
           <span class="part-label">Source</span>
-          <p class="filter-hint">
-            {draft.themeSources.length === 0
-              ? "Showing all sources"
-              : "Showing items whose theme came from any selected source"}
-          </p>
           <CheckboxList
             options={sidebarDomain.THEME_SOURCES.map((source) => ({
               value: source,
@@ -281,7 +265,7 @@
 
     {#if uiState.sidebarMode === "items"}
       <section class="option-card" aria-label="Metadata issues">
-        <div class="option-header">
+        <div class="heading-row">
           <span class="form-label">Metadata issues</span>
           <SegmentedControl
             --segmented-width="auto"
@@ -291,11 +275,6 @@
             bind:value={draft.metadataIssues.mode}
           />
         </div>
-        <p class="filter-hint">
-          {draft.metadataIssues.mode === "all"
-            ? "Show items with every selected issue"
-            : "Show items with any selected issue"}
-        </p>
         <CheckboxList
           options={metadataIssueOptions.map((flag) => ({
             value: flag,
@@ -324,14 +303,6 @@
 </PopupShell>
 
 <style>
-  .option-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-
   .filter-section,
   .filter-part {
     display: flex;
@@ -359,12 +330,6 @@
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text-secondary);
-  }
-
-  .filter-hint {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-    margin: 0;
   }
 
   /* Label column + control column; collapses to stacked rows on phones. */
