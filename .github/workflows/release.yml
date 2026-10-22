@@ -1,0 +1,356 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, for example v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    # CI's own native job, skipped here, still needs this to be granted.
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  native:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/native.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  release-validation:
+    uses: ./.github/workflows/release-validation.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  publish:
+    needs: [quality, native, release-validation]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Verify the release tag is on the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          WORKFLOW_REF: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$WORKFLOW_REF" != "$DEFAULT_BRANCH" ]; then
+            echo "Run the release workflow from $DEFAULT_BRANCH, not $WORKFLOW_REF." >&2
+            exit 1
+          fi
+          comparison=$(gh api "repos/$REPOSITORY/compare/$TAG...$DEFAULT_BRANCH" --jq '.status')
+          if [ "$comparison" != ahead ] && [ "$comparison" != identical ]; then
+            echo "$TAG is not reachable from $DEFAULT_BRANCH." >&2
+            exit 1
+          fi
+
+      - name: Checkout the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Validate tag and release metadata
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          uv run --locked python -m scripts.release_metadata --tag "$TAG" \
+            --notes-file release-notes.md --github-output "$GITHUB_OUTPUT"
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "created=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          # renovate: datasource=docker depName=tonistiigi/binfmt versioning=regex:^qemu-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+          image: tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          cache-image: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: autogitr
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # The Dockerfile owns the image labels; this only names the tags.
+      - name: Create image tags
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: |
+            ${{ steps.release.outputs.image }}
+            ${{ steps.release.outputs.dockerhub_image }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.release.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.release.outputs.version }}
+            type=raw,value=latest
+
+      - name: Refuse to overwrite release artifacts
+        env:
+          DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub release $TAG already exists." >&2
+            exit 1
+          fi
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "Container tag $IMAGE:$VERSION already exists." >&2
+            exit 1
+          fi
+          if docker buildx imagetools inspect "$DOCKERHUB_IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "Container tag $DOCKERHUB_IMAGE:$VERSION already exists." >&2
+            exit 1
+          fi
+
+      # The image is pushed by digest only and tagged once every check passed,
+      # so a failed run leaves no version tag behind and can run again.
+      - name: Build and push the multi-platform image by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          outputs: type=image,"name=${{ steps.release.outputs.image }},docker.io/${{ steps.release.outputs.dockerhub_image }}",push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            APP_VERSION=${{ steps.release.outputs.version }}
+            BUILD_DATE=${{ steps.release.outputs.created }}
+            VCS_REF=${{ steps.release.outputs.revision }}
+          cache-from: |
+            type=gha,scope=container-smoke
+            type=gha,scope=release
+          cache-to: type=gha,scope=release,mode=max,ignore-error=true
+          provenance: mode=max
+          sbom: true
+
+      - name: Block fixable High and Critical amd64 image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/amd64
+        with:
+          version: v0.76.1
+          scan-type: image
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Block fixable High and Critical arm64 image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          skip-setup-trivy: true
+          scan-type: image
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # cosign 3.0 cannot verify signatures kept in COSIGN_REPOSITORY.
+          # renovate: datasource=github-releases depName=sigstore/cosign
+          cosign-release: v3.1.4
+
+      - name: Sign and verify the immutable image digest
+        env:
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          SIGNATURES: ${{ steps.release.outputs.signatures }}
+        run: |
+          # Verifies with the Docker config in $2, or the logged-in default.
+          sign_and_verify() {
+            cosign sign --yes "$1"
+            # Docker Hub lists a new signature among the image's referrers
+            # a few seconds after accepting it.
+            for attempt in 1 2 3 4 5 6; do
+              if DOCKER_CONFIG="${2:-$HOME/.docker}" cosign verify "$1" \
+                --certificate-identity "$CERTIFICATE_IDENTITY" \
+                --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+                return
+              fi
+              if [ "$attempt" -eq 6 ]; then
+                echo "Verifying $1 failed; check that its packages are public." >&2
+                exit 1
+              fi
+              sleep 10
+            done
+          }
+          # Kept apart so the signature tag does not become the package's
+          # newest version on its GHCR page. Verified without credentials, as
+          # a user would, because a new GHCR package starts private.
+          anonymous="$RUNNER_TEMP/anonymous-docker-config"
+          mkdir -p "$anonymous"
+          COSIGN_REPOSITORY="$SIGNATURES" sign_and_verify "$IMAGE@$DIGEST" "$anonymous"
+          sign_and_verify "docker.io/$DOCKERHUB_IMAGE@$DIGEST"
+
+      - name: Export the SPDX SBOMs of both platforms
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          for architecture in amd64 arm64; do
+            sbom="overture-${VERSION}-linux-${architecture}.spdx.json"
+            docker buildx imagetools inspect "$IMAGE@$DIGEST" \
+              --format "{{ json (index .SBOM \"linux/$architecture\").SPDX }}" > "$sbom"
+            jq --exit-status .spdxVersion "$sbom" >/dev/null
+          done
+
+      - name: Verify both published platforms
+        env:
+          APP_PASSWORD_HASH: $argon2id$v=19$m=19456,t=2,p=1$5PshSM2LkBARR0U/VapWcQ$Cyx+v2jMhbD55bxzEKRR07qFy3RE6MU1+PXxS/nJfK4
+          DIGEST: ${{ steps.build.outputs.digest }}
+          DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          MEDIA_SERVER: plex
+          MEDIA_SERVER_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          MEDIA_SERVER_URL: http://127.0.0.1:32400
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          docker buildx imagetools inspect "docker.io/$DOCKERHUB_IMAGE@$DIGEST" >/dev/null
+
+          for architecture in amd64 arm64; do
+            container="overture-release-$architecture"
+            volume="overture-release-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            cleanup() {
+              docker rm --force "$container" >/dev/null 2>&1 || true
+              docker volume rm "$volume" >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+            docker volume create "$volume" >/dev/null
+            docker run --detach --platform "linux/$architecture" --name "$container" \
+              --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
+              --cap-drop ALL --security-opt no-new-privileges:true \
+              --publish 127.0.0.1:5885:5885 \
+              --volume "$volume:/config" \
+              --env APP_PASSWORD_HASH --env MEDIA_SERVER \
+              --env MEDIA_SERVER_URL --env MEDIA_SERVER_API_KEY \
+              "$IMAGE@$DIGEST" >/dev/null
+
+            for _ in $(seq 1 90); do
+              if curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null
+            docker exec --interactive "$container" python - \
+              --expected-version "$VERSION" < scripts/container_smoke.py
+            test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container")" = "$VERSION"
+            cleanup
+            trap - EXIT
+          done
+
+      - name: Write release artifact metadata
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          printf '%s@%s\n%s@%s\n' "$IMAGE" "$DIGEST" "docker.io/$DOCKERHUB_IMAGE" "$DIGEST" > image-digest.txt
+          printf '\n### Container images\n\n- `%s:%s`\n- `docker.io/%s:%s`\n\nBoth are `%s`. [Verify a release](%s) shows how to check the signatures.\n' \
+            "$IMAGE" "$VERSION" "$DOCKERHUB_IMAGE" "$VERSION" "$DIGEST" \
+            "https://github.com/AutoGitr/Overture#verify-a-release" >> release-notes.md
+
+      - name: Download the qualified native archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name native-archive --dir native-release
+
+      - name: Sign and verify native artifacts
+        env:
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+        run: |
+          for artifact in native-release/*; do
+            cosign sign-blob --yes --bundle "$artifact.sigstore.json" "$artifact"
+            cosign verify-blob "$artifact" --bundle "$artifact.sigstore.json" \
+              --certificate-identity "$CERTIFICATE_IDENTITY" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          done
+
+      - name: Tag the published image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          for tag in $TAGS; do
+            docker buildx imagetools create --tag "$tag" "${tag%:*}@$DIGEST"
+            test "$(docker buildx imagetools inspect "$tag" --format '{{ .Manifest.Digest }}')" = "$DIGEST"
+          done
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --verify-tag \
+            --title "Overture $VERSION" \
+            --notes-file release-notes.md \
+            image-digest.txt \
+            "overture-${VERSION}-linux-amd64.spdx.json" \
+            "overture-${VERSION}-linux-arm64.spdx.json" \
+            native-release/* \
+            LICENSE \
+            licenses/THIRD_PARTY_NOTICES.md
+

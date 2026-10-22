@@ -1,0 +1,141 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "abandonments:recommended",
+    ":configMigration"
+  ],
+  "pinDigests": true,
+  "dependencyDashboard": true,
+  "rangeStrategy": "pin",
+  "labels": ["deps"],
+  "prConcurrentLimit": 2,
+  "prHourlyLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "schedule": ["* 5 * * 2"],
+  "internalChecksFilter": "strict",
+  "rebaseWhen": "conflicted",
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["* 5 * * 1"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "minimumReleaseAge": null,
+    "schedule": ["at any time"],
+    "vulnerabilityFixStrategy": "lowest"
+  },
+  "packageRules": [
+    {
+      "description": "Ignore Overture's own compose file",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/autogitr/overture"],
+      "enabled": false
+    },
+    {
+      "description": "svelte-check's default compiler integration requires TypeScript 6",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Patch consumers of the js-yaml 4 API without forcing a major API change",
+      "matchPackageNames": ["js-yaml"],
+      "allowedVersions": "<5"
+    },
+    {
+      "matchManagers": ["github-actions", "custom.regex"],
+      "addLabels": ["ci"]
+    },
+    {
+      "matchManagers": ["github-actions", "custom.regex"],
+      "groupName": "GitHub Actions Updates",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchDatasources": ["github-runners"],
+      "enabled": true,
+      "groupName": "GitHub runners",
+      "minimumReleaseAge": null,
+      "automerge": false
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Docker Infrastructure"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Backend Core"
+    },
+    {
+      "matchFileNames": ["frontend/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Frontend Core"
+    },
+    {
+      "matchPackageNames": [
+        "/eslint/",
+        "/prettier/",
+        "/vitest/",
+        "/pytest/",
+        "/ruff/",
+        "/pyright/",
+        "/testing-library/"
+      ],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Tooling, Linters & Testing Rules"
+    },
+    {
+      "description": "uv must be the same version everywhere: required-version, which CI reads, and the image that builds the container",
+      "matchPackageNames": ["uv", "astral/uv"],
+      "groupName": "uv"
+    },
+    {
+      "description": "Python must be the same exact version in requires-python, .python-version and the container image",
+      "matchPackageNames": ["python"],
+      "groupName": "Python Version"
+    },
+    {
+      "description": "Bun must be the same version in package.json, which CI reads, and the image that builds the web interface",
+      "matchPackageNames": ["bun", "oven/bun"],
+      "groupName": "Bun"
+    },
+    {
+      "matchUpdateTypes": ["pin", "patch", "digest", "pinDigest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "schedule": ["at any time"]
+    },
+    {
+      "matchUpdateTypes": ["pin", "digest", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "7 days"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Tool versions passed to workflow actions, marked by a renovate comment",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+[\\w-]+: (?:[\\w./-]+:)?(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ]
+    },
+    {
+      "description": "The uv version every uv command and setup-uv step requires",
+      "customType": "regex",
+      "managerFilePatterns": ["/^pyproject\\.toml$/"],
+      "matchStrings": ["required-version = \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "uv",
+      "datasourceTemplate": "pypi"
+    }
+  ]
+}

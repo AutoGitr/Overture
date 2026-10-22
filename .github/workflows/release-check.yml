@@ -1,0 +1,24 @@
+name: Release check
+
+# Started by scripts/release.sh on the commit it is about to tag. It runs what
+# the Release workflow checks beyond CI, so a failure here cannot use up a
+# version number.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-check-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/native.yml
+
+  release-validation:
+    uses: ./.github/workflows/release-validation.yml

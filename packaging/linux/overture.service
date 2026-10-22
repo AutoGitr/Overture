@@ -1,0 +1,25 @@
+[Unit]
+Description=Overture artwork and theme manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=overture
+Group=overture
+WorkingDirectory=/var/lib/overture
+ExecStart=/opt/overture/current/bin/overture serve
+Environment=LOG_COLOUR=false
+Environment=XDG_CACHE_HOME=/var/lib/overture/cache
+Environment=DENO_DIR=/var/lib/overture/cache/deno
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+KillMode=mixed
+NoNewPrivileges=true
+UMask=0027
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,58 @@
+services:
+  overture:
+    image: "ghcr.io/autogitr/overture:1"
+    container_name: "overture"
+    restart: "unless-stopped"
+    user: "1000:1000"
+    cap_drop:
+      - "ALL"
+    security_opt:
+      - "no-new-privileges:true"
+    read_only: true
+    init: true
+    ports:
+      - "127.0.0.1:5885:5885"
+    # Use an env file or define the environment variables in the 'environment:' section below.
+    env_file: ".env"
+    environment:
+      APP_PASSWORD_HASH: "${APP_PASSWORD_HASH:-}"
+      APP_URL: "${APP_URL:-}"
+      ART_DOWNLOAD_WORKERS: "${ART_DOWNLOAD_WORKERS:-1}"
+      AUTH_MODE: "${AUTH_MODE:-password}"
+      LOG_COLOUR: "${LOG_COLOUR:-true}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      MEDIA_SERVER: "${MEDIA_SERVER:-}"
+      MEDIA_SERVER_API_KEY: "${MEDIA_SERVER_API_KEY:-}"
+      MEDIA_SERVER_URL: "${MEDIA_SERVER_URL:-}"
+      MEDIA_SERVER_VERIFY_TLS: "${MEDIA_SERVER_VERIFY_TLS:-true}"
+      OIDC_AUTO_LOGIN: "${OIDC_AUTO_LOGIN:-false}"
+      OIDC_CLIENT_ID: "${OIDC_CLIENT_ID:-}"
+      OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-}"
+      OIDC_DISPLAY_NAME: "${OIDC_DISPLAY_NAME:-Sign in with SSO}"
+      OIDC_ISSUER_URL: "${OIDC_ISSUER_URL:-}"
+      PHASH_WORKERS: "${PHASH_WORKERS:-1}"
+      SESSION_EXPIRY_DAYS: "${SESSION_EXPIRY_DAYS:-7}"
+      THEME_DOWNLOAD_WORKERS: "${THEME_DOWNLOAD_WORKERS:-1}"
+      TMDB_API_KEY: "${TMDB_API_KEY:-}"
+      TRUSTED_PROXY_CIDRS: "${TRUSTED_PROXY_CIDRS:-}"
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - "./config:/config"
+      # The container path must be the one your media server reports for your media.
+      - "/path/to/media:/media"
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "3"
+        max-size: "10m"
+    cpus: 2.0
+    mem_limit: "2g"
+    mem_reservation: "512m"
+    pids_limit: 256
+    stop_grace_period: "60s"
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536
