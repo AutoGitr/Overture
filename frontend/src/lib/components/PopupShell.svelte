@@ -26,6 +26,7 @@
      * - `wide`: a form for work that needs the width, such as operations.
      */
     size?: "dialog" | "form" | "wide";
+    /** `top` keeps the top edge still while the content's height changes. */
     placement?: "center" | "top";
     /** Optional glyph rendered before the title. */
     icon?: Snippet;
@@ -164,6 +165,8 @@
 
   .popup-overlay::backdrop {
     background: var(--surface-overlay);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .popup-content {

@@ -172,4 +172,19 @@ describe("JobLogFeed", () => {
     await vi.waitFor(() => expect(job.log.lines.size).toBe(3));
     expect(job.log.lines.get(2)?.target).toBe("Line 2");
   });
+
+  it("reconciles log total to the persisted count on completion or stop", async () => {
+    const feed = new JobLogFeed();
+    // Optimistically had 10 total
+    feed.apply({ run_id: "run", log_total: 10 });
+    feed.show(0, 10);
+    expect(feed.total).toBe(10);
+
+    // Database actually has 4 entries on stop
+    storedLog(4);
+    feed.finish({ run_id: "run", log_total: 4 });
+    await vi.waitFor(() => expect(feed.lines.size).toBe(4));
+    expect(feed.total).toBe(4);
+    expect(feed.lines.has(4)).toBe(false);
+  });
 });

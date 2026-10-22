@@ -32,7 +32,7 @@
   let data = $derived(statsQuery.data);
 </script>
 
-<PopupShell title="Statistics" size="wide" onclose={() => uiState.closePopup()}>
+<PopupShell title="Statistics" size="wide" placement="top" onclose={() => uiState.closePopup()}>
   {#snippet icon()}
     <ChartColumn size={18} />
   {/snippet}

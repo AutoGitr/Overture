@@ -274,11 +274,15 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     expect(headerBox!.y).toBeGreaterThanOrEqual(0);
-    // Width keeps a gutter; height may fill the screen and remains centered.
+    // Width keeps a gutter; height may fill the screen and remains centered unless top-anchored.
     expect(box!.x).toBeGreaterThan(0);
     expect(box!.x + box!.width).toBeLessThan(viewport.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    expect(box!.y + box!.height / 2).toBeCloseTo(viewport.height / 2, 0);
+    if (dialogTitle === "Statistics") {
+      expect(box!.y).toBe(0);
+    } else {
+      expect(box!.y + box!.height / 2).toBeCloseTo(viewport.height / 2, 0);
+    }
     const body = dialog.locator(".popup-body");
     expect(await body.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
 

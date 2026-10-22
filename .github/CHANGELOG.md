@@ -7,6 +7,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Press `/` or Ctrl+K (Cmd+K on macOS) to jump to the sidebar search.
+
 ### Changed
 
 - Improved readability across the interface with clearer text contrast, inline option hints, and top-anchored operations navigation.
@@ -15,6 +19,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 
 - Prevented empty log placeholders when stopping an operation and improved live elapsed timer accuracy.
+- A finished operation's log now lists exactly its saved lines, and its time taken no longer drops back when it ends.
 
 ## [1.0.2] - 2026-10-21
 

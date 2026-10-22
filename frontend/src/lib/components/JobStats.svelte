@@ -20,7 +20,8 @@
 
 <script lang="ts">
   import { serverClock } from "../realtime/serverClock";
-  import { formatElapsedTime } from "../utils/jobTime";
+  import { elapsedSeconds } from "../utils/jobTime";
+  import { formatDuration } from "../utils/popupFormat";
 
   let {
     job,
@@ -33,10 +34,26 @@
     stats: JobStat[];
   } = $props();
 
-  // Both ends come from the server's clock, so a run counts from 0s and its
-  // final time continues from the last running value.
+  // The shown time never runs backwards: a clock resync or a finished_at a
+  // little behind the live clock keeps what was already counted.
+  let maxSeconds = $state(0);
+  let activeStart = $state<string | null>(null);
+
+  let currentSeconds = $derived(
+    job.started_at ? elapsedSeconds(job.started_at, job.finished_at || serverClock.now) : 0,
+  );
+
+  $effect(() => {
+    if (job.started_at !== activeStart) {
+      activeStart = job.started_at;
+      maxSeconds = currentSeconds;
+    } else if (currentSeconds > maxSeconds) {
+      maxSeconds = currentSeconds;
+    }
+  });
+
   let elapsed = $derived(
-    job.started_at ? formatElapsedTime(job.started_at, job.finished_at || serverClock.now) : "",
+    job.started_at ? formatDuration(Math.max(currentSeconds, maxSeconds)) : "",
   );
 </script>
 

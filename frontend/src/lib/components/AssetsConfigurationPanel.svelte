@@ -120,12 +120,6 @@
     flex-wrap: wrap;
   }
 
-  .inline-hint {
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-    font-weight: 400;
-  }
-
   .muted {
     opacity: 0.5;
   }

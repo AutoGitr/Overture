@@ -68,7 +68,9 @@
     height: var(--header-height);
     padding: var(--safe-area-top) calc(var(--space-5) + var(--safe-area-right)) 0
       calc(var(--space-5) + var(--safe-area-left));
-    background: var(--bg-primary);
+    background: oklch(from var(--bg-primary) l c h / 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: var(--border-subtle);
     flex-shrink: 0;
     z-index: 100;

@@ -149,4 +149,18 @@ describe("SidebarControls menus", () => {
       "Search studios...",
     );
   });
+
+  it("focuses the search input on / or Ctrl+K shortcut", async () => {
+    renderControls();
+    const input = screen.getByRole("textbox", { name: "Search sidebar" });
+
+    await fireEvent.keyDown(window, { key: "/" });
+    expect(input).toHaveFocus();
+
+    input.blur();
+    expect(input).not.toHaveFocus();
+
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(input).toHaveFocus();
+  });
 });

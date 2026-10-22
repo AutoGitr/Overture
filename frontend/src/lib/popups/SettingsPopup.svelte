@@ -133,7 +133,12 @@
       </div>
 
       <div class="option-card">
-        <label class="form-label" for="theme-search-format">Theme Search Query</label>
+        <div class="form-row justify-between">
+          <label class="form-label" for="theme-search-format">Theme Search Query</label>
+          <span class="inline-hint"
+            >Variables: <code>{"{title}"}</code> <code>{"{year}"}</code></span
+          >
+        </div>
         <input
           id="theme-search-format"
           type="text"
@@ -141,14 +146,10 @@
           bind:value={draft.theme_search_format}
           placeholder={DEFAULT_APP_SETTINGS.theme_search_format}
         />
-        <p class="form-hint">
-          Available variables: <code>{"{title}"}</code> <code>{"{year}"}</code>
-        </p>
         <label class="form-row justify-between">
           <span>Normalize theme loudness</span>
           <input type="checkbox" bind:checked={draft.normalize_theme_loudness} />
         </label>
-        <p class="form-hint">Level new theme downloads to -16 LUFS so themes play equally loud.</p>
       </div>
 
       <div class="option-card number-card duration-range">
@@ -185,12 +186,10 @@
               <option value="themes">Themes</option>
             </select>
           </label>
-          <p class="form-hint">Sets the opening tab and the order of work for each item.</p>
           <label class="form-row justify-between">
             <span>Auto-advance</span>
             <input type="checkbox" bind:checked={draft.auto_advance} />
           </label>
-          <p class="form-hint">Move through the workflow and onto the next item after saving.</p>
           <label class="form-row justify-between">
             <span>Skip completed slots and items</span>
             <input
@@ -209,9 +208,6 @@
               <option value="art_and_theme">Art and theme complete</option>
             </select>
           </label>
-          <p class="form-hint">
-            Unmonitor items when downloads or library scans meet this condition.
-          </p>
         </div>
       </div>
 

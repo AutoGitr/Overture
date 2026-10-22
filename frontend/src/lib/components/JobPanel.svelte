@@ -38,7 +38,11 @@
       {/if}
     </header>
   {/if}
-  <div class="progress-bar" role="progressbar" aria-valuenow={Math.round(job.progress)}>
+  <div
+    class={["progress-bar", { active: Boolean(job.started_at && !job.finished_at) }]}
+    role="progressbar"
+    aria-valuenow={Math.round(job.progress)}
+  >
     <div class="progress-bar-fill" style:width="{job.progress}%"></div>
   </div>
   <JobStats {job} {unit} {stats} />

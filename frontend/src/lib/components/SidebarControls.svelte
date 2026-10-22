@@ -75,7 +75,29 @@
       sortField === field ? (sortDir === "asc" ? "desc" : "asc") : defaultSortDir(field),
     );
   }
+
+  /** `/` outside a text field, or Ctrl/Cmd+K anywhere, jumps to the search box. */
+  function focusSearchShortcut(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.altKey) return;
+    const { target } = event;
+    const shortcut =
+      event.ctrlKey || event.metaKey
+        ? event.key.toLowerCase() === "k"
+        : event.key === "/" &&
+          !(
+            target instanceof HTMLElement &&
+            (target.isContentEditable || target.matches("input, textarea, select"))
+          );
+    if (!shortcut) return;
+    searchInput.focus({ preventScroll: true });
+    // An open modal makes the sidebar inert; leave the key to the browser then.
+    if (document.activeElement !== searchInput) return;
+    event.preventDefault();
+    searchInput.select();
+  }
 </script>
+
+<svelte:window onkeydown={focusSearchShortcut} />
 
 <div class="sidebar-controls">
   {#if !searchingTmdb}
@@ -158,6 +180,8 @@
       >
         <X size={12} />
       </button>
+    {:else}
+      <kbd class="search-kbd" aria-hidden="true">/</kbd>
     {/if}
   </div>
 
@@ -280,6 +304,22 @@
   .search-clear-btn:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+  }
+
+  .search-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-tertiary);
+    background: var(--bg-secondary);
+    border: var(--border-subtle);
+    border-radius: var(--radius-sm);
+    line-height: 1.2;
+    pointer-events: none;
+    user-select: none;
   }
 
   .search-input {

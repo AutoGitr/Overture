@@ -19,6 +19,9 @@
     return `${w}x${h}`;
   }
 
+  let src = $derived(candidateImageUrl(art));
+  // Starts over with each image; settles on load or error.
+  let settled = $derived(!src);
   let sourceLabel = $derived(showSource ? art.source : null);
   let resolution = $derived(formatResolution(art.width, art.height));
   let infoBadge = $derived([sourceLabel, resolution].filter(Boolean).join(" | "));
@@ -30,10 +33,17 @@
 
 <button {disabled} class="art-card" aria-label={label} onclick={() => onSelect(art)}>
   <div
-    class="art-card-image"
+    class={["art-card-image", { loading: !settled }]}
     style:aspect-ratio={art.width && art.height ? `${art.width} / ${art.height}` : null}
   >
-    <img src={candidateImageUrl(art)} alt="" loading="lazy" decoding="async" />
+    <img
+      {src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onload={() => (settled = true)}
+      onerror={() => (settled = true)}
+    />
 
     <div class="card-overlays">
       {#if infoBadge}
@@ -69,11 +79,31 @@
     height: fit-content;
     background: var(--bg-secondary);
     border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    transition:
+      transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  .art-card:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-hover);
   }
 
   .art-card:disabled {
     cursor: wait;
     opacity: 0.65;
+  }
+
+  @keyframes card-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
   }
 
   /* Sized before the image loads: by its own dimensions when known, else by
@@ -88,6 +118,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* Only while loading: a contained image leaves the background visible. */
+  .art-card-image.loading {
+    background: linear-gradient(
+      90deg,
+      var(--bg-tertiary) 0%,
+      var(--bg-elevated) 50%,
+      var(--bg-tertiary) 100%
+    );
+    background-size: 200% 100%;
+    animation: card-shimmer 2.4s ease-in-out infinite;
   }
 
   .art-card-image img {

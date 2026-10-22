@@ -140,7 +140,7 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
     this.apply(data);
     this.finished_at = data.finished_at || serverClock.isoNow();
     this.stopping = false;
-    this.log.retry();
+    this.log.finish(data);
   }
 
   /** Copy whichever figures the event carried, keeping the rest. */

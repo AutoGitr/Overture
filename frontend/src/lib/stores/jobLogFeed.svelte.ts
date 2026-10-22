@@ -35,6 +35,7 @@ export class JobLogFeed {
   /** Lines listed: every line of the run, or those the filter shows. */
   total = $state(0);
   error = $state("");
+  finished = $state(false);
   readonly lines = new SvelteMap<number, JobLogEntry>();
   /** Outcomes whose lines are hidden. */
   readonly hidden = new SvelteSet<JobOutcome>();
@@ -118,11 +119,23 @@ export class JobLogFeed {
 
   /** Fetch the lines on screen again after a failed request. */
   retry() {
+    this.error = "";
+    this.show(...this.view);
+  }
+
+  /** Take the run's terminal event: its counts are final, so fetch what is shown again. */
+  finish(event: JobLogEvent) {
+    this.finished = true;
+    if (event.log_outcomes) this.counts = event.log_outcomes;
+    if (event.log_total != null) {
+      this.logTotal = event.log_total;
+      this.total = this.hidden.size ? this.listed() : this.logTotal;
+      this.truncate();
+    }
     // A terminal event guarantees persistence. Discard any earlier page
     // request that may have read the log before its final batch was saved.
     this.abortLoads();
-    this.error = "";
-    this.show(...this.view);
+    this.retry();
   }
 
   reset() {
@@ -135,6 +148,7 @@ export class JobLogFeed {
     this.counts = {};
     this.error = "";
     this.view = [0, 0];
+    this.finished = false;
   }
 
   private abortLoads() {
@@ -147,6 +161,13 @@ export class JobLogFeed {
       if (!this.lines.has(ordinal)) return false;
     }
     return true;
+  }
+
+  /** Drop lines numbered past what is listed. */
+  private truncate() {
+    for (const ordinal of this.lines.keys()) {
+      if (ordinal >= this.total) this.lines.delete(ordinal);
+    }
   }
 
   private evict() {
@@ -176,7 +197,13 @@ export class JobLogFeed {
         const ordinal = result.offset + index;
         if (!this.lines.has(ordinal)) this.lines.set(ordinal, entry);
       });
-      this.total = Math.max(this.total, result.total);
+      // A live run only grows; a finished one's stored log is the whole of it.
+      if (this.finished) {
+        this.total = result.total;
+        this.truncate();
+      } else {
+        this.total = Math.max(this.total, result.total);
+      }
     } catch (error) {
       if (!request.signal.aborted && this.runId === runId) {
         this.error = errorMessage(error, "Could not load the log. Please retry.");
