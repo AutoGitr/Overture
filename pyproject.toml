@@ -21,22 +21,22 @@ requires-python = "==3.15.0"
 
 dependencies = [
     "aiosqlite==0.22.1",
-    "alembic==1.20.0",
+    "alembic==1.20.1",
     "argon2-cffi==25.1.0",
     "authlib==1.9.1",
     "blake3==1.0.11",
-    "fastapi==0.159.1",
-    "httpx2==2.14.0",
+    "fastapi==0.160.0",
+    "httpx2==2.16.0",
     "joserfc==1.7.7",
     "jsonschema==4.26.0",
     "pillow==13.0.0",
-    "pydantic-settings==2.16.0",
+    "pydantic-settings==2.16.1",
     "python-dotenv==1.2.4",
-    "sqlalchemy[asyncio]==2.1.5",
+    "sqlalchemy[asyncio]==2.1.6",
     "sqlmodel==0.0.48",
     "tzdata==2026.5",
     "uvicorn[standard]==0.54.0",
-    "yt-dlp[default]==2026.8.19",
+    "yt-dlp[default]==2026.10.21",
 ]
 
 [dependency-groups]
@@ -53,7 +53,7 @@ dev = [
 script_location = "%(here)s/src/overture/migrations"
 
 [tool.uv]
-required-version = "0.13.4"
+required-version = "0.13.5"
 # brotli publishes no CPython 3.15 wheels yet and the slim image has no compiler;
 # yt-dlp prefers brotlicffi, whose abi3 wheels cover 3.15.
 override-dependencies = [
