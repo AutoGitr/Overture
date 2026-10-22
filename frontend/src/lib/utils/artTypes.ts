@@ -16,6 +16,9 @@ export const ASSET_BADGES: Record<ServerAsset, string> = {
   theme: "badge-theme",
 };
 
+/** Why season artwork is unavailable to a scope without shows. */
+export const SEASON_ONLY = "Only shows have season artwork";
+
 /** Whether an artwork slot exists only on shows, whose seasons hold it. */
 export function isSeasonArtType(asset: ServerAsset): boolean {
   return (SEASON_ART_TYPES as readonly ServerAsset[]).includes(asset);

@@ -70,17 +70,14 @@
     height: fit-content;
     background: var(--bg-secondary);
     border-radius: var(--radius-md);
-    border: 1px solid transparent;
     transition:
       transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 0.18s ease,
-      border-color 0.18s ease;
+      box-shadow 0.18s ease;
   }
 
   .art-card:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
-    border-color: var(--border-hover);
   }
 
   .art-card:disabled {

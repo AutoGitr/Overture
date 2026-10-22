@@ -139,8 +139,22 @@
         />
 
         {#if uiState.sidebarMode === "items"}
+          <span class="form-label">Media server</span>
+          <SegmentedControl
+            label="Media Server"
+            options={MEDIA_SERVER_OPTIONS}
+            bind:value={draft.mediaServer}
+          />
+
           <span class="form-label">Art</span>
           <SegmentedControl label="Art Status" options={COMPLETE_OPTIONS} bind:value={draft.art} />
+
+          <span class="form-label">Aspect ratio</span>
+          <SegmentedControl
+            label="Aspect Ratio"
+            options={ASPECT_RATIO_OPTIONS}
+            bind:value={draft.aspectRatio}
+          />
         {/if}
 
         <span class="form-label">Theme music</span>
@@ -150,35 +164,19 @@
           bind:value={draft.theme}
         />
 
-        {#if uiState.sidebarMode === "items"}
-          {#if datasetEnabled}
-            <span class="form-label">OvertureDB</span>
-            <SegmentedControl
-              label="OvertureDB Status"
-              options={COMPLETE_OPTIONS}
-              bind:value={draft.overtureDb}
-            />
-
-            <span class="form-label">ThemerrDB</span>
-            <SegmentedControl
-              label="ThemerrDB Status"
-              options={COMPLETE_OPTIONS}
-              bind:value={draft.themerrDb}
-            />
-          {/if}
-
-          <span class="form-label">Aspect ratio</span>
+        {#if uiState.sidebarMode === "items" && datasetEnabled}
+          <span class="form-label">OvertureDB</span>
           <SegmentedControl
-            label="Aspect Ratio"
-            options={ASPECT_RATIO_OPTIONS}
-            bind:value={draft.aspectRatio}
+            label="OvertureDB Status"
+            options={COMPLETE_OPTIONS}
+            bind:value={draft.overtureDb}
           />
 
-          <span class="form-label">Media server</span>
+          <span class="form-label">ThemerrDB</span>
           <SegmentedControl
-            label="Media Server"
-            options={MEDIA_SERVER_OPTIONS}
-            bind:value={draft.mediaServer}
+            label="ThemerrDB Status"
+            options={COMPLETE_OPTIONS}
+            bind:value={draft.themerrDb}
           />
         {/if}
       </div>

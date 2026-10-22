@@ -61,7 +61,6 @@
 
   .actionable {
     cursor: pointer;
-    user-select: none;
   }
 
   .actionable:hover {

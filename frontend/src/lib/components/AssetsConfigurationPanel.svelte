@@ -24,7 +24,6 @@
   } = $props();
 
   let config = $derived(form.config);
-  const hintId = $props.id();
 </script>
 
 <div class="option-card">
@@ -56,29 +55,20 @@
       <input type="checkbox" bind:checked={config.includeUnmonitored} />
       <span>Include unmonitored items</span>
     </label>
-    <label class="checkbox-group">
-      <input
-        type="checkbox"
-        bind:checked={config.overwriteExisting}
-        aria-label="Overwrite existing"
-        aria-describedby="{hintId}-overwrite"
-      />
+    <label class="checkbox-group" title="Search again and replace files">
+      <input type="checkbox" bind:checked={config.overwriteExisting} />
       <span>Overwrite existing</span>
-      <span class="hint" id="{hintId}-overwrite">Search again and replace files</span>
     </label>
-    <label class="checkbox-group">
+    <label class="checkbox-group" title="Download saved selections whose files are missing">
       <input
         type="checkbox"
         bind:checked={config.retrySavedDownloads}
         disabled={config.overwriteExisting}
-        aria-label="Retry saved downloads"
-        aria-describedby="{hintId}-retry"
       />
       <span>Retry saved downloads</span>
-      <span class="hint" id="{hintId}-retry">Missing files only</span>
     </label>
   </div>
-  <div class="form-row skip-row">
+  <div class="form-row skip-row" title="0 checks every item">
     <span>Skip items checked within</span>
     <input
       type="number"
@@ -92,7 +82,6 @@
       <option value="hours">hours</option>
       <option value="days">days</option>
     </select>
-    <span class="hint">0 = off</span>
   </div>
 </div>
 

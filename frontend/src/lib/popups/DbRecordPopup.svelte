@@ -8,6 +8,7 @@
     getPublicDatasetRecordOptions,
     listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import CardColumn from "../components/CardColumn.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import { invalidateSeasons, refreshItem } from "../rest/cache";
@@ -93,142 +94,96 @@
   let publicDatasetSeasons = $derived(publicDatasetRecord?.seasons ?? []);
 </script>
 
+{#snippet fieldTable(fields: DisplayField[])}
+  <div class="db-table">
+    {#each fields as field (field.key)}
+      <button class="db-row" onclick={() => copyValue(field)}>
+        <span class="db-key">{field.key}</span>
+        <span class="db-value truncate">{field.value}</span>
+        {#if copiedField === field.key}
+          <Check size={12} class="text-success" />
+        {:else}
+          <Copy size={12} class="text-tertiary" />
+        {/if}
+      </button>
+    {/each}
+  </div>
+{/snippet}
+
 <PopupShell title={recordTitle} onclose={() => uiState.closePopup()}>
-  {#if uiState.sidebarMode === "collections" && coll}
-    <h3 class="section-title">Collection</h3>
-    <div class="db-table">
-      {#each collFields as field (field.key)}
-        <button class="db-row" onclick={() => copyValue(field)}>
-          <span class="db-key">{field.key}</span>
-          <span class="db-value truncate">{field.value}</span>
-          {#if copiedField === field.key}
-            <Check size={12} class="text-success" />
-          {:else}
-            <Copy size={12} class="text-tertiary" />
-          {/if}
-        </button>
-      {/each}
-    </div>
-  {:else if item}
-    <DataStatus
-      label="database record"
-      error={refreshError}
-      loading={refreshing}
-      hasData={true}
-      onretry={refreshRecord}
-    />
-    <h3 class="section-title">Media Item</h3>
-    <div class="db-table">
-      {#each mediaFields as field (field.key)}
-        <button class="db-row" onclick={() => copyValue(field)}>
-          <span class="db-key">{field.key}</span>
-          <span class="db-value truncate">{field.value}</span>
-          {#if copiedField === field.key}
-            <Check size={12} class="text-success" />
-          {:else}
-            <Copy size={12} class="text-tertiary" />
-          {/if}
-        </button>
-      {/each}
-    </div>
-
-    {#if item.media_type === "show"}
+  <CardColumn>
+    {#if uiState.sidebarMode === "collections" && coll}
+      <section class="option-card">
+        <h3 class="form-label">Collection</h3>
+        {@render fieldTable(collFields)}
+      </section>
+    {:else if item}
       <DataStatus
-        label="seasons"
-        error={seasonsQuery.error}
-        loading={seasonsQuery.isFetching}
-        hasData={seasonsQuery.data !== undefined}
-        onretry={() => seasonsQuery.refetch()}
+        label="database record"
+        error={refreshError}
+        loading={refreshing}
+        hasData={true}
+        onretry={refreshRecord}
       />
-    {/if}
-    {#if seasons.length > 0}
-      <h3 class="section-title">Seasons</h3>
-      {#each seasons as season (season.id)}
-        <details class="db-details">
-          <summary>{season.title || `Season ${season.season_num}`}</summary>
-          <div class="db-table">
-            {#each getFields(season) as field (field.key)}
-              <button class="db-row" onclick={() => copyValue(field)}>
-                <span class="db-key">{field.key}</span>
-                <span class="db-value truncate">{field.value}</span>
-                {#if copiedField === field.key}
-                  <Check size={12} class="text-success" />
-                {:else}
-                  <Copy size={12} class="text-tertiary" />
-                {/if}
-              </button>
+      <section class="option-card">
+        <h3 class="form-label">Media Item</h3>
+        {@render fieldTable(mediaFields)}
+      </section>
+
+      {#if item.media_type === "show"}
+        <DataStatus
+          label="seasons"
+          error={seasonsQuery.error}
+          loading={seasonsQuery.isFetching}
+          hasData={seasonsQuery.data !== undefined}
+          onretry={() => seasonsQuery.refetch()}
+        />
+      {/if}
+      {#if seasons.length > 0}
+        <section class="option-card">
+          <h3 class="form-label">Seasons</h3>
+          {#each seasons as season (season.id)}
+            <details class="db-details">
+              <summary>{season.title || `Season ${season.season_num}`}</summary>
+              {@render fieldTable(getFields(season))}
+            </details>
+          {/each}
+        </section>
+      {/if}
+
+      <DataStatus
+        label="OvertureDB record"
+        error={publicDatasetRecordQuery.error}
+        loading={publicDatasetRecordQuery.isFetching}
+        hasData={publicDatasetRecordQuery.data !== undefined}
+        onretry={() => publicDatasetRecordQuery.refetch()}
+      />
+      {#if publicDatasetRecord?.item}
+        <section class="option-card">
+          <h3 class="form-label">OvertureDB Item</h3>
+          {@render fieldTable(getFields(publicDatasetRecord.item))}
+        </section>
+
+        {#if publicDatasetSeasons.length > 0}
+          <section class="option-card">
+            <h3 class="form-label">OvertureDB Seasons</h3>
+            {#each publicDatasetSeasons as season (season.season_num)}
+              <details class="db-details">
+                <summary>Season {season.season_num}</summary>
+                {@render fieldTable(getFields(season))}
+              </details>
             {/each}
-          </div>
-        </details>
-      {/each}
-    {/if}
-
-    <DataStatus
-      label="OvertureDB record"
-      error={publicDatasetRecordQuery.error}
-      loading={publicDatasetRecordQuery.isFetching}
-      hasData={publicDatasetRecordQuery.data !== undefined}
-      onretry={() => publicDatasetRecordQuery.refetch()}
-    />
-    {#if publicDatasetRecord?.item}
-      <h3 class="section-title">OvertureDB Item</h3>
-      <div class="db-table">
-        {#each getFields(publicDatasetRecord.item) as field (field.key)}
-          <button class="db-row" onclick={() => copyValue(field)}>
-            <span class="db-key">{field.key}</span>
-            <span class="db-value truncate">{field.value}</span>
-            {#if copiedField === field.key}
-              <Check size={12} class="text-success" />
-            {:else}
-              <Copy size={12} class="text-tertiary" />
-            {/if}
-          </button>
-        {/each}
-      </div>
-
-      {#if publicDatasetSeasons.length > 0}
-        <h3 class="section-title">OvertureDB Seasons</h3>
-        {#each publicDatasetSeasons as season (season.season_num)}
-          <details class="db-details">
-            <summary>Season {season.season_num}</summary>
-            <div class="db-table">
-              {#each getFields(season) as field (field.key)}
-                <button class="db-row" onclick={() => copyValue(field)}>
-                  <span class="db-key">{field.key}</span>
-                  <span class="db-value truncate">{field.value}</span>
-                  {#if copiedField === field.key}
-                    <Check size={12} class="text-success" />
-                  {:else}
-                    <Copy size={12} class="text-tertiary" />
-                  {/if}
-                </button>
-              {/each}
-            </div>
-          </details>
-        {/each}
+          </section>
+        {/if}
       {/if}
     {/if}
-  {/if}
+  </CardColumn>
 </PopupShell>
 
 <style>
-  .section-title {
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin: var(--space-4) 0 var(--space-2);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .section-title:first-child {
-    margin-top: 0;
-  }
-
   .db-table {
-    border: var(--border-subtle);
-    border-radius: var(--radius-md);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .db-row {
@@ -236,7 +191,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-1) 0;
     text-align: left;
     font-size: var(--text-xs);
     border-bottom: var(--border-subtle);
@@ -259,6 +214,7 @@
   }
 
   .db-value {
+    -webkit-user-select: text;
     user-select: text;
     flex: 1;
     min-width: 0;
@@ -266,15 +222,11 @@
     color: var(--text-secondary);
   }
 
-  .db-details {
-    margin-bottom: var(--space-2);
-  }
-
   .db-details summary {
     cursor: pointer;
     font-size: var(--text-sm);
     color: var(--text-secondary);
-    padding: var(--space-2) 0;
+    padding: var(--space-1) 0;
   }
 
   .db-details summary:hover {

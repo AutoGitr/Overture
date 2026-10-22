@@ -119,7 +119,6 @@
     font-size: var(--text-sm);
     font-weight: 500;
     color: var(--text-secondary);
-    user-select: none;
     cursor: pointer;
     white-space: nowrap;
   }

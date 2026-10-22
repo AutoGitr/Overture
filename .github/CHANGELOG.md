@@ -19,6 +19,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Downloads show which step they are on, such as "Transcoding 3/4", instead of a percentage, and their progress bar now advances by real steps.
 - Each operation's schedules and the form for a new one are now one Schedules section, with the form first and the saved schedules below.
 - Checkboxes have a new look and no longer leave a focus ring after a click, option lists such as libraries flow into columns instead of one per line, and many hints were removed or folded into the rows they explain.
+- Operations results and the database record now use the same full-width sections as the other popups, and Settings, Backup, OvertureDB and the filters list their sections in a clearer order.
+- Buttons, labels, checkboxes and images no longer get highlighted by clicks or drags; titles, paths, log lines and errors stay selectable.
+- Season poster options are simply greyed out when no shows are chosen, and option explanations in Assets moved into tooltips.
 - Light mode is easier to read: status colours meet WCAG AA contrast and text fields have visible borders. Both modes now share one default accent colour, which light mode darkens automatically, so a custom accent also stays legible there.
 - Popup footers are slimmer, and buttons only grow to touch size on touch screens, not in narrow windows.
 - Clarified bulk asset counts so completed file transfers always count as downloaded, reserving adopted for existing local files kept without downloading.

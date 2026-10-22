@@ -9,6 +9,7 @@
     unit,
     stats,
     title,
+    kind,
     status,
     sections,
     children,
@@ -18,6 +19,8 @@
     stats: JobStat[];
     /** Names the run when a view shows more than one. */
     title?: string;
+    /** The asset kind the run fetches, which colours it. */
+    kind?: "art" | "theme";
     status?: string;
     /** Fixed-height parts shown above the lists, such as running downloads. */
     sections?: Snippet;
@@ -35,7 +38,7 @@
      shown, so the lists of all of them share the popup's room, each asking
      for its own height and getting its share of what the screen allows. It
      spans as many rows as it may have; one left out takes no room. -->
-<section class="job-panel" aria-label={title} style:grid-row="span {children ? 5 : 3}">
+<section class={["job-panel", kind]} aria-label={title} style:grid-row="span {children ? 5 : 3}">
   <div class="job-panel-top">
     {#if title}
       <header class="job-panel-header">
@@ -60,16 +63,35 @@
 </section>
 
 <style>
+  /* The full-width section look of CardColumn's sections. */
   .job-panel {
     display: grid;
     grid-template-rows: subgrid;
     row-gap: 0;
     min-width: 0;
-    padding: var(--space-3);
-    border: var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-secondary);
-    box-shadow: inset 3px 0 0 var(--job-accent, var(--accent));
+    margin-inline: calc(-1 * var(--popup-pad));
+    padding: var(--space-3) var(--popup-pad);
+    box-shadow: inset 3px 0 0 var(--section-accent, transparent);
+  }
+
+  .job-panel:first-child {
+    margin-top: calc(-1 * var(--space-2));
+  }
+
+  .job-panel:not(:first-child) {
+    border-top: var(--border-subtle);
+  }
+
+  .job-panel:last-child {
+    margin-bottom: calc(-1 * var(--space-2));
+  }
+
+  .art {
+    --section-accent: var(--asset-art);
+  }
+
+  .theme {
+    --section-accent: var(--asset-theme);
   }
 
   .job-panel > :global(* + *) {
@@ -83,7 +105,7 @@
   }
 
   .job-panel .progress-bar-fill {
-    background: var(--job-accent, var(--accent));
+    background: var(--section-accent, var(--accent));
   }
 
   .job-panel-header {
@@ -97,6 +119,6 @@
   h3 {
     font-size: var(--text-sm);
     font-weight: 700;
-    color: var(--job-accent, var(--text-primary));
+    color: var(--section-accent, var(--text-primary));
   }
 </style>

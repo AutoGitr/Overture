@@ -69,7 +69,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    row-gap: var(--space-3);
+    row-gap: 0;
     min-height: 0;
   }
 </style>

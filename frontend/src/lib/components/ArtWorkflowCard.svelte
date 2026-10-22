@@ -7,9 +7,8 @@
     PERFECT_MATCH_ONLY,
     SEASON_ART_TYPES,
   } from "../../generated/settings";
-  import { ASSET_LABELS } from "../utils/artTypes";
+  import { ASSET_LABELS, SEASON_ONLY } from "../utils/artTypes";
   import type { AssetsForm } from "../utils/assetsForm.svelte";
-  import ArtTypeGroup from "./ArtTypeGroup.svelte";
   import SourceOrderList from "./SourceOrderList.svelte";
   import WorkflowCard from "./WorkflowCard.svelte";
   import WorkflowSection from "./WorkflowSection.svelte";
@@ -18,12 +17,11 @@
 
   let config = $derived(form.config);
   let hasSelectedLibraries = $derived(form.hasSelectedLibraries);
-  let hasShowLibraries = $derived(form.hasShowLibraries);
-  let seasonTypesEnabled = $derived(hasShowLibraries && hasSelectedLibraries);
+  let seasonTypesEnabled = $derived(form.hasShowLibraries && hasSelectedLibraries);
 </script>
 
-{#snippet typeOption(artType: ArtType, enabled: boolean)}
-  <label class="checkbox-group">
+{#snippet typeOption(artType: ArtType, enabled: boolean, reason?: string)}
+  <label class="checkbox-group" title={enabled ? undefined : reason}>
     <input
       type="checkbox"
       checked={enabled && config.artTypes.includes(artType)}
@@ -37,20 +35,12 @@
 <WorkflowCard title="Art" kind="art" bind:enabled={config.enableArt}>
   <WorkflowSection label="Types">
     <div class="filter-options">
-      <ArtTypeGroup>
-        {#each ITEM_ART_TYPES as artType (artType)}
-          {@render typeOption(artType, hasSelectedLibraries)}
-        {/each}
-      </ArtTypeGroup>
-      <ArtTypeGroup
-        label="Shows only"
-        note={hasShowLibraries ? null : "no shows selected"}
-        disabled={!seasonTypesEnabled}
-      >
-        {#each SEASON_ART_TYPES as artType (artType)}
-          {@render typeOption(artType, seasonTypesEnabled)}
-        {/each}
-      </ArtTypeGroup>
+      {#each ITEM_ART_TYPES as artType (artType)}
+        {@render typeOption(artType, hasSelectedLibraries)}
+      {/each}
+      {#each SEASON_ART_TYPES as artType (artType)}
+        {@render typeOption(artType, seasonTypesEnabled, SEASON_ONLY)}
+      {/each}
     </div>
   </WorkflowSection>
 

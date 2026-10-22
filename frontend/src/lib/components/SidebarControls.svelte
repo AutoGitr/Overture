@@ -319,6 +319,7 @@
     border-radius: var(--radius-sm);
     line-height: 1.2;
     pointer-events: none;
+    -webkit-user-select: none;
     user-select: none;
   }
 

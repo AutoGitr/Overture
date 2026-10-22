@@ -56,8 +56,8 @@
         </button>
       </div>
     </BackupSection>
-    <BackupList />
     <BackupScheduleCard />
+    <BackupList />
   </CardColumn>
   {#snippet footer()}
     <button class="btn btn-ghost" onclick={() => uiState.closePopup()}>Close</button>

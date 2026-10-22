@@ -88,7 +88,7 @@
   >
     <CardColumn>
       <div class="option-card">
-        <span class="form-label">Behaviour</span>
+        <span class="form-label">Artwork</span>
         <div class="options-col">
           <label class="form-row justify-between">
             <span>Aspect ratio control</span>
@@ -114,12 +114,6 @@
             </span>
             <input type="checkbox" bind:checked={draft.disable_media_server_art} />
           </label>
-          {#if settingsState.current.media_server === "plex"}
-            <label class="form-row justify-between">
-              <span>Enable Collections</span>
-              <input type="checkbox" bind:checked={draft.plex_collections_enabled} />
-            </label>
-          {/if}
           {#if settingsState.current.tmdb_configured}
             <label class="form-row justify-between">
               <span>TMDB image languages</span>
@@ -133,43 +127,48 @@
       </div>
 
       <div class="option-card">
-        <div class="form-row justify-between">
-          <label class="form-label" for="theme-search-format">Theme Search Query</label>
-          <span class="hint">Variables: <code>{"{title}"}</code> <code>{"{year}"}</code></span>
-        </div>
-        <input
-          id="theme-search-format"
-          type="text"
-          class="text-input"
-          bind:value={draft.theme_search_format}
-          placeholder={DEFAULT_APP_SETTINGS.theme_search_format}
-        />
-        <label class="form-row justify-between">
-          <span>Normalize theme loudness</span>
-          <input type="checkbox" bind:checked={draft.normalize_theme_loudness} />
-        </label>
-      </div>
-
-      <div class="option-card duration-range">
-        <div class="duration-field">
-          <label for="min-theme-duration">Min Theme Duration (seconds)</label>
-          <input
-            id="min-theme-duration"
-            type="number"
-            class="number-input"
-            min="0"
-            bind:value={draft.min_duration_seconds}
-          />
-        </div>
-        <div class="duration-field">
-          <label for="max-theme-duration">Max Theme Duration (seconds)</label>
-          <input
-            id="max-theme-duration"
-            type="number"
-            class="number-input"
-            min="0"
-            bind:value={draft.max_duration_seconds}
-          />
+        <span class="form-label">Themes</span>
+        <div class="options-col">
+          <div class="form-row">
+            <label for="theme-search-format">Theme Search Query</label>
+            <input
+              id="theme-search-format"
+              type="text"
+              class="text-input"
+              aria-describedby="theme-search-variables"
+              bind:value={draft.theme_search_format}
+              placeholder={DEFAULT_APP_SETTINGS.theme_search_format}
+            />
+          </div>
+          <span class="hint" id="theme-search-variables">
+            Variables: <code>{"{title}"}</code> <code>{"{year}"}</code>
+          </span>
+          <div class="duration-range">
+            <div class="duration-field">
+              <label for="min-theme-duration">Min Theme Duration (seconds)</label>
+              <input
+                id="min-theme-duration"
+                type="number"
+                class="number-input"
+                min="0"
+                bind:value={draft.min_duration_seconds}
+              />
+            </div>
+            <div class="duration-field">
+              <label for="max-theme-duration">Max Theme Duration (seconds)</label>
+              <input
+                id="max-theme-duration"
+                type="number"
+                class="number-input"
+                min="0"
+                bind:value={draft.max_duration_seconds}
+              />
+            </div>
+          </div>
+          <label class="form-row justify-between">
+            <span>Normalize theme loudness</span>
+            <input type="checkbox" bind:checked={draft.normalize_theme_loudness} />
+          </label>
         </div>
       </div>
 
@@ -206,6 +205,12 @@
               <option value="art_and_theme">Art and theme complete</option>
             </select>
           </label>
+          {#if settingsState.current.media_server === "plex"}
+            <label class="form-row justify-between">
+              <span>Enable Collections</span>
+              <input type="checkbox" bind:checked={draft.plex_collections_enabled} />
+            </label>
+          {/if}
         </div>
       </div>
 

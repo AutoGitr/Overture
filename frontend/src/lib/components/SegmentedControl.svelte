@@ -48,7 +48,6 @@
     font-weight: 500;
     color: var(--text-tertiary);
     cursor: pointer;
-    user-select: none;
     white-space: nowrap;
   }
 

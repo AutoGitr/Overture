@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { ArtType, ServerAsset } from "../../generated/rest/types.gen";
   import { ITEM_ART_TYPES, SEASON_ART_TYPES } from "../../generated/settings";
-  import { ASSET_LABELS } from "../utils/artTypes";
-  import ArtTypeGroup from "./ArtTypeGroup.svelte";
+  import { ASSET_LABELS, SEASON_ONLY } from "../utils/artTypes";
 
   let {
     artTypes,
@@ -23,43 +22,32 @@
 
 <div class={["option-card", { "option-card-disabled": !hasSelectedFolders }]}>
   <span class="form-label">Check for</span>
-  <div class="filter-options">
-    {#each ITEM_ART_TYPES as artType (artType)}
-      <label class="checkbox-group">
-        <input
-          type="checkbox"
-          checked={artTypes.includes(artType)}
-          disabled={!hasSelectedFolders}
-          onchange={() => ontoggletype(artType)}
-        />
-        <span>{ASSET_LABELS[artType]}</span>
-      </label>
-    {/each}
-    <label class="checkbox-group">
+  {#snippet typeOption(artType: ArtType, enabled: boolean, reason?: string)}
+    <label class="checkbox-group" title={enabled ? undefined : reason}>
       <input
         type="checkbox"
-        checked={themeChecked}
-        disabled={!hasSelectedFolders}
-        onchange={(event) => ontoggletheme(event.currentTarget.checked)}
+        checked={enabled && artTypes.includes(artType)}
+        disabled={!enabled}
+        onchange={() => ontoggletype(artType)}
       />
-      <span>Themes</span>
+      <span>{ASSET_LABELS[artType]}</span>
     </label>
-    <ArtTypeGroup
-      label="Shows only"
-      note={hasShowFolders ? null : "select show folders to enable"}
-      disabled={!hasShowFolders}
-    >
-      {#each SEASON_ART_TYPES as artType (artType)}
-        <label class="checkbox-group">
-          <input
-            type="checkbox"
-            checked={artTypes.includes(artType)}
-            disabled={!hasSelectedFolders || !hasShowFolders}
-            onchange={() => ontoggletype(artType)}
-          />
-          <span>{ASSET_LABELS[artType]}</span>
-        </label>
-      {/each}
-    </ArtTypeGroup>
+  {/snippet}
+  <div class="filter-options">
+    {#each ITEM_ART_TYPES as artType (artType)}
+      {@render typeOption(artType, hasSelectedFolders)}
+    {/each}
+    {#each SEASON_ART_TYPES as artType (artType)}
+      {@render typeOption(artType, hasSelectedFolders && hasShowFolders, SEASON_ONLY)}
+    {/each}
   </div>
+  <label class="checkbox-group">
+    <input
+      type="checkbox"
+      checked={themeChecked}
+      disabled={!hasSelectedFolders}
+      onchange={(event) => ontoggletheme(event.currentTarget.checked)}
+    />
+    <span>Themes</span>
+  </label>
 </div>

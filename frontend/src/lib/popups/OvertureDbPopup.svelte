@@ -122,6 +122,56 @@
       </div>
 
       <div class="option-card">
+        <span class="form-label">Status</span>
+        <div class="options-col">
+          <div class="dataset-meta">
+            <span>Repository</span>
+            {#if publicDatasetStatus?.repo_url}
+              <a
+                href={publicDatasetStatus.repo_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="dataset-link"
+                title={publicDatasetStatus.repo_url}
+              >
+                <code>{publicDatasetStatus.repo_url}</code>
+                <ExternalLink size={12} />
+              </a>
+            {:else}
+              <code>Not configured</code>
+            {/if}
+          </div>
+          <div class="dataset-meta">
+            <span>Catalog</span>
+            <code>{publicDatasetStatus?.catalog_url || "Not configured"}</code>
+          </div>
+          <div class="dataset-meta">
+            <span>Last sync</span>
+            <span>{formatDateTime(publicDatasetStatus?.last_synced_at)}</span>
+          </div>
+          <div class="dataset-meta">
+            <span>Status</span>
+            <span>{publicDatasetStatus?.last_status || "never_synced"}</span>
+          </div>
+          <div class="dataset-meta">
+            <span>Next sync</span>
+            <span>
+              {savedEnabled ? formatDateTime(publicDatasetStatus?.next_run) : "Disabled"}
+            </span>
+          </div>
+          <button
+            class="btn btn-secondary btn-sm self-start"
+            onclick={syncPublicDatasetNow}
+            disabled={!savedEnabled || publicDatasetBusy || dirty || !!datasetQuery.error}
+          >
+            {publicDatasetBusy ? "Syncing..." : "Sync OvertureDB Now"}
+          </button>
+          {#if publicDatasetSyncState.error}
+            <span class="dataset-error" role="alert">{publicDatasetSyncState.error}</span>
+          {/if}
+        </div>
+      </div>
+      <div class="option-card">
         <span class="form-label">Synced File</span>
         {#if stats}
           <div class="stats-grid">
@@ -181,58 +231,6 @@
         </div>
       </div>
     </div>
-    {#if publicDatasetStatus}
-      <div class="option-card">
-        <span class="form-label">Status</span>
-        <div class="options-col">
-          <div class="dataset-meta">
-            <span>Repository</span>
-            {#if publicDatasetStatus?.repo_url}
-              <a
-                href={publicDatasetStatus.repo_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="dataset-link"
-                title={publicDatasetStatus.repo_url}
-              >
-                <code>{publicDatasetStatus.repo_url}</code>
-                <ExternalLink size={12} />
-              </a>
-            {:else}
-              <code>Not configured</code>
-            {/if}
-          </div>
-          <div class="dataset-meta">
-            <span>Catalog</span>
-            <code>{publicDatasetStatus?.catalog_url || "Not configured"}</code>
-          </div>
-          <div class="dataset-meta">
-            <span>Last sync</span>
-            <span>{formatDateTime(publicDatasetStatus?.last_synced_at)}</span>
-          </div>
-          <div class="dataset-meta">
-            <span>Status</span>
-            <span>{publicDatasetStatus?.last_status || "never_synced"}</span>
-          </div>
-          <div class="dataset-meta">
-            <span>Next sync</span>
-            <span>
-              {savedEnabled ? formatDateTime(publicDatasetStatus?.next_run) : "Disabled"}
-            </span>
-          </div>
-          <button
-            class="btn btn-secondary btn-sm self-start"
-            onclick={syncPublicDatasetNow}
-            disabled={!savedEnabled || publicDatasetBusy || dirty || !!datasetQuery.error}
-          >
-            {publicDatasetBusy ? "Syncing..." : "Sync OvertureDB Now"}
-          </button>
-          {#if publicDatasetSyncState.error}
-            <span class="dataset-error" role="alert">{publicDatasetSyncState.error}</span>
-          {/if}
-        </div>
-      </div>
-    {/if}
   </CardColumn>
   {#snippet footer()}
     <button class="btn btn-ghost" onclick={() => uiState.closePopup()}> Cancel </button>
