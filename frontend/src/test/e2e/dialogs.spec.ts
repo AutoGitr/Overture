@@ -274,10 +274,11 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     expect(headerBox!.y).toBeGreaterThanOrEqual(0);
-    // Every screen keeps the popup's margin: its height follows its content.
+    // Width keeps a gutter; height may fill the screen and remains centered.
     expect(box!.x).toBeGreaterThan(0);
     expect(box!.x + box!.width).toBeLessThan(viewport.width);
-    expect(box!.y + box!.height).toBeLessThan(viewport.height);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    expect(box!.y + box!.height / 2).toBeCloseTo(viewport.height / 2, 0);
     const body = dialog.locator(".popup-body");
     expect(await body.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
 
@@ -307,4 +308,37 @@ test("a confirmation stays a small dialog on every screen", async ({ page }) => 
   expect(box.height).toBeLessThan(viewport.height / 2);
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(confirm).toHaveCount(0);
+});
+
+test("short screens give popups their full safe height and scroll content behind fixed controls", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 320 });
+  await logIn(page);
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty("--safe-area-top", "12px");
+    document.documentElement.style.setProperty("--safe-area-bottom", "18px");
+  });
+  await page.getByRole("button", { name: "Assets", exact: true }).click();
+  const operations = page.getByRole("dialog", { name: "Operations", exact: true });
+  const tabs = operations.getByRole("tablist", { name: "Operation modes" });
+  const tabBox = await tabs.boundingBox();
+  const box = await operations.locator(".popup-content").boundingBox();
+  expect(box).toMatchObject({ y: 12, height: 290 });
+  const body = operations.locator(".popup-body");
+  await body.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  expect(await body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await tabs.boundingBox()).toEqual(tabBox);
+  await expect(operations.getByRole("button", { name: "Run Now", exact: true })).toBeInViewport();
+  await operations.getByRole("button", { name: "Close popup" }).click();
+  await page.getByLabel("Open menu").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  expect(await settings.locator(".popup-content").boundingBox()).toMatchObject({
+    y: 12,
+    height: 290,
+  });
+  await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
 });

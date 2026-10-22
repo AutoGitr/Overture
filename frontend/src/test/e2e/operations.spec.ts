@@ -100,10 +100,14 @@ test("the operations popup keeps its top edge and width across tabs and runs", a
     return [box!.x, box!.y, box!.width];
   };
   const box = await edges();
+  expect(box[1]).toBe(0);
+  const tabs = dialog.getByRole("tablist", { name: "Operation modes" });
+  const tabsBox = await tabs.boundingBox();
   const body = dialog.locator(".popup-body");
   for (const tab of ["Sync", "Renamer", "Server Audit", "Assets"]) {
     await dialog.getByRole("tab", { name: tab }).click();
     expect(await edges()).toEqual(box);
+    expect(await tabs.boundingBox()).toEqual(tabsBox);
     expect(await body.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
   }
   realtime.emit({

@@ -34,7 +34,8 @@
   .workflow-card {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-3);
+    border-left: 3px solid var(--workflow-accent, var(--info));
   }
 
   .workflow-header {
@@ -46,11 +47,12 @@
 
   .workflow-header .form-label {
     margin: 0;
+    color: var(--workflow-accent, var(--info));
   }
 
   .workflow-body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: var(--space-3);
   }
 </style>

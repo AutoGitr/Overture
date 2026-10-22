@@ -53,6 +53,15 @@
     flex-direction: column;
     gap: var(--space-3);
     min-width: 0;
+    padding: var(--space-3);
+    border: var(--border-subtle);
+    border-top: 2px solid var(--job-accent, var(--accent));
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+  }
+
+  .job-panel .progress-bar-fill {
+    background: var(--job-accent, var(--accent));
   }
 
   .job-panel-header {

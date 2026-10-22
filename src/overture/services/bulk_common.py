@@ -325,10 +325,9 @@ async def report_downloads[TallyT: BulkAssetTally](
                 )
             elif outcome.unchanged:
                 await job.report(
-                    JobOutcome.ADOPTED,
+                    JobOutcome.DOWNLOADED,
                     outcome.target,
-                    "download is identical to the local file; selection saved, "
-                    "nothing written",
+                    "download is identical to the local file; kept on disk",
                     finished=False,
                 )
             else:

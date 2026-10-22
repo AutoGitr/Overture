@@ -48,8 +48,8 @@ class RealtimeStream {
 
   /** Adopt a snapshot unless it is strictly behind what is already applied. */
   applySnapshot(snapshot: RealtimeSnapshot): boolean {
-    serverClock.sync(snapshot.server_time);
     if (this.epoch === snapshot.epoch && this.sequence > snapshot.sequence) return false;
+    serverClock.sync(snapshot.server_time);
     const previous = this.downloads;
     const continuing = this.epoch === snapshot.epoch;
     this.epoch = snapshot.epoch;

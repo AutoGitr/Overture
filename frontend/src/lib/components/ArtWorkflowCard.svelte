@@ -52,10 +52,7 @@
     </ArtTypeGroup>
   </WorkflowSection>
 
-  <WorkflowSection
-    label="Sources"
-    note="Tried top to bottom; the first match wins. Local art matching picks the source image closest to your current one."
-  >
+  <WorkflowSection label="Sources" note="First match wins, top to bottom.">
     <SourceOrderList
       sourceOrder={config.artSourceOrder}
       selectedSources={config.selectedArtSources}
@@ -67,7 +64,7 @@
     />
   </WorkflowSection>
 
-  <WorkflowSection label="Matching" note="For local art matching only. Lower is stricter.">
+  <WorkflowSection label="Local art matching">
     <div class="form-row">
       <span class="form-label">Distance threshold:</span>
       <input

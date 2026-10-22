@@ -7,6 +7,15 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- Improved readability across the interface with clearer text contrast, inline option hints, and top-anchored operations navigation.
+- Clarified bulk asset counts so completed file transfers always count as downloaded, reserving adopted for existing local files kept without downloading.
+
+### Fixed
+
+- Prevented empty log placeholders when stopping an operation and improved live elapsed timer accuracy.
+
 ## [1.0.2] - 2026-10-21
 
 ### Added

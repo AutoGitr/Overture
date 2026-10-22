@@ -1,7 +1,7 @@
 """Publishing and logging the lifecycle events of jobs."""
 
 lazy import logging
-lazy from collections.abc import Callable, Mapping
+lazy from collections.abc import Awaitable, Callable, Mapping
 lazy from dataclasses import dataclass
 lazy from typing import Any
 
@@ -100,6 +100,7 @@ async def publish_job_lifecycle(
     save_snapshot: Callable[[str, dict[str, Any]], None] | None = None,
     save_resume_snapshot: Callable[[str, dict[str, Any]], None] | None = None,
     before_publish: Callable[[str, Any], None] | None = None,
+    persist: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
     **payload: Any,
 ) -> dict[str, Any]:
     """Publish a standard job lifecycle event with a stable job envelope.
@@ -126,6 +127,9 @@ async def publish_job_lifecycle(
         if save_resume_snapshot is not None and LifecycleStatus(status).running
         else None
     )
+
+    if persist is not None:
+        await persist(f"{kind.event_prefix}.{status}", event_payload)
 
     projected = False
 

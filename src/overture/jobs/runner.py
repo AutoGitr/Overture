@@ -6,6 +6,7 @@ lazy from collections import Counter
 lazy from collections.abc import AsyncGenerator, Callable, Mapping
 lazy from contextlib import asynccontextmanager
 lazy from dataclasses import dataclass, field, replace
+lazy from functools import partial
 lazy from typing import Any
 lazy from uuid import uuid4
 
@@ -112,6 +113,7 @@ class JobContext:
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     persistence: JobPersistence | None = None
     shutdown_event: asyncio.Event = field(default_factory=asyncio.Event)
+    publication_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def stop_requested(self) -> bool:
         """Return whether the run has been asked to stop."""
@@ -128,41 +130,45 @@ class JobContext:
         **payload: Any,
     ) -> None:
         """Publish a standard job lifecycle event with a stable job envelope."""
-        payload.setdefault("started_at", self.started_at)
-        name = self.lifecycle.kind.label
-        if status == "stopped" and self.shutdown_event.is_set():
-            if payload.get("error") is None:
-                payload["error"] = INTERRUPTED_MESSAGE
-            payload.setdefault(
-                "log", log_entry(JobOutcome.SKIPPED, name, INTERRUPTED_MESSAGE)
-            )
-        if status == "failed" and not quiet and (error := payload.get("error")):
-            # The error ends the run's log as well as its terminal event.
-            payload.setdefault("log", log_entry(JobOutcome.ERROR, label(name), error))
-        if self.persistence is not None:
-            payload["run_id"] = self.persistence.run_id
-            if (entry := payload.get("log")) is not None:
-                self.persistence.add_log(JobLogEntry.model_validate(entry))
-            payload["log_total"] = self.persistence.log_total
-            payload["log_outcomes"] = dict(self.persistence.log_outcomes)
-        canonical = await publish_job_lifecycle(
-            self.lifecycle.kind,
-            status,
-            event_job_id=self.lifecycle.event_job_id,
-            target=self.lifecycle.target,
-            name=None if quiet else name,
-            exc=exc,
-            save_snapshot=self.save_snapshot if snapshot else None,
-            save_resume_snapshot=self.save_resume_snapshot,
-            publisher=self.publisher,
-            **payload,
-        )
-        if self.persistence is not None:
-            await self.persistence.record(
-                f"{self.lifecycle.kind.event_prefix}.{status}",
-                canonical,
-                result_batch or [],
-                is_progress=status == "progress",
+        # Matching and download settlement share one numbered, buffered log.
+        async with self.publication_lock:
+            payload.setdefault("started_at", self.started_at)
+            name = self.lifecycle.kind.label
+            if status == "stopped" and self.shutdown_event.is_set():
+                if payload.get("error") is None:
+                    payload["error"] = INTERRUPTED_MESSAGE
+                payload.setdefault(
+                    "log", log_entry(JobOutcome.SKIPPED, name, INTERRUPTED_MESSAGE)
+                )
+            if status == "failed" and not quiet and (error := payload.get("error")):
+                # The error ends the run's log as well as its terminal event.
+                payload.setdefault(
+                    "log", log_entry(JobOutcome.ERROR, label(name), error)
+                )
+            if self.persistence is not None:
+                payload["run_id"] = self.persistence.run_id
+                if (entry := payload.get("log")) is not None:
+                    self.persistence.add_log(JobLogEntry.model_validate(entry))
+                payload["log_total"] = self.persistence.log_total
+                payload["log_outcomes"] = dict(self.persistence.log_outcomes)
+            await publish_job_lifecycle(
+                self.lifecycle.kind,
+                status,
+                event_job_id=self.lifecycle.event_job_id,
+                target=self.lifecycle.target,
+                name=None if quiet else name,
+                exc=exc,
+                save_snapshot=self.save_snapshot if snapshot else None,
+                save_resume_snapshot=self.save_resume_snapshot,
+                publisher=self.publisher,
+                persist=partial(
+                    self.persistence.record,
+                    results=result_batch or [],
+                    is_progress=status == "progress",
+                )
+                if self.persistence is not None
+                else None,
+                **payload,
             )
 
 

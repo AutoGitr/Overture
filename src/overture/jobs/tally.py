@@ -101,9 +101,8 @@ class BulkAssetTally(JobTally):
 
     Every counter but ``settled`` equals the lines starting with its outcome.
     ``queued`` counts the downloads the run created; ``settled`` counts the
-    ones that have since ended, whether ``downloaded``, ``adopted`` (identical
-    to the local file, so nothing written) or failed. Matching is over long
-    before the last download settles.
+    ones that have since ended, whether ``downloaded`` or failed. Matching is
+    over long before the last download settles.
     """
 
     queued: int = 0

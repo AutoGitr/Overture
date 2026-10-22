@@ -5,7 +5,9 @@ to shape their payloads, so its contract is tested directly rather than only
 through each runner.
 """
 
+lazy import asyncio
 lazy import logging
+lazy from collections.abc import Callable
 lazy from typing import Any
 
 lazy import pytest
@@ -21,6 +23,61 @@ lazy from overture.jobs.runner import run_managed_job
 lazy from overture.jobs.tally import AssetScanTally, BulkAssetTally, ServerAuditTally
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe
+
+
+async def test_concurrent_progress_keeps_every_line_and_persists_before_completion(
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
+    original_persist = runner.job_results.persist
+    writing = asyncio.Event()
+    release = asyncio.Event()
+    terminal_lines: list[str] = []
+
+    async def persist(db: Database, **kwargs: Any) -> None:
+        if kwargs["log"] and not writing.is_set():
+            writing.set()
+            await release.wait()
+        await original_persist(db, **kwargs)
+
+    original_broadcast = probe.publisher.broadcast
+
+    async def broadcast(
+        event: str,
+        payload: Any = None,
+        *,
+        before_publish: Callable[[str, Any], None] | None = None,
+    ) -> None:
+        if event == "match.completed":
+            page = await runner.job_results.log_page(
+                database, payload["run_id"], 0, 100
+            )
+            terminal_lines.extend(entry.target for entry in page.items)
+        await original_broadcast(event, payload, before_publish=before_publish)
+
+    monkeypatch.setattr(runner.job_results, "persist", persist)
+    monkeypatch.setattr(probe.publisher, "broadcast", broadcast)
+    async with asyncio.timeout(5):
+        async with run_managed_job(probe.context, _tally(), database=database) as job:
+            await job.started()
+            # Force this progress batch to flush while another publisher arrives.
+            assert job.context.persistence is not None
+            monkeypatch.setattr(job.context.persistence, "_summarised_at", None)
+            first = asyncio.create_task(job.report(JobOutcome.ADOPTED, "A", "kept"))
+            await writing.wait()
+            second = asyncio.create_task(
+                job.report(JobOutcome.DOWNLOADED, "B", "saved")
+            )
+            await asyncio.sleep(0)
+            release.set()
+            await asyncio.gather(first, second)
+
+    assert terminal_lines == ["A", "B"]
+    progress = probe.publisher.payloads("match.progress")
+    assert [payload["log_total"] for payload in progress] == [1, 2]
+    terminal = probe.terminal()[1]
+    assert (terminal["adopted"], terminal["downloaded"]) == (1, 1)
 
 
 def _tally() -> BulkAssetTally:

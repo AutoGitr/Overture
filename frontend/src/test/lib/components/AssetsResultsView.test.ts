@@ -49,7 +49,12 @@ describe("AssetsResultsView", () => {
     expect(within(themes).getByTitle("Downloads waiting or still running")).toHaveTextContent(
       "queued: 1",
     );
-    expect(within(themes).getByTitle("Files written to disk")).toHaveTextContent("downloaded: 1");
+    expect(within(themes).getByTitle("Files downloaded and saved to disk")).toHaveTextContent(
+      "downloaded: 1",
+    );
+    expect(
+      within(themes).getByTitle("Existing file kept and linked to an art URL or YouTube ID"),
+    ).toHaveTextContent("adopted: 0");
   });
 
   it("holds a row per lane worker from a run's first download until it ends", async () => {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobLogFeed } from "../../../lib/stores/jobLogFeed.svelte";
+import { JobLifecycleState } from "../../../lib/stores/jobLifecycleState.svelte";
 import { logEntry } from "../../helpers/fixtures";
 import { type FetchCall, mockFetchRoutes } from "../../helpers/fetch";
 import type { JobOutcome } from "../../../generated/ws";
@@ -158,5 +159,17 @@ describe("JobLogFeed", () => {
     feed.retry();
     await vi.waitFor(() => expect(feed.lines.size).toBe(10));
     expect(feed.error).toBe("");
+  });
+
+  it("fills an incomplete visible page when the operation stops without scrolling", async () => {
+    const job = new JobLifecycleState({ failureMessage: "Failed" });
+    const { calls } = storedLog(0);
+    job.handleStarted({ run_id: "run", log_total: 3 });
+    job.log.show(0, 3);
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    storedLog(3);
+    job.handleStopped({ run_id: "run", log_total: 3 });
+    await vi.waitFor(() => expect(job.log.lines.size).toBe(3));
+    expect(job.log.lines.get(2)?.target).toBe("Line 2");
   });
 });

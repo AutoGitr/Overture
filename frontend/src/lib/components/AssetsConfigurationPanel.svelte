@@ -24,6 +24,7 @@
   } = $props();
 
   let config = $derived(form.config);
+  const hintId = $props.id();
 </script>
 
 <div class="option-card">
@@ -51,27 +52,31 @@
 
 <div class="option-card">
   <span class="form-label">Options</span>
-  <p class="option-note">
-    By default, anything that already has a file or a saved choice is skipped.
-  </p>
   <label class="checkbox-group">
     <input type="checkbox" bind:checked={config.includeUnmonitored} />
     <span>Include unmonitored items</span>
   </label>
   <label class="checkbox-group">
-    <input type="checkbox" bind:checked={config.overwriteExisting} />
+    <input
+      type="checkbox"
+      bind:checked={config.overwriteExisting}
+      aria-label="Overwrite existing"
+      aria-describedby="{hintId}-overwrite"
+    />
     <span>Overwrite existing</span>
+    <span class="inline-hint" id="{hintId}-overwrite">Search again and replace files</span>
   </label>
-  <p class="option-note">Searches again and replaces existing files.</p>
   <label class="checkbox-group">
     <input
       type="checkbox"
       bind:checked={config.retrySavedDownloads}
       disabled={config.overwriteExisting}
+      aria-label="Retry saved downloads"
+      aria-describedby="{hintId}-retry"
     />
     <span>Retry saved downloads</span>
+    <span class="inline-hint" id="{hintId}-retry">Missing files only</span>
   </label>
-  <p class="option-note">Downloads saved choices again where the file is missing.</p>
   <div class="form-row skip-row">
     <span>Skip items checked within</span>
     <input
@@ -86,19 +91,14 @@
       <option value="hours">hours</option>
       <option value="days">days</option>
     </select>
-  </div>
-  <div class="option-note">
-    Skips items whose sources were searched this recently. 0 turns it off.
+    <span class="inline-hint">0 = off</span>
   </div>
 </div>
 
 <ArtWorkflowCard {form} />
 
-<WorkflowCard title="Themes" bind:enabled={config.enableThemes}>
-  <WorkflowSection
-    label="Sources"
-    note="Tried top to bottom; the first match wins. YouTube searches use the Theme Search Query from Settings."
-  >
+<WorkflowCard title="Themes" bind:enabled={config.enableThemes} --workflow-accent="var(--violet)">
+  <WorkflowSection label="Sources" note="First match wins, top to bottom.">
     <SourceOrderList
       sourceOrder={config.themeSourceOrder}
       selectedSources={config.selectedThemeSources}
@@ -116,6 +116,16 @@
 {/if}
 
 <style>
+  .checkbox-group {
+    flex-wrap: wrap;
+  }
+
+  .inline-hint {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 400;
+  }
+
   .muted {
     opacity: 0.5;
   }

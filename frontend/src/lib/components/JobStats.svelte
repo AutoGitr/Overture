@@ -5,7 +5,7 @@
     value: number;
     /** What the figure counts, when the label alone does not say. */
     title?: string;
-    tone?: "info" | "accent" | "danger";
+    tone?: "info" | "accent" | "danger" | "success" | "warning" | "violet";
   }
 
   /** The progress and timing every run reports. */
@@ -60,7 +60,7 @@
       <dd class={["stat-value", stat.tone && `text-${stat.tone}`]}>{stat.value}</dd>
     </div>
   {/each}
-  <div class="stat" style:min-width="22ch">
+  <div class="stat elapsed" style:min-width="22ch">
     <dt>time taken:</dt>
     <dd class="stat-value">{elapsed || "-"}</dd>
   </div>
@@ -84,6 +84,10 @@
     white-space: nowrap;
   }
 
+  .elapsed {
+    margin-left: auto;
+  }
+
   dd {
     margin: 0;
     overflow: hidden;
@@ -92,7 +96,6 @@
 
   .stat-value {
     font-weight: 600;
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
   }
@@ -107,5 +110,17 @@
 
   .stat-value.text-danger {
     color: var(--danger);
+  }
+
+  .stat-value.text-success {
+    color: var(--success);
+  }
+
+  .stat-value.text-warning {
+    color: var(--warning);
+  }
+
+  .stat-value.text-violet {
+    color: var(--violet);
   }
 </style>

@@ -64,8 +64,8 @@ def _log_outcome(
     while the bulk run that queued it mirrors the write at debug.
     """
     if status is DownloadStatus.COMPLETED and payload.get("unchanged"):
-        level, outcome = logging.DEBUG, JobOutcome.ADOPTED
-        reason = "download is identical to the local file; nothing written"
+        level, outcome = logging.DEBUG, JobOutcome.DOWNLOADED
+        reason = "download is identical to the local file; kept on disk"
     elif status is DownloadStatus.COMPLETED:
         level, outcome, reason = logging.INFO, JobOutcome.DOWNLOADED, "written to disk"
     elif status is DownloadStatus.FAILED:

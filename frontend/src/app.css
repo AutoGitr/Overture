@@ -50,8 +50,8 @@
 
   /* -- Colors: Text -- */
   --text-primary: oklch(93.7% 0.008 271);
-  --text-secondary: oklch(66.2% 0.034 271);
-  --text-tertiary: oklch(50.5% 0.047 274);
+  --text-secondary: oklch(76% 0.026 271);
+  --text-tertiary: oklch(66% 0.03 274);
 
   /* -- Colors: Accent -- */
   --accent: oklch(83.5% 0.052 86);
@@ -72,8 +72,8 @@
   --warning: oklch(76.9% 0.165 70);
   --danger: oklch(63.7% 0.208 25);
   --danger-hover: oklch(from var(--danger) calc(l - 0.06) c h);
-  --info: oklch(62.3% 0.188 260);
-  --violet: oklch(60.6% 0.219 293);
+  --info: oklch(76% 0.13 250);
+  --violet: oklch(76% 0.14 293);
   --success-muted: oklch(from var(--success) l c h / 0.15);
   --warning-muted: oklch(from var(--warning) l c h / 0.15);
   --danger-muted: oklch(from var(--danger) l c h / 0.15);
@@ -484,7 +484,7 @@ img {
   flex-direction: column;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
-  padding: var(--space-2);
+  padding: var(--space-3);
   background: var(--bg-secondary);
   border: var(--border-subtle);
   border-radius: var(--radius-md);
@@ -501,7 +501,7 @@ img {
 }
 
 .option-note {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .option-error {
@@ -522,8 +522,8 @@ img {
 
 .form-label {
   font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .form-row {
@@ -538,6 +538,7 @@ img {
   gap: var(--space-2);
   cursor: pointer;
   font-size: var(--text-sm);
+  font-weight: 500;
 }
 
 .checkbox-group input[type="checkbox"] {
@@ -571,7 +572,7 @@ img {
 .form-hint,
 .hint {
   font-size: var(--text-xs);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   margin-top: var(--space-1);
 }
 
@@ -799,6 +800,7 @@ img {
   --warning: oklch(66.6% 0.157 58);
   --danger: oklch(57.7% 0.215 27);
   --info: oklch(58.8% 0.139 242);
+  --violet: oklch(49% 0.18 293);
   --success-muted: oklch(from var(--success) l c h / 0.12);
   --warning-muted: oklch(from var(--warning) l c h / 0.12);
   --danger-muted: oklch(from var(--danger) l c h / 0.12);

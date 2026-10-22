@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { serverClock } from "../../../lib/realtime/serverClock";
 import { client } from "../../../generated/rest/client.gen";
 import { realtimeStream } from "../../../lib/realtime/stream";
 import { queryClient } from "../../../lib/rest/queryClient";
@@ -93,8 +94,13 @@ describe("realtime stream reconciliation", () => {
   });
 
   it("rejects a snapshot that is strictly behind the applied sequence", () => {
-    realtimeStream.applySnapshot(snapshot(9));
+    vi.useFakeTimers({ toFake: ["performance"] });
+    realtimeStream.applySnapshot({ ...snapshot(9), server_time: "2026-06-02T10:00:00Z" });
+    vi.advanceTimersByTime(2000);
 
-    expect(realtimeStream.applySnapshot(snapshot(4))).toBe(false);
+    expect(
+      realtimeStream.applySnapshot({ ...snapshot(4), server_time: "2026-06-02T09:00:00Z" }),
+    ).toBe(false);
+    expect(serverClock.isoNow()).toBe("2026-06-02T10:00:02.000Z");
   });
 });

@@ -7,6 +7,7 @@
   let {
     title,
     size = "form",
+    placement = "center",
     icon,
     tabs,
     info,
@@ -21,11 +22,11 @@
      * screen's height, past which its body scrolls; it is as wide as the size
      * allows, and narrower only when the screen is.
      * - `dialog`: a short question, centred.
-     * - `form`: settings and choices, anchored to the top, so content that
-     *   grows or shrinks moves only the bottom edge.
+     * - `form`: settings and choices.
      * - `wide`: a form for work that needs the width, such as operations.
      */
     size?: "dialog" | "form" | "wide";
+    placement?: "center" | "top";
     /** Optional glyph rendered before the title. */
     icon?: Snippet;
     /** A `PopupTabs` shown under the title, part of the header that never scrolls. */
@@ -71,7 +72,7 @@
     backdropPressed = false;
   }}
 >
-  <div class={["popup-content", size]}>
+  <div class={["popup-content", size, { "top-aligned": placement === "top" }]}>
     <div class="popup-header">
       <div class="header-row">
         <div class="header-title">
@@ -106,13 +107,12 @@
       {@render tabs?.()}
     </div>
 
-    {#if about && aboutOpen}
-      <div class="popup-info" id={aboutId}>
-        {@render about()}
-      </div>
-    {/if}
-
     <div class="popup-body">
+      {#if about && aboutOpen}
+        <div class="popup-info" id={aboutId}>
+          {@render about()}
+        </div>
+      {/if}
       {#if info}
         <div class="popup-info">
           {@render info()}
@@ -134,7 +134,6 @@
 
 <style>
   .popup-overlay {
-    --popup-top-offset: min(6dvh, var(--space-12));
     --popup-margin: var(--space-3);
 
     position: fixed;
@@ -155,17 +154,8 @@
        container, so focusing a field scrolls only the body. */
     overflow: clip;
     overscroll-behavior: contain;
-    padding: calc(var(--popup-margin) + var(--safe-area-top))
-      calc(var(--popup-margin) + var(--safe-area-right))
-      calc(var(--popup-margin) + var(--safe-area-bottom))
-      calc(var(--popup-margin) + var(--safe-area-left));
-  }
-
-  /* A short or narrow screen leaves no height to spend above the popup. */
-  @media (max-height: 700px), (max-width: 640px) {
-    .popup-overlay {
-      --popup-top-offset: 0px;
-    }
+    padding: var(--safe-area-top) calc(var(--popup-margin) + var(--safe-area-right))
+      var(--safe-area-bottom) calc(var(--popup-margin) + var(--safe-area-left));
   }
 
   .popup-overlay[open] {
@@ -199,11 +189,8 @@
     width: 440px;
   }
 
-  .popup-content.form,
-  .popup-content.wide {
+  .popup-content.top-aligned {
     align-self: flex-start;
-    max-height: calc(100% - var(--popup-top-offset));
-    margin-top: var(--popup-top-offset);
   }
 
   .popup-content.form {
@@ -220,6 +207,8 @@
     gap: var(--space-3);
     padding: var(--space-4) var(--popup-pad) var(--space-3);
     flex-shrink: 0;
+    background: linear-gradient(110deg, var(--accent-muted), transparent 70%);
+    border-bottom: var(--border-subtle);
   }
 
   .header-row {
@@ -234,6 +223,10 @@
     align-items: center;
     gap: var(--space-2);
     min-width: 0;
+  }
+
+  .header-title :global(svg) {
+    color: var(--accent);
   }
 
   .header-buttons {
@@ -271,6 +264,7 @@
     gap: var(--space-3);
     padding: var(--space-3) var(--popup-pad) var(--popup-pad);
     flex-shrink: 0;
+    border-top: var(--border-subtle);
   }
 
   .popup-footer :global(.popup-footer-note) {
@@ -286,7 +280,7 @@
   .popup-info {
     padding: var(--space-2) var(--popup-pad);
     font-size: var(--text-xs);
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     background: var(--bg-secondary);
     border-bottom: var(--border-subtle);
     line-height: 1.5;

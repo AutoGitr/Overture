@@ -26,8 +26,8 @@ lazy from tests.publishers import NullEventPublisher
             {"unchanged": True},
             logging.DEBUG,
             (
-                "Download: Adopted Alien (poster) - download is identical to the "
-                "local file; nothing written"
+                "Download: Downloaded Alien (poster) - download is identical to the "
+                "local file; kept on disk"
             ),
         ),
         (

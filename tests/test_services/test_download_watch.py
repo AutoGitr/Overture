@@ -147,8 +147,8 @@ async def test_report_downloads_counts_what_landed_and_what_failed() -> None:
     ):
         pass
 
-    assert job.tally.downloaded == 1
-    assert job.tally.adopted == 1
+    assert job.tally.downloaded == 2
+    assert job.tally.adopted == 0
     assert job.tally.skipped == 1
     assert job.tally.errors == 1
     assert job.tally.settled == 4
@@ -158,8 +158,8 @@ async def test_report_downloads_counts_what_landed_and_what_failed() -> None:
         "Downloaded Alien (poster) - written to disk",
         "Error Firefly - download failed: disk full",
         (
-            "Adopted Heat (poster) - download is identical to the local file; "
-            "selection saved, nothing written"
+            "Downloaded Heat (poster) - download is identical to the local file; "
+            "kept on disk"
         ),
         "Skipped Ran (poster) - download cancelled before it finished",
     ]

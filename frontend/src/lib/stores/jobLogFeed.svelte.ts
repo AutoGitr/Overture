@@ -118,6 +118,9 @@ export class JobLogFeed {
 
   /** Fetch the lines on screen again after a failed request. */
   retry() {
+    // A terminal event guarantees persistence. Discard any earlier page
+    // request that may have read the log before its final batch was saved.
+    this.abortLoads();
     this.error = "";
     this.show(...this.view);
   }

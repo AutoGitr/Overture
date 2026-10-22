@@ -43,7 +43,7 @@ class JobOutcome(StrEnum):
     #: Assets: a file was written to disk.
     DOWNLOADED = "Downloaded"
     #: Assets: a selection was saved for a local file with identical bytes;
-    #: nothing was written.
+    #: nothing was downloaded.
     ADOPTED = "Adopted"
     #: Audit: local and server assets agree.
     MATCHED = "Matched"

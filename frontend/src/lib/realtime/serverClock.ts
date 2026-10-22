@@ -8,24 +8,33 @@ import { createSubscriber } from "svelte/reactivity";
  * realtime snapshot carries the server time, which fixes the offset.
  */
 class ServerClock {
-  private offsetMs = 0;
+  private serverMs = Date.now();
+  private sampledAt = performance.now();
+  private notify: (() => void) | undefined;
 
-  /** One shared one-second tick, running only while something reads `now`. */
+  /** Sample inside each second so scheduler jitter cannot skip a displayed second. */
   private readonly tick = createSubscriber((update) => {
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
+    this.notify = update;
+    const interval = setInterval(update, 250);
+    return () => {
+      clearInterval(interval);
+      this.notify = undefined;
+    };
   });
 
   /** Align with a timestamp the server has just sent. */
   sync(serverTime: string): void {
     const server = Date.parse(serverTime);
-    if (!Number.isNaN(server)) this.offsetMs = server - Date.now();
+    if (Number.isNaN(server)) return;
+    this.serverMs = server;
+    this.sampledAt = performance.now();
+    this.notify?.();
   }
 
-  /** The server's current time in milliseconds; reactive reads update every second. */
+  /** Advance from server time without following browser wall-clock corrections. */
   get now(): number {
     this.tick();
-    return Date.now() + this.offsetMs;
+    return this.serverMs + performance.now() - this.sampledAt;
   }
 
   /** The server's current time as an ISO timestamp, for client-side job stamps. */
