@@ -1940,6 +1940,28 @@
             ],
             "title": "Stage"
           },
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
           "unchanged": {
             "anyOf": [
               {
@@ -1956,6 +1978,8 @@
           "job",
           "percent",
           "stage",
+          "step",
+          "steps",
           "unchanged"
         ],
         "title": "DownloadJobEvent",

@@ -34,7 +34,8 @@ vi.mock("../../../generated/rest/sdk.gen", () => ({
   setCollectionMonitored,
   setCollectionTheme,
 }));
-vi.mock("../../../lib/stores/downloadState.svelte", () => ({
+vi.mock("../../../lib/stores/downloadState.svelte", async (importOriginal) => ({
+  ...(await importOriginal()),
   downloadState: { getCollectionJob, trackQueuedCollectionJob },
 }));
 
@@ -149,12 +150,18 @@ describe("CollectionThemePanel theme state", () => {
   });
 
   it("shows a running theme job's progress and holds other changes", () => {
-    getCollectionJob.mockReturnValue({ status: "running", stage: "downloading", percent: 41.6 });
+    getCollectionJob.mockReturnValue({
+      status: "running",
+      stage: "downloading",
+      step: 2,
+      steps: 4,
+      percent: 41.6,
+    });
     show({ ...starWars, theme_status: "complete", has_theme: true });
 
     renderPanel();
 
-    expect(screen.getByText("Theme job running: downloading 42%")).toBeInTheDocument();
+    expect(screen.getByText("Theme job running: Downloading 2/4")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Clear theme" })).toBeDisabled();
   });
 

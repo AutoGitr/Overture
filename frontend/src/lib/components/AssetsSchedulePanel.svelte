@@ -12,8 +12,7 @@
     workflowSummary,
   } from "../utils/assetsPopup";
   import type { ScheduleController } from "../utils/schedules.svelte";
-  import ScheduleForm from "./ScheduleForm.svelte";
-  import ScheduleList from "./ScheduleList.svelte";
+  import Schedules from "./Schedules.svelte";
 
   let {
     canSchedule,
@@ -34,20 +33,17 @@
   } = $props();
 </script>
 
-{#if canSchedule}
-  <ScheduleForm
-    {controller}
-    cronExpression={scheduleCronExpression}
-    namePlaceholder="Nightly assets"
-    {oncronchange}
-  />
-{:else}
-  <div class="option-note">
-    Sidebar items can only be run now. Select libraries to save a schedule.
-  </div>
-{/if}
-
-<ScheduleList {controller} emptyMessage="No saved assets schedules." {onedit}>
+<Schedules
+  {controller}
+  emptyMessage="No saved assets schedules."
+  {onedit}
+  cronExpression={scheduleCronExpression}
+  namePlaceholder="Nightly assets"
+  {oncronchange}
+  unavailable={canSchedule
+    ? undefined
+    : "Sidebar items can only be run now. Select libraries to save a schedule."}
+>
   {#snippet badges(schedule)}
     <span class="badge badge-muted">{workflowSummary(schedule.config)}</span>
   {/snippet}
@@ -85,4 +81,4 @@
       </div>
     {/if}
   {/snippet}
-</ScheduleList>
+</Schedules>

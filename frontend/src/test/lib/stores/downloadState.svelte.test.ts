@@ -1,7 +1,7 @@
 import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DownloadJobEvent, DownloadStatus } from "../../../generated/ws";
-import { downloadState } from "../../../lib/stores/downloadState.svelte";
+import { downloadStageLabel, downloadState } from "../../../lib/stores/downloadState.svelte";
 import { libraryGate } from "../../../lib/stores/libraryGate.svelte";
 import { OPERATIONS } from "../../../lib/stores/operations";
 import { matchState, themeJobState } from "../../../lib/stores/bulkJobState.svelte";
@@ -19,6 +19,8 @@ function itemEvent(
   return {
     percent,
     stage: null,
+    step: null,
+    steps: null,
     unchanged: null,
     job: {
       id,
@@ -73,6 +75,8 @@ describe("downloadState", () => {
     const event = (status: DownloadStatus): DownloadJobEvent => ({
       percent: null,
       stage: null,
+      step: null,
+      steps: null,
       unchanged: null,
       job: { id: "theme", kind: "download", status, target, error: null },
     });
@@ -219,6 +223,17 @@ describe("downloadState", () => {
     cleanup();
   });
 
+  it("labels a download by its stage, with its step when it reports one", () => {
+    downloadState.replaceSnapshot([
+      { ...itemEvent("a", 1, "progress", 60), stage: "transcoding", step: 3, steps: 4 },
+      itemEvent("b", 2, "started"),
+    ]);
+    const [running] = downloadState.getJobsForItem(1);
+    const [starting] = downloadState.getJobsForItem(2);
+    expect(running && downloadStageLabel(running)).toBe("Transcoding 3/4");
+    expect(starting && downloadStageLabel(starting)).toBe("Starting");
+  });
+
   it("lists a failure until its display time ends, unless the download starts again", () => {
     vi.useFakeTimers();
     downloadState.handleFailed(itemEvent("a", 1, "failed"));
@@ -246,6 +261,8 @@ describe("downloadState", () => {
     downloadState.handleFailed({
       percent: null,
       stage: null,
+      step: null,
+      steps: null,
       unchanged: null,
       job: {
         id: "old",

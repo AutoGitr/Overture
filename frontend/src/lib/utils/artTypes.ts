@@ -10,10 +10,10 @@ export const ASSET_LABELS: Record<ServerAsset, string> = {
 };
 
 export const ASSET_BADGES: Record<ServerAsset, string> = {
-  poster: "badge-accent",
-  background: "badge-warning",
-  season_poster: "badge-success",
-  theme: "badge-muted",
+  poster: "badge-art",
+  background: "badge-art",
+  season_poster: "badge-art",
+  theme: "badge-theme",
 };
 
 /** Whether an artwork slot exists only on shows, whose seasons hold it. */

@@ -237,11 +237,11 @@
   }
 
   .seg-art {
-    background: var(--info);
+    background: var(--asset-art);
   }
 
   .seg-theme {
-    background: var(--success);
+    background: var(--asset-theme);
   }
 
   .seg-db {
@@ -249,7 +249,7 @@
   }
 
   .seg-backup {
-    background: var(--violet);
+    background: var(--success);
   }
 
   .legend-row {

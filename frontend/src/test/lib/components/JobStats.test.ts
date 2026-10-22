@@ -19,9 +19,9 @@ describe("JobStats", () => {
 
     render(JobStats, { job, unit: "items", stats });
 
-    expect(screen.getByText("15")).toBeInTheDocument();
-    expect(screen.getByText("/30 items")).toBeInTheDocument();
-    expect(screen.getByText("downloaded:")).toBeInTheDocument();
+    expect(screen.getByText("items")).toBeInTheDocument();
+    expect(screen.getByText("/30")).toBeInTheDocument();
+    expect(screen.getByText("downloaded")).toBeInTheDocument();
     expect(screen.getByText("5")).toHaveClass("text-success");
   });
 

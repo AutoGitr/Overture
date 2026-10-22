@@ -29,7 +29,7 @@
   {#each WORKFLOWS as { lane, title, unit, run } (lane)}
     {#if run.hasRun}
       <JobPanel
-        --job-accent={lane === "art" ? "var(--info)" : "var(--violet)"}
+        --job-accent={lane === "art" ? "var(--asset-art)" : "var(--asset-theme)"}
         job={run}
         {unit}
         {title}

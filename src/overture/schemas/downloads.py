@@ -52,5 +52,8 @@ class DownloadJobEvent(StrictBaseModel):
     job: DownloadJobMetadata
     percent: float | int | None = None
     stage: str | None = None
+    #: While running: the step the download is on, counted from 1, of *steps*.
+    step: int | None = None
+    steps: int | None = None
     #: On completion: the download matched the local file, so nothing was written.
     unchanged: bool | None = None

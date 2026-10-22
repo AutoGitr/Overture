@@ -14,8 +14,7 @@
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
   import LibraryChecklist from "../LibraryChecklist.svelte";
-  import ScheduleForm from "../ScheduleForm.svelte";
-  import ScheduleList from "../ScheduleList.svelte";
+  import Schedules from "../Schedules.svelte";
   import {
     createSyncScheduleMutation,
     deleteSyncScheduleMutation,
@@ -241,73 +240,77 @@
       />
     </div>
 
-    <ScheduleForm
+    <Schedules
       controller={scheduleController}
+      emptyMessage="No saved sync schedules."
+      onedit={editSchedule}
       cronExpression={scheduleCronExpression}
       namePlaceholder="Hourly sync"
       presets={CRON_PRESETS[scheduleMode]}
       oncronchange={(value) => (scheduleCronExpression = value)}
     >
-      <div class="schedule-config">
-        <label class="form-row justify-between">
-          <span>Schedule type</span>
-          <select class="select-compact" bind:value={scheduleMode}>
-            <option value="full">{MODE_LABELS.full}</option>
-            <option value="incremental">{MODE_LABELS.incremental}</option>
-          </select>
-        </label>
-        {#if scheduleMode === "incremental"}
-          <div class="schedule-meta">
-            Only adds new items. The first run sets a starting point; Run Now is always a full sync.
-          </div>
-          <label
-            class={["form-row justify-between", { "option-card-disabled": !publicDatasetEnabled }]}
-          >
-            <span>Download OvertureDB art for new media</span>
-            <input
-              type="checkbox"
-              bind:checked={downloadOvertureDbArt}
-              disabled={!publicDatasetEnabled}
-            />
-          </label>
-          <label
-            class={["form-row justify-between", { "option-card-disabled": !publicDatasetEnabled }]}
-          >
-            <span>Download themes for new media</span>
-            <select
-              class="select-compact"
-              bind:value={downloadThemes}
-              disabled={!publicDatasetEnabled}
-            >
-              {#each Object.entries(THEME_ORDER_LABELS) as [value, label] (value)}
-                <option {value}>{label}</option>
-              {/each}
+      {#snippet settings()}
+        <div class="schedule-config">
+          <label class="form-row justify-between">
+            <span>Schedule type</span>
+            <select class="select-compact" bind:value={scheduleMode}>
+              <option value="full">{MODE_LABELS.full}</option>
+              <option value="incremental">{MODE_LABELS.incremental}</option>
             </select>
           </label>
-          {#if !publicDatasetStatusError}
+          {#if scheduleMode === "incremental"}
             <div class="schedule-meta">
-              {publicDatasetEnabled
-                ? "Only fills in missing files; existing files are kept."
-                : "Enable OvertureDB to use these."}
+              Only adds new items. The first run sets a starting point; Run Now is always a full
+              sync.
+            </div>
+            <label
+              class={[
+                "form-row justify-between",
+                { "option-card-disabled": !publicDatasetEnabled },
+              ]}
+            >
+              <span>Download OvertureDB art for new media</span>
+              <input
+                type="checkbox"
+                bind:checked={downloadOvertureDbArt}
+                disabled={!publicDatasetEnabled}
+              />
+            </label>
+            <label
+              class={[
+                "form-row justify-between",
+                { "option-card-disabled": !publicDatasetEnabled },
+              ]}
+            >
+              <span>Download themes for new media</span>
+              <select
+                class="select-compact"
+                bind:value={downloadThemes}
+                disabled={!publicDatasetEnabled}
+              >
+                {#each Object.entries(THEME_ORDER_LABELS) as [value, label] (value)}
+                  <option {value}>{label}</option>
+                {/each}
+              </select>
+            </label>
+            {#if !publicDatasetStatusError}
+              <div class="schedule-meta">
+                {publicDatasetEnabled
+                  ? "Only fills in missing files; existing files are kept."
+                  : "Enable OvertureDB to use these."}
+              </div>
+            {/if}
+          {/if}
+          {#if publicDatasetStatusError}
+            <div class="schedule-meta">
+              <span class="sync-error">{publicDatasetStatusError}</span>
+              <button class="btn btn-ghost btn-sm" onclick={() => datasetStatusQuery.refetch()}>
+                Retry
+              </button>
             </div>
           {/if}
-        {/if}
-        {#if publicDatasetStatusError}
-          <div class="schedule-meta">
-            <span class="sync-error">{publicDatasetStatusError}</span>
-            <button class="btn btn-ghost btn-sm" onclick={() => datasetStatusQuery.refetch()}>
-              Retry
-            </button>
-          </div>
-        {/if}
-      </div>
-    </ScheduleForm>
-
-    <ScheduleList
-      controller={scheduleController}
-      emptyMessage="No saved sync schedules."
-      onedit={editSchedule}
-    >
+        </div>
+      {/snippet}
       {#snippet badges(schedule)}
         <span class="badge badge-muted">{MODE_LABELS[schedule.config.mode]}</span>
       {/snippet}
@@ -334,7 +337,7 @@
           {/if}
         {/if}
       {/snippet}
-    </ScheduleList>
+    </Schedules>
   </CardColumn>
 {:else}
   <JobPanel
@@ -397,7 +400,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    margin-top: var(--space-3);
   }
   .schedule-meta {
     font-size: var(--text-xs);

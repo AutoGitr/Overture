@@ -3,10 +3,13 @@
 
   let {
     title,
+    kind,
     enabled = $bindable(),
     children,
   }: {
     title: string;
+    /** The asset kind the workflow fetches, which colours it. */
+    kind: "art" | "theme";
     /** Whether the run includes this workflow; its settings show only then. */
     enabled: boolean;
     children: Snippet;
@@ -15,7 +18,7 @@
   const bodyId = $props.id();
 </script>
 
-<section class="option-card workflow-card" aria-label={title}>
+<section class={["option-card workflow-card", kind]} aria-label={title}>
   <div class="workflow-header">
     <span class="form-label">{title}</span>
     <label class="checkbox-group">
@@ -35,7 +38,14 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    border-left: 3px solid var(--workflow-accent, var(--info));
+  }
+
+  .art {
+    --section-accent: var(--asset-art);
+  }
+
+  .theme {
+    --section-accent: var(--asset-theme);
   }
 
   .workflow-header {
@@ -47,7 +57,7 @@
 
   .workflow-header .form-label {
     margin: 0;
-    color: var(--workflow-accent, var(--info));
+    color: var(--section-accent);
   }
 
   .workflow-body {

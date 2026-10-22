@@ -16,7 +16,7 @@
     setCollectionThemeMutation,
     setCollectionMonitoredMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { downloadState } from "../stores/downloadState.svelte";
+  import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
@@ -52,14 +52,7 @@
     applying && chosen && chosen.collectionId === coll?.id ? chosen.videoId : null,
   );
   let uploading = $derived(applying || deleteThemeRequest.isPending);
-  let uploadProgressLabel = $derived.by(() => {
-    if (!activeThemeJob) return "";
-    const stage = activeThemeJob.stage || "working";
-    const percent = Number.isFinite(activeThemeJob.percent)
-      ? ` ${Math.round(activeThemeJob.percent)}%`
-      : "";
-    return `${stage}${percent}`;
-  });
+  let uploadProgressLabel = $derived(activeThemeJob ? downloadStageLabel(activeThemeJob) : "");
 
   async function handleToggleMonitored() {
     if (!coll) return;

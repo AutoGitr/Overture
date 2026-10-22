@@ -22,6 +22,8 @@ const activeJob: DownloadJobEvent = {
   },
   percent: 45,
   stage: "downloading",
+  step: 1,
+  steps: 3,
   unchanged: null,
 };
 
@@ -40,6 +42,7 @@ describe("AssetDownloads", () => {
     downloadState.replaceSnapshot([activeJob]);
     renderWithQueryClient(AssetDownloads);
     expect(screen.getByRole("region", { name: "Art downloads" })).toHaveTextContent("Movie Poster");
+    expect(screen.getByText("Downloading 1/3")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Theme downloads" })).toBeNull();
   });
 });

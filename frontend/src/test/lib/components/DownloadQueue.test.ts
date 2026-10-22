@@ -31,9 +31,9 @@ describe("DownloadQueue", () => {
     downloadState.replaceSnapshot([]);
   });
 
-  it("lists the lane's downloads with their kind, stage and rounded progress", () => {
+  it("lists the lane's downloads with their kind and step", () => {
     downloadState.replaceSnapshot([
-      { ...download("art", "Alien"), stage: "downloading", percent: 42.4 },
+      { ...download("art", "Alien"), stage: "downloading", step: 1, steps: 3, percent: 20 },
       download("theme", "Firefly", "theme"),
     ]);
 
@@ -41,8 +41,7 @@ describe("DownloadQueue", () => {
 
     expect(rows()).toEqual(["Alien"]);
     expect(screen.getByText("Poster")).toBeInTheDocument();
-    expect(screen.getByText("downloading")).toBeInTheDocument();
-    expect(screen.getByText("42%")).toBeInTheDocument();
+    expect(screen.getByText("Downloading 1/3")).toBeInTheDocument();
   });
 
   it("labels theme downloads apart from art", () => {

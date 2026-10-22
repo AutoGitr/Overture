@@ -4,7 +4,7 @@ lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...protocols import ProgressCallback
+lazy from ...utils.progress import ProgressCallback
 lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from ..themes.youtube_resolver import DownloadError, YouTubeResolver
 lazy from .results import DownloadedCollectionTheme, DownloadedTheme, PreparedDownload

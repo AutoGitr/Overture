@@ -32,6 +32,8 @@ function collectionDownload(id: string): DownloadJobEvent {
   return {
     percent: null,
     stage: null,
+    step: null,
+    steps: null,
     unchanged: null,
     job: {
       id,

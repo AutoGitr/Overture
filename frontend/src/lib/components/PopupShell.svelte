@@ -7,7 +7,6 @@
   let {
     title,
     size = "form",
-    placement = "center",
     icon,
     tabs,
     info,
@@ -18,19 +17,22 @@
   }: {
     title: string;
     /**
-     * Every size is one column of content, as tall as it is up to the
-     * screen's height, past which its body scrolls; it is as wide as the size
-     * allows, and narrower only when the screen is.
-     * - `dialog`: a short question, centred.
+     * Every size is one column of content, centred, as tall as it is up to
+     * the screen's height, past which its body scrolls; it is as wide as the
+     * size allows, and narrower only when the screen is.
+     * - `dialog`: a short question.
      * - `form`: settings and choices.
-     * - `wide`: a form for work that needs the width, such as operations.
+     * - `wide`: work that needs the width, such as operations. It keeps one
+     *   height, so switching its tabs never resizes or moves it.
      */
     size?: "dialog" | "form" | "wide";
-    /** `top` keeps the top edge still while the content's height changes. */
-    placement?: "center" | "top";
     /** Optional glyph rendered before the title. */
     icon?: Snippet;
-    /** A `PopupTabs` shown under the title, part of the header that never scrolls. */
+    /**
+     * A `PopupTabs` shown under the title, part of the header that never
+     * scrolls. Set `--popup-glow-at` to the active tab's centre, as a fraction
+     * of the tabs' width, and the header's glow follows it.
+     */
     tabs?: Snippet;
     info?: Snippet;
     /** What the popup is for, shown only when asked for from the header. */
@@ -73,7 +75,7 @@
     backdropPressed = false;
   }}
 >
-  <div class={["popup-content", size, { "top-aligned": placement === "top" }]}>
+  <div class={["popup-content", size]}>
     <div class="popup-header">
       <div class="header-row">
         <div class="header-title">
@@ -192,16 +194,13 @@
     width: 440px;
   }
 
-  .popup-content.top-aligned {
-    align-self: flex-start;
-  }
-
   .popup-content.form {
     width: 720px;
   }
 
   .popup-content.wide {
     width: 1040px;
+    height: min(100%, 880px);
   }
 
   .popup-header {
@@ -210,8 +209,35 @@
     gap: var(--space-3);
     padding: var(--space-4) var(--popup-pad) var(--space-3);
     flex-shrink: 0;
-    background: linear-gradient(110deg, var(--accent-muted), transparent 70%);
+    position: relative;
+    isolation: isolate;
     border-bottom: var(--border-subtle);
+  }
+
+  /* Centred on the header's padded content, so a fraction of the tabs' width
+     lands on a tab; without tabs it sits at the top-left corner. */
+  .popup-header::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--popup-pad) + (100% - 2 * var(--popup-pad)) * var(--popup-glow-at, 0));
+    width: 70%;
+    translate: -50% 0;
+    background: radial-gradient(
+      ellipse 50% 100% at 50% 0%,
+      oklch(from var(--accent) l c h / 0.24),
+      transparent
+    );
+    pointer-events: none;
+    transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .popup-header::before {
+      transition: none;
+    }
   }
 
   .header-row {

@@ -97,7 +97,7 @@
 
 <ArtWorkflowCard {form} />
 
-<WorkflowCard title="Themes" bind:enabled={config.enableThemes} --workflow-accent="var(--violet)">
+<WorkflowCard title="Themes" kind="theme" bind:enabled={config.enableThemes}>
   <WorkflowSection label="Sources" note="First match wins, top to bottom.">
     <SourceOrderList
       sourceOrder={config.themeSourceOrder}

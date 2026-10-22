@@ -11,12 +11,11 @@ lazy from dataclasses import dataclass
 lazy from pathlib import Path
 lazy from typing import Any, cast
 
-lazy from ... import protocols
 lazy from ...schemas.themes import ThemeSearchResult
 lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, ffprobe_duration
 lazy from ...utils.errors import public_error_message
 lazy from ...utils.process import PROBE_SLOTS, run_process
-lazy from ...utils.progress import StageProgress
+lazy from ...utils.progress import ProgressCallback, ProgressUpdate, StepProgress
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.temporary import operation_directory
 lazy from ...utils.threads import owned_thread
@@ -170,7 +169,7 @@ class YouTubeResolver:
         youtube_id: str,
         min_duration: int,
         max_duration: int,
-        progress_callback: protocols.ProgressCallback | None = None,
+        progress_callback: ProgressCallback | None = None,
         *,
         normalize_loudness: bool,
     ) -> ThemeAudio:
@@ -185,10 +184,19 @@ class YouTubeResolver:
             DurationError: When the audio is outside the allowed range.
             TranscodeError: When the transcode fails.
         """
-        report = progress_callback or _discard_progress
+        progress = StepProgress(
+            progress_callback or _discard_progress,
+            (
+                "checking",
+                "downloading",
+                *(("measuring",) if normalize_loudness else ()),
+                "transcoding",
+                "finalizing",
+            ),
+        )
         url = f"https://www.youtube.com/watch?v={youtube_id}"
 
-        await report(5, "checking")
+        await progress.enter("checking")
         info = await self._video_info(url)
         duration = int(info.get("duration") or 0)
         if duration < min_duration:
@@ -200,12 +208,12 @@ class YouTubeResolver:
 
         title = info.get("title", "")
         with operation_directory(self._config_dir) as tmp_dir:
-            source = await self._download_source(url, tmp_dir, report)
+            source = await self._download_source(url, tmp_dir, progress)
             mp3_path = await self._transcode(
                 source,
                 tmp_dir,
                 duration,
-                report,
+                progress,
                 youtube_id=youtube_id,
                 title=title or None,
                 normalize_loudness=normalize_loudness,
@@ -219,7 +227,7 @@ class YouTubeResolver:
             ):
                 raise DurationError("Downloaded audio has invalid duration")
             duration = round(actual_duration)
-            await report(95, "finalizing")
+            await progress.enter("finalizing")
             return ThemeAudio(
                 audio_bytes=await owned_thread(mp3_path.read_bytes),
                 title=title or None,
@@ -249,19 +257,18 @@ class YouTubeResolver:
     async def _download_source(
         url: str,
         tmp_dir: Path,
-        report: protocols.ProgressCallback,
+        progress: StepProgress,
     ) -> Path:
         """Download the audio stream, reporting the progress yt-dlp prints.
 
         Raises:
             DownloadError: When the download fails, times out, or writes no file.
         """
-        stage = StageProgress(report, stage="downloading", start=10, end=70)
-        await stage.report(0)
+        await progress.enter("downloading")
 
         async def on_line(line: str) -> None:
             if (fraction := _ytdlp_fraction(line)) is not None:
-                await stage.report(fraction)
+                await progress.report(fraction)
 
         try:
             result = await run_process(
@@ -308,7 +315,7 @@ class YouTubeResolver:
         source: Path,
         tmp_dir: Path,
         duration: int,
-        report: protocols.ProgressCallback,
+        progress: StepProgress,
         *,
         youtube_id: str | None = None,
         title: str | None = None,
@@ -324,7 +331,7 @@ class YouTubeResolver:
         """
         levelling: list[str] = []
         if normalize_loudness:
-            await report(70, "measuring")
+            await progress.enter("measuring")
             measured = await _measure_loudness(source)
             levelling = [
                 "-af",
@@ -332,13 +339,12 @@ class YouTubeResolver:
                 "-ar",
                 _LEVELLED_SAMPLE_RATE,
             ]
-        stage = StageProgress(report, stage="transcoding", start=70, end=95)
-        await stage.report(0)
+        await progress.enter("transcoding")
         mp3_path = tmp_dir / "theme.mp3"
 
         async def on_line(line: str) -> None:
             if (fraction := _ffmpeg_fraction(line, duration)) is not None:
-                await stage.report(fraction)
+                await progress.report(fraction)
 
         cmd = [
             "ffmpeg",
@@ -443,7 +449,7 @@ def _loudnorm_measurement(output: str) -> str:
     return ":".join(f"{name}={value}" for name, value in values.items())
 
 
-async def _discard_progress(percent: int, stage: str) -> None:
+async def _discard_progress(update: ProgressUpdate) -> None:
     """Ignore progress, for a caller that asked for none."""
 
 

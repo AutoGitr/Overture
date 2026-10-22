@@ -32,7 +32,12 @@
   let data = $derived(statsQuery.data);
 </script>
 
-<PopupShell title="Statistics" size="wide" placement="top" onclose={() => uiState.closePopup()}>
+<PopupShell
+  title="Statistics"
+  size="wide"
+  --popup-glow-at={(TABS.findIndex((tab) => tab.id === activeTab) + 0.5) / TABS.length}
+  onclose={() => uiState.closePopup()}
+>
   {#snippet icon()}
     <ChartColumn size={18} />
   {/snippet}

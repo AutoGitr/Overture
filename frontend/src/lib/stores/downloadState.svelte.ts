@@ -25,6 +25,9 @@ export interface DownloadJob {
   season_id: number | null;
   percent: number;
   stage: string;
+  /** The step the download is on, counted from 1, while it reports one. */
+  step: number | null;
+  steps: number | null;
   status: "pending" | "running" | "failed";
   /**
    * The row a running download holds among its lane's, kept until it ends
@@ -50,9 +53,19 @@ function buildJob(data: DownloadJobEvent, status?: DownloadJob["status"]): Downl
     season_id: itemTarget?.season_id ?? null,
     percent: data.percent ?? 0,
     stage: data.stage ?? "starting",
+    step: data.step,
+    steps: data.steps,
     status: status ?? (data.job.status === "pending" ? "pending" : "running"),
     slot: -1,
   };
+}
+
+/** What a download is doing, with its step when it reports one: "Transcoding 3/4". */
+export function downloadStageLabel(job: DownloadJob): string {
+  // A failed download's stage is its error message.
+  if (job.status === "failed") return job.stage;
+  const stage = job.stage.charAt(0).toUpperCase() + job.stage.slice(1);
+  return job.step !== null && job.steps !== null ? `${stage} ${job.step}/${job.steps}` : stage;
 }
 
 /** The item or collection a download belongs to, if any. */
@@ -168,6 +181,8 @@ class DownloadState {
       season_id: options.seasonId ?? null,
       percent: 0,
       stage: "queued",
+      step: null,
+      steps: null,
       status: "running",
       slot: -1,
     });
@@ -190,6 +205,8 @@ class DownloadState {
       season_id: null,
       percent: 0,
       stage: "queued",
+      step: null,
+      steps: null,
       status: "running",
       slot: -1,
     });

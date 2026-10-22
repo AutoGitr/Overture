@@ -4,6 +4,7 @@
   import {
     type DownloadJob,
     type DownloadLane,
+    downloadStageLabel,
     downloadState,
   } from "../stores/downloadState.svelte";
   import { ASSET_BADGES, ASSET_LABELS } from "../utils/artTypes";
@@ -47,7 +48,7 @@
 </script>
 
 {#if shown}
-  <section class="downloads" aria-label={label}>
+  <section class={["downloads", lane]} aria-label={label}>
     <header class="downloads-header">
       <span class="form-label">{label}</span>
       {#if queue.waiting > 0}
@@ -57,17 +58,14 @@
     {#each rows as job, slot (job?.job_id ?? `slot-${slot}`)}
       {#if job}
         {@const what = kind(job)}
-        <div class="download-row">
-          <LoaderCircle size={12} class="animate-spin" />
+        {@const stage = downloadStageLabel(job)}
+        <div class="download-row" style:--download-progress="{job.percent}%">
+          <LoaderCircle size={12} class="animate-spin download-spinner" />
           <span class="download-title truncate" title={job.title ?? undefined}
             >{job.title || "Queued download"}</span
           >
           <span class="badge {what.badge}">{what.label}</span>
-          <span class="download-stage truncate" title={job.stage}>{job.stage}</span>
-          <div class="progress-bar progress-bar-sm">
-            <div class="progress-bar-fill" style:width="{job.percent}%"></div>
-          </div>
-          <span class="download-percent">{Math.round(job.percent)}%</span>
+          <span class="download-stage truncate" title={stage}>{stage}</span>
         </div>
       {:else}
         <div class="download-row idle">
@@ -88,6 +86,14 @@
     container-type: inline-size;
   }
 
+  .art {
+    --download-accent: var(--asset-art);
+  }
+
+  .theme {
+    --download-accent: var(--asset-theme);
+  }
+
   .downloads-header {
     display: flex;
     align-items: center;
@@ -96,27 +102,47 @@
     height: 24px;
   }
 
+  .downloads-header .form-label {
+    color: var(--download-accent);
+  }
+
   .downloads-note {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
     font-size: var(--text-xs);
     color: var(--text-tertiary);
   }
 
-  /* Every row shares one column grid, so titles, kinds, stages and bars line
-     up across rows and a changing stage or percentage moves nothing. */
+  /* Every row shares one column grid, so titles, kinds and steps line up
+     across rows and a changing step moves nothing. Its progress is a line
+     along its bottom edge. */
   .download-row {
+    position: relative;
     display: grid;
-    grid-template-columns: 12px minmax(0, 1fr) 7.5rem 6.5rem 80px 4ch;
+    grid-template-columns: 12px minmax(0, 1fr) 7.5rem 9rem;
     align-items: center;
     gap: var(--space-2);
-    height: 28px;
-    padding: 0 var(--space-2);
+    height: 32px;
+    padding: 0 var(--space-3);
+    overflow: hidden;
     font-size: var(--text-xs);
     color: var(--text-secondary);
-    background: var(--bg-secondary);
+    background: var(--bg-root);
+    border: var(--border-subtle);
     border-radius: var(--radius-sm);
+  }
+
+  .download-row::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: var(--download-progress, 0%);
+    height: 2px;
+    background: var(--download-accent);
+    transition: width 0.3s ease;
+  }
+
+  .download-row :global(.download-spinner) {
+    color: var(--download-accent);
   }
 
   .download-row .badge {
@@ -133,19 +159,20 @@
 
   .download-title {
     color: var(--text-primary);
+    font-weight: 500;
   }
 
-  .download-percent {
+  .download-stage {
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
 
   @container (max-width: 30rem) {
     .download-row {
-      grid-template-columns: 12px minmax(0, 1fr) 6rem 48px 4ch;
+      grid-template-columns: 12px minmax(0, 1fr) 7.5rem;
     }
 
-    .download-stage {
+    .download-row .badge {
       display: none;
     }
   }

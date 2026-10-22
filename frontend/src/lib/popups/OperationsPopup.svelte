@@ -21,7 +21,12 @@
   let footers = $state<Partial<Record<OperationsTab, Snippet>>>({});
 </script>
 
-<PopupShell title="Operations" size="wide" placement="top" onclose={() => uiState.closePopup()}>
+<PopupShell
+  title="Operations"
+  size="wide"
+  --popup-glow-at={(OPERATION_TABS.indexOf(activeTab) + 0.5) / OPERATION_TABS.length}
+  onclose={() => uiState.closePopup()}
+>
   {#snippet icon()}
     <active.icon size={18} />
   {/snippet}

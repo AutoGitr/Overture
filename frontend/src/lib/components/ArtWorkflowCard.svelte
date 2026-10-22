@@ -34,7 +34,7 @@
   </label>
 {/snippet}
 
-<WorkflowCard title="Art" bind:enabled={config.enableArt}>
+<WorkflowCard title="Art" kind="art" bind:enabled={config.enableArt}>
   <WorkflowSection label="Types">
     <ArtTypeGroup>
       {#each ITEM_ART_TYPES as artType (artType)}

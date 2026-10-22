@@ -57,28 +57,29 @@
   );
 </script>
 
-<!-- Each cell is as wide as its label and the widest figure it may show, so
-     a figure gaining digits, or a run starting or ending, never moves another
-     figure or rewraps the row: only the row's width decides where it wraps. -->
-<dl class="job-stats">
-  <div class="stat" style:min-width="{unit.length + 15}ch">
-    <dt class="sr-only">Progress</dt>
-    <dd>
+<!-- Each figure sits under its label and keeps room for as many digits as
+     the run's total has, so a figure gaining digits, or a run starting or
+     ending, never moves another figure: only the row's width decides where
+     it wraps. -->
+<dl class="job-stats" style:--digits={String(job.total ?? 0).length}>
+  <div class="stat">
+    <dt>{unit}</dt>
+    <dd class="stat-value progress">
       {#if job.planning}
         Planning...
       {:else}
-        <span class="stat-value">{job.done}</span>/{job.total ?? 0} {unit}
+        {job.done}<span class="stat-total">/{job.total ?? 0}</span>
       {/if}
     </dd>
   </div>
   {#each stats as stat (stat.label)}
-    <div class="stat" title={stat.title} style:min-width="{stat.label.length + 8}ch">
-      <dt>{stat.label}:</dt>
+    <div class="stat" title={stat.title}>
+      <dt>{stat.label}</dt>
       <dd class={["stat-value", stat.tone && `text-${stat.tone}`]}>{stat.value}</dd>
     </div>
   {/each}
-  <div class="stat elapsed" style:min-width="22ch">
-    <dt>time taken:</dt>
+  <div class="stat elapsed">
+    <dt>time</dt>
     <dd class="stat-value">{elapsed || "-"}</dd>
   </div>
 </dl>
@@ -87,34 +88,51 @@
   .job-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1) var(--space-3);
+    gap: var(--space-2) var(--space-5);
     margin: 0;
-    font-size: var(--text-xs);
-    color: var(--text-secondary);
     flex: none;
   }
 
   .stat {
     display: flex;
-    align-items: baseline;
-    gap: var(--space-1);
+    flex-direction: column;
+    gap: 2px;
     white-space: nowrap;
+  }
+
+  dt {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
   }
 
   .elapsed {
     margin-left: auto;
+    text-align: right;
   }
 
   dd {
     margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .stat-value {
+    min-width: calc(var(--digits) * 1ch);
+    font-size: var(--text-sm);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
+  }
+
+  .stat-value.progress {
+    min-width: calc(var(--digits) * 2ch + 1ch);
+  }
+
+  .elapsed .stat-value {
+    min-width: 8ch;
+  }
+
+  .stat-total {
+    color: var(--text-tertiary);
+    font-weight: 500;
   }
 
   .stat-value.text-info {

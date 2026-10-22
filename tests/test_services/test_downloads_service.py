@@ -17,7 +17,6 @@ lazy from sqlalchemy.ext.asyncio import async_sessionmaker
 lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture import protocols
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot
 lazy from overture.db.models.download_job import DownloadJob
@@ -53,6 +52,7 @@ lazy from overture.services.themes.youtube_resolver import (
     YouTubeResolver,
 )
 lazy from overture.utils.file import compute_bytes_hash
+lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -309,7 +309,7 @@ def _download_manager(
     )
 
 
-async def _noop_progress(_percent: int, _stage: str) -> None:
+async def _noop_progress(_update: ProgressUpdate) -> None:
     """Discard progress reports in tests that do not assert on them."""
 
 
@@ -877,7 +877,7 @@ async def test_process_theme_job_writes_theme_and_updates_item(
             youtube_id: str,
             min_duration: int = 30,
             max_duration: int = 300,
-            progress_callback: protocols.ProgressCallback | None = None,
+            progress_callback: ProgressCallback | None = None,
             *,
             normalize_loudness: bool,
         ) -> ThemeAudio:
@@ -1041,7 +1041,7 @@ async def test_another_writer_can_commit_while_a_download_is_in_flight(
             youtube_id: str,
             min_duration: int = 30,
             max_duration: int = 300,
-            progress_callback: protocols.ProgressCallback | None = None,
+            progress_callback: ProgressCallback | None = None,
             *,
             normalize_loudness: bool = False,
         ) -> ThemeAudio:

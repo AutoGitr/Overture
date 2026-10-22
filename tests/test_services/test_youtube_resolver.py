@@ -20,6 +20,7 @@ lazy from overture.services.themes.youtube_resolver import (
 )
 lazy from overture.utils import progress as progress_module
 lazy from overture.utils.process import ProcessResult
+lazy from overture.utils.progress import ProgressUpdate
 
 
 async def test_search_parses_json_lines(
@@ -365,10 +366,10 @@ async def test_download_audio_reports_the_progress_its_tools_print(
 
     monkeypatch.setattr(module, "run_process", run_printing)
     monkeypatch.setattr(progress_module, "_MIN_INTERVAL", 0)
-    reported: list[tuple[int, str]] = []
+    reported: list[ProgressUpdate] = []
 
-    async def record(percent: int, stage: str) -> None:
-        reported.append((percent, stage))
+    async def record(update: ProgressUpdate) -> None:
+        reported.append(update)
 
     await YouTubeResolver(tmp_path).download_audio(
         "abcDEF123_4",
@@ -379,12 +380,12 @@ async def test_download_audio_reports_the_progress_its_tools_print(
     )
 
     assert reported == [
-        (5, "checking"),
-        (10, "downloading"),
-        (40, "downloading"),
-        (70, "transcoding"),
-        (82, "transcoding"),
-        (95, "finalizing"),
+        ProgressUpdate(0, "checking", 1, 4),
+        ProgressUpdate(25, "downloading", 2, 4),
+        ProgressUpdate(38, "downloading", 2, 4),
+        ProgressUpdate(50, "transcoding", 3, 4),
+        ProgressUpdate(62, "transcoding", 3, 4),
+        ProgressUpdate(75, "finalizing", 4, 4),
     ]
 
 

@@ -14,7 +14,7 @@
     TmdbItemPreview,
   } from "../../generated/rest/types.gen";
   import { upsertLibraryItem } from "../rest/cache";
-  import { downloadState } from "../stores/downloadState.svelte";
+  import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { errorMessage } from "../utils/errors";
@@ -166,7 +166,7 @@
         {#if job.status === "running"}
           <LoaderCircle size={14} class="animate-spin" />
         {/if}
-        <span>{job.stage || "Downloading..."}</span>
+        <span>{downloadStageLabel(job)}</span>
       </div>
       <div class="progress-bar progress-bar-sm">
         <div class="progress-bar-fill" style="width:{job.percent}%"></div>

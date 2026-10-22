@@ -1060,6 +1060,14 @@ export type DownloadJobEvent = {
      */
     stage: string | null;
     /**
+     * Step
+     */
+    step: number | null;
+    /**
+     * Steps
+     */
+    steps: number | null;
+    /**
      * Unchanged
      */
     unchanged: boolean | null;

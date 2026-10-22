@@ -68,24 +68,19 @@ test("assets keeps every part of its results in place while downloads come and g
   await expect(rows).toHaveText(["Casablanca", "Brazil"]);
   expect(await rows.nth(1).boundingBox()).toEqual(brazil);
   expect(await log.boundingBox()).toEqual(logBox);
-  await expect(art.getByTitle("Downloads waiting or still running")).toHaveText("queued: 2");
+  await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*2$/);
 
   emitDownload("second", "Brazil", "completed");
   emitDownload("third", "Casablanca", "completed");
   emitRun("completed", 3, "Casablanca");
   await expect(downloads).toHaveCount(0);
-  await expect(art.getByTitle("Downloads waiting or still running")).toHaveText("queued: 0");
+  await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*0$/);
   await expect(dialog.getByRole("button", { name: "Clear Results" })).toBeVisible();
-  // The popup fits its content, so only its bottom edge may move.
-  const finalBox = await dialog.locator(".popup-content").boundingBox();
-  expect([finalBox?.x, finalBox?.y, finalBox?.width]).toEqual([
-    dialogBox?.x,
-    dialogBox?.y,
-    dialogBox?.width,
-  ]);
+  // The popup keeps one size, so it never moves.
+  expect(await dialog.locator(".popup-content").boundingBox()).toEqual(dialogBox);
 });
 
-test("the operations popup keeps its top edge and width across tabs and runs", async ({
+test("the operations popup keeps its place and size across tabs and runs", async ({
   page,
   realtime,
 }) => {
@@ -97,10 +92,9 @@ test("the operations popup keeps its top edge and width across tabs and runs", a
     const box = await content.boundingBox();
     const viewport = page.viewportSize()!;
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    return [box!.x, box!.y, box!.width];
+    return [box!.x, box!.y, box!.width, box!.height];
   };
   const box = await edges();
-  expect(box[1]).toBe(0);
   const tabs = dialog.getByRole("tablist", { name: "Operation modes" });
   const tabsBox = await tabs.boundingBox();
   const body = dialog.locator(".popup-body");

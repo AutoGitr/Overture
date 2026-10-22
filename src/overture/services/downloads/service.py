@@ -35,6 +35,7 @@ lazy from ...utils.errors import public_error_message
 lazy from ...utils.file import compute_bytes_hash
 lazy from ...utils.image import RemoteImageError
 lazy from ...utils.locks import KeyedLock
+lazy from ...utils.progress import ProgressUpdate
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..library.completion import auto_unmonitor_completed
@@ -505,15 +506,14 @@ class DownloadService:
         job, item = started
         title = _job_title(job, item)
 
-        async def progress(percent: int, stage: str) -> None:
-            await self._emit_progress(job, percent, stage, title=title)
+        async def progress(update: ProgressUpdate) -> None:
+            await self._emit_progress(job, update, title=title)
 
         try:
             if job.job_type is JobType.COLLECTION_THEME:
                 downloaded_collection = (
                     await self.theme_handler.download_collection_theme(job, progress)
                 )
-                await progress(85, "uploading")
                 # The upload is the write: one collection takes one at a time.
                 async with self.asset_locks.acquire(_lock_key(job)):
                     await self._finish_commit(
@@ -723,19 +723,17 @@ class DownloadService:
     async def _emit_progress(
         self,
         job: DownloadJob,
-        percent: int,
-        stage: str,
+        update: ProgressUpdate,
         *,
         title: str | None,
     ) -> None:
         """Record how far one job has come, and say so."""
-        job.progress_percent = percent
+        job.progress_percent = update.percent
         await self._events.publish(
             job,
             DownloadStatus.PROGRESS,
             title=title,
-            percent=percent,
-            stage=stage,
+            **update._asdict(),
         )
 
     async def fail_job(

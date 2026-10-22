@@ -59,9 +59,9 @@
     min-width: 0;
     padding: var(--space-3);
     border: var(--border-subtle);
-    border-top: 2px solid var(--job-accent, var(--accent));
     border-radius: var(--radius-md);
     background: var(--bg-secondary);
+    box-shadow: inset 3px 0 0 var(--job-accent, var(--accent));
   }
 
   .job-panel .progress-bar-fill {
@@ -79,6 +79,6 @@
   h3 {
     font-size: var(--text-sm);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--job-accent, var(--text-primary));
   }
 </style>

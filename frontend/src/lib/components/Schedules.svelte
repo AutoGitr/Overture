@@ -6,6 +6,8 @@
   import Play from "@lucide/svelte/icons/play";
   import Trash from "@lucide/svelte/icons/trash";
   import type { Snippet } from "svelte";
+  import type { CronPreset } from "../utils/cronPresets";
+  import CronScheduleField from "./CronScheduleField.svelte";
   import DataStatus from "./DataStatus.svelte";
   import {
     formatScheduleDate,
@@ -19,7 +21,14 @@
     onedit,
     badges,
     details,
+    cronExpression,
+    namePlaceholder,
+    presets,
+    oncronchange,
+    unavailable,
+    settings,
   }: {
+    /** Holds the saved schedules, the form's name and the schedule being edited. */
     controller: ScheduleController<TConfig, TSchedule>;
     emptyMessage: string;
     /** Editing also loads the schedule's settings into the tab, which owns them. */
@@ -28,6 +37,15 @@
     badges: Snippet<[TSchedule]>;
     /** Saved settings shown when the schedule is expanded. */
     details: Snippet<[TSchedule]>;
+    /** The cron expression lives in the tab's configuration, which it owns. */
+    cronExpression: string;
+    namePlaceholder: string;
+    presets?: readonly CronPreset[];
+    oncronchange: (value: string) => void;
+    /** Why the tab's choices cannot be saved as a schedule, which hides the form. */
+    unavailable?: string;
+    /** Settings the schedule kind adds beside name and timing. */
+    settings?: Snippet;
   } = $props();
 
   function checkedFromEvent(event: Event & { currentTarget: HTMLInputElement }) {
@@ -48,8 +66,15 @@
   }
 </script>
 
-<div class="option-card">
-  <span class="form-label">Schedules</span>
+<section class="option-card" aria-label="Schedules">
+  <div class="schedules-header">
+    <span class="form-label">Schedules</span>
+    {#if controller.isEditing}
+      <button type="button" class="btn btn-ghost btn-sm" onclick={() => controller.clearEdit()}>
+        New schedule
+      </button>
+    {/if}
+  </div>
   <DataStatus
     label="Schedules"
     error={controller.error}
@@ -165,9 +190,56 @@
       {/each}
     </div>
   {/if}
-</div>
+
+  <div class="schedule-form">
+    <span class="part-label">{controller.isEditing ? "Edit schedule" : "New schedule"}</span>
+    {#if unavailable}
+      <div class="option-note">{unavailable}</div>
+    {:else}
+      <label class="field-block">
+        <span>Name</span>
+        <input type="text" bind:value={controller.name} placeholder={namePlaceholder} />
+      </label>
+      {@render settings?.()}
+      <CronScheduleField value={cronExpression} onchange={oncronchange} {presets} />
+    {/if}
+  </div>
+</section>
 
 <style>
+  .schedules-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .schedule-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: var(--border-subtle);
+  }
+
+  .part-label {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .field-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .field-block input {
+    width: 100%;
+  }
+
   .schedule-list {
     display: flex;
     flex-direction: column;

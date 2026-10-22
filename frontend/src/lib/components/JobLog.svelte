@@ -5,6 +5,10 @@
   import VirtualList from "./VirtualList.svelte";
 
   let { feed }: { feed: JobLogFeed } = $props();
+
+  const ROW_HEIGHT = 24;
+  /** Few enough that a popup showing more than one run scrolls its body, not its logs. */
+  const MAX_ROWS = 8;
 </script>
 
 <!-- A region of the panel, as tall as its lines up to a bound, past which it
@@ -18,12 +22,12 @@
   class="job-log"
   role="log"
   aria-label="Job log"
-  style:--log-rows-height="{Math.max(feed.total, 3) * 24}px"
+  style:--log-rows-height="{Math.min(Math.max(feed.total, 3), MAX_ROWS) * ROW_HEIGHT}px"
 >
   {#if feed.total > 0}
     <VirtualList
       itemCount={feed.total}
-      itemSize={24}
+      itemSize={ROW_HEIGHT}
       overscanCount={10}
       followEnd
       onVisibleRangeChange={(first, end) => feed.show(first, end)}
@@ -58,15 +62,14 @@
 </div>
 
 <style>
-  /* Its lines' height, never taller than about a third of the screen. The
-     padding and border are added to the rows' height. */
+  /* The padding and border are added to the rows' height. */
   .job-log {
     position: relative;
     display: flex;
     flex-direction: column;
     flex: none;
     box-sizing: content-box;
-    height: min(var(--log-rows-height), max(12rem, 30dvh));
+    height: var(--log-rows-height);
     padding: var(--space-2) var(--space-3);
     background: var(--bg-root);
     border: var(--border-subtle);

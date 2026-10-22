@@ -78,6 +78,13 @@
   --warning-muted: oklch(from var(--warning) l c h / 0.15);
   --danger-muted: oklch(from var(--danger) l c h / 0.15);
   --info-muted: oklch(from var(--info) l c h / 0.15);
+  --violet-muted: oklch(from var(--violet) l c h / 0.15);
+
+  /* -- Colors: Asset kinds, the same wherever art or themes appear -- */
+  --asset-art: var(--info);
+  --asset-art-muted: var(--info-muted);
+  --asset-theme: var(--violet);
+  --asset-theme-muted: var(--violet-muted);
 
   /* -- Typography -- */
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -414,6 +421,16 @@ img {
 .badge-danger {
   background: var(--danger-muted);
   color: var(--danger);
+}
+
+.badge-art {
+  background: var(--asset-art-muted);
+  color: var(--asset-art);
+}
+
+.badge-theme {
+  background: var(--asset-theme-muted);
+  color: var(--asset-theme);
 }
 
 .badge-muted {
@@ -834,6 +851,7 @@ img {
   --warning-muted: oklch(from var(--warning) l c h / 0.12);
   --danger-muted: oklch(from var(--danger) l c h / 0.12);
   --info-muted: oklch(from var(--info) l c h / 0.12);
+  --violet-muted: oklch(from var(--violet) l c h / 0.12);
 
   /* -- Borders & Elements -- */
   --line-subtle: oklch(0% 0 0 / 0.08);

@@ -7,7 +7,6 @@ lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
-lazy from ...protocols import ProgressCallback
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.image import (
@@ -17,7 +16,7 @@ lazy from ...utils.image import (
     fetch_image_bytes,
     get_image_size_from_bytes,
 )
-lazy from ...utils.progress import StageProgress
+lazy from ...utils.progress import ProgressCallback, StepProgress
 lazy from ...utils.security import remove_sensitive_url_params
 lazy from ...utils.ssrf import is_private_url
 lazy from ...utils.threads import owned_thread
@@ -52,7 +51,7 @@ class DownloadArtHandler:
         target_url: str,
         *,
         trusted_media_server: bool,
-        progress_cb: ProgressCallback,
+        progress: StepProgress,
     ) -> bytes:
         """Download the chosen artwork, reporting the bytes as they arrive.
 
@@ -65,15 +64,14 @@ class DownloadArtHandler:
             )
 
         headers = self.provider_registry.provider.get_download_headers(target_url)
-        stage = StageProgress(progress_cb, stage="downloading", start=10, end=70)
-        await stage.report(0)
+        await progress.enter("downloading")
         try:
             return await fetch_image_bytes(
                 target_url,
                 await self._image_clients.get_client(target_url),
                 allow_private=trusted_media_server,
                 headers=headers,
-                on_progress=stage.report_bytes,
+                on_progress=progress.report_bytes,
                 # ART_DOWNLOAD_WORKERS bounds the art lane; a bulk match's
                 # comparisons must not hold its downloads back.
                 transfer_slots=None,
@@ -122,15 +120,16 @@ class DownloadArtHandler:
         art_type = job.art_type
 
         season = await self._season(job, item)
+        progress = StepProgress(progress_cb, ("downloading", "hashing", "writing"))
         image_data = await self._fetch_source_image(
             target_url,
             trusted_media_server=trusted_media_server,
-            progress_cb=progress_cb,
+            progress=progress,
         )
-        await progress_cb(70, "hashing")
+        await progress.enter("hashing")
         phash = await self.phash.compute_from_bytes(image_data)
 
-        await progress_cb(85, "writing")
+        await progress.enter("writing")
         try:
             ext = encoded_image_extension(image_data)
         except UnsupportedImageFormatError as exc:

@@ -207,10 +207,29 @@
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+
+  .sidebar-item::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 3px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    opacity: 0;
+    pointer-events: none;
     transition:
-      background-color 0.12s ease,
-      border-color 0.12s ease,
-      box-shadow 0.12s ease;
+      transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 0.15s ease;
+  }
+
+  .sidebar-item.active::before {
+    transform: translateY(-50%) scaleY(1);
+    opacity: 1;
   }
 
   .sidebar-item-main {
@@ -249,8 +268,6 @@
 
   .sidebar-item.active {
     background: var(--bg-tertiary);
-    border-color: var(--accent);
-    box-shadow: inset 3px 0 0 var(--accent);
   }
 
   .item-poster {

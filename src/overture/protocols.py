@@ -1,10 +1,7 @@
 """Minimal structural interfaces for runtime-injected services."""
 
-lazy from collections.abc import Awaitable, Callable
+lazy from collections.abc import Callable
 lazy from typing import Any, Protocol
-
-#: Reports percent-complete and a stage label while long work runs.
-type ProgressCallback = Callable[[int, str], Awaitable[None]]
 
 
 class ClientConnection(Protocol):

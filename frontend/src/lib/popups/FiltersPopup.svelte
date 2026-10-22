@@ -185,7 +185,7 @@
     </div>
 
     {#if uiState.sidebarMode === "items"}
-      <section class="option-card filter-section" aria-label="Art">
+      <section class="option-card filter-section art" aria-label="Art">
         <span class="form-label">Art</span>
         <div class="filter-part">
           <div class="option-header">
@@ -242,7 +242,7 @@
       </section>
     {/if}
 
-    <section class="option-card filter-section" aria-label="Themes">
+    <section class="option-card filter-section theme" aria-label="Themes">
       <span class="form-label">Themes</span>
       <div class="filter-part">
         <span class="part-label">Length</span>
@@ -341,6 +341,18 @@
 
   .filter-section {
     gap: var(--space-4);
+  }
+
+  .art {
+    --section-accent: var(--asset-art);
+  }
+
+  .theme {
+    --section-accent: var(--asset-theme);
+  }
+
+  .filter-section > .form-label {
+    color: var(--section-accent);
   }
 
   .part-label {
