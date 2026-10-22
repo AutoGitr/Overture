@@ -68,6 +68,7 @@ test("assets keeps every part of its results in place while downloads come and g
   await expect(rows).toHaveText(["Casablanca", "Brazil"]);
   expect(await rows.nth(1).boundingBox()).toEqual(brazil);
   expect(await log.boundingBox()).toEqual(logBox);
+  expect(await dialog.locator(".popup-content").boundingBox()).toEqual(dialogBox);
   await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*2$/);
 
   emitDownload("second", "Brazil", "completed");
@@ -76,11 +77,13 @@ test("assets keeps every part of its results in place while downloads come and g
   await expect(downloads).toHaveCount(0);
   await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*0$/);
   await expect(dialog.getByRole("button", { name: "Clear Results" })).toBeVisible();
-  // The popup keeps one size, so it never moves.
-  expect(await dialog.locator(".popup-content").boundingBox()).toEqual(dialogBox);
+  // A finished log keeps only its lines' height; the popup stays centred.
+  const finalBox = await dialog.locator(".popup-content").boundingBox();
+  expect(finalBox!.height).toBeLessThan(dialogBox!.height);
+  expect(finalBox!.y + finalBox!.height / 2).toBeCloseTo(dialogBox!.y + dialogBox!.height / 2, 0);
 });
 
-test("the operations popup keeps its place and size across tabs and runs", async ({
+test("the operations popup stays centred, as tall as each tab needs", async ({
   page,
   realtime,
 }) => {
@@ -88,20 +91,19 @@ test("the operations popup keeps its place and size across tabs and runs", async
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Operations", exact: true });
   const content = dialog.locator(".popup-content");
-  const edges = async () => {
-    const box = await content.boundingBox();
-    const viewport = page.viewportSize()!;
-    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    return [box!.x, box!.y, box!.width, box!.height];
-  };
-  const box = await edges();
-  const tabs = dialog.getByRole("tablist", { name: "Operation modes" });
-  const tabsBox = await tabs.boundingBox();
   const body = dialog.locator(".popup-body");
+  const viewport = page.viewportSize()!;
+  const placement = async () => {
+    const box = (await content.boundingBox())!;
+    expect(box.y).toBeGreaterThan(0);
+    expect(box.y + box.height).toBeLessThan(viewport.height);
+    expect(box.y + box.height / 2).toBeCloseTo(viewport.height / 2, 0);
+    return [box.x, box.width];
+  };
+  const columns = await placement();
   for (const tab of ["Sync", "Renamer", "Server Audit", "Assets"]) {
     await dialog.getByRole("tab", { name: tab }).click();
-    expect(await edges()).toEqual(box);
-    expect(await tabs.boundingBox()).toEqual(tabsBox);
+    expect(await placement()).toEqual(columns);
     expect(await body.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
   }
   realtime.emit({
@@ -112,7 +114,11 @@ test("the operations popup keeps its place and size across tabs and runs", async
   });
   await dialog.getByRole("tab", { name: "Sync" }).click();
   await expect(dialog.getByRole("log")).toBeVisible();
-  expect(await edges()).toEqual(box);
+  // A running log takes the room the screen has, so the body never scrolls.
+  expect(await placement()).toEqual(columns);
+  expect(await body.evaluate((el) => el.scrollHeight - el.clientHeight)).toBe(0);
+  const box = (await content.boundingBox())!;
+  expect(viewport.height - box.height).toBeLessThanOrEqual(2 * 12 + 2);
 });
 
 test("restart restores stopped results and active download blocks sync", async ({

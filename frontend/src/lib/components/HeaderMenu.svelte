@@ -234,13 +234,15 @@
     margin: var(--space-1) var(--space-2);
   }
 
-  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+  @media (hover: none) and (pointer: coarse) {
     .header-menu-wrapper > .btn {
       width: 44px;
       height: 44px;
       padding: 0;
     }
+  }
 
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     .menu-dropdown-container {
       max-width: calc(100vw - var(--space-4) - var(--safe-area-left) - var(--safe-area-right));
     }

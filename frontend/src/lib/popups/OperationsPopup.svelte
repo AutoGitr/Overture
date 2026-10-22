@@ -21,12 +21,7 @@
   let footers = $state<Partial<Record<OperationsTab, Snippet>>>({});
 </script>
 
-<PopupShell
-  title="Operations"
-  size="wide"
-  --popup-glow-at={(OPERATION_TABS.indexOf(activeTab) + 0.5) / OPERATION_TABS.length}
-  onclose={() => uiState.closePopup()}
->
+<PopupShell title="Operations" size="wide" onclose={() => uiState.closePopup()}>
   {#snippet icon()}
     <active.icon size={18} />
   {/snippet}
@@ -66,3 +61,15 @@
     {/if}
   {/snippet}
 </PopupShell>
+
+<style>
+  /* Rows for every run shown, which subgrid into it; it gives way to the
+     body's height down to their lists' least heights. */
+  .tab-panel:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    row-gap: var(--space-4);
+    min-height: 0;
+  }
+</style>

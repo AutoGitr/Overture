@@ -274,15 +274,12 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     expect(headerBox!.y).toBeGreaterThanOrEqual(0);
-    // Width keeps a gutter; height may fill the screen and remains centered unless top-anchored.
+    // Every popup keeps a gutter and is centred, whatever its height.
     expect(box!.x).toBeGreaterThan(0);
     expect(box!.x + box!.width).toBeLessThan(viewport.width);
-    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    if (dialogTitle === "Statistics") {
-      expect(box!.y).toBe(0);
-    } else {
-      expect(box!.y + box!.height / 2).toBeCloseTo(viewport.height / 2, 0);
-    }
+    expect(box!.y).toBeGreaterThan(0);
+    expect(box!.y + box!.height).toBeLessThan(viewport.height);
+    expect(box!.y + box!.height / 2).toBeCloseTo(viewport.height / 2, 0);
     const body = dialog.locator(".popup-body");
     expect(await body.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
 
@@ -314,7 +311,7 @@ test("a confirmation stays a small dialog on every screen", async ({ page }) => 
   await expect(confirm).toHaveCount(0);
 });
 
-test("short screens give popups their full safe height and scroll content behind fixed controls", async ({
+test("short screens give popups nearly all their safe height and scroll content behind fixed controls", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 640, height: 320 });
@@ -327,8 +324,13 @@ test("short screens give popups their full safe height and scroll content behind
   const operations = page.getByRole("dialog", { name: "Operations", exact: true });
   const tabs = operations.getByRole("tablist", { name: "Operation modes" });
   const tabBox = await tabs.boundingBox();
-  const box = await operations.locator(".popup-content").boundingBox();
-  expect(box).toMatchObject({ y: 12, height: 290 });
+  // Inside the 12px and 18px safe areas, with a 2dvh margin on a 320px screen.
+  const fillsSafeHeight = async (dialog: typeof operations) => {
+    const box = (await dialog.locator(".popup-content").boundingBox())!;
+    expect(box.y).toBeCloseTo(12 + 6.4, 0);
+    expect(box.height).toBeCloseTo(320 - 12 - 18 - 2 * 6.4, 0);
+  };
+  await fillsSafeHeight(operations);
   const body = operations.locator(".popup-body");
   await body.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
@@ -340,9 +342,6 @@ test("short screens give popups their full safe height and scroll content behind
   await page.getByLabel("Open menu").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "Settings", exact: true });
-  expect(await settings.locator(".popup-content").boundingBox()).toMatchObject({
-    y: 12,
-    height: 290,
-  });
+  await fillsSafeHeight(settings);
   await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
 });

@@ -3,7 +3,6 @@ import {
   DEFAULT_ACCENT,
   DEFAULT_APPEARANCE,
   DEFAULT_DARK_BG,
-  DEFAULT_LIGHT_ACCENT,
   DEFAULT_LIGHT_BG,
   applyAppearancePreferences,
   loadAppearancePreferences,
@@ -13,13 +12,13 @@ import {
 } from "../../../lib/utils/appearance";
 
 describe("appearance preferences", () => {
-  it("uses the light palette when light mode has no saved colors", () => {
+  it("uses the light background and the one default accent when light mode has no saved colors", () => {
     localStorage.setItem("theme", JSON.stringify("light"));
     const prefs = loadAppearancePreferences();
-    expect(prefs.accentColor).toBe(DEFAULT_LIGHT_ACCENT);
+    expect(prefs.accentColor).toBe(DEFAULT_ACCENT);
     expect(prefs.bgColor).toBe(DEFAULT_LIGHT_BG);
     applyAppearancePreferences(prefs);
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("");
   });
 
   it("falls back to dark defaults when stored values are absent", () => {
@@ -53,7 +52,7 @@ describe("appearance preferences", () => {
     applyAppearancePreferences(loadAppearancePreferences());
 
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#ff0055");
+    expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("#ff0055");
     expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("#ffffff");
     expect(themeColor).toHaveAttribute("content", "#ffffff");
   });
@@ -65,7 +64,7 @@ describe("appearance preferences", () => {
       bgColor: "#123456",
       showBackgroundImage: true,
     });
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#ff0055");
+    expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("#ff0055");
     expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("#123456");
 
     applyAppearancePreferences({
@@ -76,7 +75,7 @@ describe("appearance preferences", () => {
     });
 
     expect(document.documentElement).not.toHaveAttribute("data-theme");
-    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("");
     expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("");
   });
 
@@ -86,10 +85,10 @@ describe("appearance preferences", () => {
     expect(loadAppearancePreferences().bgColor).toBe(DEFAULT_LIGHT_BG);
   });
 
-  it("switches mode with its colours, keeping an accent the user picked", () => {
+  it("switches mode with its background, keeping the accent", () => {
     expect(withThemeMode(DEFAULT_APPEARANCE, "light")).toMatchObject({
       theme: "light",
-      accentColor: DEFAULT_LIGHT_ACCENT,
+      accentColor: DEFAULT_ACCENT,
       bgColor: DEFAULT_LIGHT_BG,
     });
     expect(withThemeMode({ ...DEFAULT_APPEARANCE, accentColor: "#ff0000" }, "light")).toMatchObject(

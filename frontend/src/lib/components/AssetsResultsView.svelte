@@ -25,51 +25,42 @@
   }
 </script>
 
-<div class="asset-results">
-  {#each WORKFLOWS as { lane, title, unit, run } (lane)}
-    {#if run.hasRun}
-      <JobPanel
-        --job-accent={lane === "art" ? "var(--asset-art)" : "var(--asset-theme)"}
-        job={run}
-        {unit}
-        {title}
-        status={workflowStatusLabel(run)}
-        stats={[
-          {
-            label: "queued",
-            value: run.unsettled,
-            title: "Downloads waiting or still running",
-            tone: "info",
-          },
-          {
-            label: "downloaded",
-            value: run.counters.downloaded,
-            title: "Files downloaded and saved to disk",
-            tone: "success",
-          },
-          {
-            label: "adopted",
-            value: run.counters.adopted,
-            title: "Existing file kept and linked to an art URL or YouTube ID",
-            tone: "violet",
-          },
-          { label: "skipped", value: run.counters.skipped },
-          { label: "no match", value: run.counters.no_match, tone: "warning" },
-          { label: "errors", value: run.errors, tone: "danger" },
-        ]}
-      >
-        {#snippet sections()}
-          <DownloadQueue {lane} label="Downloads" reserved={reserved(run, lane)} />
-        {/snippet}
-      </JobPanel>
-    {/if}
-  {/each}
-</div>
-
-<style>
-  .asset-results {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-  }
-</style>
+<!-- Each run is a few rows of the Operations grid, so their logs share its room. -->
+{#each WORKFLOWS as { lane, title, unit, run } (lane)}
+  {#if run.hasRun}
+    <JobPanel
+      --job-accent={lane === "art" ? "var(--asset-art)" : "var(--asset-theme)"}
+      job={run}
+      {unit}
+      {title}
+      status={workflowStatusLabel(run)}
+      stats={[
+        {
+          label: "queued",
+          value: run.unsettled,
+          title: "Downloads waiting or still running",
+          tone: "info",
+        },
+        {
+          label: "downloaded",
+          value: run.counters.downloaded,
+          title: "Files downloaded and saved to disk",
+          tone: "success",
+        },
+        {
+          label: "adopted",
+          value: run.counters.adopted,
+          title: "Existing file kept and linked to an art URL or YouTube ID",
+          tone: "violet",
+        },
+        { label: "skipped", value: run.counters.skipped },
+        { label: "no match", value: run.counters.no_match, tone: "warning" },
+        { label: "errors", value: run.errors, tone: "danger" },
+      ]}
+    >
+      {#snippet sections()}
+        <DownloadQueue {lane} label="Downloads" reserved={reserved(run, lane)} />
+      {/snippet}
+    </JobPanel>
+  {/if}
+{/each}

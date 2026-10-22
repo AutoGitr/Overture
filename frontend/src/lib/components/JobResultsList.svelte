@@ -53,10 +53,10 @@
   let allSelected = $derived(actionableCount > 0 && selectedCount === actionableCount);
 </script>
 
-<!-- A region of its job panel, as tall as its rows up to a bound, past which
-     it scrolls: findings arriving never push or squeeze what is around it
-     beyond that bound. -->
-<div class="findings">
+<!-- Two rows of its job panel: a fixed head, and a list that asks for its
+     rows' height (all the room it may get while running, so it never grows
+     row by row) and takes what the popup gives, past which it scrolls. -->
+<div class="findings-head">
   <div class="findings-header">
     <label class="checkbox-group">
       <input
@@ -81,10 +81,13 @@
     </span>
   </div>
   <ResultFilters label="Show {noun} by kind" {groups} ontoggle={onToggleGroup} />
+</div>
+<div
+  class="findings-body"
+  style:--findings-rows-height={running ? "100dvh" : `${itemCount * itemSize}px`}
+>
   {#if itemCount > 0}
-    <div class="findings-list" style:--findings-rows-height="{itemCount * itemSize}px">
-      <VirtualList {itemCount} {itemSize} overscanCount={3} followEnd={running} {row} />
-    </div>
+    <VirtualList {itemCount} {itemSize} overscanCount={3} followEnd={running} {row} />
   {:else}
     <div class="findings-empty">
       {#if findings.loading}
@@ -108,27 +111,10 @@
 </div>
 
 <style>
-  .findings {
-    position: relative;
+  .findings-head {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    flex: none;
-  }
-
-  .findings-error {
-    position: absolute;
-    inset: auto var(--space-2) var(--space-2);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--bg-elevated);
-    color: var(--danger);
-    font-size: var(--text-xs);
-    box-shadow: var(--shadow-md);
   }
 
   .findings-header {
@@ -145,16 +131,29 @@
     color: var(--text-tertiary);
   }
 
-  /* As tall as the rows, but never taller than about half the screen. */
   .hidden-selected {
     color: var(--warning);
   }
 
-  .findings-list {
-    display: flex;
-    flex-direction: column;
-    height: min(var(--findings-rows-height), max(18rem, 45dvh));
+  /* Its height is the room its grid row gets: the strut below is the height
+     it asks for and six rem the least it takes. The rows, empty text and
+     error share the strut's cell. */
+  .findings-body {
+    position: relative;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    min-height: 6rem;
     border-top: var(--border-subtle);
+  }
+
+  .findings-body::before {
+    content: "";
+    grid-area: 1 / 1;
+    height: var(--findings-rows-height);
+  }
+
+  .findings-body > :global(*) {
+    grid-area: 1 / 1;
   }
 
   .findings-empty {
@@ -162,10 +161,23 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-3);
-    min-height: 6rem;
-    border-top: var(--border-subtle);
     color: var(--text-secondary);
     font-size: var(--text-sm);
     text-align: center;
+  }
+
+  .findings-error {
+    position: absolute;
+    inset: auto var(--space-2) var(--space-2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    color: var(--danger);
+    font-size: var(--text-xs);
+    box-shadow: var(--shadow-md);
   }
 </style>

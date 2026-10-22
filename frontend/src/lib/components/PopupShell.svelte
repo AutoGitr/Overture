@@ -17,21 +17,20 @@
   }: {
     title: string;
     /**
-     * Every size is one column of content, centred, as tall as it is up to
-     * the screen's height, past which its body scrolls; it is as wide as the
-     * size allows, and narrower only when the screen is.
+     * How wide the popup is; it is narrower only when the screen is. Every
+     * popup is centred and exactly as tall as its content, up to the
+     * screen's height: there its job lists give way first, then its body
+     * scrolls.
      * - `dialog`: a short question.
      * - `form`: settings and choices.
-     * - `wide`: work that needs the width, such as operations. It keeps one
-     *   height, so switching its tabs never resizes or moves it.
+     * - `wide`: work that needs the width, such as operations.
      */
     size?: "dialog" | "form" | "wide";
     /** Optional glyph rendered before the title. */
     icon?: Snippet;
     /**
      * A `PopupTabs` shown under the title, part of the header that never
-     * scrolls. Set `--popup-glow-at` to the active tab's centre, as a fraction
-     * of the tabs' width, and the header's glow follows it.
+     * scrolls. Its active tab then carries the glow the title has without it.
      */
     tabs?: Snippet;
     info?: Snippet;
@@ -78,7 +77,7 @@
   <div class={["popup-content", size]}>
     <div class="popup-header">
       <div class="header-row">
-        <div class="header-title">
+        <div class={["header-title", { glow: !tabs }]}>
           {@render icon?.()}
           <h2 id={titleId}>{title}</h2>
         </div>
@@ -138,6 +137,8 @@
 <style>
   .popup-overlay {
     --popup-margin: var(--space-3);
+    /* Thinner on short screens, where every row of content counts. */
+    --popup-margin-block: min(var(--popup-margin), 2dvh);
 
     position: fixed;
     inset: 0;
@@ -157,8 +158,10 @@
        container, so focusing a field scrolls only the body. */
     overflow: clip;
     overscroll-behavior: contain;
-    padding: var(--safe-area-top) calc(var(--popup-margin) + var(--safe-area-right))
-      var(--safe-area-bottom) calc(var(--popup-margin) + var(--safe-area-left));
+    padding: calc(var(--popup-margin-block) + var(--safe-area-top))
+      calc(var(--popup-margin) + var(--safe-area-right))
+      calc(var(--popup-margin-block) + var(--safe-area-bottom))
+      calc(var(--popup-margin) + var(--safe-area-left));
   }
 
   .popup-overlay[open] {
@@ -200,7 +203,6 @@
 
   .popup-content.wide {
     width: 1040px;
-    height: min(100%, 880px);
   }
 
   .popup-header {
@@ -209,35 +211,7 @@
     gap: var(--space-3);
     padding: var(--space-4) var(--popup-pad) var(--space-3);
     flex-shrink: 0;
-    position: relative;
-    isolation: isolate;
     border-bottom: var(--border-subtle);
-  }
-
-  /* Centred on the header's padded content, so a fraction of the tabs' width
-     lands on a tab; without tabs it sits at the top-left corner. */
-  .popup-header::before {
-    content: "";
-    position: absolute;
-    z-index: -1;
-    top: 0;
-    bottom: 0;
-    left: calc(var(--popup-pad) + (100% - 2 * var(--popup-pad)) * var(--popup-glow-at, 0));
-    width: 70%;
-    translate: -50% 0;
-    background: radial-gradient(
-      ellipse 50% 100% at 50% 0%,
-      oklch(from var(--accent) l c h / 0.24),
-      transparent
-    );
-    pointer-events: none;
-    transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .popup-header::before {
-      transition: none;
-    }
   }
 
   .header-row {
@@ -256,6 +230,13 @@
 
   .header-title :global(svg) {
     color: var(--accent);
+  }
+
+  /* A soft light behind the icon and title; with tabs the active one has it. */
+  .header-title.glow {
+    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-4));
+    padding: var(--space-2) var(--space-4);
+    background: radial-gradient(closest-side, var(--accent-glow), transparent);
   }
 
   .header-buttons {
@@ -279,6 +260,8 @@
   /* The info strip spans the body's width and scrolls with it; only the
      content is padded. */
   .popup-body {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
     overflow-x: hidden;
@@ -286,12 +269,26 @@
     overscroll-behavior: contain;
   }
 
+  .popup-body > * {
+    flex: none;
+  }
+
+  /* Job panels' lists give way to the screen's height before the body
+     scrolls. Only then may the content be shorter than what it holds: an
+     overflowing box loses its bottom padding from the scroll range. */
+  .popup-body-content:has(:global(.job-panel)) {
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+
   .popup-footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-3);
-    padding: var(--space-3) var(--popup-pad) var(--popup-pad);
+    padding: var(--space-3) var(--popup-pad);
     flex-shrink: 0;
     border-top: var(--border-subtle);
   }
@@ -330,6 +327,11 @@
     .popup-footer {
       flex-wrap: wrap;
     }
+  }
+
+  /* Sized by the pointer, not the window: a narrow desktop window keeps
+     desktop buttons. */
+  @media (hover: none) and (pointer: coarse) {
     .popup-footer :global(> .btn) {
       min-height: 44px;
     }
@@ -338,9 +340,6 @@
   @media (max-width: 480px), (max-height: 500px) and (pointer: coarse) {
     .popup-header h2 {
       font-size: var(--text-lg);
-    }
-    .popup-footer :global(> .btn) {
-      flex: 1;
     }
   }
 </style>

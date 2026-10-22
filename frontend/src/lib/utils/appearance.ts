@@ -9,49 +9,41 @@ export interface AppearancePreferences {
 
 export const DEFAULT_DARK_BG = "#0a0c10";
 export const DEFAULT_LIGHT_BG = "#f3f4f6";
+/** One accent for both modes: the stylesheet darkens it on light surfaces. */
 export const DEFAULT_ACCENT = "#d8c7a3";
-export const DEFAULT_LIGHT_ACCENT = "#806844";
 
 type ThemeMode = AppearancePreferences["theme"];
 
-/** Each mode's own colours, used wherever a colour is unset or invalid. */
-const THEME_COLORS = {
-  dark: { accentColor: DEFAULT_ACCENT, bgColor: DEFAULT_DARK_BG },
-  light: { accentColor: DEFAULT_LIGHT_ACCENT, bgColor: DEFAULT_LIGHT_BG },
-} as const satisfies Record<ThemeMode, Pick<AppearancePreferences, "accentColor" | "bgColor">>;
+/** Each mode's own background, used wherever none is set or it is invalid. */
+const DEFAULT_BACKGROUNDS: Record<ThemeMode, string> = {
+  dark: DEFAULT_DARK_BG,
+  light: DEFAULT_LIGHT_BG,
+};
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = {
   theme: "dark",
-  ...THEME_COLORS.dark,
+  accentColor: DEFAULT_ACCENT,
+  bgColor: DEFAULT_DARK_BG,
   showBackgroundImage: true,
 };
 
-/** The preferences in another mode: its background, and its accent unless one was picked. */
+/** The preferences in another mode, with that mode's background. */
 export function withThemeMode(
   prefs: AppearancePreferences,
   theme: ThemeMode,
 ): AppearancePreferences {
-  const pickedAccent = !Object.values(THEME_COLORS).some(
-    (colors) => colors.accentColor === prefs.accentColor,
-  );
-  return {
-    ...prefs,
-    theme,
-    bgColor: THEME_COLORS[theme].bgColor,
-    accentColor: pickedAccent ? prefs.accentColor : THEME_COLORS[theme].accentColor,
-  };
+  return { ...prefs, theme, bgColor: DEFAULT_BACKGROUNDS[theme] };
 }
 
-/** The colours to show, each replaced by the mode's own when it is not a valid hex colour. */
+/** The colours to show, each replaced by its default when it is not a valid hex colour. */
 function resolvedColors({
   theme,
   accentColor,
   bgColor,
 }: Pick<AppearancePreferences, "theme" | "accentColor" | "bgColor">) {
-  const defaults = THEME_COLORS[theme];
   return {
-    accentColor: normalizeHexColor(accentColor) ?? defaults.accentColor,
-    bgColor: normalizeHexColor(bgColor) ?? defaults.bgColor,
+    accentColor: normalizeHexColor(accentColor) ?? DEFAULT_ACCENT,
+    bgColor: normalizeHexColor(bgColor) ?? DEFAULT_BACKGROUNDS[theme],
   };
 }
 
@@ -71,13 +63,12 @@ export function normalizeHexColor(value: string): string | null {
 
 export function loadAppearancePreferences(): AppearancePreferences {
   const theme = readJson<string>("theme", "dark") === "light" ? "light" : "dark";
-  const defaults = THEME_COLORS[theme];
   return {
     theme,
     ...resolvedColors({
       theme,
-      accentColor: readJson<string>("accentColor", defaults.accentColor),
-      bgColor: readJson<string>("bgColor", defaults.bgColor),
+      accentColor: readJson<string>("accentColor", DEFAULT_ACCENT),
+      bgColor: readJson<string>("bgColor", DEFAULT_BACKGROUNDS[theme]),
     }),
     showBackgroundImage: readJson("showBackgroundImage", true),
   };
@@ -93,7 +84,6 @@ export function saveAppearancePreferences(prefs: AppearancePreferences): void {
 
 export function applyAppearancePreferences(prefs: AppearancePreferences): void {
   const { accentColor, bgColor } = resolvedColors(prefs);
-  const defaultAccent = THEME_COLORS[prefs.theme].accentColor;
 
   if (prefs.theme === "light") {
     document.documentElement.setAttribute("data-theme", "light");
@@ -101,11 +91,11 @@ export function applyAppearancePreferences(prefs: AppearancePreferences): void {
     document.documentElement.removeAttribute("data-theme");
   }
 
-  // Text, hover and muted accent variants are derived from --accent in CSS.
-  if (accentColor !== defaultAccent) {
-    document.documentElement.style.setProperty("--accent", accentColor);
+  // The mode's lightness, and the text, hover and muted variants, are derived in CSS.
+  if (accentColor !== DEFAULT_ACCENT) {
+    document.documentElement.style.setProperty("--accent-color", accentColor);
   } else {
-    document.documentElement.style.removeProperty("--accent");
+    document.documentElement.style.removeProperty("--accent-color");
   }
 
   if (bgColor !== DEFAULT_DARK_BG && bgColor !== DEFAULT_LIGHT_BG) {

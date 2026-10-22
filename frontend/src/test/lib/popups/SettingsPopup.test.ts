@@ -216,7 +216,7 @@ describe("SettingsPopup", () => {
     await waitFor(() => {
       expect(localStorage.getItem("accentColor")).toBe(JSON.stringify("#ff0055"));
       expect(localStorage.getItem("bgColor")).toBe(JSON.stringify("#112233"));
-      expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#ff0055");
+      expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("#ff0055");
       expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("#112233");
     });
   });

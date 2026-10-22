@@ -4,15 +4,21 @@
   import ResultFilters from "./ResultFilters.svelte";
   import VirtualList from "./VirtualList.svelte";
 
-  let { feed }: { feed: JobLogFeed } = $props();
+  let {
+    feed,
+    filling = false,
+  }: {
+    feed: JobLogFeed;
+    /** A running log asks for all the room it may get at once, so it never grows line by line. */
+    filling?: boolean;
+  } = $props();
 
   const ROW_HEIGHT = 24;
-  /** Few enough that a popup showing more than one run scrolls its body, not its logs. */
-  const MAX_ROWS = 8;
 </script>
 
-<!-- A region of the panel, as tall as its lines up to a bound, past which it
-     scrolls; lines load and arrive without moving anything around it. -->
+<!-- A region of the panel that asks for its lines' height; the popup gives
+     it what the screen allows, down to three lines, and it scrolls past
+     that. Lines load and arrive without moving anything around it. -->
 <ResultFilters
   label="Show log lines by outcome"
   groups={feed.groups}
@@ -22,7 +28,7 @@
   class="job-log"
   role="log"
   aria-label="Job log"
-  style:--log-rows-height="{Math.min(Math.max(feed.total, 3), MAX_ROWS) * ROW_HEIGHT}px"
+  style:--log-rows-height={filling ? "100dvh" : `${Math.max(feed.total, 3) * ROW_HEIGHT}px`}
 >
   {#if feed.total > 0}
     <VirtualList
@@ -62,14 +68,15 @@
 </div>
 
 <style>
-  /* The padding and border are added to the rows' height. */
+  /* Its height is the room its grid row gets: the strut below is the height
+     it asks for and three lines are the least it takes. The rows, empty
+     text and error share the strut's cell. */
   .job-log {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    flex: none;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
     box-sizing: content-box;
-    height: var(--log-rows-height);
+    min-height: calc(3 * 24px);
     padding: var(--space-2) var(--space-3);
     background: var(--bg-root);
     border: var(--border-subtle);
@@ -78,6 +85,16 @@
     font-size: var(--text-xs);
     line-height: 1.7;
     overflow: hidden;
+  }
+
+  .job-log::before {
+    content: "";
+    grid-area: 1 / 1;
+    height: var(--log-rows-height);
+  }
+
+  .job-log > :global(*) {
+    grid-area: 1 / 1;
   }
 
   .job-log-row {

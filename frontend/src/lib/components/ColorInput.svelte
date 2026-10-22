@@ -101,7 +101,7 @@
     padding: 0;
     width: 32px;
     height: 30px;
-    border: 1px solid var(--border-subtle);
+    border: var(--border-muted);
     border-radius: var(--radius-sm);
     background: transparent;
     cursor: pointer;

@@ -54,13 +54,17 @@
   --text-tertiary: oklch(71% 0.028 274);
 
   /* -- Colors: Accent -- */
-  --accent: oklch(83.5% 0.052 86);
+  /* The chosen accent, which Settings can replace; --accent is that hue at a
+     lightness that reads on this mode's surfaces. */
+  --accent-color: oklch(83.5% 0.052 86);
+  --accent: oklch(from var(--accent-color) max(l, 0.68) c h);
   /* Near-black on light accents, white on dark ones (threshold ~ L 68%). */
   --accent-text: oklch(from var(--accent) clamp(0.17, (0.68 - l) * 1000, 1) 0 0);
   /* Hover shifts lightness toward the middle: darker on light accents, lighter on dark. */
   --accent-hover: oklch(from var(--accent) calc(l + clamp(-0.06, (0.68 - l) * 1000, 0.06)) c h);
   --accent-muted: oklch(from var(--accent) l c h / 0.15);
   --accent-border: oklch(from var(--accent) l c h / 0.45);
+  --accent-glow: oklch(from var(--accent) l c h / 0.3);
   --accent-gradient: linear-gradient(
     135deg,
     var(--accent),
@@ -213,7 +217,7 @@ textarea {
   font-size: inherit;
   color: var(--text-primary);
   background: var(--bg-tertiary);
-  border: var(--border-subtle);
+  border: var(--border-muted);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   outline: none;
@@ -839,13 +843,14 @@ img {
   --text-tertiary: oklch(48.5% 0.038 258);
 
   /* -- Colors: Accent -- */
-  --accent: oklch(53.2% 0.06 77);
+  --accent: oklch(from var(--accent-color) min(l, 0.52) c h);
+  --accent-glow: oklch(from var(--accent) l c h / 0.16);
 
-  /* -- Colors: Status (WCAG AA on light surfaces) -- */
-  --success: oklch(59.6% 0.127 163);
-  --warning: oklch(66.6% 0.157 58);
-  --danger: oklch(57.7% 0.215 27);
-  --info: oklch(58.8% 0.139 242);
+  /* -- Colors: Status (WCAG AA as text on light surfaces: L at most ~0.56) -- */
+  --success: oklch(52% 0.12 163);
+  --warning: oklch(55% 0.15 55);
+  --danger: oklch(54% 0.21 27);
+  --info: oklch(52% 0.14 245);
   --violet: oklch(49% 0.18 293);
   --success-muted: oklch(from var(--success) l c h / 0.12);
   --warning-muted: oklch(from var(--warning) l c h / 0.12);

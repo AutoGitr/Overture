@@ -21,47 +21,60 @@
     status?: string;
     /** Fixed-height parts shown above the lists, such as running downloads. */
     sections?: Snippet;
-    /** The run's findings, a region that shares the panel's height with its log. */
+    /**
+     * The run's findings: exactly two elements, a fixed head and a list that
+     * shares the room the popup gives with the log, like `JobResultsList`.
+     */
     children?: Snippet;
   } = $props();
+
+  let running = $derived(Boolean(job.started_at && !job.finished_at));
 </script>
 
-<!-- One run's results, every part as tall as its content up to its own bound,
-     so no part squeezes or covers another; the popup's body scrolls past
-     them when the screen is shorter. -->
-<section class="job-panel" aria-label={title}>
-  {#if title}
-    <header class="job-panel-header">
-      <h3>{title}</h3>
-      {#if status}
-        <span class="badge badge-muted">{status}</span>
-      {/if}
-    </header>
-  {/if}
-  <div
-    class={["progress-bar", { active: Boolean(job.started_at && !job.finished_at) }]}
-    role="progressbar"
-    aria-valuenow={Math.round(job.progress)}
-  >
-    <div class="progress-bar-fill" style:width="{job.progress}%"></div>
+<!-- One run's results: its rows are rows of the grid that holds every run
+     shown, so the lists of all of them share the popup's room, each asking
+     for its own height and getting its share of what the screen allows. -->
+<section class="job-panel" aria-label={title} style:grid-row="span {children ? 5 : 3}">
+  <div class="job-panel-top">
+    {#if title}
+      <header class="job-panel-header">
+        <h3>{title}</h3>
+        {#if status}
+          <span class="badge badge-muted">{status}</span>
+        {/if}
+      </header>
+    {/if}
+    <div
+      class={["progress-bar", { active: running }]}
+      role="progressbar"
+      aria-valuenow={Math.round(job.progress)}
+    >
+      <div class="progress-bar-fill" style:width="{job.progress}%"></div>
+    </div>
+    <JobStats {job} {unit} {stats} />
+    {@render sections?.()}
   </div>
-  <JobStats {job} {unit} {stats} />
-  {@render sections?.()}
   {@render children?.()}
-  <JobLog feed={job.log} />
+  <JobLog feed={job.log} filling={running} />
 </section>
 
 <style>
   .job-panel {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
+    display: grid;
+    grid-template-rows: subgrid;
+    row-gap: var(--space-3);
     min-width: 0;
     padding: var(--space-3);
     border: var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--bg-secondary);
     box-shadow: inset 3px 0 0 var(--job-accent, var(--accent));
+  }
+
+  .job-panel-top {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
   .job-panel .progress-bar-fill {

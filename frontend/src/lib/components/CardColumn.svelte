@@ -18,6 +18,15 @@
     margin-inline: calc(-1 * var(--popup-pad));
   }
 
+  /* Its sections' own padding is room enough at the body's ends. */
+  .card-column:first-child {
+    margin-top: calc(-1 * var(--space-2));
+  }
+
+  .card-column:last-child {
+    margin-bottom: calc(-1 * var(--space-2));
+  }
+
   .card-column > :global(*) {
     min-width: 0;
     margin: 0;

@@ -82,7 +82,9 @@
   .popup-tab.active {
     color: var(--accent);
     background: var(--accent-muted);
-    box-shadow: inset 0 0 0 1px var(--accent-border);
+    box-shadow:
+      inset 0 0 0 1px var(--accent-border),
+      0 0 14px var(--accent-glow);
     font-weight: 600;
   }
 
