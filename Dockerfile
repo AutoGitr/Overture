@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 COPY frontend/ .
 RUN bun run build
 
-FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS python-base
+FROM python:3.15.1-slim@sha256:08275f764e022331c6d3e3ca55d8cce01fa4684b02111adf0445d71806fe7941 AS python-base
 
 FROM astral/uv:0.13.5 AS uv
 
