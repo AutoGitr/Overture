@@ -9,16 +9,20 @@ lazy import pytest
 lazy from PIL import Image
 
 lazy import overture.utils.image as image_mod
+lazy from overture.utils import rate_limit
 lazy from overture.utils.image import (
     MAX_REMOTE_IMAGE_BYTES,
     FetchedImage,
+    RateLimitedError,
     RemoteImageError,
     fetch_image,
     fetch_image_bytes,
     is_supported_remote_image_type,
     normalise_content_type,
+    raise_if_rate_limited,
     sniff_image_size,
 )
+lazy from tests.pause_clock import PauseClock
 
 PNG_DATA = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
@@ -347,3 +351,97 @@ async def test_a_transfer_without_slots_does_not_wait_for_shared_transfers() -> 
             )
 
     assert data == PNG_DATA
+
+
+def _host_handler(
+    responses: dict[str, list[httpx2.Response]],
+) -> httpx2.MockTransport:
+    """Answer each host with its queued responses, then with a PNG."""
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        queued = responses.get(request.url.host, [])
+        if queued:
+            return queued.pop(0)
+        return httpx2.Response(
+            200, headers={"content-type": "image/png"}, content=PNG_DATA
+        )
+
+    return httpx2.MockTransport(handler)
+
+
+async def test_a_rate_limited_host_pauses_only_its_own_later_fetches(
+    pause_clock: PauseClock,
+) -> None:
+    transport = _host_handler(
+        {"tpdb.test": [httpx2.Response(429, headers={"Retry-After": "120"})]}
+    )
+    async with httpx2.AsyncClient(transport=transport) as client:
+        with pytest.raises(
+            RateLimitedError,
+            match=r"tpdb\.test is rate limiting requests; pausing them for 120s",
+        ):
+            await fetch_image_bytes("https://tpdb.test/poster.png", client)
+        assert await fetch_image_bytes("https://other.test/a.png", client) == PNG_DATA
+        assert pause_clock.waits == []
+
+        with pytest.raises(RateLimitedError, match=r"tpdb\.test .*try again in 120s"):
+            raise_if_rate_limited("https://tpdb.test/poster.png")
+        with pytest.raises(RateLimitedError, match=r"tpdb\.test .*try again in 120s"):
+            raise_if_rate_limited()
+        raise_if_rate_limited("https://other.test/a.png")
+
+        assert await fetch_image_bytes("https://tpdb.test/p.png", client) == PNG_DATA
+    assert pause_clock.waits == [120]
+    raise_if_rate_limited()
+
+
+async def test_a_failed_status_names_the_host_without_pausing_it(
+    pause_clock: PauseClock,
+) -> None:
+    transport = _host_handler({"tpdb.test": [httpx2.Response(404)]})
+    async with httpx2.AsyncClient(transport=transport) as client:
+        with pytest.raises(
+            RemoteImageError, match=r"tpdb\.test returned HTTP 404"
+        ) as exc:
+            await fetch_image_bytes("https://tpdb.test/poster.png", client)
+    assert not isinstance(exc.value, RateLimitedError)
+    raise_if_rate_limited()
+
+
+async def test_sniffing_reports_a_rate_limit_instead_of_no_size(
+    pause_clock: PauseClock,
+) -> None:
+    transport = _host_handler(
+        {"tpdb.test": [httpx2.Response(404), httpx2.Response(429)]}
+    )
+    async with httpx2.AsyncClient(transport=transport) as client:
+        assert await sniff_image_size("https://tpdb.test/p.png", client) == (0, 0)
+        with pytest.raises(RateLimitedError, match="pausing them for 60s"):
+            await sniff_image_size("https://tpdb.test/p.png", client)
+
+
+async def test_a_fetch_waiting_out_a_pause_holds_no_transfer_slot(
+    monkeypatch: pytest.MonkeyPatch, pause_clock: PauseClock
+) -> None:
+    waiting = asyncio.Event()
+    release = asyncio.Event()
+
+    async def sleep(delay: float) -> None:
+        waiting.set()
+        await release.wait()
+        await pause_clock.sleep(delay)
+
+    monkeypatch.setattr(rate_limit, "sleep", sleep)
+    image_mod.IMAGE_HOST_PAUSES.limited("tpdb.test")
+    slots = asyncio.Semaphore(1)
+    async with httpx2.AsyncClient(transport=_host_handler({})) as client:
+        paused = asyncio.create_task(
+            fetch_image_bytes("https://tpdb.test/p.png", client, transfer_slots=slots)
+        )
+        await waiting.wait()
+        other = fetch_image_bytes(
+            "https://other.test/a.png", client, transfer_slots=slots
+        )
+        assert await asyncio.wait_for(other, timeout=1) == PNG_DATA
+        release.set()
+        assert await paused == PNG_DATA

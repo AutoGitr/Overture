@@ -28,8 +28,10 @@ lazy from ...schemas.library import ItemSelectionResponse
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import (
+    RateLimitedError,
     is_valid_aspect_ratio,
     is_valid_image_format,
+    raise_if_rate_limited,
     sniff_image_size,
 )
 lazy from ...utils.security import remove_sensitive_url_params
@@ -204,12 +206,18 @@ class ArtService:
         if width is not None and height is not None:
             return width, height
 
-        width, height = await sniff_image_size(
-            target_url,
-            await self._image_clients.get_client(target_url),
-            allow_private=trusted_media_server,
-            headers=self._provider_registry.provider.get_download_headers(target_url),
-        )
+        try:
+            raise_if_rate_limited(target_url)
+            width, height = await sniff_image_size(
+                target_url,
+                await self._image_clients.get_client(target_url),
+                allow_private=trusted_media_server,
+                headers=self._provider_registry.provider.get_download_headers(
+                    target_url
+                ),
+            )
+        except RateLimitedError as exc:
+            raise PublicServiceError(503, str(exc)) from exc
         if not width or not height:
             raise PublicServiceError(
                 400,
@@ -387,6 +395,12 @@ class ArtService:
         season_id: int | None = None,
     ) -> ArtMatchResponse:
         """Run pHash matching for one slot and update match timestamps."""
+        try:
+            # Candidates come from several image hosts; while one is paused,
+            # matching would wait it out or compare without its images.
+            raise_if_rate_limited()
+        except RateLimitedError as exc:
+            raise PublicServiceError(503, str(exc)) from exc
         async with self._database.read_session() as db:
             item = await require_item(db, item_id)
             await _require_art_target(db, item, art_type, season_id)

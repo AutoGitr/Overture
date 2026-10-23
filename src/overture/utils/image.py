@@ -1,6 +1,7 @@
 """Image utility functions."""
 
 lazy import asyncio
+lazy import math
 lazy from collections.abc import AsyncGenerator
 lazy from contextlib import (
     AbstractAsyncContextManager,
@@ -8,6 +9,7 @@ lazy from contextlib import (
     nullcontext,
 )
 lazy from dataclasses import dataclass
+lazy from http import HTTPStatus
 lazy from io import BytesIO
 lazy from pathlib import Path
 lazy from urllib.parse import urljoin, urlsplit
@@ -17,6 +19,7 @@ lazy from PIL import ExifTags, Image, ImageFile, ImageOps, UnidentifiedImageErro
 
 lazy from ..domain import ArtType, AspectRatioTolerance
 lazy from .progress import BytesProgress
+lazy from .rate_limit import RateLimitPause, retry_after_seconds
 lazy from .ssrf import is_private_url
 lazy from .threads import owned_thread
 
@@ -35,6 +38,8 @@ REMOTE_IMAGE_REQUEST_HEADERS = frozendict(
 #: and audits fan out per slot, so this bounds the memory they hold together.
 #: Downloads are bounded by their own lane's worker count instead.
 SHARED_IMAGE_TRANSFERS = asyncio.Semaphore(8)
+#: Image hosts paused while they rate-limit Overture, by host name.
+IMAGE_HOST_PAUSES = RateLimitPause[str]()
 #: Downscaling is CPU-bound: a sidebar full of thumbnails queues here rather
 #: than occupying every worker thread at once.
 _IMAGE_RESIZES = asyncio.Semaphore(4)
@@ -51,7 +56,36 @@ IMAGE_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
 class RemoteImageError(ValueError):
-    """Raised when a remote image fails safety validation."""
+    """Raised when a remote image cannot be fetched or fails validation."""
+
+
+class RateLimitedError(RemoteImageError):
+    """Raised when an image host is rate-limiting Overture."""
+
+
+def _host(url: str) -> str:
+    return urlsplit(url).hostname or ""
+
+
+def raise_if_rate_limited(url: str | None = None) -> None:
+    """Refuse at once while *url*'s host, or any host without one, is paused.
+
+    For work someone is waiting on; background fetches wait the pause out.
+
+    Raises:
+        RateLimitedError: While the host is paused.
+    """
+    if url is None:
+        paused = IMAGE_HOST_PAUSES.longest()
+    elif delay := IMAGE_HOST_PAUSES.remaining(host := _host(url)):
+        paused = host, delay
+    else:
+        paused = None
+    if paused is not None:
+        host, delay = paused
+        raise RateLimitedError(
+            f"{host} is rate limiting requests; try again in {math.ceil(delay)}s"
+        )
 
 
 class UnsupportedImageFormatError(ValueError):
@@ -293,6 +327,8 @@ async def _image_response(
 
     request_headers = {**REMOTE_IMAGE_REQUEST_HEADERS, **(headers or {})}
     for _ in range(MAX_IMAGE_REDIRECTS + 1):
+        host = _host(url)
+        await IMAGE_HOST_PAUSES.wait(host)
         async with client.stream(
             "GET",
             url,
@@ -301,8 +337,18 @@ async def _image_response(
             params=params,
             follow_redirects=False,
         ) as response:
-            if response.status_code not in IMAGE_REDIRECT_STATUSES:
-                response.raise_for_status()
+            status = response.status_code
+            if status == HTTPStatus.TOO_MANY_REQUESTS:
+                pause = IMAGE_HOST_PAUSES.limited(
+                    host, retry_after=retry_after_seconds(response)
+                )
+                raise RateLimitedError(
+                    f"{host} is rate limiting requests; pausing them for {pause}s"
+                )
+            if response.is_error:
+                raise RemoteImageError(f"{host} returned HTTP {status}")
+            IMAGE_HOST_PAUSES.succeeded(host)
+            if status not in IMAGE_REDIRECT_STATUSES:
                 yield response
                 return
             next_url = await _safe_redirect_url(
@@ -355,7 +401,13 @@ async def sniff_image_size(
     allow_private: bool = False,
     headers: dict[str, str] | None = None,
 ) -> tuple[int, int]:
-    """Close the stream as soon as dimensions are available, within the sniff limit."""
+    """Close the stream as soon as dimensions are available, within the sniff limit.
+
+    Returns ``(0, 0)`` when the image cannot be measured.
+
+    Raises:
+        RateLimitedError: When the image host is rate-limiting Overture.
+    """
     try:
         async with _image_response(
             url,
@@ -374,6 +426,8 @@ async def sniff_image_size(
                 parser.feed(chunk)
                 if parser.image:
                     return parser.image.size
+    except RateLimitedError:
+        raise
     except httpx2.HTTPError, OSError, ValueError:
         return 0, 0
     return 0, 0
@@ -446,6 +500,9 @@ async def fetch_image(
     slot: AbstractAsyncContextManager[object] = (
         nullcontext() if transfer_slots is None else transfer_slots
     )
+    # Wait before taking a slot, so a paused host never holds the slots that
+    # fetches from other hosts need.
+    await IMAGE_HOST_PAUSES.wait(_host(url))
     async with slot:
         async with _image_response(
             url,

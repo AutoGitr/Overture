@@ -9,7 +9,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-- When YouTube rate-limits theme downloads or searches, Overture pauses its YouTube requests, waiting longer each time the limit repeats, and searches from the UI say when to try again; failed theme downloads and searches now show YouTube's actual error instead of a generic or truncated message.
+- When YouTube or an artwork source such as ThePosterDB rate-limits Overture, Overture pauses its requests to that service, for longer each time the limit repeats. Theme and artwork downloads and bulk runs wait the pause out; theme searches, artwork matching, choosing artwork and media-server previews in the UI say when to try again.
+- Failed theme downloads, YouTube searches and artwork downloads now say why, such as YouTube's own error or the HTTP status an artwork source returned, instead of a generic or truncated message.
 
 ## [1.1.0] - 2026-10-22
 

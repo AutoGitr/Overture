@@ -26,13 +26,16 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
+lazy from overture.utils import image
 lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.image import RateLimitedError
 lazy from tests.factories import (
     MediaItemFactory,
     SeasonFactory,
 )
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
+    StaticImageClients,
     database_for,
     make_download_service,
     make_local_assets,
@@ -355,6 +358,29 @@ async def test_match_art_raises_404_for_missing_item(
         )
 
 
+async def test_match_art_refuses_at_once_while_an_image_host_is_paused(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
+) -> None:
+    database = database_for(one_session(db_session))
+    matcher, calls = _art_matcher(
+        monkeypatch, ArtMatchResponse(), app_config=app_config, database=database
+    )
+    service = _art_service(
+        app_config=app_config,
+        database=database,
+        matcher=matcher,
+        publisher=FakePublisher(),
+    )
+    image.IMAGE_HOST_PAUSES.limited("theposterdb.com")
+    with pytest.raises(PublicServiceError) as exc_info:
+        await service.match(item_id=1, art_type=ArtType.POSTER, threshold=5)
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.message.startswith(
+        "theposterdb.com is rate limiting requests; try again in "
+    )
+    assert calls == []
+
+
 async def test_match_art_updates_item_timestamp_and_broadcasts(
     db_session: AsyncSession,
     media_item_factory: MediaItemFactory,
@@ -465,6 +491,60 @@ async def test_save_art_rejects_private_url(
         )
     assert exc_info.value.status_code == 400
     assert "Private" in exc_info.value.message
+
+
+async def test_save_art_refuses_at_once_to_measure_on_a_paused_host(
+    monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
+) -> None:
+    async def accept(_target_url: str, **_kwargs: object) -> None:
+        return None
+
+    async def sniff(*_args: object, **_kwargs: object) -> tuple[int, int]:
+        raise AssertionError("a paused host is not asked")
+
+    monkeypatch.setattr(module, "_validate_art_url", accept)
+    monkeypatch.setattr(module, "sniff_image_size", sniff)
+    image.IMAGE_HOST_PAUSES.limited("image.tmdb.org")
+    service = _art_service(app_config=app_config, database=database)
+    with pytest.raises(PublicServiceError) as exc_info:
+        await service.save(
+            item_id=1,
+            art_type=ArtType.POSTER,
+            body=SaveArtRequest(url="https://image.tmdb.org/t/p/original/a.jpg"),
+        )
+    assert exc_info.value.status_code == 503
+    assert "image.tmdb.org is rate limiting requests" in exc_info.value.message
+
+
+async def test_save_art_reports_a_rate_limit_met_while_measuring(
+    monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
+) -> None:
+    async def accept(_target_url: str, **_kwargs: object) -> None:
+        return None
+
+    async def sniff(*_args: object, **_kwargs: object) -> tuple[int, int]:
+        raise RateLimitedError("image.tmdb.org is rate limiting requests")
+
+    monkeypatch.setattr(module, "_validate_art_url", accept)
+    monkeypatch.setattr(module, "sniff_image_size", sniff)
+
+    def no_headers(_url: str) -> dict[str, str]:
+        return {}
+
+    provider = SimpleNamespace(get_download_headers=no_headers)
+    service = _art_service(
+        app_config=app_config,
+        database=database,
+        provider_registry=NoopProviderRegistry(provider),
+        image_clients=StaticImageClients(),
+    )
+    with pytest.raises(PublicServiceError) as exc_info:
+        await service.save(
+            item_id=1,
+            art_type=ArtType.POSTER,
+            body=SaveArtRequest(url="https://image.tmdb.org/t/p/original/a.jpg"),
+        )
+    assert exc_info.value.status_code == 503
 
 
 async def test_save_art_rejects_source_links_that_name_no_image(

@@ -7,6 +7,7 @@ lazy import pytest
 
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.services import provider_images as module
+lazy from overture.utils import image
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.image import FetchedImage, RemoteImageError
 
@@ -71,3 +72,22 @@ async def test_proxy_provider_image_wraps_remote_image_error(
         )
 
     assert exc_info.value.status_code == 502
+
+
+async def test_proxy_provider_image_refuses_a_paused_host_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_image(*_args: object, **_kwargs: object):
+        raise AssertionError("a paused host is not asked")
+
+    monkeypatch.setattr(module, "fetch_image", fake_fetch_image)
+    image.IMAGE_HOST_PAUSES.limited("plex.example")
+
+    with pytest.raises(PublicServiceError) as exc_info:
+        await module.proxy_provider_image(
+            ProviderImageRequest(url="https://plex.example/img", headers={}),
+            proxy_clients=cast("Any", FakeProxyClients(httpx2.AsyncClient())),
+        )
+
+    assert exc_info.value.status_code == 503
+    assert "plex.example is rate limiting requests" in exc_info.value.message

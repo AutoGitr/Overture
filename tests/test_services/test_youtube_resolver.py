@@ -20,32 +20,15 @@ lazy from overture.services.themes.youtube_resolver import (
     YouTubeResolver,
 )
 lazy from overture.utils import progress as progress_module
+lazy from overture.utils import rate_limit
 lazy from overture.utils.process import ProcessResult
 lazy from overture.utils.progress import ProgressUpdate
-
-
-class YouTubeClock:
-    """Advance request waits without delaying resolver tests."""
-
-    def __init__(self) -> None:
-        self.now = 100.0
-        self.waits: list[float] = []
-
-    def monotonic(self) -> float:
-        return self.now
-
-    async def sleep(self, delay: float) -> None:
-        self.waits.append(delay)
-        self.now += delay
-        await asyncio.sleep(0)
+lazy from tests.pause_clock import PauseClock
 
 
 @pytest.fixture(autouse=True)
-def youtube_clock(monkeypatch: pytest.MonkeyPatch) -> YouTubeClock:
-    clock = YouTubeClock()
-    monkeypatch.setattr(module, "monotonic", clock.monotonic)
-    monkeypatch.setattr(module, "sleep", clock.sleep)
-    return clock
+def _pauses_on_a_fake_clock(pause_clock: PauseClock) -> None:
+    """Keep rate-limit pauses from delaying resolver tests."""
 
 
 async def test_search_parses_json_lines(
@@ -304,7 +287,7 @@ _SUCCEEDED = ProcessResult(0, b"", "")
 async def test_only_explicit_rate_limits_pause_later_requests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    youtube_clock: YouTubeClock,
+    pause_clock: PauseClock,
     reason: str,
     waits: list[int],
 ) -> None:
@@ -322,12 +305,12 @@ async def test_only_explicit_rate_limits_pause_later_requests(
     assert ("YouTube is rate limiting requests" in str(exc.value)) == bool(waits)
     with pytest.raises(ValueError, match="YouTube search failed"):
         await resolver.search("theme")
-    assert youtube_clock.waits == waits
+    assert pause_clock.waits == waits
     assert calls == 2
 
 
 async def test_repeated_rate_limits_back_off_until_a_request_succeeds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, youtube_clock: YouTubeClock
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pause_clock: PauseClock
 ) -> None:
     outcomes = iter([*[_RATE_LIMITED] * 6, _SUCCEEDED, _RATE_LIMITED, _SUCCEEDED])
 
@@ -339,11 +322,11 @@ async def test_repeated_rate_limits_back_off_until_a_request_succeeds(
     for _ in range(9):
         with contextlib.suppress(ValueError):
             await resolver.search("theme")
-    assert youtube_clock.waits == [60, 120, 240, 480, 900, 900, 60]
+    assert pause_clock.waits == [60, 120, 240, 480, 900, 900, 60]
 
 
 async def test_a_paused_search_without_wait_fails_at_once(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, youtube_clock: YouTubeClock
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pause_clock: PauseClock
 ) -> None:
     outcomes = iter([_RATE_LIMITED, _SUCCEEDED])
     calls = 0
@@ -357,24 +340,24 @@ async def test_a_paused_search_without_wait_fails_at_once(
     resolver = YouTubeResolver(tmp_path)
     with pytest.raises(ValueError, match="YouTube is rate limiting requests"):
         await resolver.search("theme")
-    youtube_clock.now += 30.5
+    pause_clock.now += 30.5
     with pytest.raises(ValueError, match=r"rate limiting requests; try again in 30s"):
         await resolver.search("theme", wait=False)
     assert calls == 1
-    youtube_clock.now += 30
+    pause_clock.now += 30
     assert await resolver.search("theme", wait=False) == []
-    assert youtube_clock.waits == []
+    assert pause_clock.waits == []
 
 
 async def test_an_in_flight_rate_limit_extends_a_waiting_requests_pause(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, youtube_clock: YouTubeClock
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pause_clock: PauseClock
 ) -> None:
     in_flight = asyncio.Event()
     release = asyncio.Event()
     calls: list[float] = []
 
     async def run(_args: object, **_kwargs: object) -> ProcessResult:
-        calls.append(youtube_clock.now)
+        calls.append(pause_clock.now)
         if len(calls) == 1:
             in_flight.set()
             await release.wait()
@@ -389,10 +372,10 @@ async def test_an_in_flight_rate_limit_extends_a_waiting_requests_pause(
         # The search started before the pause is refused while this one sleeps.
         release.set()
         await slow
-        await youtube_clock.sleep(delay)
+        await pause_clock.sleep(delay)
 
     monkeypatch.setattr(module, "run_process", run)
-    monkeypatch.setattr(module, "sleep", sleep)
+    monkeypatch.setattr(rate_limit, "sleep", sleep)
     resolver = YouTubeResolver(tmp_path)
     slow = asyncio.create_task(limited_search())
     await in_flight.wait()
@@ -400,7 +383,7 @@ async def test_an_in_flight_rate_limit_extends_a_waiting_requests_pause(
     assert await resolver.search("theme") == []
     # 60s for the first rate limit, then the in-flight one doubles it to 120s.
     assert calls == [100, 100, 220]
-    assert youtube_clock.waits == [60, 60]
+    assert pause_clock.waits == [60, 60]
 
 
 async def test_download_audio_rejects_duration_below_minimum(

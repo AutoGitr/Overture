@@ -1,5 +1,9 @@
 """Artwork download handling."""
 
+lazy from urllib.parse import urlsplit
+
+lazy import httpx2
+
 lazy from ...config import Settings
 lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_item import MediaItem
@@ -9,6 +13,7 @@ lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.art_urls import public_art_url
+lazy from ...utils.errors import public_error_message
 lazy from ...utils.image import (
     RemoteImageError,
     UnsupportedImageFormatError,
@@ -78,6 +83,11 @@ class DownloadArtHandler:
             )
         except RemoteImageError as exc:
             raise DownloadError(str(exc)) from exc
+        except httpx2.HTTPError as exc:
+            detail = public_error_message(exc) or type(exc).__name__
+            raise DownloadError(
+                f"Could not reach {urlsplit(target_url).hostname}: {detail}"
+            ) from exc
 
     async def _season(self, job: DownloadJob, item: MediaItem) -> Season | None:
         """Return the season a season poster belongs to.

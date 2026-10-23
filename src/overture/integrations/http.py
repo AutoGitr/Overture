@@ -12,6 +12,7 @@ lazy import httpx2
 
 lazy from ..utils.cache import TimedRegistry
 lazy from ..utils.locks import KeyedLock
+lazy from ..utils.rate_limit import retry_after_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -173,11 +174,11 @@ async def _retry_response(response: httpx2.Response, delay: float) -> Retry | No
     """Ask for another attempt after a rate limit or transient server error."""
     if response.status_code not in RETRYABLE_STATUS:
         return None
-    retry_after = response.headers.get("Retry-After", "")
+    retry_after = retry_after_seconds(response)
     wait = (
-        min(_MAX_RETRY_AFTER_SECONDS, max(delay, int(retry_after)))
-        if retry_after.isdigit()
-        else delay
+        delay
+        if retry_after is None
+        else min(_MAX_RETRY_AFTER_SECONDS, max(delay, retry_after))
     )
     await response.aclose()
     return Retry(wait, f"returned {response.status_code}")

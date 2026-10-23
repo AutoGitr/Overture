@@ -52,6 +52,7 @@ lazy from overture.services.themes.youtube_resolver import (
     YouTubeResolver,
 )
 lazy from overture.utils.file import compute_bytes_hash
+lazy from overture.utils.image import RateLimitedError
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.publishers import NullEventPublisher
@@ -765,6 +766,66 @@ async def test_process_art_job_blocks_untrusted_private_url(
 
     with pytest.raises(DownloadError, match="private address"):
         await handler.download(job, item, _noop_progress)
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        (
+            RateLimitedError(
+                "tpdb.test is rate limiting requests; pausing them for 60s"
+            ),
+            "tpdb.test is rate limiting requests; pausing them for 60s",
+        ),
+        (
+            httpx2.ConnectError("Connection refused"),
+            "Could not reach tpdb.test: Connection refused",
+        ),
+        (httpx2.ReadTimeout(""), "Could not reach tpdb.test: ReadTimeout"),
+    ],
+)
+async def test_art_download_failures_say_why(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    message: str,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    async def public_url(_url: str) -> bool:
+        return False
+
+    async def fail(*_args: object, **_kwargs: object) -> bytes:
+        raise failure
+
+    monkeypatch.setattr(art_module, "is_private_url", public_url)
+    monkeypatch.setattr(art_module, "fetch_image_bytes", fail)
+    movie_dir = tmp_path / "Movie"
+    movie_dir.mkdir()
+    item = MediaItem(
+        id=1, media_type=MediaType.MOVIE, title="Movie", folder_path=str(movie_dir)
+    )
+    job = DownloadJob(
+        id="job-art",
+        media_item_id=1,
+        job_type=JobType.ART,
+        art_type=ArtType.POSTER,
+        target_url="https://tpdb.test/poster.jpg",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    handler = DownloadArtHandler(
+        provider_registry=NoopProviderRegistry(RefreshingProvider()),
+        asset_storage=AssetStorage(app_config=app_config),
+        phash=PhashService(app_config=app_config),
+        image_clients=cast("Any", StaticImageClients()),
+        app_config=app_config,
+        database=database,
+    )
+
+    with pytest.raises(DownloadError) as exc:
+        await handler.download(job, item, _noop_progress)
+    assert str(exc.value) == message
 
 
 async def test_process_season_poster_job_updates_asset_and_parent_aggregates(

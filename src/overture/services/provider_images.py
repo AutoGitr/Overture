@@ -9,7 +9,12 @@ lazy from ..integrations.http import retrying
 lazy from ..integrations.proxy import ProxyClientManager
 lazy from ..media_servers.adapters import ProviderImageRequest
 lazy from ..utils.errors import PublicServiceError
-lazy from ..utils.image import RemoteImageError, fetch_image
+lazy from ..utils.image import (
+    RateLimitedError,
+    RemoteImageError,
+    fetch_image,
+    raise_if_rate_limited,
+)
 
 _IMAGE_RETRY_DELAYS = (0.2, 0.5)
 _CACHE_SECONDS = 604800
@@ -23,6 +28,7 @@ async def proxy_provider_image(
     """Fetch and return one authenticated, bounded media-server image."""
     client = await proxy_clients.get_client(request.url)
     try:
+        raise_if_rate_limited(request.url)
         image = await retrying(
             partial(
                 fetch_image,
@@ -37,6 +43,8 @@ async def proxy_provider_image(
             # Short: a sidebar full of thumbnails must not stall on one blip.
             retry_delays=_IMAGE_RETRY_DELAYS,
         )
+    except RateLimitedError as exc:
+        raise PublicServiceError(503, str(exc)) from exc
     except RemoteImageError as exc:
         raise PublicServiceError(502, str(exc)) from exc
     except httpx2.HTTPError as exc:

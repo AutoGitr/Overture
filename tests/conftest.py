@@ -51,8 +51,9 @@ lazy from overture.runtime import build_runtime
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.auth import AuthService
 lazy from overture.services.public_dataset.schema.contract import ART_HOSTS
-lazy from overture.utils import art_urls
+lazy from overture.utils import art_urls, image, rate_limit
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
+lazy from overture.utils.rate_limit import RateLimitPause
 lazy from tests.factories import (
     AppSettingsFactory,
     ArtSpec,
@@ -62,6 +63,7 @@ lazy from tests.factories import (
     ScheduleFactory,
     SeasonFactory,
 )
+lazy from tests.pause_clock import PauseClock
 
 
 @pytest.fixture
@@ -100,6 +102,21 @@ def _terminate_phash_pools(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     yield
     for service in services:
         service.shutdown()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_image_host_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep an image host one test rate-limits from pausing the next test."""
+    monkeypatch.setattr(image, "IMAGE_HOST_PAUSES", RateLimitPause[str]())
+
+
+@pytest.fixture
+def pause_clock(monkeypatch: pytest.MonkeyPatch) -> PauseClock:
+    """Run rate-limit pauses on a fake clock."""
+    clock = PauseClock()
+    monkeypatch.setattr(rate_limit, "monotonic", clock.monotonic)
+    monkeypatch.setattr(rate_limit, "sleep", clock.sleep)
+    return clock
 
 
 @pytest.fixture

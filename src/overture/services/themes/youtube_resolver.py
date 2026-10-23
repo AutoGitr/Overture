@@ -7,11 +7,9 @@ lazy import math
 lazy import re
 lazy import shutil
 lazy import sys
-lazy from asyncio import sleep
 lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
-lazy from time import monotonic
 lazy from typing import Any, cast
 
 lazy from ...schemas.themes import ThemeSearchResult
@@ -19,6 +17,7 @@ lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, ffprobe_duration
 lazy from ...utils.errors import public_error_message
 lazy from ...utils.process import PROBE_SLOTS, ProcessResult, run_process
 lazy from ...utils.progress import ProgressCallback, ProgressUpdate, StepProgress
+lazy from ...utils.rate_limit import RateLimitPause
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.temporary import operation_directory
 lazy from ...utils.threads import owned_thread
@@ -30,11 +29,8 @@ _INFO_TIMEOUT = 30  # seconds - just a JSON metadata fetch
 _DOWNLOAD_TIMEOUT = 300  # seconds - audio download
 _TRANSCODE_TIMEOUT = 120  # seconds - ffmpeg transcode
 
-# After YouTube rate-limits a request, every request pauses: first for the
-# minimum, doubling on each further rate limit up to the maximum. A successful
-# request resets the next pause to the minimum.
-_RATE_LIMIT_PAUSE_MIN = 60  # seconds
-_RATE_LIMIT_PAUSE_MAX = 900  # seconds
+#: YouTube rate-limits this address as a whole, whichever host a request uses.
+_YOUTUBE = "youtube"
 
 #: Lowercase yt-dlp output that means YouTube is rate-limiting this address.
 _RATE_LIMIT_MARKERS = (
@@ -175,8 +171,7 @@ class YouTubeResolver:
 
     def __init__(self, config_dir: Path) -> None:
         self._config_dir = config_dir
-        self._paused_until = 0.0
-        self._next_pause = _RATE_LIMIT_PAUSE_MIN
+        self._pauses = RateLimitPause[str]()
 
     async def _await_pause(self, *, wait: bool) -> None:
         """Hold a request while YouTube is rate-limiting this address.
@@ -184,23 +179,18 @@ class YouTubeResolver:
         Raises:
             ValueError: When paused and the caller cannot *wait*.
         """
-        # A request already in flight can extend the pause while this one sleeps.
-        while (delay := self._paused_until - monotonic()) > 0:
-            if not wait:
-                raise ValueError(
-                    "YouTube is rate limiting requests; "
-                    f"try again in {math.ceil(delay)}s"
-                )
-            await sleep(delay)
+        if not wait and (delay := self._pauses.remaining(_YOUTUBE)) > 0:
+            raise ValueError(
+                f"YouTube is rate limiting requests; try again in {math.ceil(delay)}s"
+            )
+        await self._pauses.wait(_YOUTUBE)
 
     def _note_result(self, result: ProcessResult) -> None:
         """Start or lengthen the pause on a rate limit; reset it on success."""
         if result.returncode == 0:
-            self._next_pause = _RATE_LIMIT_PAUSE_MIN
+            self._pauses.succeeded(_YOUTUBE)
         elif _is_rate_limited(result):
-            pause = self._next_pause
-            self._paused_until = max(self._paused_until, monotonic() + pause)
-            self._next_pause = min(pause * 2, _RATE_LIMIT_PAUSE_MAX)
+            pause = self._pauses.limited(_YOUTUBE)
             logger.warning("YouTube rate limit; pausing requests for %ss", pause)
 
     async def search(
