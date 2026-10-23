@@ -21,6 +21,8 @@ class MediaItemBase(SQLModel):
     tmdb_id: int | None = Field(default=None, index=True)
     tvdb_id: int | None = None
     imdb_id: str | None = None
+    #: The TMDB collection a movie belongs to.
+    tmdb_collection_id: int | None = Field(default=None, index=True)
 
     folder_path: str | None = Field(default=None, index=True)
 
@@ -77,6 +79,9 @@ class MediaItem(MediaItemBase, table=True):
     #: Seconds, read from the file at the revision above.
     theme_file_duration: int | None = None
     theme_provenance_cleared: bool = Field(default=False, nullable=False)
+    #: The tmdb_id whose collection tmdb_collection_id records; a different
+    #: tmdb_id means the collection has to be looked up again.
+    tmdb_collection_checked_id: int | None = None
 
     # Relationships. Foreign keys cascade in the database, so a deleted
     # item cannot leave seasons, artwork, or jobs behind whether the delete goes

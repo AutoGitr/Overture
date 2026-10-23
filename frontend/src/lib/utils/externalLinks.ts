@@ -1,6 +1,10 @@
 import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
 import { slugify } from "./slug";
 
+export function buildTmdbCollectionUrl(id: number): string {
+  return `https://www.themoviedb.org/collection/${id}`;
+}
+
 /** What the detail view shows: a stored item, or a TMDB title not yet stored. */
 export type DetailSubject = MediaItemRead | TmdbItemPreview;
 

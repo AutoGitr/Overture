@@ -1,11 +1,18 @@
 """Public dataset router - opt-in curated art/theme sources."""
 
-lazy from fastapi import APIRouter, Depends
+lazy from typing import Annotated
+
+lazy from fastapi import APIRouter, Depends, Path, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import DatabaseDep, PublicDatasetDep, RuntimeDep
+lazy from ..domain import CatalogMediaType
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.public_dataset import (
+    CatalogCounts,
+    CatalogDraftUpdate,
+    CatalogEntryDetail,
+    CatalogEntryRow,
     PublicDatasetEnabledRequest,
     PublicDatasetRecord,
     PublicDatasetSources,
@@ -14,6 +21,11 @@ lazy from ..schemas.public_dataset import (
 lazy from ..services.public_dataset.export import export_archive
 lazy from .auth import require_auth
 lazy from .parameters import ItemIdPath
+
+CatalogMediaTypePath = Annotated[CatalogMediaType, Path(description="Entry kind")]
+EntryKeyPath = Annotated[
+    str, Path(description="Entry name, as its file is named: tmdb-603")
+]
 
 router = APIRouter(
     prefix="/public-dataset",
@@ -74,3 +86,45 @@ async def get_public_dataset_record(
 ) -> PublicDatasetRecord:
     """Return public dataset record."""
     return await dataset.get_record_for_item(item_id)
+
+
+@router.get("/catalog/counts")
+async def get_catalog_counts(dataset: PublicDatasetDep) -> CatalogCounts:
+    """Return catalog and draft counts without reading every entry."""
+    return await dataset.catalog.counts()
+
+
+@router.get("/catalog")
+async def list_catalog_entries(
+    dataset: PublicDatasetDep,
+    media_type: Annotated[CatalogMediaType, Query(description="Entry kind")],
+) -> list[CatalogEntryRow]:
+    """Return every catalog entry of a kind, with what the library holds of it."""
+    return await dataset.catalog.list_entries(media_type)
+
+
+@router.get("/catalog/{media_type}/{entry_key}")
+async def get_catalog_entry(
+    media_type: CatalogMediaTypePath, entry_key: EntryKeyPath, dataset: PublicDatasetDep
+) -> CatalogEntryDetail:
+    """Return one catalog entry with its local draft."""
+    return await dataset.catalog.get_entry(media_type, entry_key)
+
+
+@router.put("/catalog/{media_type}/{entry_key}/draft")
+async def save_catalog_draft(
+    media_type: CatalogMediaTypePath,
+    entry_key: EntryKeyPath,
+    body: CatalogDraftUpdate,
+    dataset: PublicDatasetDep,
+) -> CatalogEntryDetail:
+    """Change an entry's local draft, to contribute later."""
+    return await dataset.catalog.save_draft(media_type, entry_key, body)
+
+
+@router.delete("/catalog/{media_type}/{entry_key}/draft")
+async def discard_catalog_draft(
+    media_type: CatalogMediaTypePath, entry_key: EntryKeyPath, dataset: PublicDatasetDep
+) -> CatalogEntryDetail:
+    """Discard an entry's local draft."""
+    return await dataset.catalog.discard_draft(media_type, entry_key)

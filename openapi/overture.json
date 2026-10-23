@@ -33,6 +33,22 @@
             "$ref": "#/components/schemas/AutoUnmonitor",
             "default": "off"
           },
+          "collection_themes_unavailable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Themes Unavailable"
+          },
+          "collections_supported": {
+            "default": false,
+            "title": "Collections Supported",
+            "type": "boolean"
+          },
           "disable_media_server_art": {
             "default": false,
             "title": "Disable Media Server Art",
@@ -65,11 +81,6 @@
           "normalize_theme_loudness": {
             "default": true,
             "title": "Normalize Theme Loudness",
-            "type": "boolean"
-          },
-          "plex_collections_enabled": {
-            "default": true,
-            "title": "Plex Collections Enabled",
             "type": "boolean"
           },
           "skip_media_server_tmdb_urls": {
@@ -125,7 +136,6 @@
           "skip_media_server_tmdb_urls",
           "disable_media_server_art",
           "aspect_ratio_tolerance",
-          "plex_collections_enabled",
           "tmdb_language_filter",
           "auto_advance",
           "auto_advance_skip_completed",
@@ -133,6 +143,8 @@
           "updated_at",
           "media_server",
           "tmdb_configured",
+          "collections_supported",
+          "collection_themes_unavailable",
           "art_download_workers",
           "theme_download_workers"
         ],
@@ -239,17 +251,6 @@
               }
             ],
             "title": "Normalize Theme Loudness"
-          },
-          "plex_collections_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Plex Collections Enabled"
           },
           "skip_media_server_tmdb_urls": {
             "anyOf": [
@@ -1046,6 +1047,16 @@
               }
             ]
           },
+          "collection_ids": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0_____"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "include_unmonitored": {
             "default": false,
             "description": "Include unmonitored items in either target scope.",
@@ -1115,6 +1126,16 @@
               }
             ]
           },
+          "collection_ids": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0_____"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "include_unmonitored": {
             "default": false,
             "description": "Include unmonitored items in either target scope.",
@@ -1170,6 +1191,7 @@
         "required": [
           "library_ids",
           "item_ids",
+          "collection_ids",
           "include_unmonitored",
           "overwrite_existing",
           "retry_saved_downloads",
@@ -1365,6 +1387,11 @@
         "additionalProperties": false,
         "description": "Theme-specific assets workflow configuration.",
         "properties": {
+          "include_collections": {
+            "default": false,
+            "title": "Include Collections",
+            "type": "boolean"
+          },
           "source_order": {
             "$ref": "#/components/schemas/SourceOrder_ThemeBulkSource_"
           }
@@ -1376,12 +1403,18 @@
         "additionalProperties": false,
         "description": "Theme-specific assets workflow configuration.",
         "properties": {
+          "include_collections": {
+            "default": false,
+            "title": "Include Collections",
+            "type": "boolean"
+          },
           "source_order": {
             "$ref": "#/components/schemas/SourceOrder_ThemeBulkSource_"
           }
         },
         "required": [
-          "source_order"
+          "source_order",
+          "include_collections"
         ],
         "title": "BulkAssetsThemeConfig",
         "type": "object"
@@ -1392,7 +1425,7 @@
         "properties": {
           "collection_ids": {
             "items": {
-              "type": "string"
+              "type": "integer"
             },
             "title": "Collection Ids",
             "type": "array"
@@ -1482,6 +1515,876 @@
         "title": "BulkMonitorResponse",
         "type": "object"
       },
+      "CatalogCounts": {
+        "additionalProperties": false,
+        "description": "Catalog and draft counts without downloading the catalog.",
+        "properties": {
+          "collections": {
+            "title": "Collections",
+            "type": "integer"
+          },
+          "drafts": {
+            "title": "Drafts",
+            "type": "integer"
+          },
+          "movies": {
+            "title": "Movies",
+            "type": "integer"
+          },
+          "shows": {
+            "title": "Shows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "movies",
+          "shows",
+          "collections",
+          "drafts"
+        ],
+        "title": "CatalogCounts",
+        "type": "object"
+      },
+      "CatalogDraftUpdate": {
+        "additionalProperties": false,
+        "description": "Changes to a catalog entry; only the fields sent are changed.",
+        "properties": {
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "imdb_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Id"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "seasons": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CatalogSeason"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seasons"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "tvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          }
+        },
+        "title": "CatalogDraftUpdate",
+        "type": "object"
+      },
+      "CatalogEntry": {
+        "additionalProperties": false,
+        "description": "A catalog entry; fields its media type does not carry are ``None``.",
+        "properties": {
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "imdb_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Id"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/CatalogMediaType"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "seasons": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CatalogSeason"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seasons"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "tvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "media_type",
+          "title",
+          "year",
+          "tmdb_id",
+          "tvdb_id",
+          "imdb_id",
+          "poster_url",
+          "background_url",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb",
+          "seasons"
+        ],
+        "title": "CatalogEntry",
+        "type": "object"
+      },
+      "CatalogEntryDetail": {
+        "additionalProperties": false,
+        "description": "One catalog entry with the local draft of changes to it.",
+        "properties": {
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry": {
+            "$ref": "#/components/schemas/CatalogEntry"
+          },
+          "entry_key": {
+            "title": "Entry Key",
+            "type": "string"
+          },
+          "library_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Collection Id"
+          },
+          "library_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Item Id"
+          }
+        },
+        "required": [
+          "entry_key",
+          "entry",
+          "draft",
+          "library_item_id",
+          "library_collection_id"
+        ],
+        "title": "CatalogEntryDetail",
+        "type": "object"
+      },
+      "CatalogEntryRow": {
+        "additionalProperties": false,
+        "description": "One catalog entry as the catalog view lists it.",
+        "properties": {
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "entry_key": {
+            "title": "Entry Key",
+            "type": "string"
+          },
+          "has_draft": {
+            "default": false,
+            "title": "Has Draft",
+            "type": "boolean"
+          },
+          "imdb_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Id"
+          },
+          "library_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Collection Id"
+          },
+          "library_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Item Id"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/CatalogMediaType"
+          },
+          "poster_preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Preview Url"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "season_posters": {
+            "default": 0,
+            "title": "Season Posters",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "tvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "entry_key",
+          "media_type",
+          "title",
+          "year",
+          "tmdb_id",
+          "tvdb_id",
+          "imdb_id",
+          "poster_url",
+          "poster_preview_url",
+          "background_url",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb",
+          "season_posters",
+          "has_draft",
+          "library_item_id",
+          "library_collection_id"
+        ],
+        "title": "CatalogEntryRow",
+        "type": "object"
+      },
+      "CatalogMediaType": {
+        "description": "Kind of OvertureDB catalog entry: a movie, a show or a movie collection.",
+        "enum": [
+          "movie",
+          "show",
+          "collection"
+        ],
+        "title": "CatalogMediaType",
+        "type": "string"
+      },
+      "CatalogSeason": {
+        "additionalProperties": false,
+        "description": "One season poster of a catalog entry.",
+        "properties": {
+          "poster_url": {
+            "title": "Poster Url",
+            "type": "string"
+          },
+          "season_num": {
+            "minimum": 0.0,
+            "title": "Season Num",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "season_num",
+          "poster_url"
+        ],
+        "title": "CatalogSeason",
+        "type": "object"
+      },
+      "CollectionDetail": {
+        "additionalProperties": false,
+        "description": "One collection with its members and what limits its theme.",
+        "properties": {
+          "art_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Art Url"
+          },
+          "catalog_entry_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Entry Key"
+          },
+          "catalog_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Title"
+          },
+          "child_count": {
+            "default": 0,
+            "title": "Child Count",
+            "type": "integer"
+          },
+          "has_theme": {
+            "default": false,
+            "title": "Has Theme",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "monitored": {
+            "default": true,
+            "title": "Monitored",
+            "type": "boolean"
+          },
+          "public_dataset_complete": {
+            "default": false,
+            "title": "Public Dataset Complete",
+            "type": "boolean"
+          },
+          "public_dataset_themerrdb": {
+            "default": false,
+            "title": "Public Dataset Themerrdb",
+            "type": "boolean"
+          },
+          "server_added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Added At"
+          },
+          "server_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Link"
+          },
+          "server_type": {
+            "$ref": "#/components/schemas/ServerType"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "theme_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "theme_unavailable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Unavailable"
+          },
+          "theme_writable": {
+            "default": false,
+            "title": "Theme Writable",
+            "type": "boolean"
+          },
+          "thumb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
+          "tmdb_match": {
+            "$ref": "#/components/schemas/CollectionMatch",
+            "default": "auto"
+          },
+          "youtube_duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Duration"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          },
+          "youtube_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Title"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "thumb_url",
+          "art_url",
+          "child_count",
+          "media_type",
+          "library_id",
+          "server_added_at",
+          "server_type",
+          "server_link",
+          "has_theme",
+          "youtube_id",
+          "youtube_title",
+          "youtube_duration",
+          "theme_status",
+          "monitored",
+          "tmdb_collection_id",
+          "tmdb_match",
+          "public_dataset_complete",
+          "public_dataset_themerrdb",
+          "members",
+          "theme_unavailable",
+          "theme_writable",
+          "catalog_entry_key",
+          "catalog_title",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb"
+        ],
+        "title": "CollectionDetail",
+        "type": "object"
+      },
+      "CollectionMatch": {
+        "description": "How a media-server collection got its TMDB collection.\n\n``auto`` follows the server's own ID or the collection's members;\n``manual`` and ``unmatched`` are the user's choice and survive syncs.",
+        "enum": [
+          "auto",
+          "manual",
+          "unmatched"
+        ],
+        "title": "CollectionMatch",
+        "type": "string"
+      },
+      "CollectionMatchRequest": {
+        "additionalProperties": false,
+        "description": "Match a collection to a TMDB collection; ``None`` keeps it unmatched.",
+        "properties": {
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          }
+        },
+        "required": [
+          "media_type",
+          "tmdb_collection_id"
+        ],
+        "title": "CollectionMatchRequest",
+        "type": "object"
+      },
+      "CollectionMember": {
+        "additionalProperties": false,
+        "description": "A stored item a collection holds.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "year",
+          "media_type",
+          "tmdb_id"
+        ],
+        "title": "CollectionMember",
+        "type": "object"
+      },
       "CollectionRead": {
         "additionalProperties": false,
         "description": "Media-server collection response.",
@@ -1509,7 +2412,7 @@
           },
           "id": {
             "title": "Id",
-            "type": "string"
+            "type": "integer"
           },
           "library_id": {
             "anyOf": [
@@ -1528,6 +2431,16 @@
           "monitored": {
             "default": true,
             "title": "Monitored",
+            "type": "boolean"
+          },
+          "public_dataset_complete": {
+            "default": false,
+            "title": "Public Dataset Complete",
+            "type": "boolean"
+          },
+          "public_dataset_themerrdb": {
+            "default": false,
+            "title": "Public Dataset Themerrdb",
             "type": "boolean"
           },
           "server_added_at": {
@@ -1585,6 +2498,21 @@
             "title": "Title",
             "type": "string"
           },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
+          "tmdb_match": {
+            "$ref": "#/components/schemas/CollectionMatch",
+            "default": "auto"
+          },
           "youtube_duration": {
             "anyOf": [
               {
@@ -1636,7 +2564,11 @@
           "youtube_title",
           "youtube_duration",
           "theme_status",
-          "monitored"
+          "monitored",
+          "tmdb_collection_id",
+          "tmdb_match",
+          "public_dataset_complete",
+          "public_dataset_themerrdb"
         ],
         "title": "CollectionRead",
         "type": "object"
@@ -1645,12 +2577,9 @@
         "additionalProperties": false,
         "description": "Target for a media-server collection theme upload.",
         "properties": {
-          "collection_server_id": {
-            "title": "Collection Server Id",
-            "type": "string"
-          },
-          "media_type": {
-            "$ref": "#/components/schemas/MediaType"
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "integer"
           },
           "target_type": {
             "const": "collection_theme",
@@ -1664,11 +2593,44 @@
         },
         "required": [
           "target_type",
-          "collection_server_id",
-          "media_type",
+          "collection_id",
           "title"
         ],
         "title": "CollectionThemeDownloadTarget",
+        "type": "object"
+      },
+      "CollectionThemeSources": {
+        "additionalProperties": false,
+        "description": "The catalog's theme candidates for a matched collection.",
+        "properties": {
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb"
+        ],
+        "title": "CollectionThemeSources",
         "type": "object"
       },
       "CollectionThemeStatusResponse": {
@@ -2888,6 +3850,17 @@
             ],
             "title": "Last Synced At"
           },
+          "library_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Collection Id"
+          },
           "library_id": {
             "anyOf": [
               {
@@ -3117,6 +4090,17 @@
             "title": "Title",
             "type": "string"
           },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
           "tmdb_id": {
             "anyOf": [
               {
@@ -3202,6 +4186,8 @@
           "tmdb_id",
           "tvdb_id",
           "imdb_id",
+          "tmdb_collection_id",
+          "library_collection_id",
           "folder_path",
           "server_item_id",
           "server_link",
@@ -3765,6 +4751,11 @@
             ],
             "title": "Catalog Url"
           },
+          "collections": {
+            "default": 0,
+            "title": "Collections",
+            "type": "integer"
+          },
           "entries": {
             "default": 0,
             "title": "Entries",
@@ -3812,6 +4803,7 @@
           "items",
           "movies",
           "shows",
+          "collections",
           "seasons",
           "errors",
           "catalog_url",
@@ -6936,7 +7928,7 @@
     },
     "/api/collections": {
       "get": {
-        "description": "Return all collections for the given media type from the active server.",
+        "description": "Return the collections the last sync listed for the media type.",
         "operationId": "list_collections",
         "parameters": [
           {
@@ -7062,20 +8054,95 @@
         ]
       }
     },
+    "/api/collections/{collection_id}": {
+      "get": {
+        "description": "Return one collection with its members and catalog themes.",
+        "operationId": "get_collection",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/image/{art_type}": {
       "get": {
         "description": "Proxy a collection's poster or background from the media server.",
         "operationId": "proxy_collection_image",
         "parameters": [
           {
-            "description": "Collection rating key or ID",
+            "description": "Collection ID",
             "in": "path",
             "name": "collection_id",
             "required": true,
             "schema": {
-              "description": "Collection rating key or ID",
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
               "title": "Collection Id",
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -7146,20 +8213,167 @@
         ]
       }
     },
+    "/api/collections/{collection_id}/match": {
+      "delete": {
+        "description": "Let the server and the members decide the TMDB collection again.",
+        "operationId": "reset_collection_match",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Collection Match",
+        "tags": [
+          "collections"
+        ]
+      },
+      "put": {
+        "description": "Match a collection to a TMDB collection, or keep it unmatched.",
+        "operationId": "set_collection_match",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Collection Match",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/monitored": {
       "patch": {
         "description": "Set whether a collection is monitored.",
         "operationId": "set_collection_monitored",
         "parameters": [
           {
-            "description": "Collection rating key or ID",
+            "description": "Collection ID",
             "in": "path",
             "name": "collection_id",
             "required": true,
             "schema": {
-              "description": "Collection rating key or ID",
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
               "title": "Collection Id",
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -7229,20 +8443,95 @@
         ]
       }
     },
-    "/api/collections/{collection_id}/theme": {
-      "delete": {
-        "description": "Remove the theme from a collection and clear the local DB record.",
-        "operationId": "delete_collection_theme",
+    "/api/collections/{collection_id}/sources": {
+      "get": {
+        "description": "Return the matched catalog's collection theme candidates.",
+        "operationId": "get_collection_sources",
         "parameters": [
           {
-            "description": "Collection rating key or ID",
+            "description": "Collection ID",
             "in": "path",
             "name": "collection_id",
             "required": true,
             "schema": {
-              "description": "Collection rating key or ID",
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
               "title": "Collection Id",
-              "type": "string"
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionThemeSources"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection Sources",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/theme": {
+      "delete": {
+        "description": "Remove the theme from a collection and clear its stored record.",
+        "operationId": "delete_collection_theme",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
             }
           },
           {
@@ -7306,14 +8595,15 @@
         "operationId": "get_collection_theme",
         "parameters": [
           {
-            "description": "Collection rating key or ID",
+            "description": "Collection ID",
             "in": "path",
             "name": "collection_id",
             "required": true,
             "schema": {
-              "description": "Collection rating key or ID",
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
               "title": "Collection Id",
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -7373,18 +8663,19 @@
         ]
       },
       "put": {
-        "description": "Queue a YouTube track for upload as the theme for a collection.",
+        "description": "Queue a YouTube track to become the theme of a collection.",
         "operationId": "set_collection_theme",
         "parameters": [
           {
-            "description": "Collection rating key or ID",
+            "description": "Collection ID",
             "in": "path",
             "name": "collection_id",
             "required": true,
             "schema": {
-              "description": "Collection rating key or ID",
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
               "title": "Collection Id",
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -8688,6 +9979,351 @@
         "summary": "List Server Libraries",
         "tags": [
           "media-server"
+        ]
+      }
+    },
+    "/api/public-dataset/catalog": {
+      "get": {
+        "description": "Return every catalog entry of a kind, with what the library holds of it.",
+        "operationId": "list_catalog_entries",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogEntryRow"
+                  },
+                  "title": "Response List Catalog Entries",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Catalog Entries",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
+    "/api/public-dataset/catalog/counts": {
+      "get": {
+        "description": "Return catalog and draft counts without reading every entry.",
+        "operationId": "get_catalog_counts",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Counts",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
+    "/api/public-dataset/catalog/{media_type}/{entry_key}": {
+      "get": {
+        "description": "Return one catalog entry with its local draft.",
+        "operationId": "get_catalog_entry",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntryDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Entry",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
+    "/api/public-dataset/catalog/{media_type}/{entry_key}/draft": {
+      "delete": {
+        "description": "Discard an entry's local draft.",
+        "operationId": "discard_catalog_draft",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntryDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Catalog Draft",
+        "tags": [
+          "public-dataset"
+        ]
+      },
+      "put": {
+        "description": "Change an entry's local draft, to contribute later.",
+        "operationId": "save_catalog_draft",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogDraftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntryDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Catalog Draft",
+        "tags": [
+          "public-dataset"
         ]
       }
     },
@@ -10590,13 +12226,13 @@
         "operationId": "get_tmdb_art_sources",
         "parameters": [
           {
-            "description": "Media type ('movie' or 'show')",
+            "description": "Catalog entry kind",
             "in": "path",
             "name": "media_type",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/MediaType",
-              "description": "Media type ('movie' or 'show')"
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Catalog entry kind"
             }
           },
           {

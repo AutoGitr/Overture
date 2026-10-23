@@ -1,5 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getCatalogCountsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { queryClient } from "../../../lib/rest/queryClient";
 import OvertureDbPopup from "../../../lib/popups/OvertureDbPopup.svelte";
 import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
 import { publicDatasetSyncState } from "../../../lib/stores/jobStates.svelte";
@@ -14,6 +16,13 @@ describe("OvertureDbPopup", () => {
   beforeEach(() => {
     publicDatasetSyncState.reset();
     uiState.closePopup();
+    queryClient.clear();
+    queryClient.setQueryData(getCatalogCountsOptions().queryKey, {
+      movies: 0,
+      shows: 0,
+      collections: 0,
+      drafts: 0,
+    });
   });
 
   it("renders the repository as a clickable link when configured", () => {
@@ -41,6 +50,7 @@ describe("OvertureDbPopup", () => {
       publicDatasetStatus({
         last_stats: {
           entries: 130,
+          collections: 0,
           items: 125,
           movies: 120,
           shows: 50,
@@ -61,6 +71,20 @@ describe("OvertureDbPopup", () => {
     expect(screen.getByText("Unpacked").nextElementSibling).toHaveTextContent("1.00 MB");
     expect(screen.getByText("Schema").nextElementSibling).toHaveTextContent("1");
     expect(screen.queryByText("No synced file statistics yet.")).toBeNull();
+  });
+
+  it("counts drafts across movies, shows and collections beside export", async () => {
+    storePublicDatasetStatus(publicDatasetStatus());
+    queryClient.setQueryData(getCatalogCountsOptions().queryKey, {
+      movies: 1,
+      shows: 1,
+      collections: 1,
+      drafts: 3,
+    });
+    renderWithQueryClient(OvertureDbPopup);
+    expect(await screen.findByText("3 local drafts")).toBeInTheDocument();
+    expect(screen.getByText("1 catalog collection")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export selections" })).toBeEnabled();
   });
 
   it("links a bulk contribution issue to the repository", () => {

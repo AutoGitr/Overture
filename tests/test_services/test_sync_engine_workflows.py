@@ -22,6 +22,7 @@ lazy from overture.jobs.runner import JobContext
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import (
     MAX_SEASONS_PER_SHOW,
+    ServerCollection,
     ServerItem,
     ServerSeason,
     SyncProgressCallback,
@@ -35,6 +36,7 @@ lazy from overture.services.public_dataset.downloads import QueuedDownloads
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.sync import engine as module
 lazy from overture.services.sync import runner as sync_runner_module
+lazy from overture.services.sync.collection_sync import CollectionSync
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
 lazy from overture.services.sync.staging import StagedListing
@@ -72,7 +74,11 @@ class FakeProvider:
 
     def __init__(self) -> None:
         self.items = normalized_items()
+        self.collections: list[ServerCollection] = []
         self.calls: list[dict[str, Any]] = []
+
+    async def list_collections(self) -> list[ServerCollection]:
+        return self.collections
 
     async def iter_items(
         self,
@@ -285,8 +291,18 @@ async def test_partial_provider_listing_cannot_reconcile(tmp_path: Path) -> None
         reconciler=Reconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
     assert probe.names()[-1] == "sync.failed"
+
+
+class NoCollections(CollectionSync):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def run(self, *_args: object, **_kwargs: object) -> None:
+        return None
 
 
 class NoTmdbShows(TmdbSeasonSync):
@@ -460,6 +476,7 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
         reconciler=FakeReconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
 
     assert provider.calls == [{"library_ids": ["1"]}]
@@ -546,6 +563,7 @@ async def test_run_sync_progress_counters_survive_a_throttled_callback(
         reconciler=ThrottledReconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
 
     _, progress_payload = probe.events[-2]
@@ -593,6 +611,7 @@ async def test_run_sync_reports_stopped_when_cancellation_is_requested(
         reconciler=QuietReconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
 
     assert probe.names()[-1] == "sync.stopped"
@@ -624,6 +643,7 @@ async def test_run_sync_provider_error_fails_the_job(tmp_path: Path) -> None:
         reconciler=FakeReconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
 
     assert probe.names()[-1] == "sync.failed"
@@ -650,6 +670,7 @@ async def test_run_sync_reports_failed_when_the_run_itself_raises(
         reconciler=FakeReconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
 
     assert probe.names()[-1] == "sync.failed"
@@ -846,6 +867,7 @@ async def test_full_sync_oserror_has_one_terminal_event(
         reconciler=Reconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
     )
     event, payload = probe.terminal()
     assert event == "sync.failed"

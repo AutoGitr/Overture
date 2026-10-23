@@ -18,7 +18,12 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture import protocols
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, TmdbLanguageFilter
+lazy from overture.domain import (
+    ArtType,
+    CatalogMediaType,
+    MediaType,
+    TmdbLanguageFilter,
+)
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
@@ -378,7 +383,7 @@ class NoopTmdb(TMDBClient):
     @override
     async def art_candidates(
         self,
-        media_type: MediaType,
+        media_type: MediaType | CatalogMediaType,
         tmdb_id: int,
         art_type: ArtType,
         *,
@@ -562,6 +567,7 @@ def make_runtime(
             publisher=events,
             downloads=downloads,
             proxy_clients=proxy_clients,
+            app_config=app_config,
         )
         if collections is None
         else collections

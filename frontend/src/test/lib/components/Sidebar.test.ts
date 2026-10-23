@@ -39,7 +39,7 @@ describe("Sidebar", () => {
     });
     client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
       collection({
-        id: "plex://collection/1",
+        id: 1,
         title: "Action",
         media_type: "movie",
         server_type: "plex",
@@ -54,7 +54,7 @@ describe("Sidebar", () => {
       appSettings({
         workflow: "art",
         media_server: null,
-        plex_collections_enabled: false,
+        collections_supported: false,
       }),
     );
   });
@@ -74,8 +74,8 @@ describe("Sidebar", () => {
       await fireEvent.scroll(viewport);
       vi.advanceTimersByTime(250);
 
-      expect(sessionStorage.getItem("overture_sidebar_scroll:movie:items")).toBe("400");
-      expect(sessionStorage.getItem("overture_sidebar_scroll:show:items")).toBeNull();
+      expect(sessionStorage.getItem("overture_sidebar_scroll:library:movie:items")).toBe("400");
+      expect(sessionStorage.getItem("overture_sidebar_scroll:library:show:items")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -175,7 +175,7 @@ describe("Sidebar", () => {
       appSettings({
         workflow: "art",
         media_server: "plex",
-        plex_collections_enabled: true,
+        collections_supported: true,
       }),
     );
     render(SidebarHarness, {
@@ -426,7 +426,7 @@ describe("Sidebar TMDB search", () => {
       items: [tmdbItem(605, "The Matrix Revolutions")],
     });
     await navigate("/movies", { replace: true });
-    settingsState.load(appSettings({ media_server: null, plex_collections_enabled: false }));
+    settingsState.load(appSettings({ media_server: null, collections_supported: false }));
     settingsState.current.tmdb_configured = true;
     uiState.clearFilters();
     uiState.searchField = "tmdb";

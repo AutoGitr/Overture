@@ -8,7 +8,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.download_job import DownloadJob
 lazy from ..db.models.media_item import MediaItem
-lazy from ..domain import ACTIVE_JOB_STATUSES, ArtType, JobStatus, JobType, MediaType
+lazy from ..domain import ACTIVE_JOB_STATUSES, ArtType, JobStatus, JobType
 lazy from ..services.downloads.queue import AssetScope
 
 #: Statuses a finished job can be in, and therefore safe to age out.
@@ -44,8 +44,7 @@ class DownloadJobRepository:
         media_item_id: int | None = None,
         art_type: ArtType | None = None,
         season_id: int | None = None,
-        collection_server_id: str | None = None,
-        collection_media_type: MediaType | None = None,
+        collection_id: int | None = None,
         collection_title: str | None = None,
     ) -> DownloadJob:
         """Create and stage a new download job."""
@@ -55,8 +54,7 @@ class DownloadJobRepository:
             art_type=art_type,
             target_url=target_url,
             season_id=season_id,
-            collection_server_id=collection_server_id,
-            collection_media_type=collection_media_type,
+            collection_id=collection_id,
             collection_title=collection_title,
             created_at=created_at,
         )
@@ -86,10 +84,8 @@ class DownloadJobRepository:
         if scope is not None:
             if scope.media_item_id is not None:
                 stmt = stmt.where(col(DownloadJob.media_item_id) == scope.media_item_id)
-            if scope.collection_server_id is not None:
-                stmt = stmt.where(
-                    col(DownloadJob.collection_server_id) == scope.collection_server_id
-                )
+            if scope.collection_id is not None:
+                stmt = stmt.where(col(DownloadJob.collection_id) == scope.collection_id)
             if scope.job_type is not None:
                 stmt = stmt.where(col(DownloadJob.job_type) == scope.job_type)
             if scope.art_type is not None:
@@ -155,4 +151,21 @@ class DownloadJobRepository:
         for item_id, url in (await self.session.exec(stmt)).all():
             if item_id is not None and url is not None:
                 failed.setdefault(item_id, set()).add(url)
+        return failed
+
+    async def failed_themes_by_collection(
+        self, collection_ids: list[int]
+    ) -> dict[int, set[str]]:
+        """Return failed catalog videos for a bounded collection batch."""
+        rows = await self.session.exec(
+            select(DownloadJob.collection_id, DownloadJob.target_url).where(
+                col(DownloadJob.collection_id).in_(collection_ids),
+                col(DownloadJob.status) == JobStatus.FAILED,
+                col(DownloadJob.target_url).is_not(None),
+            )
+        )
+        failed: dict[int, set[str]] = {}
+        for collection_id, youtube_id in rows:
+            if collection_id is not None and youtube_id is not None:
+                failed.setdefault(collection_id, set()).add(youtube_id)
         return failed

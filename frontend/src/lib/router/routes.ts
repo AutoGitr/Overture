@@ -1,8 +1,8 @@
 import { createRouter } from "sv-router";
-import type { ArtType } from "../../generated/rest/types.gen";
+import type { ArtType, CatalogMediaType } from "../../generated/rest/types.gen";
 import { settingsState } from "../stores/settingsState.svelte";
-import type { SidebarTab } from "../utils/sidebarDomain";
-import { buildIdSlug, parseIdFromSlug, parseItemSlug, type ItemSlug } from "../utils/slug";
+import type { SidebarMode, SidebarSource, SidebarTab } from "../utils/sidebarDomain";
+import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../utils/slug";
 
 /**
  * Path-based routing for the whole app.
@@ -26,7 +26,8 @@ import { buildIdSlug, parseIdFromSlug, parseItemSlug, type ItemSlug } from "../u
  * leading segment and is what actually drives lookups - the title suffix is
  * cosmetic and never parsed for anything but display. Seasons are addressed
  * by their season number (stable and meaningful to a person reading the
- * URL) rather than their internal database id.
+ * URL) rather than their internal database id. Collections use their own database
+ * ID, independent of the media server's ID.
  *
  * The route tree below is intentionally shared between `/movies` and `/shows` -
  * both tabs support exactly the same set of views, just scoped to a different
@@ -43,7 +44,7 @@ export type ArtSubTab = "poster" | "background" | "seasons";
 type SelectableItem = { title: string; media_type: SidebarTab } & (
   { id: number } | { id?: never; tmdb_id: number }
 );
-type SelectableCollection = { id: string; title: string; media_type: SidebarTab };
+type SelectableCollection = { id: number; title: string; media_type: SidebarTab };
 type SelectableSeason = { season_num: number };
 
 const loadLibraryPage = () => import("./pages/LibraryPage.svelte");
@@ -70,9 +71,35 @@ const mediaTypeRoutes = {
   "/:itemSlug": itemSubroutes,
 };
 
+const catalogEntrySubroutes = {
+  "/": () => import("./pages/CatalogEntryPage.svelte"),
+  "/art": () => import("./pages/CatalogEntryPage.svelte"),
+  "/art/:subtab": () => import("./pages/CatalogEntryPage.svelte"),
+  "/art/seasons/:seasonNum": () => import("./pages/CatalogEntryPage.svelte"),
+  "/themes": () => import("./pages/CatalogEntryPage.svelte"),
+};
+const catalogCollectionSubroutes = {
+  "/": () => import("./pages/CatalogCollectionPage.svelte"),
+  "/art": () => import("./pages/CatalogCollectionPage.svelte"),
+  "/art/:subtab": () => import("./pages/CatalogCollectionPage.svelte"),
+  "/themes": () => import("./pages/CatalogCollectionPage.svelte"),
+};
+
 export const { navigate, route } = createRouter({
   "/movies": mediaTypeRoutes,
   "/shows": mediaTypeRoutes,
+  "/overturedb/movies": {
+    "/": () => import("./pages/CatalogPage.svelte"),
+    "/collections": {
+      "/": () => import("./pages/CatalogPage.svelte"),
+      "/:entrySlug": catalogCollectionSubroutes,
+    },
+    "/:entrySlug": catalogEntrySubroutes,
+  },
+  "/overturedb/shows": {
+    "/": () => import("./pages/CatalogPage.svelte"),
+    "/:entrySlug": catalogEntrySubroutes,
+  },
   // Anything unmatched (including a bare "/") opens an available library.
   "*": loadRedirectToLibrary,
 });
@@ -99,8 +126,63 @@ export function routedItemId(): number | null {
 }
 
 /** The ID of the collection the URL opens. */
-export function routedCollectionId(): string | null {
-  return parseIdFromSlug(route.params.collectionSlug) || null;
+export function routedCollectionId(): number | null {
+  const slug = parseItemSlug(route.params.collectionSlug);
+  return slug?.kind === "item" ? slug.id : null;
+}
+
+/** The URL owns the sidebar's source, tab and mode together. */
+export function routeScope(): { source: SidebarSource; tab: SidebarTab; mode: SidebarMode } {
+  const parts = route.pathname.split("/").filter(Boolean);
+  const source = parts[0] === "overturedb" ? "overturedb" : "library";
+  const offset = source === "overturedb" ? 1 : 0;
+  return {
+    source,
+    tab: parts[offset] === "shows" ? "show" : "movie",
+    mode: parts[offset + 1] === "collections" ? "collections" : "items",
+  };
+}
+
+export type CatalogTarget = { media_type: CatalogMediaType; entry_key: string };
+
+export function routedCatalogEntry(): CatalogTarget | null {
+  const scope = routeScope();
+  const entryKey = parseCatalogSlug(route.params.entrySlug);
+  return scope.source === "overturedb" && entryKey
+    ? { media_type: scope.mode === "collections" ? "collection" : scope.tab, entry_key: entryKey }
+    : null;
+}
+
+export function goToCatalog(tab: SidebarTab, mode: SidebarMode = "items"): void {
+  if (tab === "show") void navigate("/overturedb/shows");
+  else if (mode === "collections") void navigate("/overturedb/movies/collections");
+  else void navigate("/overturedb/movies");
+}
+
+/** Open a catalog identity, whose key remains resolvable when another ID is added. */
+export function goToCatalogEntry(entry: CatalogTarget, view?: ItemView): void {
+  const params = {
+    entrySlug: entry.entry_key,
+    subtab: view?.artSubTab ?? "poster",
+    seasonNum: String(view?.drillSeasonNum ?? 0),
+  };
+  if (entry.media_type === "collection") {
+    if (view?.mode === "themes")
+      void navigate("/overturedb/movies/collections/:entrySlug/themes", { params });
+    else if (view)
+      void navigate("/overturedb/movies/collections/:entrySlug/art/:subtab", { params });
+    else void navigate("/overturedb/movies/collections/:entrySlug", { params });
+  } else if (entry.media_type === "show") {
+    if (view?.mode === "themes") void navigate("/overturedb/shows/:entrySlug/themes", { params });
+    else if (view?.drillSeasonNum !== null && view?.drillSeasonNum !== undefined)
+      void navigate("/overturedb/shows/:entrySlug/art/seasons/:seasonNum", { params });
+    else if (view) void navigate("/overturedb/shows/:entrySlug/art/:subtab", { params });
+    else void navigate("/overturedb/shows/:entrySlug", { params });
+  } else {
+    if (view?.mode === "themes") void navigate("/overturedb/movies/:entrySlug/themes", { params });
+    else if (view) void navigate("/overturedb/movies/:entrySlug/art/:subtab", { params });
+    else void navigate("/overturedb/movies/:entrySlug", { params });
+  }
 }
 
 /** The detail view the URL names; a bare item route opens the configured tab. */

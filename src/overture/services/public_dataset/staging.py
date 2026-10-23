@@ -13,9 +13,13 @@ lazy from sqlmodel import insert
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
-lazy from ...db.models.public_dataset import PublicDatasetItem, PublicDatasetSeason
+lazy from ...db.models.public_dataset import (
+    PublicDatasetCollection,
+    PublicDatasetItem,
+    PublicDatasetSeason,
+)
 lazy from ...db.session import PAGE_SIZE
-lazy from ...domain import MediaType
+lazy from ...domain import CatalogMediaType
 lazy from ...integrations.http import create_client
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.public_dataset import PublicDatasetSyncStats
@@ -131,20 +135,30 @@ async def replace(
     after = 0
     while batch := await owned_thread(_batch, database, after):
         items: list[dict[str, Any]] = []
+        collections: list[dict[str, Any]] = []
         seasons: list[dict[str, Any]] = []
         for key, entry in batch:
             values = {name: value for name, value in entry.items() if name != "seasons"}
-            items.append({**values, "id": key, "catalog_synced_at": synced_at})
+            row = {**values, "id": key, "catalog_synced_at": synced_at}
+            if entry["media_type"] == CatalogMediaType.COLLECTION:
+                del row["media_type"]
+                collections.append(row)
+                stats.collections += 1
+                continue
+            items.append(row)
             seasons.extend(
                 {"public_dataset_item_id": key, **season}
                 for season in entry.get("seasons", [])
             )
             stats.items += 1
-            if entry["media_type"] == MediaType.MOVIE:
+            if entry["media_type"] == CatalogMediaType.MOVIE:
                 stats.movies += 1
             else:
                 stats.shows += 1
-        await session.exec(insert(PublicDatasetItem), params=items)
+        if items:
+            await session.exec(insert(PublicDatasetItem), params=items)
+        if collections:
+            await session.exec(insert(PublicDatasetCollection), params=collections)
         if seasons:
             await session.exec(insert(PublicDatasetSeason), params=seasons)
         stats.seasons += len(seasons)

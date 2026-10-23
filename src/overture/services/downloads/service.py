@@ -53,7 +53,7 @@ lazy from ..themes.youtube_resolver import (
     TranscodeError,
 )
 lazy from .art import DownloadArtHandler
-lazy from .collection_theme import upload_collection_theme
+lazy from .collection_theme import store_collection_theme
 lazy from .events import DownloadEventPublisher
 lazy from .queue import AssetScope, JobTarget, add_job
 lazy from .results import DownloadedCollectionTheme, DownloadResult, PreparedDownload
@@ -114,7 +114,7 @@ class _Staged:
 
 def _lock_key(job: DownloadJob) -> int | str:
     """Return the asset lock that writing *job*'s asset takes."""
-    return AssetScope(job.media_item_id, job.collection_server_id).lock_key
+    return AssetScope(job.media_item_id, job.collection_id).lock_key
 
 
 def _job_title(job: DownloadJob, item: MediaItem | None) -> str | None:
@@ -149,6 +149,7 @@ class DownloadService:
         self._events = events
         self._publisher = publisher
         self._asset_storage = asset_storage
+        self._app_config = app_config
         self._lane_sizes = {
             JobType.ART: app_config.ART_DOWNLOAD_WORKERS,
             JobType.THEME: app_config.THEME_DOWNLOAD_WORKERS,
@@ -670,18 +671,20 @@ class DownloadService:
     async def _commit_collection_theme(
         self, job: DownloadJob, downloaded: DownloadedCollectionTheme
     ) -> bool:
-        """Upload the theme unless the job has ended, then record it.
+        """Store the theme on the server unless the job has ended, then record it.
 
         Returns:
-            Whether the theme was uploaded; ``False`` also when the job failed.
+            Whether the theme was stored; ``False`` also when the job failed.
         """
         try:
             if not await self._is_running(job.id):
                 return False
-            await upload_collection_theme(
+            await store_collection_theme(
                 job,
                 downloaded,
                 provider=self.provider_registry.collections,
+                asset_storage=self._asset_storage,
+                app_config=self._app_config,
                 publisher=self._publisher,
                 database=self._database,
             )

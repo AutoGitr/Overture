@@ -10,7 +10,9 @@ lazy from ..db.models.media_item import MediaItem
 lazy from ..domain import ArtType, ImageSize, ServerAsset, ServerType, media_sort_key
 lazy from ..schemas.art import ArtCandidate
 lazy from .adapters import (
+    CollectionSupport,
     ProviderImageRequest,
+    ServerCollection,
     ServerItem,
     ServerSection,
     ServerTheme,
@@ -26,6 +28,21 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     """
 
     server_type: ClassVar[ServerType]
+    collections: ClassVar[CollectionSupport | None] = None
+
+    async def list_collections(self) -> list[ServerCollection]:
+        """Return collections when the provider declares support."""
+        return []
+
+    async def upload_collection_theme(
+        self, server_item_id: str, mp3_bytes: bytes
+    ) -> str:
+        """Upload a theme on a provider declaring UploadThemes."""
+        raise NotImplementedError("Collection theme uploads are unsupported")
+
+    async def delete_collection_theme(self, server_item_id: str) -> None:
+        """Delete a theme on a provider declaring UploadThemes."""
+        raise NotImplementedError("Collection theme uploads are unsupported")
 
     def __init__(self, *, client: C, app_config: Settings) -> None:
         self.client = client

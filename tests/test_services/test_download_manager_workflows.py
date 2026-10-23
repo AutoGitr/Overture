@@ -14,6 +14,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import ArtFileFacts, read_art_slot, record_art_file
 lazy from overture.db.models.download_job import DownloadJob
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
@@ -24,6 +25,7 @@ lazy from overture.domain import (
     JobStatus,
     JobType,
     MediaType,
+    ServerType,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.jobs.kinds import INTERRUPTED_MESSAGE, DownloadStatus
@@ -917,12 +919,21 @@ async def test_a_new_collection_theme_supersedes_the_pending_upload(
     publisher = RecordingPublisher()
     service = _download_service(publisher, app_config=app_config, database=database)
 
+    async with database.write_session() as session:
+        session.add(
+            MediaCollection(
+                id=1,
+                server_type=ServerType.PLEX,
+                server_item_id="c1",
+                media_type=MediaType.MOVIE,
+            )
+        )
     job_ids: list[str] = []
     for youtube_id in ("abcDEF123_4", "defABC456_7"):
         async with database.write_session() as session:
             job_id, created = await service.queue_job(
                 session,
-                JobTarget.collection_theme("c1", MediaType.MOVIE, "Saga", youtube_id),
+                JobTarget.collection_theme(1, "Saga", youtube_id),
             )
         await service.committed(session)
         assert created

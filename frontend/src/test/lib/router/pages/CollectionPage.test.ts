@@ -5,11 +5,10 @@ import CollectionPage from "../../../../lib/router/pages/CollectionPage.svelte";
 import { navigate } from "../../../../lib/router/routes";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../../helpers/fetch";
-import { collection } from "../../../helpers/fixtures";
+import { collectionDetail as collection } from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
-const action = collection({ id: "12", title: "Action", media_type: "movie" });
-const horror = collection({ id: "13", title: "Horror", media_type: "movie" });
+const action = collection({ id: 12, title: "Action", media_type: "movie" });
 
 async function openCollection(collectionSlug: string) {
   await navigate("/movies/collections/:collectionSlug", { params: { collectionSlug } });
@@ -21,8 +20,8 @@ describe("CollectionPage", () => {
     uiState.mobileShowDetail = false;
   });
 
-  it("selects the collection its URL names once the list has loaded", async () => {
-    mockFetchRoutes({ "/api/collections": [action, horror] });
+  it("selects the collection its URL names once its detail has loaded", async () => {
+    mockFetchRoutes({ "/api/collections/12": action });
     await openCollection("12-action");
 
     renderWithQueryClient(CollectionPage);
@@ -32,17 +31,21 @@ describe("CollectionPage", () => {
   });
 
   it("selects nothing for a collection the server no longer lists", async () => {
-    const { fetchMock } = mockFetchRoutes({ "/api/collections": [horror] });
+    const { fetchMock } = mockFetchRoutes({
+      "/api/collections/12": () =>
+        Response.json({ detail: "Collection not found" }, { status: 404 }),
+    });
     await openCollection("12-action");
 
     renderWithQueryClient(CollectionPage);
 
     expect(await screen.findByText("Select a collection from the sidebar")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Collection not found");
     expect(fetchMock).toHaveBeenCalled();
   });
 
   it("shows no collection on the collections list", async () => {
-    mockFetchRoutes({ "/api/collections": [action] });
+    mockFetchRoutes({});
     uiState.mobileShowDetail = true;
     await navigate("/movies/collections");
 
@@ -52,12 +55,12 @@ describe("CollectionPage", () => {
     expect(uiState.mobileShowDetail).toBe(false);
   });
 
-  it("waits for a failed list to be retried before deciding what is selected", async () => {
+  it("waits for a failed detail to be retried before deciding what is selected", async () => {
     let available = false;
     mockFetchRoutes({
-      "/api/collections": () =>
+      "/api/collections/12": () =>
         available
-          ? Response.json([action])
+          ? Response.json(action)
           : Response.json({ detail: "Collections unavailable" }, { status: 404 }),
     });
     await openCollection("12-action");

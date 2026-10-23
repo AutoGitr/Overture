@@ -574,7 +574,7 @@ def test_active_provider_tracks_configured_media_server(
 
     app_config.MEDIA_SERVER = ServerType.JELLYFIN
     assert isinstance(registry.provider, JellyfinProvider)
-    assert registry.collections is None
+    assert registry.collections is registry.provider
 
     app_config.MEDIA_SERVER = ServerType.EMBY
     assert isinstance(registry.provider, EmbyProvider)

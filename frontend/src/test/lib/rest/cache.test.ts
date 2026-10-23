@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getItemOptions,
+  getCatalogEntryOptions,
   getSeasonsOptions,
   getTmdbItemOptions,
   listCollectionsOptions,
@@ -18,6 +19,7 @@ import {
   findCachedLibraryItem,
   invalidateSeasons,
   patchCollection,
+  storeCatalogDetail,
   refreshItem,
   removeLibraryItem,
   upsertLibraryItem,
@@ -29,6 +31,8 @@ import {
   collection as fixtureCollection,
   season as fixtureSeason,
   mediaItem,
+  catalogDetail,
+  catalogEntry,
 } from "../../helpers/fixtures";
 
 const movie = mediaItem({
@@ -233,12 +237,12 @@ describe("REST cache helpers", () => {
   it("sets the monitoring of several collections in every list", () => {
     const key = listCollectionsOptions({ query: { media_type: "movie" } }).queryKey;
     queryClient.setQueryData(key, [
-      fixtureCollection({ id: "1", monitored: false }),
-      fixtureCollection({ id: "2", monitored: false }),
-      fixtureCollection({ id: "3", monitored: false }),
+      fixtureCollection({ id: 1, monitored: false }),
+      fixtureCollection({ id: 2, monitored: false }),
+      fixtureCollection({ id: 3, monitored: false }),
     ]);
 
-    bulkSetCollectionMonitoredInCache(["1", "3"], true);
+    bulkSetCollectionMonitoredInCache([1, 3], true);
 
     expect(
       queryClient.getQueryData<CollectionRead[]>(key)?.map((collection) => collection.monitored),
@@ -247,7 +251,7 @@ describe("REST cache helpers", () => {
 
   it("patches collection lists", () => {
     const collection = fixtureCollection({
-      id: "plex://collection/1",
+      id: 1,
       title: "Action",
       media_type: "movie",
       monitored: false,
@@ -302,5 +306,35 @@ describe("TMDB matches", () => {
 
     removeLibraryItem(movie.id);
     expect(queryClient.getQueryState(tmdbKey)?.isInvalidated).toBe(true);
+  });
+});
+
+describe("catalog draft cache", () => {
+  it("updates every identity alias for the same entry while keeping other media types separate", () => {
+    queryClient.clear();
+    const oldKey = getCatalogEntryOptions({
+      path: { media_type: "show", entry_key: "tvdb-81189" },
+    }).queryKey;
+    const target = { media_type: "show", entry_key: "tmdb-12" } as const;
+    const detail = catalogDetail({
+      entry_key: "tmdb-12",
+      entry: catalogEntry({ media_type: "show", tmdb_id: 12, tvdb_id: 81189, seasons: [] }),
+    });
+    queryClient.setQueryData(oldKey, detail);
+    const movieKey = getCatalogEntryOptions({
+      path: { media_type: "movie", entry_key: "tmdb-12" },
+    }).queryKey;
+    const movie = catalogDetail({ entry_key: "tmdb-12", entry: catalogEntry({ tmdb_id: 12 }) });
+    queryClient.setQueryData(movieKey, movie);
+    const updated = {
+      ...detail,
+      draft: { ...detail.entry, poster_url: "https://image.test/new.jpg" },
+    };
+    storeCatalogDetail(target, updated);
+    expect(queryClient.getQueryData(oldKey)).toEqual(updated);
+    expect(queryClient.getQueryData(getCatalogEntryOptions({ path: target }).queryKey)).toEqual(
+      updated,
+    );
+    expect(queryClient.getQueryData(movieKey)).toEqual(movie);
   });
 });

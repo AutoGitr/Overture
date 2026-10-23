@@ -13,6 +13,7 @@
     SIDEBAR_SORT_FIELDS,
     SIDEBAR_SORT_OPTIONS,
     type SidebarMode,
+    type SidebarSource,
     type SidebarSearchField,
     type SidebarSortDir,
     type SidebarSortField,
@@ -22,6 +23,7 @@
   import MenuOption from "./MenuOption.svelte";
 
   let {
+    source = "library",
     sidebarMode,
     sidebarTab,
     tmdbConfigured,
@@ -37,6 +39,7 @@
     onSearchFieldChange,
     onSetSort,
   }: {
+    source?: SidebarSource;
     sidebarMode: SidebarMode;
     sidebarTab: SidebarTab;
     tmdbConfigured: boolean;
@@ -55,10 +58,16 @@
 
   let searchInput: HTMLInputElement;
 
-  let section = $derived(`${sidebarTab}:${sidebarMode}`);
-  let fieldGroups = $derived(searchFieldGroups(sidebarTab, tmdbConfigured));
+  let section = $derived(`${source}:${sidebarTab}:${sidebarMode}`);
+  let fieldGroups = $derived(
+    source === "overturedb"
+      ? [{ label: "OvertureDB", fields: ["title", "year", "external_id", "youtube"] as const }]
+      : searchFieldGroups(sidebarTab, tmdbConfigured),
+  );
   // TMDB results are not the library: its filters and sort do not apply to them.
-  let searchingTmdb = $derived(sidebarMode === "items" && searchField === "tmdb");
+  let searchingTmdb = $derived(
+    source === "library" && sidebarMode === "items" && searchField === "tmdb",
+  );
   let isDefaultSort = $derived(sortField === "title" && sortDir === "asc");
   let placeholder = $derived.by(() => {
     const fieldPlaceholder = SIDEBAR_SEARCH_FIELDS[searchField].placeholder;
@@ -207,7 +216,7 @@
         {/if}
       {/snippet}
       {#snippet menu(close)}
-        {#each SIDEBAR_SORT_FIELDS as field (field)}
+        {#each SIDEBAR_SORT_FIELDS.filter((field) => source === "library" || field === "title" || field === "year") as field (field)}
           <MenuOption
             checked={sortField === field}
             onselect={() => {

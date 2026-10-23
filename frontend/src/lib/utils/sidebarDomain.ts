@@ -1,11 +1,92 @@
 import { SELECTED_ART_SOURCE_LABELS } from "../../generated/settings";
-import type { CollectionRead, MediaItemRead } from "../../generated/rest/types.gen";
+import type {
+  CatalogEntryRow,
+  CollectionRead,
+  MediaItemRead,
+} from "../../generated/rest/types.gen";
 import type { FilterState, NumberRange } from "../stores/uiState.svelte";
 import { extractYouTubeId } from "./themeSearch";
 import { keysOf } from "./records";
 
 export type SidebarTab = "movie" | "show";
 export type SidebarMode = "items" | "collections";
+export type SidebarSource = "library" | "overturedb";
+export type CatalogPresence = "all" | "present" | "missing";
+export const CATALOG_FILTER_LABELS = {
+  poster: "Poster",
+  background: "Background",
+  seasonPosters: "Season posters",
+  overturedb: "OvertureDB theme",
+  themerrdb: "ThemerrDB theme",
+  draft: "Has draft",
+  library: "In library",
+} as const;
+export const CATALOG_FILTER_KEYS = keysOf(CATALOG_FILTER_LABELS);
+export type CatalogFilters = Record<keyof typeof CATALOG_FILTER_LABELS, CatalogPresence>;
+
+export function defaultCatalogFilters(): CatalogFilters {
+  return {
+    poster: "all",
+    background: "all",
+    seasonPosters: "all",
+    overturedb: "all",
+    themerrdb: "all",
+    draft: "all",
+    library: "all",
+  };
+}
+
+export function filterCatalogEntries(options: {
+  entries: CatalogEntryRow[];
+  filters: CatalogFilters;
+  searchQuery: string;
+  searchField?: SidebarSearchField;
+  sortField?: SidebarSortField;
+  sortDir?: SidebarSortDir;
+}): CatalogEntryRow[] {
+  const { filters } = options;
+  const query = options.searchQuery.trim().toLowerCase();
+  const linkedId = extractYouTubeId(query) ?? query;
+  const rows = options.entries.filter((entry) => {
+    const presence: Record<keyof CatalogFilters, boolean> = {
+      poster: !!entry.poster_url,
+      background: !!entry.background_url,
+      seasonPosters: entry.season_posters > 0,
+      overturedb: !!entry.youtube_id_overturedb,
+      themerrdb: !!entry.youtube_id_themerrdb,
+      draft: entry.has_draft,
+      library: entry.library_item_id !== null || entry.library_collection_id !== null,
+    };
+    if (
+      !keysOf(filters).every(
+        (key) =>
+          (key === "seasonPosters" && entry.media_type !== "show") ||
+          matchesTriState(presence[key], filters[key], "present"),
+      )
+    )
+      return false;
+    if (!query) return true;
+    if (options.searchField === "external_id")
+      return [entry.tmdb_id, entry.tvdb_id, entry.imdb_id].some(
+        (id) => id != null && String(id).toLowerCase() === query,
+      );
+    if (options.searchField === "year") return String(entry.year ?? "").startsWith(query);
+    if (options.searchField === "youtube")
+      return [entry.youtube_id_overturedb, entry.youtube_id_themerrdb].some(
+        (id) => id?.toLowerCase() === linkedId.toLowerCase(),
+      );
+    return entry.title.toLowerCase().includes(query);
+  });
+  return rows.sort((a, b) => {
+    const direction = options.sortDir === "desc" ? -1 : 1;
+    if (options.sortField === "year" && a.year !== b.year) {
+      if (a.year === null) return 1;
+      if (b.year === null) return -1;
+      return (a.year - b.year) * direction;
+    }
+    return titleCollator.compare(a.title, b.title) * direction;
+  });
+}
 export type SidebarSortDir = "asc" | "desc";
 export type StatusTone = "success" | "warning" | "danger" | "downloading";
 export type ThemeSource = NonNullable<MediaItemRead["youtube_id_source"]>;

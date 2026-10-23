@@ -94,8 +94,7 @@ describe("AssetsPopup", () => {
   it("shows independent downloads alongside the bulk configuration", () => {
     downloadState.trackQueuedCollectionJob({
       jobId: "independent-collection",
-      serverId: "movies",
-      mediaType: "movie",
+      collectionId: 1,
       title: "Movies collection",
     });
     renderWithQueryClient(OperationsPopup);

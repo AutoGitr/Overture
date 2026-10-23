@@ -33,6 +33,10 @@ class AppSettingsRead(AppSettingsBase):
     updated_at: datetime | None = None
     media_server: ServerType | None = None
     tmdb_configured: bool = False
+    #: The media server has collections Overture can manage.
+    collections_supported: bool = False
+    #: Why collection themes cannot be stored, when they cannot.
+    collection_themes_unavailable: str | None = None
     art_download_workers: int = 1
     theme_download_workers: int = 1
 
@@ -63,7 +67,6 @@ class AppSettingsUpdate(StrictBaseModel):
     skip_media_server_tmdb_urls: bool | None = None
     disable_media_server_art: bool | None = None
     aspect_ratio_tolerance: AspectRatioTolerance | None = None
-    plex_collections_enabled: bool | None = None
     tmdb_language_filter: TmdbLanguageFilter | None = None
     auto_advance: bool | None = None
     auto_advance_skip_completed: bool | None = None

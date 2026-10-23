@@ -13,6 +13,7 @@ lazy from overture.domain import (
     TmdbLanguageFilter,
     Workflow,
 )
+lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.schemas.settings import AppSettingsUpdate
 lazy from overture.services import settings as module
 lazy from overture.utils.errors import PublicServiceError
@@ -77,7 +78,11 @@ def test_workflow_rejects_invalid_and_removed_settings(
 async def test_get_settings_creates_default_row(
     db_session: AsyncSession, *, app_config: Settings
 ) -> None:
-    result = await module.get_settings(db_session, app_config=app_config)
+    result = await module.get_settings(
+        db_session,
+        app_config=app_config,
+        provider_registry=ProviderRegistry(app_config=app_config),
+    )
 
     assert result.auto_match_art is False
     assert result.theme_search_format == "{title} {year} main theme music ost"
@@ -93,7 +98,11 @@ async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_conf
 ) -> None:
     app_config.TMDB_API_KEY = SecretStr("a" * 32)
 
-    result = await module.get_settings(db_session, app_config=app_config)
+    result = await module.get_settings(
+        db_session,
+        app_config=app_config,
+        provider_registry=ProviderRegistry(app_config=app_config),
+    )
 
     assert result.skip_media_server_tmdb_urls is False
 
@@ -101,8 +110,16 @@ async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_conf
 async def test_get_settings_returns_existing_row_without_recreating(
     db_session: AsyncSession, *, app_config: Settings
 ) -> None:
-    first = await module.get_settings(db_session, app_config=app_config)
-    second = await module.get_settings(db_session, app_config=app_config)
+    first = await module.get_settings(
+        db_session,
+        app_config=app_config,
+        provider_registry=ProviderRegistry(app_config=app_config),
+    )
+    second = await module.get_settings(
+        db_session,
+        app_config=app_config,
+        provider_registry=ProviderRegistry(app_config=app_config),
+    )
 
     assert first.workflow == second.workflow == "art"
 
@@ -120,7 +137,6 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
         skip_media_server_tmdb_urls=True,
         disable_media_server_art=True,
         aspect_ratio_tolerance=AspectRatioTolerance.LENIENT,
-        plex_collections_enabled=False,
         tmdb_language_filter=TmdbLanguageFilter.ALL,
         auto_advance=True,
         auto_unmonitor=AutoUnmonitor.ART_AND_THEME,
@@ -128,7 +144,10 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
     )
 
     result = await module.update_settings(
-        body, app_config=app_config, database=database
+        body,
+        app_config=app_config,
+        database=database,
+        provider_registry=ProviderRegistry(app_config=app_config),
     )
 
     assert result.auto_match_art is True
@@ -139,7 +158,6 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
     assert result.skip_media_server_tmdb_urls is True
     assert result.disable_media_server_art is True
     assert result.aspect_ratio_tolerance == "lenient"
-    assert result.plex_collections_enabled is False
     assert result.tmdb_language_filter == "all"
     assert result.auto_advance is True
     assert result.auto_unmonitor == "art_and_theme"
@@ -150,11 +168,18 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
 async def test_update_settings_with_no_fields_preserves_existing_row(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    await module.get_settings(db_session, app_config=app_config)
+    await module.get_settings(
+        db_session,
+        app_config=app_config,
+        provider_registry=ProviderRegistry(app_config=app_config),
+    )
 
     database = database_for(one_session(db_session))
     result = await module.update_settings(
-        AppSettingsUpdate(), app_config=app_config, database=database
+        AppSettingsUpdate(),
+        app_config=app_config,
+        database=database,
+        provider_registry=ProviderRegistry(app_config=app_config),
     )
 
     assert result.workflow == "art"
@@ -187,6 +212,7 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
         AppSettingsUpdate(min_duration_seconds=30, max_duration_seconds=60),
         app_config=app_config,
         database=database,
+        provider_registry=ProviderRegistry(app_config=app_config),
     )
 
     with pytest.raises(PublicServiceError) as exc_info:
@@ -194,6 +220,7 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
             update,
             app_config=app_config,
             database=database,
+            provider_registry=ProviderRegistry(app_config=app_config),
         )
 
     assert exc_info.value.status_code == 400
@@ -226,9 +253,17 @@ async def test_settings_mapping_includes_environment_fields(
     if saved:
         db_session.add(AppSettings(id=1))
         await db_session.commit()
-    result = await module.get_settings(db_session, app_config=app_config)
+    result = await module.get_settings(
+        db_session,
+        app_config=app_config,
+        provider_registry=ProviderRegistry(app_config=app_config),
+    )
     assert result.media_server == "jellyfin"
     assert result.tmdb_configured is True
+    assert result.collections_supported is True
+    assert result.collection_themes_unavailable == (
+        "Set JELLYFIN_COLLECTIONS_PATH to store collection themes"
+    )
     assert (result.art_download_workers, result.theme_download_workers) == (3, 2)
 
 

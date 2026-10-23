@@ -26,6 +26,7 @@ lazy from overture.services.sync.tmdb_seasons import TmdbSeasonSync
 lazy from overture.utils.time import utc_now
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry
+lazy from tests.test_services.test_sync_engine_workflows import NoCollections
 
 
 class TmdbStub(TMDBClient):
@@ -134,6 +135,7 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
             reconciler=NothingToReconcile(),
             config_dir=tmp_path,
             tmdb_seasons=service,
+            collections=NoCollections(),
         )
         _, result = probe.terminal()
         assert result["total"] == result["done"] == 2

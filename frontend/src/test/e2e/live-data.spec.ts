@@ -64,6 +64,7 @@ test("a failed background refresh keeps the last loaded library with a stale not
   realtime,
 }) => {
   await logIn(page);
+  await expect(page.getByRole("button", { name: "Select Alien", exact: true })).toBeVisible();
   let fail = true;
   await page.route("**/api/library/items*", async (route) => {
     if (!fail || new URL(route.request().url()).searchParams.get("media_type") !== "movie")

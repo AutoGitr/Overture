@@ -7,7 +7,13 @@ lazy from typing import Any, Literal
 lazy import httpx2
 
 lazy from ..config import Settings
-lazy from ..domain import ArtSource, ArtType, MediaType, TmdbLanguageFilter
+lazy from ..domain import (
+    ArtSource,
+    ArtType,
+    CatalogMediaType,
+    MediaType,
+    TmdbLanguageFilter,
+)
 lazy from ..schemas.art import ArtCandidate
 lazy from ..services.public_dataset.schema.contract import canonical_art_url
 lazy from ..utils.art_urls import art_preview_url
@@ -63,6 +69,8 @@ class TmdbDetails:
     poster_url: str | None
     background_url: str | None
     seasons: tuple[TmdbSeason, ...]
+    #: The TMDB collection a movie belongs to.
+    collection_id: int | None = None
 
     @property
     def summary(self) -> TmdbTitle:
@@ -143,6 +151,8 @@ def _details(media_type: MediaType, data: dict[str, Any]) -> TmdbDetails:
     external_ids: dict[str, Any] = data.get("external_ids") or {}
     tvdb_id = external_ids.get("tvdb_id")
     imdb_id = external_ids.get("imdb_id") or data.get("imdb_id")
+    collection: dict[str, Any] = data.get("belongs_to_collection") or {}
+    collection_id = collection.get("id")
     return TmdbDetails(
         media_type=media_type,
         tmdb_id=title.tmdb_id,
@@ -161,6 +171,9 @@ def _details(media_type: MediaType, data: dict[str, Any]) -> TmdbDetails:
             )
             for season in _records(data, "seasons")
         ),
+        collection_id=collection_id
+        if type(collection_id) is int and collection_id > 0
+        else None,
     )
 
 
@@ -239,7 +252,7 @@ class TMDBClient:
 
     async def art_candidates(
         self,
-        media_type: MediaType,
+        media_type: MediaType | CatalogMediaType,
         tmdb_id: int,
         art_type: ArtType,
         *,
@@ -247,7 +260,12 @@ class TMDBClient:
         language_filter: TmdbLanguageFilter = TmdbLanguageFilter.EN_NULL,
     ) -> list[ArtCandidate]:
         """Return TMDB's *art_type* images of a title, or of one of its seasons."""
-        path = f"/{_TMDB_KIND[media_type]}/{tmdb_id}"
+        kind = (
+            "collection"
+            if media_type == CatalogMediaType.COLLECTION
+            else _TMDB_KIND[MediaType(media_type)]
+        )
+        path = f"/{kind}/{tmdb_id}"
         if art_type.owned_by_season:
             path = f"{path}/season/{season_num}"
         images = await self._cache.get_or_compute(

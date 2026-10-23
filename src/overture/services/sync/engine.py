@@ -38,8 +38,10 @@ lazy from ..public_dataset.downloads import (
 )
 lazy from ..schedule_store import SYNC_SERVER_SCHEDULE, load_schedule, patch_payload
 lazy from ..scheduler import SchedulerService
+lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler
 lazy from .runner import run_sync as _run_sync
+lazy from .tmdb_collections import TmdbCollectionEnrichment
 lazy from .tmdb_seasons import TmdbSeasonSync
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,16 @@ class SyncEngine:
             database=database,
             tmdb_client=tmdb_client,
             publisher=publisher,
+        )
+        self._collections = CollectionSync(
+            provider_registry=provider_registry,
+            enrichment=TmdbCollectionEnrichment(
+                app_config=app_config, database=database, tmdb_client=tmdb_client
+            ),
+            publisher=publisher,
+            app_config=app_config,
+            database=database,
+            downloads=downloads,
         )
         self.reconciler = LibraryReconciler(
             publisher=publisher,
@@ -267,6 +279,7 @@ class SyncEngine:
             reconciler=self.reconciler,
             config_dir=self._config_dir,
             tmdb_seasons=self._tmdb_seasons,
+            collections=self._collections,
         )
 
     def run_sync(self, body: SyncRunRequest) -> StatusResponse:

@@ -47,6 +47,7 @@ class BulkAssetsThemeConfig(StrictBaseModel):
     source_order: SourceOrder[ThemeBulkSource] = Field(
         default_factory=lambda: list(DEFAULT_THEME_SOURCE_ORDER)
     )
+    include_collections: bool = False
 
 
 class _BulkSharedRunFields(StrictBaseModel):
@@ -54,6 +55,7 @@ class _BulkSharedRunFields(StrictBaseModel):
 
     library_ids: LibraryIds = Field(default_factory=list[str])
     item_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
+    collection_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
     include_unmonitored: bool = Field(
         default=False, description="Include unmonitored items in either target scope."
     )
@@ -79,6 +81,11 @@ class _BulkSharedRunFields(StrictBaseModel):
     @model_validator(mode="after")
     def validate_target_selection(self) -> Self:
         """Explicit items replace libraries; an empty list never means all items."""
+        if self.collection_ids is not None:
+            if not self.collection_ids:
+                raise ValueError("collection_ids must include at least one collection")
+            if self.library_ids or self.item_ids is not None:
+                raise ValueError("Select collections, items, or libraries")
         if self.item_ids is not None:
             if self.library_ids:
                 raise ValueError("Select either library_ids or item_ids")
@@ -110,7 +117,13 @@ class BulkAssetsRequest(_BulkSharedRunFields):
         """Require at least one selected asset workflow and a valid target."""
         if self.art is None and self.themes is None:
             raise ValueError("At least one asset workflow must be selected")
-        if self.item_ids is None and not self.library_ids:
+        if self.collection_ids is not None and self.art is not None:
+            raise ValueError("Collection runs support themes only")
+        if (
+            self.item_ids is None
+            and self.collection_ids is None
+            and not self.library_ids
+        ):
             raise ValueError("Select at least one library")
         return self
 
@@ -151,7 +164,7 @@ class BulkAssetsScheduleWrite(ScheduleWrite[BulkAssetsRequest]):
     @model_validator(mode="after")
     def validate_schedule_scope(self) -> Self:
         """Sidebar snapshots are only available for immediate runs."""
-        if self.config.item_ids is not None:
+        if self.config.item_ids is not None or self.config.collection_ids is not None:
             raise ValueError("Scheduled assets require a library selection")
         return self
 

@@ -13,7 +13,13 @@ lazy from overture.db import metadata
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database, configure_sqlite
-lazy from overture.domain import ArtType, MediaType, ServerType, TmdbLanguageFilter
+lazy from overture.domain import (
+    ArtType,
+    CatalogMediaType,
+    MediaType,
+    ServerType,
+    TmdbLanguageFilter,
+)
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
@@ -84,7 +90,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
         @override
         async def art_candidates(
             self,
-            media_type: MediaType,
+            media_type: MediaType | CatalogMediaType,
             tmdb_id: int,
             art_type: ArtType,
             *,

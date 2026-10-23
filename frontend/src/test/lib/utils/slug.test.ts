@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildIdSlug, parseIdFromSlug, parseItemSlug, slugify } from "../../../lib/utils/slug";
+import {
+  buildIdSlug,
+  parseCatalogSlug,
+  parseIdFromSlug,
+  parseItemSlug,
+  slugify,
+} from "../../../lib/utils/slug";
 
 describe("slugify", () => {
   it.each([
@@ -44,4 +50,21 @@ describe("item slugs", () => {
     expect(parseItemSlug("the-matrix")).toBeNull();
     expect(parseItemSlug("tmdb-")).toBeNull();
   });
+});
+
+describe("catalog identity slugs", () => {
+  it.each(["tmdb-10", "tvdb-81189", "imdb-tt0078748"])("accepts %s as a catalog identity", (slug) =>
+    expect(parseCatalogSlug(slug)).toBe(slug),
+  );
+  it.each([
+    undefined,
+    "",
+    "10-title",
+    "tmdb-10-title",
+    "tmdb-0",
+    "tvdb--3",
+    "imdb-12",
+    "../../tmdb-10",
+    "tmdb-10/art",
+  ])("rejects %s", (slug) => expect(parseCatalogSlug(slug)).toBeNull());
 });

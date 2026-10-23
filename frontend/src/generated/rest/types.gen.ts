@@ -32,6 +32,14 @@ export type AppSettingsRead = {
     auto_match_art: boolean;
     auto_unmonitor: AutoUnmonitor;
     /**
+     * Collection Themes Unavailable
+     */
+    collection_themes_unavailable: string | null;
+    /**
+     * Collections Supported
+     */
+    collections_supported: boolean;
+    /**
      * Disable Media Server Art
      */
     disable_media_server_art: boolean;
@@ -48,10 +56,6 @@ export type AppSettingsRead = {
      * Normalize Theme Loudness
      */
     normalize_theme_loudness: boolean;
-    /**
-     * Plex Collections Enabled
-     */
-    plex_collections_enabled: boolean;
     /**
      * Skip Media Server Tmdb Urls
      */
@@ -118,10 +122,6 @@ export type AppSettingsUpdate = {
      * Normalize Theme Loudness
      */
     normalize_theme_loudness?: boolean | null;
-    /**
-     * Plex Collections Enabled
-     */
-    plex_collections_enabled?: boolean | null;
     /**
      * Skip Media Server Tmdb Urls
      */
@@ -554,6 +554,7 @@ export type BulkAssetsArtConfigOutput = {
  */
 export type BulkAssetsRequestInput = {
     art?: BulkAssetsArtConfigInput | null;
+    collection_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
     /**
      * Include Unmonitored
      *
@@ -589,6 +590,7 @@ export type BulkAssetsRequestInput = {
  */
 export type BulkAssetsRequestOutput = {
     art: BulkAssetsArtConfigOutput | null;
+    collection_ids: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
     /**
      * Include Unmonitored
      *
@@ -729,6 +731,10 @@ export type BulkAssetsStopRequest = {
  * Theme-specific assets workflow configuration.
  */
 export type BulkAssetsThemeConfigInput = {
+    /**
+     * Include Collections
+     */
+    include_collections?: boolean;
     source_order?: SourceOrderThemeBulkSource;
 };
 
@@ -738,6 +744,10 @@ export type BulkAssetsThemeConfigInput = {
  * Theme-specific assets workflow configuration.
  */
 export type BulkAssetsThemeConfigOutput = {
+    /**
+     * Include Collections
+     */
+    include_collections: boolean;
     source_order: SourceOrderThemeBulkSource;
 };
 
@@ -750,7 +760,7 @@ export type BulkCollectionMonitorUpdate = {
     /**
      * Collection Ids
      */
-    collection_ids: Array<string>;
+    collection_ids: Array<number>;
     media_type: MediaType;
     /**
      * Monitored
@@ -799,6 +809,393 @@ export type BulkMonitorResponse = {
 };
 
 /**
+ * CatalogCounts
+ *
+ * Catalog and draft counts without downloading the catalog.
+ */
+export type CatalogCounts = {
+    /**
+     * Collections
+     */
+    collections: number;
+    /**
+     * Drafts
+     */
+    drafts: number;
+    /**
+     * Movies
+     */
+    movies: number;
+    /**
+     * Shows
+     */
+    shows: number;
+};
+
+/**
+ * CatalogDraftUpdate
+ *
+ * Changes to a catalog entry; only the fields sent are changed.
+ */
+export type CatalogDraftUpdate = {
+    /**
+     * Background Url
+     */
+    background_url?: string | null;
+    /**
+     * Imdb Id
+     */
+    imdb_id?: string | null;
+    /**
+     * Poster Url
+     */
+    poster_url?: string | null;
+    /**
+     * Seasons
+     */
+    seasons?: Array<CatalogSeason> | null;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id?: number | null;
+    /**
+     * Tvdb Id
+     */
+    tvdb_id?: number | null;
+    /**
+     * Year
+     */
+    year?: number | null;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb?: string | null;
+};
+
+/**
+ * CatalogEntry
+ *
+ * A catalog entry; fields its media type does not carry are ``None``.
+ */
+export type CatalogEntry = {
+    /**
+     * Background Url
+     */
+    background_url: string | null;
+    /**
+     * Imdb Id
+     */
+    imdb_id: string | null;
+    media_type: CatalogMediaType;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
+    /**
+     * Seasons
+     */
+    seasons: Array<CatalogSeason> | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number | null;
+    /**
+     * Tvdb Id
+     */
+    tvdb_id: number | null;
+    /**
+     * Year
+     */
+    year: number | null;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
+};
+
+/**
+ * CatalogEntryDetail
+ *
+ * One catalog entry with the local draft of changes to it.
+ */
+export type CatalogEntryDetail = {
+    draft: CatalogEntry | null;
+    entry: CatalogEntry;
+    /**
+     * Entry Key
+     */
+    entry_key: string;
+    /**
+     * Library Collection Id
+     */
+    library_collection_id: number | null;
+    /**
+     * Library Item Id
+     */
+    library_item_id: number | null;
+};
+
+/**
+ * CatalogEntryRow
+ *
+ * One catalog entry as the catalog view lists it.
+ */
+export type CatalogEntryRow = {
+    /**
+     * Background Url
+     */
+    background_url: string | null;
+    /**
+     * Entry Key
+     */
+    entry_key: string;
+    /**
+     * Has Draft
+     */
+    has_draft: boolean;
+    /**
+     * Imdb Id
+     */
+    imdb_id: string | null;
+    /**
+     * Library Collection Id
+     */
+    library_collection_id: number | null;
+    /**
+     * Library Item Id
+     */
+    library_item_id: number | null;
+    media_type: CatalogMediaType;
+    /**
+     * Poster Preview Url
+     */
+    poster_preview_url: string | null;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
+    /**
+     * Season Posters
+     */
+    season_posters: number;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number | null;
+    /**
+     * Tvdb Id
+     */
+    tvdb_id: number | null;
+    /**
+     * Year
+     */
+    year: number | null;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
+};
+
+/**
+ * CatalogMediaType
+ *
+ * Kind of OvertureDB catalog entry: a movie, a show or a movie collection.
+ */
+export type CatalogMediaType = 'movie' | 'show' | 'collection';
+
+/**
+ * CatalogSeason
+ *
+ * One season poster of a catalog entry.
+ */
+export type CatalogSeason = {
+    /**
+     * Poster Url
+     */
+    poster_url: string;
+    /**
+     * Season Num
+     */
+    season_num: number;
+};
+
+/**
+ * CollectionDetail
+ *
+ * One collection with its members and what limits its theme.
+ */
+export type CollectionDetail = {
+    /**
+     * Art Url
+     */
+    art_url: string | null;
+    /**
+     * Catalog Entry Key
+     */
+    catalog_entry_key: string | null;
+    /**
+     * Catalog Title
+     */
+    catalog_title: string | null;
+    /**
+     * Child Count
+     */
+    child_count: number;
+    /**
+     * Has Theme
+     */
+    has_theme: boolean;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Library Id
+     */
+    library_id: string | null;
+    media_type: MediaType;
+    /**
+     * Members
+     */
+    members: Array<CollectionMember>;
+    /**
+     * Monitored
+     */
+    monitored: boolean;
+    /**
+     * Public Dataset Complete
+     */
+    public_dataset_complete: boolean;
+    /**
+     * Public Dataset Themerrdb
+     */
+    public_dataset_themerrdb: boolean;
+    /**
+     * Server Added At
+     */
+    server_added_at: string | null;
+    /**
+     * Server Link
+     */
+    server_link: string | null;
+    server_type: ServerType;
+    /**
+     * Summary
+     */
+    summary: string | null;
+    theme_status: AssetStatus;
+    /**
+     * Theme Unavailable
+     */
+    theme_unavailable: string | null;
+    /**
+     * Theme Writable
+     */
+    theme_writable: boolean;
+    /**
+     * Thumb Url
+     */
+    thumb_url: string | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id: number | null;
+    tmdb_match: CollectionMatch;
+    /**
+     * Youtube Duration
+     */
+    youtube_duration: number | null;
+    /**
+     * Youtube Id
+     */
+    youtube_id: string | null;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
+    /**
+     * Youtube Title
+     */
+    youtube_title: string | null;
+};
+
+/**
+ * CollectionMatch
+ *
+ * How a media-server collection got its TMDB collection.
+ *
+ * ``auto`` follows the server's own ID or the collection's members;
+ * ``manual`` and ``unmatched`` are the user's choice and survive syncs.
+ */
+export type CollectionMatch = 'auto' | 'manual' | 'unmatched';
+
+/**
+ * CollectionMatchRequest
+ *
+ * Match a collection to a TMDB collection; ``None`` keeps it unmatched.
+ */
+export type CollectionMatchRequest = {
+    media_type: MediaType;
+    /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id: number | null;
+};
+
+/**
+ * CollectionMember
+ *
+ * A stored item a collection holds.
+ */
+export type CollectionMember = {
+    /**
+     * Id
+     */
+    id: number;
+    media_type: MediaType;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number | null;
+    /**
+     * Year
+     */
+    year: number | null;
+};
+
+/**
  * CollectionRead
  *
  * Media-server collection response.
@@ -819,7 +1216,7 @@ export type CollectionRead = {
     /**
      * Id
      */
-    id: string;
+    id: number;
     /**
      * Library Id
      */
@@ -829,6 +1226,14 @@ export type CollectionRead = {
      * Monitored
      */
     monitored: boolean;
+    /**
+     * Public Dataset Complete
+     */
+    public_dataset_complete: boolean;
+    /**
+     * Public Dataset Themerrdb
+     */
+    public_dataset_themerrdb: boolean;
     /**
      * Server Added At
      */
@@ -852,6 +1257,11 @@ export type CollectionRead = {
      */
     title: string;
     /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id: number | null;
+    tmdb_match: CollectionMatch;
+    /**
      * Youtube Duration
      */
     youtube_duration: number | null;
@@ -872,10 +1282,9 @@ export type CollectionRead = {
  */
 export type CollectionThemeDownloadTarget = {
     /**
-     * Collection Server Id
+     * Collection Id
      */
-    collection_server_id: string;
-    media_type: MediaType;
+    collection_id: number;
     /**
      * Target Type
      */
@@ -884,6 +1293,22 @@ export type CollectionThemeDownloadTarget = {
      * Title
      */
     title: string;
+};
+
+/**
+ * CollectionThemeSources
+ *
+ * The catalog's theme candidates for a matched collection.
+ */
+export type CollectionThemeSources = {
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
 };
 
 /**
@@ -1578,6 +2003,10 @@ export type MediaItemRead = {
      */
     last_synced_at: string | null;
     /**
+     * Library Collection Id
+     */
+    library_collection_id: number | null;
+    /**
      * Library Id
      */
     library_id: string | null;
@@ -1666,6 +2095,10 @@ export type MediaItemRead = {
      * Title
      */
     title: string;
+    /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id: number | null;
     /**
      * Tmdb Id
      */
@@ -1958,6 +2391,10 @@ export type PublicDatasetSyncStats = {
      * Catalog Url
      */
     catalog_url: string | null;
+    /**
+     * Collections
+     */
+    collections: number;
     /**
      * Entries
      */
@@ -3751,15 +4188,52 @@ export type BulkSetCollectionMonitoredResponses = {
 
 export type BulkSetCollectionMonitoredResponse = BulkSetCollectionMonitoredResponses[keyof BulkSetCollectionMonitoredResponses];
 
+export type GetCollectionData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}';
+};
+
+export type GetCollectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionError = GetCollectionErrors[keyof GetCollectionErrors];
+
+export type GetCollectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type GetCollectionResponse = GetCollectionResponses[keyof GetCollectionResponses];
+
 export type ProxyCollectionImageData = {
     body?: never;
     path: {
         /**
          * Collection Id
          *
-         * Collection rating key or ID
+         * Collection ID
          */
-        collection_id: string;
+        collection_id: number;
         /**
          * Which artwork slot
          */
@@ -3792,15 +4266,84 @@ export type ProxyCollectionImageResponses = {
     200: unknown;
 };
 
+export type ResetCollectionMatchData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/match';
+};
+
+export type ResetCollectionMatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResetCollectionMatchError = ResetCollectionMatchErrors[keyof ResetCollectionMatchErrors];
+
+export type ResetCollectionMatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type ResetCollectionMatchResponse = ResetCollectionMatchResponses[keyof ResetCollectionMatchResponses];
+
+export type SetCollectionMatchData = {
+    body: CollectionMatchRequest;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query?: never;
+    url: '/api/collections/{collection_id}/match';
+};
+
+export type SetCollectionMatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetCollectionMatchError = SetCollectionMatchErrors[keyof SetCollectionMatchErrors];
+
+export type SetCollectionMatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type SetCollectionMatchResponse = SetCollectionMatchResponses[keyof SetCollectionMatchResponses];
+
 export type SetCollectionMonitoredData = {
     body: MonitorUpdate;
     path: {
         /**
          * Collection Id
          *
-         * Collection rating key or ID
+         * Collection ID
          */
-        collection_id: string;
+        collection_id: number;
     };
     query: {
         /**
@@ -3829,15 +4372,52 @@ export type SetCollectionMonitoredResponses = {
 
 export type SetCollectionMonitoredResponse = SetCollectionMonitoredResponses[keyof SetCollectionMonitoredResponses];
 
+export type GetCollectionSourcesData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/sources';
+};
+
+export type GetCollectionSourcesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionSourcesError = GetCollectionSourcesErrors[keyof GetCollectionSourcesErrors];
+
+export type GetCollectionSourcesResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionThemeSources;
+};
+
+export type GetCollectionSourcesResponse = GetCollectionSourcesResponses[keyof GetCollectionSourcesResponses];
+
 export type DeleteCollectionThemeData = {
     body?: never;
     path: {
         /**
          * Collection Id
          *
-         * Collection rating key or ID
+         * Collection ID
          */
-        collection_id: string;
+        collection_id: number;
     };
     query: {
         /**
@@ -3872,9 +4452,9 @@ export type GetCollectionThemeData = {
         /**
          * Collection Id
          *
-         * Collection rating key or ID
+         * Collection ID
          */
-        collection_id: string;
+        collection_id: number;
     };
     query: {
         /**
@@ -3909,9 +4489,9 @@ export type SetCollectionThemeData = {
         /**
          * Collection Id
          *
-         * Collection rating key or ID
+         * Collection ID
          */
-        collection_id: string;
+        collection_id: number;
     };
     query?: never;
     url: '/api/collections/{collection_id}/theme';
@@ -4521,6 +5101,171 @@ export type ListServerLibrariesResponses = {
 };
 
 export type ListServerLibrariesResponse = ListServerLibrariesResponses[keyof ListServerLibrariesResponses];
+
+export type ListCatalogEntriesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+    };
+    url: '/api/public-dataset/catalog';
+};
+
+export type ListCatalogEntriesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListCatalogEntriesError = ListCatalogEntriesErrors[keyof ListCatalogEntriesErrors];
+
+export type ListCatalogEntriesResponses = {
+    /**
+     * Response List Catalog Entries
+     *
+     * Successful Response
+     */
+    200: Array<CatalogEntryRow>;
+};
+
+export type ListCatalogEntriesResponse = ListCatalogEntriesResponses[keyof ListCatalogEntriesResponses];
+
+export type GetCatalogCountsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/public-dataset/catalog/counts';
+};
+
+export type GetCatalogCountsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogCountsError = GetCatalogCountsErrors[keyof GetCatalogCountsErrors];
+
+export type GetCatalogCountsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogCounts;
+};
+
+export type GetCatalogCountsResponse = GetCatalogCountsResponses[keyof GetCatalogCountsResponses];
+
+export type GetCatalogEntryData = {
+    body?: never;
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/public-dataset/catalog/{media_type}/{entry_key}';
+};
+
+export type GetCatalogEntryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogEntryError = GetCatalogEntryErrors[keyof GetCatalogEntryErrors];
+
+export type GetCatalogEntryResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogEntryDetail;
+};
+
+export type GetCatalogEntryResponse = GetCatalogEntryResponses[keyof GetCatalogEntryResponses];
+
+export type DiscardCatalogDraftData = {
+    body?: never;
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/draft';
+};
+
+export type DiscardCatalogDraftErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DiscardCatalogDraftError = DiscardCatalogDraftErrors[keyof DiscardCatalogDraftErrors];
+
+export type DiscardCatalogDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogEntryDetail;
+};
+
+export type DiscardCatalogDraftResponse = DiscardCatalogDraftResponses[keyof DiscardCatalogDraftResponses];
+
+export type SaveCatalogDraftData = {
+    body: CatalogDraftUpdate;
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/draft';
+};
+
+export type SaveCatalogDraftErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SaveCatalogDraftError = SaveCatalogDraftErrors[keyof SaveCatalogDraftErrors];
+
+export type SaveCatalogDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogEntryDetail;
+};
+
+export type SaveCatalogDraftResponse = SaveCatalogDraftResponses[keyof SaveCatalogDraftResponses];
 
 export type SetPublicDatasetEnabledData = {
     body: PublicDatasetEnabledRequest;
@@ -5411,9 +6156,9 @@ export type GetTmdbArtSourcesData = {
     body?: never;
     path: {
         /**
-         * Media type ('movie' or 'show')
+         * Catalog entry kind
          */
-        media_type: MediaType;
+        media_type: CatalogMediaType;
         /**
          * Tmdb Id
          *

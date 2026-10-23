@@ -10,6 +10,7 @@ whole, so the columns of one kind can never describe different things.
 lazy from dataclasses import dataclass
 
 lazy from ..domain import ThemeIdSource
+lazy from .models.media_collection import MediaCollection
 lazy from .models.media_item import MediaItem
 
 
@@ -28,7 +29,7 @@ class ThemeFileFacts:
     duration: int | None
 
 
-def theme_file_facts(item: MediaItem) -> ThemeFileFacts | None:
+def theme_file_facts(item: MediaItem | MediaCollection) -> ThemeFileFacts | None:
     """Return the recorded facts of the item's local theme file, or ``None``."""
     if item.theme_file_hash is None:
         return None
@@ -41,7 +42,7 @@ def theme_file_facts(item: MediaItem) -> ThemeFileFacts | None:
 
 
 def theme_file_columns(
-    item: MediaItem | ThemeFileFacts | None,
+    item: MediaItem | MediaCollection | ThemeFileFacts | None,
 ) -> tuple[str | None, int | None, int | None, int | None]:
     """Return the theme file columns an item holds, or would hold for *facts*.
 
@@ -59,7 +60,9 @@ def theme_file_columns(
     )
 
 
-def record_theme_file(item: MediaItem, facts: ThemeFileFacts | None) -> None:
+def record_theme_file(
+    item: MediaItem | MediaCollection, facts: ThemeFileFacts | None
+) -> None:
     """Record the item's local theme file, or its absence."""
     item.theme_file_hash = facts.file_hash if facts else None
     item.theme_file_mtime_ns = facts.file_mtime_ns if facts else None

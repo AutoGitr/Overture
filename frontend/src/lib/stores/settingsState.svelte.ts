@@ -9,6 +9,8 @@ const INITIAL_SETTINGS: AppSettingsRead = {
   ...DEFAULT_APP_SETTINGS,
   media_server: null,
   tmdb_configured: false,
+  collections_supported: false,
+  collection_themes_unavailable: null,
   art_download_workers: 1,
   theme_download_workers: 1,
   updated_at: null,
@@ -49,6 +51,8 @@ class SettingsState {
     const {
       media_server: _server,
       tmdb_configured: _tmdb,
+      collections_supported: _collections,
+      collection_themes_unavailable: _collectionThemes,
       art_download_workers: _artWorkers,
       theme_download_workers: _themeWorkers,
       updated_at: _updated,

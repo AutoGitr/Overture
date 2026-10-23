@@ -1,71 +1,68 @@
-"""Coverage for collection listing, theme, monitoring, and image-proxy actions."""
+"""Coverage for collection listing, theme, matching, monitoring and image actions."""
 
-lazy from datetime import UTC, datetime
+lazy from collections.abc import Collection
+lazy from pathlib import Path
 lazy from typing import Any, override
 
 lazy import pytest
 lazy from fastapi.responses import Response
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from overture.config import Settings
+lazy from overture.db.models.media_collection import (
+    MediaCollection,
+    MediaCollectionMember,
+)
+lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
+    CollectionMatch,
     ImageSize,
     MediaType,
+    ServerAsset,
     ServerType,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.media_servers.errors import MediaServerError
-lazy from overture.repositories.collection_themes import CollectionThemeRepository
-lazy from overture.schemas.collections import SetCollectionThemeRequest
+lazy from overture.media_servers.jellyfin import JellyfinProvider
+lazy from overture.media_servers.plex import PlexProvider
+lazy from overture.repositories.collections import CollectionRepository
+lazy from overture.schemas.collections import (
+    CollectionMatchRequest,
+    SetCollectionThemeRequest,
+)
 lazy from overture.schemas.common import Status
 lazy from overture.services.collections import service as module
 lazy from overture.services.downloads.queue import AssetScope, JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
-lazy from tests.runtime_helpers import (
-    NoopProviderRegistry,
-    database_for,
-    one_session,
-    unused,
-)
-
-TS = datetime(2026, 1, 1, tzinfo=UTC)
+lazy from overture.utils.time import utc_now
+lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 
 
-class FakeProvider:
-    """The collection surface of a Plex provider, recording what it was asked."""
-
-    server_type = ServerType.PLEX
+class FakePlex(PlexProvider):
+    """A Plex provider that records what it was asked instead of calling Plex."""
 
     def __init__(
-        self,
-        *,
-        collections: list[dict[str, Any]] | None = None,
-        list_collections_error: Exception | None = None,
-        delete_error: Exception | None = None,
+        self, *, app_config: Settings, delete_error: Exception | None = None
     ) -> None:
-        self._collections = collections or []
-        self._list_error = list_collections_error
+        super().__init__(app_config=app_config)
         self._delete_error = delete_error
         self.deleted_theme_for: list[str] = []
         self.image_requests: list[tuple[str, ArtType, ImageSize | None]] = []
 
-    async def list_collections(self, media_type: MediaType) -> list[dict[str, Any]]:
-        if self._list_error:
-            raise self._list_error
-        return [
-            {"media_type": media_type, "server_type": self.server_type, **collection}
-            for collection in self._collections
-        ]
-
+    @override
     async def delete_collection_theme(self, server_item_id: str) -> None:
         if self._delete_error:
             raise self._delete_error
         self.deleted_theme_for.append(server_item_id)
 
+    @override
     async def build_collection_image_request(
         self, server_item_id: str, art_type: ArtType, size: ImageSize | None
     ) -> ProviderImageRequest:
@@ -73,31 +70,10 @@ class FakeProvider:
         return ProviderImageRequest(url="https://example.test/img", headers={})
 
 
-def _service(
-    *,
-    database: Database,
-    provider: FakeProvider | None = None,
-    plex: bool = True,
-    publisher: Any | None = None,
-    downloads: DownloadService | None = None,
-    proxy_clients: Any | None = None,
-) -> module.CollectionsService:
-    return module.CollectionsService(
-        database=database,
-        provider_registry=NoopProviderRegistry(
-            provider or FakeProvider(), collections=plex
-        ),
-        publisher=publisher or FakePublisher(),
-        downloads=downloads or FakeDownloads(),
-        proxy_clients=proxy_clients or unused(ProxyClientManager),
-    )
-
-
 class FakeDownloads(DownloadService):
     """Records the targets queued."""
 
-    def __init__(self, *, job_id: str = "job-1") -> None:
-        self._job_id = job_id
+    def __init__(self) -> None:
         self.targets: list[JobTarget] = []
         self._asset_locks = KeyedLock[int | str]()
 
@@ -111,7 +87,7 @@ class FakeDownloads(DownloadService):
         self, session: AsyncSession, target: JobTarget, *, supersede: bool = True
     ) -> tuple[str, bool]:
         self.targets.append(target)
-        return self._job_id, True
+        return "job-1", True
 
     @override
     async def cancel_assets(self, session: AsyncSession, scope: AssetScope) -> None:
@@ -130,380 +106,290 @@ class FakePublisher:
         self.broadcasts.append((event, payload))
 
     async def broadcast_built(self, builder: Any) -> bool:
-        built = builder()
-        if built is None:
-            return False
-        event, payload = built
-        self.broadcasts.append((event, payload))
-        return True
+        raise AssertionError("Collections broadcast their events directly")
 
 
-# --- require_collection ------------------------------------------------------------
-
-
-async def test_require_collection_rejects_a_server_without_collections(
+def _service(
+    *,
+    app_config: Settings,
     database: Database,
+    provider: Any | None = None,
+    publisher: FakePublisher | None = None,
+    downloads: FakeDownloads | None = None,
+    supported: bool = True,
+) -> module.CollectionsService:
+    return module.CollectionsService(
+        database=database,
+        provider_registry=NoopProviderRegistry(
+            provider or FakePlex(app_config=app_config), collections=supported
+        ),
+        publisher=publisher or FakePublisher(),
+        downloads=downloads or FakeDownloads(),
+        proxy_clients=unused(ProxyClientManager),
+        app_config=app_config,
+    )
+
+
+async def _collection(
+    session: AsyncSession, server_id: str = "c1", **fields: Any
+) -> MediaCollection:
+    row = MediaCollection(
+        server_item_id=server_id,
+        media_type=MediaType.MOVIE,
+        server_type=ServerType.PLEX,
+        title=f"Collection {server_id}",
+        last_synced_at=utc_now(),
+        **fields,
+    )
+    session.add(row)
+    await session.commit()
+    return row
+
+
+async def test_every_action_rejects_a_server_without_collections(
+    *, app_config: Settings, database: Database
 ) -> None:
-    service = _service(database=database, plex=False)
+    service = _service(app_config=app_config, database=database, supported=False)
+    for call in (
+        service.list_collections(MediaType.MOVIE),
+        service.get_collection(1, MediaType.MOVIE),
+        service.set_collection_theme(
+            1,
+            SetCollectionThemeRequest(youtube_id="a" * 11, media_type=MediaType.MOVIE),
+        ),
+        service.proxy_collection_image(1, ArtType.POSTER, None),
+    ):
+        with pytest.raises(PublicServiceError) as exc_info:
+            await call
+        assert exc_info.value.status_code == 400
+
+
+async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
+) -> None:
+    await _collection(db_session, "c1", tmdb_collection_id=10)
+    await _collection(db_session, "c2", server_theme_id="/theme/1")
+    # Kept from before the first sync: not shown until a sync lists it.
+    db_session.add(
+        MediaCollection(
+            server_item_id="old",
+            media_type=MediaType.MOVIE,
+            server_type=ServerType.PLEX,
+        )
+    )
+    db_session.add(
+        PublicDatasetCollection(
+            tmdb_id=10, title="Star Wars Collection", youtube_id_overturedb="a" * 11
+        )
+    )
+    await db_session.commit()
+    service = _service(app_config=app_config, database=database)
+
+    disabled = await service.list_collections(MediaType.MOVIE)
+    await enable_public_dataset(db_session)
+    enabled = {c.id: c for c in await service.list_collections(MediaType.MOVIE)}
+
+    assert sorted(c.id for c in disabled) == [1, 2]
+    assert not any(c.public_dataset_complete for c in disabled)
+    assert enabled[1].public_dataset_complete is True
+    assert enabled[2].has_theme is True
+    assert enabled[2].theme_status == "partial"
+    assert await service.list_collections(MediaType.SHOW) == []
+
+
+async def test_get_collection_lists_members_and_catalog_candidates(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
+) -> None:
+    row = await _collection(db_session, tmdb_collection_id=10)
+    newer = MediaItem(media_type=MediaType.MOVIE, title="Empire", year=1980)
+    older = MediaItem(media_type=MediaType.MOVIE, title="Star Wars", year=1977)
+    db_session.add_all([newer, older])
+    await db_session.flush()
+    db_session.add_all(
+        MediaCollectionMember(collection_id=row.id or 0, media_item_id=item.id or 0)
+        for item in (newer, older)
+    )
+    db_session.add(
+        PublicDatasetCollection(
+            tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="b" * 11
+        )
+    )
+    await db_session.commit()
+    await enable_public_dataset(db_session)
+
+    detail = await _service(app_config=app_config, database=database).get_collection(
+        1, MediaType.MOVIE
+    )
+
+    assert [member.title for member in detail.members] == ["Star Wars", "Empire"]
+    assert detail.catalog_title == "Star Wars Collection"
+    assert detail.youtube_id_themerrdb == "b" * 11
+    assert detail.theme_unavailable is None
+
+
+async def test_get_collection_raises_404_for_an_unlisted_collection(
+    *, app_config: Settings, database: Database
+) -> None:
+    service = _service(app_config=app_config, database=database)
     with pytest.raises(PublicServiceError) as exc_info:
-        await service.require_collection("c1", MediaType.MOVIE)
-    assert exc_info.value.status_code == 400
-
-
-async def test_require_collection_returns_the_matching_collection(
-    database: Database,
-) -> None:
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
-    service = _service(database=database, provider=provider)
-    result = await service.require_collection("c1", MediaType.MOVIE)
-    assert result["title"] == "Marvel"
-
-
-async def test_require_collection_raises_404_when_not_found(
-    database: Database,
-) -> None:
-    provider = FakeProvider(collections=[{"id": "other", "title": "X"}])
-    service = _service(database=database, provider=provider)
-    with pytest.raises(PublicServiceError) as exc_info:
-        await service.require_collection("c1", MediaType.MOVIE)
+        await service.get_collection(999, MediaType.MOVIE)
     assert exc_info.value.status_code == 404
 
 
-async def test_require_collection_propagates_provider_failure(
-    database: Database,
+async def test_set_collection_theme_enqueues_job(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    provider = FakeProvider(
-        list_collections_error=MediaServerError("Unavailable", status_code=503)
-    )
-    service = _service(database=database, provider=provider)
-    with pytest.raises(MediaServerError) as exc_info:
-        await service.require_collection("c1", MediaType.MOVIE)
-    assert exc_info.value.status_code == 503
+    await _collection(db_session)
+    downloads = FakeDownloads()
+    service = _service(app_config=app_config, database=database, downloads=downloads)
 
-
-# --- list_collections --------------------------------------------------------------
-
-
-async def test_list_collections_rejects_a_server_without_collections(
-    database: Database,
-) -> None:
-    service = _service(database=database, plex=False)
-    with pytest.raises(PublicServiceError) as exc_info:
-        await service.list_collections(MediaType.MOVIE)
-    assert exc_info.value.status_code == 400
-
-
-async def test_list_collections_returns_empty_when_provider_has_none(
-    database: Database,
-) -> None:
-    service = _service(database=database, provider=FakeProvider(collections=[]))
-    assert await service.list_collections(MediaType.MOVIE) == []
-
-
-async def _uploaded_theme(
-    session: AsyncSession,
-    server_item_id: str,
-    *,
-    title: str,
-    server_theme_id: str,
-) -> None:
-    await CollectionThemeRepository(session).upsert_uploaded_theme(
-        server_item_id=server_item_id,
-        media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
-        youtube_id="dQw4w9WgXcQ",
-        youtube_title=title,
-        youtube_duration=120,
-        server_theme_id=server_theme_id,
-        timestamp=TS,
-    )
-    await session.commit()
-
-
-async def test_list_collections_merges_matching_theme_provenance(
-    db_session: AsyncSession, database: Database
-) -> None:
-    await _uploaded_theme(
-        db_session, "c1", title="Marvel Theme", server_theme_id="/themes/marvel"
-    )
-    provider = FakeProvider(
-        collections=[
-            {"id": "c1", "title": "Marvel", "theme_id": "/themes/marvel"},
-            {"id": "c2", "title": "DC"},
-        ]
-    )
-    result = await _service(database=database, provider=provider).list_collections(
-        MediaType.MOVIE
+    result = await service.set_collection_theme(
+        1,
+        SetCollectionThemeRequest(youtube_id="abcDEF123_4", media_type=MediaType.MOVIE),
     )
 
-    by_id = {c.id: c for c in result}
-    assert by_id["c1"].has_theme is True
-    assert by_id["c1"].youtube_id == "dQw4w9WgXcQ"
-    assert by_id["c1"].youtube_title == "Marvel Theme"
-    assert by_id["c1"].youtube_duration == 120
-    assert by_id["c2"].has_theme is False
-    assert by_id["c2"].monitored is True  # default when no local row exists
-
-
-async def test_list_collections_invalidates_provenance_for_external_theme_change(
-    db_session: AsyncSession, database: Database
-) -> None:
-    await _uploaded_theme(
-        db_session, "c1", title="Old Theme", server_theme_id="/themes/old"
-    )
-    provider = FakeProvider(
-        collections=[{"id": "c1", "title": "Marvel", "theme_id": "/themes/replaced"}]
-    )
-    result = await _service(database=database, provider=provider).list_collections(
-        MediaType.MOVIE
-    )
-
-    assert result[0].has_theme is True
-    assert result[0].youtube_id is None
-    assert result[0].youtube_title is None
-    assert result[0].youtube_duration is None
-    row = await CollectionThemeRepository(db_session).get_for_collection(
-        "c1", MediaType.MOVIE
-    )
-    assert row is not None
-    await db_session.refresh(row)
-    assert row.server_theme_id == "/themes/replaced"
-
-
-async def test_list_collections_invalidates_provenance_for_external_theme_removal(
-    db_session: AsyncSession, database: Database
-) -> None:
-    await _uploaded_theme(
-        db_session, "c1", title="Removed Theme", server_theme_id="/themes/removed"
-    )
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
-    result = await _service(database=database, provider=provider).list_collections(
-        MediaType.MOVIE
-    )
-
-    assert result[0].has_theme is False
-    assert result[0].youtube_id is None
-    row = await CollectionThemeRepository(db_session).get_for_collection(
-        "c1", MediaType.MOVIE
-    )
-    assert row is not None
-    await db_session.refresh(row)
-    assert row.server_theme_id is None
-    assert row.youtube_title is None
-    assert row.youtube_duration is None
-
-
-async def test_list_collections_invalidates_removed_collection_provenance(
-    db_session: AsyncSession, database: Database
-) -> None:
-    await _uploaded_theme(
-        db_session,
-        "removed",
-        title="Removed Collection Theme",
-        server_theme_id="/themes/removed-collection",
-    )
-    result = await _service(
-        database=database, provider=FakeProvider(collections=[])
-    ).list_collections(MediaType.MOVIE)
-
-    assert result == []
-    row = await CollectionThemeRepository(db_session).get_for_collection(
-        "removed", MediaType.MOVIE
-    )
-    assert row is not None
-    await db_session.refresh(row)
-    assert row.server_theme_id is None
-    assert row.youtube_id is None
-    assert row.youtube_title is None
-    assert row.youtube_duration is None
-
-
-# --- get_collection_theme -----------------------------------------------------------
-
-
-async def test_get_collection_theme_rejects_a_server_without_collections(
-    database: Database,
-) -> None:
-    service = _service(database=database, plex=False)
-    with pytest.raises(PublicServiceError):
-        await service.get_collection_theme("c1", MediaType.MOVIE)
-
-
-async def test_get_collection_theme_returns_live_provider_state_without_a_row(
-    database: Database,
-) -> None:
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
-    service = _service(database=database, provider=provider)
-    status = await service.get_collection_theme("c1", MediaType.MOVIE)
-    assert status.has_theme is False
-
-
-# --- set_collection_theme -----------------------------------------------------------
-
-_THEME = SetCollectionThemeRequest(youtube_id="dQw4w9WgXcQ", media_type=MediaType.MOVIE)
-
-
-async def test_set_collection_theme_enqueues_job(database: Database) -> None:
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
-    downloads = FakeDownloads(job_id="job-42")
-    service = _service(database=database, provider=provider, downloads=downloads)
-
-    result = await service.set_collection_theme("c1", _THEME)
-
-    assert result.job_id == "job-42"
-    assert result.status == Status.ENQUEUED
+    assert result.job_id == "job-1"
     assert downloads.targets == [
-        JobTarget.collection_theme("c1", MediaType.MOVIE, "Marvel", "dQw4w9WgXcQ")
+        JobTarget.collection_theme(1, "Collection c1", "abcDEF123_4")
     ]
 
 
-# --- delete_collection_theme ---------------------------------------------------------
+async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
+) -> None:
+    await _collection(db_session)
+    service = _service(
+        app_config=app_config,
+        database=database,
+        provider=JellyfinProvider(app_config=app_config),
+    )
+
+    with pytest.raises(PublicServiceError, match="JELLYFIN_COLLECTIONS_PATH"):
+        await service.set_collection_theme(
+            1,
+            SetCollectionThemeRequest(youtube_id="a" * 11, media_type=MediaType.MOVIE),
+        )
 
 
 async def test_delete_collection_theme_clears_row_and_broadcasts(
-    db_session: AsyncSession,
+    db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    await _uploaded_theme(
-        db_session, "c1", title="Marvel Theme", server_theme_id="/themes/marvel"
-    )
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
+    await _collection(db_session, youtube_id="abcDEF12345", server_theme_id="/t/1")
+    provider = FakePlex(app_config=app_config)
     publisher = FakePublisher()
     service = _service(
-        database=database_for(one_session(db_session)),
+        app_config=app_config,
+        database=database,
         provider=provider,
         publisher=publisher,
     )
 
-    result = await service.delete_collection_theme("c1", MediaType.MOVIE)
+    result = await service.delete_collection_theme(1, MediaType.MOVIE)
 
-    assert result.status == Status.OK
-    assert result.has_theme is False
+    assert result.status is Status.OK
     assert provider.deleted_theme_for == ["c1"]
-    assert publisher.broadcasts[0][0] == "collection.theme.updated"
-    row = await CollectionThemeRepository(db_session).get_for_collection(
-        "c1", MediaType.MOVIE
-    )
+    row = await CollectionRepository(db_session).get(1, MediaType.MOVIE)
     assert row is not None
-    assert row.youtube_id is None
+    await db_session.refresh(row)
+    assert (row.youtube_id, row.server_theme_id) == (None, None)
+    assert publisher.broadcasts[0][0] == "collection.theme.updated"
+    assert publisher.broadcasts[0][1]["has_theme"] is False
 
 
 async def test_delete_collection_theme_keeps_the_row_when_the_server_fails(
-    db_session: AsyncSession,
+    db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    await _uploaded_theme(
-        db_session, "c1", title="Marvel Theme", server_theme_id="/themes/marvel"
-    )
-    provider = FakeProvider(
-        collections=[{"id": "c1", "title": "Marvel"}],
-        delete_error=MediaServerError("Plex refused"),
-    )
-    publisher = FakePublisher()
+    await _collection(db_session, youtube_id="abcDEF12345", server_theme_id="/t/1")
     service = _service(
-        database=database_for(one_session(db_session)),
-        provider=provider,
-        publisher=publisher,
+        app_config=app_config,
+        database=database,
+        provider=FakePlex(app_config=app_config, delete_error=MediaServerError("x")),
     )
 
     with pytest.raises(MediaServerError):
-        await service.delete_collection_theme("c1", MediaType.MOVIE)
+        await service.delete_collection_theme(1, MediaType.MOVIE)
 
-    assert publisher.broadcasts == []
-    row = await CollectionThemeRepository(db_session).get_for_collection(
-        "c1", MediaType.MOVIE
-    )
+    row = await CollectionRepository(db_session).get(1, MediaType.MOVIE)
     assert row is not None
-    assert row.youtube_id == "dQw4w9WgXcQ"
+    assert row.youtube_id == "abcDEF12345"
 
 
-# --- monitoring -----------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("monitored", [True, False])
-async def test_set_collection_monitored_creates_the_row(
-    db_session: AsyncSession, *, monitored: bool
+async def test_monitored_flags_change_only_listed_collections(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
-    service = _service(
-        database=database_for(one_session(db_session)), provider=provider
+    await _collection(db_session, "c1")
+    await _collection(db_session, "c2")
+    service = _service(app_config=app_config, database=database)
+
+    single = await service.set_collection_monitored(1, MediaType.MOVIE, False)
+    bulk = await service.bulk_set_collection_monitored(
+        [1, 2, 999], MediaType.MOVIE, False
     )
 
-    result = await service.set_collection_monitored("c1", MediaType.MOVIE, monitored)
-
-    assert result.monitored is monitored
-    row = await CollectionThemeRepository(db_session).get_for_collection(
-        "c1", MediaType.MOVIE
-    )
-    assert row is not None
-    assert row.monitored is monitored
-
-
-async def test_set_collection_monitored_is_idempotent(
-    db_session: AsyncSession,
-) -> None:
-    await CollectionThemeRepository(db_session).set_monitored(
-        server_item_id="c1",
-        media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
-        monitored=False,
-        timestamp=TS,
-    )
-    await db_session.commit()
-    provider = FakeProvider(collections=[{"id": "c1", "title": "Marvel"}])
-    service = _service(
-        database=database_for(one_session(db_session)), provider=provider
-    )
-
-    first = await service.set_collection_monitored("c1", MediaType.MOVIE, False)
-    second = await service.set_collection_monitored("c1", MediaType.MOVIE, False)
-
-    assert first.monitored is second.monitored is False
-
-
-async def test_bulk_set_collection_monitored(db_session: AsyncSession) -> None:
-    provider = FakeProvider(
-        collections=[{"id": "c1", "title": "Marvel"}, {"id": "c2", "title": "DC"}]
-    )
-    service = _service(
-        database=database_for(one_session(db_session)), provider=provider
-    )
-
-    res = await service.bulk_set_collection_monitored(
-        ["c1", "c2"], MediaType.MOVIE, False
-    )
-    assert res.updated == 2
-
-    repo = CollectionThemeRepository(db_session)
-    for server_id in ("c1", "c2"):
-        row = await repo.get_for_collection(server_id, MediaType.MOVIE)
-        assert row is not None
-        assert row.monitored is False
-
-
-# --- proxy_collection_image ---------------------------------------------------------
-
-
-async def test_proxy_collection_image_has_no_season_posters(
-    database: Database,
-) -> None:
-    service = _service(database=database)
+    assert single.monitored is False
+    assert bulk.updated == 2
     with pytest.raises(PublicServiceError) as exc_info:
-        await service.proxy_collection_image("c1", ArtType.SEASON_POSTER, None)
+        await service.set_collection_monitored(999, MediaType.MOVIE, False)
     assert exc_info.value.status_code == 404
 
 
-async def test_proxy_collection_image_rejects_a_server_without_collections(
-    database: Database,
+async def test_a_manual_match_holds_until_reset_to_the_members(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    service = _service(database=database, plex=False)
+    row = await _collection(db_session, tmdb_collection_id=None)
+    members = [
+        MediaItem(media_type=MediaType.MOVIE, title=f"Part {n}", tmdb_collection_id=10)
+        for n in range(2)
+    ]
+    db_session.add_all(members)
+    await db_session.flush()
+    db_session.add_all(
+        MediaCollectionMember(collection_id=row.id or 0, media_item_id=item.id or 0)
+        for item in members
+    )
+    await db_session.commit()
+    publisher = FakePublisher()
+    service = _service(app_config=app_config, database=database, publisher=publisher)
+
+    manual = await service.set_match(
+        1, CollectionMatchRequest(media_type=MediaType.MOVIE, tmdb_collection_id=99)
+    )
+    unmatched = await service.set_match(
+        1,
+        CollectionMatchRequest(media_type=MediaType.MOVIE, tmdb_collection_id=None),
+    )
+    reset = await service.reset_match(1, MediaType.MOVIE)
+
+    assert (manual.tmdb_collection_id, manual.tmdb_match) == (
+        99,
+        CollectionMatch.MANUAL,
+    )
+    assert (unmatched.tmdb_collection_id, unmatched.tmdb_match) == (
+        None,
+        CollectionMatch.UNMATCHED,
+    )
+    assert (reset.tmdb_collection_id, reset.tmdb_match) == (10, CollectionMatch.AUTO)
+    assert [event for event, _ in publisher.broadcasts] == ["collection.updated"] * 3
+
+
+async def test_proxy_collection_image_has_no_season_posters(
+    *, app_config: Settings, database: Database
+) -> None:
+    service = _service(app_config=app_config, database=database)
     with pytest.raises(PublicServiceError) as exc_info:
-        await service.proxy_collection_image("c1", ArtType.POSTER, None)
-    assert exc_info.value.status_code == 400
+        await service.proxy_collection_image(1, ArtType.SEASON_POSTER, None)
+    assert exc_info.value.status_code == 404
 
 
 async def test_proxy_collection_image_delegates_to_proxy_provider_image(
-    monkeypatch: pytest.MonkeyPatch, database: Database
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
 ) -> None:
-    provider = FakeProvider()
+    await _collection(db_session)
+    provider = FakePlex(app_config=app_config)
 
     async def fake_proxy_provider_image(
         request: ProviderImageRequest, *, proxy_clients: ProxyClientManager
@@ -511,11 +397,59 @@ async def test_proxy_collection_image_delegates_to_proxy_provider_image(
         return Response("sentinel-response")
 
     monkeypatch.setattr(module, "proxy_provider_image", fake_proxy_provider_image)
+    service = _service(app_config=app_config, database=database, provider=provider)
 
-    service = _service(database=database, provider=provider)
-    result = await service.proxy_collection_image(
-        "c1", ArtType.POSTER, ImageSize.DISPLAY
-    )
+    result = await service.proxy_collection_image(1, ArtType.POSTER, ImageSize.DISPLAY)
 
     assert result.body == b"sentinel-response"
     assert provider.image_requests == [("c1", ArtType.POSTER, ImageSize.DISPLAY)]
+
+
+async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_facts(
+    tmp_path: Path, *, app_config: Settings, database: Database
+) -> None:
+    refreshed: list[str] = []
+
+    class Jellyfin(JellyfinProvider):
+        @override
+        async def refresh_item(
+            self, item_id: str, *, unlock: Collection[ServerAsset]
+        ) -> None:
+            refreshed.append(item_id)
+
+    app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
+    async with database.write_session() as session:
+        session.add(
+            MediaCollection(
+                id=1,
+                server_item_id="opaque-id",
+                server_type=ServerType.JELLYFIN,
+                media_type=MediaType.MOVIE,
+                server_path="/config/collections/Saga [boxset]",
+                youtube_id="a" * 11,
+                theme_file_hash="known",
+                theme_file_size=5,
+                last_synced_at=utc_now(),
+            )
+        )
+    service = _service(
+        app_config=app_config,
+        database=database,
+        provider=Jellyfin(app_config=app_config),
+    )
+    detail = await service.get_collection(1, MediaType.MOVIE)
+    assert not detail.theme_writable
+    assert detail.theme_unavailable is not None
+    folder = tmp_path / "Saga [boxset]"
+    folder.mkdir()
+    (folder / "theme.mp3").write_bytes(b"audio")
+    assert (await service.get_collection(1, MediaType.MOVIE)).theme_writable
+    await service.delete_collection_theme(1, MediaType.MOVIE)
+    assert not (folder / "theme.mp3").exists()
+    assert refreshed == ["opaque-id"]
+    async with database.read_session() as session:
+        row = await session.get(MediaCollection, 1)
+        assert row is not None
+        assert row.youtube_id is None
+        assert row.theme_file_hash is None
+        assert row.theme_file_size is None

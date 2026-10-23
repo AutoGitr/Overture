@@ -36,6 +36,7 @@
     selectionMatchesPublicDataset,
   } from "../utils/publicDataset";
   import { hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
+  import CollectionBadge from "./CollectionBadge.svelte";
   import ArtPanel from "./ArtPanel.svelte";
   import DetailPanelBase from "./DetailPanelBase.svelte";
   import IdBadge from "./IdBadge.svelte";
@@ -200,6 +201,11 @@
 
   {#snippet badges()}
     <ExternalLinkBadges {subject} mode={view.mode} {artType} season={drillSeason} />
+    {#if item?.tmdb_collection_id}<CollectionBadge
+        tmdbId={item.tmdb_collection_id}
+        libraryCollectionId={item.library_collection_id}
+        {datasetEnabled}
+      />{/if}
     {#if showContributionLink}
       <IdBadge
         href={contributionUrl}

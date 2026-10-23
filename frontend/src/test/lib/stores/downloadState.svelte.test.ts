@@ -68,8 +68,7 @@ describe("downloadState", () => {
   it("announces a collection theme once its download completes", () => {
     const target = {
       target_type: "collection_theme",
-      collection_server_id: "coll-1",
-      media_type: "movie",
+      collection_id: 1,
       title: "Star Wars",
     } as const;
     const event = (status: DownloadStatus): DownloadJobEvent => ({
@@ -82,8 +81,7 @@ describe("downloadState", () => {
     });
     downloadState.trackQueuedCollectionJob({
       jobId: "theme",
-      serverId: "coll-1",
-      mediaType: "movie",
+      collectionId: 1,
       title: "Star Wars",
     });
 
@@ -92,7 +90,7 @@ describe("downloadState", () => {
 
     downloadState.handleFinished(event("completed"));
     expect(notify.success).toHaveBeenCalledExactlyOnceWith("Theme applied to Star Wars.");
-    expect(downloadState.isDownloadingCollection("coll-1")).toBe(false);
+    expect(downloadState.isDownloadingCollection(1)).toBe(false);
   });
 
   it("lists the running downloads of one lane", () => {
@@ -139,8 +137,7 @@ describe("downloadState", () => {
         status: "pending",
         target: {
           target_type: "collection_theme",
-          collection_server_id: "movies",
-          media_type: "movie",
+          collection_id: 1,
           title: "Movies",
         },
         error: null,
@@ -254,8 +251,7 @@ describe("downloadState", () => {
     vi.useFakeTimers();
     downloadState.trackQueuedCollectionJob({
       jobId: "old",
-      serverId: "coll",
-      mediaType: "movie",
+      collectionId: 1,
       title: "Saga",
     });
     downloadState.handleFailed({
@@ -270,8 +266,7 @@ describe("downloadState", () => {
         status: "failed",
         target: {
           target_type: "collection_theme",
-          collection_server_id: "coll",
-          media_type: "movie",
+          collection_id: 1,
           title: "Saga",
         },
         error: null,
@@ -279,12 +274,11 @@ describe("downloadState", () => {
     });
     downloadState.trackQueuedCollectionJob({
       jobId: "new",
-      serverId: "coll",
-      mediaType: "movie",
+      collectionId: 1,
       title: "Saga",
     });
 
-    expect(downloadState.getCollectionJob("coll")?.job_id).toBe("new");
-    expect(downloadState.isDownloadingCollection("coll")).toBe(true);
+    expect(downloadState.getCollectionJob(1)?.job_id).toBe("new");
+    expect(downloadState.isDownloadingCollection(1)).toBe(true);
   });
 });

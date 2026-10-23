@@ -2,7 +2,7 @@
 
 lazy from collections.abc import AsyncIterator, Collection
 lazy from datetime import datetime
-lazy from typing import Any, ClassVar, Literal, override
+lazy from typing import ClassVar, Literal, override
 
 lazy from ...config import Settings
 lazy from ...domain import ArtType, ImageSize, MediaType, ServerAsset, ServerType
@@ -11,9 +11,11 @@ lazy from ...utils.time import parse_utc_datetime
 lazy from ..adapters import (
     MAX_SEASONS_PER_SHOW,
     ProviderImageRequest,
+    ServerCollection,
     ServerItem,
     ServerSeason,
     ServerSection,
+    UploadThemes,
     server_path,
 )
 lazy from ..base import BaseMediaServerProvider
@@ -105,6 +107,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     """Adapt Plex responses to the shared media-server contract."""
 
     server_type: ClassVar[ServerType] = ServerType.PLEX
+    collections = UploadThemes()
 
     def __init__(
         self, *, client: PlexClient | None = None, app_config: Settings
@@ -282,25 +285,45 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         """Delete the Plex theme attached to an item."""
         await self.client.delete_theme(server_item_id)
 
-    async def list_collections(self, media_type: MediaType) -> list[dict[str, Any]]:
-        """Return Plex collections for all matching library sections."""
-        results: list[dict[str, Any]] = []
-        for section in await self.get_sections():
-            if section.media_type is not media_type:
-                continue
-            collections = await self.client.get_collections(section.key)
-            for collection in collections:
-                collection["media_type"] = media_type
-                collection["server_type"] = self.server_type
-            results.extend(collections)
-        return results
+    @override
+    async def list_collections(self) -> list[ServerCollection]:
+        """Return the collections of every movie and show library."""
+        machine_id = await self.client.get_machine_identifier()
+        return [
+            await self._server_collection(item, section, machine_id)
+            for section in await self.get_sections()
+            for item in await self.client.get_collections(section.key)
+        ]
 
+    async def _server_collection(
+        self, item: PlexMetadata, section: ServerSection, machine_id: str | None
+    ) -> ServerCollection:
+        rating_key = str(item["ratingKey"])
+        thumb, art, theme = item.get("thumb"), item.get("art"), item.get("theme")
+        return ServerCollection(
+            id=rating_key,
+            title=item.get("title") or "",
+            member_ids=tuple(await self.client.get_collection_member_ids(rating_key)),
+            server_link=plex_web_link(
+                "collections", rating_key, machine_id, app_config=self._app_config
+            ),
+            media_type=section.media_type,
+            library_id=section.key,
+            summary=item.get("summary") or None,
+            thumb_url=await self.client.asset_url(thumb) if thumb else None,
+            art_url=await self.client.asset_url(art) if art else None,
+            theme_id=str(theme) if theme else None,
+            added_at=parse_utc_datetime(item.get("addedAt")),
+        )
+
+    @override
     async def upload_collection_theme(
         self, server_item_id: str, mp3_bytes: bytes
     ) -> str:
         """Upload an MP3 as a Plex collection theme."""
         return await self.client.upload_collection_theme(server_item_id, mp3_bytes)
 
+    @override
     async def delete_collection_theme(self, server_item_id: str) -> None:
         """Delete a Plex collection theme."""
         await self.client.delete_collection_theme(server_item_id)

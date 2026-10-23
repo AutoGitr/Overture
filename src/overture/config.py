@@ -236,6 +236,9 @@ class Settings(RuntimeSettings):
     MEDIA_SERVER_VERIFY_TLS: bool = True
 
     TMDB_API_KEY: SecretStr = SecretStr("")
+    # Jellyfin's collections metadata folder, mounted into Overture, where it
+    # writes each collection's theme.mp3.
+    JELLYFIN_COLLECTIONS_PATH: Path | None = None
 
     # Canonical browser origin. This controls secure cookies and WebSocket origin
     # checks; it does not grant trust to any reverse proxy.

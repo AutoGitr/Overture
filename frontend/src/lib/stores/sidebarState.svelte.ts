@@ -11,9 +11,10 @@ export const sidebarState = $state<{
    * virtual viewport. "Current sidebar items" operations act on it.
    */
   current: { type: SidebarTab; itemIds: number[] } | null;
+  collections: { type: SidebarTab; collectionIds: number[] } | null;
   /** The TMDB results shown, in order, while the sidebar searches TMDB. */
   tmdbResults: AdvanceEntry[] | null;
-}>({ current: null, tmdbResults: null });
+}>({ current: null, collections: null, tmdbResults: null });
 
 /** The rows auto-advance moves through: the TMDB results, else the library's. */
 export function advanceOrder(): AdvanceEntry[] {

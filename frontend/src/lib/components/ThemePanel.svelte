@@ -9,6 +9,7 @@
     selectTmdbThemeMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
+    CatalogEntryDetail,
     MediaItemRead,
     ThemeSearchResult,
     TmdbItemPreview,
@@ -17,6 +18,7 @@
   import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
+  import type { CatalogDraft } from "../utils/catalogDraft";
   import { errorMessage } from "../utils/errors";
   import { beginAutoAdvance, handleThemeSelectionAdvance } from "../utils/autoAdvance";
   import { buildThemeSearchQuery, mergeThemeResults } from "../utils/themeSearch";
@@ -25,17 +27,20 @@
   import ThemeSearch from "./ThemeSearch.svelte";
 
   let {
-    item,
-    preview,
+    item = null,
+    preview = null,
+    catalog = null,
   }: {
-    item: MediaItemRead | null;
+    item?: MediaItemRead | null;
+    catalog?: { detail: CatalogEntryDetail; draft: CatalogDraft } | null;
     /** A TMDB title not yet stored: its first theme selection stores it. */
-    preview: TmdbItemPreview | null;
+    preview?: TmdbItemPreview | null;
   } = $props();
 
   const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
   let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
-  let subject = $derived(item ?? preview);
+  let catalogEntry = $derived(catalog?.detail.draft ?? catalog?.detail.entry);
+  let subject = $derived(item ?? preview ?? catalogEntry);
   const provenanceLabels = {
     download: "Source recorded when downloaded",
     embedded_id: "Recovered from an embedded YouTube ID",
@@ -59,32 +64,52 @@
   // Keyed on the item, so responses stay with the item they were requested for.
   const itemSourcesQuery = createQuery(() => ({
     ...getPublicDatasetSourcesOptions({ path: { item_id: item?.id ?? 0 } }),
-    enabled: !!item && datasetEnabled,
+    enabled: !!item && !catalog && datasetEnabled,
   }));
   const tmdbSourcesQuery = createQuery(() => ({
     ...getTmdbPublicDatasetSourcesOptions({
       path: { media_type: preview?.media_type ?? "movie", tmdb_id: preview?.tmdb_id ?? 0 },
     }),
-    enabled: !!preview && datasetEnabled,
+    enabled: !!preview && !catalog && datasetEnabled,
   }));
   let publicSourcesQuery = $derived(preview ? tmdbSourcesQuery : itemSourcesQuery);
-  let datasetSource = $derived(datasetEnabled ? publicSourcesQuery.data?.item : null);
+  let datasetSource = $derived(
+    catalogEntry ?? (datasetEnabled ? publicSourcesQuery.data?.item : null),
+  );
   // The themes shown whatever is searched for: the current one and the dataset's.
   let candidateVideoIds = $derived([
     ...new Set(
-      [item?.youtube_id, datasetSource?.youtube_id_overturedb, datasetSource?.youtube_id_themerrdb]
+      [
+        item?.youtube_id,
+        catalog?.detail.entry.youtube_id_overturedb,
+        datasetSource?.youtube_id_overturedb,
+        datasetSource?.youtube_id_themerrdb,
+      ]
         .map((id) => id?.trim())
         .filter((id): id is string => Boolean(id)),
     ),
   ]);
   let subjectKey = $derived(
-    item ? `item-${item.id}` : preview ? `tmdb-${preview.media_type}-${preview.tmdb_id}` : null,
+    catalog
+      ? `catalog-${catalog.detail.entry.media_type}-${catalog.detail.entry_key}`
+      : item
+        ? `item-${item.id}`
+        : preview
+          ? `tmdb-${preview.media_type}-${preview.tmdb_id}`
+          : null,
   );
 
   /** The subject's current and dataset themes first, then the videos found. */
   function presentResults(results: ThemeSearchResult[]) {
     return mergeThemeResults({
-      item,
+      item: catalogEntry
+        ? {
+            title: catalogEntry.title,
+            youtube_id: catalogEntry.youtube_id_overturedb,
+            youtube_title: null,
+            youtube_duration: null,
+          }
+        : item,
       overtureDbId: datasetSource?.youtube_id_overturedb,
       themerrDbId: datasetSource?.youtube_id_themerrdb,
       searchResults: results,
@@ -92,6 +117,7 @@
   }
 
   async function selectTheme(youtubeId: string): Promise<boolean> {
+    if (catalog) return catalog.draft.save({ youtube_id_overturedb: youtubeId });
     if (themeBusy) return false;
     if (preview) return selectTmdbTheme(preview.media_type, preview.tmdb_id, youtubeId);
     if (!item) return false;
@@ -149,7 +175,7 @@
 </script>
 
 <div class="theme-panel">
-  {#if datasetEnabled}
+  {#if datasetEnabled && !catalog}
     <DataStatus
       label="OvertureDB theme"
       error={publicSourcesQuery.error}
@@ -182,12 +208,15 @@
     {#key subjectKey}
       <ThemeSearch
         label="Search themes"
-        initialQuery={buildThemeSearchQuery(subject, settingsState.current.theme_search_format)}
+        initialQuery={buildThemeSearchQuery(
+          { title: subject.title, year: subject.year ?? null },
+          settingsState.current.theme_search_format,
+        )}
         videoIds={candidateVideoIds}
         present={presentResults}
-        currentYoutubeId={item?.youtube_id ?? null}
+        currentYoutubeId={catalogEntry?.youtube_id_overturedb ?? item?.youtube_id ?? null}
         busyVideoId={downloadingId}
-        busy={themeBusy}
+        busy={themeBusy || (catalog?.draft.busy ?? false)}
         onselect={selectTheme}
       />
     {/key}

@@ -1,5 +1,6 @@
 """Startup creates or upgrades the schema and safely accepts repeated runs."""
 
+lazy import json
 lazy import logging
 lazy from pathlib import Path
 
@@ -226,3 +227,151 @@ def test_every_model_check_constraint_exists_at_head() -> None:
         if isinstance(constraint, CheckConstraint)
     }
     assert declared == migrated
+
+
+def test_revision_2_moves_collection_choices_and_keeps_the_setting() -> None:
+    """Kept collection themes wait unlisted for a sync; the toggle carries over."""
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "1")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_themes (id, server_item_id, media_type, "
+                "server_type, youtube_id, server_theme_id, monitored) VALUES "
+                "(1, 'c1', 'movie', 'plex', 'abcDEF12345', '/theme/1', 1), "
+                "(2, 'c2', 'show', 'plex', NULL, NULL, 1)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO app_settings (id, auto_match_art, workflow, "
+                "theme_search_format, min_duration_seconds, max_duration_seconds, "
+                "normalize_theme_loudness, skip_media_server_tmdb_urls, "
+                "disable_media_server_art, aspect_ratio_tolerance, "
+                "plex_collections_enabled, tmdb_language_filter, auto_advance, "
+                "auto_advance_skip_completed, auto_unmonitor) VALUES (1, 0, 'art', "
+                "'{title}', 30, 300, 1, 0, 0, 'strict', 0, 'en_null', 0, 1, 'off')"
+            )
+
+            command.upgrade(config, "2")
+
+            assert conn.exec_driver_sql(
+                "SELECT server_item_id, media_type, youtube_id, server_theme_id, "
+                "tmdb_match, last_synced_at FROM media_collections "
+                "ORDER BY server_item_id"
+            ).all() == [
+                ("c1", "movie", "abcDEF12345", "/theme/1", "auto", None),
+                ("c2", "show", None, None, "auto", None),
+            ]
+            assert conn.exec_driver_sql(
+                "SELECT collections_enabled FROM app_settings"
+            ).all() == [(0,)]
+
+            command.downgrade(config, "1")
+
+            # Only the collection holding a choice of the user's goes back.
+            assert conn.exec_driver_sql(
+                "SELECT server_item_id, youtube_id FROM collection_themes"
+            ).all() == [("c1", "abcDEF12345")]
+            assert conn.exec_driver_sql(
+                "SELECT plex_collections_enabled FROM app_settings"
+            ).all() == [(0,)]
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("revision", ["1", "2"])
+def test_collection_ids_upgrade_jobs_and_history_and_downgrade_without_loss(
+    revision: str,
+) -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "1")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_themes (id, server_item_id, "
+                "media_type, server_type, "
+                "youtube_id, monitored) VALUES (7, '42', 'movie', 'plex', "
+                "'abcDEF12345', 1)"
+            )
+            command.upgrade(config, revision)
+            conn.exec_driver_sql(
+                "INSERT INTO download_jobs (id, job_type, collection_server_id, "
+                "collection_media_type, collection_title, status, "
+                "progress_percent, created_at) "
+                "VALUES ('pending', 'collection_theme', '42', 'movie', "
+                "'Saga', 'pending', 0, '2026-01-01'), "
+                "('orphan', 'collection_theme', 'gone', 'movie', 'Gone', "
+                "'done', 100, '2026-01-01')"
+            )
+            old = {
+                "job": {
+                    "target": {
+                        "target_type": "collection_theme",
+                        "collection_server_id": "42",
+                        "media_type": "movie",
+                        "title": "Saga",
+                    }
+                }
+            }
+            conn.exec_driver_sql(
+                "INSERT INTO job_runs (id, kind, started_at, event, "
+                "summary, total, log_total, cleared) "
+                "VALUES ('run', 'download', '2026-01-01', "
+                "'download.completed', '{}', 1, 0, 0)"
+            )
+            conn.execute(
+                text("INSERT INTO job_results VALUES ('run', 0, :payload)"),
+                {"payload": json.dumps(old)},
+            )
+            command.upgrade(config, "head")
+            collection_id = conn.exec_driver_sql(
+                "SELECT id FROM media_collections WHERE server_item_id='42'"
+            ).scalar_one()
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT collection_id FROM download_jobs WHERE id='pending'"
+                ).scalar_one()
+                == collection_id
+            )
+            target = json.loads(
+                conn.exec_driver_sql("SELECT payload FROM job_results").scalar_one()
+            )["job"]["target"]
+            assert target == {
+                "target_type": "collection_theme",
+                "collection_id": collection_id,
+                "title": "Saga",
+            }
+            assert conn.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+            assert (
+                conn.exec_driver_sql("SELECT count(*) FROM download_jobs").scalar_one()
+                == 2
+            )
+            assert "collections_enabled" not in {
+                col["name"] for col in inspect(conn).get_columns("app_settings")
+            }
+            command.downgrade(config, "1")
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT collection_server_id FROM download_jobs WHERE id='pending'"
+                ).scalar_one()
+                == "42"
+            )
+            assert (
+                json.loads(
+                    conn.exec_driver_sql("SELECT payload FROM job_results").scalar_one()
+                )
+                == old
+            )
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT youtube_id FROM collection_themes WHERE server_item_id='42'"
+                ).scalar_one()
+                == "abcDEF12345"
+            )
+            command.upgrade(config, "head")
+            assert conn.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+    finally:
+        engine.dispose()

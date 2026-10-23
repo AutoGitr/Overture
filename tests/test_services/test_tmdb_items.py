@@ -15,7 +15,13 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ThemeIdSource
+lazy from overture.domain import (
+    ArtType,
+    CatalogMediaType,
+    MediaType,
+    ThemeIdSource,
+    TmdbLanguageFilter,
+)
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import (
     TMDBClient,
@@ -24,7 +30,7 @@ lazy from overture.integrations.tmdb import (
     TmdbSeason,
     TmdbTitle,
 )
-lazy from overture.schemas.art import SaveArtRequest
+lazy from overture.schemas.art import ArtCandidate, SaveArtRequest
 lazy from overture.schemas.themes import SelectThemeRequest, ThemeSearchResult
 lazy from overture.services.art import service as art_module
 lazy from overture.services.art.candidates import ArtCandidates
@@ -540,3 +546,52 @@ async def test_tmdb_item_with_folder_enqueues_download_and_wakes_worker(
     assert theme.selection.job_id == "job-2"
     assert downloads.committed_jobs == downloads.jobs
     assert downloads.jobs[1] == JobTarget.theme(7, "abcDEF123_4")
+
+
+async def test_catalog_collection_art_uses_saved_candidate_policy(
+    tmdb_config: Settings, database: Database
+) -> None:
+    class CollectionArtTmdb(FakeTmdb):
+        @override
+        async def art_candidates(
+            self,
+            media_type: MediaType | CatalogMediaType,
+            tmdb_id: int,
+            art_type: ArtType,
+            *,
+            season_num: int | None = None,
+            language_filter: TmdbLanguageFilter = TmdbLanguageFilter.EN_NULL,
+        ) -> list[ArtCandidate]:
+            assert media_type == CatalogMediaType.COLLECTION
+            assert tmdb_id == 10
+            assert language_filter == TmdbLanguageFilter.EN_NULL
+            return [
+                ArtCandidate(
+                    url=f"{IMAGE}/poster.jpg",
+                    width=1000,
+                    height=1500,
+                    art_type=art_type,
+                    source="tmdb",
+                ),
+                ArtCandidate(
+                    url=f"{IMAGE}/wrong-shape.jpg",
+                    width=1000,
+                    height=1000,
+                    art_type=art_type,
+                    source="tmdb",
+                ),
+            ]
+
+    service = _service(
+        app_config=tmdb_config, database=database, tmdb=CollectionArtTmdb()
+    )
+    result = await service.art_sources(
+        CatalogMediaType.COLLECTION, 10, ArtType.POSTER, None
+    )
+    assert [art.url for art in result.sources["tmdb"]] == [f"{IMAGE}/poster.jpg"]
+    with pytest.raises(PublicServiceError, match="Collections have no season posters"):
+        await service.art_sources(
+            CatalogMediaType.COLLECTION, 10, ArtType.SEASON_POSTER, 1
+        )
+    async with database.read_session() as session:
+        assert await _items(session) == []

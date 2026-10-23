@@ -4,10 +4,8 @@
  * Routes identify items and collections with a slug of the form
  * `{id}-{slugified-title}` (e.g. `42-the-matrix`) instead of a bare numeric
  * or opaque id, so links are both stable (the id drives lookups) and
- * readable/shareable. Both item ids (numeric DB primary keys) and Plex
- * collection ids (numeric ratingKeys) are digit-only in this app, so the
- * id can always be recovered by reading the leading digits back off the
- * slug.
+ * readable/shareable. Library item IDs and Plex rating keys use the leading
+ * digits; opaque Jellyfin collection IDs are kept intact by the router.
  */
 
 /** Lowercase, hyphenate, and strip a title down to URL-safe characters. */
@@ -48,4 +46,9 @@ export function parseIdFromSlug(slug: string | undefined): string {
   if (!slug) return "";
   const match = /^(\d+)/.exec(slug);
   return match?.[1] ?? slug;
+}
+
+/** Read a catalog identity, independently of the unsaved TMDB item route. */
+export function parseCatalogSlug(slug: string | undefined): string | null {
+  return slug && /^(?:(?:tmdb|tvdb)-[1-9]\d*|imdb-tt\d+)$/.test(slug) ? slug : null;
 }

@@ -14,6 +14,9 @@ lazy from .plex import PlexProvider
 
 logger = logging.getLogger(__name__)
 
+#: A provider whose server has collections Overture can manage.
+type CollectionProvider = BaseMediaServerProvider[Any]
+
 #: The provider class that adapts each media server.
 _PROVIDERS: frozendict[ServerType, Callable[..., BaseMediaServerProvider[Any]]] = (
     frozendict(
@@ -48,10 +51,12 @@ class ProviderRegistry:
         return self._providers[server_type]
 
     @property
-    def collections(self) -> PlexProvider | None:
-        """Return the provider when its server supports collections (Plex)."""
+    def collections(self) -> CollectionProvider | None:
+        """Return the provider when its server supports collections."""
         provider = self.provider
-        return provider if isinstance(provider, PlexProvider) else None
+        if provider.collections is not None:
+            return provider
+        return None
 
     async def fetch_server_active_art_url(
         self, server_id: str, art_type: ArtType

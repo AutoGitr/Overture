@@ -30,8 +30,7 @@ def job_target(job: DownloadJob, title: str | None) -> dict[str, int | str | Non
     if job.job_type is JobType.COLLECTION_THEME:
         return {
             "target_type": "collection_theme",
-            "collection_server_id": job.collection_server_id,
-            "media_type": job.collection_media_type,
+            "collection_id": job.collection_id,
             "title": title or job.collection_title,
         }
     return {

@@ -7,7 +7,7 @@ lazy import pytest
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
-lazy from overture.domain import MediaType
+lazy from overture.domain import ArtType, CatalogMediaType, MediaType
 lazy from overture.integrations.http import RequestLimiter
 lazy from overture.integrations.tmdb import TMDBClient, TmdbSeason
 lazy from tests.http_mock import mock_client_factory
@@ -177,3 +177,34 @@ async def test_collection_lists_its_movies(app_config: Settings) -> None:
     assert collection is not None
     assert collection.summary.poster_url == f"{IMAGE}/collection.jpg"
     assert [part.tmdb_id for part in collection.parts] == [604, 603]
+
+
+async def test_collection_art_uses_collection_images_and_caches_by_language(
+    app_config: Settings,
+) -> None:
+    client, transport = _client(
+        app_config,
+        {
+            "/3/collection/10/images": httpx2.Response(
+                200,
+                json={
+                    "posters": [
+                        {"file_path": "/collection.jpg", "width": 1000, "height": 1500}
+                    ],
+                    "backdrops": [
+                        {"file_path": "/background.jpg", "width": 1920, "height": 1080}
+                    ],
+                },
+            )
+        },
+    )
+    posters = await client.art_candidates(
+        CatalogMediaType.COLLECTION, 10, ArtType.POSTER
+    )
+    backgrounds = await client.art_candidates(
+        CatalogMediaType.COLLECTION, 10, ArtType.BACKGROUND
+    )
+    await client.close()
+    assert [poster.url for poster in posters] == [f"{IMAGE}/collection.jpg"]
+    assert [background.url for background in backgrounds] == [f"{IMAGE}/background.jpg"]
+    assert transport.call_count == 1

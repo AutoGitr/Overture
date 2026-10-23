@@ -14,6 +14,8 @@ import { clearJobSnapshot, JOB_PROJECTION_HANDLERS, jobKindOf, resetJobStates } 
 
 const PROJECTION_HANDLERS: WebSocketHandlerMap = {
   "realtime.snapshot": () => {},
+  "collections.changed": () => {},
+  "collection.updated": () => {},
   ...JOB_PROJECTION_HANDLERS,
   "download.started": (data) => downloadState.handleStarted(data),
   "download.progress": (data) => downloadState.handleProgress(data),

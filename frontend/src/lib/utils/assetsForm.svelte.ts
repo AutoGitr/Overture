@@ -45,6 +45,7 @@ export class AssetsForm {
   readonly config: AssetsConfig = persistedState("assetsPopup", {
     selectedLibraries: [] as string[],
     useSidebarItems: false,
+    includeCollections: false,
     includeUnmonitored: false,
     overwriteExisting: false,
     retrySavedDownloads: false,
@@ -79,7 +80,11 @@ export class AssetsForm {
     scheduleCronExpression: DEFAULT_CRON_EXPRESSION,
   });
 
-  constructor(private readonly source: AssetsFormSource) {}
+  private readonly source: AssetsFormSource;
+
+  constructor(source: AssetsFormSource) {
+    this.source = source;
+  }
 
   get movieLibraries(): LibrarySectionRead[] {
     return this.source.movieLibraries();
@@ -97,6 +102,10 @@ export class AssetsForm {
     restoreLibrarySelection(this.movieLibraries, this.showLibraries, this.config.selectedLibraries),
   );
 
+  readonly collectionScope = $derived(
+    this.config.useSidebarItems && sidebarState.collections !== null,
+  );
+
   readonly hasShowLibraries = $derived.by(() =>
     this.config.useSidebarItems
       ? sidebarState.current?.type === "show"
@@ -105,7 +114,7 @@ export class AssetsForm {
 
   readonly hasSelectedLibraries = $derived.by(() =>
     this.config.useSidebarItems
-      ? !!sidebarState.current?.itemIds.length
+      ? !!(sidebarState.current?.itemIds.length || sidebarState.collections?.collectionIds.length)
       : this.source.librariesLoaded() && this.selectedLibraries.length > 0,
   );
 
@@ -138,16 +147,28 @@ export class AssetsForm {
   readonly canRun = $derived.by(() => {
     const { enableArt, enableThemes } = this.config;
     const artReady =
-      !enableArt || (this.artTypesToRun.length > 0 && this.activeArtSources.length > 0);
+      !enableArt ||
+      this.collectionScope ||
+      (this.artTypesToRun.length > 0 && this.activeArtSources.length > 0);
     const themesReady = !enableThemes || this.activeThemeSources.length > 0;
-    return this.hasSelectedLibraries && (enableArt || enableThemes) && artReady && themesReady;
+    return (
+      this.hasSelectedLibraries &&
+      ((enableArt && !this.collectionScope) || enableThemes) &&
+      artReady &&
+      themesReady
+    );
   });
 
   request(): BulkAssetsRequest {
     const { config } = this;
     return buildBulkAssetsRequest({
       selectedLibraries: this.selectedLibraries,
-      itemIds: config.useSidebarItems ? (sidebarState.current?.itemIds ?? []) : undefined,
+      itemIds:
+        config.useSidebarItems && !this.collectionScope
+          ? (sidebarState.current?.itemIds ?? [])
+          : undefined,
+      collectionIds: this.collectionScope ? sidebarState.collections?.collectionIds : undefined,
+      includeCollections: config.includeCollections,
       includeUnmonitored: config.includeUnmonitored,
       overwriteExisting: config.overwriteExisting,
       retrySavedDownloads: config.retrySavedDownloads,
@@ -221,6 +242,7 @@ export class AssetsForm {
     config.skipRecentUnit = saved.skip_recent_unit;
     config.enableArt = !!saved.art;
     config.enableThemes = !!saved.themes;
+    config.includeCollections = saved.themes?.include_collections ?? false;
     if (saved.art) {
       config.artTypes = saved.art.art_types;
       config.artSourceOrder = normaliseSourceOrder(

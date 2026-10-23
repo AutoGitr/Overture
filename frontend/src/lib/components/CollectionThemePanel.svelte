@@ -8,7 +8,7 @@
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import Music from "@lucide/svelte/icons/music";
   import { createMutation } from "@tanstack/svelte-query";
-  import type { CollectionRead } from "../../generated/rest/types.gen";
+  import type { CollectionDetail, ThemeSearchResult } from "../../generated/rest/types.gen";
   import youtubeIcon from "../../assets/icons/youtube.svg";
   import { patchCollection } from "../rest/cache";
   import {
@@ -18,12 +18,18 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
+  import { goToCatalogEntry } from "../router/routes";
+  import { buildTmdbCollectionUrl } from "../utils/externalLinks";
+  import CollectionMatchPanel from "./CollectionMatchPanel.svelte";
+  import CollectionMembers from "./CollectionMembers.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
   import { errorMessage } from "../utils/errors";
   import { statusTone } from "../utils/sidebarDomain";
   import {
     buildCollectionThemeSearchQuery,
+    mergeThemeResults,
     youtubeSearchUrl,
     youtubeShortUrl,
   } from "../utils/themeSearch";
@@ -32,7 +38,7 @@
   import StatusTab from "./StatusTab.svelte";
   import ThemeSearch from "./ThemeSearch.svelte";
 
-  let { collection: coll }: { collection: CollectionRead | null } = $props();
+  let { collection: coll }: { collection: CollectionDetail | null } = $props();
   const feedback = createNotifier();
   const deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
   const setThemeRequest = createMutation(() => setCollectionThemeMutation());
@@ -47,7 +53,7 @@
     setThemeRequest.isPending || !!activeThemeJob || collectionThemeJob?.status === "pending",
   );
   // Belongs to the collection it was chosen for, so switching never shows it.
-  let chosen = $state<{ collectionId: string; videoId: string } | null>(null);
+  let chosen = $state<{ collectionId: number; videoId: string } | null>(null);
   let uploadingVideoId = $derived(
     applying && chosen && chosen.collectionId === coll?.id ? chosen.videoId : null,
   );
@@ -85,8 +91,7 @@
       });
       downloadState.trackQueuedCollectionJob({
         jobId: enqueueResult.job_id,
-        serverId: target.id,
-        mediaType: target.media_type,
+        collectionId: target.id,
         title: target.title,
       });
       return true;
@@ -130,7 +135,7 @@
   subjectKey={coll?.id ?? null}
   backgroundUrl={collectionImageUrl(coll?.art_url)}
   posterHref={coll?.server_link ?? null}
-  posterLinkTitle={coll?.server_link ? "Open in Plex" : null}
+  posterLinkTitle={coll?.server_link ? `Open in ${settingsState.media_server_name}` : null}
   summary={coll?.summary ?? null}
   emptyMessage="Select a collection from the sidebar"
   posterUrl={collectionImageUrl(coll?.thumb_url)}
@@ -149,6 +154,30 @@
   {/snippet}
 
   {#snippet badges()}
+    {#if coll?.tmdb_collection_id}
+      <a
+        class="btn btn-ghost btn-sm"
+        href={buildTmdbCollectionUrl(coll.tmdb_collection_id)}
+        target="_blank"
+        rel="noreferrer">TMDB {coll.tmdb_collection_id}</a
+      >
+      {#if coll.catalog_entry_key}<button
+          class="btn btn-ghost btn-sm"
+          onclick={() => {
+            if (coll?.catalog_entry_key)
+              goToCatalogEntry({
+                media_type: "collection",
+                entry_key: coll.catalog_entry_key,
+              });
+          }}>Open in OvertureDB</button
+        >{/if}
+    {/if}
+    {#if coll?.server_link}<a
+        class="btn btn-ghost btn-sm"
+        href={coll.server_link}
+        target="_blank"
+        rel="noreferrer">Open in {settingsState.media_server_name}</a
+      >{/if}
     {#if coll?.title}
       <IdBadge
         href={youtubeSearchUrl(buildCollectionThemeSearchQuery(coll.title))}
@@ -166,7 +195,9 @@
       active
       status={coll && statusTone(coll.theme_status, !!activeThemeJob)}
       clearLabel="Clear theme"
-      onclear={coll && coll.theme_status !== "missing" ? clearTheme : null}
+      onclear={coll && !coll.theme_unavailable && coll.theme_status !== "missing"
+        ? clearTheme
+        : null}
       clearDisabled={uploading}
     />
     <button
@@ -191,7 +222,11 @@
   {/snippet}
 
   {#snippet content()}
-    {#if coll?.server_type === "plex"}
+    {#if coll}
+      <CollectionMatchPanel collection={coll} />
+      {#if coll.theme_unavailable}<p class="text-muted">{coll.theme_unavailable}</p>{/if}
+    {/if}
+    {#if coll && !coll.theme_unavailable}
       <div class="theme-panel">
         {#if coll.theme_status !== "missing"}
           <div class="theme-status">
@@ -228,6 +263,20 @@
           <ThemeSearch
             label="Search collection themes"
             initialQuery={buildCollectionThemeSearchQuery(coll.title)}
+            videoIds={[
+              ...new Set(
+                [coll.youtube_id, coll.youtube_id_overturedb, coll.youtube_id_themerrdb].filter(
+                  (id): id is string => !!id,
+                ),
+              ),
+            ]}
+            present={(results: ThemeSearchResult[]) =>
+              mergeThemeResults({
+                item: coll,
+                overtureDbId: coll?.youtube_id_overturedb,
+                themerrDbId: coll?.youtube_id_themerrdb,
+                searchResults: results,
+              })}
             currentYoutubeId={coll.youtube_id}
             busyVideoId={uploadingVideoId}
             busy={uploading}
@@ -241,6 +290,7 @@
         {/key}
       </div>
     {/if}
+    {#if coll}<CollectionMembers members={coll.members} />{/if}
   {/snippet}
 </DetailPanelBase>
 

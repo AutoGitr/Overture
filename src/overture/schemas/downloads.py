@@ -4,7 +4,7 @@ lazy from typing import Annotated, Literal
 
 lazy from pydantic import Field
 
-lazy from ..domain import ArtType, JobType, MediaType
+lazy from ..domain import ArtType, JobType
 lazy from ..jobs.kinds import DownloadStatus, JobKind
 lazy from .base import StrictBaseModel
 lazy from .common import PublicError
@@ -25,8 +25,7 @@ class CollectionThemeDownloadTarget(StrictBaseModel):
     """Target for a media-server collection theme upload."""
 
     target_type: Literal["collection_theme"]
-    collection_server_id: str
-    media_type: MediaType
+    collection_id: int
     title: str
 
 

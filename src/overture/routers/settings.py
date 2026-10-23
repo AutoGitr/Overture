@@ -23,18 +23,25 @@ router = APIRouter(
 
 
 @router.get("")
-async def get_settings(db: SessionDep, settings: SettingsDep) -> AppSettingsRead:
+async def get_settings(
+    db: SessionDep, settings: SettingsDep, providers: ProviderRegistryDep
+) -> AppSettingsRead:
     """Return current settings."""
-    return await settings_service.get_settings(db, app_config=settings)
+    return await settings_service.get_settings(
+        db, app_config=settings, provider_registry=providers
+    )
 
 
 @router.put("")
 async def update_settings(
-    body: AppSettingsUpdate, settings: SettingsDep, database: DatabaseDep
+    body: AppSettingsUpdate,
+    settings: SettingsDep,
+    database: DatabaseDep,
+    providers: ProviderRegistryDep,
 ) -> AppSettingsRead:
     """Update settings."""
     return await settings_service.update_settings(
-        body, app_config=settings, database=database
+        body, app_config=settings, database=database, provider_registry=providers
     )
 
 

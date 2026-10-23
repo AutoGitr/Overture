@@ -482,6 +482,7 @@ def build_runtime(
         publisher=events,
         downloads=downloads,
         proxy_clients=proxy_clients,
+        app_config=app_config,
     )
     themes = ThemesService(
         database=database,

@@ -6,6 +6,7 @@
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
   import Music from "@lucide/svelte/icons/music";
   import type {
+    CatalogEntryRow,
     CollectionRead,
     MediaItemRead,
     TmdbCollectionResult,
@@ -24,6 +25,7 @@
     style,
     index,
     active,
+    catalogEntry = null,
     item = null,
     collection = null,
     tmdbResult = null,
@@ -36,6 +38,7 @@
     style: string;
     index: number;
     active: boolean;
+    catalogEntry?: CatalogEntryRow | null;
     item?: MediaItemRead | null;
     collection?: CollectionRead | null;
     /** A TMDB search result, not yet stored. */
@@ -60,6 +63,22 @@
 
   /** What every kind of row shows, so one layout renders them all. */
   let row = $derived.by((): Row | null => {
+    if (catalogEntry) {
+      return {
+        title: catalogEntry.title,
+        selectLabel: `Select ${catalogEntry.title}`,
+        meta: catalogEntry.has_draft ? "Draft" : catalogEntry.year,
+        unmonitored: false,
+        icon:
+          catalogEntry.media_type === "collection"
+            ? Layers
+            : catalogEntry.media_type === "show"
+              ? MonitorPlay
+              : Clapperboard,
+        src: remotePosterUrl(catalogEntry),
+        link: null,
+      };
+    }
     if (item) {
       const src = itemArtDisplayUrl(item, "poster");
       const href = itemPosterOriginalUrl(item);
@@ -159,7 +178,30 @@
       </div>
     </button>
 
-    {#if item}
+    {#if catalogEntry}
+      <div class="item-badges">
+        <button
+          type="button"
+          class="item-badge"
+          aria-label={`Open art for ${catalogEntry.title}`}
+          title="Art"
+          data-status={catalogEntry.poster_url && catalogEntry.background_url
+            ? "success"
+            : "danger"}
+          onclick={onOpenArt}><Image size={18} /></button
+        >
+        <button
+          type="button"
+          class="item-badge"
+          aria-label={`Open themes for ${catalogEntry.title}`}
+          title="Theme Music"
+          data-status={catalogEntry.youtube_id_overturedb || catalogEntry.youtube_id_themerrdb
+            ? "success"
+            : "danger"}
+          onclick={onOpenThemes}><Music size={18} /></button
+        >
+      </div>
+    {:else if item}
       <div class="item-badges">
         <button
           type="button"

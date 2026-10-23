@@ -1,4 +1,5 @@
 import type {
+  CatalogEntry,
   MediaItemRead,
   PublicDatasetRecord,
   SeasonRead,
@@ -22,23 +23,23 @@ export function hasContributionValues(
 
 export function buildContributionIssueUrl(
   repoUrl: string,
-  item: MediaItemRead,
-  seasons: SeasonRead[] = [],
+  item: CatalogEntry | MediaItemRead,
+  seasons: Pick<SeasonRead, "season_num" | "poster_url">[] = [],
 ): string {
   const isShow = item.media_type === "show";
 
-  const seasonPosters = seasons
+  const seasonPosters = (seasons.length ? seasons : "seasons" in item ? (item.seasons ?? []) : [])
     .map((season) => [season.season_num, season.poster_url] as const)
     .filter(([, posterUrl]) => !!posterUrl)
     .map(([seasonNum, posterUrl]) => `${seasonNum}=${posterUrl}`)
     .join("\n");
 
   const params = new URLSearchParams();
-  params.set("template", isShow ? "show.yml" : "movie.yml");
+  params.set("template", `${item.media_type}.yml`);
   const year = value(item.year);
   params.set(
     "title",
-    `${isShow ? "[Show]" : "[Movie]"}: ${value(item.title)}${year ? ` (${year})` : ""}`,
+    `${item.media_type === "collection" ? "[Collection]" : isShow ? "[Show]" : "[Movie]"}: ${value(item.title)}${year ? ` (${year})` : ""}`,
   );
   params.set("item_title", value(item.title));
   params.set("year", value(item.year));
@@ -47,7 +48,10 @@ export function buildContributionIssueUrl(
   params.set("imdb_id", value(item.imdb_id));
   params.set("poster_url", value(item.poster_url));
   params.set("background_url", value(item.background_url));
-  params.set("youtube_id", value(item.youtube_id));
+  params.set(
+    "youtube_id",
+    value("youtube_id" in item ? item.youtube_id : item.youtube_id_overturedb),
+  );
   if (isShow) {
     params.set("season_posters", seasonPosters);
   }

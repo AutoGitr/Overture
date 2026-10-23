@@ -160,7 +160,7 @@ describe("DbRecordPopup", () => {
 
   it("shows the selected collection in collections mode without reading item records", async () => {
     queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
-      collection({ id: "12", title: "Action", media_type: "movie" }),
+      collection({ id: 12, title: "Action", media_type: "movie" }),
     ]);
     await navigate("/movies/collections/:collectionSlug", {
       params: { collectionSlug: "12-action" },

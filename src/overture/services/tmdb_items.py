@@ -18,8 +18,9 @@ lazy from .. import protocols
 lazy from ..config import Settings
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
+lazy from ..db.models.settings import get_app_settings
 lazy from ..db.session import Database
-lazy from ..domain import ArtType, MediaType
+lazy from ..domain import ArtType, CatalogMediaType, MediaType
 lazy from ..integrations.tmdb import TMDBClient, TmdbDetails, TmdbTitle
 lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..repositories.seasons import SeasonRepository
@@ -39,6 +40,7 @@ lazy from ..schemas.tmdb import (
 )
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
+lazy from .art.candidates import CandidatePolicy
 lazy from .art.service import ArtService
 lazy from .downloads.service import DownloadService
 lazy from .library.items import (
@@ -242,13 +244,40 @@ class TmdbItemsService:
 
     async def art_sources(
         self,
-        media_type: MediaType,
+        media_type: MediaType | CatalogMediaType,
         tmdb_id: int,
         art_type: ArtType,
         season_num: int | None,
     ) -> ArtSourcesResponse:
-        """Return artwork options for one slot of an unsaved item."""
-        details = await self._details(media_type, tmdb_id)
+        """Return artwork options for an unsaved item or catalog collection.
+
+        Raises:
+            PublicServiceError: When a collection requests a season poster.
+        """
+        if media_type == CatalogMediaType.COLLECTION:
+            self._require_configured()
+            if art_type.owned_by_season:
+                raise PublicServiceError(422, "Collections have no season posters.")
+            async with self._database.read_session() as session:
+                policy = CandidatePolicy.of(await get_app_settings(session))
+            candidates = await self._fetch(
+                self._tmdb.art_candidates(
+                    CatalogMediaType.COLLECTION,
+                    tmdb_id,
+                    art_type,
+                    language_filter=policy.tmdb_language_filter,
+                )
+            )
+            return ArtSourcesResponse(
+                sources={
+                    "tmdb": [
+                        candidate
+                        for candidate in candidates
+                        if policy.accepts(candidate, art_type)
+                    ]
+                }
+            )
+        details = await self._details(MediaType(media_type), tmdb_id)
         return await self._art.sources_for(
             unsaved_item(details), art_type, _season_num(details, art_type, season_num)
         )

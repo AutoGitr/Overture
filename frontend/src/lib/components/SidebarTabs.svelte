@@ -1,22 +1,43 @@
 <script lang="ts">
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
-  import { goToCollectionsList, goToLibrary } from "../router/routes";
+  import { goToCatalog, goToCollectionsList, goToLibrary } from "../router/routes";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
-  import type { SidebarTab } from "../utils/sidebarDomain";
+  import SegmentedControl from "./SegmentedControl.svelte";
+  import type { SidebarSource, SidebarTab } from "../utils/sidebarDomain";
 
-  let { totalMovies, totalShows }: { totalMovies: number; totalShows: number } = $props();
+  let {
+    totalMovies,
+    totalShows,
+    datasetEnabled = false,
+  }: { totalMovies: number; totalShows: number; datasetEnabled?: boolean } = $props();
 
   let collectionsEnabled = $derived(
-    settingsState.current.media_server === "plex" && settingsState.current.plex_collections_enabled,
+    uiState.sidebarSource === "overturedb"
+      ? uiState.sidebarTab === "movie"
+      : settingsState.current.collections_supported,
   );
-
+  function switchSource(source: SidebarSource) {
+    uiState.mobileShowDetail = false;
+    if (source === "overturedb") goToCatalog(uiState.sidebarTab, uiState.sidebarMode);
+    else if (uiState.sidebarMode === "collections" && settingsState.current.collections_supported)
+      goToCollectionsList(uiState.sidebarTab);
+    else goToLibrary(uiState.sidebarTab);
+  }
+  function switchMode(collections: boolean) {
+    uiState.mobileShowDetail = false;
+    if (uiState.sidebarSource === "overturedb")
+      goToCatalog(uiState.sidebarTab, collections ? "collections" : "items");
+    else if (collections) goToCollectionsList(uiState.sidebarTab);
+    else goToLibrary(uiState.sidebarTab);
+  }
   function switchTab(tab: SidebarTab) {
     // A top-level tab switch is a request to browse that library: keep the
     // browser surface visible on mobile while the matching route settles.
     uiState.mobileShowDetail = false;
-    goToLibrary(tab);
+    if (uiState.sidebarSource === "overturedb") goToCatalog(tab);
+    else goToLibrary(tab);
   }
 </script>
 
@@ -37,6 +58,17 @@
   </button>
 {/snippet}
 
+{#if datasetEnabled}
+  <SegmentedControl
+    label="Sidebar source"
+    options={[
+      ["library", "Library"],
+      ["overturedb", "OvertureDB"],
+    ] as const}
+    bind:value={() => uiState.sidebarSource, switchSource}
+  />
+{/if}
+
 <div class="tabs">
   {@render tab("movie", "Movies", totalMovies)}
   {@render tab("show", "Shows", totalShows)}
@@ -48,13 +80,13 @@
       type="button"
       class={["mode", { active: uiState.sidebarMode === "items" }]}
       aria-pressed={uiState.sidebarMode === "items"}
-      onclick={() => goToLibrary(uiState.sidebarTab)}>Items</button
+      onclick={() => switchMode(false)}>Items</button
     >
     <button
       type="button"
       class={["mode", { active: uiState.sidebarMode === "collections" }]}
       aria-pressed={uiState.sidebarMode === "collections"}
-      onclick={() => goToCollectionsList(uiState.sidebarTab)}>Collections</button
+      onclick={() => switchMode(true)}>Collections</button
     >
   </div>
 {/if}

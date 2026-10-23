@@ -202,6 +202,7 @@ class ItemReconciler:
             server_added_at=server_item.server_added_at,
             created_at=utc_now(),
         )
+        apply_provider_collection(item, server_item)
         session.add(item)
         await session.flush()
 
@@ -283,6 +284,7 @@ class ItemReconciler:
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
         item.tvdb_id = item.tvdb_id or guid_int(server_item.guids, "tvdb")
         item.imdb_id = item.imdb_id or guid_text(server_item.guids, "imdb")
+        apply_provider_collection(item, server_item)
 
         art_pulled = apply_provider_art_urls(
             item, server_item, resolved, only_missing=not server_changed
@@ -300,6 +302,20 @@ class ItemReconciler:
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
         session.add(item)
         return art_pulled
+
+
+def apply_provider_collection(item: MediaItem, server_item: ServerItem) -> None:
+    """Record the TMDB collection a server names for a movie, sparing TMDB.
+
+    Jellyfin's TMDB plugin stores it among the movie's provider IDs.
+    """
+    if item.tmdb_collection_checked_id != item.tmdb_id:
+        item.tmdb_collection_id = None
+        item.tmdb_collection_checked_id = None
+    collection_id = guid_int(server_item.guids, "tmdbcollection")
+    if item.media_type is MediaType.MOVIE and collection_id and item.tmdb_id:
+        item.tmdb_collection_id = collection_id
+        item.tmdb_collection_checked_id = item.tmdb_id
 
 
 def _art_slot_fingerprint(

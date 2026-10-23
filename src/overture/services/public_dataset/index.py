@@ -1,14 +1,15 @@
 """OvertureDB resolution for a batch of media items, done once."""
 
 lazy from collections.abc import Iterable, Mapping, Sequence, Set
-lazy from dataclasses import dataclass
+lazy from dataclasses import dataclass, field
 lazy from typing import Self
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import PublicDatasetItem
+lazy from ...db.models.public_dataset import PublicDatasetCollection, PublicDatasetItem
 lazy from ...db.models.season import Season
 lazy from ...domain import ArtType, ThemeBulkSource
 lazy from ...repositories.public_dataset import PublicDatasetRepository
@@ -75,6 +76,32 @@ class PublicDatasetIndex:
     season_posters: dict[int, dict[int, str]]
     #: Whether OvertureDB is enabled; a disabled index holds nothing.
     enabled: bool = True
+    collections: dict[int, PublicDatasetCollection] = field(
+        default_factory=dict[int, PublicDatasetCollection]
+    )
+
+    @classmethod
+    async def build_collections(
+        cls,
+        session: AsyncSession,
+        collections: Sequence[MediaCollection],
+        *,
+        app_config: Settings,
+    ) -> Self:
+        """Resolve catalog themes for a bounded batch of collections."""
+        schedule = await load_schedule(
+            session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
+        )
+        if not schedule.enabled:
+            return cls.empty(enabled=False)
+        entries = await PublicDatasetRepository(session).collections_by_tmdb_id(
+            {
+                row.tmdb_collection_id
+                for row in collections
+                if row.tmdb_collection_id is not None
+            }
+        )
+        return cls({}, {}, collections=entries)
 
     @classmethod
     def empty(cls, *, enabled: bool = True) -> Self:
@@ -135,7 +162,7 @@ class PublicDatasetIndex:
 
     def theme(
         self,
-        item: MediaItem,
+        item: MediaItem | MediaCollection,
         sources: Iterable[ThemeBulkSource],
         *,
         failed: Set[str] = frozenset(),
@@ -145,7 +172,11 @@ class PublicDatasetIndex:
         A theme in *failed* failed to download for *item* before, so it is
         passed over. Sources that are not catalogs are not asked.
         """
-        public_item = self.items.get(item.id) if item.id is not None else None
+        public_item = (
+            self.collections.get(item.tmdb_collection_id or 0)
+            if isinstance(item, MediaCollection)
+            else self.items.get(item.id or 0)
+        )
         notes: list[str] = []
         for source in sources:
             if not source.catalog:
@@ -157,17 +188,24 @@ class PublicDatasetIndex:
                 notes.append(f"the {source.label} theme failed to download before")
             else:
                 return CatalogPick(youtube_id, f"{source.label} theme")
+        if not notes and isinstance(item, MediaCollection):
+            notes.append("Collection themes require an OvertureDB or ThemerrDB source")
         return CatalogPick(None, notes=tuple(notes), enabled=self.enabled)
 
-    def _missing(self, item: MediaItem, what: str) -> str:
+    def _missing(self, item: MediaItem | MediaCollection, what: str) -> str:
         """Say why OvertureDB has nothing: disabled, no entry, or *what*."""
         if not self.enabled:
             return DATASET_DISABLED
-        if item.id is None or item.id not in self.items:
+        if (
+            isinstance(item, MediaCollection)
+            and item.tmdb_collection_id not in self.collections
+        ) or (isinstance(item, MediaItem) and item.id not in self.items):
             return "OvertureDB has no entry for it"
         return f"OvertureDB has {what}"
 
-    def _theme_missing(self, item: MediaItem, source: ThemeBulkSource) -> str:
+    def _theme_missing(
+        self, item: MediaItem | MediaCollection, source: ThemeBulkSource
+    ) -> str:
         """Say why one catalog has no theme for *item*.
 
         ThemerrDB's themes arrive with OvertureDB's catalog, so both depend on
@@ -182,7 +220,7 @@ class PublicDatasetIndex:
 
 
 def _catalog_youtube_id(
-    public_item: PublicDatasetItem, source: ThemeBulkSource
+    public_item: PublicDatasetItem | PublicDatasetCollection, source: ThemeBulkSource
 ) -> str | None:
     """Return one catalog's theme video ID for an entry."""
     match source:

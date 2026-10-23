@@ -7,7 +7,26 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Browse the full OvertureDB catalog from the sidebar, filter movies, shows and collections, and save local artwork and theme drafts to contribute through GitHub or the ZIP export.
+- Collection pages show their members, TMDB matching controls and OvertureDB/ThemerrDB theme candidates. Jellyfin 12 collection themes write into a mounted collections directory configured with `JELLYFIN_COLLECTIONS_PATH`.
+
+- Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly matched collections can receive catalog themes automatically from an enabled incremental sync policy.
+
+### Changed
+
+- Plex and Jellyfin collections and their members are stored locally and refreshed on full syncs. Set `TMDB_API_KEY` for automatic Plex collection matching, or choose a TMDB collection manually.
+
+### Removed
+
+- The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
+
 ### Fixed
+
+- Collection routes and queued downloads use stable database IDs, with migrated history and cascading cleanup. Jellyfin theme files retain their hashes and source provenance independently of Plex theme IDs.
+- Unknown collection members count toward the matching majority. Unavailable Jellyfin mounts preserve saved state, and listed BoxSets keep manual matches even when none of their members are visible locally.
+- Catalog drafts stay editable after correcting their only identifier. Collection theme exports preserve ThemerrDB attribution, and catalog counts no longer require downloading the entire catalog.
 
 - When YouTube or an artwork source such as ThePosterDB rate-limits Overture, Overture pauses its requests to that service, for longer each time the limit repeats. Theme and artwork downloads and bulk runs wait the pause out; theme searches, artwork matching, choosing artwork and media-server previews in the UI say when to try again.
 - Assets runs that use only OvertureDB or ThemerrDB report artwork slots and themes the catalog has nothing for as No match, instead of skipping them as a saved selection that Overwrite existing would search again. Saved choices include the artwork URLs Sync copies from your media server, so this affected most items the catalog covers only partly.

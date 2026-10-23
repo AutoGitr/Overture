@@ -391,7 +391,7 @@ class PlexClient(MediaServerHttpClient):
     ) -> str | None:
         metadata = await self.get_metadata(rating_key, include_fields=field)
         url = metadata.get(field) if metadata else None
-        return await self._asset_url(url) if url else None
+        return await self.asset_url(url) if url else None
 
     async def _theme_id(self, rating_key: str) -> str | None:
         """Return the version of the item's theme, or ``None`` without one."""
@@ -399,7 +399,8 @@ class PlexClient(MediaServerHttpClient):
         theme = metadata.get("theme") if metadata else None
         return str(theme) if theme else None
 
-    async def _asset_url(self, path: str) -> str:
+    async def asset_url(self, path: str) -> str:
+        """Return the absolute URL of a Plex asset path."""
         if path.startswith("/") and not path.startswith("//"):
             client = await self.get_client()
             return f"{str(client.base_url).rstrip('/')}{path}"
@@ -548,42 +549,26 @@ class PlexClient(MediaServerHttpClient):
         """
         if not await self._theme_id(item_id):
             return []
-        url = await self._asset_url(f"/library/metadata/{item_id}/theme")
+        url = await self.asset_url(f"/library/metadata/{item_id}/theme")
         return [ServerTheme(id=item_id, url=url)]
 
     async def delete_theme(self, rating_key: str) -> None:
         """Delete the item's theme; Plex locks the field until it is unlocked."""
         await self._request("DELETE", f"/library/metadata/{rating_key}/theme")
 
-    async def get_collections(self, section_key: str) -> list[dict[str, Any]]:
-        items = await self._metadata(
+    async def get_collections(self, section_key: str) -> list[PlexMetadata]:
+        """Return a section's collections with their theme field."""
+        return await self._metadata(
             f"/library/sections/{section_key}/collections",
             {"includeGuids": 0, "includeFields": "theme"},
         )
-        machine_id = await self.get_machine_identifier()
-        results: list[dict[str, Any]] = []
-        for item in items:
-            rating_key = str(item["ratingKey"])
-            thumb, art = item.get("thumb"), item.get("art")
-            theme = item.get("theme")
-            results.append(
-                {
-                    "id": rating_key,
-                    "title": item.get("title", ""),
-                    "summary": item.get("summary") or "",
-                    "thumb_url": await self._asset_url(thumb) if thumb else None,
-                    "art_url": await self._asset_url(art) if art else None,
-                    "child_count": item.get("childCount") or 0,
-                    "theme_id": str(theme) if theme else None,
-                    "server_link": plex_web_link(
-                        "collections",
-                        rating_key,
-                        machine_id,
-                        app_config=self._app_config,
-                    ),
-                }
-            )
-        return results
+
+    async def get_collection_member_ids(self, rating_key: str) -> list[str]:
+        """Return the rating keys of the items a collection holds."""
+        children = await self._metadata(
+            f"/library/collections/{rating_key}/children", {"includeGuids": 0}
+        )
+        return [str(child["ratingKey"]) for child in children]
 
     async def upload_collection_theme(self, rating_key: str, mp3_bytes: bytes) -> str:
         await self._request(

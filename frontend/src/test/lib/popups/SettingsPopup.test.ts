@@ -21,6 +21,8 @@ function storedSettings() {
   return {
     ...settingsState.toUpdatePayload(),
     media_server: "plex" as const,
+    collection_themes_unavailable: null,
+    collections_supported: true,
     tmdb_configured: false,
     art_download_workers: 1,
     theme_download_workers: 1,

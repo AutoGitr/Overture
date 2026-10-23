@@ -1,8 +1,6 @@
 """Tests for the stats route."""
 
-lazy import asyncio
 lazy from pathlib import Path
-lazy from typing import Any, override
 
 lazy import pytest
 lazy from fastapi import FastAPI
@@ -11,45 +9,21 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.models.art import ArtSlot
-lazy from overture.db.models.collection_theme import CollectionTheme
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, ServerType
 lazy from overture.main import create_app
-lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.schemas.stats import StatsResponse
-lazy from overture.services.stats import service as stats_service
+lazy from overture.utils.time import utc_now
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_runtime
 
 
 class FakePlex:
-    """A Plex provider listing fixed movie collections."""
+    """A media server with collections; stats read them from the last sync."""
 
     server_type = ServerType.PLEX
-
-    def __init__(self, *movie_collections: dict[str, Any]) -> None:
-        self.movie_collections = list(movie_collections)
-
-    async def list_collections(self, media_type: MediaType) -> list[dict[str, Any]]:
-        listed = self.movie_collections if media_type is MediaType.MOVIE else []
-        return [
-            {"media_type": media_type, "server_type": self.server_type, **collection}
-            for collection in listed
-        ]
-
-
-class UnreachablePlex(FakePlex):
-    @override
-    async def list_collections(self, media_type: MediaType) -> list[dict[str, Any]]:
-        raise MediaServerError("Media server is unavailable", status_code=503)
-
-
-class SilentPlex(FakePlex):
-    @override
-    async def list_collections(self, media_type: MediaType) -> list[dict[str, Any]]:
-        await asyncio.Event().wait()
-        return []
 
 
 @pytest.fixture
@@ -108,33 +82,14 @@ def test_stats_authenticated_returns_valid_schema(
     assert "media_items" in table_names
     assert "seasons" in table_names
     assert "art_slots" in table_names
-    assert "collection_themes" in table_names
-    # Without a media server nobody can list the collections.
+    assert "media_collections" in table_names
+    # Without a media server there are no collections to count.
     assert validated.library.total_collections is None
     assert validated.library.monitored_collections is None
     assert validated.themes.collections is None
 
 
-@pytest.mark.parametrize("media_server", [UnreachablePlex(), SilentPlex()])
-def test_stats_report_collections_unknown_when_server_cannot_list_them(
-    authenticated_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A failing or silent server leaves collections unknown instead of stalling."""
-    monkeypatch.setattr(stats_service, "COLLECTIONS_TIMEOUT_SECONDS", 0.05)
-
-    response = authenticated_client.get("/api/stats")
-
-    assert response.status_code == 200
-    stats = _stats(response.json())
-    assert stats.library.total_collections is None
-    assert stats.library.monitored_collections is None
-    assert stats.themes.collections is None
-
-
-@pytest.mark.parametrize(
-    "media_server", [FakePlex({"id": "coll-1", "theme_id": "server_th_1"})]
-)
+@pytest.mark.parametrize("media_server", [FakePlex()])
 async def test_stats_with_seeded_data(
     authenticated_client: TestClient,
     db_session: AsyncSession,
@@ -223,14 +178,15 @@ async def test_stats_with_seeded_data(
     )
     await db_session.commit()
 
-    # Seed collection theme
-    coll1 = CollectionTheme(
+    # Seed a synced collection with the theme Overture stored
+    coll1 = MediaCollection(
         server_item_id="coll-1",
         media_type=MediaType.MOVIE,
         server_type=ServerType.PLEX,
         server_theme_id="server_th_1",
         youtube_id="coll_yt_123",
         monitored=True,
+        last_synced_at=utc_now(),
     )
     db_session.add(coll1)
     await db_session.commit()

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { MediaItemRead } from "../../../generated/rest/types.gen";
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
+  CATALOG_FILTER_KEYS,
+  defaultCatalogFilters,
+  filterCatalogEntries,
   filterSidebarCollections,
   filterSidebarItems,
   hasThemeAttributes,
@@ -13,7 +16,7 @@ import {
   SIDEBAR_SORT_FIELDS,
   statusTone,
 } from "../../../lib/utils/sidebarDomain";
-import { collection, mediaItem } from "../../helpers/fixtures";
+import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
 
 function withFilters(patch: Partial<FilterState>): FilterState {
   return { ...defaultFilters(), ...patch };
@@ -159,9 +162,9 @@ describe("sidebar item filters", () => {
     expect(
       filterSidebarCollections({
         collections: [
-          collection({ id: "c1", title: "Short Set", youtube_duration: 30 }),
-          collection({ id: "c2", title: "Long Set", youtube_duration: 300 }),
-          collection({ id: "c3", title: "No Theme" }),
+          collection({ id: 1, title: "Short Set", youtube_duration: 30 }),
+          collection({ id: 2, title: "Long Set", youtube_duration: 300 }),
+          collection({ id: 3, title: "No Theme" }),
         ],
         filters: withFilters({ themeLength: { min: 120, max: 300 } }),
         searchQuery: "",
@@ -422,7 +425,7 @@ describe("sidebar collections", () => {
   it("returns an empty collection list when selected libraries do not match", () => {
     expect(
       filterSidebarCollections({
-        collections: [collection({ id: "collection-1", library_id: "library-1" })],
+        collections: [collection({ id: 1, library_id: "library-1" })],
         filters: withFilters({ libraryIds: ["library-2"] }),
         searchQuery: "",
       }),
@@ -431,8 +434,8 @@ describe("sidebar collections", () => {
 
   it("filters collections by the theme status the backend reports", () => {
     const collections = [
-      collection({ id: "c1", title: "Themed", theme_status: "complete" }),
-      collection({ id: "c2", title: "Server Only", has_theme: true, theme_status: "partial" }),
+      collection({ id: 1, title: "Themed", theme_status: "complete" }),
+      collection({ id: 2, title: "Server Only", has_theme: true, theme_status: "partial" }),
     ];
 
     expect(
@@ -448,8 +451,8 @@ describe("sidebar collections", () => {
     expect(
       filterSidebarCollections({
         collections: [
-          collection({ id: "c1", title: "Saga 10" }),
-          collection({ id: "c2", title: "Saga 2" }),
+          collection({ id: 1, title: "Saga 10" }),
+          collection({ id: 2, title: "Saga 2" }),
         ],
         filters: withFilters({ art: "complete", aspectRatio: "incorrect" }),
         searchQuery: "",
@@ -504,5 +507,68 @@ describe("sidebar thumbnail preloading", () => {
   it("stays inside the list", () => {
     expect(preloadRowIndexes(0, 10, 25)).toEqual([18, 19, 20, 21, 22, 23, 24]);
     expect(preloadRowIndexes(0, 0, 0)).toEqual([]);
+  });
+});
+
+describe("catalog filters", () => {
+  const complete = catalogRow({
+    title: "Complete",
+    media_type: "show",
+    tmdb_id: 12,
+    poster_url: "poster",
+    background_url: "background",
+    youtube_id_overturedb: "abcDEF123_4",
+    youtube_id_themerrdb: "themerr12345",
+    season_posters: 1,
+    has_draft: true,
+    library_item_id: 2,
+  });
+  const missing = catalogRow({ title: "Missing", media_type: "show", year: null });
+  it.each(CATALOG_FILTER_KEYS)("filters %s by presence in either direction", (key) => {
+    const rows = [complete, missing];
+    expect(
+      filterCatalogEntries({
+        entries: rows,
+        filters: { ...defaultCatalogFilters(), [key]: "present" },
+        searchQuery: "",
+      }),
+    ).toEqual([complete]);
+    expect(
+      filterCatalogEntries({
+        entries: rows,
+        filters: { ...defaultCatalogFilters(), [key]: "missing" },
+        searchQuery: "",
+      }),
+    ).toEqual([missing]);
+  });
+  it("combines filters, searches IDs and theme links, and keeps unknown years last", () => {
+    const filter = (options: Partial<Parameters<typeof filterCatalogEntries>[0]>) =>
+      filterCatalogEntries({
+        entries: [missing, complete],
+        filters: defaultCatalogFilters(),
+        searchQuery: "",
+        ...options,
+      });
+    expect(filter({ searchQuery: " COMPLETE " })).toEqual([complete]);
+    expect(filter({ searchField: "external_id", searchQuery: "12" })).toEqual([complete]);
+    expect(filter({ searchField: "year", searchQuery: "197" })).toEqual([complete]);
+    expect(filter({ searchField: "youtube", searchQuery: "https://youtu.be/abcDEF123_4" })).toEqual(
+      [complete],
+    );
+    expect(filter({ sortField: "year", sortDir: "desc" })).toEqual([complete, missing]);
+    expect(filter({ sortField: "title", sortDir: "desc" })).toEqual([missing, complete]);
+    expect(
+      filter({ filters: { ...defaultCatalogFilters(), poster: "present", draft: "missing" } }),
+    ).toEqual([]);
+  });
+  it("counts linked library collections and ignores the season filter for movies", () => {
+    const entry = catalogRow({ library_collection_id: 1 });
+    expect(
+      filterCatalogEntries({
+        entries: [entry],
+        filters: { ...defaultCatalogFilters(), library: "present", seasonPosters: "missing" },
+        searchQuery: "",
+      }),
+    ).toEqual([entry]);
   });
 });

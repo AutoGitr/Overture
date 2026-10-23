@@ -40,6 +40,12 @@ async def test_media_browser_consumed_operations(
     }
     season = {"Id": "season", "SeriesId": "show", "IndexNumber": 0, "ChildCount": 1}
     theme = {"Id": "theme", "Name": "Theme", "RunTimeTicks": 30_000_000}
+    boxset = {
+        "Id": "boxset",
+        "Name": "Saga",
+        "ProviderIds": {"Tmdb": "10"},
+        "Path": "/config/data/collections/Saga [boxset]",
+    }
     image = {
         "Url": "https://image.tmdb.org/t/p/original/a.jpg",
         "ProviderName": "TheMovieDb",
@@ -69,8 +75,13 @@ async def test_media_browser_consumed_operations(
         if path == "/Items":
             kind = params.get("IncludeItemTypes" if emby else "includeItemTypes")
             ids = params.get("Ids" if emby else "ids")
+            parent = params.get("ParentId" if emby else "parentId")
             rows = (
-                [season]
+                [boxset]
+                if kind == "BoxSet"
+                else [movie]
+                if parent == "boxset"
+                else [season]
                 if kind == "Season"
                 else [{"Id": "episode", "SeasonId": "season"}]
                 if kind == "Episode"
@@ -152,6 +163,8 @@ async def test_media_browser_consumed_operations(
         assert (await client.get_theme_songs("movie"))[0].duration == 3
         assert (await client.get_item("movie"))["Id"] == "movie"
         assert [item["Id"] for item in await client.get_people(["movie"])] == ["movie"]
+        assert await client.get_boxsets() == [boxset]
+        assert await client.get_boxset_member_ids("boxset") == ["movie"]
         await client.refresh_item("movie")
         await client.delete_item("theme")
         assert {request.method for request in transport.requests} == {

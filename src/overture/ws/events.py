@@ -9,7 +9,10 @@ lazy from ..jobs.kinds import JobKind, LifecycleStatus
 lazy from ..schemas.asset_manager import AssetScanProgressEvent
 lazy from ..schemas.backup import BackupJobEvent
 lazy from ..schemas.bulk import BulkArtJobEvent, BulkThemeJobEvent
-lazy from ..schemas.collections import CollectionThemeUpdatedEvent
+lazy from ..schemas.collections import (
+    CollectionThemeUpdatedEvent,
+    CollectionUpdatedEvent,
+)
 lazy from ..schemas.common import JsonValue
 lazy from ..schemas.downloads import DownloadJobEvent
 lazy from ..schemas.job_snapshots import JobSnapshotClearedEvent
@@ -91,6 +94,10 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         ),
         "collection.theme.updated": WebSocketEventDefinition(
             "collection.theme.updated", CollectionThemeUpdatedEvent
+        ),
+        "collections.changed": WebSocketEventDefinition("collections.changed", None),
+        "collection.updated": WebSocketEventDefinition(
+            "collection.updated", CollectionUpdatedEvent
         ),
         **_lifecycle_events(JobKind.PUBLIC_DATASET_SYNC, PublicDatasetSyncEvent),
         **_lifecycle_events(JobKind.BACKUP, BackupJobEvent),

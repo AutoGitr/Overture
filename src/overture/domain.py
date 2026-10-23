@@ -19,6 +19,26 @@ class MediaType(StrEnum):
     SHOW = "show"
 
 
+class CatalogMediaType(StrEnum):
+    """Kind of OvertureDB catalog entry: a movie, a show or a movie collection."""
+
+    MOVIE = "movie"
+    SHOW = "show"
+    COLLECTION = "collection"
+
+
+class CollectionMatch(StrEnum):
+    """How a media-server collection got its TMDB collection.
+
+    ``auto`` follows the server's own ID or the collection's members;
+    ``manual`` and ``unmatched`` are the user's choice and survive syncs.
+    """
+
+    AUTO = "auto"
+    MANUAL = "manual"
+    UNMATCHED = "unmatched"
+
+
 class ThemeIdSource(StrEnum):
     """Evidence used to record an item's selected YouTube ID."""
 

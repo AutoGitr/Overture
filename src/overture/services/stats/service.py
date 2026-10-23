@@ -1,6 +1,5 @@
 """Application statistics service."""
 
-lazy import asyncio
 lazy from pathlib import Path
 lazy from typing import Any
 
@@ -9,17 +8,21 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...db.completion import SLOT_COMPLETE, THEME_COMPLETE
 lazy from ...db.models.art import ArtSlot
-lazy from ...db.models.collection_theme import CollectionTheme
 lazy from ...db.models.download_job import DownloadJob
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import PublicDatasetItem, PublicDatasetSeason
+lazy from ...db.models.public_dataset import (
+    PublicDatasetCollection,
+    PublicDatasetDraft,
+    PublicDatasetItem,
+    PublicDatasetSeason,
+)
 lazy from ...db.models.saved_schedule import SavedSchedule
 lazy from ...db.models.schedule import TaskSchedule
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import AppSettings
 lazy from ...db.session import Database
 lazy from ...domain import ITEM_ART_TYPES, ArtType, AssetStatus, MediaType
-lazy from ...media_servers.errors import MediaServerError
 lazy from ...schemas.stats import (
     ArtTypeStats,
     BackupStats,
@@ -42,19 +45,16 @@ TABLES: tuple[tuple[type[Any], str], ...] = (
     (MediaItem, "Movies and TV shows"),
     (Season, "Show seasons"),
     (ArtSlot, "Poster, background, and season artwork slots"),
-    (CollectionTheme, "Collection theme assignments"),
+    (MediaCollection, "Media-server collections"),
     (PublicDatasetItem, "OvertureDB curated items"),
     (PublicDatasetSeason, "OvertureDB curated seasons"),
+    (PublicDatasetCollection, "OvertureDB curated collections"),
+    (PublicDatasetDraft, "OvertureDB drafts awaiting contribution"),
     (DownloadJob, "Download queue history"),
     (SavedSchedule, "Saved sync and asset schedules"),
     (TaskSchedule, "Recurring task schedules"),
     (AppSettings, "Application configuration"),
 )
-
-#: How long stats wait for the media server to list collections. The listing
-#: retries with backoff for background work; stats report the collections as
-#: unknown instead of holding the response that long.
-COLLECTIONS_TIMEOUT_SECONDS = 3.0
 
 _HAS_FILE = col(ArtSlot.file_hash).is_not(None)
 #: Counts of local and of complete art slots in a grouped query.
@@ -101,31 +101,18 @@ class StatsService:
         self._collections = collections
 
     async def _collection_themes(self) -> tuple[int, Coverage] | None:
-        """Count collections and their themes as the media server lists them.
-
-        Only the server knows every collection; the database holds rows only
-        for those the user changed. So when the server cannot list them in
-        time, or is not Plex, the counts are unknown rather than estimated.
+        """Count the synced collections and their themes.
 
         Returns:
-            How many collections are monitored, and their theme coverage.
+            How many collections are monitored, and their theme coverage, or
+            ``None`` when the media server has no collections.
         """
         try:
-            async with (
-                asyncio.timeout(COLLECTIONS_TIMEOUT_SECONDS),
-                asyncio.TaskGroup() as group,
-            ):
-                movies = group.create_task(
-                    self._collections.list_collections(MediaType.MOVIE)
-                )
-                shows = group.create_task(
-                    self._collections.list_collections(MediaType.SHOW)
-                )
-        except* TimeoutError, MediaServerError, PublicServiceError:
-            collections = None
-        else:
-            collections = movies.result() + shows.result()
-        if collections is None:
+            collections = [
+                *await self._collections.list_collections(MediaType.MOVIE),
+                *await self._collections.list_collections(MediaType.SHOW),
+            ]
+        except PublicServiceError:
             return None
         return sum(c.monitored for c in collections), Coverage(
             total=len(collections),
@@ -324,8 +311,6 @@ class StatsService:
 
     async def get_stats(self) -> StatsResponse:
         """Gather and compute comprehensive statistics across all domain entities."""
-        # Before the read session: the media server is not worth holding a
-        # database connection for.
         collections = await self._collection_themes()
         async with self._database.read_session() as session:
             library = await self._library(session, collections)

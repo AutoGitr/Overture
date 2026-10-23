@@ -9,7 +9,9 @@ lazy from ...domain import ArtType, ImageSize, MediaType, ServerAsset, ServerTyp
 lazy from ...utils.time import parse_utc_datetime
 lazy from ..adapters import (
     MAX_SEASONS_PER_SHOW,
+    FolderThemes,
     ProviderImageRequest,
+    ServerCollection,
     ServerItem,
     ServerSeason,
     ServerSection,
@@ -18,7 +20,13 @@ lazy from ..adapters import (
 lazy from ..base import BaseMediaServerProvider
 lazy from ..errors import MediaServerError
 lazy from ..wire import MediaBrowserItem, MediaBrowserPerson
-lazy from .client import COLLECTION_TYPES, IMAGE_TYPES, ITEM_TYPES, JellyfinClient
+lazy from .client import (
+    COLLECTION_TYPES,
+    IMAGE_TYPES,
+    ITEM_TYPES,
+    JellyfinClient,
+    provider_ids,
+)
 
 #: The media type each supported library collection type holds.
 _COLLECTION_MEDIA_TYPES = frozendict(
@@ -132,10 +140,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             title=metadata.get("Name") or "",
             year=metadata.get("ProductionYear"),
             media_type=media_type,
-            guids={
-                key.lower(): str(value)
-                for key, value in (metadata.get("ProviderIds") or {}).items()
-            },
+            guids=provider_ids(metadata),
             poster_url=_media_browser_image_url(
                 self.client,
                 item_id,
@@ -276,6 +281,7 @@ class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
     """Adapt Jellyfin responses to the shared media-server contract."""
 
     server_type: ClassVar[ServerType] = ServerType.JELLYFIN
+    collections = FolderThemes()
 
     def __init__(
         self, *, client: JellyfinClient | None = None, app_config: Settings
@@ -284,3 +290,40 @@ class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
             client=client or JellyfinClient(app_config=app_config),
             app_config=app_config,
         )
+
+    @override
+    async def list_collections(self) -> list[ServerCollection]:
+        """Return every BoxSet; Jellyfin keeps them outside the libraries."""
+        results: list[ServerCollection] = []
+        for boxset in await self.client.get_boxsets():
+            boxset_id = boxset["Id"]
+            tmdb_id = provider_ids(boxset).get("tmdb", "")
+            results.append(
+                ServerCollection(
+                    id=boxset_id,
+                    title=boxset.get("Name") or "",
+                    member_ids=tuple(
+                        await self.client.get_boxset_member_ids(boxset_id)
+                    ),
+                    server_link=self.server_link(boxset_id),
+                    summary=boxset.get("Overview") or None,
+                    thumb_url=_media_browser_image_url(
+                        self.client,
+                        boxset_id,
+                        "Primary",
+                        (boxset.get("ImageTags") or {}).get("Primary"),
+                    ),
+                    art_url=_media_browser_image_url(
+                        self.client,
+                        boxset_id,
+                        "Backdrop",
+                        next(iter(boxset.get("BackdropImageTags") or []), None),
+                    ),
+                    tmdb_id=int(tmdb_id) if tmdb_id.isdigit() else None,
+                    path=boxset.get("Path"),
+                    added_at=parse_utc_datetime(
+                        boxset.get("DateCreated"), naive_tz=self._app_config.tzinfo
+                    ),
+                )
+            )
+        return results

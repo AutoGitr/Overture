@@ -5,6 +5,7 @@
   import type { PublicDatasetStatus } from "../../generated/rest/types.gen";
   import {
     getPublicDatasetStatusOptions,
+    getCatalogCountsOptions,
     setPublicDatasetEnabledMutation,
     syncPublicDatasetNowMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -19,6 +20,12 @@
   import PendingButton from "../components/PendingButton.svelte";
 
   const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
+
+  const countsQuery = createQuery(() => ({
+    ...getCatalogCountsOptions(),
+    enabled: datasetQuery.data?.enabled === true,
+  }));
+  let draftCount = $derived(countsQuery.data?.drafts ?? null);
 
   const queryClient = useQueryClient();
 
@@ -175,7 +182,7 @@
         <span class="form-label">Synced File</span>
         {#if stats}
           <div class="stats-grid">
-            {#each [["Movies", stats.movies], ["Shows", stats.shows], ["Seasons", stats.seasons], ["Errors", stats.errors]] as const as [label, count] (label)}
+            {#each [["Movies", stats.movies], ["Shows", stats.shows], ["Collections", stats.collections], ["Seasons", stats.seasons], ["Errors", stats.errors]] as const as [label, count] (label)}
               <div class="stat-card">
                 <span>{label}</span>
                 <strong>{count.toLocaleString()}</strong>
@@ -205,10 +212,25 @@
       <span class="form-label">Bulk contribution</span>
       <div class="options-col">
         <span class="hint">
-          Export all saved artwork, season posters, and theme selections as a ZIP. Check the export
-          report, then attach the ZIP to a Bulk contribution issue on GitHub. Only selections
-          missing from OvertureDB are added.
+          Export local catalog drafts and saved artwork, season posters, and theme selections as a
+          ZIP. Check the export report, then attach the ZIP to a Bulk contribution issue on GitHub.
+          Only selections missing from OvertureDB are added.
         </span>
+        {#if countsQuery.data}<span class="hint"
+            >{countsQuery.data.collections} catalog {countsQuery.data.collections === 1
+              ? "collection"
+              : "collections"}</span
+          >{/if}
+        {#if draftCount !== null}<span class="hint"
+            >{draftCount} local {draftCount === 1 ? "draft" : "drafts"}</span
+          >{/if}
+        {#if countsQuery.isError}<DataStatus
+            label="draft count"
+            error={countsQuery.error}
+            hasData={false}
+            loading={false}
+            onretry={() => countsQuery.refetch()}
+          />{/if}
         <div class="flex gap-2 self-start">
           <PendingButton
             class="btn btn-secondary btn-sm"
@@ -293,7 +315,7 @@
   }
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
     gap: var(--space-2);
     margin-top: var(--space-2);
   }

@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, type MutationOptions, queryOptions } from '@tanstack/svelte-query';
 
 import { client } from '../client.gen';
-import { authConfig, bulkOperateItems, bulkSetCollectionMonitored, checkConnectivity, clearAllArt, clearArt, clearJobSnapshot, clearTheme, createBackup, createBulkAssetsSchedule, createSyncSchedule, deleteBulkAssetsSchedule, deleteCollectionTheme, deleteItem, deleteSyncSchedule, exportPublicDatasetSelections, fixAuditFindings, getArtSources, getBackupSchedule, getCollectionTheme, getFolderRoots, getItem, getJobLog, getJobResults, getLibraries, getPublicDatasetRecord, getPublicDatasetSources, getPublicDatasetStatus, getRealtimeSnapshot, getSeasons, getSettings, getStats, getSyncStatus, getTmdbArtSources, getTmdbCollection, getTmdbItem, getTmdbPublicDatasetSources, health, listBackups, listBulkAssetsSchedules, listCollections, listItems, listServerLibraries, listSyncSchedules, login, logout, matchArt, me, oidcCallback, oidcLogin, type Options, proxyCollectionImage, proxyItemProviderArt, proxySeasonProviderArt, ready, renameAssets, runBulkAssetsSchedule, runSync, runSyncSchedule, saveArt, saveTmdbArt, searchTmdb, searchYoutube, selectTheme, selectTmdbTheme, serveLocalImage, serveLocalSeasonImage, setCollectionMonitored, setCollectionTheme, setMonitored, setPublicDatasetEnabled, startBulkAssets, startScan, startServerAudit, stopAuditFix, stopBulkAssets, stopScan, stopServerAudit, stopSync, syncPublicDatasetNow, updateBackupSchedule, updateBulkAssetsSchedule, updateSettings, updateSyncSchedule } from '../sdk.gen';
-import type { AuthConfigData, AuthConfigResponse, BulkOperateItemsData, BulkOperateItemsError, BulkOperateItemsResponse, BulkSetCollectionMonitoredData, BulkSetCollectionMonitoredError, BulkSetCollectionMonitoredResponse, CheckConnectivityData, CheckConnectivityError, CheckConnectivityResponse, ClearAllArtData, ClearAllArtError, ClearAllArtResponse, ClearArtData, ClearArtError, ClearArtResponse, ClearJobSnapshotData, ClearJobSnapshotError, ClearJobSnapshotResponse, ClearThemeData, ClearThemeError, ClearThemeResponse, CreateBackupData, CreateBackupError, CreateBackupResponse, CreateBulkAssetsScheduleData, CreateBulkAssetsScheduleError, CreateBulkAssetsScheduleResponse, CreateSyncScheduleData, CreateSyncScheduleError, CreateSyncScheduleResponse, DeleteBulkAssetsScheduleData, DeleteBulkAssetsScheduleError, DeleteBulkAssetsScheduleResponse, DeleteCollectionThemeData, DeleteCollectionThemeError, DeleteCollectionThemeResponse2, DeleteItemData, DeleteItemError, DeleteItemResponse, DeleteSyncScheduleData, DeleteSyncScheduleError, DeleteSyncScheduleResponse, ExportPublicDatasetSelectionsData, ExportPublicDatasetSelectionsError, ExportPublicDatasetSelectionsResponse, FixAuditFindingsData, FixAuditFindingsError, FixAuditFindingsResponse, GetArtSourcesData, GetArtSourcesError, GetArtSourcesResponse, GetBackupScheduleData, GetBackupScheduleError, GetBackupScheduleResponse, GetCollectionThemeData, GetCollectionThemeError, GetCollectionThemeResponse, GetFolderRootsData, GetFolderRootsError, GetFolderRootsResponse, GetItemData, GetItemError, GetItemResponse, GetJobLogData, GetJobLogError, GetJobLogResponse, GetJobResultsData, GetJobResultsError, GetJobResultsResponse, GetLibrariesData, GetLibrariesError, GetLibrariesResponse, GetPublicDatasetRecordData, GetPublicDatasetRecordError, GetPublicDatasetRecordResponse, GetPublicDatasetSourcesData, GetPublicDatasetSourcesError, GetPublicDatasetSourcesResponse, GetPublicDatasetStatusData, GetPublicDatasetStatusError, GetPublicDatasetStatusResponse, GetRealtimeSnapshotData, GetRealtimeSnapshotError, GetRealtimeSnapshotResponse, GetSeasonsData, GetSeasonsError, GetSeasonsResponse, GetSettingsData, GetSettingsError, GetSettingsResponse, GetStatsData, GetStatsError, GetStatsResponse, GetSyncStatusData, GetSyncStatusError, GetSyncStatusResponse, GetTmdbArtSourcesData, GetTmdbArtSourcesError, GetTmdbArtSourcesResponse, GetTmdbCollectionData, GetTmdbCollectionError, GetTmdbCollectionResponse, GetTmdbItemData, GetTmdbItemError, GetTmdbItemResponse, GetTmdbPublicDatasetSourcesData, GetTmdbPublicDatasetSourcesError, GetTmdbPublicDatasetSourcesResponse, HealthData, HealthResponse2, ListBackupsData, ListBackupsError, ListBackupsResponse, ListBulkAssetsSchedulesData, ListBulkAssetsSchedulesError, ListBulkAssetsSchedulesResponse, ListCollectionsData, ListCollectionsError, ListCollectionsResponse, ListItemsData, ListItemsError, ListItemsResponse, ListServerLibrariesData, ListServerLibrariesError, ListServerLibrariesResponse, ListSyncSchedulesData, ListSyncSchedulesError, ListSyncSchedulesResponse, LoginData, LoginError, LoginResponse2, LogoutData, LogoutResponse2, MatchArtData, MatchArtError, MatchArtResponse, MeData, MeError, MeResponse2, OidcCallbackData, OidcLoginData, OidcLoginError, ProxyCollectionImageData, ProxyCollectionImageError, ProxyItemProviderArtData, ProxyItemProviderArtError, ProxySeasonProviderArtData, ProxySeasonProviderArtError, ReadyData, ReadyError, ReadyResponse, RenameAssetsData, RenameAssetsError, RenameAssetsResponse, RunBulkAssetsScheduleData, RunBulkAssetsScheduleError, RunBulkAssetsScheduleResponse, RunSyncData, RunSyncError, RunSyncResponse, RunSyncScheduleData, RunSyncScheduleError, RunSyncScheduleResponse, SaveArtData, SaveArtError, SaveArtResponse, SaveTmdbArtData, SaveTmdbArtError, SaveTmdbArtResponse, SearchTmdbData, SearchTmdbError, SearchTmdbResponse, SearchYoutubeData, SearchYoutubeError, SearchYoutubeResponse, SelectThemeData, SelectThemeError, SelectThemeResponse, SelectTmdbThemeData, SelectTmdbThemeError, SelectTmdbThemeResponse, ServeLocalImageData, ServeLocalImageError, ServeLocalSeasonImageData, ServeLocalSeasonImageError, SetCollectionMonitoredData, SetCollectionMonitoredError, SetCollectionMonitoredResponse, SetCollectionThemeData, SetCollectionThemeError, SetCollectionThemeResponse, SetMonitoredData, SetMonitoredError, SetMonitoredResponse, SetPublicDatasetEnabledData, SetPublicDatasetEnabledError, SetPublicDatasetEnabledResponse, StartBulkAssetsData, StartBulkAssetsError, StartBulkAssetsResponse, StartScanData, StartScanError, StartScanResponse, StartServerAuditData, StartServerAuditError, StartServerAuditResponse, StopAuditFixData, StopAuditFixError, StopAuditFixResponse, StopBulkAssetsData, StopBulkAssetsError, StopBulkAssetsResponse, StopScanData, StopScanError, StopScanResponse, StopServerAuditData, StopServerAuditError, StopServerAuditResponse, StopSyncData, StopSyncError, StopSyncResponse, SyncPublicDatasetNowData, SyncPublicDatasetNowError, SyncPublicDatasetNowResponse, UpdateBackupScheduleData, UpdateBackupScheduleError, UpdateBackupScheduleResponse, UpdateBulkAssetsScheduleData, UpdateBulkAssetsScheduleError, UpdateBulkAssetsScheduleResponse, UpdateSettingsData, UpdateSettingsError, UpdateSettingsResponse, UpdateSyncScheduleData, UpdateSyncScheduleError, UpdateSyncScheduleResponse } from '../types.gen';
+import { authConfig, bulkOperateItems, bulkSetCollectionMonitored, checkConnectivity, clearAllArt, clearArt, clearJobSnapshot, clearTheme, createBackup, createBulkAssetsSchedule, createSyncSchedule, deleteBulkAssetsSchedule, deleteCollectionTheme, deleteItem, deleteSyncSchedule, discardCatalogDraft, exportPublicDatasetSelections, fixAuditFindings, getArtSources, getBackupSchedule, getCatalogCounts, getCatalogEntry, getCollection, getCollectionSources, getCollectionTheme, getFolderRoots, getItem, getJobLog, getJobResults, getLibraries, getPublicDatasetRecord, getPublicDatasetSources, getPublicDatasetStatus, getRealtimeSnapshot, getSeasons, getSettings, getStats, getSyncStatus, getTmdbArtSources, getTmdbCollection, getTmdbItem, getTmdbPublicDatasetSources, health, listBackups, listBulkAssetsSchedules, listCatalogEntries, listCollections, listItems, listServerLibraries, listSyncSchedules, login, logout, matchArt, me, oidcCallback, oidcLogin, type Options, proxyCollectionImage, proxyItemProviderArt, proxySeasonProviderArt, ready, renameAssets, resetCollectionMatch, runBulkAssetsSchedule, runSync, runSyncSchedule, saveArt, saveCatalogDraft, saveTmdbArt, searchTmdb, searchYoutube, selectTheme, selectTmdbTheme, serveLocalImage, serveLocalSeasonImage, setCollectionMatch, setCollectionMonitored, setCollectionTheme, setMonitored, setPublicDatasetEnabled, startBulkAssets, startScan, startServerAudit, stopAuditFix, stopBulkAssets, stopScan, stopServerAudit, stopSync, syncPublicDatasetNow, updateBackupSchedule, updateBulkAssetsSchedule, updateSettings, updateSyncSchedule } from '../sdk.gen';
+import type { AuthConfigData, AuthConfigResponse, BulkOperateItemsData, BulkOperateItemsError, BulkOperateItemsResponse, BulkSetCollectionMonitoredData, BulkSetCollectionMonitoredError, BulkSetCollectionMonitoredResponse, CheckConnectivityData, CheckConnectivityError, CheckConnectivityResponse, ClearAllArtData, ClearAllArtError, ClearAllArtResponse, ClearArtData, ClearArtError, ClearArtResponse, ClearJobSnapshotData, ClearJobSnapshotError, ClearJobSnapshotResponse, ClearThemeData, ClearThemeError, ClearThemeResponse, CreateBackupData, CreateBackupError, CreateBackupResponse, CreateBulkAssetsScheduleData, CreateBulkAssetsScheduleError, CreateBulkAssetsScheduleResponse, CreateSyncScheduleData, CreateSyncScheduleError, CreateSyncScheduleResponse, DeleteBulkAssetsScheduleData, DeleteBulkAssetsScheduleError, DeleteBulkAssetsScheduleResponse, DeleteCollectionThemeData, DeleteCollectionThemeError, DeleteCollectionThemeResponse2, DeleteItemData, DeleteItemError, DeleteItemResponse, DeleteSyncScheduleData, DeleteSyncScheduleError, DeleteSyncScheduleResponse, DiscardCatalogDraftData, DiscardCatalogDraftError, DiscardCatalogDraftResponse, ExportPublicDatasetSelectionsData, ExportPublicDatasetSelectionsError, ExportPublicDatasetSelectionsResponse, FixAuditFindingsData, FixAuditFindingsError, FixAuditFindingsResponse, GetArtSourcesData, GetArtSourcesError, GetArtSourcesResponse, GetBackupScheduleData, GetBackupScheduleError, GetBackupScheduleResponse, GetCatalogCountsData, GetCatalogCountsError, GetCatalogCountsResponse, GetCatalogEntryData, GetCatalogEntryError, GetCatalogEntryResponse, GetCollectionData, GetCollectionError, GetCollectionResponse, GetCollectionSourcesData, GetCollectionSourcesError, GetCollectionSourcesResponse, GetCollectionThemeData, GetCollectionThemeError, GetCollectionThemeResponse, GetFolderRootsData, GetFolderRootsError, GetFolderRootsResponse, GetItemData, GetItemError, GetItemResponse, GetJobLogData, GetJobLogError, GetJobLogResponse, GetJobResultsData, GetJobResultsError, GetJobResultsResponse, GetLibrariesData, GetLibrariesError, GetLibrariesResponse, GetPublicDatasetRecordData, GetPublicDatasetRecordError, GetPublicDatasetRecordResponse, GetPublicDatasetSourcesData, GetPublicDatasetSourcesError, GetPublicDatasetSourcesResponse, GetPublicDatasetStatusData, GetPublicDatasetStatusError, GetPublicDatasetStatusResponse, GetRealtimeSnapshotData, GetRealtimeSnapshotError, GetRealtimeSnapshotResponse, GetSeasonsData, GetSeasonsError, GetSeasonsResponse, GetSettingsData, GetSettingsError, GetSettingsResponse, GetStatsData, GetStatsError, GetStatsResponse, GetSyncStatusData, GetSyncStatusError, GetSyncStatusResponse, GetTmdbArtSourcesData, GetTmdbArtSourcesError, GetTmdbArtSourcesResponse, GetTmdbCollectionData, GetTmdbCollectionError, GetTmdbCollectionResponse, GetTmdbItemData, GetTmdbItemError, GetTmdbItemResponse, GetTmdbPublicDatasetSourcesData, GetTmdbPublicDatasetSourcesError, GetTmdbPublicDatasetSourcesResponse, HealthData, HealthResponse2, ListBackupsData, ListBackupsError, ListBackupsResponse, ListBulkAssetsSchedulesData, ListBulkAssetsSchedulesError, ListBulkAssetsSchedulesResponse, ListCatalogEntriesData, ListCatalogEntriesError, ListCatalogEntriesResponse, ListCollectionsData, ListCollectionsError, ListCollectionsResponse, ListItemsData, ListItemsError, ListItemsResponse, ListServerLibrariesData, ListServerLibrariesError, ListServerLibrariesResponse, ListSyncSchedulesData, ListSyncSchedulesError, ListSyncSchedulesResponse, LoginData, LoginError, LoginResponse2, LogoutData, LogoutResponse2, MatchArtData, MatchArtError, MatchArtResponse, MeData, MeError, MeResponse2, OidcCallbackData, OidcLoginData, OidcLoginError, ProxyCollectionImageData, ProxyCollectionImageError, ProxyItemProviderArtData, ProxyItemProviderArtError, ProxySeasonProviderArtData, ProxySeasonProviderArtError, ReadyData, ReadyError, ReadyResponse, RenameAssetsData, RenameAssetsError, RenameAssetsResponse, ResetCollectionMatchData, ResetCollectionMatchError, ResetCollectionMatchResponse, RunBulkAssetsScheduleData, RunBulkAssetsScheduleError, RunBulkAssetsScheduleResponse, RunSyncData, RunSyncError, RunSyncResponse, RunSyncScheduleData, RunSyncScheduleError, RunSyncScheduleResponse, SaveArtData, SaveArtError, SaveArtResponse, SaveCatalogDraftData, SaveCatalogDraftError, SaveCatalogDraftResponse, SaveTmdbArtData, SaveTmdbArtError, SaveTmdbArtResponse, SearchTmdbData, SearchTmdbError, SearchTmdbResponse, SearchYoutubeData, SearchYoutubeError, SearchYoutubeResponse, SelectThemeData, SelectThemeError, SelectThemeResponse, SelectTmdbThemeData, SelectTmdbThemeError, SelectTmdbThemeResponse, ServeLocalImageData, ServeLocalImageError, ServeLocalSeasonImageData, ServeLocalSeasonImageError, SetCollectionMatchData, SetCollectionMatchError, SetCollectionMatchResponse, SetCollectionMonitoredData, SetCollectionMonitoredError, SetCollectionMonitoredResponse, SetCollectionThemeData, SetCollectionThemeError, SetCollectionThemeResponse, SetMonitoredData, SetMonitoredError, SetMonitoredResponse, SetPublicDatasetEnabledData, SetPublicDatasetEnabledError, SetPublicDatasetEnabledResponse, StartBulkAssetsData, StartBulkAssetsError, StartBulkAssetsResponse, StartScanData, StartScanError, StartScanResponse, StartServerAuditData, StartServerAuditError, StartServerAuditResponse, StopAuditFixData, StopAuditFixError, StopAuditFixResponse, StopBulkAssetsData, StopBulkAssetsError, StopBulkAssetsResponse, StopScanData, StopScanError, StopScanResponse, StopServerAuditData, StopServerAuditError, StopServerAuditResponse, StopSyncData, StopSyncError, StopSyncResponse, SyncPublicDatasetNowData, SyncPublicDatasetNowError, SyncPublicDatasetNowResponse, UpdateBackupScheduleData, UpdateBackupScheduleError, UpdateBackupScheduleResponse, UpdateBulkAssetsScheduleData, UpdateBulkAssetsScheduleError, UpdateBulkAssetsScheduleResponse, UpdateSettingsData, UpdateSettingsError, UpdateSettingsResponse, UpdateSyncScheduleData, UpdateSyncScheduleError, UpdateSyncScheduleResponse } from '../types.gen';
 
 /**
  * Clear All Art
@@ -531,7 +531,7 @@ export const listCollectionsQueryKey = (options: Options<ListCollectionsData>) =
 /**
  * List Collections
  *
- * Return all collections for the given media type from the active server.
+ * Return the collections the last sync listed for the media type.
  */
 export const listCollectionsOptions = (options: Options<ListCollectionsData>) => queryOptions<ListCollectionsResponse, ListCollectionsError, ListCollectionsResponse, ReturnType<typeof listCollectionsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -565,6 +565,26 @@ export const bulkSetCollectionMonitoredMutation = (options?: Partial<Options<Bul
     return mutationOptions;
 };
 
+export const getCollectionQueryKey = (options: Options<GetCollectionData>) => createQueryKey('getCollection', options, false, ['collections']);
+
+/**
+ * Get Collection
+ *
+ * Return one collection with its members and catalog themes.
+ */
+export const getCollectionOptions = (options: Options<GetCollectionData>) => queryOptions<GetCollectionResponse, GetCollectionError, GetCollectionResponse, ReturnType<typeof getCollectionQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCollection({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCollectionQueryKey(options)
+});
+
 export const proxyCollectionImageQueryKey = (options: Options<ProxyCollectionImageData>) => createQueryKey('proxyCollectionImage', options, false, ['collections']);
 
 /**
@@ -586,6 +606,44 @@ export const proxyCollectionImageOptions = (options: Options<ProxyCollectionImag
 });
 
 /**
+ * Reset Collection Match
+ *
+ * Let the server and the members decide the TMDB collection again.
+ */
+export const resetCollectionMatchMutation = (options?: Partial<Options<ResetCollectionMatchData>>): MutationOptions<ResetCollectionMatchResponse, ResetCollectionMatchError, Options<ResetCollectionMatchData>> => {
+    const mutationOptions: MutationOptions<ResetCollectionMatchResponse, ResetCollectionMatchError, Options<ResetCollectionMatchData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await resetCollectionMatch({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Set Collection Match
+ *
+ * Match a collection to a TMDB collection, or keep it unmatched.
+ */
+export const setCollectionMatchMutation = (options?: Partial<Options<SetCollectionMatchData>>): MutationOptions<SetCollectionMatchResponse, SetCollectionMatchError, Options<SetCollectionMatchData>> => {
+    const mutationOptions: MutationOptions<SetCollectionMatchResponse, SetCollectionMatchError, Options<SetCollectionMatchData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await setCollectionMatch({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
  * Set Collection Monitored
  *
  * Set whether a collection is monitored.
@@ -604,10 +662,30 @@ export const setCollectionMonitoredMutation = (options?: Partial<Options<SetColl
     return mutationOptions;
 };
 
+export const getCollectionSourcesQueryKey = (options: Options<GetCollectionSourcesData>) => createQueryKey('getCollectionSources', options, false, ['collections']);
+
+/**
+ * Get Collection Sources
+ *
+ * Return the matched catalog's collection theme candidates.
+ */
+export const getCollectionSourcesOptions = (options: Options<GetCollectionSourcesData>) => queryOptions<GetCollectionSourcesResponse, GetCollectionSourcesError, GetCollectionSourcesResponse, ReturnType<typeof getCollectionSourcesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCollectionSources({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCollectionSourcesQueryKey(options)
+});
+
 /**
  * Delete Collection Theme
  *
- * Remove the theme from a collection and clear the local DB record.
+ * Remove the theme from a collection and clear its stored record.
  */
 export const deleteCollectionThemeMutation = (options?: Partial<Options<DeleteCollectionThemeData>>): MutationOptions<DeleteCollectionThemeResponse2, DeleteCollectionThemeError, Options<DeleteCollectionThemeData>> => {
     const mutationOptions: MutationOptions<DeleteCollectionThemeResponse2, DeleteCollectionThemeError, Options<DeleteCollectionThemeData>> = {
@@ -646,7 +724,7 @@ export const getCollectionThemeOptions = (options: Options<GetCollectionThemeDat
 /**
  * Set Collection Theme
  *
- * Queue a YouTube track for upload as the theme for a collection.
+ * Queue a YouTube track to become the theme of a collection.
  */
 export const setCollectionThemeMutation = (options?: Partial<Options<SetCollectionThemeData>>): MutationOptions<SetCollectionThemeResponse, SetCollectionThemeError, Options<SetCollectionThemeData>> => {
     const mutationOptions: MutationOptions<SetCollectionThemeResponse, SetCollectionThemeError, Options<SetCollectionThemeData>> = {
@@ -1058,6 +1136,104 @@ export const listServerLibrariesOptions = (options?: Options<ListServerLibraries
     },
     queryKey: listServerLibrariesQueryKey(options)
 });
+
+export const listCatalogEntriesQueryKey = (options: Options<ListCatalogEntriesData>) => createQueryKey('listCatalogEntries', options, false, ['public-dataset']);
+
+/**
+ * List Catalog Entries
+ *
+ * Return every catalog entry of a kind, with what the library holds of it.
+ */
+export const listCatalogEntriesOptions = (options: Options<ListCatalogEntriesData>) => queryOptions<ListCatalogEntriesResponse, ListCatalogEntriesError, ListCatalogEntriesResponse, ReturnType<typeof listCatalogEntriesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listCatalogEntries({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listCatalogEntriesQueryKey(options)
+});
+
+export const getCatalogCountsQueryKey = (options?: Options<GetCatalogCountsData>) => createQueryKey('getCatalogCounts', options, false, ['public-dataset']);
+
+/**
+ * Get Catalog Counts
+ *
+ * Return catalog and draft counts without reading every entry.
+ */
+export const getCatalogCountsOptions = (options?: Options<GetCatalogCountsData>) => queryOptions<GetCatalogCountsResponse, GetCatalogCountsError, GetCatalogCountsResponse, ReturnType<typeof getCatalogCountsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogCounts({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogCountsQueryKey(options)
+});
+
+export const getCatalogEntryQueryKey = (options: Options<GetCatalogEntryData>) => createQueryKey('getCatalogEntry', options, false, ['public-dataset']);
+
+/**
+ * Get Catalog Entry
+ *
+ * Return one catalog entry with its local draft.
+ */
+export const getCatalogEntryOptions = (options: Options<GetCatalogEntryData>) => queryOptions<GetCatalogEntryResponse, GetCatalogEntryError, GetCatalogEntryResponse, ReturnType<typeof getCatalogEntryQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogEntry({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogEntryQueryKey(options)
+});
+
+/**
+ * Discard Catalog Draft
+ *
+ * Discard an entry's local draft.
+ */
+export const discardCatalogDraftMutation = (options?: Partial<Options<DiscardCatalogDraftData>>): MutationOptions<DiscardCatalogDraftResponse, DiscardCatalogDraftError, Options<DiscardCatalogDraftData>> => {
+    const mutationOptions: MutationOptions<DiscardCatalogDraftResponse, DiscardCatalogDraftError, Options<DiscardCatalogDraftData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await discardCatalogDraft({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Save Catalog Draft
+ *
+ * Change an entry's local draft, to contribute later.
+ */
+export const saveCatalogDraftMutation = (options?: Partial<Options<SaveCatalogDraftData>>): MutationOptions<SaveCatalogDraftResponse, SaveCatalogDraftError, Options<SaveCatalogDraftData>> => {
+    const mutationOptions: MutationOptions<SaveCatalogDraftResponse, SaveCatalogDraftError, Options<SaveCatalogDraftData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await saveCatalogDraft({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
 
 /**
  * Set Public Dataset Enabled

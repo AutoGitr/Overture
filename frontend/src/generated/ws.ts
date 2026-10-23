@@ -175,13 +175,17 @@ export interface ServerAuditFixEvent {
 }
 
 export interface CollectionThemeUpdatedEvent {
-  server_id: string;
+  collection_id: number;
   media_type: MediaType;
   has_theme: boolean;
   youtube_id?: string | null;
   youtube_title?: string | null;
   youtube_duration?: number | null;
   theme_status: AssetStatus;
+}
+
+export interface CollectionUpdatedEvent {
+  collection_id: number;
 }
 
 export interface PublicDatasetSyncEvent {
@@ -297,6 +301,8 @@ export interface WebSocketPayloadMap {
   'download.failed': DownloadJobEvent;
   'download.cancelled': DownloadJobEvent;
   'collection.theme.updated': CollectionThemeUpdatedEvent;
+  'collections.changed': null;
+  'collection.updated': CollectionUpdatedEvent;
   'public-dataset.sync.started': PublicDatasetSyncEvent;
   'public-dataset.sync.progress': PublicDatasetSyncEvent;
   'public-dataset.sync.completed': PublicDatasetSyncEvent;
@@ -355,6 +361,8 @@ export const WEBSOCKET_EVENTS = [
   'download.failed',
   'download.cancelled',
   'collection.theme.updated',
+  'collections.changed',
+  'collection.updated',
   'public-dataset.sync.started',
   'public-dataset.sync.progress',
   'public-dataset.sync.completed',

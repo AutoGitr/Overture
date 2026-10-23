@@ -1,13 +1,20 @@
 """Public dataset query helpers."""
 
-lazy from collections.abc import Iterator, Sequence
+lazy from collections.abc import Collection, Iterator, Sequence
+lazy from itertools import batched
 lazy from typing import Literal
 
 lazy from sqlmodel import and_, col, delete, or_, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.media_item import MediaItem
-lazy from ..db.models.public_dataset import PublicDatasetItem, PublicDatasetSeason
+lazy from ..db.models.public_dataset import (
+    PublicDatasetCollection,
+    PublicDatasetItem,
+    PublicDatasetSeason,
+)
+lazy from ..db.session import CHUNK_SIZE
+lazy from ..domain import MediaType
 lazy from ..services.public_dataset.schema.contract import IDENTITY_FIELDS
 
 #: One external identifier: media type, ID field name, and its value.
@@ -27,7 +34,23 @@ class PublicDatasetRepository:
         removing the items removes them too.
         """
         await self.session.exec(delete(PublicDatasetItem))
+        await self.session.exec(delete(PublicDatasetCollection))
         await self.session.flush()
+
+    async def collections_by_tmdb_id(
+        self, tmdb_ids: Collection[int]
+    ) -> dict[int, PublicDatasetCollection]:
+        """Return the catalog's collections with these TMDB collection IDs."""
+        found: dict[int, PublicDatasetCollection] = {}
+        for batch in batched(tmdb_ids, CHUNK_SIZE, strict=False):
+            stmt = select(PublicDatasetCollection).where(
+                col(PublicDatasetCollection.tmdb_id).in_(batch)
+            )
+            found.update(
+                (collection.tmdb_id, collection)
+                for collection in await self.session.exec(stmt)
+            )
+        return found
 
     @staticmethod
     def _external_ids(item: MediaItem | PublicDatasetItem) -> Iterator[_ExternalId]:
@@ -109,6 +132,27 @@ class PublicDatasetRepository:
             )
             for item in items
         ]
+
+    async def list_items(self, media_type: MediaType) -> list[PublicDatasetItem]:
+        """Return every catalog entry of a media type."""
+        stmt = select(PublicDatasetItem).where(
+            col(PublicDatasetItem.media_type) == media_type
+        )
+        return list((await self.session.exec(stmt)).all())
+
+    async def find_item(
+        self, media_type: MediaType, field: str, value: int | str
+    ) -> PublicDatasetItem | None:
+        """Return the catalog entry of a media type with one identifier."""
+        stmt = select(PublicDatasetItem).where(
+            col(PublicDatasetItem.media_type) == media_type,
+            col(getattr(PublicDatasetItem, field)) == value,
+        )
+        return (await self.session.exec(stmt)).first()
+
+    async def list_collections(self) -> list[PublicDatasetCollection]:
+        """Return every catalog collection."""
+        return list((await self.session.exec(select(PublicDatasetCollection))).all())
 
     async def list_seasons(
         self, public_dataset_item_id: int

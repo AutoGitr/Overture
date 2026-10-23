@@ -20,6 +20,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot
 lazy from overture.db.models.download_job import DownloadJob
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
@@ -35,6 +36,7 @@ lazy from overture.domain import (
 )
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.repositories.downloads import DownloadJobRepository
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.downloads import art as art_module
@@ -250,11 +252,6 @@ class RefreshingProvider:
         self.download_header_urls.append(url)
         return self.headers
 
-    async def upload_collection_theme(
-        self, server_item_id: str, mp3_bytes: bytes
-    ) -> str | None:
-        return None
-
 
 class RecordingPublisher(NullEventPublisher):
     def __init__(self) -> None:
@@ -277,7 +274,7 @@ class RecordingPublisher(NullEventPublisher):
 def _download_manager(
     publisher: RecordingPublisher,
     *,
-    provider: RefreshingProvider,
+    provider: RefreshingProvider | PlexProvider,
     phash: PhashService,
     youtube_resolver: YouTubeResolver,
     image_clients: StaticImageClients | None = None,
@@ -341,12 +338,19 @@ async def test_start_cancels_jobs_left_by_a_previous_run(
         if job_type is JobType.ART
         else JobTarget.theme(1, "abcDEF123_4")
         if job_type is JobType.THEME
-        else JobTarget.collection_theme(
-            "collection-1", MediaType.MOVIE, "Saga", "abcDEF123_4"
-        )
+        else JobTarget.collection_theme(1, "Saga", "abcDEF123_4")
     )
     async with database.write_session() as session:
         session.add(MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie"))
+        await session.flush()
+        session.add(
+            MediaCollection(
+                id=1,
+                server_type=ServerType.PLEX,
+                server_item_id="collection-1",
+                media_type=MediaType.MOVIE,
+            )
+        )
         await session.flush()
         original_id, _ = await manager.queue_job(session, target)
     try:
@@ -369,8 +373,17 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
     app_config: Settings,
     database: Database,
 ) -> None:
+    async with database.write_session() as session:
+        session.add(
+            MediaCollection(
+                id=1,
+                server_type=ServerType.PLEX,
+                server_item_id="collection-1",
+                media_type=MediaType.MOVIE,
+            )
+        )
     entered, release = asyncio.Event(), asyncio.Event()
-    provider = RefreshingProvider()
+    provider = PlexProvider(app_config=app_config)
 
     async def upload(_server_id: str, _data: bytes) -> str:
         entered.set()
@@ -408,9 +421,7 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
             async with database.write_session() as session:
                 job_id, _ = await manager.queue_job(
                     session,
-                    JobTarget.collection_theme(
-                        "collection-1", MediaType.MOVIE, "Saga", "abcDEF123_4"
-                    ),
+                    JobTarget.collection_theme(1, "Saga", "abcDEF123_4"),
                 )
             watch.tracking("Saga")(job_id)
             await manager.committed(session)

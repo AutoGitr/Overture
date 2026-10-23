@@ -4,7 +4,7 @@ lazy from collections.abc import Collection
 lazy from datetime import datetime
 lazy from itertools import batched
 lazy from pathlib import Path
-lazy from typing import Any, cast
+lazy from typing import Any, NamedTuple, cast
 
 lazy from sqlalchemy.orm import QueryableAttribute, raiseload
 lazy from sqlalchemy.sql.elements import ColumnElement
@@ -25,6 +25,16 @@ lazy from ..domain import (
     text_sort_key,
 )
 lazy from ..schemas.library import BulkItemOperation
+lazy from ..services.public_dataset.schema.contract import IDENTITY_FIELDS
+
+
+class ServerItemFacts(NamedTuple):
+    """What a collection needs to know about one of its member items."""
+
+    id: int
+    media_type: MediaType
+    library_id: str | None
+    tmdb_collection_id: int | None
 
 
 def _matching(load_art: bool) -> SelectOfScalar[MediaItem]:
@@ -338,6 +348,77 @@ class MediaItemRepository:
             result.all(),
             key=lambda item: media_sort_key(item.media_type, item.title, item.id),
         )
+
+    async def facts_by_server_id(self) -> dict[str, ServerItemFacts]:
+        """Return the visible linked items by media-server ID, without artwork."""
+        stmt = _matching(load_art=False).where(
+            col(MediaItem.server_item_id).is_not(None),
+            col(MediaItem.server_removed_at).is_(None),
+        )
+        return {
+            item.server_item_id: ServerItemFacts(
+                item.id, item.media_type, item.library_id, item.tmdb_collection_id
+            )
+            for item in await self.session.exec(stmt)
+            if item.server_item_id is not None and item.id is not None
+        }
+
+    async def visible_ids_by_identity(
+        self,
+        media_type: MediaType,
+        identities: list[tuple[str, int | str]] | None = None,
+    ) -> dict[tuple[str, int | str], int]:
+        """Return visible item IDs keyed by each ``(field, value)`` they carry."""
+        stmt = _matching(load_art=False).where(
+            col(MediaItem.media_type) == media_type,
+            col(MediaItem.server_removed_at).is_(None),
+        )
+        if identities is not None:
+            if not identities:
+                return {}
+            stmt = stmt.where(
+                or_(
+                    *(
+                        col(getattr(MediaItem, name)) == value
+                        for name, value in identities
+                    )
+                )
+            )
+        found: dict[tuple[str, int | str], int] = {}
+        for item in await self.session.exec(stmt):
+            for field in IDENTITY_FIELDS:
+                value = getattr(item, field)
+                if value is not None and item.id is not None:
+                    found.setdefault((field, value), item.id)
+        return found
+
+    async def tmdb_collection_ids(self, item_ids: list[int]) -> list[int | None]:
+        """Return the TMDB collection of each visible item among *item_ids*."""
+        found: list[int | None] = []
+        for batch in batched(item_ids, CHUNK_SIZE, strict=False):
+            stmt = select(MediaItem.tmdb_collection_id).where(
+                col(MediaItem.id).in_(batch),
+                col(MediaItem.server_removed_at).is_(None),
+            )
+            found.extend(await self.session.exec(stmt))
+        return found
+
+    async def movies_without_tmdb_collection_check(self) -> list[tuple[int, int]]:
+        """Return ``(id, tmdb_id)`` of visible movies whose collection is unknown."""
+        stmt = select(MediaItem.id, MediaItem.tmdb_id).where(
+            col(MediaItem.media_type) == MediaType.MOVIE,
+            col(MediaItem.server_removed_at).is_(None),
+            col(MediaItem.tmdb_id).is_not(None),
+            or_(
+                col(MediaItem.tmdb_collection_checked_id).is_(None),
+                col(MediaItem.tmdb_collection_checked_id) != col(MediaItem.tmdb_id),
+            ),
+        )
+        return [
+            (item_id, tmdb_id)
+            for item_id, tmdb_id in await self.session.exec(stmt)
+            if item_id is not None and tmdb_id is not None
+        ]
 
     async def list_unconnected_tmdb_shows(self) -> list[MediaItem]:
         """Return saved TMDB shows whose seasons are not supplied by a server."""

@@ -38,7 +38,6 @@ lazy from ..bulk_common import (
     queue_and_report,
     queue_download,
     report_downloads,
-    report_planned,
     report_unloaded,
     scope_chunks,
 )
@@ -47,6 +46,7 @@ lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..local_assets.service import LocalAssets
 lazy from ..public_dataset.index import PublicDatasetIndex
+lazy from .collection_bulk import plan_collection_themes, run_collection_themes
 lazy from .youtube_resolver import YouTubeResolver
 
 logger = logging.getLogger(__name__)
@@ -138,7 +138,16 @@ async def run_bulk_themes(
             plan = await plan_bulk_themes(
                 params, app_config=app_config, database=database
             )
-            await report_planned(job, plan, _count_label)
+            collection_plan = await plan_collection_themes(
+                params, app_config=app_config, database=database
+            )
+            await job.planned(plan.total + collection_plan.total)
+            for (outcome, reason), count in plan.decided.items():
+                await job.report(outcome, _count_label(count), reason, count=count)
+            for (outcome, reason), count in collection_plan.decided.items():
+                await job.report(
+                    outcome, count_label(count, "collection"), reason, count=count
+                )
             async with report_downloads(job, watch, downloads=downloads):
                 try:
                     for batch in plan.batches():
@@ -170,6 +179,15 @@ async def run_bulk_themes(
                                 if job.stop_requested():
                                     break
                                 await _visit_item(run, item, outcome)
+                    await run_collection_themes(
+                        job,
+                        params,
+                        collection_plan,
+                        downloads=downloads,
+                        watch=watch,
+                        app_config=app_config,
+                        database=database,
+                    )
                 finally:
                     await run.stamper.flush()
 
@@ -335,6 +353,8 @@ async def plan_bulk_themes(
     """
     dataset_only = all(source.catalog for source in params.source_order)
     plan = AssetPlan[ThemeTarget]()
+    if params.collection_ids is not None:
+        return plan
     async with aclosing(scope_chunks(params, database=database, chunk=chunk)) as chunks:
         async for session, items in chunks:
             index = (

@@ -9,6 +9,7 @@ lazy from typing import Annotated
 lazy from fastapi import APIRouter, Depends, Path, Query
 
 lazy from ..dependencies import TmdbItemsDep
+lazy from ..domain import CatalogMediaType
 lazy from ..schemas.art import ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.library import ItemSelectionResponse
 lazy from ..schemas.public_dataset import PublicDatasetSources
@@ -61,7 +62,7 @@ async def get_tmdb_item(
 
 @router.get("/{media_type}/{tmdb_id}/art/{art_type}/sources")
 async def get_tmdb_art_sources(
-    media_type: MediaTypePath,
+    media_type: Annotated[CatalogMediaType, Path(description="Catalog entry kind")],
     tmdb_id: TmdbIdPath,
     art_type: ArtTypePath,
     tmdb_items: TmdbItemsDep,

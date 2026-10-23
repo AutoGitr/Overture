@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import {
     getArtSourcesOptions,
+    getCatalogEntryOptions,
     getTmdbArtSourcesOptions,
     matchArtMutation,
     saveArtMutation,
@@ -51,14 +52,54 @@
   const tmdbSourcesQuery = createQuery(() => ({
     ...getTmdbArtSourcesOptions({
       path: {
-        media_type: slot.kind === "tmdb" ? slot.mediaType : "movie",
-        tmdb_id: slot.kind === "tmdb" ? slot.tmdbId : 0,
+        media_type: slot.kind === "tmdb" || slot.kind === "catalog" ? slot.mediaType : "movie",
+        tmdb_id: slot.kind === "tmdb" || slot.kind === "catalog" ? (slot.tmdbId ?? 0) : 0,
         art_type: artType,
       },
-      query: { season_num: slot.kind === "tmdb" ? slot.seasonNum : null },
+      query: {
+        season_num: slot.kind === "tmdb" || slot.kind === "catalog" ? slot.seasonNum : null,
+      },
     }),
-    enabled: slot.kind === "tmdb",
+    enabled:
+      slot.kind === "tmdb" ||
+      (slot.kind === "catalog" && !!slot.tmdbId && settingsState.current.tmdb_configured),
   }));
+  const catalogQuery = createQuery(() => ({
+    ...getCatalogEntryOptions({
+      path: {
+        media_type: slot.kind === "catalog" ? slot.mediaType : "movie",
+        entry_key: slot.kind === "catalog" ? slot.entryKey : "",
+      },
+    }),
+    enabled: slot.kind === "catalog",
+  }));
+  function catalogArt(draft: boolean): ArtCandidate[] {
+    const entry = draft ? catalogQuery.data?.draft : catalogQuery.data?.entry;
+    const url =
+      artType === "season_poster"
+        ? entry?.seasons?.find(
+            (season) => slot.kind === "catalog" && season.season_num === slot.seasonNum,
+          )?.poster_url
+        : artType === "background"
+          ? entry?.background_url
+          : entry?.poster_url;
+    return url
+      ? [
+          {
+            url,
+            art_type: artType,
+            source: "overturedb",
+            width: null,
+            height: null,
+            hamming: null,
+            iso_639_1: null,
+            perfect_match: null,
+            preview_url: null,
+            title: draft ? "Draft" : "Catalog",
+          },
+        ]
+      : [];
+  }
   let sourcesQuery = $derived(slot.kind === "item" ? itemSourcesQuery : tmdbSourcesQuery);
   let sources = $derived(sourcesQuery.data?.sources ?? null);
   // Typed/pasted URL entry, shown when the clipboard cannot be read directly.
@@ -93,7 +134,7 @@
    * which the detail page then shows until the server has fetched the file.
    */
   async function saveArt(art: ArtSelection, previewUrl: string | null = null) {
-    if (saving) return false;
+    if (saving || (slot.kind === "catalog" && slot.draft.busy)) return false;
     if (!art.url) {
       feedback.warning("No art URL selected");
       return false;
@@ -101,6 +142,25 @@
     const body = { height: art.height ?? null, url: art.url, width: art.width ?? null };
     saving = true;
     feedback.clear();
+    if (slot.kind === "catalog") {
+      try {
+        if (artType === "season_poster") {
+          const entry = catalogQuery.data?.draft ?? catalogQuery.data?.entry;
+          if (!entry || slot.seasonNum === null) return false;
+          const seasonNum = slot.seasonNum;
+          const seasons = [
+            ...(entry.seasons ?? []).filter((season) => season.season_num !== seasonNum),
+            { season_num: seasonNum, poster_url: art.url },
+          ].sort((a, b) => a.season_num - b.season_num);
+          return await slot.draft.save({ seasons });
+        }
+        return await slot.draft.save(
+          artType === "background" ? { background_url: art.url } : { poster_url: art.url },
+        );
+      } finally {
+        saving = false;
+      }
+    }
     if (slot.kind === "tmdb") {
       const advanceContext = beginAutoAdvance();
       // The first selection stores the title; the view then follows the item.
@@ -239,6 +299,21 @@
       {/if}
     {/snippet}
   </ArtMatchBar>
+
+  {#if slot.kind === "catalog"}
+    {#each [false, true] as draft (draft)}
+      {@const arts = catalogArt(draft)}
+      {#if arts.length}
+        <ArtSourceSection
+          title={draft ? "DRAFT" : "CATALOG"}
+          {arts}
+          {artType}
+          disabled={saving}
+          onselect={saveArt}
+        />
+      {/if}
+    {/each}
+  {/if}
 
   {#if match.results && match.results.length > 0}
     <ArtSourceSection

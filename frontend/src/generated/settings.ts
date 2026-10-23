@@ -12,7 +12,6 @@ export const DEFAULT_APP_SETTINGS = {
   max_duration_seconds: 300,
   min_duration_seconds: 30,
   normalize_theme_loudness: true,
-  plex_collections_enabled: true,
   skip_media_server_tmdb_urls: false,
   theme_search_format: "{title} {year} main theme music ost",
   tmdb_language_filter: "en_null",

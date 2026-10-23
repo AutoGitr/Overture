@@ -37,6 +37,7 @@ lazy from ..schedule_store import (
 )
 lazy from ..scheduler import SchedulerService
 lazy from . import catalog, staging
+lazy from .browse import CatalogBrowser
 lazy from .lookup import get_record_for_item, get_sources_for_item
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ _SCHEDULED_SYNC_JOB = "public_dataset_sync"
 class PublicDatasetService:
     """Scheduling, sync lifecycle, and status for the public dataset.
 
-    Heavy lifting is split across ``catalog`` and ``lookup``.
+    Heavy lifting is split across ``catalog``, ``lookup`` and ``browse``.
     """
 
     def __init__(
@@ -65,6 +66,7 @@ class PublicDatasetService:
         self._config_dir = config_dir
         self._publisher = publisher
         self.scheduler = scheduler
+        self.catalog = CatalogBrowser(database=database, app_config=app_config)
         self.job = ManagedBackgroundJob(
             ManagedJobLifecycle(
                 JobKind.PUBLIC_DATASET_SYNC,
@@ -245,7 +247,7 @@ class PublicDatasetService:
                     "OvertureDB catalog",
                     f"imported {stats.items} items "
                     f"({stats.movies} movies, {stats.shows} shows, "
-                    f"{stats.seasons} seasons)",
+                    f"{stats.seasons} seasons) and {stats.collections} collections",
                 ),
                 snapshot=True,
             )

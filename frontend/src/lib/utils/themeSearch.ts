@@ -54,7 +54,7 @@ export function extractYouTubeId(value: string): string | null {
 }
 
 export interface MergeThemeResultsParams {
-  item: MediaItemRead | null;
+  item: Pick<MediaItemRead, "title" | "youtube_id" | "youtube_title" | "youtube_duration"> | null;
   overtureDbId?: string | null;
   themerrDbId?: string | null;
   searchResults?: ThemeSearchResult[];

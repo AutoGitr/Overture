@@ -6,7 +6,7 @@ lazy from typing import Self
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...db.models.download_job import DownloadJob
-lazy from ...domain import ArtType, JobType, MediaType
+lazy from ...domain import ArtType, JobType
 lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.time import utc_now
@@ -21,7 +21,7 @@ class AssetScope:
     """
 
     media_item_id: int | None = None
-    collection_server_id: str | None = None
+    collection_id: int | None = None
     job_type: JobType | None = None
     art_type: ArtType | None = None
     season_id: int | None = None
@@ -31,7 +31,7 @@ class AssetScope:
         """The asset lock that writing these assets takes."""
         if self.media_item_id is not None:
             return self.media_item_id
-        return f"collection:{self.collection_server_id}"
+        return f"collection:{self.collection_id}"
 
 
 @dataclass(slots=True, frozen=True)
@@ -47,8 +47,7 @@ class JobTarget:
     media_item_id: int | None = None
     art_type: ArtType | None = None
     season_id: int | None = None
-    collection_server_id: str | None = None
-    collection_media_type: MediaType | None = None
+    collection_id: int | None = None
     collection_title: str | None = None
 
     @classmethod
@@ -81,15 +80,12 @@ class JobTarget:
         return cls(JobType.THEME, youtube_id, media_item_id=media_item_id)
 
     @classmethod
-    def collection_theme(
-        cls, server_id: str, media_type: MediaType, title: str, youtube_id: str
-    ) -> Self:
+    def collection_theme(cls, collection_id: int, title: str, youtube_id: str) -> Self:
         """Target the theme of a media-server collection."""
         return cls(
             JobType.COLLECTION_THEME,
             youtube_id,
-            collection_server_id=server_id,
-            collection_media_type=media_type,
+            collection_id=collection_id,
             collection_title=title,
         )
 
@@ -98,7 +94,7 @@ class JobTarget:
         """The asset slot this target writes, whatever its source."""
         return AssetScope(
             media_item_id=self.media_item_id,
-            collection_server_id=self.collection_server_id,
+            collection_id=self.collection_id,
             job_type=self.job_type,
             art_type=self.art_type,
             season_id=self.season_id,

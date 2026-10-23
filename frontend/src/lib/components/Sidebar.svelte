@@ -1,12 +1,19 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
   import { untrack } from "svelte";
-  import type { CollectionRead, MediaItemRead } from "../../generated/rest/types.gen";
+  import type {
+    CatalogEntryRow,
+    CollectionRead,
+    MediaItemRead,
+  } from "../../generated/rest/types.gen";
   import {
     getPublicDatasetStatusOptions,
     listCollectionsOptions,
+    listCatalogEntriesOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import {
+    goToCatalogEntry,
+    routedCatalogEntry,
     goToCollection,
     goToItem,
     goToItemArt,
@@ -18,9 +25,10 @@
   import { sidebarState } from "../stores/sidebarState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
-  import { collectionImageUrl, itemArtDisplayUrl } from "../utils/artDisplay";
+  import { collectionImageUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import type {
     SidebarSortPreference,
+    SidebarSource,
     SidebarTab,
     SidebarSortDir as SortDir,
     SidebarSortField as SortField,
@@ -55,35 +63,76 @@
 
   const collectionsQuery = createQuery(() => ({
     ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled: uiState.sidebarMode === "collections",
+    enabled: uiState.sidebarSource === "library" && uiState.sidebarMode === "collections",
   }));
   let collections = $derived(collectionsQuery.data ?? []);
 
-  function sortStorageKey(tab: SidebarTab) {
-    return `overture_sidebar_sort_${tab}`;
+  const catalogMovies = createQuery(() => ({
+    ...listCatalogEntriesOptions({ query: { media_type: "movie" } }),
+    enabled: datasetEnabled && uiState.sidebarSource === "overturedb",
+  }));
+  const catalogShows = createQuery(() => ({
+    ...listCatalogEntriesOptions({ query: { media_type: "show" } }),
+    enabled: datasetEnabled && uiState.sidebarSource === "overturedb",
+  }));
+  const catalogCollections = createQuery(() => ({
+    ...listCatalogEntriesOptions({ query: { media_type: "collection" } }),
+    enabled:
+      datasetEnabled &&
+      uiState.sidebarSource === "overturedb" &&
+      uiState.sidebarMode === "collections",
+  }));
+  let catalogQuery = $derived(
+    uiState.sidebarMode === "collections"
+      ? catalogCollections
+      : uiState.sidebarTab === "show"
+        ? catalogShows
+        : catalogMovies,
+  );
+
+  function sortStorageKey(source: SidebarSource, tab: SidebarTab) {
+    return source === "library" ? `overture_sidebar_sort_${tab}` : `overture_catalog_sort_${tab}`;
   }
 
-  function loadSortPreference(tab: SidebarTab) {
-    return sidebarDomain.normalizeSortPreference(readJson<unknown>(sortStorageKey(tab), null));
+  function loadSortPreference(source: SidebarSource, tab: SidebarTab) {
+    return sidebarDomain.normalizeSortPreference(
+      readJson<unknown>(sortStorageKey(source, tab), null),
+    );
   }
 
-  /** Each tab keeps its own sort, which the browser remembers. */
-  let sortByTab = $state<Record<SidebarTab, SidebarSortPreference>>({
-    movie: loadSortPreference("movie"),
-    show: loadSortPreference("show"),
+  /** Each source and tab remembers its own sort. */
+  let sortBySource = $state<Record<SidebarSource, Record<SidebarTab, SidebarSortPreference>>>({
+    library: {
+      movie: loadSortPreference("library", "movie"),
+      show: loadSortPreference("library", "show"),
+    },
+    overturedb: {
+      movie: loadSortPreference("overturedb", "movie"),
+      show: loadSortPreference("overturedb", "show"),
+    },
   });
-  let sort = $derived(sortByTab[uiState.sidebarTab]);
+  let sort = $derived(sortBySource[uiState.sidebarSource][uiState.sidebarTab]);
+  let catalogRows = $derived(
+    sidebarDomain.filterCatalogEntries({
+      entries: catalogQuery.data ?? [],
+      filters: uiState.catalogFilters,
+      searchQuery: uiState.searchQuery,
+      searchField: uiState.searchField,
+      sortField: sort.field,
+      sortDir: sort.dir,
+    }),
+  );
 
   function setSort(field: SortField, dir: SortDir) {
-    sortByTab[uiState.sidebarTab] = { field, dir };
-    writeJson(sortStorageKey(uiState.sidebarTab), { field, dir });
+    sortBySource[uiState.sidebarSource][uiState.sidebarTab] = { field, dir };
+    writeJson(sortStorageKey(uiState.sidebarSource, uiState.sidebarTab), { field, dir });
   }
 
   // Whichever tab/mode combination is active is entirely driven by the URL
   // (see uiState.sidebarTab/sidebarMode). Reset the search box whenever that
   // combination changes, regardless of how the navigation happened (tab
   // button, mode toggle, browser back/forward, or a deep link).
-  let section = $derived(`${uiState.sidebarTab}:${uiState.sidebarMode}`);
+  let section = $derived(`${uiState.sidebarSource}:${uiState.sidebarTab}:${uiState.sidebarMode}`);
   let searchedSection = untrack(() => section);
   $effect(() => {
     if (section === searchedSection) return;
@@ -110,7 +159,11 @@
   }
 
   // The TMDB field searches TMDB instead of filtering the library.
-  let searchingTmdb = $derived(uiState.sidebarMode === "items" && uiState.searchField === "tmdb");
+  let searchingTmdb = $derived(
+    uiState.sidebarSource === "library" &&
+      uiState.sidebarMode === "items" &&
+      uiState.searchField === "tmdb",
+  );
   let libraryItems = $derived(uiState.sidebarTab === "movie" ? movies : shows);
 
   let filteredItems = $derived(
@@ -128,7 +181,11 @@
   // Auto-advance follows the order the user sees.
   $effect(() => {
     sidebarState.current =
-      uiState.sidebarMode === "items" && !searchingTmdb && !loading && !error
+      uiState.sidebarSource === "library" &&
+      uiState.sidebarMode === "items" &&
+      !searchingTmdb &&
+      !loading &&
+      !error
         ? { type: uiState.sidebarTab, itemIds: filteredItems.map((item) => item.id) }
         : null;
     return () => {
@@ -143,6 +200,18 @@
       searchQuery: uiState.searchQuery,
     }),
   );
+
+  $effect(() => {
+    sidebarState.collections =
+      uiState.sidebarSource === "library" &&
+      uiState.sidebarMode === "collections" &&
+      collectionsQuery.isSuccess
+        ? { type: uiState.sidebarTab, collectionIds: filteredCollections.map((row) => row.id) }
+        : null;
+    return () => {
+      sidebarState.collections = null;
+    };
+  });
 
   let itemsMessage = $derived(
     error || (filteredItems.length === 0 && !loading ? "No items found" : ""),
@@ -190,22 +259,57 @@
   />
 {/snippet}
 
+{#snippet catalogRow(entry: CatalogEntryRow, index: number, style: string)}
+  <SidebarRow
+    {style}
+    {index}
+    catalogEntry={entry}
+    active={routedCatalogEntry()?.entry_key === entry.entry_key}
+    onSelect={() => openDetail(() => goToCatalogEntry(entry))}
+    onOpenArt={() =>
+      openDetail(() =>
+        goToCatalogEntry(entry, { mode: "art", artSubTab: "poster", drillSeasonNum: null }),
+      )}
+    onOpenThemes={() =>
+      openDetail(() =>
+        goToCatalogEntry(entry, { mode: "themes", artSubTab: "poster", drillSeasonNum: null }),
+      )}
+  />
+{/snippet}
+
 <aside class="sidebar">
-  <SidebarTabs {totalMovies} {totalShows} />
+  <SidebarTabs
+    {datasetEnabled}
+    totalMovies={uiState.sidebarSource === "overturedb"
+      ? (catalogMovies.data?.length ?? 0)
+      : totalMovies}
+    totalShows={uiState.sidebarSource === "overturedb"
+      ? (catalogShows.data?.length ?? 0)
+      : totalShows}
+  />
 
   <SidebarControls
+    source={uiState.sidebarSource}
     sidebarMode={uiState.sidebarMode}
     sidebarTab={uiState.sidebarTab}
     tmdbConfigured={settingsState.current.tmdb_configured}
     filtersOpen={uiState.openPopup === "filters"}
-    hasActiveFilters={sidebarDomain.hasVisibleActiveFilters(
-      uiState.currentFilters,
-      datasetEnabled,
-      uiState.sidebarMode,
-    )}
-    filteredCount={uiState.sidebarMode === "collections"
-      ? filteredCollections.length
-      : filteredItems.length}
+    hasActiveFilters={uiState.sidebarSource === "overturedb"
+      ? sidebarDomain.CATALOG_FILTER_KEYS.some(
+          (key) =>
+            (key !== "seasonPosters" || uiState.sidebarTab === "show") &&
+            uiState.catalogFilters[key] !== "all",
+        )
+      : sidebarDomain.hasVisibleActiveFilters(
+          uiState.currentFilters,
+          datasetEnabled,
+          uiState.sidebarMode,
+        )}
+    filteredCount={uiState.sidebarSource === "overturedb"
+      ? catalogRows.length
+      : uiState.sidebarMode === "collections"
+        ? filteredCollections.length
+        : filteredItems.length}
     searchQuery={uiState.searchQuery}
     searchField={uiState.searchField}
     sortField={sort.field}
@@ -221,7 +325,7 @@
     onSetSort={setSort}
   />
 
-  {#if uiState.sidebarMode === "collections" && collectionsQuery.isError}
+  {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && collectionsQuery.isError}
     <DataStatus
       label="collections"
       error={collectionsQuery.error}
@@ -238,7 +342,30 @@
     }}
   >
     {#key scrollKey}
-      {#if searchingTmdb}
+      {#if uiState.sidebarSource === "overturedb"}
+        {#if !datasetEnabled}
+          <p class="text-muted">Enable OvertureDB to browse the catalog.</p>
+        {:else}
+          <DataStatus
+            label="catalog"
+            error={catalogQuery.error}
+            loading={catalogQuery.isFetching}
+            hasData={catalogQuery.data !== undefined}
+            onretry={() => catalogQuery.refetch()}
+          />
+          <SidebarList
+            rows={catalogRows}
+            loading={catalogQuery.isPending}
+            message={catalogQuery.data && catalogRows.length === 0
+              ? "No catalog entries found"
+              : ""}
+            scrollOffset={savedScroll}
+            getKey={(entry) => entry.entry_key}
+            posterUrl={remotePosterUrl}
+            entry={catalogRow}
+          />
+        {/if}
+      {:else if searchingTmdb}
         <TmdbSearchResults
           query={uiState.searchQuery}
           tab={uiState.sidebarTab}

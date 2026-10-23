@@ -8,6 +8,7 @@ import {
 import {
   season as fixtureSeason,
   mediaItem,
+  catalogEntry,
   publicDatasetRecord,
   publicDatasetRecordItem,
   publicDatasetRecordSeason,
@@ -173,5 +174,35 @@ describe("public dataset helpers", () => {
     expect(selectionMatchesPublicDataset(show, seasons, matchingPublicDatasetRecord(show))).toBe(
       false,
     );
+  });
+});
+
+describe("catalog contributions", () => {
+  it("uses the collection template and draft theme with no year", () => {
+    const entry = catalogEntry({
+      media_type: "collection",
+      title: "Star Wars",
+      tmdb_id: 10,
+      year: null,
+      youtube_id_overturedb: "abcDEF123_4",
+    });
+    const params = new URL(buildContributionIssueUrl(REPO_URL, entry)).searchParams;
+    expect(params.get("template")).toBe("collection.yml");
+    expect(params.get("title")).toBe("[Collection]: Star Wars");
+    expect(params.get("tmdb_id")).toBe("10");
+    expect(params.get("youtube_id")).toBe("abcDEF123_4");
+  });
+  it("includes a catalog show's season posters", () => {
+    const params = new URL(
+      buildContributionIssueUrl(
+        REPO_URL,
+        catalogEntry({
+          media_type: "show",
+          seasons: [{ season_num: 0, poster_url: "https://image.test/zero.jpg" }],
+        }),
+      ),
+    ).searchParams;
+    expect(params.get("template")).toBe("show.yml");
+    expect(params.get("season_posters")).toBe("0=https://image.test/zero.jpg");
   });
 });

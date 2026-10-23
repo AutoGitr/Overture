@@ -2,7 +2,7 @@
 
 lazy from datetime import UTC, datetime
 lazy from pathlib import Path
-lazy from typing import Any, override
+lazy from typing import override
 lazy from zoneinfo import ZoneInfo
 
 lazy import httpx2
@@ -11,6 +11,7 @@ lazy import pytest
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot, write_art_slot
 lazy from overture.db.models.download_job import DownloadJob
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.session import Database
@@ -20,7 +21,7 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.main import create_app
-lazy from overture.repositories.collection_themes import CollectionThemeRepository
+lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import MonitoredResponse
 lazy from overture.services.art.phash import PhashService
@@ -32,6 +33,7 @@ lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
+lazy from overture.utils.time import utc_now
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopYoutube,
@@ -51,17 +53,6 @@ class Provider:
         assert (server_id, art_type) == ("movie-1", ArtType.POSTER)
         return [
             ArtCandidate(url="https://images.test/poster.jpg", width=100, height=150)
-        ]
-
-    async def list_collections(self, media_type: MediaType) -> list[dict[str, Any]]:
-        assert media_type is MediaType.MOVIE
-        return [
-            {
-                "id": "collection-1",
-                "title": "Collection",
-                "media_type": media_type,
-                "server_type": self.server_type,
-            }
         ]
 
 
@@ -111,6 +102,15 @@ async def test_http_services_use_bound_database_events_and_queue(
         write_art_slot(item, ArtType.POSTER, url="https://images.test/old.jpg")
         session.add(item)
         session.add(
+            MediaCollection(
+                server_item_id="collection-1",
+                media_type=MediaType.MOVIE,
+                server_type=ServerType.PLEX,
+                title="Collection",
+                last_synced_at=utc_now(),
+            )
+        )
+        session.add(
             PublicDatasetItem(
                 media_type=MediaType.MOVIE,
                 tmdb_id=42,
@@ -154,7 +154,7 @@ async def test_http_services_use_bound_database_events_and_queue(
             "status": "existing",
         }
         collection = await client.patch(
-            "/api/collections/collection-1/monitored?media_type=movie",
+            "/api/collections/1/monitored?media_type=movie",
             json={"monitored": False},
         )
         assert collection.json() == {"monitored": False}
@@ -177,9 +177,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         job = await session.get(DownloadJob, queued_selection["job_id"])
         assert job is not None
         assert job.media_item_id == 1
-        row = await CollectionThemeRepository(session).get_for_collection(
-            "collection-1", MediaType.MOVIE
-        )
+        row = await CollectionRepository(session).get(1, MediaType.MOVIE)
         assert row is not None
         assert row.monitored is False
     updates = events.payloads("library.item.upserted")

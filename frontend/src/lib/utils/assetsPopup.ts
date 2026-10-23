@@ -25,6 +25,7 @@ export type ThemeAssetSource = ThemeBulkSource;
 export interface AssetsConfig {
   selectedLibraries: string[];
   useSidebarItems: boolean;
+  includeCollections: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
   retrySavedDownloads: boolean;
@@ -146,6 +147,8 @@ export function disabledSources(publicDatasetEnabled: boolean): readonly string[
 export interface BulkAssetsRequestParams {
   selectedLibraries: string[];
   itemIds?: number[];
+  collectionIds?: number[];
+  includeCollections?: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
   retrySavedDownloads: boolean;
@@ -162,23 +165,29 @@ export interface BulkAssetsRequestParams {
 /** Build the bulk-assets start request from the current popup configuration. */
 export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAssetsRequest {
   return {
-    library_ids: params.itemIds === undefined ? params.selectedLibraries : [],
+    library_ids:
+      params.itemIds === undefined && params.collectionIds === undefined
+        ? params.selectedLibraries
+        : [],
     ...(params.itemIds === undefined ? {} : { item_ids: [...params.itemIds] }),
+    ...(params.collectionIds === undefined ? {} : { collection_ids: [...params.collectionIds] }),
     include_unmonitored: params.includeUnmonitored,
     overwrite_existing: params.overwriteExisting,
     retry_saved_downloads: params.retrySavedDownloads,
     skip_recent_val: params.skipRecentVal,
     skip_recent_unit: params.skipRecentUnit,
-    art: params.enableArt
-      ? {
-          art_types: params.artTypes,
-          source_order: params.activeArtSources,
-          threshold: params.threshold,
-        }
-      : null,
+    art:
+      params.enableArt && params.collectionIds === undefined
+        ? {
+            art_types: params.artTypes,
+            source_order: params.activeArtSources,
+            threshold: params.threshold,
+          }
+        : null,
     themes: params.enableThemes
       ? {
           source_order: params.activeThemeSources,
+          include_collections: params.includeCollections ?? false,
         }
       : null,
   };

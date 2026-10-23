@@ -8,7 +8,10 @@ lazy from fastapi.responses import Response
 lazy from ..dependencies import CollectionsDep
 lazy from ..schemas.collections import (
     BulkCollectionMonitorUpdate,
+    CollectionDetail,
+    CollectionMatchRequest,
     CollectionRead,
+    CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     SetCollectionThemeRequest,
@@ -22,7 +25,7 @@ lazy from ..schemas.common import (
 lazy from .auth import require_auth
 lazy from .parameters import ArtTypePath, ImageSizeQuery, MediaTypeQuery
 
-CollectionIdPath = Annotated[str, Path(description="Collection rating key or ID")]
+CollectionIdPath = Annotated[int, Path(gt=0, description="Collection ID")]
 
 router = APIRouter(
     prefix="/collections",
@@ -35,8 +38,52 @@ router = APIRouter(
 async def list_collections(
     collections: CollectionsDep, media_type: MediaTypeQuery
 ) -> list[CollectionRead]:
-    """Return all collections for the given media type from the active server."""
+    """Return the collections the last sync listed for the media type."""
     return await collections.list_collections(media_type)
+
+
+@router.get("/{collection_id}")
+async def get_collection(
+    collection_id: CollectionIdPath,
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+) -> CollectionDetail:
+    """Return one collection with its members and catalog themes."""
+    return await collections.get_collection(collection_id, media_type)
+
+
+@router.put("/{collection_id}/match")
+async def set_collection_match(
+    collection_id: CollectionIdPath,
+    body: CollectionMatchRequest,
+    collections: CollectionsDep,
+) -> CollectionDetail:
+    """Match a collection to a TMDB collection, or keep it unmatched."""
+    return await collections.set_match(collection_id, body)
+
+
+@router.get("/{collection_id}/sources")
+async def get_collection_sources(
+    collection_id: CollectionIdPath,
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+) -> CollectionThemeSources:
+    """Return the matched catalog's collection theme candidates."""
+    detail = await collections.get_collection(collection_id, media_type)
+    return CollectionThemeSources(
+        youtube_id_overturedb=detail.youtube_id_overturedb,
+        youtube_id_themerrdb=detail.youtube_id_themerrdb,
+    )
+
+
+@router.delete("/{collection_id}/match")
+async def reset_collection_match(
+    collection_id: CollectionIdPath,
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+) -> CollectionDetail:
+    """Let the server and the members decide the TMDB collection again."""
+    return await collections.reset_match(collection_id, media_type)
 
 
 @router.get("/{collection_id}/theme")
@@ -55,7 +102,7 @@ async def set_collection_theme(
     body: SetCollectionThemeRequest,
     collections: CollectionsDep,
 ) -> EnqueuedJobResponse:
-    """Queue a YouTube track for upload as the theme for a collection."""
+    """Queue a YouTube track to become the theme of a collection."""
     return await collections.set_collection_theme(collection_id, body)
 
 
@@ -65,7 +112,7 @@ async def delete_collection_theme(
     collections: CollectionsDep,
     media_type: MediaTypeQuery,
 ) -> DeleteCollectionThemeResponse:
-    """Remove the theme from a collection and clear the local DB record."""
+    """Remove the theme from a collection and clear its stored record."""
     return await collections.delete_collection_theme(collection_id, media_type)
 
 

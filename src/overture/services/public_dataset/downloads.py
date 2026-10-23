@@ -1,6 +1,7 @@
 """Queue OvertureDB downloads for local media items."""
 
 lazy from dataclasses import dataclass
+lazy from itertools import batched
 lazy from typing import Self
 
 lazy from sqlalchemy.exc import SQLAlchemyError
@@ -8,16 +9,22 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
 lazy from ...db.art_slots import read_art_slot
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
-lazy from ...db.session import Database
+lazy from ...db.session import CHUNK_SIZE, Database
 lazy from ...domain import (
     ITEM_ART_TYPES,
     ArtType,
     IncrementalThemeOrder,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
+lazy from ..downloads.collection_theme import (
+    collection_theme_unavailable,
+    collection_themes_unavailable,
+)
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from .index import PublicDatasetIndex
@@ -154,4 +161,68 @@ async def queue_overturedb_downloads_for_items(
             continue
         queued += item_queued
         await downloads.committed(session)
+    return queued
+
+
+async def queue_catalog_themes_for_collections(
+    collection_ids: list[int],
+    *,
+    theme_order: IncrementalThemeOrder,
+    downloads: DownloadService,
+    app_config: Settings,
+    database: Database,
+) -> QueuedDownloads:
+    """Fill newly matched, monitored collections without replacing a theme."""
+    queued = QueuedDownloads()
+    if not collection_ids or theme_order is IncrementalThemeOrder.OFF:
+        return queued
+    if collection_themes_unavailable(
+        downloads.provider_registry.collections, app_config
+    ):
+        return queued
+    for batch in batched(collection_ids, CHUNK_SIZE, strict=False):
+        async with database.read_session() as session:
+            rows = await CollectionRepository(session).bulk_targets(
+                collection_ids=list(batch)
+            )
+            index = await PublicDatasetIndex.build_collections(
+                session, rows, app_config=app_config
+            )
+        for row in rows:
+            if row.id is None:
+                continue
+            if await collection_theme_unavailable(
+                row,
+                provider=downloads.provider_registry.collections,
+                app_config=app_config,
+            ):
+                continue
+            pick = index.theme(row, theme_order.sources)
+            if pick.value is None:
+                continue
+            try:
+                async with (
+                    downloads.asset_locks.acquire(f"collection:{row.id}"),
+                    database.write_session() as session,
+                ):
+                    current = await session.get(MediaCollection, row.id)
+                    if (
+                        current is None
+                        or not current.monitored
+                        or current.youtube_id
+                        or current.server_theme_id
+                        or current.theme_file_hash
+                    ):
+                        continue
+                    _, created = await downloads.queue_job(
+                        session,
+                        JobTarget.collection_theme(
+                            current.id or 0, current.title, pick.value
+                        ),
+                        supersede=False,
+                    )
+                await downloads.committed(session)
+                queued.themes += created
+            except SQLAlchemyError, ValueError:
+                queued.errors += 1
     return queued

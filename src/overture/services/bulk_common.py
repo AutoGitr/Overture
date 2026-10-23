@@ -21,6 +21,7 @@ lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.art_slots import read_art_slot
+lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE, PAGE_SIZE, Database
 lazy from ..domain import MediaSortKey, RecentUnit, media_sort_key
@@ -139,7 +140,7 @@ class AssetPlan[TargetT]:
         """Count one target decided while planning."""
         self.decided[outcome] += 1
 
-    def visit(self, item: MediaItem, targets: list[TargetT]) -> None:
+    def visit(self, item: MediaItem | MediaCollection, targets: list[TargetT]) -> None:
         """Keep *item*'s *targets* for a visit, in the order they are given."""
         if targets and item.id is not None:
             key = media_sort_key(item.media_type, item.title, item.id)
@@ -269,6 +270,13 @@ async def _holds_selection(
     session: AsyncSession, target: JobTarget, planned: str | None
 ) -> bool:
     """Return whether *target*'s slot still holds the *planned* selection."""
+    if target.collection_id is not None:
+        collection = await session.get(MediaCollection, target.collection_id)
+        return (
+            collection is not None
+            and collection.last_synced_at is not None
+            and collection.youtube_id == planned
+        )
     item = await session.get(MediaItem, target.media_item_id)
     if item is None:
         return False

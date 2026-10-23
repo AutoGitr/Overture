@@ -9,6 +9,7 @@ lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.base import BaseMediaServerProvider
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...utils.temporary import operation_directory
+lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler
 lazy from .staging import StagedListing
 lazy from .tmdb_seasons import TmdbSeasonSync
@@ -22,8 +23,9 @@ async def run_sync(
     reconciler: LibraryReconciler,
     config_dir: Path,
     tmdb_seasons: TmdbSeasonSync,
+    collections: CollectionSync,
 ) -> None:
-    """Run a full sync: reconcile the media server, then refresh TMDB seasons.
+    """Run a full sync: reconcile the server, then TMDB seasons and collections.
 
     Publishes lifecycle events (started -> progress* -> completed | stopped |
     failed) through the managed job context, which also owns snapshot
@@ -43,6 +45,7 @@ async def run_sync(
             tmdb_count=len(tmdb_items),
         )
         await tmdb_seasons.run(tmdb_items, job)
+        await collections.run(job, library_ids=library_ids)
 
 
 async def _sync_with_provider(

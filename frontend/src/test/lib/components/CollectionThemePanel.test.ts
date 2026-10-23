@@ -1,14 +1,17 @@
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listCollectionsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
-import type { CollectionRead } from "../../../generated/rest/types.gen";
+import {
+  getCollectionOptions,
+  listCollectionsOptions,
+} from "../../../generated/rest/@tanstack/svelte-query.gen";
+import type { CollectionDetail } from "../../../generated/rest/types.gen";
 import CollectionThemePanel from "../../../lib/components/CollectionThemePanel.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { navigate } from "../../../lib/router/routes";
 import { notificationState } from "../../../lib/stores/notificationState.svelte";
-import { collection } from "../../helpers/fixtures";
+import { collectionDetail as collection } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -39,10 +42,10 @@ vi.mock("../../../lib/stores/downloadState.svelte", async (importOriginal) => ({
   downloadState: { getCollectionJob, trackQueuedCollectionJob },
 }));
 
-const starWars = collection({ id: "coll-1", title: "Star Wars", server_type: "plex" });
-let shown: CollectionRead = starWars;
+const starWars = collection({ id: 1, title: "Star Wars", server_type: "plex" });
+let shown: CollectionDetail = starWars;
 
-function show(coll: CollectionRead) {
+function show(coll: CollectionDetail) {
   shown = coll;
 }
 
@@ -55,12 +58,19 @@ async function renderPage() {
   queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
     shown,
   ]);
-  await navigate("/movies/collections/:collectionSlug", { params: { collectionSlug: shown.id } });
+  queryClient.setQueryData(
+    getCollectionOptions({ path: { collection_id: shown.id }, query: { media_type: "movie" } })
+      .queryKey,
+    shown,
+  );
+  await navigate("/movies/collections/:collectionSlug", {
+    params: { collectionSlug: String(shown.id) },
+  });
   return renderWithQueryClient(CollectionPage);
 }
 
 function cachedCollection() {
-  return queryClient.getQueryData<CollectionRead[]>(
+  return queryClient.getQueryData<CollectionDetail[]>(
     listCollectionsOptions({ query: { media_type: "movie" } }).queryKey,
   )?.[0];
 }
@@ -72,7 +82,7 @@ function toasts() {
 describe("CollectionThemePanel search", () => {
   beforeEach(() => {
     queryClient.clear();
-    show(collection({ id: "coll-1", title: "Star Wars" }));
+    show(collection({ id: 1, title: "Star Wars" }));
     vi.resetAllMocks();
     searchYoutube.mockResolvedValue({ data: { results: [] } });
     setCollectionTheme.mockResolvedValue({ data: { job_id: "col-theme-job" } });
@@ -109,7 +119,7 @@ describe("CollectionThemePanel search", () => {
     await waitFor(() => {
       expect(setCollectionTheme).toHaveBeenCalledWith(
         expect.objectContaining({
-          path: { collection_id: "coll-1" },
+          path: { collection_id: 1 },
           body: { media_type: "movie", youtube_id: "abc12345678" },
         }),
       );
@@ -189,7 +199,7 @@ describe("CollectionThemePanel theme state", () => {
     );
     expect(deleteCollectionTheme).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: { collection_id: "coll-1" },
+        path: { collection_id: 1 },
         query: { media_type: "movie" },
       }),
     );
@@ -239,10 +249,39 @@ describe("CollectionThemePanel theme state", () => {
     await waitFor(() =>
       expect(trackQueuedCollectionJob).toHaveBeenCalledWith({
         jobId: "job-1",
-        serverId: "coll-1",
-        mediaType: "movie",
+        collectionId: 1,
         title: "Star Wars",
       }),
     );
+  });
+});
+
+describe("Jellyfin collection themes", () => {
+  beforeEach(() => {
+    queryClient.clear();
+    vi.resetAllMocks();
+    searchYoutube.mockResolvedValue({ data: { results: [] } });
+  });
+  it("offers catalog themes when Jellyfin's collection folder is writable", async () => {
+    show(
+      collection({
+        server_type: "jellyfin",
+        theme_unavailable: null,
+        youtube_id_overturedb: "overture123",
+        youtube_id_themerrdb: "themerr12345",
+      }),
+    );
+    renderPanel();
+    expect(await screen.findByLabelText("Search collection themes")).toBeInTheDocument();
+    expect(screen.getByText("OvertureDB", { selector: ".badge" })).toBeInTheDocument();
+    expect(screen.getByText("ThemerrDB", { selector: ".badge" })).toBeInTheDocument();
+  });
+  it("shows the reason themes cannot be written", () => {
+    show(
+      collection({ server_type: "jellyfin", theme_unavailable: "Set JELLYFIN_COLLECTIONS_PATH" }),
+    );
+    renderPanel();
+    expect(screen.getByText("Set JELLYFIN_COLLECTIONS_PATH")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Search collection themes")).toBeNull();
   });
 });

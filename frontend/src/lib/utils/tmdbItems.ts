@@ -1,9 +1,18 @@
-import type { MediaItemRead } from "../../generated/rest/types.gen";
+import type { CatalogMediaType, MediaItemRead } from "../../generated/rest/types.gen";
+import type { CatalogDraft } from "./catalogDraft";
 import { upsertLibraryItem } from "../rest/cache";
 import { beginAutoAdvance, handleFirstSelectionAdvance, type FirstSelection } from "./autoAdvance";
 
 /** The artwork slot a panel saves into: of a stored item, or of a TMDB title. */
 export type ArtSlotTarget =
+  | {
+      kind: "catalog";
+      draft: CatalogDraft;
+      mediaType: CatalogMediaType;
+      entryKey: string;
+      tmdbId: number | null;
+      seasonNum: number | null;
+    }
   | { kind: "item"; itemId: number; seasonId: number | null }
   | {
       kind: "tmdb";

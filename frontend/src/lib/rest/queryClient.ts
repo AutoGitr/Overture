@@ -19,6 +19,8 @@ const STALE_TIME_BY_OPERATION: Readonly<Record<string, number>> = {
   listBackups: LIST_STALE_TIME,
   listBulkAssetsSchedules: LIST_STALE_TIME,
   listCollections: LIST_STALE_TIME,
+  listCatalogEntries: LIST_STALE_TIME,
+  getCatalogEntry: LIST_STALE_TIME,
   listItems: LIST_STALE_TIME,
   listSyncSchedules: LIST_STALE_TIME,
   searchYoutube: EXPENSIVE_STALE_TIME,

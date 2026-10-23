@@ -98,7 +98,7 @@ class DownloadedTheme:
 
 @dataclass(slots=True, frozen=True)
 class DownloadedCollectionTheme:
-    """One finished collection theme download, ready to be uploaded to Plex."""
+    """One finished collection theme download, ready for the media server."""
 
     youtube_id: str
     title: str | None

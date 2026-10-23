@@ -1,17 +1,22 @@
 import {
   getItemOptions,
+  getCollectionOptions,
+  getCatalogEntryOptions,
   getSeasonsOptions,
   listBulkAssetsSchedulesQueryKey,
   listSyncSchedulesQueryKey,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   BulkItemOperation,
+  CatalogEntryDetail,
+  CollectionDetail,
   CollectionRead,
   MediaItemListResponse,
   MediaItemRead,
 } from "../../generated/rest/types.gen";
 import type { ApiTag, SchedulesChangedEvent } from "../../generated/ws";
 import { goToLibrary, routedItemId } from "../router/routes";
+import type { CatalogTarget } from "../router/routes";
 import { artPreviewState } from "../stores/artPreviewState.svelte";
 import { uiState } from "../stores/uiState.svelte";
 import { queryClient, queryOperationId } from "./queryClient";
@@ -147,16 +152,47 @@ export function invalidateSeasons(itemId: number | string): Promise<void> {
   });
 }
 
-export function patchCollection(serverId: string, update: Partial<CollectionRead>): void {
+export function patchCollection(collectionId: number, update: Partial<CollectionRead>): void {
   queryClient.setQueriesData<CollectionRead[]>(
     {
       predicate: ({ queryKey }) => isTaggedQuery(queryKey, "listCollections"),
     },
     (collections) =>
       collections?.map((collection) =>
-        collection.id === serverId ? { ...collection, ...update } : collection,
+        collection.id === collectionId ? { ...collection, ...update } : collection,
       ),
   );
+  queryClient.setQueriesData<CollectionDetail>(
+    { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "getCollection") },
+    (collection) => (collection?.id === collectionId ? { ...collection, ...update } : collection),
+  );
+}
+
+export function storeCollectionDetail(collection: CollectionDetail): void {
+  patchCollection(collection.id, collection);
+  queryClient.setQueryData(
+    getCollectionOptions({
+      path: { collection_id: collection.id },
+      query: { media_type: collection.media_type },
+    }).queryKey,
+    collection,
+  );
+}
+
+export function storeCatalogDetail(target: CatalogTarget, detail: CatalogEntryDetail): void {
+  queryClient.setQueriesData<CatalogEntryDetail>(
+    { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "getCatalogEntry") },
+    (current) =>
+      current?.entry.media_type === detail.entry.media_type &&
+      current.entry_key === detail.entry_key
+        ? detail
+        : current,
+  );
+  queryClient.setQueryData(getCatalogEntryOptions({ path: target }).queryKey, detail);
+  void queryClient.invalidateQueries({
+    predicate: ({ queryKey }) =>
+      isTaggedQuery(queryKey, "listCatalogEntries") || isTaggedQuery(queryKey, "getCatalogCounts"),
+  });
 }
 
 /** Apply a whole committed batch without per-item requests or list scans. */
@@ -197,7 +233,7 @@ export function applyBulkItemOperation({ item_ids, operation }: BulkItemOperatio
 }
 
 export function bulkSetCollectionMonitoredInCache(
-  collectionIds: string[],
+  collectionIds: number[],
   monitored: boolean,
 ): void {
   const ids = new Set(collectionIds);

@@ -5,11 +5,17 @@ lazy from .art import (
     ArtSlot,
 )
 lazy from .auth_session import AuthSession
-lazy from .collection_theme import CollectionTheme, CollectionThemeBase
 lazy from .download_job import DownloadJob, DownloadJobBase
 lazy from .job_result import JobResult, JobRun
+lazy from .media_collection import (
+    MediaCollection,
+    MediaCollectionBase,
+    MediaCollectionMember,
+)
 lazy from .media_item import MediaItem, MediaItemBase
 lazy from .public_dataset import (
+    PublicDatasetCollection,
+    PublicDatasetDraft,
     PublicDatasetItem,
     PublicDatasetItemBase,
     PublicDatasetSeason,
@@ -34,14 +40,17 @@ __all__ = [
     "AppSettingsBase",
     "ArtSlot",
     "AuthSession",
-    "CollectionTheme",
-    "CollectionThemeBase",
     "DownloadJob",
     "DownloadJobBase",
     "JobResult",
     "JobRun",
+    "MediaCollection",
+    "MediaCollectionBase",
+    "MediaCollectionMember",
     "MediaItem",
     "MediaItemBase",
+    "PublicDatasetCollection",
+    "PublicDatasetDraft",
     "PublicDatasetItem",
     "PublicDatasetItemBase",
     "PublicDatasetSeason",

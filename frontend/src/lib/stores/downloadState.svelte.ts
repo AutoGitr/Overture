@@ -1,5 +1,4 @@
 import { SvelteMap } from "svelte/reactivity";
-import type { MediaItemRead } from "../../generated/rest/types.gen";
 import type { DownloadJobEvent } from "../../generated/ws";
 import { jobEventErrorMessage } from "../utils/errors";
 import { notify } from "./notificationState.svelte";
@@ -17,8 +16,7 @@ export function downloadLane(jobType: string): DownloadLane {
 export interface DownloadJob {
   job_id: string;
   media_item_id: number | null;
-  collection_server_id: string | null;
-  media_type: MediaItemRead["media_type"] | null;
+  collection_id: number | null;
   title: string | null;
   job_type: string;
   art_type: string | null;
@@ -45,8 +43,7 @@ function buildJob(data: DownloadJobEvent, status?: DownloadJob["status"]): Downl
   return {
     job_id: data.job.id,
     media_item_id: itemTarget?.media_item_id ?? null,
-    collection_server_id: collectionTarget?.collection_server_id ?? null,
-    media_type: collectionTarget?.media_type ?? null,
+    collection_id: collectionTarget?.collection_id ?? null,
     title: itemTarget?.title ?? collectionTarget?.title ?? null,
     job_type: itemTarget?.job_type ?? target.target_type,
     art_type: itemTarget?.art_type ?? null,
@@ -71,7 +68,7 @@ export function downloadStageLabel(job: DownloadJob): string {
 /** The item or collection a download belongs to, if any. */
 function ownerKey(job: DownloadJob): string | null {
   if (job.media_item_id !== null) return `item:${job.media_item_id}`;
-  if (job.collection_server_id !== null) return `collection:${job.collection_server_id}`;
+  if (job.collection_id !== null) return `collection:${job.collection_id}`;
   return null;
 }
 
@@ -142,7 +139,7 @@ class DownloadState {
 
   handleFinished(data: DownloadJobEvent) {
     this.remove(data.job.id);
-    // Only a user's choice queues a collection theme, so its arrival is news.
+    // Report a completed collection theme alongside other download notifications.
     const target = data.job.target;
     if (data.job.status === "completed" && target.target_type === "collection_theme") {
       notify.success(`Theme applied to ${target.title}.`);
@@ -173,8 +170,7 @@ class DownloadState {
     this.put({
       job_id: options.jobId,
       media_item_id: options.mediaItemId,
-      collection_server_id: null,
-      media_type: null,
+      collection_id: null,
       title: null,
       job_type: options.jobType,
       art_type: options.artType ?? null,
@@ -188,17 +184,11 @@ class DownloadState {
     });
   }
 
-  trackQueuedCollectionJob(options: {
-    jobId: string;
-    serverId: string;
-    mediaType: MediaItemRead["media_type"];
-    title: string;
-  }) {
+  trackQueuedCollectionJob(options: { jobId: string; collectionId: number; title: string }) {
     this.put({
       job_id: options.jobId,
       media_item_id: null,
-      collection_server_id: options.serverId,
-      media_type: options.mediaType,
+      collection_id: options.collectionId,
       title: options.title,
       job_type: "collection_theme",
       art_type: null,
@@ -248,15 +238,15 @@ class DownloadState {
   }
 
   /** The collection's download, a running or pending one before a failed one. */
-  getCollectionJob(serverId: string): DownloadJob | null {
-    const jobs = this.jobsOf(`collection:${serverId}`);
+  getCollectionJob(collectionId: number): DownloadJob | null {
+    const jobs = this.jobsOf(`collection:${collectionId}`);
     return (
       jobs.find((job) => job.status === "running" || job.status === "pending") ?? jobs[0] ?? null
     );
   }
 
-  isDownloadingCollection(serverId: string): boolean {
-    const status = this.getCollectionJob(serverId)?.status;
+  isDownloadingCollection(collectionId: number): boolean {
+    const status = this.getCollectionJob(collectionId)?.status;
     return status === "running" || status === "pending";
   }
 

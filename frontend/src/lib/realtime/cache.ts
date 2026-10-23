@@ -12,6 +12,7 @@ import {
   upsertLibraryItem,
 } from "../rest/cache";
 import { queryClient } from "../rest/queryClient";
+import { syncState } from "../stores/jobStates.svelte";
 import { realtimeConnectionState } from "../stores/realtimeConnectionState.svelte";
 import { errorMessage, isAbortError } from "../utils/errors";
 
@@ -56,8 +57,14 @@ export function storePublicDatasetStatus(status: PublicDatasetStatus): void {
 
 /** Keep the REST caches consistent with one applied realtime event. */
 export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void {
+  if (
+    message.event === "collections.changed" ||
+    (message.event === "collection.updated" && !syncState.running)
+  ) {
+    void invalidateTags(["collections", "public-dataset", "library"]);
+  }
   if (message.event === "collection.theme.updated") {
-    patchCollection(message.data.server_id, {
+    patchCollection(message.data.collection_id, {
       has_theme: message.data.has_theme,
       youtube_id: message.data.youtube_id ?? null,
       youtube_title: message.data.youtube_title ?? null,
@@ -111,6 +118,8 @@ export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void 
     message.event === "theme.stopped" ||
     message.event === "theme.failed"
   ) {
-    void invalidateTags(["library"]);
+    void invalidateTags(
+      message.event.startsWith("theme.") ? ["library", "collections"] : ["library"],
+    );
   }
 }

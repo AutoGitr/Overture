@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  goToCatalog,
+  goToCatalogEntry,
+  routedCatalogEntry,
+  routeScope,
   goToCollection,
   goToCollectionsList,
   goToItem,
@@ -45,10 +49,10 @@ describe("route helpers", () => {
   });
 
   it("open a collection by its id and title", async () => {
-    goToCollection({ id: "12", title: "Star Wars: Saga", media_type: "show" });
+    goToCollection({ id: 12, title: "Star Wars: Saga", media_type: "show" });
     await expectPath("/shows/collections/12-star-wars-saga");
 
-    goToCollection({ id: "3", title: "Alien", media_type: "movie" });
+    goToCollection({ id: 3, title: "Alien", media_type: "movie" });
     await expectPath("/movies/collections/3-alien");
   });
 
@@ -144,9 +148,57 @@ describe("route helpers", () => {
     expect(routedItemId()).toBeNull();
     expect(routedCollectionId()).toBeNull();
 
-    goToCollection({ id: "12", title: "Action", media_type: "movie" });
+    goToCollection({ id: 12, title: "Action", media_type: "movie" });
     await expectPath("/movies/collections/12-action");
-    expect(routedCollectionId()).toBe("12");
+    expect(routedCollectionId()).toBe(12);
     expect(routedItem()).toBeNull();
+  });
+});
+
+describe("catalog routes", () => {
+  it("derives all three sidebar dimensions from the URL", async () => {
+    goToCatalog("movie", "collections");
+    await expectPath("/overturedb/movies/collections");
+    expect(routeScope()).toEqual({ source: "overturedb", tab: "movie", mode: "collections" });
+    expect(routedCatalogEntry()).toBeNull();
+    goToCatalog("show");
+    await expectPath("/overturedb/shows");
+    expect(routeScope()).toEqual({ source: "overturedb", tab: "show", mode: "items" });
+    goToCatalog("movie");
+    await expectPath("/overturedb/movies");
+  });
+  it.each(["movie", "show", "collection"] as const)(
+    "opens %s entries and art and theme tabs",
+    async (media_type) => {
+      const entry = { media_type, entry_key: "tmdb-10" };
+      const base =
+        media_type === "collection"
+          ? "/overturedb/movies/collections"
+          : media_type === "show"
+            ? "/overturedb/shows"
+            : "/overturedb/movies";
+      goToCatalogEntry(entry);
+      await expectPath(`${base}/tmdb-10`);
+      expect(routedCatalogEntry()).toEqual(entry);
+      expect(routedItem()).toBeNull();
+      goToCatalogEntry(entry, { mode: "themes", artSubTab: "poster", drillSeasonNum: null });
+      await expectPath(`${base}/tmdb-10/themes`);
+      goToCatalogEntry(entry, { mode: "art", artSubTab: "background", drillSeasonNum: null });
+      await expectPath(`${base}/tmdb-10/art/background`);
+    },
+  );
+  it("drills into catalog season zero and accepts TVDB identities", async () => {
+    goToCatalogEntry(
+      { media_type: "show", entry_key: "tvdb-81189" },
+      { mode: "art", artSubTab: "seasons", drillSeasonNum: 0 },
+    );
+    await expectPath("/overturedb/shows/tvdb-81189/art/seasons/0");
+    expect(routedItemView().drillSeasonNum).toBe(0);
+    expect(routedCatalogEntry()?.entry_key).toBe("tvdb-81189");
+  });
+  it.each([12, 345, 6789])("round-trips database collection ID %s", async (id) => {
+    goToCollection({ id, title: "Star Wars", media_type: "movie" });
+    await expectPath(`/movies/collections/${id}-star-wars`);
+    expect(routedCollectionId()).toBe(id);
   });
 });

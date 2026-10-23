@@ -6,7 +6,7 @@ lazy from typing import Any, ClassVar, Optional
 
 lazy from sqlmodel import Field, Index, Relationship, SQLModel
 
-lazy from ...domain import ArtType, JobStatus, JobType, MediaType
+lazy from ...domain import ArtType, JobStatus, JobType
 lazy from ..columns import enum_columns, enum_type
 lazy from .media_item import MediaItem
 lazy from .season import Season
@@ -35,9 +35,8 @@ class DownloadJobBase(SQLModel):
         foreign_key="seasons.id",
         ondelete="CASCADE",
     )
-    collection_server_id: str | None = Field(default=None, index=True)
-    collection_media_type: MediaType | None = Field(
-        default=None, sa_type=enum_type(MediaType)
+    collection_id: int | None = Field(
+        default=None, foreign_key="media_collections.id", ondelete="CASCADE", index=True
     )
     collection_title: str | None = None
     status: JobStatus = Field(

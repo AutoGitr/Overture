@@ -205,12 +205,6 @@
               <option value="art_and_theme">Art and theme complete</option>
             </select>
           </label>
-          {#if settingsState.current.media_server === "plex"}
-            <label class="form-row justify-between">
-              <span>Enable Collections</span>
-              <input type="checkbox" bind:checked={draft.plex_collections_enabled} />
-            </label>
-          {/if}
         </div>
       </div>
 

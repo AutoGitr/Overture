@@ -9,6 +9,7 @@ import {
 import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import { realtimeConnectionState } from "../../../lib/stores/realtimeConnectionState.svelte";
+import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
   itemDownload,
   mediaItem,
@@ -41,8 +42,7 @@ function collectionDownload(id: string): DownloadJobEvent {
       status: "completed",
       target: {
         target_type: "collection_theme",
-        collection_server_id: "coll",
-        media_type: "movie",
+        collection_id: 1,
         title: "Saga",
       },
       error: null,
@@ -55,23 +55,44 @@ describe("realtime REST cache policy", () => {
     vi.resetAllMocks();
     queryClient.clear();
     realtimeConnectionState.reset();
+    syncState.reset();
     rest.refreshItem.mockResolvedValue(undefined);
     rest.invalidateSeasons.mockResolvedValue(undefined);
     rest.invalidateTags.mockResolvedValue(undefined);
     rest.invalidateReconnectData.mockResolvedValue(undefined);
   });
 
+  it("invalidates collections and catalog links when matching or membership changes", () => {
+    applyRestCachePolicy(message("collections.changed", null));
+    expect(rest.invalidateTags).toHaveBeenCalledWith(["collections", "public-dataset", "library"]);
+  });
+
+  it("refreshes individual collection changes while coalescing full sync updates", () => {
+    applyRestCachePolicy(message("collection.updated", { collection_id: 1 }));
+    expect(rest.invalidateTags).toHaveBeenCalledExactlyOnceWith([
+      "collections",
+      "public-dataset",
+      "library",
+    ]);
+    rest.invalidateTags.mockClear();
+    syncState.handleStarted({});
+    applyRestCachePolicy(message("collection.updated", { collection_id: 2 }));
+    expect(rest.invalidateTags).not.toHaveBeenCalled();
+    applyRestCachePolicy(message("collections.changed", null));
+    expect(rest.invalidateTags).toHaveBeenCalledTimes(1);
+  });
+
   it("patches a collection's theme without its absent YouTube details", () => {
     applyRestCachePolicy(
       message("collection.theme.updated", {
-        server_id: "coll",
+        collection_id: 1,
         media_type: "movie",
         has_theme: true,
         theme_status: "complete",
       }),
     );
 
-    expect(rest.patchCollection).toHaveBeenCalledWith("coll", {
+    expect(rest.patchCollection).toHaveBeenCalledWith(1, {
       has_theme: true,
       youtube_id: null,
       youtube_title: null,
@@ -141,9 +162,9 @@ describe("realtime REST cache policy", () => {
     ["match.completed", ["library"]],
     ["match.stopped", ["library"]],
     ["match.failed", ["library"]],
-    ["theme.completed", ["library"]],
-    ["theme.stopped", ["library"]],
-    ["theme.failed", ["library"]],
+    ["theme.completed", ["library", "collections"]],
+    ["theme.stopped", ["library", "collections"]],
+    ["theme.failed", ["library", "collections"]],
   ] as const)("marks the data a %s event changes stale", (event, tags) => {
     applyRestCachePolicy(message(event, {}));
 

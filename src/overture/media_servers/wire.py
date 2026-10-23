@@ -93,6 +93,7 @@ class MediaBrowserStudio(TypedDict, total=False):
 class MediaBrowserItem(TypedDict, total=False):
     Id: Required[Identifier]
     Name: str | None
+    Overview: str | None
     Path: str | None
     IsFolder: bool
     ProductionYear: int | None

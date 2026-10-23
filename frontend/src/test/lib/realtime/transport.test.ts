@@ -332,7 +332,7 @@ describe("realtimeTransport", () => {
       serverEvent(2, "collection.theme.updated", {
         has_theme: true,
         media_type: "movie",
-        server_id: "plex://collection/1",
+        collection_id: 1,
         youtube_id: "abc123",
         youtube_title: "Collection Theme",
         youtube_duration: 120,
@@ -341,7 +341,7 @@ describe("realtimeTransport", () => {
 
     expect(cache.upsertLibraryItem).toHaveBeenCalledWith(movie);
     expect(cache.invalidateSeasons).toHaveBeenCalledWith(movie.id);
-    expect(cache.patchCollection).toHaveBeenCalledWith("plex://collection/1", {
+    expect(cache.patchCollection).toHaveBeenCalledWith(1, {
       has_theme: true,
       youtube_id: "abc123",
       youtube_title: "Collection Theme",

@@ -1,11 +1,11 @@
-"""Export saved library selections as OvertureDB source files."""
+"""Export drafts and saved selections as OvertureDB source files."""
 
 lazy import json
 lazy import sqlite3
 lazy from contextlib import closing
 lazy from pathlib import Path
 lazy from tempfile import TemporaryDirectory
-lazy from typing import cast, override
+lazy from typing import Any, cast, override
 lazy from zipfile import ZIP_DEFLATED, ZipFile
 
 lazy from fastapi.responses import FileResponse
@@ -14,14 +14,24 @@ lazy from sqlmodel import col, select
 lazy from starlette.types import Receive, Scope, Send
 
 lazy from ...db.art_slots import read_art_slot
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
+lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.season import Season
 lazy from ...db.session import PAGE_SIZE, Database
-lazy from ...domain import ArtType, MediaType
+lazy from ...domain import ArtType, CatalogMediaType, MediaType, ThemeBulkSource
+lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ...repositories.public_dataset_drafts import PublicDatasetDraftRepository
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.temporary import create_operation_directory
 lazy from ...utils.threads import owned_thread
-lazy from .schema.contract import catalog_art_url, entry_file_stem, validate_entry
+lazy from .schema.contract import (
+    catalog_art_url,
+    entry_identities,
+    entry_repo_path,
+    validate_entry,
+)
 
 
 def _initialize(directory: Path) -> None:
@@ -29,7 +39,7 @@ def _initialize(directory: Path) -> None:
         connection.executescript(
             "CREATE TABLE files (path TEXT PRIMARY KEY, content TEXT); "
             "CREATE TABLE identities (media TEXT, provider TEXT, value TEXT, "
-            "PRIMARY KEY(media, provider, value));"
+            "drafted INTEGER, PRIMARY KEY(media, provider, value));"
         )
 
 
@@ -43,44 +53,87 @@ def _catalog_art_url(url: str | None) -> str | None:
         return None
 
 
-def _stage_batch(directory: Path, items: list[MediaItem]) -> None:
+def _item_entry(item: MediaItem) -> dict[str, Any] | None:
+    """Return a library item's selections as a catalog entry, if it has any."""
+    poster = _catalog_art_url(read_art_slot(item, ArtType.POSTER).url)
+    background = _catalog_art_url(read_art_slot(item, ArtType.BACKGROUND).url)
+    seasons = [
+        {"season_num": season.season_num, "poster_url": url}
+        for season in sorted(item.seasons, key=lambda season: season.season_num)
+        if (url := _catalog_art_url(read_art_slot(season, ArtType.SEASON_POSTER).url))
+    ]
+    if not (poster or background or item.youtube_id or seasons):
+        return None
+    entry: dict[str, Any] = {
+        "media_type": item.media_type.value,
+        "title": item.title,
+        "year": item.year,
+        "tmdb_id": item.tmdb_id,
+        "tvdb_id": item.tvdb_id,
+        "imdb_id": item.imdb_id,
+        "poster_url": poster,
+        "background_url": background,
+        "youtube_id_overturedb": item.youtube_id,
+        "youtube_id_themerrdb": None,
+    }
+    if item.media_type == MediaType.SHOW:
+        entry["seasons"] = seasons
+    return entry
+
+
+def _collection_entry(
+    collection: MediaCollection, catalog: PublicDatasetCollection | None
+) -> dict[str, Any] | None:
+    """Return the theme chosen for a matched collection as a catalog entry."""
+    if collection.tmdb_collection_id is None or collection.youtube_id is None:
+        return None
+    if collection.youtube_id_source is ThemeBulkSource.THEMERRDB or (
+        catalog and collection.youtube_id == catalog.youtube_id_themerrdb
+    ):
+        return None
+    return {
+        "media_type": CatalogMediaType.COLLECTION.value,
+        "title": catalog.title if catalog else collection.title,
+        "tmdb_id": collection.tmdb_collection_id,
+        "poster_url": None,
+        "background_url": None,
+        "youtube_id_overturedb": collection.youtube_id,
+        "youtube_id_themerrdb": None,
+    }
+
+
+def _stage_batch(
+    directory: Path,
+    entries: list[dict[str, Any]],
+    *,
+    drafts: bool = False,
+    covered_identities: list[tuple[str, str, str]] | None = None,
+) -> None:
+    """Stage valid entries; a draft takes precedence over library selections.
+
+    Raises:
+        PublicServiceError: When two staged entries claim one identity.
+    """
     with closing(sqlite3.connect(directory / "export.sqlite")) as connection:
-        for item in items:
-            raw_poster = read_art_slot(item, ArtType.POSTER).url
-            raw_background = read_art_slot(item, ArtType.BACKGROUND).url
-            poster = _catalog_art_url(raw_poster)
-            background = _catalog_art_url(raw_background)
-            seasons = [
-                {"season_num": season.season_num, "poster_url": url}
-                for season in sorted(item.seasons, key=lambda season: season.season_num)
-                if (
-                    url := _catalog_art_url(
-                        read_art_slot(season, ArtType.SEASON_POSTER).url
-                    )
-                )
-            ]
-            if not (poster or background or item.youtube_id or seasons):
-                continue
-            entry: dict[str, object] = {
-                "media_type": item.media_type.value,
-                "title": item.title,
-                "year": item.year,
-                "tmdb_id": item.tmdb_id,
-                "tvdb_id": item.tvdb_id,
-                "imdb_id": item.imdb_id,
-                "poster_url": poster,
-                "background_url": background,
-                "youtube_id_overturedb": item.youtube_id,
-                "youtube_id_themerrdb": None,
-            }
-            if item.media_type == MediaType.SHOW:
-                entry["seasons"] = seasons
+        for entry in entries:
             try:
                 validate_entry(entry)
             except ValueError:
                 continue
-            folder = "movies" if item.media_type == MediaType.MOVIE else "shows"
-            path = f"data/{folder}/{entry_file_stem(entry)}.json"
+            keys = [
+                (media, field, str(value))
+                for media, field, value in entry_identities(entry)
+            ]
+            if not drafts and any(
+                connection.execute(
+                    "SELECT 1 FROM identities WHERE media = ? AND provider = ? "
+                    "AND value = ? AND drafted",
+                    key,
+                ).fetchone()
+                for key in keys
+            ):
+                continue
+            path = entry_repo_path(entry)
             content = json.dumps(entry, ensure_ascii=False, indent=2) + "\n"
             previous = connection.execute(
                 "SELECT content FROM files WHERE path = ?", (path,)
@@ -88,17 +141,20 @@ def _stage_batch(directory: Path, items: list[MediaItem]) -> None:
             if previous is not None and previous[0] == content:
                 continue
             try:
-                for field in ("tmdb_id", "tvdb_id", "imdb_id"):
-                    if entry[field] is not None:
-                        connection.execute(
-                            "INSERT INTO identities VALUES (?, ?, ?)",
-                            (item.media_type.value, field, str(entry[field])),
-                        )
+                connection.executemany(
+                    "INSERT INTO identities VALUES (?, ?, ?, ?)",
+                    [(*key, drafts) for key in keys],
+                )
                 connection.execute("INSERT INTO files VALUES (?, ?)", (path, content))
             except sqlite3.IntegrityError as exc:
                 raise PublicServiceError(
                     422, "Resolve conflicting library selections before exporting"
                 ) from exc
+        if covered_identities:
+            connection.executemany(
+                "INSERT OR IGNORE INTO identities VALUES (?, ?, ?, 1)",
+                covered_identities,
+            )
         connection.commit()
 
 
@@ -116,8 +172,26 @@ def _archive(directory: Path) -> Path:
 
 
 async def export_selections(database: Database, directory: Path) -> Path:
-    """Page detached selections; never keep a session during archive I/O."""
+    """Page detached selections; never keep a session during archive I/O.
+
+    Drafts made in the catalog view go first, then library selections, then
+    the themes chosen for matched collections.
+    """
     await owned_thread(_initialize, directory)
+    async with database.read_session() as session:
+        drafts = await PublicDatasetDraftRepository(session).list_all()
+    await owned_thread(
+        _stage_batch,
+        directory,
+        [draft.entry for draft in drafts],
+        drafts=True,
+        covered_identities=[
+            (draft.media_type.value, name, str(value))
+            for draft in drafts
+            for name in ("tmdb_id", "tvdb_id", "imdb_id")
+            if (value := getattr(draft, name)) is not None
+        ],
+    )
     after = 0
     while True:
         async with database.read_session() as session:
@@ -144,8 +218,20 @@ async def export_selections(database: Database, directory: Path) -> Path:
             )
         if not items:
             break
-        await owned_thread(_stage_batch, directory, items)
+        entries = [entry for item in items if (entry := _item_entry(item))]
+        await owned_thread(_stage_batch, directory, entries)
         after = items[-1].id or after
+    async with database.read_session() as session:
+        collections = await CollectionRepository(session).list_listed()
+        catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
+            {row.tmdb_collection_id for row in collections if row.tmdb_collection_id}
+        )
+    entries = [
+        entry
+        for row in collections
+        if (entry := _collection_entry(row, catalog.get(row.tmdb_collection_id or 0)))
+    ]
+    await owned_thread(_stage_batch, directory, entries)
     return await owned_thread(_archive, directory)
 
 

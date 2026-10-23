@@ -1,5 +1,5 @@
 import { assertRoute, expect, logIn, startupLoader, test } from "./fixtures";
-import { collection } from "../helpers/fixtures";
+import { appSettings, catalogDetail, collection, collectionDetail } from "../helpers/fixtures";
 
 test("default redirect opens shows when no movie libraries exist", async ({ page }) => {
   await page.route("**/api/library/libraries?*", (request) =>
@@ -107,10 +107,13 @@ test.describe("path-based client routing", () => {
     page,
   }) => {
     await page.route("**/api/settings", (route) =>
-      route.fulfill({ json: { media_server: "plex", plex_collections_enabled: true } }),
+      route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    );
+    await page.route("**/api/collections/1?*", (route) =>
+      route.fulfill({ json: collectionDetail({ id: 1, title: "Action" }) }),
     );
     await page.route("**/api/collections?*", (route) =>
-      route.fulfill({ json: [collection({ id: "1", title: "Action" })] }),
+      route.fulfill({ json: [collection({ id: 1, title: "Action" })] }),
     );
     await page.route("**/api/themes/search?**", (route) =>
       route.fulfill({ json: { results: [] } }),
@@ -239,4 +242,45 @@ test.describe("path-based client routing", () => {
     await expect(page.getByRole("tab", { name: "Themes", selected: true })).toBeVisible();
     await assertRoute(page, "/movies/1-alien/themes");
   });
+});
+
+test("catalog deep links restore movie, show, season and collection views on reload", async ({
+  page,
+}) => {
+  await page.route("**/api/public-dataset/catalog?*", (request) => request.fulfill({ json: [] }));
+  await page.route("**/api/public-dataset/catalog/*/*", (request) => {
+    const path = new URL(request.request().url()).pathname;
+    const collection = path.includes("/collection/");
+    const show = path.includes("/show/");
+    return request.fulfill({
+      json: catalogDetail({
+        entry_key: collection ? "tmdb-10" : show ? "tvdb-81189" : "tmdb-348",
+        entry: {
+          ...catalogDetail().entry,
+          media_type: collection ? "collection" : show ? "show" : "movie",
+          title: collection ? "Star Wars" : show ? "Twin Peaks" : "Alien",
+          tmdb_id: collection ? 10 : show ? null : 348,
+          tvdb_id: show ? 81189 : null,
+          seasons: show
+            ? [{ season_num: 0, poster_url: "https://image.tmdb.org/t/p/original/zero.jpg" }]
+            : null,
+        },
+      }),
+    });
+  });
+  await logIn(page, "/overturedb/movies/tmdb-348/art/background");
+  for (const [path, title, tab] of [
+    ["/overturedb/movies/tmdb-348/art/background", "Alien", "Background"],
+    ["/overturedb/shows/tvdb-81189", "Twin Peaks", "Poster"],
+    ["/overturedb/shows/tvdb-81189/art/seasons/0", "Twin Peaks", "Seasons"],
+    ["/overturedb/movies/collections/tmdb-10/themes", "Star Wars", "Themes"],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: tab, selected: true })).toBeVisible();
+    await assertRoute(page, path);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await assertRoute(page, path);
+  }
 });

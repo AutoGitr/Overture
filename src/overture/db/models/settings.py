@@ -50,7 +50,6 @@ class AppSettingsBase(SQLModel):
     aspect_ratio_tolerance: AspectRatioTolerance = Field(
         default=AspectRatioTolerance.STRICT, sa_type=enum_type(AspectRatioTolerance)
     )
-    plex_collections_enabled: bool = True
     tmdb_language_filter: TmdbLanguageFilter = Field(
         default=TmdbLanguageFilter.EN_NULL, sa_type=enum_type(TmdbLanguageFilter)
     )

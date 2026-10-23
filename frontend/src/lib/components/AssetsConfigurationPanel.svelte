@@ -43,6 +43,7 @@
   <SidebarItemsOption
     checked={config.useSidebarItems}
     sidebarItems={sidebarState.current}
+    collectionIds={sidebarState.collections?.collectionIds}
     muted={!config.useSidebarItems && config.selectedLibraries.length > 0}
     onchange={(selected) => (config.useSidebarItems = selected)}
   />
@@ -85,9 +86,20 @@
   </div>
 </div>
 
-<ArtWorkflowCard {form} />
+{#if !form.collectionScope}<ArtWorkflowCard {form} />{/if}
 
 <WorkflowCard title="Themes" kind="theme" bind:enabled={config.enableThemes}>
+  {#if !config.useSidebarItems}
+    <label class="checkbox-group">
+      <input type="checkbox" bind:checked={config.includeCollections} />
+      <span>Include collection themes</span>
+    </label>
+  {/if}
+  {#if form.collectionScope || config.includeCollections}
+    <p class="hint">
+      Collection themes use OvertureDB and ThemerrDB. YouTube search applies to movies and shows.
+    </p>
+  {/if}
   <WorkflowSection label="Sources" note="First match wins, top to bottom.">
     <SourceOrderList
       sourceOrder={config.themeSourceOrder}

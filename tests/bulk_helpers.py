@@ -71,10 +71,12 @@ def progress_logs(context: Context) -> list[str]:
     ]
 
 
-def make_bulk_downloads(*, app_config: Settings, database: Database) -> DownloadService:
+def make_bulk_downloads(
+    *, app_config: Settings, database: Database, provider: object | None = None
+) -> DownloadService:
     return make_download_service(
         NullEventPublisher(),
-        provider_registry=NoopProviderRegistry(),
+        provider_registry=NoopProviderRegistry(provider),
         asset_storage=AssetStorage(app_config=app_config),
         phash=PhashService(app_config=app_config),
         image_clients=unused(ProxyClientManager),

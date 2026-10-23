@@ -1,5 +1,5 @@
 import { assertRoute, expect, logIn, test } from "./fixtures";
-import { collection, mediaItem } from "../helpers/fixtures";
+import { appSettings, catalogDetail, catalogRow, collection, mediaItem } from "../helpers/fixtures";
 
 test("sidebar row hit areas preserve selection, poster links, and badge actions", async ({
   page,
@@ -59,10 +59,10 @@ test("sidebar row hit areas preserve selection, poster links, and badge actions"
 
 test("a collection's decorative theme badge selects its row", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: { media_server: "plex", plex_collections_enabled: true } }),
+    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
   await page.route("**/api/collections?*", (route) =>
-    route.fulfill({ json: [collection({ id: "1", title: "Action" })] }),
+    route.fulfill({ json: [collection({ id: 1, title: "Action" })] }),
   );
   await page.route("**/api/themes/search?**", (route) => route.fulfill({ json: { results: [] } }));
   await logIn(page);
@@ -106,4 +106,88 @@ test("a ten-thousand-item library stays virtualized and interactive", async ({ p
   await last.click();
   await expect(page.getByRole("heading", { name: "Movie 09999", exact: true })).toBeVisible();
   expect(Date.now() - interactionStarted).toBeLessThan(2_000);
+});
+
+test("catalog browsing filters drafts and saves and discards artwork on desktop and mobile", async ({
+  page,
+  isMobile,
+}) => {
+  let detail = catalogDetail();
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ tmdb_configured: true, auto_match_art: false }) }),
+  );
+  await page.route("**/api/public-dataset/catalog?*", (route) => {
+    const type = new URL(route.request().url()).searchParams.get("media_type");
+    return route.fulfill({
+      json:
+        type === "movie"
+          ? [
+              catalogRow({ has_draft: !!detail.draft }),
+              catalogRow({ entry_key: "tmdb-329865", title: "Arrival", tmdb_id: 329865 }),
+            ]
+          : [],
+    });
+  });
+  await page.route("**/api/public-dataset/catalog/movie/tmdb-348", (route) =>
+    route.fulfill({ json: detail }),
+  );
+  await page.route("**/api/public-dataset/catalog/movie/tmdb-348/draft", (route) => {
+    detail = {
+      ...detail,
+      draft:
+        route.request().method() === "DELETE"
+          ? null
+          : { ...detail.entry, ...route.request().postDataJSON() },
+    };
+    return route.fulfill({ json: detail });
+  });
+  await page.route("**/api/tmdb/movie/348/art/poster/sources*", (route) =>
+    route.fulfill({
+      json: {
+        sources: {
+          tmdb: [
+            {
+              url: "https://image.tmdb.org/t/p/original/poster.jpg",
+              art_type: "poster",
+              source: "tmdb",
+              width: 1000,
+              height: 1500,
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await logIn(page);
+  await page
+    .getByRole("radiogroup", { name: "Sidebar source" })
+    .getByText("OvertureDB", { exact: true })
+    .click();
+  await assertRoute(page, "/overturedb/movies");
+  await expect(page.getByRole("button", { name: "Select Arrival", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Select Alien", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Alien", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Use artwork 1000x1500 from tmdb" }).click();
+  await expect(page.getByRole("button", { name: "Discard draft" })).toBeVisible();
+  if (isMobile) await page.getByLabel("Toggle sidebar").click();
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await expect(page.getByText("Monitor status", { exact: true })).toHaveCount(0);
+  await page
+    .getByRole("radiogroup", { name: "Has draft" })
+    .getByText("Present", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page.getByRole("button", { name: "Select Alien", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select Arrival", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Select Alien", exact: true }).click();
+  await page.getByRole("button", { name: "Discard draft" }).click();
+  await expect(page.getByRole("button", { name: "Discard draft" })).toHaveCount(0);
+  if (isMobile) await page.getByLabel("Toggle sidebar").click();
+  await expect(page.getByText("No catalog entries found", { exact: true })).toBeVisible();
+  await page
+    .getByRole("radiogroup", { name: "Sidebar source" })
+    .getByText("Library", { exact: true })
+    .click();
+  await assertRoute(page, "/movies");
+  await expect(page.getByRole("button", { name: "Select Alien", exact: true })).toBeVisible();
 });

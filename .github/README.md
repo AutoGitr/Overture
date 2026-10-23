@@ -231,6 +231,7 @@ its [settings file](#native-service-settings). Empty values count as unset.
 | `MEDIA_SERVER_URL`        | Yes                |                           | Server address with protocol, port and any base path.                                                                      |
 | `MEDIA_SERVER_API_KEY`    | Yes                |                           | Server token or API key                                                                                                    |
 | `MEDIA_SERVER_VERIFY_TLS` | No                 | `true`                    | Set to `false` only for a self-signed certificate; keep it on for Plex                                                     |
+| `JELLYFIN_COLLECTIONS_PATH` | No | | Local mount of Jellyfin's collections directory, used to write BoxSet themes |
 | `TMDB_API_KEY`            | No                 |                           | Enables TMDB artwork and title/collection search directly in the sidebar; recommended for Plex                             |
 | `AUTH_MODE`               | No                 | `password`                | Authentication mode: `password`, `oidc`, `both`, or `none`                                                                 |
 | `APP_PASSWORD_HASH`       | `password`, `both` |                           | [Password](#password) hash; required for `password` and `both` modes                                                       |
@@ -397,8 +398,8 @@ services:
 
 ## Using Overture
 
-1. Run **Sync** to import movies and shows. Plex collections are included when
-   **Enable Collections** is on.
+1. Run a full **Sync** to import movies, shows and your Plex or Jellyfin collections.
+   Collections and their members refresh on full syncs.
 2. Enable [OvertureDB](#overturedb) if you want community picks, then open an
    item to compare artwork and preview themes. Saving a choice downloads it.
 3. Work through items manually, run **Assets** in bulk, or save schedules for
@@ -412,6 +413,24 @@ poster for every season with videos.
 For titles outside your library, switch the search field to **TMDB** (requires
 `TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
 finds their media folder.
+
+### Collections
+
+Plex and Jellyfin collections appear under **Collections** in the library sidebar.
+Their pages list members and show the matched TMDB collection. Jellyfin's provider
+ID is used when available; otherwise Overture uses a strict majority of members'
+TMDB collection IDs. Set `TMDB_API_KEY` for Plex's automatic matching. You can
+search for a different collection or enter a TMDB collection ID manually, choose
+**Unmatch**, or **Reset to auto**.
+
+Collection themes include OvertureDB and ThemerrDB candidates alongside YouTube
+search. Plex receives the theme through its API. For Jellyfin 12, mount its
+collections directory into Overture, set `JELLYFIN_COLLECTIONS_PATH` to that mount,
+and run a full Sync. Overture writes `theme.mp3` into the BoxSet folder and asks
+Jellyfin to refresh it. The folder must have a `[boxset]` suffix or contain
+`collection.xml`; Jellyfin can leave out that file when XML saving is disabled.
+Without an accessible mount, the collection page explains why themes cannot be
+applied. An unavailable mount preserves previously saved choices and file facts. Emby collection themes are not supported.
 
 ### Operations
 
@@ -433,7 +452,12 @@ your existing library.
 
 Assets can use OvertureDB and local-image matching for artwork; theme sources
 are OvertureDB, ThemerrDB and YouTube search. Local-image matching finds a source
-for artwork already on disk.
+for artwork already on disk. Select **Include collection themes** to fill matched
+collections in the selected libraries, or use **Current sidebar items** from the
+collection list to target its filtered rows. Collections use OvertureDB and
+ThemerrDB in the configured order; YouTube search applies to movies and shows.
+New collection matches found by a full Sync also use the catalog theme order of
+an enabled incremental schedule covering their library.
 
 <details>
 <summary><b>How Assets treats existing choices and files</b></summary>
@@ -483,10 +507,24 @@ date. It also carries imported ThemerrDB theme choices. Catalog-only runs still
 download images and audio from their linked sources; coverage and availability
 depend on those sources.
 
+Use **Library | OvertureDB** above the sidebar tabs to browse the full local
+catalog, including movies, shows and movie collections outside your library.
+Filter by artwork, season posters, either theme source, local drafts or library
+membership. Catalog links use TMDB, TVDB or IMDb identities, for example
+`/overturedb/shows/tvdb-81189`.
+
+Artwork and theme choices in this view become local drafts. They do not change
+library selections or download files. **Discard draft** restores the catalog
+entry; **Open in library** opens a linked item or collection. **Contribute to
+OvertureDB** opens an issue with the draft's choices. **Export selections** includes
+all local drafts along with library selections and matched collection themes.
+The OvertureDB popup shows collection and draft counts.
+
 To contribute one title, select the GitHub icon on its page, shown when your
 choices differ from the catalog's. It opens a
 [movie](https://github.com/AutoGitr/OvertureDB/issues/new?template=movie.yml) or
-[show](https://github.com/AutoGitr/OvertureDB/issues/new?template=show.yml)
+[show](https://github.com/AutoGitr/OvertureDB/issues/new?template=show.yml), or
+[collection](https://github.com/AutoGitr/OvertureDB/issues/new?template=collection.yml)
 issue filled in with the title's IDs and your choices. For many titles, use
 **OvertureDB -> Export selections** and attach the ZIP to a
 [bulk contribution](https://github.com/AutoGitr/OvertureDB/issues/new?template=bulk.yml).

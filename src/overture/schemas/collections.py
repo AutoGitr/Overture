@@ -1,12 +1,15 @@
 """Collection REST and WebSocket schemas."""
 
 lazy import hashlib
-lazy from collections.abc import Mapping
-lazy from typing import Any
+lazy from typing import Annotated
+
+lazy from pydantic import Field
 
 lazy from ..config import API_PREFIX
 lazy from ..db.completion import collection_theme_status
-lazy from ..domain import AssetStatus, MediaType, ServerType
+lazy from ..db.models.media_collection import MediaCollection
+lazy from ..db.models.public_dataset import PublicDatasetCollection
+lazy from ..domain import AssetStatus, CollectionMatch, MediaType, ServerType
 lazy from .base import StrictBaseModel
 lazy from .common import StatusResponse
 lazy from .validators import YouTubeId
@@ -15,7 +18,7 @@ lazy from .validators import YouTubeId
 class CollectionRead(StrictBaseModel):
     """Media-server collection response."""
 
-    id: str
+    id: int
     title: str
     summary: str | None = None
     thumb_url: str | None = None
@@ -33,6 +36,44 @@ class CollectionRead(StrictBaseModel):
     youtube_duration: int | None = None
     theme_status: AssetStatus = AssetStatus.MISSING
     monitored: bool = True
+    tmdb_collection_id: int | None = None
+    tmdb_match: CollectionMatch = CollectionMatch.AUTO
+    #: The catalog has an OvertureDB theme for the collection's TMDB collection.
+    public_dataset_complete: bool = False
+    #: The catalog has a ThemerrDB theme for it.
+    public_dataset_themerrdb: bool = False
+
+
+class CollectionMember(StrictBaseModel):
+    """A stored item a collection holds."""
+
+    id: int
+    title: str
+    year: int | None = None
+    media_type: MediaType
+    tmdb_id: int | None = None
+
+
+class CollectionDetail(CollectionRead):
+    """One collection with its members and what limits its theme."""
+
+    members: list[CollectionMember]
+    #: Why a theme cannot be stored on this collection, if it cannot.
+    theme_unavailable: str | None = None
+    theme_writable: bool = False
+    catalog_entry_key: str | None = None
+    #: The catalog entry's title, when OvertureDB has the TMDB collection.
+    catalog_title: str | None = None
+    #: The catalog's theme candidates for the collection.
+    youtube_id_overturedb: str | None = None
+    youtube_id_themerrdb: str | None = None
+
+
+class CollectionMatchRequest(StrictBaseModel):
+    """Match a collection to a TMDB collection; ``None`` keeps it unmatched."""
+
+    media_type: MediaType
+    tmdb_collection_id: Annotated[int, Field(gt=0)] | None
 
 
 class CollectionThemeStatusResponse(StrictBaseModel):
@@ -61,7 +102,7 @@ class DeleteCollectionThemeResponse(StatusResponse):
 class CollectionThemeUpdatedEvent(StrictBaseModel):
     """Collection theme state update."""
 
-    server_id: str
+    collection_id: int
     media_type: MediaType
     has_theme: bool
     youtube_id: str | None = None
@@ -71,7 +112,7 @@ class CollectionThemeUpdatedEvent(StrictBaseModel):
 
 
 def _collection_image_url(
-    collection_id: str, image_type: str, server_url: str | None
+    collection_id: int, image_type: str, server_url: str | None
 ) -> str | None:
     """Return Overture's route for a collection image the server has.
 
@@ -84,41 +125,37 @@ def _collection_image_url(
     return f"{API_PREFIX}/collections/{collection_id}/image/{image_type}?t={version}"
 
 
-def collection_read_from_provider(
-    collection: Mapping[str, Any],
-    *,
-    youtube_id: str | None,
-    youtube_title: str | None,
-    youtube_duration: int | None,
-    monitored: bool,
+def collection_read(
+    row: MediaCollection, catalog: PublicDatasetCollection | None
 ) -> CollectionRead:
-    """Map provider collection metadata plus Overture provenance to public output."""
-    collection_id = str(collection.get("id") or "")
-    has_provider_theme = bool(collection.get("theme_id"))
+    """Map a stored collection and its catalog entry to public output."""
+    has_theme = row.server_theme_id is not None or row.theme_file_hash is not None
     return CollectionRead(
-        id=collection_id,
-        title=str(collection.get("title") or ""),
-        summary=collection.get("summary") or "",
-        thumb_url=_collection_image_url(
-            collection_id, "poster", collection.get("thumb_url")
-        ),
-        art_url=_collection_image_url(
-            collection_id, "background", collection.get("art_url")
-        ),
-        child_count=int(collection.get("child_count") or 0),
-        media_type=collection["media_type"],
-        library_id=collection.get("library_id"),
-        server_added_at=collection.get("server_added_at"),
-        server_type=collection["server_type"],
-        server_link=collection.get("server_link"),
-        has_theme=has_provider_theme,
-        youtube_id=youtube_id,
-        youtube_title=youtube_title,
-        youtube_duration=youtube_duration,
+        id=row.id or 0,
+        title=row.title,
+        summary=row.summary,
+        thumb_url=_collection_image_url(row.id or 0, "poster", row.thumb_url),
+        art_url=_collection_image_url(row.id or 0, "background", row.art_url),
+        child_count=row.child_count,
+        media_type=row.media_type,
+        library_id=row.library_id,
+        server_added_at=row.server_added_at.isoformat()
+        if row.server_added_at
+        else None,
+        server_type=row.server_type,
+        server_link=row.server_link,
+        has_theme=has_theme,
+        youtube_id=row.youtube_id,
+        youtube_title=row.youtube_title,
+        youtube_duration=row.youtube_duration,
         theme_status=collection_theme_status(
-            server_has_theme=has_provider_theme, youtube_id=youtube_id
+            server_has_theme=has_theme, youtube_id=row.youtube_id
         ),
-        monitored=bool(monitored),
+        monitored=row.monitored,
+        tmdb_collection_id=row.tmdb_collection_id,
+        tmdb_match=row.tmdb_match,
+        public_dataset_complete=bool(catalog and catalog.youtube_id_overturedb),
+        public_dataset_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
 
 
@@ -137,6 +174,19 @@ def collection_theme_status_response(
 class BulkCollectionMonitorUpdate(StrictBaseModel):
     """Validate bulk collection monitor updates."""
 
-    collection_ids: list[str]
+    collection_ids: list[int]
     media_type: MediaType
     monitored: bool
+
+
+class CollectionUpdatedEvent(StrictBaseModel):
+    """A collection's match, membership or monitoring changed."""
+
+    collection_id: int
+
+
+class CollectionThemeSources(StrictBaseModel):
+    """The catalog's theme candidates for a matched collection."""
+
+    youtube_id_overturedb: str | None = None
+    youtube_id_themerrdb: str | None = None

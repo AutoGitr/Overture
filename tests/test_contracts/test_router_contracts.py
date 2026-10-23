@@ -11,7 +11,9 @@ lazy from pydantic import ValidationError
 lazy from starlette.routing import BaseRoute
 
 lazy from overture.config import Settings
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -24,6 +26,7 @@ lazy from overture.domain import (
     ArtType,
     MediaType,
     RecentUnit,
+    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.integrations.tmdb import TMDBClient
@@ -46,7 +49,7 @@ lazy from overture.schemas.bulk import (
 )
 lazy from overture.schemas.collections import (
     CollectionThemeStatusResponse,
-    collection_read_from_provider,
+    collection_read,
     collection_theme_status_response,
 )
 lazy from overture.schemas.common import SaveSelectionResponse
@@ -323,72 +326,68 @@ class TestLibraryResponseMappers:
 
 
 class TestCollectionResponseMappers:
-    def test_collection_mapper_combines_provider_state_and_provenance(self) -> None:
-        read = collection_read_from_provider(
-            {
-                "id": "abc",
-                "title": "Collection",
-                "summary": "Summary",
-                "thumb_url": "provider-thumb",
-                "art_url": "provider-art",
-                "child_count": 3,
-                "media_type": "movie",
-                "server_type": "plex",
-                "server_link": "https://server/collection/abc",
-                "theme_id": "/themes/abc",
-            },
+    @staticmethod
+    def _row(**changes: str | None) -> MediaCollection:
+        row = MediaCollection(
+            id=1,
+            server_item_id="abc",
+            media_type=MediaType.MOVIE,
+            server_type=ServerType.PLEX,
+            title="Collection",
+            summary="Summary",
+            thumb_url="provider-thumb",
+            art_url="provider-art",
+            child_count=3,
+            server_link="https://server/collection/abc",
+            server_theme_id="/themes/abc",
             youtube_id="abcDEF12345",
             youtube_title="Collection Theme",
             youtube_duration=120,
             monitored=False,
+            tmdb_collection_id=10,
         )
+        row.sqlmodel_update(changes)
+        return row
+
+    def test_collection_mapper_combines_server_state_provenance_and_catalog(
+        self,
+    ) -> None:
+        catalog = PublicDatasetCollection(
+            tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="a" * 11
+        )
+        read = collection_read(self._row(), catalog)
 
         assert read.thumb_url is not None
-        assert read.thumb_url.startswith("/api/collections/abc/image/poster?t=")
+        assert read.thumb_url.startswith("/api/collections/1/image/poster?t=")
         assert read.art_url is not None
-        assert read.art_url.startswith("/api/collections/abc/image/background?t=")
+        assert read.art_url.startswith("/api/collections/1/image/background?t=")
         assert "provider" not in read.thumb_url + read.art_url
         # A replaced server image gets a new URL; the same one keeps its URL.
-        renamed = collection_read_from_provider(
-            {
-                "id": "abc",
-                "thumb_url": "provider-thumb-2",
-                "art_url": "provider-art",
-                "media_type": "movie",
-                "server_type": "plex",
-            },
-            youtube_id=None,
-            youtube_title=None,
-            youtube_duration=None,
-            monitored=True,
-        )
+        renamed = collection_read(self._row(thumb_url="provider-thumb-2"), None)
         assert renamed.thumb_url != read.thumb_url
         assert renamed.art_url == read.art_url
         assert read.has_theme is True
         assert read.youtube_id == "abcDEF12345"
-        assert read.youtube_title == "Collection Theme"
-        assert read.youtube_duration == 120
         assert read.monitored is False
+        assert read.tmdb_collection_id == 10
+        assert (read.public_dataset_complete, read.public_dataset_themerrdb) == (
+            False,
+            True,
+        )
+        assert renamed.public_dataset_themerrdb is False
 
     def test_collection_theme_status_mapper_uses_reconciled_collection(self) -> None:
-        read = collection_read_from_provider(
-            {
-                "id": "abc",
-                "title": "Collection",
-                "theme_id": None,
-                "media_type": "movie",
-                "server_type": "plex",
-            },
-            youtube_id=None,
-            youtube_title=None,
-            youtube_duration=None,
-            monitored=True,
+        read = collection_read(
+            self._row(
+                server_theme_id=None,
+                youtube_id=None,
+                youtube_title=None,
+                youtube_duration=None,
+            ),
+            None,
         )
         assert collection_theme_status_response(read) == (
-            CollectionThemeStatusResponse(
-                has_theme=False,
-                youtube_id=None,
-            )
+            CollectionThemeStatusResponse(has_theme=False, youtube_id=None)
         )
 
 

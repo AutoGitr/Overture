@@ -53,7 +53,23 @@ class FakePlexClient:
         return [row for row in self.details if str(row["ratingKey"]) in show_keys]
 
     async def get_collections(self, section_key: str) -> list[dict[str, Any]]:
-        return [{"id": f"collection-{section_key}"}]
+        return [
+            {
+                "ratingKey": f"collection-{section_key}",
+                "title": f"Collection {section_key}",
+                "thumb": f"/library/metadata/collection-{section_key}/thumb/1",
+                "theme": "/library/metadata/collection-1/theme/2"
+                if section_key == "1"
+                else None,
+                "addedAt": 1_700_000_000,
+            }
+        ]
+
+    async def get_collection_member_ids(self, rating_key: str) -> list[str]:
+        return [f"{rating_key}-member"]
+
+    async def asset_url(self, path: str) -> str:
+        return f"{BASE}{path}"
 
     async def get_art_url(self, rating_key: str, field: str) -> str:
         self.art_fields.append((rating_key, field))
@@ -225,11 +241,24 @@ async def test_active_art_is_read_from_the_field_holding_it(
     assert client.art_fields == [("10", "art"), ("10", "thumb")]
 
 
-async def test_collections_are_listed_from_libraries_of_the_media_type(
+async def test_collections_are_listed_with_their_library_members_and_theme(
     app_config: Settings,
 ) -> None:
     provider = _provider(app_config, FakePlexClient())
 
-    assert await provider.list_collections(MediaType.SHOW) == [
-        {"id": "collection-2", "media_type": MediaType.SHOW, "server_type": "plex"}
-    ]
+    movies, shows = await provider.list_collections()
+
+    assert (movies.id, movies.media_type, movies.library_id) == (
+        "collection-1",
+        MediaType.MOVIE,
+        "1",
+    )
+    assert movies.member_ids == ("collection-1-member",)
+    assert movies.theme_id == "/library/metadata/collection-1/theme/2"
+    assert movies.thumb_url == f"{BASE}/library/metadata/collection-1/thumb/1"
+    assert movies.added_at is not None
+    assert (shows.media_type, shows.theme_id, shows.tmdb_id) == (
+        MediaType.SHOW,
+        None,
+        None,
+    )

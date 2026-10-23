@@ -1,11 +1,11 @@
 """Public dataset REST and WebSocket schemas."""
 
 lazy from datetime import datetime
-lazy from typing import Literal
+lazy from typing import Annotated, Literal
 
 lazy from pydantic import Field
 
-lazy from ..domain import MediaType
+lazy from ..domain import CatalogMediaType, MediaType
 lazy from .art import ArtCandidate
 lazy from .base import StrictBaseModel
 lazy from .common import JobEnvelope
@@ -28,6 +28,7 @@ class PublicDatasetSyncStats(StrictBaseModel):
     items: int = 0
     movies: int = 0
     shows: int = 0
+    collections: int = 0
     seasons: int = 0
     errors: int = 0
     catalog_url: str | None = None
@@ -119,3 +120,83 @@ class PublicDatasetRecord(StrictBaseModel):
     seasons: list[PublicDatasetRecordSeason] = Field(
         default_factory=list[PublicDatasetRecordSeason]
     )
+
+
+class CatalogSeason(StrictBaseModel):
+    """One season poster of a catalog entry."""
+
+    season_num: Annotated[int, Field(ge=0)]
+    poster_url: str
+
+
+class CatalogEntry(StrictBaseModel):
+    """A catalog entry; fields its media type does not carry are ``None``."""
+
+    media_type: CatalogMediaType
+    title: str
+    year: int | None = None
+    tmdb_id: int | None = None
+    tvdb_id: int | None = None
+    imdb_id: str | None = None
+    poster_url: str | None = None
+    background_url: str | None = None
+    youtube_id_overturedb: str | None = None
+    youtube_id_themerrdb: str | None = None
+    seasons: list[CatalogSeason] | None = None
+
+
+class CatalogEntryRow(StrictBaseModel):
+    """One catalog entry as the catalog view lists it."""
+
+    entry_key: str
+    media_type: CatalogMediaType
+    title: str
+    year: int | None = None
+    tmdb_id: int | None = None
+    tvdb_id: int | None = None
+    imdb_id: str | None = None
+    poster_url: str | None = None
+    #: A smaller rendition of the poster, when its source serves one.
+    poster_preview_url: str | None = None
+    background_url: str | None = None
+    youtube_id_overturedb: str | None = None
+    youtube_id_themerrdb: str | None = None
+    #: Season posters the entry holds; shows only.
+    season_posters: int = 0
+    has_draft: bool = False
+    #: The library item or collection the entry describes, if there is one.
+    library_item_id: int | None = None
+    library_collection_id: int | None = None
+
+
+class CatalogEntryDetail(StrictBaseModel):
+    """One catalog entry with the local draft of changes to it."""
+
+    entry_key: str
+    entry: CatalogEntry
+    draft: CatalogEntry | None = None
+    library_item_id: int | None = None
+    library_collection_id: int | None = None
+
+
+class CatalogCounts(StrictBaseModel):
+    """Catalog and draft counts without downloading the catalog."""
+
+    movies: int
+    shows: int
+    collections: int
+    drafts: int
+
+
+class CatalogDraftUpdate(StrictBaseModel):
+    """Changes to a catalog entry; only the fields sent are changed."""
+
+    title: str | None = None
+    year: int | None = None
+    tmdb_id: int | None = None
+    tvdb_id: int | None = None
+    imdb_id: str | None = None
+    poster_url: str | None = None
+    background_url: str | None = None
+    youtube_id_overturedb: str | None = None
+    seasons: list[CatalogSeason] | None = None

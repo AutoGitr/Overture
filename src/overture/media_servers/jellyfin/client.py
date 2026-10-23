@@ -44,7 +44,7 @@ ITEM_TYPES = frozendict({MediaType.MOVIE: "Movie", MediaType.SHOW: "Series"})  #
 _ITEM = TypeAdapter(MediaBrowserItem)
 
 
-def _provider_ids(item: MediaBrowserItem) -> dict[str, str]:
+def provider_ids(item: MediaBrowserItem) -> dict[str, str]:
     """Return an item's external IDs, keyed by lowercase provider name."""
     return {
         key.lower(): str(value)
@@ -182,6 +182,31 @@ class JellyfinClient(MediaServerHttpClient):
             )
         return counts
 
+    async def get_boxsets(self) -> list[MediaBrowserItem]:
+        """Return every collection (BoxSet) with its folder and provider IDs."""
+        return await self._items(
+            "/Items",
+            self.query_params(
+                includeItemTypes="BoxSet",
+                recursive="true",
+                fields="ProviderIds,Path,DateCreated,Overview",
+                enableImages="true",
+                enableImageTypes="Primary,Backdrop",
+                imageTypeLimit="1",
+                enableUserData="false",
+            ),
+        )
+
+    async def get_boxset_member_ids(self, boxset_id: str) -> list[str]:
+        """Return the IDs of the items a BoxSet holds."""
+        children = await self._items(
+            "/Items",
+            self.query_params(
+                parentId=boxset_id, enableImages="false", enableUserData="false"
+            ),
+        )
+        return [child["Id"] for child in children]
+
     async def get_people(self, item_ids: list[str]) -> list[MediaBrowserItem]:
         """Return the given items with only their credited people."""
         items: list[MediaBrowserItem] = []
@@ -234,7 +259,7 @@ class JellyfinClient(MediaServerHttpClient):
                 enableUserData="false",
             ),
         ):
-            ids = _provider_ids(metadata)
+            ids = provider_ids(metadata)
             if any(ids.get(key) == value for key, value in wanted.items()):
                 return metadata["Id"]
         return None

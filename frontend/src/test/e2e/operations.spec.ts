@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { appSettings } from "../helpers/fixtures";
+import { appSettings, collection } from "../helpers/fixtures";
 import { epoch, expect, logIn, realtimeSnapshot, test } from "./fixtures";
 
 test("assets keeps every part of its results in place while downloads come and go", async ({
@@ -287,4 +287,39 @@ test("assets waits for a running full sync and says why", async ({ page, realtim
   });
   await expect(dialog.getByRole("button", { name: "Run Now" })).toBeEnabled();
   await expect(dialog.getByText("Wait for the full sync to finish.")).toHaveCount(0);
+});
+
+test("Assets uses filtered collection rows as numeric theme targets on Jellyfin", async ({
+  page,
+}) => {
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({
+      json: appSettings({ media_server: "jellyfin", collections_supported: true }),
+    }),
+  );
+  await page.route("**/api/collections?*", (route) =>
+    route.fulfill({
+      json: [
+        collection({ id: 12, title: "Star Wars", server_type: "jellyfin" }),
+        collection({ id: 34, title: "Matrix", server_type: "jellyfin" }),
+      ],
+    }),
+  );
+  let requestBody: unknown;
+  await page.route("**/api/bulk/assets", async (route) => {
+    requestBody = route.request().postDataJSON();
+    await route.fulfill({ json: { art: "not_requested", themes: "started" } });
+  });
+  await logIn(page);
+  await page.getByRole("button", { name: "Collections", exact: true }).click();
+  await page.getByLabel("Search sidebar").fill("Star Wars");
+  await page.getByRole("button", { name: "Assets", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Operations", exact: true });
+  await dialog.getByRole("checkbox", { name: "Current sidebar items 1 collection" }).check();
+  await expect(dialog.getByRole("region", { name: "Art", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Run Now" }).click();
+  await expect
+    .poll(() => requestBody)
+    .toMatchObject({ library_ids: [], collection_ids: [12], art: null });
 });

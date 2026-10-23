@@ -170,15 +170,13 @@ describe("REST transport", () => {
 
     await sdkData(
       deleteCollectionTheme({
-        path: { collection_id: "plex://collection/Action & Adventure" },
+        path: { collection_id: 12 },
         query: { media_type: "movie" },
         throwOnError: true,
       }),
     );
 
-    expect(calls[0]?.url).toBe(
-      "/api/collections/plex%3A%2F%2Fcollection%2FAction%20%26%20Adventure/theme?media_type=movie",
-    );
+    expect(calls[0]?.url).toBe("/api/collections/12/theme?media_type=movie");
   });
 
   it("supports generated reads through the configured transport", async () => {

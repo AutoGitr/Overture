@@ -1,9 +1,11 @@
-import { route } from "../router/routes";
+import { routeScope } from "../router/routes";
 import {
   ART_SOURCE_SLOTS,
   ART_SOURCES,
   METADATA_ISSUES,
   THEME_SOURCES,
+  defaultCatalogFilters,
+  type CatalogFilters,
   type ArtSource,
   type ArtSourceSlot,
   type MetadataIssue,
@@ -150,6 +152,7 @@ class UiState {
   // Filters specific to section
   movieFilters = $state<FilterState>(loadFilters("movieFilters"));
   showFilters = $state<FilterState>(loadFilters("showFilters"));
+  catalogFilters = $state<CatalogFilters>(defaultCatalogFilters());
 
   operationsTab = $state<OperationsTab>("assets");
 
@@ -182,15 +185,16 @@ class UiState {
 
   /** Which top-level tab (movies/shows) is active, derived from the URL. */
   get sidebarTab(): SidebarTab {
-    return route.pathname.startsWith("/shows") ? "show" : "movie";
+    return routeScope().tab;
   }
 
   /** Whether the sidebar is showing individual items or server collections, derived from the URL. */
   get sidebarMode(): SidebarMode {
-    const collectionsBase = `${this.sidebarTab === "show" ? "/shows" : "/movies"}/collections`;
-    return route.pathname === collectionsBase || route.pathname.startsWith(`${collectionsBase}/`)
-      ? "collections"
-      : "items";
+    return routeScope().mode;
+  }
+
+  get sidebarSource() {
+    return routeScope().source;
   }
 
   get currentFilters(): FilterState {

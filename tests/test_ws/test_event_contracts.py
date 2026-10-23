@@ -170,11 +170,13 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
             },
         },
         "collection.theme.updated": {
-            "server_id": "collection-1",
+            "collection_id": 1,
             "media_type": "movie",
             "has_theme": True,
             "theme_status": "partial",
         },
+        "collections.changed": {},
+        "collection.updated": {"collection_id": 1},
         "library.item.upserted": {
             "item": {"id": 1, "media_type": "movie", "title": "Movie"}
         },

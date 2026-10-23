@@ -82,6 +82,7 @@ describe("AssetsForm", () => {
       config: {
         library_ids: ["2", "gone"],
         item_ids: null,
+        collection_ids: null,
         include_unmonitored: true,
         overwrite_existing: true,
         retry_saved_downloads: false,
@@ -107,5 +108,39 @@ describe("AssetsForm", () => {
       threshold: 4,
       scheduleCronExpression: "0 4 * * *",
     });
+  });
+});
+
+describe("collection theme scope", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sidebarState.current = null;
+    sidebarState.collections = null;
+  });
+
+  it("runs the current collection rows as themes while remembering the art configuration", () => {
+    sidebarState.collections = { type: "movie", collectionIds: [12, 34] };
+    const assets = form();
+    assets.config.useSidebarItems = true;
+    expect(assets.canRun).toBe(true);
+    expect(assets.request()).toMatchObject({
+      library_ids: [],
+      collection_ids: [12, 34],
+      art: null,
+    });
+    expect(assets.request().item_ids).toBeUndefined();
+    expect(assets.config.enableArt).toBe(true);
+    assets.config.enableThemes = false;
+    expect(assets.canRun).toBe(false);
+    sidebarState.collections = null;
+  });
+
+  it("persists the opt-in collection setting with a library theme run", () => {
+    const assets = form();
+    assets.toggleLibrary("1");
+    assets.config.enableArt = false;
+    assets.config.includeCollections = true;
+    expect(assets.request().themes?.include_collections).toBe(true);
+    expect(assets.request().collection_ids).toBeUndefined();
   });
 });

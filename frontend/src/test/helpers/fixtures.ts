@@ -6,6 +6,10 @@ import type {
   ArtMatchResponse,
   BulkAssetsScheduleResponse,
   CollectionRead,
+  CollectionDetail,
+  CatalogEntry,
+  CatalogEntryDetail,
+  CatalogEntryRow,
   MediaItemRead,
   PublicDatasetRecord,
   PublicDatasetRecordItem,
@@ -83,6 +87,8 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     studio: null,
     title: "Test Item",
     tmdb_id: null,
+    tmdb_collection_id: null,
+    library_collection_id: null,
     tvdb_id: null,
     year: null,
     youtube_duration: null,
@@ -119,7 +125,11 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     art_url: null,
     child_count: 0,
     has_theme: false,
-    id: "collection-1",
+    id: 1,
+    tmdb_collection_id: null,
+    tmdb_match: "auto",
+    public_dataset_complete: false,
+    public_dataset_themerrdb: false,
     library_id: null,
     media_type: "movie",
     monitored: false,
@@ -133,6 +143,60 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     youtube_duration: null,
     youtube_id: null,
     youtube_title: null,
+    ...overrides,
+  };
+}
+
+export function collectionDetail(overrides: Partial<CollectionDetail> = {}): CollectionDetail {
+  return {
+    ...collection(),
+    catalog_entry_key: null,
+    theme_writable: true,
+    members: [],
+    catalog_title: null,
+    theme_unavailable: null,
+    youtube_id_overturedb: null,
+    youtube_id_themerrdb: null,
+    ...overrides,
+  };
+}
+
+export function catalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
+  return {
+    media_type: "movie",
+    title: "Alien",
+    year: 1979,
+    tmdb_id: 348,
+    tvdb_id: null,
+    imdb_id: "tt0078748",
+    poster_url: null,
+    background_url: null,
+    youtube_id_overturedb: null,
+    youtube_id_themerrdb: null,
+    seasons: null,
+    ...overrides,
+  };
+}
+export function catalogDetail(overrides: Partial<CatalogEntryDetail> = {}): CatalogEntryDetail {
+  return {
+    entry_key: "tmdb-348",
+    entry: catalogEntry(),
+    draft: null,
+    library_item_id: null,
+    library_collection_id: null,
+    ...overrides,
+  };
+}
+export function catalogRow(overrides: Partial<CatalogEntryRow> = {}): CatalogEntryRow {
+  const { seasons: _seasons, ...entry } = catalogEntry();
+  return {
+    ...entry,
+    entry_key: "tmdb-348",
+    poster_preview_url: null,
+    season_posters: 0,
+    has_draft: false,
+    library_item_id: null,
+    library_collection_id: null,
     ...overrides,
   };
 }
@@ -268,6 +332,8 @@ export function appSettings(overrides: Partial<AppSettingsRead> = {}): AppSettin
     ...DEFAULT_APP_SETTINGS,
     media_server: null,
     tmdb_configured: false,
+    collections_supported: false,
+    collection_themes_unavailable: null,
     art_download_workers: 1,
     theme_download_workers: 1,
     updated_at: null,
@@ -323,6 +389,7 @@ export function bulkAssetsSchedule(
     config: {
       library_ids: ["1"],
       item_ids: null,
+      collection_ids: null,
       skip_recent_val: 4,
       skip_recent_unit: "days",
       include_unmonitored: true,

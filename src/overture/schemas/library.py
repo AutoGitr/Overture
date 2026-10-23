@@ -30,6 +30,9 @@ class MediaItemRead(StrictBaseModel):
     tmdb_id: int | None = None
     tvdb_id: int | None = None
     imdb_id: str | None = None
+    #: The TMDB collection a movie belongs to.
+    tmdb_collection_id: int | None = None
+    library_collection_id: int | None = None
     folder_path: str | None = None
     server_item_id: str | None = None
     server_link: str | None = None
@@ -176,6 +179,7 @@ def media_item_read_from_model(
     seasons: Sequence[Season],
     has_incorrect_aspect_ratio: bool = False,
     public_dataset_ids: Literal["matching", "mismatching"] | None = None,
+    library_collection_id: int | None = None,
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.
 
@@ -194,6 +198,7 @@ def media_item_read_from_model(
                     "theme_file_size",
                     "theme_file_duration",
                     "theme_provenance_cleared",
+                    "tmdb_collection_checked_id",
                 }
             ),
             **_art_slot_fields(poster, "poster"),
@@ -211,6 +216,7 @@ def media_item_read_from_model(
             "theme_status": theme_status(item),
             "public_dataset_complete": public_dataset_complete,
             "public_dataset_themerrdb": public_dataset_themerrdb,
+            "library_collection_id": library_collection_id,
             "public_dataset_ids": public_dataset_ids,
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
