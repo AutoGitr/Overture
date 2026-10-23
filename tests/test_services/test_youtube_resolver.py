@@ -1,6 +1,7 @@
 """YouTube resolver subprocess parsing tests using fakes."""
 
 lazy import asyncio
+lazy import contextlib
 lazy import json
 lazy import sys
 lazy from importlib.machinery import ModuleSpec
@@ -21,6 +22,30 @@ lazy from overture.services.themes.youtube_resolver import (
 lazy from overture.utils import progress as progress_module
 lazy from overture.utils.process import ProcessResult
 lazy from overture.utils.progress import ProgressUpdate
+
+
+class YouTubeClock:
+    """Advance request waits without delaying resolver tests."""
+
+    def __init__(self) -> None:
+        self.now = 100.0
+        self.waits: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    async def sleep(self, delay: float) -> None:
+        self.waits.append(delay)
+        self.now += delay
+        await asyncio.sleep(0)
+
+
+@pytest.fixture(autouse=True)
+def youtube_clock(monkeypatch: pytest.MonkeyPatch) -> YouTubeClock:
+    clock = YouTubeClock()
+    monkeypatch.setattr(module, "monotonic", clock.monotonic)
+    monkeypatch.setattr(module, "sleep", clock.sleep)
+    return clock
 
 
 async def test_search_parses_json_lines(
@@ -78,6 +103,10 @@ async def test_search_uses_the_pinned_javascript_runtime(
             "--ignore-config",
             "--js-runtimes",
             "deno",
+            "--sleep-requests",
+            "1",
+            "--color",
+            "never",
             "ytsearch10:theme",
             "--dump-json",
             "--flat-playlist",
@@ -144,6 +173,10 @@ async def test_search_with_video_ids_and_deduplication(
             "--ignore-config",
             "--js-runtimes",
             "deno",
+            "--sleep-requests",
+            "1",
+            "--color",
+            "never",
             "ytsearch5:query string",
             "https://www.youtube.com/watch?v=vid_second2",
             "--dump-json",
@@ -189,6 +222,185 @@ async def test_search_reports_subprocess_failure(
 
     with pytest.raises(ValueError, match="YouTube search failed"):
         await YouTubeResolver(tmp_path).search("theme")
+
+
+@pytest.mark.parametrize("stage", ["search", "info", "download"])
+@pytest.mark.parametrize(
+    ("output", "detail"),
+    [
+        (
+            "[youtube] Downloading webpage\n" * 30
+            + "ERROR: HTTP Error 429: Too Many Requests token=secret\n"
+            + "WARNING: request failed\n",
+            "ERROR: HTTP Error 429: Too Many Requests token=[REDACTED]",
+        ),
+        ("ERROR: Video unavailable. This video is private", "This video is private"),
+        ("HTTP Error 403 token=secret", "HTTP Error 403 token=[REDACTED]"),
+        ("", "yt-dlp exited with status 1"),
+    ],
+)
+async def test_youtube_failures_preserve_the_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+    output: str,
+    detail: str,
+) -> None:
+    async def run(args: list[str], **_kwargs: object) -> ProcessResult:
+        if stage == "download" and "--dump-json" in args:
+            return ProcessResult(0, b'{"duration":120}', "")
+        return ProcessResult(1, b"", output)
+
+    monkeypatch.setattr(module, "run_process", run)
+    resolver = YouTubeResolver(tmp_path)
+    operation = (
+        resolver.search("theme")
+        if stage == "search"
+        else resolver.download_audio("abcDEF123_4", 30, 300, normalize_loudness=False)
+    )
+    with pytest.raises(
+        ValueError if stage == "search" else DownloadError, match=r"failed|Failed"
+    ) as exc:
+        await operation
+    message = str(exc.value)
+    assert detail in message
+    assert "secret" not in message
+    assert "\n" not in message
+    assert "Downloading webpage" not in message
+    assert not (tmp_path / ".tmp").exists()
+
+
+async def test_youtube_errors_are_bounded_after_redaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def run(_args: object, **_kwargs: object) -> ProcessResult:
+        return ProcessResult(
+            1, b"", "ERROR: token=" + "secret" * 1000 + " " + "x" * 2000
+        )
+
+    monkeypatch.setattr(module, "run_process", run)
+    with pytest.raises(ValueError, match="YouTube search failed") as exc:
+        await YouTubeResolver(tmp_path).search("theme")
+    message = str(exc.value)
+    assert message.startswith("YouTube search failed: ERROR: token=[REDACTED]")
+    assert len(message) == len("YouTube search failed: ") + 1000
+    assert "secret" not in message
+
+
+_RATE_LIMITED = ProcessResult(1, b"", "ERROR: HTTP Error 429: Too Many Requests")
+_SUCCEEDED = ProcessResult(0, b"", "")
+
+
+@pytest.mark.parametrize(
+    ("reason", "waits"),
+    [
+        ("HTTP Error 429: Too Many Requests", [60]),
+        ("This content isn't available, try again later", [60]),
+        ("HTTP Error 403: Forbidden", []),
+        ("Video unavailable", []),
+        ("Sign in to confirm you're not a bot", []),
+    ],
+)
+async def test_only_explicit_rate_limits_pause_later_requests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    youtube_clock: YouTubeClock,
+    reason: str,
+    waits: list[int],
+) -> None:
+    calls = 0
+
+    async def run(_args: object, **_kwargs: object) -> ProcessResult:
+        nonlocal calls
+        calls += 1
+        return ProcessResult(1, b"", f"ERROR: {reason}")
+
+    monkeypatch.setattr(module, "run_process", run)
+    resolver = YouTubeResolver(tmp_path)
+    with pytest.raises(DownloadError) as exc:
+        await resolver.download_audio("abcDEF123_4", 30, 300, normalize_loudness=False)
+    assert ("YouTube is rate limiting requests" in str(exc.value)) == bool(waits)
+    with pytest.raises(ValueError, match="YouTube search failed"):
+        await resolver.search("theme")
+    assert youtube_clock.waits == waits
+    assert calls == 2
+
+
+async def test_repeated_rate_limits_back_off_until_a_request_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, youtube_clock: YouTubeClock
+) -> None:
+    outcomes = iter([*[_RATE_LIMITED] * 6, _SUCCEEDED, _RATE_LIMITED, _SUCCEEDED])
+
+    async def run(_args: object, **_kwargs: object) -> ProcessResult:
+        return next(outcomes)
+
+    monkeypatch.setattr(module, "run_process", run)
+    resolver = YouTubeResolver(tmp_path)
+    for _ in range(9):
+        with contextlib.suppress(ValueError):
+            await resolver.search("theme")
+    assert youtube_clock.waits == [60, 120, 240, 480, 900, 900, 60]
+
+
+async def test_a_paused_search_without_wait_fails_at_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, youtube_clock: YouTubeClock
+) -> None:
+    outcomes = iter([_RATE_LIMITED, _SUCCEEDED])
+    calls = 0
+
+    async def run(_args: object, **_kwargs: object) -> ProcessResult:
+        nonlocal calls
+        calls += 1
+        return next(outcomes)
+
+    monkeypatch.setattr(module, "run_process", run)
+    resolver = YouTubeResolver(tmp_path)
+    with pytest.raises(ValueError, match="YouTube is rate limiting requests"):
+        await resolver.search("theme")
+    youtube_clock.now += 30.5
+    with pytest.raises(ValueError, match=r"rate limiting requests; try again in 30s"):
+        await resolver.search("theme", wait=False)
+    assert calls == 1
+    youtube_clock.now += 30
+    assert await resolver.search("theme", wait=False) == []
+    assert youtube_clock.waits == []
+
+
+async def test_an_in_flight_rate_limit_extends_a_waiting_requests_pause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, youtube_clock: YouTubeClock
+) -> None:
+    in_flight = asyncio.Event()
+    release = asyncio.Event()
+    calls: list[float] = []
+
+    async def run(_args: object, **_kwargs: object) -> ProcessResult:
+        calls.append(youtube_clock.now)
+        if len(calls) == 1:
+            in_flight.set()
+            await release.wait()
+            return _RATE_LIMITED
+        return _RATE_LIMITED if len(calls) == 2 else _SUCCEEDED
+
+    async def limited_search() -> None:
+        with pytest.raises(ValueError, match="YouTube is rate limiting requests"):
+            await resolver.search("theme")
+
+    async def sleep(delay: float) -> None:
+        # The search started before the pause is refused while this one sleeps.
+        release.set()
+        await slow
+        await youtube_clock.sleep(delay)
+
+    monkeypatch.setattr(module, "run_process", run)
+    monkeypatch.setattr(module, "sleep", sleep)
+    resolver = YouTubeResolver(tmp_path)
+    slow = asyncio.create_task(limited_search())
+    await in_flight.wait()
+    await limited_search()
+    assert await resolver.search("theme") == []
+    # 60s for the first rate limit, then the in-flight one doubles it to 120s.
+    assert calls == [100, 100, 220]
+    assert youtube_clock.waits == [60, 60]
 
 
 async def test_download_audio_rejects_duration_below_minimum(

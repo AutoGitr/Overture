@@ -39,6 +39,8 @@ async def test_theme_search_filters_by_settings_duration(
     db_session.add(AppSettings(id=1, min_duration_seconds=30, max_duration_seconds=90))
     await db_session.commit()
 
+    waits: list[bool] = []
+
     class FakeYoutube(NoopYoutube):
         @override
         async def search(
@@ -46,7 +48,10 @@ async def test_theme_search_filters_by_settings_duration(
             query: str = "",
             limit: int = 10,
             video_ids: Sequence[str] | None = None,
+            *,
+            wait: bool = True,
         ) -> list[ThemeSearchResult]:
+            waits.append(wait)
             return [
                 ThemeSearchResult(id="short", title="Short", duration=10),
                 ThemeSearchResult(id="ok", title="OK", duration=60),
@@ -66,6 +71,8 @@ async def test_theme_search_filters_by_settings_duration(
 
     assert [item.id for item in result.results] == ["ok"]
     assert result.results[0].duration == 60
+    # Someone is waiting on the answer, so a rate-limit pause fails it at once.
+    assert waits == [False]
 
 
 async def test_theme_search_explicit_video_ids_bypass_duration_limits(
@@ -85,6 +92,8 @@ async def test_theme_search_explicit_video_ids_bypass_duration_limits(
             query: str = "",
             limit: int = 10,
             video_ids: Sequence[str] | None = None,
+            *,
+            wait: bool = True,
         ) -> list[ThemeSearchResult]:
             return [
                 ThemeSearchResult(id="short_vid12", title="Short", duration=10),

@@ -7,6 +7,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- When YouTube rate-limits theme downloads or searches, Overture pauses its YouTube requests, waiting longer each time the limit repeats, and searches from the UI say when to try again; failed theme downloads and searches now show YouTube's actual error instead of a generic or truncated message.
+
 ## [1.1.0] - 2026-10-22
 
 ### Added

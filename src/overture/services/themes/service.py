@@ -62,7 +62,9 @@ class ThemesService:
         max_duration = app_settings.max_duration_seconds
 
         try:
-            results = await self._youtube.search(body.query, body.limit, body.video_ids)
+            results = await self._youtube.search(
+                body.query, body.limit, body.video_ids, wait=False
+            )
         except (OSError, ValueError) as exc:
             raise PublicServiceError(502, str(exc)) from exc
         explicit_ids = set(body.video_ids)
@@ -81,7 +83,7 @@ class ThemesService:
         must not refuse the selection.
         """
         try:
-            results = await self._youtube.search("", 1, [youtube_id])
+            results = await self._youtube.search("", 1, [youtube_id], wait=False)
         except (OSError, ValueError) as exc:
             logger.warning("YouTube metadata lookup failed: %s", exc)
             return None

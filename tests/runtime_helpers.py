@@ -402,6 +402,8 @@ class NoopYoutube(YouTubeResolver):
         query: str = "",
         limit: int = 10,
         video_ids: Sequence[str] | None = None,
+        *,
+        wait: bool = True,
     ) -> list[ThemeSearchResult]:
         return []
 

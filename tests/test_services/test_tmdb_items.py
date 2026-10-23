@@ -125,6 +125,8 @@ class FakeYoutube(NoopYoutube):
         query: str = "",
         limit: int = 10,
         video_ids: Sequence[str] | None = None,
+        *,
+        wait: bool = True,
     ) -> list[ThemeSearchResult]:
         return [
             ThemeSearchResult(id=video_id, title="Main Theme", duration=95)

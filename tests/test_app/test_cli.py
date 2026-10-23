@@ -281,6 +281,20 @@ def test_config_dir_must_exist_and_be_writable(
         cli.verify_config_dir(tmp_path)
 
 
+def test_serve_exits_immediately_when_config_is_not_writable(
+    app_config: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app_config.OVERTURE_CONFIG_DIR = tmp_path
+    build = Mock()
+    monkeypatch.setattr(cli, "load_configuration", Mock(return_value=app_config))
+    monkeypatch.setattr(cli, "build_runtime", build)
+    monkeypatch.setattr(cli.os, "access", Mock(return_value=False))
+    with pytest.raises(SystemExit, match="is not writable") as exc:
+        cli.main(["serve"])
+    assert exc.value.code != 0
+    build.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("missing_tool", "failing_tool", "missing_package", "message"),
     [

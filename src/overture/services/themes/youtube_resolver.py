@@ -2,28 +2,50 @@
 
 lazy import importlib.util
 lazy import json
+lazy import logging
 lazy import math
 lazy import re
 lazy import shutil
 lazy import sys
+lazy from asyncio import sleep
 lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
+lazy from time import monotonic
 lazy from typing import Any, cast
 
 lazy from ...schemas.themes import ThemeSearchResult
 lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, ffprobe_duration
 lazy from ...utils.errors import public_error_message
-lazy from ...utils.process import PROBE_SLOTS, run_process
+lazy from ...utils.process import PROBE_SLOTS, ProcessResult, run_process
 lazy from ...utils.progress import ProgressCallback, ProgressUpdate, StepProgress
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.temporary import operation_directory
 lazy from ...utils.threads import owned_thread
 
+logger = logging.getLogger(__name__)
+
 # Maximum wall-clock time allowed for each subprocess stage
 _INFO_TIMEOUT = 30  # seconds - just a JSON metadata fetch
 _DOWNLOAD_TIMEOUT = 300  # seconds - audio download
 _TRANSCODE_TIMEOUT = 120  # seconds - ffmpeg transcode
+
+# After YouTube rate-limits a request, every request pauses: first for the
+# minimum, doubling on each further rate limit up to the maximum. A successful
+# request resets the next pause to the minimum.
+_RATE_LIMIT_PAUSE_MIN = 60  # seconds
+_RATE_LIMIT_PAUSE_MAX = 900  # seconds
+
+#: Lowercase yt-dlp output that means YouTube is rate-limiting this address.
+_RATE_LIMIT_MARKERS = (
+    "http error 429",
+    "too many requests",
+    "this content isn't available, try again later",
+    "this content is not available, try again later",
+)
+
+#: Longest yt-dlp error line kept in a failure message.
+_MAX_ERROR_DETAIL = 1000
 
 #: LAME VBR quality themes are encoded at: V2, LAME's recommended transparent
 #: setting. The YouTube source is already lossy, so a higher one only adds bytes.
@@ -50,6 +72,10 @@ _YTDLP_COMMAND = (
     "--ignore-config",
     "--js-runtimes",
     "deno",
+    "--sleep-requests",
+    "1",
+    "--color",
+    "never",
 )
 
 #: Programs theme downloads run, each with the flag that prints its version.
@@ -65,6 +91,31 @@ def theme_runtime_available() -> bool:
     return all(shutil.which(tool) for tool in THEME_TOOLS) and all(
         importlib.util.find_spec(package) for package in THEME_PACKAGES
     )
+
+
+def _is_rate_limited(result: ProcessResult) -> bool:
+    """Return whether a failed yt-dlp run was refused by YouTube's rate limit."""
+    output = result.error_tail.lower()
+    return any(marker in output for marker in _RATE_LIMIT_MARKERS)
+
+
+def _failure_detail(result: ProcessResult) -> str:
+    """Return the redacted last ``ERROR:`` line, else last line, of a failed run."""
+    lines = [
+        line.strip()
+        for line in sanitise_error(result.error_tail).splitlines()
+        if line.strip()
+    ]
+    errors = [line for line in lines if line.startswith("ERROR:")]
+    explained = errors or lines
+    detail = (
+        explained[-1][:_MAX_ERROR_DETAIL]
+        if explained
+        else f"yt-dlp exited with status {result.returncode}"
+    )
+    if _is_rate_limited(result):
+        return f"YouTube is rate limiting requests. {detail}"
+    return detail
 
 
 class DurationError(Exception):
@@ -124,14 +175,50 @@ class YouTubeResolver:
 
     def __init__(self, config_dir: Path) -> None:
         self._config_dir = config_dir
+        self._paused_until = 0.0
+        self._next_pause = _RATE_LIMIT_PAUSE_MIN
+
+    async def _await_pause(self, *, wait: bool) -> None:
+        """Hold a request while YouTube is rate-limiting this address.
+
+        Raises:
+            ValueError: When paused and the caller cannot *wait*.
+        """
+        # A request already in flight can extend the pause while this one sleeps.
+        while (delay := self._paused_until - monotonic()) > 0:
+            if not wait:
+                raise ValueError(
+                    "YouTube is rate limiting requests; "
+                    f"try again in {math.ceil(delay)}s"
+                )
+            await sleep(delay)
+
+    def _note_result(self, result: ProcessResult) -> None:
+        """Start or lengthen the pause on a rate limit; reset it on success."""
+        if result.returncode == 0:
+            self._next_pause = _RATE_LIMIT_PAUSE_MIN
+        elif _is_rate_limited(result):
+            pause = self._next_pause
+            self._paused_until = max(self._paused_until, monotonic() + pause)
+            self._next_pause = min(pause * 2, _RATE_LIMIT_PAUSE_MAX)
+            logger.warning("YouTube rate limit; pausing requests for %ss", pause)
 
     async def search(
         self,
         query: str = "",
         limit: int = 10,
         video_ids: Sequence[str] | None = None,
+        *,
+        wait: bool = True,
     ) -> list[ThemeSearchResult]:
-        """Search YouTube for videos matching query or explicit video IDs."""
+        """Search YouTube for videos matching query or explicit video IDs.
+
+        Without *wait*, a rate-limit pause fails the search instead of
+        holding it, so someone waiting on the answer is told at once.
+
+        Raises:
+            ValueError: When the search fails or is paused without *wait*.
+        """
         targets: list[str] = []
         cleaned_query = query.strip()
         if cleaned_query:
@@ -154,10 +241,12 @@ class YouTubeResolver:
             "--ignore-errors",
         ]
         try:
+            await self._await_pause(wait=wait)
             async with PROBE_SLOTS:
                 result = await run_process(cmd, deadline=_INFO_TIMEOUT)
+            self._note_result(result)
             if result.returncode != 0:
-                raise ValueError("YouTube search failed")
+                raise ValueError(f"YouTube search failed: {_failure_detail(result)}")
             stdout = result.stdout
 
             return _parse_search_output(stdout)
@@ -234,14 +323,14 @@ class YouTubeResolver:
                 duration=duration,
             )
 
-    @staticmethod
-    async def _video_info(url: str) -> dict[str, Any]:
+    async def _video_info(self, url: str) -> dict[str, Any]:
         """Return yt-dlp's metadata for one video.
 
         Raises:
             DownloadError: When the metadata cannot be fetched.
         """
         try:
+            await self._await_pause(wait=True)
             async with PROBE_SLOTS:
                 result = await run_process(
                     [*_YTDLP_COMMAND, "--dump-json", "--no-download", url],
@@ -249,12 +338,13 @@ class YouTubeResolver:
                 )
         except TimeoutError as exc:
             raise DownloadError("Timed out fetching video info") from exc
+        self._note_result(result)
         if result.returncode != 0:
-            raise DownloadError("Failed to get video info")
+            raise DownloadError(f"Failed to get video info: {_failure_detail(result)}")
         return json.loads(result.stdout)
 
-    @staticmethod
     async def _download_source(
+        self,
         url: str,
         tmp_dir: Path,
         progress: StepProgress,
@@ -271,6 +361,7 @@ class YouTubeResolver:
                 await progress.report(fraction)
 
         try:
+            await self._await_pause(wait=True)
             result = await run_process(
                 [
                     *_YTDLP_COMMAND,
@@ -292,10 +383,9 @@ class YouTubeResolver:
             )
         except TimeoutError as exc:
             raise DownloadError("Timed out downloading audio") from exc
+        self._note_result(result)
         if result.returncode != 0:
-            raise DownloadError(
-                f"Download failed: {sanitise_error(result.error_tail)[:200]}"
-            )
+            raise DownloadError(f"Download failed: {_failure_detail(result)}")
 
         def _find_audio() -> Path | None:
             for path in tmp_dir.iterdir():
