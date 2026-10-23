@@ -54,7 +54,7 @@ lazy from ..library.items import emit_library_item_upserted
 lazy from ..local_assets.service import LocalAssets
 lazy from ..public_dataset.index import PublicDatasetIndex
 lazy from .bulk_targets import target_art_slot
-lazy from .bulk_work import NO_PUBLIC_ART, load_art_batch, plan_bulk_art
+lazy from .bulk_work import load_art_batch, plan_bulk_art
 lazy from .matcher import ArtMatcher
 lazy from .selection import adopt_art
 lazy from .targets import target_label
@@ -147,12 +147,12 @@ async def _from_overturedb(
     index: PublicDatasetIndex,
     notes: _Notes,
 ) -> _Decision | None:
-    url = index.art_url(item, art_type, season=season)
-    if not url:
-        notes.empty.append(NO_PUBLIC_ART)
+    pick = index.art(item, art_type, season=season)
+    if (url := pick.value) is None:
+        notes.empty.extend(pick.notes)
         return None
     if local is None or run.params.overwrite_existing:
-        reason = "OvertureDB artwork" + ("; replaces the local file" if local else "")
+        reason = pick.label + ("; replaces the local file" if local else "")
         return _Decision(url, reason)
     try:
         identical = await run.art_matcher.identical_to_local(url, local)

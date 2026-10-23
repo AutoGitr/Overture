@@ -1,6 +1,6 @@
 """OvertureDB resolution for a batch of media items, done once."""
 
-lazy from collections.abc import Iterable, Mapping, Sequence
+lazy from collections.abc import Iterable, Mapping, Sequence, Set
 lazy from dataclasses import dataclass
 lazy from typing import Self
 
@@ -32,6 +32,34 @@ def catalog_art_url(
 
 
 @dataclass(frozen=True, slots=True)
+class CatalogPick:
+    """What the catalogs offer one target, or why none of them offers anything.
+
+    The bulk planner and the visit that follows it both read a target's catalog
+    answer from here, so a target is decided and explained the same way at
+    either stage.
+    """
+
+    #: The artwork URL or YouTube ID the catalogs offer, if any.
+    value: str | None
+    #: What *value* is, as named in a log line ("OvertureDB artwork").
+    label: str = ""
+    #: Why each catalog asked had nothing, in the order they were asked.
+    notes: tuple[str, ...] = ()
+    #: False when OvertureDB is disabled, so no catalog was read at all.
+    enabled: bool = True
+
+    @property
+    def reason(self) -> str:
+        """Return why no catalog offers anything, one clause per catalog."""
+        return "; ".join(self.notes)
+
+
+#: Why OvertureDB offers nothing while the user has it switched off.
+DATASET_DISABLED = "OvertureDB is disabled"
+
+
+@dataclass(frozen=True, slots=True)
 class PublicDatasetIndex:
     """What OvertureDB holds for a known set of local media items.
 
@@ -45,11 +73,13 @@ class PublicDatasetIndex:
 
     items: dict[int, PublicDatasetItem]
     season_posters: dict[int, dict[int, str]]
+    #: Whether OvertureDB is enabled; a disabled index holds nothing.
+    enabled: bool = True
 
     @classmethod
-    def empty(cls) -> Self:
+    def empty(cls, *, enabled: bool = True) -> Self:
         """Return an index that holds nothing, for disabled or skipped runs."""
-        return cls({}, {})
+        return cls({}, {}, enabled)
 
     @classmethod
     async def build(
@@ -60,7 +90,7 @@ class PublicDatasetIndex:
             session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
         )
         if not schedule.enabled or not items:
-            return cls.empty()
+            return cls.empty(enabled=schedule.enabled)
 
         repository = PublicDatasetRepository(session)
         matched = await repository.items_by_media_item_id(items)
@@ -91,24 +121,64 @@ class PublicDatasetIndex:
             season.season_num if season else None,
         )
 
-    def youtube_id(
-        self, item: MediaItem, sources: Iterable[ThemeBulkSource]
-    ) -> str | None:
-        """Return the first theme video ID a catalog in *sources* holds for *item*.
+    def art(
+        self, item: MediaItem, art_type: ArtType, *, season: Season | None = None
+    ) -> CatalogPick:
+        """Return OvertureDB's artwork for one slot, or why it has none."""
+        if url := self.art_url(item, art_type, season=season):
+            return CatalogPick(url, "OvertureDB artwork")
+        return CatalogPick(
+            None,
+            notes=(self._missing(item, f"no {art_type.label} for it"),),
+            enabled=self.enabled,
+        )
 
-        Sources that are not catalogs hold no themes here.
+    def theme(
+        self,
+        item: MediaItem,
+        sources: Iterable[ThemeBulkSource],
+        *,
+        failed: Set[str] = frozenset(),
+    ) -> CatalogPick:
+        """Return the first theme a catalog in *sources* offers, or why none does.
+
+        A theme in *failed* failed to download for *item* before, so it is
+        passed over. Sources that are not catalogs are not asked.
         """
         public_item = self.items.get(item.id) if item.id is not None else None
-        if not public_item:
-            return None
-        return next(
-            (
-                youtube_id
-                for source in sources
-                if (youtube_id := _catalog_youtube_id(public_item, source))
-            ),
-            None,
-        )
+        notes: list[str] = []
+        for source in sources:
+            if not source.catalog:
+                continue
+            youtube_id = public_item and _catalog_youtube_id(public_item, source)
+            if not youtube_id:
+                notes.append(self._theme_missing(item, source))
+            elif youtube_id in failed:
+                notes.append(f"the {source.label} theme failed to download before")
+            else:
+                return CatalogPick(youtube_id, f"{source.label} theme")
+        return CatalogPick(None, notes=tuple(notes), enabled=self.enabled)
+
+    def _missing(self, item: MediaItem, what: str) -> str:
+        """Say why OvertureDB has nothing: disabled, no entry, or *what*."""
+        if not self.enabled:
+            return DATASET_DISABLED
+        if item.id is None or item.id not in self.items:
+            return "OvertureDB has no entry for it"
+        return f"OvertureDB has {what}"
+
+    def _theme_missing(self, item: MediaItem, source: ThemeBulkSource) -> str:
+        """Say why one catalog has no theme for *item*.
+
+        ThemerrDB's themes arrive with OvertureDB's catalog, so both depend on
+        OvertureDB being enabled; only OvertureDB's own entries are its
+        "entries", since a ThemerrDB theme may come without one.
+        """
+        if source is ThemeBulkSource.OVERTUREDB:
+            return self._missing(item, "no theme for it")
+        if not self.enabled:
+            return "ThemerrDB needs OvertureDB enabled"
+        return "ThemerrDB has no theme for it"
 
 
 def _catalog_youtube_id(

@@ -419,12 +419,12 @@ Operations do the work in bulk for the libraries and folders you pick, and run
 in the background, so you can close the browser; **Stop** keeps what has
 finished.
 
-| Operation | What it does                                                                                                                                         |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sync      | Imports library items, folders, seasons and existing local assets. Full sync also hides items removed from the server and keeps their files.         |
-| Assets    | Fills artwork and themes for monitored items using your chosen sources and order. Runs manually or on a schedule.                                    |
-| Renamer   | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                              |
-| Audit     | Compares local assets with the server, refreshes selected differences and checks whether the changes took effect.                                    |
+| Operation | What it does                                                                                                                                 |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sync      | Imports library items, folders, seasons and existing local assets. Full sync also hides items removed from the server and keeps their files. |
+| Assets    | Fills artwork and themes for monitored items using your chosen sources and order. Runs manually or on a schedule.                            |
+| Renamer   | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                      |
+| Audit     | Compares local assets with the server, refreshes selected differences and checks whether the changes took effect.                            |
 
 Sync schedules can run a full reconciliation or poll for newly added media
 (**incremental**). Incremental schedules can also fetch OvertureDB artwork and

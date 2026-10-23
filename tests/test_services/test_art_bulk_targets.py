@@ -34,27 +34,6 @@ def test_target_art_slot_reads_the_slot_of_the_owner(
     assert module.target_art_slot(item, ArtType.SEASON_POSTER, season=None) is None
 
 
-def test_awaiting_match_is_true_only_for_a_slot_with_no_url(
-    media_item_factory: MediaItemFactory,
-) -> None:
-    downloaded = media_item_factory(
-        id=1, art={"poster": {"url": "https://x/p.jpg", "file_hash": "h"}}
-    )
-    chosen_not_downloaded = media_item_factory(
-        id=1, art={"poster": {"url": "https://x/p.jpg"}}
-    )
-    nothing_chosen = media_item_factory(
-        id=1, art={"poster": {"url": None, "file_hash": "h"}}
-    )
-
-    assert module.awaiting_match(downloaded, ArtType.POSTER, season=None) is False
-    assert (
-        module.awaiting_match(chosen_not_downloaded, ArtType.POSTER, season=None)
-        is False
-    )
-    assert module.awaiting_match(nothing_chosen, ArtType.POSTER, season=None) is True
-
-
 def test_season_slots_are_read_from_the_season_not_the_item(
     media_item_factory: MediaItemFactory, season_factory: SeasonFactory
 ) -> None:
@@ -64,8 +43,9 @@ def test_season_slots_are_read_from_the_season_not_the_item(
         art={"season_poster": {"url": "https://x/s.jpg", "file_hash": "h"}}
     )
 
-    assert module.awaiting_match(item, ArtType.SEASON_POSTER, season=season) is False
-    assert module.awaiting_match(item, ArtType.SEASON_POSTER, season=None) is True
+    slot = module.target_art_slot(item, ArtType.SEASON_POSTER, season=season)
+    assert slot is not None
+    assert slot.url == "https://x/s.jpg"
 
 
 def test_last_checked_at_prefers_the_season_that_owns_the_slot(

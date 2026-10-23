@@ -19,6 +19,7 @@ lazy from overture.domain import (
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.public_dataset import downloads as module
+lazy from overture.services.public_dataset.index import CatalogPick
 lazy from overture.utils.locks import KeyedLock
 lazy from tests.factories import (
     MediaItemFactory,
@@ -87,14 +88,16 @@ class FakeIndex:
             raise ValueError("boom")
         return self._art.get(art_type)
 
-    def youtube_id(
+    def theme(
         self, _item: MediaItem, sources: Iterable[ThemeBulkSource]
-    ) -> str | None:
+    ) -> CatalogPick:
         by_source = {
             ThemeBulkSource.OVERTUREDB: self._youtube_id_overturedb or self._youtube_id,
             ThemeBulkSource.THEMERRDB: self._youtube_id_themerrdb,
         }
-        return next((found for s in sources if (found := by_source.get(s))), None)
+        return CatalogPick(
+            next((found for s in sources if (found := by_source.get(s))), None)
+        )
 
 
 def _bind_index(monkeypatch: pytest.MonkeyPatch, index: FakeIndex) -> None:

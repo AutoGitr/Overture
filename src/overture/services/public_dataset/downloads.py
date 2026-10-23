@@ -94,7 +94,7 @@ async def _queue_item(
             _, created = await downloads.queue_job(session, target, supersede=False)
             queued.art += created
     if item.theme_file_hash is None and (
-        youtube_id := index.youtube_id(item, theme_order.sources)
+        youtube_id := index.theme(item, theme_order.sources).value
     ):
         _, created = await downloads.queue_job(
             session, JobTarget.theme(item.id, youtube_id), supersede=False

@@ -62,7 +62,8 @@ class BulkThemeWork:
     items: list[MediaItem]
     search_format: str
     public_index: PublicDatasetIndex = field(default_factory=PublicDatasetIndex.empty)
-    failed_targets: set[tuple[int, str]] = field(default_factory=set[tuple[int, str]])
+    #: YouTube IDs that failed to download before, by item ID.
+    failed_themes: dict[int, set[str]] = field(default_factory=dict[int, set[str]])
 
 
 @dataclass(slots=True)
@@ -284,9 +285,7 @@ async def _resolve_theme(
 ) -> _Resolution:
     """Return the first usable YouTube ID in source order, and why others failed."""
     found = _Resolution()
-    failed = {
-        youtube_id for item_id, youtube_id in work.failed_targets if item_id == item.id
-    }
+    failed = work.failed_themes.get(item.id or 0, set[str]())
     for source in params.source_order:
         name = source.label
         if source is ThemeBulkSource.YOUTUBE_SEARCH:
@@ -312,39 +311,14 @@ async def _resolve_theme(
             found.youtube_id = best_id
             found.reason = f"{name}: {title}" if title else name
             return found
-        youtube_id = work.public_index.youtube_id(item, (source,))
-        if not youtube_id:
-            found.notes.append(f"{name} has no theme for it")
-        elif youtube_id in failed:
-            found.notes.append(f"{name} theme {youtube_id} failed to download before")
+        pick = work.public_index.theme(item, (source,), failed=failed)
+        if pick.value is None:
+            found.notes.extend(pick.notes)
         else:
-            found.youtube_id = youtube_id
-            found.reason = f"{name} theme"
+            found.youtube_id = pick.value
+            found.reason = pick.label
             return found
     return found
-
-
-def _no_match_reason(params: BulkThemeRequest) -> str:
-    """Say why dataset sources had no usable theme, naming the ones enabled."""
-    return "; ".join(
-        f"{source.label} has no usable theme for it"
-        for source in params.source_order
-        if source.catalog
-    )
-
-
-def _in_catalog(
-    item: MediaItem,
-    params: BulkThemeRequest,
-    index: PublicDatasetIndex,
-    failed_targets: set[tuple[int, str]],
-) -> bool:
-    """Return whether a dataset source has a theme for *item* not failed before."""
-    return any(
-        (youtube_id := index.youtube_id(item, (source,)))
-        and (item.id or 0, youtube_id) not in failed_targets
-        for source in params.source_order
-    )
 
 
 async def plan_bulk_themes(
@@ -360,7 +334,6 @@ async def plan_bulk_themes(
     kept as IDs for :func:`load_theme_batch`.
     """
     dataset_only = all(source.catalog for source in params.source_order)
-    no_catalog = _no_match_reason(params)
     plan = AssetPlan[ThemeTarget]()
     async with aclosing(scope_chunks(params, database=database, chunk=chunk)) as chunks:
         async for session, items in chunks:
@@ -369,22 +342,25 @@ async def plan_bulk_themes(
                 if dataset_only
                 else None
             )
-            failed_targets = (
-                await DownloadJobRepository(session).list_failed_theme_targets(
+            failed_themes = (
+                await DownloadJobRepository(session).failed_themes_by_item(
                     [item.id for item in items if item.id is not None]
                 )
                 if dataset_only
-                else set[tuple[int, str]]()
+                else {}
             )
             for item in items:
                 decided = planned_outcome(
                     params,
-                    saved=bool(item.youtube_id),
+                    saved=item.youtube_id,
                     last_checked=item.last_matched_at,
-                    in_catalog=None
+                    catalog=None
                     if index is None
-                    else _in_catalog(item, params, index, failed_targets),
-                    no_catalog=no_catalog,
+                    else index.theme(
+                        item,
+                        params.source_order,
+                        failed=failed_themes.get(item.id or 0, set[str]()),
+                    ),
                 )
                 if decided is None:
                     plan.visit(item, [None])
@@ -421,7 +397,7 @@ async def load_theme_batch(
             if any(source.catalog for source in params.source_order)
             else PublicDatasetIndex.empty()
         )
-        failed_targets = await DownloadJobRepository(session).list_failed_theme_targets(
+        failed_themes = await DownloadJobRepository(session).failed_themes_by_item(
             item_ids
         )
-    return BulkThemeWork(items, app_settings.theme_search_format, index, failed_targets)
+    return BulkThemeWork(items, app_settings.theme_search_format, index, failed_themes)

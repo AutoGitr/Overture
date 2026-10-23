@@ -16,7 +16,6 @@ lazy from overture.db.models.public_dataset import (
     PublicDatasetItem,
     PublicDatasetSeason,
 )
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -28,25 +27,25 @@ lazy from overture.domain import (
 )
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.services.art import bulk as art_bulk
-lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
-lazy from overture.utils.audio import ThemeAudioMetadata
 lazy from overture.utils.file import compute_bytes_hash
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import (
+    CATALOG_BYTES,
     Context,
     art_matcher,
     as_job_context,
+    enable_public_dataset,
+    fast_fingerprints,
     make_bulk_downloads,
+    no_tags,
     progress_logs,
+    write_existing_asset,
 )
 lazy from tests.runtime_helpers import make_local_assets, unused
-
-#: The bytes the fake catalog image has; a local file with them is identical.
-CATALOG_BYTES = b"catalog artwork"
 
 #: The words each per-target action's log line starts with and contains.
 ACTION_LINES: frozendict[str, tuple[str, str]] = frozendict(
@@ -87,14 +86,7 @@ async def test_dataset_only_state_matrix(
     """
     app_config.MEDIA_SERVER = ServerType(server)
     storage = AssetStorage(app_config=app_config)
-    db_session.add(
-        TaskSchedule(
-            task_name="public_dataset",
-            enabled=True,
-            cron_expression="0 0 * * *",
-            payload={},
-        )
-    )
+    await enable_public_dataset(db_session)
     expected: dict[str, str] = {}
     on_disk: dict[int, bool] = {}
     cached_flags: dict[int, bool] = {}
@@ -285,24 +277,6 @@ def seed_case(
     return available
 
 
-def fast_fingerprints(
-    monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
-) -> PhashService:
-    """Fingerprint files without the decoding pool; the matrix never compares."""
-    phash = PhashService(app_config=app_config)
-
-    async def fingerprint(_path: str) -> str:
-        return "0" * PHASH_HEX_LENGTH
-
-    monkeypatch.setattr(phash, "compute_from_file", fingerprint)
-    return phash
-
-
-async def no_tags(_path: Path) -> ThemeAudioMetadata:
-    """Stand in for ffprobe on a file without embedded provenance."""
-    return ThemeAudioMetadata(duration=30)
-
-
 def expected_action(
     saved: bool,
     disk: bool,
@@ -313,7 +287,7 @@ def expected_action(
     mode: str,
 ) -> str:
     if mode == "default" and saved:
-        return "set"
+        return "set" if available else "no_match"
     if mode == "overwrite":
         if not available:
             return "no_match"
@@ -378,26 +352,3 @@ async def assert_rows_match_disk(
         assert (slot.file_hash is not None) is present, item.title
         if expected[item.title] == "adopted":
             assert slot.url == "https://public.test/image.jpg"
-
-
-def write_existing_asset(
-    storage: AssetStorage,
-    folder: Path,
-    asset: str,
-    season: Season | None,
-    *,
-    identical: bool,
-) -> None:
-    if asset == "theme":
-        (folder / "theme.mp3").write_bytes(b"existing theme")
-        return
-    path = Path(
-        storage.resolve_art_path(
-            str(folder),
-            ArtType(asset),
-            season_folder_path=season.folder_path if season else None,
-            season_num=1 if season else None,
-        )
-    )
-    path.parent.mkdir(exist_ok=True)
-    path.write_bytes(CATALOG_BYTES if identical else b"existing artwork")

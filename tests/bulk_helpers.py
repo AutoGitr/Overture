@@ -1,13 +1,17 @@
 """Shared bulk-run fixtures and controlled collaborators."""
 
+lazy from pathlib import Path
 lazy from typing import Any, override
 
 lazy import pytest
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import write_art_slot
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetItem
+lazy from overture.db.models.schedule import TaskSchedule
+lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
@@ -22,13 +26,14 @@ lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.bulk_work import ArtTarget, BulkArtWork
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
-lazy from overture.services.art.phash import PhashService
+lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.bulk_common import AssetPlan
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.public_dataset.index import PublicDatasetIndex
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
+lazy from overture.utils.audio import ThemeAudioMetadata
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
@@ -159,6 +164,19 @@ def use_theme_work(
     monkeypatch.setattr(theme_bulk, "load_theme_batch", loaded)
 
 
+async def enable_public_dataset(session: AsyncSession) -> None:
+    """Switch OvertureDB on, as the user does with Enable OvertureDB."""
+    session.add(
+        TaskSchedule(
+            task_name="public_dataset",
+            enabled=True,
+            cron_expression="0 0 * * *",
+            payload={},
+        )
+    )
+    await session.commit()
+
+
 def public_index(item_id: int, **fields: Any) -> PublicDatasetIndex:
     """Build an index holding one dataset row for *item_id*."""
     return PublicDatasetIndex(
@@ -183,3 +201,48 @@ def movie_item(
     for art_type, fields in (art or {}).items():
         write_art_slot(item, ArtType(art_type), **fields)
     return item
+
+
+#: The bytes the fake catalog image has; a local file with them is identical.
+CATALOG_BYTES = b"catalog artwork"
+
+
+def fast_fingerprints(
+    monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
+) -> PhashService:
+    """Fingerprint files without the decoding pool; the matrix never compares."""
+    phash = PhashService(app_config=app_config)
+
+    async def fingerprint(_path: str) -> str:
+        return "0" * PHASH_HEX_LENGTH
+
+    monkeypatch.setattr(phash, "compute_from_file", fingerprint)
+    return phash
+
+
+async def no_tags(_path: Path) -> ThemeAudioMetadata:
+    """Stand in for ffprobe on a file without embedded provenance."""
+    return ThemeAudioMetadata(duration=30)
+
+
+def write_existing_asset(
+    storage: AssetStorage,
+    folder: Path,
+    asset: str,
+    season: Season | None,
+    *,
+    identical: bool,
+) -> None:
+    if asset == "theme":
+        (folder / "theme.mp3").write_bytes(b"existing theme")
+        return
+    path = Path(
+        storage.resolve_art_path(
+            str(folder),
+            ArtType(asset),
+            season_folder_path=season.folder_path if season else None,
+            season_num=1 if season else None,
+        )
+    )
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(CATALOG_BYTES if identical else b"existing artwork")

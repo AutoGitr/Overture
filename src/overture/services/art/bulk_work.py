@@ -21,15 +21,12 @@ lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ..bulk_common import AssetPlan, planned_outcome, scope_chunks
 lazy from ..local_assets.service import LocalAssets
 lazy from ..public_dataset.index import PublicDatasetIndex
-lazy from .bulk_targets import awaiting_match, last_checked_at
+lazy from .bulk_targets import last_checked_at, target_art_slot
 
 BulkArtWorkItem = tuple[MediaItem, ArtType, Season | None]
 
 #: One planned slot of an item: its art type and, for a season slot, the season.
 type ArtTarget = tuple[ArtType, int | None]
-
-#: Why a target the dataset does not cover can never match on an OvertureDB run.
-NO_PUBLIC_ART = "OvertureDB has no artwork for it"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +65,7 @@ async def plan_bulk_art(
     kept as IDs for :func:`load_art_batch`.
     """
     item_art_types, season_art_types = split_art_types(params.art_types)
-    dataset_only = params.source_order == [ArtBulkSource.OVERTUREDB]
+    dataset_only = all(source.catalog for source in params.source_order)
     plan = AssetPlan[ArtTarget]()
     async with aclosing(scope_chunks(params, database=database, chunk=chunk)) as chunks:
         async for session, items in chunks:
@@ -104,14 +101,14 @@ async def plan_bulk_art(
                 )
                 visits: list[ArtTarget] = []
                 for art_type, season in slots:
+                    stored = target_art_slot(item, art_type, season=season)
                     decided = planned_outcome(
                         params,
-                        saved=not awaiting_match(item, art_type, season=season),
+                        saved=stored.url if stored else None,
                         last_checked=last_checked_at(item, art_type, season=season),
-                        in_catalog=None
+                        catalog=None
                         if index is None
-                        else bool(index.art_url(item, art_type, season=season)),
-                        no_catalog=NO_PUBLIC_ART,
+                        else index.art(item, art_type, season=season),
                     )
                     if decided is None:
                         visits.append((art_type, season.id if season else None))

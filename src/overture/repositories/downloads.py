@@ -137,10 +137,10 @@ class DownloadJobRepository:
         )
         return result.rowcount or 0
 
-    async def list_failed_theme_targets(
+    async def failed_themes_by_item(
         self, item_ids: list[int] | None = None
-    ) -> set[tuple[int, str]]:
-        """Return (media_item_id, target_url) pairs for failed theme downloads."""
+    ) -> dict[int, set[str]]:
+        """Return the YouTube IDs of failed theme downloads, by media item ID."""
         stmt = select(
             col(DownloadJob.media_item_id), col(DownloadJob.target_url)
         ).where(
@@ -151,9 +151,8 @@ class DownloadJobRepository:
         )
         if item_ids is not None:
             stmt = stmt.where(col(DownloadJob.media_item_id).in_(item_ids))
-        result = await self.session.exec(stmt)
-        return {
-            (item_id, url)
-            for item_id, url in result.all()
-            if item_id is not None and url is not None
-        }
+        failed: dict[int, set[str]] = {}
+        for item_id, url in (await self.session.exec(stmt)).all():
+            if item_id is not None and url is not None:
+                failed.setdefault(item_id, set()).add(url)
+        return failed

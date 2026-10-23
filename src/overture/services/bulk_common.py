@@ -34,6 +34,7 @@ lazy from ..utils.time import utc_now
 lazy from .downloads.queue import JobTarget
 lazy from .downloads.service import DownloadService
 lazy from .downloads.watch import DownloadWatch
+lazy from .public_dataset.index import CatalogPick
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,9 @@ SAVED_SELECTION = (
     "saved selection already set; Retry saved downloads restores missing files "
     "and Overwrite existing searches again"
 )
+
+#: What Retry saved downloads would do for a kept saved selection.
+_RETRY_HINT = "Retry saved downloads restores a missing file"
 
 #: Why planned targets could not be visited: their row left the library.
 LEFT_LIBRARY = "no longer in the library"
@@ -69,39 +73,52 @@ class AssetRunParams(Protocol):
 def planned_outcome(
     params: AssetRunParams,
     *,
-    saved: bool,
+    saved: str | None,
     last_checked: datetime | None,
-    in_catalog: bool | None,
-    no_catalog: str,
+    catalog: CatalogPick | None,
 ) -> PlannedOutcome | None:
     """Decide one target from the database, or return ``None`` to visit it.
 
     This is the planning half of an Assets decision; a visit makes the half
-    that needs the files on disk or a source. *in_catalog* is ``None`` unless
-    the run's sole sources are datasets, and then says whether one of them
-    serves the target.
+    that needs the files on disk or a source. *saved* is the slot's saved
+    selection. *catalog* is ``None`` unless the run's sole sources are
+    catalogs, and then is what they offer the target.
     The rules apply in order:
 
-    1. A saved selection is skipped unless Retry or Overwrite is on.
-    2. On a dataset-only run, a target no dataset serves is no match, unless
-       it is a saved selection Retry may restore.
-    3. A saved selection Retry may restore is visited, whenever last checked.
+    1. A saved selection Retry may restore is visited, whenever last checked,
+       since Retry downloads the saved choice rather than asking a source.
+    2. On a catalog-only run, a target no catalog serves is no match, or
+       skipped when OvertureDB is disabled: no option would find it anything.
+    3. A saved selection is skipped unless Overwrite is on.
     4. A target checked within the Skip recently checked window is skipped.
     5. Everything else is visited.
     """
-    restores = saved and not params.overwrite_existing
-    if restores and not params.retry_saved_downloads:
-        return JobOutcome.SKIPPED, SAVED_SELECTION
-    if in_catalog is False and not restores:
-        return JobOutcome.NO_MATCH, no_catalog
-    if restores:
+    kept = bool(saved) and not params.overwrite_existing
+    if kept and params.retry_saved_downloads:
         return None
+    if catalog is not None and catalog.value is None:
+        outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
+        return outcome, catalog.reason
+    if kept:
+        return JobOutcome.SKIPPED, _saved_reason(saved, catalog)
     if checked_recently(last_checked, params):
         return (
             JobOutcome.SKIPPED,
             f"checked within the last {recent_window_label(params)}",
         )
     return None
+
+
+def _saved_reason(saved: str | None, catalog: CatalogPick | None) -> str:
+    """Say why a saved selection is kept, against the catalog's offer if known."""
+    if catalog is None:
+        return SAVED_SELECTION
+    if saved == catalog.value:
+        return f"saved selection is already the {catalog.label}; {_RETRY_HINT}"
+    return (
+        f"saved selection differs from the {catalog.label}; "
+        f"Overwrite existing would replace it and {_RETRY_HINT}"
+    )
 
 
 @dataclass(slots=True, frozen=True)

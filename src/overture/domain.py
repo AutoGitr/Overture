@@ -113,6 +113,11 @@ class ArtType(StrEnum):
         """
         return 1280 if self is ArtType.BACKGROUND else 600
 
+    @property
+    def label(self) -> str:
+        """Return how the slot is named in prose ("season poster")."""
+        return self.value.replace("_", " ")
+
 
 #: Art types stored against a media item. Ordered for deterministic iteration.
 ITEM_ART_TYPES: tuple[ArtType, ...] = (ArtType.POSTER, ArtType.BACKGROUND)

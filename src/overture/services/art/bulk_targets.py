@@ -21,14 +21,6 @@ def target_art_slot(
     return None if owner is None else read_art_slot(owner, art_type)
 
 
-def awaiting_match(
-    item: MediaItem, art_type: ArtType, *, season: Season | None
-) -> bool:
-    """Return whether the slot lacks a saved selection, regardless of disk state."""
-    slot = target_art_slot(item, art_type, season=season)
-    return not (slot and slot.url)
-
-
 def last_checked_at(
     item: MediaItem, art_type: ArtType, *, season: Season | None
 ) -> datetime | None:

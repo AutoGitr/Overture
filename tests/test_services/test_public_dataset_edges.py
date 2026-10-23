@@ -283,17 +283,17 @@ def test_public_dataset_index_youtube_id_prefers_primary_and_falls_back() -> Non
         (item2, None, "secondary12"),
         (item3, None, None),
     ):
-        assert index.youtube_id(item, [ThemeBulkSource.OVERTUREDB]) == overturedb
-        assert index.youtube_id(item, [ThemeBulkSource.THEMERRDB]) == themerrdb
+        assert index.theme(item, [ThemeBulkSource.OVERTUREDB]).value == overturedb
+        assert index.theme(item, [ThemeBulkSource.THEMERRDB]).value == themerrdb
         # The first source holding an ID wins.
-        assert index.youtube_id(item, BOTH) == (overturedb or themerrdb)
+        assert index.theme(item, BOTH).value == (overturedb or themerrdb)
     assert (
-        index.youtube_id(
+        index.theme(
             MediaItem(id=4, media_type=MediaType.MOVIE, title="Missing"), BOTH
-        )
+        ).value
         is None
     )
     assert (
-        index.youtube_id(MediaItem(media_type=MediaType.MOVIE, title="Unsaved"), BOTH)
+        index.theme(MediaItem(media_type=MediaType.MOVIE, title="Unsaved"), BOTH).value
         is None
     )

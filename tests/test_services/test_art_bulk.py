@@ -30,6 +30,7 @@ lazy from tests.bulk_helpers import (
     art_matcher,
     as_job_context,
     bind_stamper,
+    enable_public_dataset,
     make_bulk_downloads,
     movie_item,
     progress_logs,
@@ -171,7 +172,7 @@ async def test_bulk_art_overturedb_only_no_matches_when_source_unavailable(
     )
 
     assert progress_logs(context) == [
-        "No match Movie (poster) - OvertureDB has no artwork for it"
+        "No match Movie (poster) - OvertureDB has no entry for it"
     ]
     completed = context.events[-1][1]
     assert completed["no_match"] == 1
@@ -203,7 +204,7 @@ async def test_bulk_art_targets_without_dataset_art_are_counted_in_one_step(
         )
         for n in range(1, movies + 1)
     )
-    await db_session.commit()
+    await enable_public_dataset(db_session)
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
     monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected)
@@ -221,7 +222,7 @@ async def test_bulk_art_targets_without_dataset_art_are_counted_in_one_step(
     )
 
     assert progress_logs(context) == [
-        f"No match {line} - OvertureDB has no artwork for it"
+        f"No match {line} - OvertureDB has no entry for it"
     ]
     planned = context.events[1][1]
     assert planned["total"] == movies * 2
@@ -437,7 +438,7 @@ async def test_bulk_art_single_target_without_dataset_art_has_singular_plurality
             id=1, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
         )
     )
-    await db_session.commit()
+    await enable_public_dataset(db_session)
 
     context = Context()
     await art_bulk.run_bulk_art_match(
@@ -453,7 +454,7 @@ async def test_bulk_art_single_target_without_dataset_art_has_singular_plurality
     )
 
     assert progress_logs(context) == [
-        "No match 1 art slot - OvertureDB has no artwork for it"
+        "No match 1 art slot - OvertureDB has no entry for it"
     ]
 
 
@@ -666,6 +667,6 @@ async def test_slot_failure_does_not_abort_later_targets(
 
     logs = progress_logs(context)
     assert any(line.startswith("Error First (poster)") for line in logs)
-    assert logs[-1] == "No match Second (poster) - OvertureDB has no artwork for it"
+    assert logs[-1] == "No match Second (poster) - OvertureDB has no entry for it"
     flush.assert_awaited_once()
     assert context.events[-1][1]["errors"] == 1

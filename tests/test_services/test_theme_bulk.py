@@ -30,6 +30,7 @@ lazy from tests.bulk_helpers import (
     Context,
     as_job_context,
     bind_stamper,
+    enable_public_dataset,
     make_bulk_downloads,
     movie_item,
     progress_logs,
@@ -310,7 +311,7 @@ async def test_bulk_theme_items_without_dataset_theme_are_counted_in_one_step(
         )
         for n in range(1, 151)
     )
-    await db_session.commit()
+    await enable_public_dataset(db_session)
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
     bind_stamper(monkeypatch, theme_bulk)
@@ -326,10 +327,12 @@ async def test_bulk_theme_items_without_dataset_theme_are_counted_in_one_step(
         database=database,
     )
 
-    label = "OvertureDB" if source == "overturedb" else "ThemerrDB"
-    assert progress_logs(context) == [
-        f"No match 150 items - {label} has no usable theme for it"
-    ]
+    reason = (
+        "OvertureDB has no entry for it"
+        if source == "overturedb"
+        else "ThemerrDB has no theme for it"
+    )
+    assert progress_logs(context) == [f"No match 150 items - {reason}"]
     assert context.events[1][1]["total"] == 150
     completed = context.events[-1][1]
     assert completed["total"] == completed["no_match"] == 150
@@ -459,7 +462,7 @@ async def test_bulk_theme_single_item_without_dataset_theme_has_singular_plurali
             id=1, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
         )
     )
-    await db_session.commit()
+    await enable_public_dataset(db_session)
 
     context = Context()
     await theme_bulk.run_bulk_themes(
@@ -473,14 +476,14 @@ async def test_bulk_theme_single_item_without_dataset_theme_has_singular_plurali
     )
 
     assert progress_logs(context) == [
-        "No match 1 item - OvertureDB has no usable theme for it"
+        "No match 1 item - OvertureDB has no entry for it"
     ]
 
 
 @pytest.mark.parametrize(
     ("source_order", "expected"),
     [
-        (["overturedb"], "No match Movie - OvertureDB has no theme for it"),
+        (["overturedb"], "No match Movie - OvertureDB has no entry for it"),
         (["themerrdb"], "No match Movie - ThemerrDB has no theme for it"),
         (
             ["youtube_search"],
@@ -489,14 +492,14 @@ async def test_bulk_theme_single_item_without_dataset_theme_has_singular_plurali
         (
             ["overturedb", "themerrdb"],
             (
-                "No match Movie - OvertureDB has no theme for it; "
+                "No match Movie - OvertureDB has no entry for it; "
                 "ThemerrDB has no theme for it"
             ),
         ),
         (
             ["overturedb", "youtube_search"],
             (
-                "No match Movie - OvertureDB has no theme for it; "
+                "No match Movie - OvertureDB has no entry for it; "
                 "YouTube search: no result for 'Movie theme'"
             ),
         ),
@@ -504,13 +507,13 @@ async def test_bulk_theme_single_item_without_dataset_theme_has_singular_plurali
             ["youtube_search", "overturedb"],
             (
                 "No match Movie - YouTube search: no result for 'Movie theme'; "
-                "OvertureDB has no theme for it"
+                "OvertureDB has no entry for it"
             ),
         ),
         (
             ["overturedb", "themerrdb", "youtube_search"],
             (
-                "No match Movie - OvertureDB has no theme for it; ThemerrDB has "
+                "No match Movie - OvertureDB has no entry for it; ThemerrDB has "
                 "no theme for it; YouTube search: no result for 'Movie theme'"
             ),
         ),
@@ -630,13 +633,10 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
         queued.append(target.target_url)
         return True
 
-    # overturedb's target is in failed_targets
-    failed_targets = {(1, "yt-overture-failed")}
-
     use_theme_work(
         monkeypatch,
         theme_bulk.BulkThemeWork(
-            [item], "{title} theme", index, failed_targets=failed_targets
+            [item], "{title} theme", index, failed_themes={1: {"yt-overture-failed"}}
         ),
     )
     monkeypatch.setattr(theme_bulk, "queue_download", fake_queue)
