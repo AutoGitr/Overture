@@ -17,6 +17,7 @@ whenever: what a slot records is read from its media folder again on demand.
 lazy import asyncio
 lazy import os
 lazy import re
+lazy import stat
 lazy import tempfile
 lazy from collections.abc import Callable, Collection
 lazy from contextlib import suppress
@@ -26,7 +27,7 @@ lazy from typing import BinaryIO
 
 lazy from ...domain import THUMB_BOUNDS
 lazy from ...utils.assets import SAVED_EXTENSIONS
-lazy from ...utils.file import compute_bytes_hash, copy_with_hash, sync_directory
+lazy from ...utils.file import compute_bytes_hash, copy_with_hash
 lazy from ...utils.image import (
     SAVED_MEDIA_TYPES,
     THUMB_EXTENSION,
@@ -49,6 +50,14 @@ _HASH = re.compile(r"[0-9a-f]{64}")
 _CONCURRENT_RENDERS = 4
 
 
+def _regular_stat(path: Path) -> os.stat_result | None:
+    try:
+        file_stat = path.stat()
+    except FileNotFoundError, NotADirectoryError:
+        return None
+    return file_stat if stat.S_ISREG(file_stat.st_mode) else None
+
+
 @dataclass(frozen=True, slots=True)
 class CachedOriginal:
     """An image kept exactly as it was read, and the hash it is kept under."""
@@ -57,6 +66,7 @@ class CachedOriginal:
     path: Path
     width: int | None = field(default=None, compare=False)
     height: int | None = field(default=None, compare=False)
+    stat: os.stat_result | None = field(default=None, compare=False)
 
     @property
     def extension(self) -> str:
@@ -83,7 +93,7 @@ class ImageCache:
         return self._root / kind / file_hash[:2] / f"{file_hash}{extension}"
 
     def _stage[T](self, write: Callable[[BinaryIO], T]) -> tuple[Path, T]:
-        """Write a new entry into a file of its own, flushed to disk."""
+        """Write a new entry into a file of its own before moving it into place."""
         staging = self._root / _STAGING
         staging.mkdir(parents=True, exist_ok=True)
         descriptor, name = tempfile.mkstemp(dir=staging, suffix=".tmp")
@@ -91,10 +101,6 @@ class ImageCache:
         try:
             with os.fdopen(descriptor, "wb") as stream:
                 written = write(stream)
-                stream.flush()
-                # A crash must not leave a torn file under a name that vouches
-                # for its bytes: nothing would ever read them again.
-                os.fsync(stream.fileno())
         except BaseException:
             staged.unlink(missing_ok=True)
             raise
@@ -104,15 +110,14 @@ class ImageCache:
     def _place(staged: Path, destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         staged.replace(destination)
-        sync_directory(destination.parent)
 
     def _find_original(self, file_hash: str) -> CachedOriginal | None:
         if not _HASH.fullmatch(file_hash):
             return None
         for extension in SAVED_EXTENSIONS:
             path = self._entry(_ORIGINALS, file_hash, extension)
-            if path.is_file():
-                return CachedOriginal(file_hash, path)
+            if (file_stat := _regular_stat(path)) is not None:
+                return CachedOriginal(file_hash, path, stat=file_stat)
         return None
 
     def has_original(self, file_hash: str) -> bool:
@@ -122,6 +127,24 @@ class ImageCache:
     async def original(self, file_hash: str) -> CachedOriginal | None:
         """Return the kept original with this hash, or ``None`` when there is none."""
         return await owned_thread(self._find_original, file_hash)
+
+    def _find_thumb(self, file_hash: str) -> tuple[Path, os.stat_result] | None:
+        if not _HASH.fullmatch(file_hash):
+            return None
+        path = self._entry(_THUMBS, file_hash, THUMB_EXTENSION)
+        if (file_stat := _regular_stat(path)) is not None:
+            return path, file_stat
+        return None
+
+    def has_thumb(self, file_hash: str) -> bool:
+        """Return whether a thumbnail with this hash is kept."""
+        return self._find_thumb(file_hash) is not None
+
+    async def existing_thumb(
+        self, file_hash: str
+    ) -> tuple[Path, os.stat_result] | None:
+        """Return the kept thumbnail and its stat, or ``None`` when there is none."""
+        return await owned_thread(self._find_thumb, file_hash)
 
     def _keep(
         self,

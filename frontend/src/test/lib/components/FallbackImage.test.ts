@@ -19,6 +19,7 @@ describe("FallbackImage", () => {
     expect(image).toHaveAttribute("decoding", "async");
     await fireEvent.load(image as HTMLImageElement);
     first.unmount();
+    expect(image).toHaveAttribute("src", "/poster-a.jpg");
 
     // A row scrolled back into view: the browser already has the image.
     const again = render(FallbackImage, { props });
@@ -26,6 +27,12 @@ describe("FallbackImage", () => {
 
     const other = render(FallbackImage, { props: { ...props, src: "/poster-b.jpg" } });
     expect(other.container.querySelector("img")).toBeNull();
+    vi.advanceTimersByTime(100);
+    await tick();
+    const unfinished = other.container.querySelector("img");
+    expect(unfinished).toHaveAttribute("src", "/poster-b.jpg");
+    other.unmount();
+    expect(unfinished).toHaveAttribute("src", "");
   });
 
   it("shows the placeholder only when there is no image, never while one is on its way", async () => {

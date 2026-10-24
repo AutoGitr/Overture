@@ -128,10 +128,10 @@ class ArtType(StrEnum):
     def display_width(self) -> int:
         """Return how wide, in device pixels, this slot's display rendition is.
 
-        Twice the CSS width, for high-density screens: the 200-300px detail
+        Twice the CSS width, for high-density screens: the 200x300px detail
         poster and the detail background banner.
         """
-        return 1280 if self is ArtType.BACKGROUND else 600
+        return 960 if self is ArtType.BACKGROUND else 400
 
     @property
     def display_height(self) -> int:

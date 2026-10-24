@@ -675,14 +675,14 @@ async def test_plex_image_requests_go_through_the_transcoder_only_when_sized(
     assert poster.headers == {"X-Plex-Token": "server-token"}
     assert poster.params == {
         "url": "/library/metadata/7/thumb",
-        "width": "600",
-        "height": "900",
+        "width": "400",
+        "height": "600",
         "minSize": "1",
         "upscale": "0",
     }
     assert backdrop.params is not None
     assert backdrop.params["url"] == "/library/metadata/9/art"
-    assert (backdrop.params["width"], backdrop.params["height"]) == ("1280", "720")
+    assert (backdrop.params["width"], backdrop.params["height"]) == ("960", "540")
 
 
 async def test_media_browser_image_requests_ask_for_a_max_width_only_when_sized(
@@ -698,7 +698,7 @@ async def test_media_browser_image_requests_ask_for_a_max_width_only_when_sized(
 
     assert original.url == "http://jellyfin.local:8096/Items/7/Images/Backdrop"
     assert display.url == (
-        "http://jellyfin.local:8096/Items/7/Images/Primary?maxWidth=600&quality=90"
+        "http://jellyfin.local:8096/Items/7/Images/Primary?maxWidth=400&quality=90"
     )
 
 

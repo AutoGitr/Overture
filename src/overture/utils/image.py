@@ -140,7 +140,7 @@ def render_thumb(path: Path, bounds: tuple[int, int]) -> bytes:
                 alpha = rendition.has_transparency_data
                 rendition = rendition.convert("RGBA" if alpha else "RGB")
             buffer = BytesIO()
-            rendition.save(buffer, "AVIF", quality=_THUMB_QUALITY)
+            rendition.save(buffer, "AVIF", quality=_THUMB_QUALITY, speed=8)
             return buffer.getvalue()
     except UnsupportedImageFormatError:
         raise

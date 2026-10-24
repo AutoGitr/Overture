@@ -565,10 +565,10 @@ export function statusTone(status: AssetStatus, downloading: boolean): StatusTon
 }
 
 /** Rows mounted beyond each edge of the sidebar's viewport, so they load before they show. */
-export const SIDEBAR_OVERSCAN_ROWS = 8;
+export const SIDEBAR_OVERSCAN_ROWS = 20;
 
 /** Screens of rows below and above the viewport whose posters are fetched ahead. */
-const PRELOAD_SCREENS = 1;
+const PRELOAD_SCREENS = 2;
 
 /**
  * The rows whose posters to fetch ahead once scrolling settles, given the

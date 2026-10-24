@@ -51,6 +51,10 @@
 
 {#if currentSrc}
   <img
+    {@attach (node) => () => {
+      const requested = node.getAttribute("src");
+      if (requested && !isImageLoaded(requested)) node.src = "";
+    }}
     {alt}
     {loading}
     {fetchpriority}

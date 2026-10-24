@@ -102,6 +102,7 @@ class LocalArtInspector:
 
         try:
             original = await self._image_cache.import_original(path, root)
+            await self._image_cache.thumb(original)
         except UnsupportedImageFormatError, PathTraversalError:
             # Not an image that can be shown, but its bytes are still recorded.
             original = None
@@ -154,11 +155,14 @@ class LocalArtInspector:
         )
 
     def _cached(self, known: ArtFileFacts) -> bool:
-        """Return whether an unchanged image's copy is in the cache."""
+        """Return whether an unchanged image's copy and thumbnail are in the cache."""
         return (
             known.width is None
             or known.height is None
-            or self._image_cache.has_original(known.file_hash)
+            or (
+                self._image_cache.has_original(known.file_hash)
+                and self._image_cache.has_thumb(known.file_hash)
+            )
         )
 
     def _locate(
@@ -217,7 +221,10 @@ class LocalArtInspector:
         ):
             if not await owned_thread(self._cached, known):
                 with suppress(UnsupportedImageFormatError, PathTraversalError, OSError):
-                    await self._image_cache.import_original(probe.path, probe.root)
+                    original = await self._image_cache.original(
+                        known.file_hash
+                    ) or await self._image_cache.import_original(probe.path, probe.root)
+                    await self._image_cache.thumb(original)
             after = known
         else:
             after = await self.inspect(probe.path, probe.root, known)

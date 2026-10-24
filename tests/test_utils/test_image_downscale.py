@@ -19,10 +19,10 @@ def test_downscales_to_fit_bounds_keeping_the_aspect_ratio(tmp_path: Path) -> No
     path = tmp_path / "poster.jpg"
     Image.new("RGB", (1000, 1500), "red").save(path, "JPEG")
 
-    image = _decode(render_thumb(path, (1280, 900)))
+    image = _decode(render_thumb(path, (960, 600)))
 
     assert image.format == "AVIF"
-    assert image.size == (600, 900)
+    assert image.size == (400, 600)
 
 
 def test_encodes_without_enlarging_an_image_already_inside_bounds(
@@ -31,7 +31,7 @@ def test_encodes_without_enlarging_an_image_already_inside_bounds(
     path = tmp_path / "poster.png"
     Image.new("RGB", (92, 138), "red").save(path, "PNG")
 
-    image = _decode(render_thumb(path, (1280, 900)))
+    image = _decode(render_thumb(path, (960, 600)))
 
     assert image.format == "AVIF"
     assert image.size == (92, 138)

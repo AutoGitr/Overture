@@ -146,6 +146,7 @@ class DownloadArtHandler:
         # records this image never lacks its cached copy.
         try:
             original = await self._image_cache.store_original(image_data)
+            await self._image_cache.thumb(original)
         except UnsupportedImageFormatError as exc:
             raise DownloadError(str(exc)) from exc
         target_path = await owned_thread(

@@ -4,9 +4,10 @@ lazy import logging
 lazy from pathlib import Path
 
 lazy from fastapi.responses import Response
+lazy from sqlmodel import select
 
 lazy from ... import protocols
-lazy from ...db.art_slots import find_art_slot
+lazy from ...db.models.art import ArtSlot
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
@@ -253,8 +254,7 @@ class LibraryService:
 
     async def _restore_original(
         self,
-        item: MediaItem,
-        season: Season | None,
+        owner_id: int,
         art_type: ArtType,
         file_hash: str,
     ) -> CachedOriginal:
@@ -264,6 +264,15 @@ class LibraryService:
             PublicServiceError: When the file is gone, or is no longer the image
                 the slot records, which the next refresh of the item records.
         """
+        async with self._database.read_session() as db:
+            if art_type.owned_by_season:
+                season = await db.get(Season, owner_id)
+                if not season:
+                    raise PublicServiceError(404, "Not found")
+                item = await require_item(db, season.media_item_id)
+            else:
+                season = None
+                item = await require_item(db, owner_id)
         folder = await self._item_folder(item)
         path = await owned_thread(
             self._storage.find_local_art_path, art_type, item=item, season=season
@@ -281,27 +290,22 @@ class LibraryService:
 
     async def _serve_cached_image(
         self,
-        item: MediaItem,
-        season: Season | None,
+        owner_id: int,
         art_type: ArtType,
         *,
+        file_hash: str | None,
         size: ImageSize | None,
         version: str | None,
     ) -> Response:
         """Serve the image a slot records from the cache, or its thumbnail."""
-        slot = find_art_slot(season or item, art_type)
-        if slot is None or slot.file_hash is None:
+        if file_hash is None:
             raise PublicServiceError(404, "File not found")
-        original = await self._image_cache.original(slot.file_hash)
-        if original is None:
-            original = await self._restore_original(
-                item, season, art_type, slot.file_hash
-            )
         return await cached_image_response(
             self._image_cache,
-            original,
+            file_hash,
+            restore=lambda: self._restore_original(owner_id, art_type, file_hash),
             size=size,
-            current=version == slot.file_hash,
+            current=version == file_hash,
         )
 
     async def serve_local_season_image(
@@ -313,12 +317,20 @@ class LibraryService:
     ) -> Response:
         """Serve a show season poster from the cache, or its thumbnail."""
         async with self._database.read_session() as db:
-            season = await db.get(Season, season_id)
-            if not season:
-                raise PublicServiceError(404, "Not found")
-            item = await require_item(db, season.media_item_id)
+            file_hash = (
+                await db.exec(
+                    select(ArtSlot.file_hash).where(
+                        ArtSlot.season_id == season_id,
+                        ArtSlot.art_type == ArtType.SEASON_POSTER,
+                    )
+                )
+            ).first()
         return await self._serve_cached_image(
-            item, season, ArtType.SEASON_POSTER, size=size, version=version
+            season_id,
+            ArtType.SEASON_POSTER,
+            file_hash=file_hash,
+            size=size,
+            version=version,
         )
 
     async def serve_local_image(
@@ -333,7 +345,18 @@ class LibraryService:
         if art_type.owned_by_season:
             raise PublicServiceError(400, "An item has no season artwork")
         async with self._database.read_session() as db:
-            item = await require_item(db, item_id)
+            file_hash = (
+                await db.exec(
+                    select(ArtSlot.file_hash).where(
+                        ArtSlot.media_item_id == item_id,
+                        ArtSlot.art_type == art_type,
+                    )
+                )
+            ).first()
         return await self._serve_cached_image(
-            item, None, art_type, size=size, version=version
+            item_id,
+            art_type,
+            file_hash=file_hash,
+            size=size,
+            version=version,
         )

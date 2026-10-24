@@ -727,7 +727,7 @@ async def test_local_image_display_is_downscaled_to_avif_and_served_from_cache(
     assert Path(response.path) == (
         tmp_path / "cache" / "images" / "thumbs" / file_hash[:2] / f"{file_hash}.avif"
     )
-    assert _response_image(response) == ("AVIF", (600, 900))
+    assert _response_image(response) == ("AVIF", (400, 600))
     assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
 
     # Once cached, serving never touches the media folder again.
@@ -910,7 +910,7 @@ async def test_local_season_poster_is_downscaled_and_cached_while_current(
     )
 
     assert response.media_type == "image/avif"
-    assert _response_image(response) == ("AVIF", (600, 900))
+    assert _response_image(response) == ("AVIF", (400, 600))
     assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
 
 
@@ -947,11 +947,13 @@ async def test_refresh_imports_unchanged_recorded_file_when_cache_is_cold(
         app_config=app_config, database=database, image_cache=image_cache
     )
     assert not image_cache.has_original(file_hash)
+    assert not image_cache.has_thumb(file_hash)
 
     changed = await local_assets.refresh(1, themes=False)
 
     assert changed is False
     assert image_cache.has_original(file_hash)
+    assert image_cache.has_thumb(file_hash)
 
 
 async def test_public_dataset_themerrdb_separation_and_completeness(

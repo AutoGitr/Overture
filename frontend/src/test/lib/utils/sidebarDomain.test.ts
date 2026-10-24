@@ -516,15 +516,15 @@ describe("sidebar sort preferences", () => {
 });
 
 describe("sidebar thumbnail preloading", () => {
-  it("covers one screen past the mounted rows, below first, nearest first", () => {
-    // Rows 100-109 on screen, so rows 92-117 are mounted (8 overscan each way).
-    expect(preloadRowIndexes(100, 110, 1000)).toEqual([
-      118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82,
+  it("covers two screens past the mounted rows, below first, nearest first", () => {
+    // Rows 100-104 on screen, so rows 80-124 are mounted (20 overscan each way).
+    expect(preloadRowIndexes(100, 105, 1000)).toEqual([
+      125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70,
     ]);
   });
 
   it("stays inside the list", () => {
-    expect(preloadRowIndexes(0, 10, 25)).toEqual([18, 19, 20, 21, 22, 23, 24]);
+    expect(preloadRowIndexes(0, 10, 35)).toEqual([30, 31, 32, 33, 34]);
     expect(preloadRowIndexes(0, 0, 0)).toEqual([]);
   });
 });
