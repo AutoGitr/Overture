@@ -318,6 +318,7 @@ class CollectionsService:
                 updated_at=now,
                 **body.model_dump(exclude={"media_type", "library_id", "member_ids"}),
             )
+            apply_match(row, [item.tmdb_collection_id for item in items])
             await self._push_options(row, body)
             if body.order_type is CollectionOrder.CUSTOM:
                 await self._provider().set_collection_members(
@@ -720,6 +721,34 @@ class CollectionsService:
             if row.library_id == body.library_id
             and row.server_type is self._provider().server_type
         }
+        if body.preset is CollectionPreset.TMDB_COLLECTIONS:
+            self._require_movie_matching(body.media_type)
+            used_ids = {
+                row.tmdb_collection_id
+                for row in existing
+                if row.library_id == body.library_id
+                and row.server_type is self._provider().server_type
+            }
+            counts: dict[int, int] = {}
+            for item in items:
+                if item.tmdb_collection_id is not None:
+                    identity = item.tmdb_collection_id
+                    counts[identity] = counts.get(identity, 0) + 1
+            previews: list[CollectionPresetRead] = []
+            for identity, count in sorted(counts.items()):
+                if identity in used_ids or count < defaults.collection_minimum_items:
+                    continue
+                franchise = await self._tmdb.get_collection(identity)
+                if franchise is not None and franchise.title.casefold() not in used:
+                    previews.append(
+                        CollectionPresetRead(
+                            title=franchise.title,
+                            count=count,
+                            filters=CollectionFilter(),
+                            tmdb_collection_id=identity,
+                        )
+                    )
+            return sorted(previews, key=lambda preview: preview.title)
         filters: dict[str, CollectionFilter] = {}
         for item in items:
             if body.preset is CollectionPreset.DECADES and item.year:
@@ -759,15 +788,27 @@ class CollectionsService:
         items = await self._library_items(body.library_id, body.media_type)
         response = CollectionGenerateResponse()
         for title in body.titles:
-            filters = previews[title].filters
+            preset = previews[title]
+            filters = preset.filters
+            tmdb_id = preset.tmdb_collection_id
             try:
                 detail = await self.create(
                     CollectionCreate(
                         title=title,
+                        collection_group=body.preset.collection_group,
                         library_id=body.library_id,
                         media_type=body.media_type,
                         member_ids=[
-                            item.id or 0 for item in self._filter_items(items, filters)
+                            item.id or 0
+                            for item in (
+                                [
+                                    item
+                                    for item in items
+                                    if item.tmdb_collection_id == tmdb_id
+                                ]
+                                if tmdb_id is not None
+                                else self._filter_items(items, filters)
+                            )
                         ],
                     )
                 )
@@ -776,7 +817,11 @@ class CollectionsService:
                     detail.id,
                     body.media_type,
                     CollectionRuleWrite(
-                        source_type=RuleSourceType.FILTER, filters=filters
+                        source_type=RuleSourceType.TMDB
+                        if tmdb_id is not None
+                        else RuleSourceType.FILTER,
+                        source_identifier=str(tmdb_id) if tmdb_id is not None else "",
+                        filters=filters,
                     ),
                 )
             except Exception as exc:
@@ -827,6 +872,20 @@ class CollectionsService:
             for row in rows
         ]
 
+    async def groups(self, media_type: MediaType) -> list[str]:
+        """Return preset groups and custom groups used on the active server."""
+        provider = self._provider()
+        async with self._database.read_session() as session:
+            rows = await CollectionRepository(session).list_listed(media_type)
+        return sorted(
+            {preset.collection_group for preset in CollectionPreset}
+            | {
+                row.collection_group
+                for row in rows
+                if row.server_type is provider.server_type and row.collection_group
+            }
+        )
+
     async def get_collection(
         self, collection_id: int, media_type: MediaType
     ) -> CollectionDetail:
@@ -853,6 +912,16 @@ class CollectionsService:
         )
         return CollectionDetail(
             **collection_read(row, entry).model_dump(),
+            tmdb_match_confidence=(
+                sum(
+                    item.tmdb_collection_id == row.tmdb_collection_id
+                    for item in members
+                )
+                / max(row.child_count, len(members))
+                if row.tmdb_collection_id is not None and (row.child_count or members)
+                else None
+            ),
+            theme_duration=row.theme_file_duration or row.youtube_duration,
             members=member_reads,
             rule=rule,
             theme_unavailable=reason,

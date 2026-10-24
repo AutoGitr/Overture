@@ -2142,6 +2142,18 @@
         "additionalProperties": false,
         "description": "Create a collection in one selected library.",
         "properties": {
+          "collection_group": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
+          },
           "collection_mode": {
             "anyOf": [
               {
@@ -2262,6 +2274,17 @@
             "title": "Child Count",
             "type": "integer"
           },
+          "collection_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
+          },
           "collection_mode": {
             "anyOf": [
               {
@@ -2378,6 +2401,17 @@
             ],
             "title": "Summary"
           },
+          "theme_duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Duration"
+          },
           "theme_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -2427,6 +2461,17 @@
           "tmdb_match": {
             "$ref": "#/components/schemas/CollectionMatch",
             "default": "auto"
+          },
+          "tmdb_match_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Match Confidence"
           },
           "visible_home": {
             "default": false,
@@ -2494,6 +2539,7 @@
           "title",
           "summary",
           "sort_title",
+          "collection_group",
           "collection_mode",
           "order_type",
           "visible_home",
@@ -2515,6 +2561,8 @@
           "tmdb_match",
           "public_dataset_complete",
           "public_dataset_themerrdb",
+          "tmdb_match_confidence",
+          "theme_duration",
           "members",
           "rule",
           "theme_unavailable",
@@ -2762,6 +2810,18 @@
         "additionalProperties": false,
         "description": "Editable collection metadata and server display options.",
         "properties": {
+          "collection_group": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
+          },
           "collection_mode": {
             "anyOf": [
               {
@@ -2831,6 +2891,7 @@
       "CollectionPreset": {
         "description": "Library metadata used to generate collections.",
         "enum": [
+          "tmdb_collections",
           "decades",
           "studios",
           "genres"
@@ -2852,12 +2913,24 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
           }
         },
         "required": [
           "title",
           "count",
-          "filters"
+          "filters",
+          "tmdb_collection_id"
         ],
         "title": "CollectionPresetRead",
         "type": "object"
@@ -2881,6 +2954,17 @@
             "default": 0,
             "title": "Child Count",
             "type": "integer"
+          },
+          "collection_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
           },
           "collection_mode": {
             "anyOf": [
@@ -3059,6 +3143,7 @@
           "title",
           "summary",
           "sort_title",
+          "collection_group",
           "collection_mode",
           "order_type",
           "visible_home",
@@ -8983,6 +9068,72 @@
           }
         },
         "summary": "Preview Collection Generator",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/groups": {
+      "get": {
+        "description": "Return default and custom collection groups for this media type.",
+        "operationId": "list_collection_groups",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Collection Groups",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Collection Groups",
         "tags": [
           "collections"
         ]

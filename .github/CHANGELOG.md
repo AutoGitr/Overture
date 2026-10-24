@@ -9,6 +9,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Generate TMDB franchise collections from a synced movie library, and organize collections with preset or custom groups.
+
 - Create, edit and delete Plex, Jellyfin and Emby collections, manage library members, and select collection posters and backgrounds. Plex supports custom member order, collection visibility and home promotion.
 - Build dynamic collections from MDBList lists, TMDB franchises or library filters, with scheduled sync, inherited defaults and minimum member thresholds. Set `MDBLIST_API_KEY` for MDBList; the generator previews decade, genre and studio collections before creation.
 
@@ -19,7 +21,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- Items and collections share detail navigation and record-action placement. Collection management groups Members, Rule / Sync and Settings together, with matching under Settings and responsive forms.
+- Item and collection headers use two continuous, stable boxes. Collections consolidate metadata, builder rules, TMDB matching and live members into Configure, with shared Save Changes and Sync Now controls.
 
 - Plex and Jellyfin collections and their members are stored locally and refreshed on full syncs. Set `TMDB_API_KEY` for automatic Plex collection matching, or choose a TMDB collection manually.
 - Local artwork is cached under `<config>/cache/images/{originals,thumbs}` by BLAKE3 hash and served as AVIF display thumbnails across the UI, with cached originals used when opening posters at full size.

@@ -35,6 +35,7 @@ class CollectionRead(StrictBaseModel):
     title: str
     summary: str | None = None
     sort_title: str | None = None
+    collection_group: str | None = None
     collection_mode: CollectionMode | None = None
     order_type: CollectionOrder = CollectionOrder.RELEASE
     visible_home: bool = False
@@ -64,6 +65,8 @@ class CollectionRead(StrictBaseModel):
 class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
+    tmdb_match_confidence: float | None = None
+    theme_duration: int | None = None
     members: list[MediaItemRead]
     rule: CollectionRuleRead | None = None
     #: Why a theme cannot be stored on this collection, if it cannot.
@@ -143,6 +146,7 @@ def collection_read(
         title=row.title,
         summary=row.summary,
         sort_title=row.sort_title,
+        collection_group=row.collection_group,
         collection_mode=row.collection_mode,
         order_type=row.order_type,
         visible_home=row.visible_home,
@@ -210,9 +214,16 @@ class CollectionOptions(StrictBaseModel):
     title: Annotated[str, Field(min_length=1, max_length=200)]
     summary: Annotated[str, Field(max_length=10000)] | None = None
     sort_title: Annotated[str, Field(max_length=200)] | None = None
+    collection_group: Annotated[str, Field(max_length=200)] | None = None
     collection_mode: CollectionMode | None = None
     order_type: CollectionOrder = CollectionOrder.RELEASE
     visible_home: bool = False
+
+    @field_validator("collection_group")
+    @classmethod
+    def normalise_group(cls, value: str | None) -> str | None:
+        """Keep unassigned groups null and custom names free of outer spaces."""
+        return value.strip() or None if value is not None else None
 
     @field_validator("title")
     @classmethod
@@ -307,6 +318,7 @@ class CollectionPresetRead(StrictBaseModel):
     title: str
     count: int
     filters: CollectionFilter
+    tmdb_collection_id: int | None = None
 
 
 class CollectionGenerateResponse(StrictBaseModel):

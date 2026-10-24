@@ -1,59 +1,12 @@
 <script lang="ts">
-  import { createMutation, createQuery } from "@tanstack/svelte-query";
-  import {
-    resetCollectionMatchMutation,
-    searchTmdbOptions,
-    setCollectionMatchMutation,
-  } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { CollectionDetail } from "../../generated/rest/types.gen";
-  import { storeCollectionDetail } from "../rest/cache";
-  import { createNotifier } from "../stores/notificationState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
-  import { errorMessage } from "../utils/errors";
+  import { CollectionMatcher } from "../utils/collectionMatch.svelte";
   import DetailSection from "./DetailSection.svelte";
   import DataStatus from "./DataStatus.svelte";
 
   let { collection }: { collection: CollectionDetail } = $props();
-  let text = $state("");
-  let submitted = $state("");
-  const search = createQuery(() => ({
-    ...searchTmdbOptions({ query: { media_type: "movie", query: submitted } }),
-    enabled: !!submitted && settingsState.current.tmdb_configured,
-  }));
-  const setMatch = createMutation(() => setCollectionMatchMutation());
-  const resetMatch = createMutation(() => resetCollectionMatchMutation());
-  const feedback = createNotifier();
-  let busy = $derived(setMatch.isPending || resetMatch.isPending);
-  let matches = $derived(
-    search.data?.results.filter((result) => result.kind === "collection") ?? [],
-  );
-
-  async function match(tmdbId: number | null) {
-    if (busy) return;
-    try {
-      const result = await setMatch.mutateAsync({
-        path: { collection_id: collection.id },
-        body: { media_type: collection.media_type, tmdb_collection_id: tmdbId },
-      });
-      storeCollectionDetail(result);
-      submitted = "";
-      text = "";
-    } catch (error) {
-      feedback.error(errorMessage(error, "Match could not be saved"));
-    }
-  }
-  async function reset() {
-    if (busy) return;
-    try {
-      const result = await resetMatch.mutateAsync({
-        path: { collection_id: collection.id },
-        query: { media_type: collection.media_type },
-      });
-      storeCollectionDetail(result);
-    } catch (error) {
-      feedback.error(errorMessage(error, "Match could not be reset"));
-    }
-  }
+  const matcher = new CollectionMatcher(() => collection);
 </script>
 
 <DetailSection
@@ -70,16 +23,26 @@
             ? "Automatic"
             : "No automatic match"}
     </p>
+    <p class="text-muted">
+      Current match: <span class="badge"
+        >{collection.tmdb_collection_id
+          ? `TMDB ${collection.tmdb_collection_id}`
+          : "Unmatched"}</span
+      >
+      {#if collection.tmdb_match_confidence != null}
+        &middot; {Math.round(collection.tmdb_match_confidence * 100)}% of members vote for this
+        franchise{/if}
+    </p>
     <div class="actions">
       <button
         class="btn btn-ghost btn-sm"
-        onclick={() => match(null)}
-        disabled={busy || collection.tmdb_match === "unmatched"}>Unmatch</button
+        onclick={() => matcher.match(null)}
+        disabled={matcher.busy || collection.tmdb_match === "unmatched"}>Unmatch</button
       >
       <button
         class="btn btn-ghost btn-sm"
-        onclick={reset}
-        disabled={busy || collection.tmdb_match === "auto"}>Reset to auto</button
+        onclick={() => void matcher.reset()}
+        disabled={matcher.busy || collection.tmdb_match === "auto"}>Reset to auto</button
       >
     </div>
     {#if settingsState.current.tmdb_configured}
@@ -87,36 +50,37 @@
         class="actions"
         onsubmit={(event) => {
           event.preventDefault();
-          const query = text.trim();
-          if (query === submitted) void search.refetch();
-          else submitted = query;
+          matcher.submitSearch();
         }}
       >
         <input
           aria-label="Search TMDB collections"
           placeholder="TMDB collection title or ID"
-          bind:value={text}
+          bind:value={matcher.text}
         />
         <button
           class="btn btn-secondary btn-sm"
-          disabled={!text.trim() || busy || search.isFetching}>Search TMDB</button
+          disabled={!matcher.text.trim() || matcher.busy || matcher.search.isFetching}
+          >Search TMDB</button
         >
       </form>
       <DataStatus
         label="TMDB collection search"
-        error={search.error}
-        loading={search.isFetching}
-        hasData={search.data !== undefined}
-        onretry={() => search.refetch()}
+        error={matcher.search.error}
+        loading={matcher.search.isFetching}
+        hasData={matcher.search.data !== undefined}
+        onretry={() => matcher.search.refetch()}
       />
-      {#each matches as candidate (candidate.tmdb_id)}
+      {#each matcher.matches as candidate (candidate.tmdb_id)}
         <button
           class="btn btn-secondary self-start"
-          onclick={() => match(candidate.tmdb_id)}
-          disabled={busy}>Match {candidate.title} (TMDB {candidate.tmdb_id})</button
+          onclick={() => matcher.match(candidate.tmdb_id)}
+          disabled={matcher.busy}>Match {candidate.title} (TMDB {candidate.tmdb_id})</button
         >
       {/each}
-      {#if submitted && search.isSuccess && matches.length === 0}<p class="text-muted">
+      {#if matcher.submitted && matcher.search.isSuccess && matcher.matches.length === 0}<p
+          class="text-muted"
+        >
           No TMDB collections found.
         </p>{/if}
     {:else}
@@ -125,7 +89,7 @@
         class="actions"
         onsubmit={(event) => {
           event.preventDefault();
-          void match(Number(text));
+          void matcher.match(Number(matcher.text));
         }}
       >
         <input
@@ -135,13 +99,15 @@
           step="1"
           required
           bind:value={
-            () => text,
+            () => matcher.text,
             (value) => {
-              text = String(value ?? "");
+              matcher.text = String(value ?? "");
             }
           }
         />
-        <button class="btn btn-secondary btn-sm" disabled={busy || !text}>Match collection</button>
+        <button class="btn btn-secondary btn-sm" disabled={matcher.busy || !matcher.text}
+          >Match collection</button
+        >
       </form>
     {/if}
   </div>

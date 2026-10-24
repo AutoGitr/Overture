@@ -35,9 +35,9 @@
     >
     <label class="form-label"
       >Group by<select bind:value={form.preset} onchange={() => form.resetPreview()}
-        ><option value="decades">Decades</option><option value="genres">Genres</option><option
-          value="studios">Studios</option
-        ></select
+        >{#if form.mediaType === "movie"}<option value="tmdb_collections">TMDB Collections</option
+          >{/if}<option value="decades">Decades</option><option value="genres">Genres</option
+        ><option value="studios">Studios</option></select
       ></label
     >
     <button class="btn" disabled={!form.libraryId} onclick={() => void form.previewCollections()}
@@ -52,7 +52,8 @@
           />{preset.title} ({preset.count} members)</label
         >{/each}
       {#if !form.preview.data.length}<p class="text-muted">
-          No new collections meet the minimum. Sync your library to refresh genres and studios.
+          No new collections meet the minimum. Sync your library to refresh franchise memberships,
+          genres and studios.
         </p>{/if}
       <button
         class="btn btn-primary"

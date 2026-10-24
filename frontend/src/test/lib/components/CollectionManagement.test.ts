@@ -54,6 +54,7 @@ describe("collection management", () => {
 
   it("removes members through the API and keeps the collection view in sync", async () => {
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12/members": { ...detail, members: [members[1]], child_count: 1 },
@@ -75,6 +76,7 @@ describe("collection management", () => {
   it("saves settings without losing nullable inheritance", async () => {
     let saved = false;
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": ({ init }: { init: RequestInit }) => {
         if (init.method === "PUT") {
           saved = true;
@@ -83,31 +85,41 @@ describe("collection management", () => {
         return Response.json(detail);
       },
     });
-    goToCollectionView(detail, "settings");
+    goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(await screen.findByLabelText("Title"), { target: { value: "New saga" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Save collection settings" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(saved).toBe(true));
     expect(await screen.findByRole("heading", { name: "New saga" })).toBeInTheDocument();
   });
 
   it("saves rule overrides and runs a saved rule", async () => {
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": { ...detail, rule },
       "/api/collections/12/rule": rule,
       "/api/collections/12/sync": { added: 1, removed: 0, skipped: false, deleted: false },
     });
-    goToCollectionView(detail, "rule");
+    goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
     await fireEvent.change(await screen.findByLabelText("Sync strategy"), {
       target: { value: "append" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
-    const body = JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body));
+    await waitFor(() =>
+      expect(calls.some((call) => call.url.includes("/rule") && call.init.method === "PUT")).toBe(
+        true,
+      ),
+    );
+    const body = JSON.parse(
+      String(
+        calls.find((call) => call.url.includes("/rule") && call.init.method === "PUT")?.init.body,
+      ),
+    );
     expect(body.sync_mode).toBe("append");
     expect(body.minimum_items).toBeNull();
-    await fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Sync Now" }));
     await waitFor(() =>
       expect(calls.some((call) => call.url.includes("/sync") && call.init.method === "POST")).toBe(
         true,
@@ -115,8 +127,53 @@ describe("collection management", () => {
     );
   });
 
+  it("saves an existing or custom group with the complete Configure draft", async () => {
+    const { calls } = mockFetchRoutes({
+      "/api/collections/groups": ["default-decades", "Weekend"],
+      "/api/collections/12": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "PUT" ? { ...detail, collection_group: "Weekend" } : detail),
+    });
+    renderWithQueryClient(CollectionPage);
+    const group = await screen.findByLabelText("Collection Group");
+    await waitFor(() => {
+      if (!(group instanceof HTMLInputElement)) throw new Error("Expected group input");
+      expect(Array.from(group.list?.options ?? [], (option) => option.value)).toContain("Weekend");
+    });
+    await fireEvent.input(group, { target: { value: "Weekend" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    expect(
+      JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
+    ).toMatchObject({ collection_group: "Weekend" });
+  });
+
+  it("only offers manual additions for manual and append collections", async () => {
+    mockFetchRoutes({ "/api/collections/12": { ...detail, rule: { ...rule, sync_mode: "sync" } } });
+    renderWithQueryClient(CollectionPage);
+    await screen.findByRole("heading", { name: "Saga" });
+    expect(screen.queryByLabelText("Add item")).toBeNull();
+    expect(screen.getByLabelText("Sort members")).toBeInTheDocument();
+  });
+
+  it("supports keyboard mode navigation while keeping both header boxes", async () => {
+    mockFetchRoutes({
+      "/api/collections/groups": [],
+      "/api/collections/12": detail,
+      "/api/collections/12/art/poster/sources": { sources: {}, current_url: null },
+    });
+    const { container } = renderWithQueryClient(CollectionPage);
+    const configure = await screen.findByRole("tab", { name: "Configure" });
+    await fireEvent.keyDown(configure, { key: "ArrowRight" });
+    expect(await screen.findByRole("tab", { name: "Art", selected: true })).toHaveFocus();
+    const boxes = container.querySelectorAll(".detail-sections > .tab-bar");
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]?.contains(screen.getByRole("group", { name: "Record actions" }))).toBe(true);
+    expect(boxes[1]?.contains(screen.getByRole("tablist", { name: "Art categories" }))).toBe(true);
+  });
+
   it("creates a collection with selected library members", async () => {
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": detail,
@@ -135,6 +192,7 @@ describe("collection management", () => {
 
   it("previews presets before generating only selected collections", async () => {
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/collections/generator/preview": [
         { title: "1990s", count: 2, filters: { decade: 1990, studio: null, genre: null } },
@@ -153,11 +211,36 @@ describe("collection management", () => {
     ).toMatchObject({ titles: ["1990s"], preset: "decades" });
   });
 
+  it("previews and submits the TMDB franchise preset", async () => {
+    const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/collections/generator/preview": [
+        { title: "Saga", count: 2, filters: {}, tmdb_collection_id: 10 },
+      ],
+      "/api/collections/generator/apply": { created: [12], errors: {} },
+    });
+    renderWithQueryClient(CollectionGeneratorModal);
+    await screen.findByRole("option", { name: "Movies" });
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.change(screen.getByLabelText("Group by"), {
+      target: { value: "tmdb_collections" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "Saga (2 members)" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Generate selected collections" }));
+    await waitFor(() => expect(calls.some((call) => call.url.endsWith("/apply"))).toBe(true));
+    expect(
+      JSON.parse(String(calls.find((call) => call.url.endsWith("/apply"))?.init.body)),
+    ).toMatchObject({ preset: "tmdb_collections", titles: ["Saga"] });
+  });
+
   it.each([
     { button: "Move First down", expected: [2, 1] },
     { button: "Move Second up", expected: [2, 1] },
   ])("reorders members using $button", async ({ button, expected }) => {
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: members.length },
       "/api/collections/12/members": {
@@ -180,6 +263,7 @@ describe("collection management", () => {
   it("drops a member anywhere on another row at that row's position", async () => {
     const all = [...members, third];
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": { ...detail, members: all },
       "/api/library/items": { items: all, total: all.length },
       "/api/collections/12/members": {
@@ -203,6 +287,7 @@ describe("collection management", () => {
 
   it("keeps member search trimmed and excludes collection members", async () => {
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": { ...detail, members: [members[0]] },
       "/api/library/items": { items: members, total: 2 },
     });
@@ -218,6 +303,7 @@ describe("collection management", () => {
 
   it("clears selected members when switching libraries and trims the submitted title", async () => {
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", count: 2 },
         { id: "other", title: "Other", count: 1 },
@@ -247,6 +333,7 @@ describe("collection management", () => {
   it("retries a refused collection creation from its error message", async () => {
     let attempts = 0;
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": () =>
@@ -268,25 +355,29 @@ describe("collection management", () => {
 
   it("shows a saved rule immediately and removes it without needing a live event", async () => {
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/collections/12/rule": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "DELETE" ? { status: "deleted" } : rule),
     });
-    goToCollectionView(detail, "rule");
+    goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
+    await fireEvent.change(await screen.findByLabelText("Source"), {
+      target: { value: "mdblist" },
+    });
     await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
       target: { value: "user/list" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
-    expect(await screen.findByRole("button", { name: "Sync now" })).toBeEnabled();
-    await fireEvent.click(screen.getByRole("button", { name: "Remove rule" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Sync now" })).not.toBeInTheDocument(),
-    );
+    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync Now" })).toBeEnabled());
+    await fireEvent.change(screen.getByLabelText("Source"), { target: { value: "manual" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync Now" })).toBeDisabled());
   });
 
   it("uses the active artwork slot for external artwork links", async () => {
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
       "/api/collections/12/art/background/sources": { sources: {}, current_url: null },
     });
@@ -303,6 +394,7 @@ describe("collection management", () => {
 
   it("keeps one header and predictable record actions while switching sections", async () => {
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: members.length },
       "/api/collections/12/art/poster/sources": { sources: {}, current_url: null },
@@ -312,11 +404,9 @@ describe("collection management", () => {
     const heading = await screen.findByRole("heading", { name: "Saga" });
     const recordActions = screen.getByRole("group", { name: "Record actions" });
     expect(screen.getAllByRole("main")).toHaveLength(1);
-    expect(screen.getByRole("tab", { name: "Collection", selected: true })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Members", selected: true })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "TMDB collection match" })).toBeNull();
-
-    await fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getByRole("tab", { name: "Configure", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "TMDB collection match" })).toBeInTheDocument();
     await fireEvent.input(await screen.findByLabelText("Title"), {
       target: { value: "Unsaved title" },
     });
@@ -345,15 +435,14 @@ describe("collection management", () => {
       }
     }
 
-    await fireEvent.click(screen.getByRole("tab", { name: "Collection" }));
-    await fireEvent.click(await screen.findByRole("tab", { name: "Settings" }));
+    await fireEvent.click(screen.getByRole("tab", { name: "Configure" }));
     expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
   });
 
   it("round-trips collection art, rule, theme and settings views in both libraries", async () => {
     for (const media_type of ["movie", "show"] as const) {
       const target = { ...detail, media_type };
-      for (const view of ["members", "art", "themes", "rule", "settings"] as const) {
+      for (const view of ["configure", "art", "themes"] as const) {
         goToCollectionView(target, view, "background");
         await waitFor(() => expect(routedCollectionView()).toBe(view));
         expect(routedCollectionId()).toBe(12);
@@ -364,10 +453,11 @@ describe("collection management", () => {
 
   it("keeps metadata and rule drafts when monitoring changes from the header", async () => {
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/collections/12/monitored": { monitored: true },
     });
-    goToCollectionView(detail, "settings");
+    goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(await screen.findByLabelText("Title"), {
       target: { value: "Unsaved title" },
@@ -375,14 +465,14 @@ describe("collection management", () => {
     await fireEvent.input(screen.getByLabelText("Summary"), {
       target: { value: "Unsaved summary" },
     });
-    await fireEvent.click(screen.getByRole("tab", { name: "Rule / Sync" }));
+    await fireEvent.change(screen.getByLabelText("Source"), { target: { value: "mdblist" } });
     await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
       target: { value: "draft/list" },
     });
     await fireEvent.click(screen.getByTitle("Unmonitored - click to monitor"));
     await screen.findByTitle("Monitored - click to unmonitor");
     expect(screen.getByLabelText("MDBList list URL or ID")).toHaveValue("draft/list");
-    await fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
     expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
     expect(screen.getByLabelText("Summary")).toHaveValue("Unsaved summary");
   });

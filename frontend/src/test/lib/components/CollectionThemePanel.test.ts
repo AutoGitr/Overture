@@ -52,7 +52,11 @@ function show(coll: CollectionDetail) {
 
 function renderPanel() {
   goToCollectionView(shown, "themes");
-  return renderWithQueryClient(CollectionManager, { collection: shown, libraryItems: [] });
+  return renderWithQueryClient(CollectionManager, {
+    collection: shown,
+    libraryItems: [],
+    groups: [],
+  });
 }
 
 /** The panel as its route shows it, following the cached collections list. */
@@ -107,6 +111,7 @@ describe("CollectionThemePanel search", () => {
       const { rerender } = renderWithQueryClient(CollectionManager, {
         collection: coll,
         libraryItems: [],
+        groups: [],
       });
       const link = await screen.findByRole("link", { name: "GitHub" });
       const issue = new URL(link.getAttribute("href") ?? "");

@@ -1,15 +1,15 @@
 <script lang="ts">
   import DetailForm from "./DetailForm.svelte";
   import type { CollectionEditor } from "../utils/collectionForms.svelte";
-  let { editor }: { editor: CollectionEditor } = $props();
+  let { editor, groups }: { editor: CollectionEditor; groups: string[] } = $props();
+  const groupListId = $props.id();
   let plex = $derived(editor.collection.server_type === "plex");
 </script>
 
 <DetailForm
-  title="Collection settings"
+  title="General & Server Display"
   description="Manage the collection's metadata and how it appears in your library."
   busy={editor.busy}
-  onsubmit={() => void editor.save()}
 >
   <label class="form-label"
     >Title <input required maxlength="200" bind:value={editor.title} /></label
@@ -30,6 +30,18 @@
   <label class="form-label form-wide"
     >Summary <textarea maxlength="10000" bind:value={editor.summary}></textarea></label
   >
+  <label class="form-label"
+    >Collection Group
+    <input
+      list={groupListId}
+      maxlength="200"
+      bind:value={editor.collectionGroup}
+      placeholder="Ungrouped"
+    />
+    <datalist id={groupListId}
+      >{#each groups as group (group)}<option value={group}></option>{/each}</datalist
+    >
+  </label>
   {#if plex}
     <label class="form-label"
       >Visibility <select bind:value={editor.collectionMode}
@@ -44,7 +56,4 @@
       ><input type="checkbox" bind:checked={editor.visibleHome} />Visible on home</label
     >
   {/if}
-  {#snippet actions()}
-    <button class="btn btn-primary" type="submit">Save collection settings</button>
-  {/snippet}
 </DetailForm>

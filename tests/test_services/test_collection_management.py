@@ -10,7 +10,7 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
-lazy from overture.db.models.settings import AppSettings
+lazy from overture.db.models.settings import AppSettings, get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
@@ -487,6 +487,7 @@ async def test_tmdb_and_intersected_filters_resolve_only_library_members(
         (CollectionPreset.DECADES, ["1990s", "2000s"]),
         (CollectionPreset.GENRES, ["Action"]),
         (CollectionPreset.STUDIOS, ["Studio"]),
+        (CollectionPreset.TMDB_COLLECTIONS, ["Saga"]),
     ],
 )
 async def test_presets_preview_and_generate_persistent_rules(
@@ -505,7 +506,17 @@ async def test_presets_preview_and_generate_persistent_rules(
     for identity in result.created:
         detail = await manager.service.get_collection(identity, MediaType.MOVIE)
         assert detail.rule
-        assert detail.rule.source_type is RuleSourceType.FILTER
+        assert detail.collection_group == preset.collection_group
+        assert detail.rule.source_type is (
+            RuleSourceType.TMDB
+            if preset is CollectionPreset.TMDB_COLLECTIONS
+            else RuleSourceType.FILTER
+        )
+        if preset is CollectionPreset.TMDB_COLLECTIONS:
+            assert detail.rule.source_identifier == "10"
+            assert len(detail.members) == 3
+            assert detail.tmdb_collection_id == 10
+            assert detail.tmdb_match_confidence == 1.0
 
 
 async def test_generator_counts_failures_and_does_not_accept_stale_selection(
@@ -642,3 +653,63 @@ async def test_append_does_not_restore_a_manual_member_removed_on_the_server(
     assert (
         await manager.service.get_collection(identity, MediaType.MOVIE)
     ).child_count == 2
+
+
+async def test_custom_group_round_trips_and_joins_group_choices(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    detail = await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="  Weekend  "),
+    )
+    assert detail.collection_group == "Weekend"
+    groups = await manager.service.groups(MediaType.MOVIE)
+    assert set(groups) == {preset.collection_group for preset in CollectionPreset} | {
+        "Weekend"
+    }
+    listed = await manager.service.list_collections(MediaType.MOVIE)
+    assert listed[0].collection_group == "Weekend"
+    detail = await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group=" "),
+    )
+    assert detail.collection_group is None
+
+
+async def test_franchise_generator_excludes_existing_matches_with_other_titles(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity, MediaType.MOVIE, CollectionOptions(title="My franchise")
+    )
+    body = CollectionGenerateRequest(
+        media_type=MediaType.MOVIE,
+        library_id="movies",
+        preset=CollectionPreset.TMDB_COLLECTIONS,
+    )
+    assert await manager.service.presets(body) == []
+
+
+async def test_franchise_generator_respects_minimum_and_missing_tmdb(
+    manager: Manager, database: Database
+) -> None:
+    body = CollectionGenerateRequest(
+        media_type=MediaType.MOVIE,
+        library_id="movies",
+        preset=CollectionPreset.TMDB_COLLECTIONS,
+    )
+    async with database.write_session() as session:
+        settings = await get_app_settings(session)
+        settings.collection_minimum_items = 4
+        session.add(settings)
+    assert await manager.service.presets(body) == []
+    async with database.write_session() as session:
+        settings = await get_app_settings(session)
+        settings.collection_minimum_items = 1
+        session.add(settings)
+    manager.tmdb.found = False
+    assert await manager.service.presets(body) == []

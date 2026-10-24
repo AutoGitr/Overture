@@ -368,9 +368,17 @@ describe("DetailPanel record actions", () => {
 
   it("changes nothing when a confirmation is declined", async () => {
     confirmAction.mockResolvedValue(false);
-    renderWithQueryClient(DetailPanel, { item: alien });
+    const { rerender } = renderWithQueryClient(DetailPanel, {
+      item: alien,
+      view: { mode: "art", artSubTab: "poster", drillSeasonNum: null },
+    });
 
     await fireEvent.click(screen.getByRole("button", { name: "Clear all art" }));
+    await rerender({
+      item: alien,
+      view: { mode: "themes", artSubTab: "poster", drillSeasonNum: null },
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "Themes" }));
     await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
     await fireEvent.click(screen.getByTitle("Delete Item from Database"));
 
@@ -382,8 +390,12 @@ describe("DetailPanel record actions", () => {
 
   it("forgets the theme selection", async () => {
     clearTheme.mockResolvedValue({ data: { status: "cleared" } });
-    renderWithQueryClient(DetailPanel, { item: alien });
+    renderWithQueryClient(DetailPanel, {
+      item: alien,
+      view: { mode: "themes", artSubTab: "poster", drillSeasonNum: null },
+    });
 
+    await fireEvent.click(screen.getByRole("tab", { name: "Themes" }));
     await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
 
     await waitFor(() =>
@@ -393,8 +405,12 @@ describe("DetailPanel record actions", () => {
 
   it("reports a failed action and leaves the item as it was", async () => {
     clearTheme.mockRejectedValue(new ApiError("Theme is being downloaded", 409));
-    renderWithQueryClient(DetailPanel, { item: alien });
+    renderWithQueryClient(DetailPanel, {
+      item: alien,
+      view: { mode: "themes", artSubTab: "poster", drillSeasonNum: null },
+    });
 
+    await fireEvent.click(screen.getByRole("tab", { name: "Themes" }));
     await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
 
     expect(await screen.findByText("Theme is being downloaded")).toBeInTheDocument();

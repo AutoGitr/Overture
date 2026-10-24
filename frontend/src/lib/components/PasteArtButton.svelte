@@ -19,7 +19,7 @@
 {#if target}
   <button
     type="button"
-    class="btn btn-secondary btn-icon paste-art-btn"
+    class="tab-item"
     aria-label={`Paste URL & save as ${target.label}`}
     title={hint}
     onclick={() => target.paste()}
@@ -30,16 +30,6 @@
     {:else}
       <ClipboardPaste size={18} />
     {/if}
+    <span>Paste Art</span>
   </button>
 {/if}
-
-<style>
-  /* Square, as tall as the sub-tab bar beside it (--tab-height + 8px). */
-  .paste-art-btn {
-    width: calc(var(--tab-height, 32px) + 8px);
-    height: calc(var(--tab-height, 32px) + 8px);
-    min-width: 0;
-    min-height: 0;
-    padding: 0;
-  }
-</style>

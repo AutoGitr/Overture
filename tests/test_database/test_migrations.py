@@ -481,3 +481,43 @@ def test_revision_5_preserves_collection_members_art_and_settings() -> None:
             command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+def test_collection_group_upgrade_preserves_existing_collections() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "ede4b777b0f9")
+            connection.exec_driver_sql(
+                "INSERT INTO media_collections "
+                "(id, server_item_id, media_type, server_type, title, child_count, "
+                "monitored, tmdb_match, order_type, visible_home) "
+                "VALUES (1, 'saga', 'movie', 'plex', 'Saga', "
+                "2, 1, 'auto', 'release', 0)"
+            )
+            command.upgrade(config, "head")
+            assert connection.exec_driver_sql(
+                "SELECT title, collection_group FROM media_collections"
+            ).all() == [("Saga", None)]
+            assert "ix_media_collections_collection_group" in {
+                index["name"]
+                for index in inspect(connection).get_indexes("media_collections")
+            }
+            connection.exec_driver_sql(
+                "UPDATE media_collections SET collection_group = 'Weekend'"
+            )
+            command.downgrade(config, "ede4b777b0f9")
+            assert connection.exec_driver_sql(
+                "SELECT title FROM media_collections"
+            ).all() == [("Saga",)]
+            command.upgrade(config, "head")
+            assert (
+                connection.exec_driver_sql(
+                    "SELECT collection_group FROM media_collections"
+                ).scalar()
+                is None
+            )
+    finally:
+        engine.dispose()

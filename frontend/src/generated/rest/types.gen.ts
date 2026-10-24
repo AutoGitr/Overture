@@ -1081,6 +1081,10 @@ export type CatalogSeason = {
  * Create a collection in one selected library.
  */
 export type CollectionCreate = {
+    /**
+     * Collection Group
+     */
+    collection_group?: string | null;
     collection_mode?: CollectionMode | null;
     /**
      * Library Id
@@ -1132,6 +1136,10 @@ export type CollectionDetail = {
      * Child Count
      */
     child_count: number;
+    /**
+     * Collection Group
+     */
+    collection_group: string | null;
     collection_mode: CollectionMode | null;
     /**
      * Has Theme
@@ -1181,6 +1189,10 @@ export type CollectionDetail = {
      * Summary
      */
     summary: string | null;
+    /**
+     * Theme Duration
+     */
+    theme_duration: number | null;
     theme_status: AssetStatus;
     /**
      * Theme Unavailable
@@ -1203,6 +1215,10 @@ export type CollectionDetail = {
      */
     tmdb_collection_id: number | null;
     tmdb_match: CollectionMatch;
+    /**
+     * Tmdb Match Confidence
+     */
+    tmdb_match_confidence: number | null;
     /**
      * Visible Home
      */
@@ -1354,6 +1370,10 @@ export type CollectionMode = 'default' | 'hide_items' | 'show_items' | 'hide';
  * Editable collection metadata and server display options.
  */
 export type CollectionOptions = {
+    /**
+     * Collection Group
+     */
+    collection_group?: string | null;
     collection_mode?: CollectionMode | null;
     order_type?: CollectionOrder;
     /**
@@ -1386,7 +1406,7 @@ export type CollectionOrder = 'release' | 'alpha' | 'custom';
  *
  * Library metadata used to generate collections.
  */
-export type CollectionPreset = 'decades' | 'studios' | 'genres';
+export type CollectionPreset = 'tmdb_collections' | 'decades' | 'studios' | 'genres';
 
 /**
  * CollectionPresetRead
@@ -1403,6 +1423,10 @@ export type CollectionPresetRead = {
      * Title
      */
     title: string;
+    /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id: number | null;
 };
 
 /**
@@ -1419,6 +1443,10 @@ export type CollectionRead = {
      * Child Count
      */
     child_count: number;
+    /**
+     * Collection Group
+     */
+    collection_group: string | null;
     collection_mode: CollectionMode | null;
     /**
      * Has Theme
@@ -4596,6 +4624,38 @@ export type PreviewCollectionGeneratorResponses = {
 };
 
 export type PreviewCollectionGeneratorResponse = PreviewCollectionGeneratorResponses[keyof PreviewCollectionGeneratorResponses];
+
+export type ListCollectionGroupsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/groups';
+};
+
+export type ListCollectionGroupsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListCollectionGroupsError = ListCollectionGroupsErrors[keyof ListCollectionGroupsErrors];
+
+export type ListCollectionGroupsResponses = {
+    /**
+     * Response List Collection Groups
+     *
+     * Successful Response
+     */
+    200: Array<string>;
+};
+
+export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
 
 export type DeleteCollectionData = {
     body?: never;

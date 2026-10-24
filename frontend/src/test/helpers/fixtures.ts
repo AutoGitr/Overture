@@ -124,6 +124,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
   return {
     art_url: null,
     sort_title: null,
+    collection_group: null,
     collection_mode: null,
     order_type: "release",
     visible_home: false,
@@ -155,6 +156,8 @@ export function collectionDetail(overrides: Partial<CollectionDetail> = {}): Col
   return {
     ...collection(),
     rule: null,
+    tmdb_match_confidence: null,
+    theme_duration: null,
     catalog_entry_key: null,
     theme_writable: true,
     members: [],

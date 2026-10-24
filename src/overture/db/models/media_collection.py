@@ -31,6 +31,7 @@ class MediaCollectionBase(SQLModel):
     title: str = Field(default="", nullable=False)
     summary: str | None = None
     sort_title: str | None = None
+    collection_group: str | None = Field(default=None, index=True)
     collection_mode: CollectionMode | None = Field(
         default=None, sa_type=enum_type(CollectionMode)
     )

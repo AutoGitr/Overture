@@ -11,8 +11,15 @@
   } from "../utils/themeSearch";
   import ThemeSearch from "./ThemeSearch.svelte";
 
-  let { collection: coll, actions }: { collection: CollectionDetail; actions: CollectionActions } =
-    $props();
+  let {
+    collection: coll,
+    actions,
+    searchInputId,
+  }: {
+    collection: CollectionDetail;
+    actions: CollectionActions;
+    searchInputId?: string;
+  } = $props();
 </script>
 
 {#if coll.theme_unavailable}
@@ -53,6 +60,7 @@
     {#key coll.id}
       <ThemeSearch
         label="Search collection themes"
+        inputId={searchInputId}
         initialQuery={buildCollectionThemeSearchQuery(coll.title)}
         videoIds={[
           ...new Set(

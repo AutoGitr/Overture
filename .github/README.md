@@ -420,32 +420,39 @@ finds their media folder.
 Plex, Jellyfin and Emby collections appear under **Collections** in the library
 sidebar. Create a collection with **+ Create collection**, choose its library and
 initial members, or use **Generate collections** to preview and create collections
-by decade, genre or studio. Run a full Sync to import current library metadata.
+by TMDB movie franchise, decade, genre or studio. TMDB franchise previews use
+franchise memberships imported by a full Sync and require `TMDB_API_KEY`. Run a full Sync to import current library metadata.
 
-Items and collections share the same detail header, **Art** and **Themes**
-sections, artwork category tabs and paste control. Database, monitoring and delete
-actions stay beside the section tabs. The **Collection** section groups **Members**,
-**Rule / Sync** and **Settings** in its second tab row; TMDB matching lives under
-**Settings**. Add or remove library members, edit the collection's title, summary
-and sort title, and browse TMDB, OvertureDB or custom poster/background artwork.
-Plex also supports custom member order through drag-and-drop or the Up/Down
-buttons, visibility modes and home promotion; Jellyfin and Emby offer release
-and alphabetical ordering. Deleting a collection keeps its media files.
+Items and collections share two continuous header boxes. The upper box holds
+**Art**, **Themes**, and record actions; collections also have **Configure**.
+The lower box stays visible at a fixed height while switching modes, with artwork
+categories and **Paste Art**, theme status and duration with **Search YouTube**
+and **Clear**, or Configure jump links with **Save Changes** and **Sync Now**.
 
-Under **Rule / Sync**, choose an MDBList list, a TMDB movie franchise, or an
+**Configure** brings General & Server Display, Builder & Dynamic Rules Engine,
+movie franchise matching, Resolved Members, and the Danger Zone into one page.
+Edit title, summary, sort title and collection group; choose an existing or preset
+group, or type a custom name. Generated collections receive `default-tmdb-collections`,
+`default-decades`, `default-genres` or `default-studios` automatically.
+Plex supports visibility and home promotion, custom member ordering by drag-and-drop
+or keyboard-accessible Up/Down buttons; Jellyfin and Emby offer release and
+alphabetical ordering. Deleting a collection preserves its underlying media.
+
+In Builder, choose Manual, an MDBList list, a TMDB movie franchise, or an
 intersection of library filters. Set `MDBLIST_API_KEY` in the environment for
 MDBList; use a list ID, `user/list`, or an HTTPS MDBList list URL. Rules only use
-items already in the selected library. Strict sync mirrors the source; append
-keeps manual members. Each enabled rule runs at its saved interval and can be
-run immediately. Failed source lookups preserve existing membership. Removing a
-rule keeps the collection and its members.
+items already in the selected library. Strict Sync mirrors the source; Append
+keeps manual members and permits adding library items. Each enabled rule runs
+at its saved interval and can run immediately with **Sync Now**. Failed source
+lookups preserve existing membership. Choosing Manual removes the rule and keeps
+its members. **Save Changes** saves metadata and the builder configuration.
 
 **Settings > Collection defaults** controls the sync strategy, Plex visibility,
 minimum member count, deletion below the minimum, and optional automatic artwork
 and catalog theme selection during rule sync. Rule overrides left blank inherit
 the global setting. Below-minimum rules keep the current collection unless
 deletion is enabled; deleting a collection also removes its rule. Per-collection
-metadata and order are configured in the collection's **Settings** view.
+metadata and order are configured on the collection's **Configure** page.
 
 Movie collections also show TMDB matching controls; TMDB has no show collections. Jellyfin's provider
 ID is used when available; otherwise Overture uses a strict majority of members'

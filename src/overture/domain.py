@@ -74,9 +74,15 @@ class RuleSourceType(StrEnum):
 class CollectionPreset(StrEnum):
     """Library metadata used to generate collections."""
 
+    TMDB_COLLECTIONS = "tmdb_collections"
     DECADES = "decades"
     STUDIOS = "studios"
     GENRES = "genres"
+
+    @property
+    def collection_group(self) -> str:
+        """Return the group assigned by this preset."""
+        return f"default-{self.replace('_', '-')}"
 
 
 class ThemeIdSource(StrEnum):

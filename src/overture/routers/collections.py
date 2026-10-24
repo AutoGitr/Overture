@@ -54,6 +54,14 @@ async def list_collections(
     return await collections.list_collections(media_type)
 
 
+@router.get("/groups")
+async def list_collection_groups(
+    collections: CollectionsDep, media_type: MediaTypeQuery
+) -> list[str]:
+    """Return default and custom collection groups for this media type."""
+    return await collections.groups(media_type)
+
+
 @router.get("/{collection_id}")
 async def get_collection(
     collection_id: CollectionIdPath,

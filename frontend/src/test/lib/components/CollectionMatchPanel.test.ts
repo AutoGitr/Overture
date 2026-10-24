@@ -40,6 +40,7 @@ describe("collection matching and members", () => {
       server_link: "https://server.test/collection",
     });
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": () => Response.json(detail),
       "/api/collections/12/match": ({ init }: { init: RequestInit }) => {
         detail =
@@ -115,6 +116,7 @@ describe("collection matching and members", () => {
       params: { collectionSlug: "12-shows" },
     });
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": collectionDetail({
         id: 12,
         title: "Shows",
@@ -146,6 +148,7 @@ describe("collection matching and members", () => {
       theme_unavailable: "Read only",
     });
     const { calls } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/collections/12/match": () =>
         Response.json({ detail: "Match refused" }, { status: 422 }),

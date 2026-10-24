@@ -62,6 +62,7 @@
       class="status-tab-label"
       role="tab"
       aria-selected={active}
+      tabindex={active ? 0 : -1}
       onclick={onselect}
     >
       {@render content()}

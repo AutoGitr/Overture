@@ -21,7 +21,7 @@ describe("CollectionPage", () => {
   });
 
   it("selects the collection its URL names once its detail has loaded", async () => {
-    mockFetchRoutes({ "/api/collections/12": action });
+    mockFetchRoutes({ "/api/collections/groups": [], "/api/collections/12": action });
     await openCollection("12-action");
 
     renderWithQueryClient(CollectionPage);
@@ -32,6 +32,7 @@ describe("CollectionPage", () => {
 
   it("selects nothing for a collection the server no longer lists", async () => {
     const { fetchMock } = mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": () =>
         Response.json({ detail: "Collection not found" }, { status: 404 }),
     });
@@ -45,7 +46,7 @@ describe("CollectionPage", () => {
   });
 
   it("shows no collection on the collections list", async () => {
-    mockFetchRoutes({});
+    mockFetchRoutes({ "/api/collections/groups": [] });
     uiState.mobileShowDetail = true;
     await navigate("/movies/collections");
 
@@ -58,6 +59,7 @@ describe("CollectionPage", () => {
   it("waits for a failed detail to be retried before deciding what is selected", async () => {
     let available = false;
     mockFetchRoutes({
+      "/api/collections/groups": [],
       "/api/collections/12": () =>
         available
           ? Response.json(action)

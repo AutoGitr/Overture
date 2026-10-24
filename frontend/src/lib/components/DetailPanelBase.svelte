@@ -36,7 +36,7 @@
     /** The active section's category tabs. */
     subtabs?: Snippet;
     subtabLabel?: string;
-    showSubtabs?: boolean;
+    subtabRole?: "tablist" | "group";
     /** Actions beside the category tabs. */
     subtabActions?: Snippet;
     content: Snippet;
@@ -60,10 +60,33 @@
     recordActions,
     subtabs,
     subtabLabel = "Art categories",
-    showSubtabs = true,
+    subtabRole = "tablist",
     subtabActions,
     content,
   }: Props = $props();
+
+  function navigateTabs(event: KeyboardEvent) {
+    if (!(event.currentTarget instanceof HTMLElement) || !(event.target instanceof HTMLElement))
+      return;
+    if (!event.target.closest('[role="tab"]')) return;
+    const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]')];
+    const index = tabs.findIndex((tab) => tab === event.target);
+    if (index === -1) return;
+    const next =
+      event.key === "ArrowRight"
+        ? (index + 1) % tabs.length
+        : event.key === "ArrowLeft"
+          ? (index + tabs.length - 1) % tabs.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? tabs.length - 1
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    tabs[next]?.focus();
+    tabs[next]?.click();
+  }
 </script>
 
 <main class="detail-panel">
@@ -124,24 +147,38 @@
         </div>
 
         <div class="detail-sections">
-          <div class="detail-tab-row">
-            <div class="mode-tabs tab-bar" role="tablist" aria-label="Detail modes">
+          <div class="detail-tab-row tab-bar">
+            <div
+              class="mode-tabs"
+              role="tablist"
+              tabindex="-1"
+              aria-label="Detail modes"
+              onkeydown={navigateTabs}
+            >
               {@render tabs()}
             </div>
             {#if recordActions}
-              <div class="record-actions tab-bar" role="group" aria-label="Record actions">
+              <div class="record-actions" role="group" aria-label="Record actions">
                 {@render recordActions()}
               </div>
             {/if}
           </div>
-          {#if subtabs && showSubtabs}
-            <div class="detail-tab-row">
-              <div class="detail-subtabs tab-bar" role="tablist" aria-label={subtabLabel}>
-                {@render subtabs()}
-              </div>
-              {@render subtabActions?.()}
+          <div class="detail-tab-row tab-bar">
+            <div
+              class="detail-subtabs"
+              role={subtabRole}
+              tabindex="-1"
+              aria-label={subtabLabel}
+              onkeydown={navigateTabs}
+            >
+              {@render subtabs?.()}
             </div>
-          {/if}
+            {#if subtabActions}
+              <div class="section-actions" role="group" aria-label="Section actions">
+                {@render subtabActions()}
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
@@ -261,6 +298,11 @@
     max-width: 100%;
   }
 
+  .detail-sections {
+    width: 100%;
+    align-items: stretch;
+  }
+
   /* -- Poster: same width as a poster candidate card ---------------------- */
   .detail-poster {
     flex-shrink: 0;
@@ -332,10 +374,13 @@
     --tab-height: 36px;
 
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: var(--header-align);
-    gap: var(--space-2);
+    justify-content: space-between;
+    gap: 0;
+    width: 100%;
+    height: 46px;
+    flex-shrink: 0;
     max-width: 100%;
   }
 
@@ -345,6 +390,24 @@
     /* Each bar scrolls sideways rather than wrapping its buttons. */
     overflow-x: auto;
     scrollbar-width: none;
+  }
+
+  .mode-tabs,
+  .detail-subtabs,
+  .record-actions,
+  .section-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: var(--space-1);
+    white-space: nowrap;
+  }
+
+  .record-actions,
+  .section-actions {
+    margin-left: var(--space-2);
+    padding-left: var(--space-2);
+    border-left: var(--border-subtle);
   }
 
   .record-actions :global(.tab-item.danger) {

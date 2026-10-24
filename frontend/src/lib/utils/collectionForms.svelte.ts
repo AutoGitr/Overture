@@ -17,9 +17,12 @@ import type {
   CollectionPreset,
   CollectionRuleWrite,
   MediaType,
+  MediaItemRead,
+  RuleSourceType,
 } from "../../generated/rest/types.gen";
 import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
 import { goToCollection, goToCollectionsList } from "../router/routes";
+import { settingsState } from "../stores/settingsState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
@@ -32,11 +35,15 @@ export class CollectionEditor {
   summary = $derived(this.savedSummary);
   private savedSortTitle = $derived.by(() => this.current().sort_title);
   sortTitle = $derived(this.savedSortTitle);
+  private savedGroup = $derived.by(() => this.current().collection_group);
+  collectionGroup = $derived(this.savedGroup ?? "");
   private savedCollectionMode = $derived.by(() => this.current().collection_mode);
   collectionMode = $derived(this.savedCollectionMode);
   private savedVisibleHome = $derived.by(() => this.current().visible_home);
   visibleHome = $derived(this.savedVisibleHome);
   private savedRule = $derived.by(() => this.current().rule);
+
+  sourceType: RuleSourceType | "manual" = $derived(this.savedRule?.source_type ?? "manual");
 
   rule: CollectionRuleWrite = $derived.by(() => {
     const rule = this.savedRule;
@@ -57,6 +64,28 @@ export class CollectionEditor {
     );
     return draft;
   });
+
+  memberSearch = $state("");
+  draggingMemberId = $state<number | null>(null);
+
+  get manualMembersAllowed() {
+    const rule = this.collection.rule;
+    return !rule || (rule.sync_mode ?? settingsState.current.collection_sync_mode) === "append";
+  }
+
+  availableMembers(libraryItems: MediaItemRead[]) {
+    const query = this.memberSearch.trim().toLowerCase();
+    if (!query) return [];
+    const memberIds = new SvelteSet(this.collection.members.map((member) => member.id));
+    return libraryItems.filter(
+      (item) =>
+        item.library_id === this.collection.library_id &&
+        item.server_item_id &&
+        !item.server_removed_at &&
+        !memberIds.has(item.id) &&
+        item.title.toLowerCase().includes(query),
+    );
+  }
 
   private readonly updateRequest = createMutation(() => updateCollectionMutation());
   private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
@@ -101,20 +130,24 @@ export class CollectionEditor {
 
   save() {
     return this.perform(async () => {
-      storeCollectionDetail(
-        await this.updateRequest.mutateAsync({
-          ...this.target,
-          body: {
-            title: this.title,
-            summary: this.summary,
-            sort_title: this.sortTitle,
-            collection_mode: this.collectionMode,
-            order_type: this.collection.order_type,
-            visible_home: this.visibleHome,
-          },
-        }),
-      );
-      this.feedback.success("Collection settings saved.");
+      const source = this.sourceType;
+      const draft = $state.snapshot(this.rule);
+      const saved = await this.updateRequest.mutateAsync({
+        ...this.target,
+        body: {
+          title: this.title,
+          summary: this.summary,
+          sort_title: this.sortTitle,
+          collection_group: this.collectionGroup || null,
+          collection_mode: this.collectionMode,
+          order_type: this.collection.order_type,
+          visible_home: this.visibleHome,
+        },
+      });
+      storeCollectionDetail(saved);
+      const rule = await this.persistRule(source, draft);
+      patchCollectionRule(saved.id, rule);
+      this.feedback.success("Collection changes saved.");
     });
   }
 
@@ -154,22 +187,19 @@ export class CollectionEditor {
     return this.setMembers(ids, "custom");
   }
 
-  saveRule() {
-    return this.perform(async () => {
-      const target = this.target;
-      const savedRule = await this.ruleRequest.mutateAsync({ ...target, body: this.rule });
-      patchCollectionRule(target.path.collection_id, savedRule);
-      this.feedback.success("Collection rule saved.");
+  private async persistRule(source: RuleSourceType | "manual", draft: CollectionRuleWrite) {
+    const target = this.target;
+    if (source === "manual") {
+      if (this.collection.rule) {
+        await this.removeRuleRequest.mutateAsync(target);
+      }
+      return null;
+    }
+    const savedRule = await this.ruleRequest.mutateAsync({
+      ...target,
+      body: { ...draft, source_type: source },
     });
-  }
-
-  removeRule() {
-    return this.perform(async () => {
-      const target = this.target;
-      await this.removeRuleRequest.mutateAsync(target);
-      patchCollectionRule(target.path.collection_id, null);
-      this.feedback.success("Collection rule removed.");
-    });
+    return savedRule;
   }
 
   sync() {

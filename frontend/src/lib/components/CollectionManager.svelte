@@ -2,8 +2,6 @@
   import Layers from "@lucide/svelte/icons/layers";
   import Image from "@lucide/svelte/icons/image";
   import Music from "@lucide/svelte/icons/music";
-  import Users from "@lucide/svelte/icons/users";
-  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Settings from "@lucide/svelte/icons/settings";
   import githubIcon from "../../assets/icons/github.svg";
   import { SERVER_DISPLAY_NAMES } from "../../generated/settings";
@@ -18,15 +16,14 @@
   } from "../router/routes";
   import { statusTone } from "../utils/sidebarDomain";
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
-  import CollectionMembers from "./CollectionMembers.svelte";
-  import CollectionSettings from "./CollectionSettings.svelte";
-  import CollectionRulePanel from "./CollectionRulePanel.svelte";
+  import CollectionConfigure from "./CollectionConfigure.svelte";
+  import ThemeStatus from "./ThemeStatus.svelte";
+  import ThemeActions from "./ThemeActions.svelte";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
   import PasteArtButton from "./PasteArtButton.svelte";
   import DetailPanelBase from "./DetailPanelBase.svelte";
   import DetailRecordActions from "./DetailRecordActions.svelte";
-  import CollectionMatchPanel from "./CollectionMatchPanel.svelte";
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import IdBadge from "./IdBadge.svelte";
   import StatusTab from "./StatusTab.svelte";
@@ -35,18 +32,17 @@
   let {
     collection,
     libraryItems,
-  }: { collection: CollectionDetail; libraryItems: MediaItemRead[] } = $props();
+    groups,
+  }: { collection: CollectionDetail; libraryItems: MediaItemRead[]; groups: string[] } = $props();
 
   const editor = new CollectionEditor(() => collection);
   const actions = new CollectionActions(() => collection);
   let view = $derived(routedCollectionView());
   let artType = $derived(routedCollectionArtType());
-  let managing = $derived(view === "members" || view === "rule" || view === "settings");
-  const managementTabs = [
-    { key: "members", label: "Members", icon: Users },
-    { key: "rule", label: "Rule / Sync", icon: RefreshCw },
-    { key: "settings", label: "Settings", icon: Settings },
-  ] as const;
+  let managing = $derived(view === "configure");
+  const panelId = $props.id();
+  const formId = `${panelId}-configure`;
+  const themeInputId = `${panelId}-theme-search`;
 </script>
 
 <DetailPanelBase
@@ -61,8 +57,12 @@
   posterLinkTitle={collection.server_link
     ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
     : null}
-  subtabLabel={managing ? "Collection sections" : "Art categories"}
-  showSubtabs={view !== "themes"}
+  subtabLabel={managing
+    ? "Configure navigation"
+    : view === "themes"
+      ? "Theme status"
+      : "Art categories"}
+  subtabRole={view === "art" ? "tablist" : "group"}
 >
   {#snippet emptyIcon()}<Layers size={64} />{/snippet}
   {#snippet posterIcon()}<Layers size={48} />{/snippet}
@@ -103,10 +103,10 @@
   {/snippet}
   {#snippet tabs()}
     <StatusTab
-      icon={Layers}
-      label="Collection"
+      icon={Settings}
+      label="Configure"
       active={managing}
-      onselect={() => goToCollectionView(collection, "members")}
+      onselect={() => goToCollectionView(collection, "configure")}
     />
     <StatusTab
       icon={Image}
@@ -122,11 +122,6 @@
         ? null
         : statusTone(collection.theme_status, actions.themeBusy)}
       onselect={() => goToCollectionView(collection, "themes")}
-      clearLabel="Clear theme"
-      onclear={!collection.theme_unavailable && collection.theme_status !== "missing"
-        ? () => void actions.clearTheme()
-        : null}
-      clearDisabled={actions.uploading}
     />
   {/snippet}
   {#snippet recordActions()}
@@ -141,14 +136,17 @@
   {/snippet}
   {#snippet subtabs()}
     {#if managing}
-      {#each managementTabs as tab (tab.key)}
-        <StatusTab
-          icon={tab.icon}
-          label={tab.label}
-          active={view === tab.key}
-          onselect={() => goToCollectionView(collection, tab.key)}
-        />
+      <span class="text-muted">Jump:</span>
+      {#each ["General", "Builder", "Members"] as section (section)}
+        <a class="tab-item" href={`#${formId}-${section.toLowerCase()}`}>{section}</a>
       {/each}
+    {:else if view === "themes"}
+      <ThemeStatus
+        status={collection.theme_status}
+        duration={collection.theme_duration}
+        title={collection.youtube_title}
+        unavailable={collection.theme_unavailable}
+      />
     {:else}
       <ArtCategoryTabs
         active={artType}
@@ -158,17 +156,32 @@
       />
     {/if}
   {/snippet}
-  {#snippet subtabActions()}{#if view === "art"}<PasteArtButton />{/if}{/snippet}
+  {#snippet subtabActions()}
+    {#if managing}
+      <button class="tab-item" type="submit" form={formId} disabled={editor.busy}
+        >Save Changes</button
+      >
+      <button
+        class="tab-item"
+        type="button"
+        disabled={editor.busy || !collection.rule}
+        onclick={() => void editor.sync()}>Sync Now</button
+      >
+    {:else if view === "art"}<PasteArtButton />
+    {:else}
+      <ThemeActions
+        inputId={themeInputId}
+        disabled={!!collection.theme_unavailable || actions.uploading}
+        clearDisabled={collection.theme_status === "missing"}
+        onclear={() => void actions.clearTheme()}
+      />
+    {/if}
+  {/snippet}
   {#snippet content()}
-    {#if view === "members"}
-      <CollectionMembers members={collection.members} {editor} {libraryItems} />
-    {:else if view === "settings"}
-      <CollectionSettings {editor} />
-      {#if collection.media_type === "movie"}<CollectionMatchPanel {collection} />{/if}
-    {:else if view === "rule"}
-      <CollectionRulePanel {editor} />
+    {#if managing}
+      <CollectionConfigure {collection} {editor} {libraryItems} {groups} {formId} />
     {:else if view === "themes"}
-      <CollectionThemePanel {collection} {actions} />
+      <CollectionThemePanel {collection} {actions} searchInputId={themeInputId} />
     {:else}
       {#key `${collection.id}-${artType}`}
         <ArtSlotPanel

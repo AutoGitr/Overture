@@ -33,8 +33,10 @@
     item = null,
     preview = null,
     catalog = null,
+    searchInputId,
   }: {
     item?: MediaItemRead | null;
+    searchInputId?: string;
     catalog?: CatalogContext | null;
     /** A TMDB title not yet stored: its first theme selection stores it. */
     preview?: TmdbItemPreview | null;
@@ -211,6 +213,7 @@
     {#key subjectKey}
       <ThemeSearch
         label="Search themes"
+        inputId={searchInputId}
         initialQuery={catalogEntry?.media_type === "collection"
           ? buildCollectionThemeSearchQuery(subject.title)
           : buildThemeSearchQuery(

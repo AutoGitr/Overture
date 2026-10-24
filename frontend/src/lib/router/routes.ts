@@ -138,14 +138,12 @@ export function routedCollectionId(): number | null {
   return slug?.kind === "item" ? slug.id : null;
 }
 
-export type CollectionView = "members" | "art" | "themes" | "rule" | "settings";
+export type CollectionView = "configure" | "art" | "themes";
 
 export function routedCollectionView(): CollectionView {
   if (route.pathname.includes("/art")) return "art";
   if (route.pathname.endsWith("/themes")) return "themes";
-  if (route.pathname.endsWith("/rule")) return "rule";
-  if (route.pathname.endsWith("/settings")) return "settings";
-  return "members";
+  return "configure";
 }
 
 export function routedCollectionArtType(): "poster" | "background" {
@@ -159,21 +157,17 @@ export function goToCollectionView(
 ): void {
   const params = { collectionSlug: buildIdSlug(collection.id, collection.title), subtab };
   if (collection.media_type === "show") {
-    if (view === "members") void navigate("/shows/collections/:collectionSlug", { params });
+    if (view === "configure") void navigate("/shows/collections/:collectionSlug", { params });
     else if (view === "art")
       void navigate("/shows/collections/:collectionSlug/art/:subtab", { params });
     else if (view === "themes")
       void navigate("/shows/collections/:collectionSlug/themes", { params });
-    else if (view === "rule") void navigate("/shows/collections/:collectionSlug/rule", { params });
-    else void navigate("/shows/collections/:collectionSlug/settings", { params });
   } else {
-    if (view === "members") void navigate("/movies/collections/:collectionSlug", { params });
+    if (view === "configure") void navigate("/movies/collections/:collectionSlug", { params });
     else if (view === "art")
       void navigate("/movies/collections/:collectionSlug/art/:subtab", { params });
     else if (view === "themes")
       void navigate("/movies/collections/:collectionSlug/themes", { params });
-    else if (view === "rule") void navigate("/movies/collections/:collectionSlug/rule", { params });
-    else void navigate("/movies/collections/:collectionSlug/settings", { params });
   }
 }
 

@@ -25,26 +25,7 @@
     libraryItems?: MediaItemRead[];
   } = $props();
 
-  let search = $state("");
-  let dragging = $state<number | null>(null);
-
-  let memberIdSet = $derived<ReadonlySet<number>>(
-    new Set(editor?.collection.members.map((member) => member.id) ?? []),
-  );
-
-  let available = $derived.by(() => {
-    const query = search.trim().toLowerCase();
-    if (!query || !editor) return [];
-
-    return libraryItems.filter(
-      (item) =>
-        item.library_id === editor.collection.library_id &&
-        item.server_item_id &&
-        !item.server_removed_at &&
-        !memberIdSet.has(item.id) &&
-        item.title.toLowerCase().includes(query),
-    );
-  });
+  let available = $derived(editor?.availableMembers(libraryItems) ?? []);
 
   function open(member: MediaItemRead | TmdbItemResult) {
     if (catalog && "catalog_entry_key" in member && member.catalog_entry_key) {
@@ -66,16 +47,24 @@
   {#if editor}
     {@const currentMembers = editor.collection.members}
     <DetailSection
-      title="Members"
+      title="Resolved Members"
       description={editor.collection.server_type === "plex"
         ? "Add library items, choose an order, or drag members into place."
         : "Add or remove library items and choose their display order."}
     >
+      <span class="badge" aria-label="Resolved member count"
+        >{editor.collection.child_count} members</span
+      >
       <div class="member-toolbar">
-        <label class="form-label">
-          Add item
-          <input type="search" placeholder="Search library" bind:value={search} />
-        </label>
+        {#if editor.manualMembersAllowed}<label class="form-label">
+            Add item
+            <input
+              type="search"
+              placeholder="Search library"
+              bind:value={editor.memberSearch}
+              disabled={editor.busy}
+            />
+          </label>{/if}
         <label class="form-label">
           Sort members
           <select
@@ -98,7 +87,7 @@
           </select>
         </label>
       </div>
-      {#if search.trim()}
+      {#if editor.manualMembersAllowed && editor.memberSearch.trim()}
         {#each available.slice(0, 20) as item (item.id)}
           <button
             type="button"
@@ -124,10 +113,10 @@
               ondrop={(event) => {
                 if (editor.collection.server_type !== "plex") return;
                 event.preventDefault();
-                if (dragging !== null && dragging !== member.id) {
-                  void editor.moveMember(dragging, index);
+                if (editor.draggingMemberId !== null && editor.draggingMemberId !== member.id) {
+                  void editor.moveMember(editor.draggingMemberId, index);
                 }
-                dragging = null;
+                editor.draggingMemberId = null;
               }}
             >
               {#if editor.collection.server_type === "plex"}
@@ -138,13 +127,14 @@
                   aria-label={`Drag ${member.title} to reorder`}
                   disabled={editor.busy}
                   ondragstart={(event) => {
-                    dragging = member.id;
+                    editor.draggingMemberId = member.id;
                     if (event.dataTransfer) {
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", String(member.id));
                     }
                   }}
-                  ondragend={() => (dragging = null)}><GripVertical size={16} /></button
+                  ondragend={() => (editor.draggingMemberId = null)}
+                  ><GripVertical size={16} /></button
                 >
               {/if}
               <button type="button" class="btn btn-ghost member-title" onclick={() => open(member)}>

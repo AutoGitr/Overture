@@ -46,6 +46,8 @@
   import SeasonGrid from "./SeasonGrid.svelte";
   import StatusTab from "./StatusTab.svelte";
   import ThemePanel from "./ThemePanel.svelte";
+  import ThemeStatus from "./ThemeStatus.svelte";
+  import ThemeActions from "./ThemeActions.svelte";
   import DataStatus from "./DataStatus.svelte";
 
   let {
@@ -66,6 +68,8 @@
   const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
   let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
 
+  const panelId = $props.id();
+  const themeInputId = `${panelId}-theme-search`;
   const actions = new ItemRecordActions(() => item);
   let detail = $derived(catalog?.detail);
   let catalogEntry = $derived(catalog?.entry);
@@ -211,7 +215,8 @@
 <DetailPanelBase
   isEmpty={!subject}
   {subjectKey}
-  showSubtabs={view.mode === "art"}
+  subtabLabel={view.mode === "art" ? "Art categories" : "Theme status"}
+  subtabRole={view.mode === "art" ? "tablist" : "group"}
   recordActions={item ? recordActions : undefined}
   {backgroundUrl}
   posterHref={item?.server_link ?? null}
@@ -293,35 +298,45 @@
       status={catalogTones?.theme ??
         (item && statusTone(item.theme_status, downloadState.isDownloadingType(item.id, "theme")))}
       onselect={() => selectView({ mode: "themes", artSubTab: "poster", drillSeasonNum: null })}
-      clearLabel="Clear theme"
-      onclear={catalogEntry
-        ? catalogEntry.youtube_id_overturedb
-          ? () => {
-              void catalog?.draft.save({ youtube_id_overturedb: null });
-            }
-          : null
-        : hasThemeAttributes(item)
-          ? () => actions.clearTheme()
-          : null}
-      clearDisabled={catalog?.draft.busy || actions.themeBusy}
     />
   {/snippet}
 
   {#snippet subtabs()}
-    <ArtCategoryTabs
-      active={view.artSubTab}
-      seasons={subject?.media_type === "show"}
-      statuses={artStatuses}
-      clearable={savedArt}
-      clearDisabled={catalog?.draft.busy || actions.clearingArt}
-      clearSeason={view.drillSeasonNum !== null}
-      onselect={(tab) => selectView({ mode: "art", artSubTab: tab, drillSeasonNum: null })}
-      onclear={clearArt}
-    />
+    {#if view.mode === "art"}
+      <ArtCategoryTabs
+        active={view.artSubTab}
+        seasons={subject?.media_type === "show"}
+        statuses={artStatuses}
+        clearable={savedArt}
+        clearDisabled={catalog?.draft.busy || actions.clearingArt}
+        clearSeason={view.drillSeasonNum !== null}
+        onselect={(tab) => selectView({ mode: "art", artSubTab: tab, drillSeasonNum: null })}
+        onclear={clearArt}
+      />
+    {:else}
+      <ThemeStatus
+        status={catalogEntry?.youtube_id_overturedb
+          ? "selected"
+          : (item?.theme_status ?? "missing")}
+        duration={item?.theme_duration}
+        title={item?.youtube_title}
+      />
+    {/if}
   {/snippet}
 
   {#snippet subtabActions()}
-    <PasteArtButton />
+    {#if view.mode === "art"}<PasteArtButton />{:else}
+      <ThemeActions
+        inputId={themeInputId}
+        clearDisabled={!!catalog?.draft.busy ||
+          actions.themeBusy ||
+          !(catalogEntry?.youtube_id_overturedb || hasThemeAttributes(item))}
+        onclear={() => {
+          if (catalogEntry) void catalog?.draft.save({ youtube_id_overturedb: null });
+          else void actions.clearTheme();
+        }}
+      />
+    {/if}
   {/snippet}
 
   {#snippet content()}
@@ -342,7 +357,7 @@
       {/if}
     {:else}
       {#key subjectKey}
-        <ThemePanel {item} {preview} {catalog} />
+        <ThemePanel {item} {preview} {catalog} searchInputId={themeInputId} />
       {/key}
     {/if}
     {#if members}{@render members()}{/if}

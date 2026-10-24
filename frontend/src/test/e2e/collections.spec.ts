@@ -24,6 +24,9 @@ test("collection members, metadata and rule views work on desktop and mobile", a
       detail = { ...detail, ...route.request().postDataJSON() };
     await route.fulfill({ json: detail });
   });
+  await page.route("**/api/collections/groups?*", (route) =>
+    route.fulfill({ json: ["default-decades", "Weekend"] }),
+  );
   await page.route("**/api/collections/12/art/*/sources?*", (route) =>
     route.fulfill({ json: { sources: {}, current_url: null } }),
   );
@@ -49,19 +52,24 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(page.getByRole("listitem").first()).toContainText("Second");
   await page.getByRole("button", { name: "Remove First from collection" }).click();
   await expect(page.getByRole("listitem")).toHaveCount(1);
-  const views = page.getByRole("tablist", { name: "Collection sections" });
-  await views.getByRole("tab", { name: "Settings", exact: true }).click();
+  const views = page.getByRole("group", { name: "Configure navigation" });
+  await views.getByRole("link", { name: "General", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill("Curated saga");
-  await page.getByRole("button", { name: "Save collection settings" }).click();
+  await page.getByRole("button", { name: "Save Changes" }).click();
   await expect(page.getByRole("heading", { name: "Curated saga", exact: true })).toBeVisible();
-  await views.getByRole("tab", { name: "Rule / Sync" }).click();
+  await views.getByRole("link", { name: "Builder" }).click();
+  await page.getByRole("combobox", { name: "Source", exact: true }).selectOption("filter");
   await expect(page.getByLabel("Sync strategy")).toHaveValue("");
   await page.getByRole("combobox", { name: "Source", exact: true }).selectOption("filter");
   await page.getByLabel("Decade", { exact: true }).fill("1990");
-  await expect(page.getByRole("button", { name: "Save rule", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeEnabled();
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
   const actions = page.getByRole("group", { name: "Record actions", exact: true });
   await expect(actions.getByRole("button")).toHaveCount(3);
+  const sections = page.locator(".detail-sections");
+  const boxes = sections.locator(":scope > .tab-bar");
+  await expect(boxes).toHaveCount(2);
+  const lowerBox = await boxes.nth(1).boundingBox();
   await modes.getByRole("tab", { name: "Art", exact: true }).click();
   await expect(views).toHaveCount(0);
   const categories = page.getByRole("tablist", { name: "Art categories", exact: true });
@@ -72,10 +80,14 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await modes.getByRole("tab", { name: "Themes", exact: true }).click();
   await expect(page.getByLabel("Search collection themes")).toBeVisible();
   await expect(categories).toHaveCount(0);
+  await expect(boxes).toHaveCount(2);
+  expect((await boxes.nth(1).boundingBox())?.height).toBe(lowerBox?.height);
+  await page.getByRole("button", { name: "Search YouTube" }).click();
+  await expect(page.getByLabel("Search collection themes")).toBeFocused();
   await expect(page.getByRole("button", { name: /^Paste URL/ })).toHaveCount(0);
   await expect(actions.getByRole("button")).toHaveCount(3);
-  await modes.getByRole("tab", { name: "Collection", exact: true }).click();
-  await views.getByRole("tab", { name: "Rule / Sync", exact: true }).click();
+  await modes.getByRole("tab", { name: "Configure", exact: true }).click();
+  await views.getByRole("link", { name: "Builder", exact: true }).click();
   await expect(page.getByLabel("Decade", { exact: true })).toHaveValue("1990");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
@@ -154,9 +166,9 @@ test("items and collections share record actions and fit a narrow viewport", asy
       await page.locator("body").evaluate((element) => element.clientWidth),
     );
   }
-  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await page.getByRole("link", { name: "General", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
-  const save = page.getByRole("button", { name: "Save collection settings" });
+  const save = page.getByRole("button", { name: "Save Changes" });
   await save.scrollIntoViewIfNeeded();
   await expect(save).toBeInViewport();
 });
