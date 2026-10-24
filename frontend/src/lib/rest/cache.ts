@@ -170,6 +170,14 @@ export function patchCollection(collectionId: number, update: Partial<Collection
   );
 }
 
+/** Apply a rule response without overwriting newer collection metadata. */
+export function patchCollectionRule(collectionId: number, rule: CollectionDetail["rule"]): void {
+  queryClient.setQueriesData<CollectionDetail>(
+    { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "getCollection") },
+    (collection) => (collection?.id === collectionId ? { ...collection, rule } : collection),
+  );
+}
+
 export function storeCollectionDetail(collection: CollectionDetail): void {
   patchCollection(collection.id, collection);
   queryClient.setQueryData(

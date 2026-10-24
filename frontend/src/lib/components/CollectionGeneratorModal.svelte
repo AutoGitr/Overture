@@ -47,7 +47,7 @@
       {#each form.preview.data as preset (preset.title)}<label class="form-row"
           ><input
             type="checkbox"
-            checked={form.titles.includes(preset.title)}
+            checked={form.titles.has(preset.title)}
             onchange={() => form.toggleTitle(preset.title)}
           />{preset.title} ({preset.count} members)</label
         >{/each}
@@ -56,7 +56,7 @@
         </p>{/if}
       <button
         class="btn btn-primary"
-        disabled={!form.titles.length}
+        disabled={form.titles.size === 0}
         onclick={async () => {
           if (await form.generate()) uiState.closePopup();
         }}>Generate selected collections</button

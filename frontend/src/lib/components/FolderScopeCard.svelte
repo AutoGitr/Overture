@@ -9,6 +9,8 @@
 
   let movieFolders = $derived(scope.useSidebarItems ? [] : scope.movieFolders);
   let showFolders = $derived(scope.useSidebarItems ? [] : scope.showFolders);
+  let movieFolderSet = $derived<ReadonlySet<string>>(new Set(movieFolders));
+  let showFolderSet = $derived<ReadonlySet<string>>(new Set(showFolders));
   let totalFolders = $derived(scope.folders.movies.length + scope.folders.shows.length);
   let groups = $derived<ChecklistGroup[]>([
     {
@@ -17,7 +19,7 @@
       options: scope.folders.movies.map((folder) => ({
         id: folder,
         label: folder,
-        checked: movieFolders.includes(folder),
+        checked: movieFolderSet.has(folder),
       })),
     },
     {
@@ -26,7 +28,7 @@
       options: scope.folders.shows.map((folder) => ({
         id: folder,
         label: folder,
-        checked: showFolders.includes(folder),
+        checked: showFolderSet.has(folder),
       })),
     },
   ]);

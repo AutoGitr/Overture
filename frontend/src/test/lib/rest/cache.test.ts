@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getItemOptions,
+  getCollectionOptions,
   getCatalogEntryOptions,
   getSeasonsOptions,
   getTmdbItemOptions,
@@ -21,6 +22,7 @@ import {
   findCachedLibraryItem,
   invalidateSeasons,
   patchCollection,
+  patchCollectionRule,
   storeCatalogDetail,
   refreshItem,
   removeLibraryItem,
@@ -31,6 +33,7 @@ import { goToItem, navigate, route } from "../../../lib/router/routes";
 import { mockFetch } from "../../helpers/fetch";
 import {
   collection as fixtureCollection,
+  collectionDetail,
   season as fixtureSeason,
   mediaItem,
   catalogDetail,
@@ -69,6 +72,38 @@ describe("REST cache helpers", () => {
     queryClient.clear();
     client.setConfig({ baseUrl: location.origin });
     await navigate("/movies", { replace: true });
+  });
+
+  it("patches only a returned rule and keeps unrelated collection state", () => {
+    const first = collectionDetail({ id: 1, title: "Latest title", order_type: "custom" });
+    const other = collectionDetail({ id: 2, title: "Other" });
+    const firstKey = getCollectionOptions({
+      path: { collection_id: 1 },
+      query: { media_type: "movie" },
+    }).queryKey;
+    const otherKey = getCollectionOptions({
+      path: { collection_id: 2 },
+      query: { media_type: "movie" },
+    }).queryKey;
+    queryClient.setQueryData(firstKey, first);
+    queryClient.setQueryData(otherKey, other);
+    const rule = {
+      source_type: "tmdb",
+      source_identifier: "10",
+      filters: { decade: null, studio: null, genre: null },
+      sync_mode: null,
+      minimum_items: null,
+      delete_below_minimum: null,
+      sync_interval_hours: 24,
+      enabled: true,
+      last_error: null,
+      last_synced_at: null,
+    } satisfies NonNullable<typeof first.rule>;
+    patchCollectionRule(1, rule);
+    expect(queryClient.getQueryData(firstKey)).toEqual({ ...first, rule });
+    expect(queryClient.getQueryData(otherKey)).toBe(other);
+    patchCollectionRule(1, null);
+    expect(queryClient.getQueryData(firstKey)).toEqual(first);
   });
 
   /** Open *item* as the detail view, the way a click in the sidebar does. */

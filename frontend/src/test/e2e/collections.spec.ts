@@ -36,7 +36,13 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   });
   await logIn(page);
   await page.goto("/movies/collections/12-saga");
-  await page.getByRole("button", { name: "Move Second up", exact: true }).click();
+  await page.getByRole("button", { name: "Move First down", exact: true }).click();
+  await expect(page.getByRole("listitem").first()).toContainText("Second");
+  await page.getByRole("button", { name: "Move First up", exact: true }).click();
+  await expect(page.getByRole("listitem").first()).toContainText("First");
+  await page
+    .getByRole("button", { name: "Drag First to reorder" })
+    .dragTo(page.getByRole("listitem").nth(1));
   await expect(page.getByRole("listitem").first()).toContainText("Second");
   await page.getByRole("button", { name: "Remove First from collection" }).click();
   await expect(page.getByRole("listitem")).toHaveCount(1);

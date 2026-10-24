@@ -20,12 +20,14 @@ export function buildTmdbUrl(
   season: { season_num: number } | null,
 ) {
   if (!item?.tmdb_id) return null;
-  if (item.media_type === "collection") return buildTmdbCollectionUrl(item.tmdb_id);
-  const base = `https://www.themoviedb.org/${item.media_type === "movie" ? "movie" : "tv"}/${item.tmdb_id}`;
+  const base =
+    item.media_type === "collection"
+      ? buildTmdbCollectionUrl(item.tmdb_id)
+      : `https://www.themoviedb.org/${item.media_type === "movie" ? "movie" : "tv"}/${item.tmdb_id}`;
   if (mode !== "art") return base;
   if (artType === "poster") return `${base}/images/posters`;
   if (artType === "background") return `${base}/images/backdrops`;
-  if (artType === "season_poster" && season) {
+  if (item.media_type === "show" && artType === "season_poster" && season) {
     return `${base}/season/${season.season_num}/images/posters`;
   }
   return base;

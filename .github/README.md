@@ -425,8 +425,8 @@ by decade, genre or studio. Run a full Sync to import current library metadata.
 Collection pages have **Members**, **Art**, **Themes**, **Rule / Sync** and
 **Settings** views. Add or remove library members, edit the collection's title,
 summary and sort title, and browse TMDB, OvertureDB or custom poster/background
-artwork. Plex also supports dragging members into custom order, visibility modes
-and home promotion; Jellyfin and Emby offer release and alphabetical ordering.
+artwork. Plex also supports custom member order through drag-and-drop or the
+Up/Down buttons, visibility modes and home promotion; Jellyfin and Emby offer release and alphabetical ordering.
 Deleting a collection keeps its media files.
 
 Under **Rule / Sync**, choose an MDBList list, a TMDB movie franchise, or an

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildFanartUrl,
+  type DetailSubject,
   buildImdbUrl,
   buildLetterboxdUrl,
   buildPosterDbUrl,
@@ -14,6 +15,26 @@ const item = mediaItem({ id: 1, title: "Show", media_type: "show", tmdb_id: 1176
 const season = fixtureSeason({ id: 10, media_item_id: 1, season_num: 2 });
 
 describe("buildTmdbUrl", () => {
+  it.each([
+    ["poster", "posters"],
+    ["background", "backdrops"],
+  ])("opens collection %s artwork directly", (artType, section) => {
+    const collection: DetailSubject = {
+      title: "Saga",
+      year: null,
+      media_type: "collection",
+      tmdb_id: 10,
+      tvdb_id: null,
+      imdb_id: null,
+    };
+    expect(buildTmdbUrl(collection, "art", artType, null)).toBe(
+      `https://www.themoviedb.org/collection/10/images/${section}`,
+    );
+    expect(buildTmdbUrl(collection, "themes", artType, null)).toBe(
+      "https://www.themoviedb.org/collection/10",
+    );
+  });
+
   it("keeps the season grid on the item page until drill-down", () => {
     expect(buildTmdbUrl(item, "art", "seasons", null)).toBe("https://www.themoviedb.org/tv/117648");
   });

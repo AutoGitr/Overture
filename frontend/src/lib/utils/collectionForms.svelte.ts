@@ -1,24 +1,25 @@
 import { createMutation } from "@tanstack/svelte-query";
+import { SvelteSet } from "svelte/reactivity";
 import {
   createCollectionMutation,
-  previewCollectionGeneratorMutation,
-  generateCollectionsMutation,
-  updateCollectionMutation,
-  setCollectionMembersMutation,
-  saveCollectionRuleMutation,
-  deleteCollectionRuleMutation,
-  syncCollectionRuleMutation,
   deleteCollectionMutation,
+  deleteCollectionRuleMutation,
+  generateCollectionsMutation,
+  previewCollectionGeneratorMutation,
+  saveCollectionRuleMutation,
+  setCollectionMembersMutation,
+  syncCollectionRuleMutation,
+  updateCollectionMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
   CollectionOptions,
   CollectionOrder,
-  CollectionRuleWrite,
   CollectionPreset,
+  CollectionRuleWrite,
   MediaType,
 } from "../../generated/rest/types.gen";
-import { storeCollectionDetail } from "../rest/cache";
+import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
 import { goToCollection, goToCollectionsList } from "../router/routes";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
@@ -37,6 +38,7 @@ export class CollectionEditor {
     });
     return draft;
   });
+
   rule: CollectionRuleWrite = $derived.by(() => {
     const rule = this.current().rule;
     const { last_error: _error, last_synced_at: _synced, ...saved } = rule ?? {};
@@ -56,6 +58,7 @@ export class CollectionEditor {
     );
     return draft;
   });
+
   private readonly updateRequest = createMutation(() => updateCollectionMutation());
   private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
   private readonly ruleRequest = createMutation(() => saveCollectionRuleMutation());
@@ -65,9 +68,11 @@ export class CollectionEditor {
   private readonly feedback = createNotifier();
 
   constructor(private readonly current: () => CollectionDetail) {}
+
   get collection() {
     return this.current();
   }
+
   get busy() {
     return (
       this.updateRequest.isPending ||
@@ -78,10 +83,12 @@ export class CollectionEditor {
       this.removeRuleRequest.isPending
     );
   }
+
   private get target() {
     const c = this.current();
     return { path: { collection_id: c.id }, query: { media_type: c.media_type } };
   }
+
   private async perform(action: () => Promise<void>): Promise<boolean> {
     if (this.busy) return false;
     try {
@@ -92,6 +99,7 @@ export class CollectionEditor {
       return false;
     }
   }
+
   save() {
     return this.perform(async () => {
       storeCollectionDetail(
@@ -100,6 +108,7 @@ export class CollectionEditor {
       this.feedback.success("Collection settings saved.");
     });
   }
+
   setMembers(memberIds: number[], order: CollectionOrder = this.collection.order_type) {
     return this.perform(async () => {
       storeCollectionDetail(
@@ -110,32 +119,56 @@ export class CollectionEditor {
       );
     });
   }
+
   removeMember(id: number) {
     return this.setMembers(this.collection.members.filter((m) => m.id !== id).map((m) => m.id));
   }
+
   addMember(id: number) {
+    if (this.collection.members.some((m) => m.id === id)) return Promise.resolve(false);
     return this.setMembers([...this.collection.members.map((m) => m.id), id]);
   }
-  moveMember(id: number, beforeId: number) {
-    const ids = this.collection.members.map((m) => m.id).filter((value) => value !== id);
-    ids.splice(ids.indexOf(beforeId), 0, id);
+
+  moveMember(id: number, targetIndex: number) {
+    const ids = this.collection.members.map((member) => member.id);
+    const fromIndex = ids.indexOf(id);
+    if (
+      fromIndex === -1 ||
+      targetIndex < 0 ||
+      targetIndex >= ids.length ||
+      fromIndex === targetIndex
+    ) {
+      return Promise.resolve(false);
+    }
+    ids.splice(fromIndex, 1);
+    ids.splice(targetIndex, 0, id);
     return this.setMembers(ids, "custom");
   }
+
   saveRule() {
     return this.perform(async () => {
-      await this.ruleRequest.mutateAsync({ ...this.target, body: this.rule });
+      const target = this.target;
+      const savedRule = await this.ruleRequest.mutateAsync({ ...target, body: this.rule });
+      patchCollectionRule(target.path.collection_id, savedRule);
       this.feedback.success("Collection rule saved.");
     });
   }
+
   removeRule() {
     return this.perform(async () => {
-      await this.removeRuleRequest.mutateAsync(this.target);
+      const target = this.target;
+      await this.removeRuleRequest.mutateAsync(target);
+      patchCollectionRule(target.path.collection_id, null);
+      this.feedback.success("Collection rule removed.");
     });
   }
+
   sync() {
     return this.perform(async () => {
       const result = await this.syncRequest.mutateAsync(this.target);
-      if (result.deleted) goToCollectionsList(this.collection.media_type);
+      if (result.deleted) {
+        goToCollectionsList(this.collection.media_type);
+      }
       this.feedback.success(
         result.skipped
           ? "Below minimum; membership kept."
@@ -143,6 +176,7 @@ export class CollectionEditor {
       );
     });
   }
+
   async delete() {
     if (
       !(await confirmAction({
@@ -164,45 +198,52 @@ export class CollectionEditor {
 export class CollectionCreation {
   title = $state("");
   libraryId = $state("");
-  memberIds = $state<number[]>([]);
+  readonly memberIds = new SvelteSet<number>();
   search = $state("");
   preset: CollectionPreset = $state("decades");
-  titles = $state<string[]>([]);
+  readonly titles = new SvelteSet<string>();
+
   readonly preview = createMutation(() => previewCollectionGeneratorMutation());
   readonly generateRequest = createMutation(() => generateCollectionsMutation());
   readonly createRequest = createMutation(() => createCollectionMutation());
   private readonly feedback = createNotifier();
+
   constructor(readonly mediaType: MediaType) {}
+
   get body() {
     return {
       media_type: this.mediaType,
       library_id: this.libraryId,
       preset: this.preset,
-      titles: this.titles,
+      titles: Array.from(this.titles),
     };
   }
+
   resetPreview() {
     this.preview.reset();
-    this.titles = [];
+    this.titles.clear();
   }
+
   toggle(id: number) {
-    this.memberIds = this.memberIds.includes(id)
-      ? this.memberIds.filter((value) => value !== id)
-      : [...this.memberIds, id];
+    if (!this.memberIds.delete(id)) {
+      this.memberIds.add(id);
+    }
   }
+
   toggleTitle(title: string) {
-    this.titles = this.titles.includes(title)
-      ? this.titles.filter((value) => value !== title)
-      : [...this.titles, title];
+    if (!this.titles.delete(title)) {
+      this.titles.add(title);
+    }
   }
+
   async create(): Promise<boolean> {
     try {
       const collection = await this.createRequest.mutateAsync({
         body: {
-          title: this.title,
+          title: this.title.trim(),
           library_id: this.libraryId,
           media_type: this.mediaType,
-          member_ids: this.memberIds,
+          member_ids: Array.from(this.memberIds),
         },
       });
       storeCollectionDetail(collection);
@@ -213,14 +254,16 @@ export class CollectionCreation {
       return false;
     }
   }
+
   async previewCollections() {
-    this.titles = [];
+    this.titles.clear();
     try {
       await this.preview.mutateAsync({ body: this.body });
     } catch (error) {
       this.feedback.error(errorMessage(error, "Preview failed"));
     }
   }
+
   async generate(): Promise<boolean> {
     try {
       const result = await this.generateRequest.mutateAsync({ body: this.body });

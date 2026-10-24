@@ -5,6 +5,7 @@
   import type { CollectionDetail, MediaItemRead } from "../../generated/rest/types.gen";
   import { CollectionEditor } from "../utils/collectionForms.svelte";
   import {
+    goToCatalogEntry,
     goToCollectionView,
     routedCollectionView,
     routedCollectionArtType,
@@ -20,13 +21,16 @@
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import IdBadge from "./IdBadge.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
-  import { goToCatalogEntry } from "../router/routes";
+
   let {
     collection,
     libraryItems,
   }: { collection: CollectionDetail; libraryItems: MediaItemRead[] } = $props();
+
   const editor = new CollectionEditor(() => collection);
   let view = $derived(routedCollectionView());
+  let artType = $derived(routedCollectionArtType());
+
   const tabs: { view: CollectionView; title: string }[] = [
     { view: "members", title: "Members" },
     { view: "art", title: "Art" },
@@ -40,16 +44,21 @@
   <nav aria-label="Collection views" class="collection-tabs">
     {#each tabs as { view: tab, title } (tab)}
       <button
-        class={["btn btn-ghost", { active: view === tab }]}
+        type="button"
+        class={["btn", view === tab ? "btn-primary" : "btn-ghost"]}
         aria-current={view === tab ? "page" : undefined}
         onclick={() => goToCollectionView(collection, tab)}
-        >{title}{#if tab === "themes" && collection.server_type === "emby"}<span
-            class="badge badge-muted">Unsupported</span
-          >{/if}</button
       >
+        {title}
+        {#if tab === "themes" && collection.server_type === "emby"}
+          <span class="badge badge-muted">Unsupported</span>
+        {/if}
+      </button>
     {/each}
   </nav>
-  {#if view === "themes"}<CollectionThemePanel {collection} showMembers={false} />
+
+  {#if view === "themes"}
+    <CollectionThemePanel {collection} showMembers={false} />
   {:else}
     <DetailPanelBase
       emptyMessage="Select a collection from the sidebar"
@@ -66,9 +75,11 @@
     >
       {#snippet emptyIcon()}<Layers size={64} />{/snippet}
       {#snippet posterIcon()}<Layers size={48} />{/snippet}
-      {#snippet tabs()}<button class="tab-item" onclick={() => uiState.openPopupByName("database")}
-          >Database</button
-        >{/snippet}
+      {#snippet tabs()}
+        <button type="button" class="tab-item" onclick={() => uiState.openPopupByName("database")}>
+          Database
+        </button>
+      {/snippet}
       {#snippet meta()}<span>{collection.child_count} items</span>{/snippet}
       {#snippet badges()}
         <ExternalLinkBadges
@@ -81,10 +92,11 @@
             imdb_id: null,
           }}
           mode="art"
-          artType="poster"
+          artType={view === "art" ? artType : "poster"}
           season={null}
         />
-        {#if collection.catalog_entry_key}<IdBadge
+        {#if collection.catalog_entry_key}
+          <IdBadge
             title="Open in OvertureDB"
             icon="/favicon.svg"
             alt="OvertureDB"
@@ -95,34 +107,46 @@
                   entry_key: collection.catalog_entry_key,
                 });
             }}
-          />{/if}
+          />
+        {/if}
       {/snippet}
       {#snippet content()}
-        {#if collection.media_type === "movie"}<CollectionMatchPanel {collection} />{/if}
-        {#if view === "members"}<CollectionMembers
-            members={collection.members}
-            {editor}
-            {libraryItems}
-          />
-        {:else if view === "settings"}<CollectionSettingsDrawer {editor} />
-        {:else if view === "rule"}<CollectionRulePanel {editor} />
+        {#if collection.media_type === "movie"}
+          <CollectionMatchPanel {collection} />
+        {/if}
+        {#if view === "members"}
+          <CollectionMembers members={collection.members} {editor} {libraryItems} />
+        {:else if view === "settings"}
+          <CollectionSettingsDrawer {editor} />
+        {:else if view === "rule"}
+          <CollectionRulePanel {editor} />
         {:else}
-          <div class="form-row">
-            <button class="btn" onclick={() => goToCollectionView(collection, "art", "poster")}
-              >Poster</button
+          <div class="form-row" role="group" aria-label="Art slot">
+            <button
+              type="button"
+              class={["btn", artType === "poster" ? "btn-primary" : "btn-secondary"]}
+              aria-pressed={artType === "poster"}
+              onclick={() => goToCollectionView(collection, "art", "poster")}
             >
-            <button class="btn" onclick={() => goToCollectionView(collection, "art", "background")}
-              >Background</button
+              Poster
+            </button>
+            <button
+              type="button"
+              class={["btn", artType === "background" ? "btn-primary" : "btn-secondary"]}
+              aria-pressed={artType === "background"}
+              onclick={() => goToCollectionView(collection, "art", "background")}
             >
+              Background
+            </button>
           </div>
-          {#key `${collection.id}-${routedCollectionArtType()}`}
+          {#key `${collection.id}-${artType}`}
             <ArtSlotPanel
               slot={{
                 kind: "collection",
                 collectionId: collection.id,
                 mediaType: collection.media_type,
               }}
-              artType={routedCollectionArtType() === "background" ? "background" : "poster"}
+              {artType}
               item={null}
             />
           {/key}

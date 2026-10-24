@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import NewCollectionModal from "../../../lib/components/NewCollectionModal.svelte";
@@ -22,6 +22,7 @@ const members = [
   mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" }),
   mediaItem({ id: 2, title: "Second", library_id: "movies", server_item_id: "m2" }),
 ];
+const third = mediaItem({ id: 3, title: "Third", library_id: "other", server_item_id: "m3" });
 const detail = collectionDetail({
   id: 12,
   title: "Saga",
@@ -150,6 +151,154 @@ describe("collection management", () => {
     expect(
       JSON.parse(String(calls.find((call) => call.url.endsWith("/apply"))?.init.body)),
     ).toMatchObject({ titles: ["1990s"], preset: "decades" });
+  });
+
+  it.each([
+    { button: "Move First down", expected: [2, 1] },
+    { button: "Move Second up", expected: [2, 1] },
+  ])("reorders members using $button", async ({ button, expected }) => {
+    const { calls } = mockFetchRoutes({
+      "/api/collections/12": detail,
+      "/api/library/items": { items: members, total: members.length },
+      "/api/collections/12/members": {
+        ...detail,
+        order_type: "custom",
+        members: [members[1], members[0]],
+      },
+    });
+    renderWithQueryClient(CollectionPage);
+    expect(await screen.findByRole("button", { name: "Move First up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Second down" })).toBeDisabled();
+    await fireEvent.click(screen.getByRole("button", { name: button }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    expect(JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body))).toEqual(
+      { member_ids: expected, order_type: "custom" },
+    );
+    await waitFor(() => expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Second"));
+  });
+
+  it("drops a member anywhere on another row at that row's position", async () => {
+    const all = [...members, third];
+    const { calls } = mockFetchRoutes({
+      "/api/collections/12": { ...detail, members: all },
+      "/api/library/items": { items: all, total: all.length },
+      "/api/collections/12/members": {
+        ...detail,
+        order_type: "custom",
+        members: [members[1], third, members[0]],
+      },
+    });
+    renderWithQueryClient(CollectionPage);
+    await fireEvent.dragStart(await screen.findByRole("button", { name: "Drag First to reorder" }));
+    const target = screen
+      .getAllByRole("listitem")
+      .find((row) => within(row).queryByRole("button", { name: "Remove Third from collection" }));
+    if (!target) throw new Error("Third collection member is missing");
+    await fireEvent.drop(target);
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    expect(JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body))).toEqual(
+      { member_ids: [2, 3, 1], order_type: "custom" },
+    );
+  });
+
+  it("keeps member search trimmed and excludes collection members", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": { ...detail, members: [members[0]] },
+      "/api/library/items": { items: members, total: 2 },
+    });
+    renderWithQueryClient(CollectionPage);
+    const search = await screen.findByLabelText("Add item");
+    await fireEvent.input(search, { target: { value: "   " } });
+    expect(screen.queryByText("No matching library items.")).not.toBeInTheDocument();
+    await fireEvent.input(search, { target: { value: "  SECOND  " } });
+    expect(await screen.findByRole("button", { name: "Add Second" })).toBeInTheDocument();
+    await fireEvent.input(search, { target: { value: " First " } });
+    expect(screen.queryByRole("button", { name: "Add First" })).not.toBeInTheDocument();
+  });
+
+  it("clears selected members when switching libraries and trims the submitted title", async () => {
+    const { calls } = mockFetchRoutes({
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", count: 2 },
+        { id: "other", title: "Other", count: 1 },
+      ],
+      "/api/library/items": { items: [...members, third], total: 3 },
+      "/api/collections": detail,
+    });
+    renderWithQueryClient(NewCollectionModal);
+    expect(screen.getByLabelText("Search members")).toBeDisabled();
+    await screen.findByRole("option", { name: "Movies" });
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "First" }));
+    const submit = screen.getByRole("button", { name: "Create collection (1 members)" });
+    expect(submit).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "  Saga  " } });
+    expect(submit).toBeEnabled();
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "other" } });
+    expect(screen.getByRole("button", { name: "Create collection (0 members)" })).toBeDisabled();
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "Third" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Create collection (1 members)" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    expect(
+      JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
+    ).toMatchObject({ title: "Saga", library_id: "other", member_ids: [3] });
+  });
+
+  it("retries a refused collection creation from its error message", async () => {
+    let attempts = 0;
+    mockFetchRoutes({
+      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/items": { items: members, total: 2 },
+      "/api/collections": () =>
+        ++attempts === 1
+          ? Response.json({ detail: "Create refused" }, { status: 422 })
+          : Response.json(detail),
+    });
+    renderWithQueryClient(NewCollectionModal);
+    await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
+    await screen.findByRole("option", { name: "Movies" });
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "First" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Create collection (1 members)" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Create refused");
+    await fireEvent.click(await screen.findByRole("button", { name: "Retry collection creation" }));
+    await waitFor(() => expect(attempts).toBe(2));
+    await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
+  });
+
+  it("shows a saved rule immediately and removes it without needing a live event", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": detail,
+      "/api/collections/12/rule": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "DELETE" ? { status: "deleted" } : rule),
+    });
+    goToCollectionView(detail, "rule");
+    renderWithQueryClient(CollectionPage);
+    await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
+      target: { value: "user/list" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
+    expect(await screen.findByRole("button", { name: "Sync now" })).toBeEnabled();
+    await fireEvent.click(screen.getByRole("button", { name: "Remove rule" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Sync now" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("uses the active artwork slot for external artwork links", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
+      "/api/collections/12/art/background/sources": { sources: {}, current_url: null },
+    });
+    goToCollectionView(detail, "art", "background");
+    renderWithQueryClient(CollectionPage);
+    expect(
+      await screen.findByRole("button", { name: "Background", pressed: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "TMDb" })).toHaveAttribute(
+      "href",
+      "https://www.themoviedb.org/collection/10/images/backdrops",
+    );
   });
 
   it("round-trips collection art, rule, theme and settings views in both libraries", async () => {

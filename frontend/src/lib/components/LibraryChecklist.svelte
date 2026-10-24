@@ -30,6 +30,7 @@
     ontoggleall: (checked: boolean) => void;
   } = $props();
 
+  let selectedSet = $derived<ReadonlySet<string>>(new Set(selectedIds));
   let libraryIds = $derived([...movieLibraries, ...showLibraries].map((library) => library.id));
   let allSelected = $derived(allValuesSelected(selectedIds, libraryIds));
   let groups = $derived<ChecklistGroup[]>(
@@ -43,7 +44,7 @@
         id: library.id,
         label: library.title,
         count: library.count,
-        checked: selectedIds.includes(library.id),
+        checked: selectedSet.has(library.id),
       })),
     })),
   );

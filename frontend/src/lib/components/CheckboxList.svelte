@@ -8,6 +8,7 @@
     selected: readonly T[];
     ontoggle: (value: T) => void;
   } = $props();
+  let selectedSet = $derived<ReadonlySet<T>>(new Set(selected));
 </script>
 
 <div class="list">
@@ -15,7 +16,7 @@
     <label class="checkbox-group">
       <input
         type="checkbox"
-        checked={selected.includes(option.value)}
+        checked={selectedSet.has(option.value)}
         onchange={() => ontoggle(option.value)}
       />
       <span class="label">

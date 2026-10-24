@@ -1,4 +1,5 @@
 import { createQuery } from "@tanstack/svelte-query";
+import { SvelteSet } from "svelte/reactivity";
 import { getFolderRootsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { ScanRequest } from "../../generated/rest/types.gen";
 import { sidebarState } from "../stores/sidebarState.svelte";
@@ -24,12 +25,14 @@ export function createFolderScope(prefix: string, isActive: () => boolean) {
   });
   const query = createQuery(() => ({ ...getFolderRootsOptions(), enabled: isActive() }));
   const folders = $derived(query.data ?? { movies: [], shows: [] });
+  const movieRoots = $derived<ReadonlySet<string>>(new SvelteSet(folders.movies));
+  const showRoots = $derived<ReadonlySet<string>>(new SvelteSet(folders.shows));
   // A remembered root the server no longer lists is never selected.
   const movieFolders = $derived(
-    stored.selectedMovieFolders.filter((folder) => folders.movies.includes(folder)),
+    stored.selectedMovieFolders.filter((folder) => movieRoots.has(folder)),
   );
   const showFolders = $derived(
-    stored.selectedShowFolders.filter((folder) => folders.shows.includes(folder)),
+    stored.selectedShowFolders.filter((folder) => showRoots.has(folder)),
   );
   const sidebarItems = $derived(stored.useSidebarItems ? sidebarState.current : null);
 
