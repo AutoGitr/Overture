@@ -5,13 +5,14 @@ lazy from pathlib import Path
 
 lazy from ..domain import ArtType
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+SAVED_EXTENSIONS = (".jpg", ".png")
+IMAGE_EXTENSIONS = {*SAVED_EXTENSIONS, ".jpeg"}
 AUDIO_EXTENSIONS = {".mp3"}
 THEME_FILENAME = "theme.mp3"
 ITEM_ASSET_CANDIDATES: frozendict[str, tuple[str, ...]] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-        ArtType.POSTER: ("poster.jpg", "poster.png"),
-        ArtType.BACKGROUND: ("background.jpg", "background.png"),
+        ArtType.POSTER: tuple(f"poster{ext}" for ext in SAVED_EXTENSIONS),
+        ArtType.BACKGROUND: tuple(f"background{ext}" for ext in SAVED_EXTENSIONS),
         "theme": (THEME_FILENAME,),
     }
 )
@@ -71,7 +72,7 @@ def season_poster_candidates(provider_type: str, season_num: int) -> list[str]:
     return [
         f"{base}{ext}"
         for base in season_poster_candidate_bases(provider_type, season_num)
-        for ext in (".jpg", ".png")
+        for ext in SAVED_EXTENSIONS
     ]
 
 

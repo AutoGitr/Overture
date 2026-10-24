@@ -21,7 +21,7 @@ lazy from .integrations.tmdb import TMDBClient
 lazy from .jobs.kinds import JobKind
 lazy from .jobs.slot import ManagedBackgroundJob
 lazy from .media_servers.registry import ProviderRegistry
-lazy from .runtime_paths import database_path, database_url
+lazy from .runtime_paths import database_path, database_url, image_cache_path
 lazy from .schemas.settings import ConnectivityStatusResponse
 lazy from .services.art.candidates import ArtCandidates
 lazy from .services.art.matcher import ArtMatcher
@@ -47,6 +47,7 @@ lazy from .services.scheduler import SchedulerService
 lazy from .services.server_audit.service import ServerAuditService
 lazy from .services.stats.service import StatsService
 lazy from .services.storage.assets import AssetStorage
+lazy from .services.storage.image_cache import ImageCache
 lazy from .services.sync.engine import SyncEngine
 lazy from .services.themes.service import ThemesService
 lazy from .services.themes.youtube_resolver import (
@@ -372,9 +373,11 @@ def build_runtime(
     events: protocols.EventPublisher = WebSocketEventEmitter(websockets)
     phash = PhashService(app_config=app_config)
     asset_storage = AssetStorage(app_config=app_config)
+    image_cache = ImageCache(image_cache_path(config_dir))
     local_assets = LocalAssets(
         asset_storage=asset_storage,
         phash=phash,
+        image_cache=image_cache,
         database=database,
         publisher=events,
     )
@@ -402,6 +405,7 @@ def build_runtime(
         art_handler=DownloadArtHandler(
             provider_registry=provider_registry,
             asset_storage=asset_storage,
+            image_cache=image_cache,
             phash=phash,
             image_clients=proxy_clients,
             app_config=app_config,
@@ -431,6 +435,7 @@ def build_runtime(
         scheduler=scheduler,
         events=backup_events,
         store=backup_store,
+        image_cache=image_cache,
         app_config=app_config,
         database=database,
     )
@@ -462,6 +467,7 @@ def build_runtime(
         downloads=downloads,
         publisher=events,
         asset_storage=asset_storage,
+        image_cache=image_cache,
         provider_registry=provider_registry,
         proxy_clients=proxy_clients,
     )

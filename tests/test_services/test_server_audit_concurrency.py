@@ -133,13 +133,16 @@ async def testlocal_fingerprint_reuses_the_record_until_the_file_changes(
         tmp_path, app_config=app_config, database=database, phash=phash
     )
 
-    assert await server_audit.local_fingerprint(poster, known, context) == recorded
+    assert (
+        await server_audit.local_fingerprint(poster, tmp_path, known, context)
+        == recorded
+    )
     assert computed == []
 
     poster.write_bytes(b"a changed poster")
 
     assert (
-        await server_audit.local_fingerprint(poster, known, context)
+        await server_audit.local_fingerprint(poster, tmp_path, known, context)
         == "b" * PHASH_HEX_LENGTH
     )
     assert computed == [str(poster)]

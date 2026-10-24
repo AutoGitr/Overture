@@ -226,9 +226,13 @@ class AssetStorage:
         Pass one *listing* to every lookup of an inspection, so each folder is
         read once.
         """
+        if not item.folder_path:
+            return None
         listing = listing or FolderListing()
         if art_type in ITEM_ART_TYPES:
-            return self._find_item_art_path(art_type, item, listing)
+            return _first_existing(
+                Path(item.folder_path), ITEM_ASSET_CANDIDATES[art_type], listing
+            )
         if art_type is ArtType.SEASON_POSTER and season is not None:
             return self._find_season_poster_path(item, season, listing)
         return None
@@ -241,16 +245,6 @@ class AssetStorage:
             return None
         path = Path(item.folder_path) / THEME_FILENAME
         return path if (listing or FolderListing()).is_file(path) else None
-
-    @staticmethod
-    def _find_item_art_path(
-        art_type: ArtType, item: MediaItem, listing: FolderListing
-    ) -> Path | None:
-        if not item or not item.folder_path:
-            return None
-        return _first_existing(
-            Path(item.folder_path), ITEM_ASSET_CANDIDATES[art_type], listing
-        )
 
     def _find_season_poster_path(
         self, item: MediaItem, season: Season, listing: FolderListing
@@ -317,7 +311,12 @@ class AssetStorage:
         self._validated_target(target_path, trusted_root)
 
     def write_file(
-        self, target_path: str, data: bytes, trusted_root: str
+        self,
+        target_path: str,
+        data: bytes,
+        trusted_root: str,
+        *,
+        file_hash: str | None = None,
     ) -> StoredFile:
         """
         Atomically replace *target_path* beneath *trusted_root*.
@@ -362,7 +361,7 @@ class AssetStorage:
 
         written = target.stat()
         stored = StoredFile(
-            file_hash=compute_bytes_hash(data),
+            file_hash=file_hash or compute_bytes_hash(data),
             mtime_ns=written.st_mtime_ns,
             size=written.st_size,
         )
@@ -375,10 +374,21 @@ class AssetStorage:
         return stored
 
     async def write_file_async(
-        self, target_path: str, data: bytes, trusted_root: str
+        self,
+        target_path: str,
+        data: bytes,
+        trusted_root: str,
+        *,
+        file_hash: str | None = None,
     ) -> StoredFile:
         """Write an asset without blocking the event loop."""
-        return await owned_thread(self.write_file, target_path, data, trusted_root)
+        return await owned_thread(
+            self.write_file,
+            target_path,
+            data,
+            trusted_root,
+            file_hash=file_hash,
+        )
 
     def stored_file(self, target_path: str | Path) -> StoredFile | None:
         """Return the file's hash and stat revision, or ``None`` when absent.

@@ -117,3 +117,4 @@ class PreparedDownload:
     trusted_root: str
     data: bytes
     result: DownloadResult
+    file_hash: str | None = None

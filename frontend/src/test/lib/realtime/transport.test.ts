@@ -402,7 +402,7 @@ describe("realtimeTransport", () => {
     expect(upserted.background_hash).toBe("background-hash");
     expect(upserted.youtube_id).toBe("abcDEF123_4");
     expect(itemArtDisplayUrl(upserted, "poster")).toBe(
-      "/api/library/items/42/local-image/poster?t=poster-hash",
+      "/api/library/items/42/local-image/poster?t=poster-hash&size=display",
     );
     expect(cache.invalidateSeasons).toHaveBeenCalledWith(42);
   });

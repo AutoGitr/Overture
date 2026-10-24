@@ -15,13 +15,12 @@ lazy from pathlib import Path
 lazy from urllib.parse import urljoin, urlsplit
 
 lazy import httpx2
-lazy from PIL import ExifTags, Image, ImageFile, ImageOps, UnidentifiedImageError
+lazy from PIL import Image, ImageFile, ImageOps, UnidentifiedImageError
 
 lazy from ..domain import ArtType, AspectRatioTolerance
 lazy from .progress import BytesProgress
 lazy from .rate_limit import RateLimitPause, retry_after_seconds
 lazy from .ssrf import is_private_url
-lazy from .threads import owned_thread
 
 SUPPORTED_IMAGE_CONTENT_TYPES = {
     "image/jpeg",
@@ -40,13 +39,13 @@ REMOTE_IMAGE_REQUEST_HEADERS = frozendict(
 SHARED_IMAGE_TRANSFERS = asyncio.Semaphore(8)
 #: Image hosts paused while they rate-limit Overture, by host name.
 IMAGE_HOST_PAUSES = RateLimitPause[str]()
-#: Downscaling is CPU-bound: a sidebar full of thumbnails queues here rather
-#: than occupying every worker thread at once.
-_IMAGE_RESIZES = asyncio.Semaphore(4)
-#: WebP quality of downscaled renditions.
-_RENDITION_QUALITY = 80
-#: EXIF orientations that show the stored image turned a quarter turn.
-_QUARTER_TURN_ORIENTATIONS = frozenset({5, 6, 7, 8})
+#: AVIF is the most compact format every current browser decodes, and a
+#: thumbnail is encoded once per image and then kept.
+THUMB_MEDIA_TYPE = "image/avif"
+THUMB_EXTENSION = ".avif"
+#: AVIF quality of thumbnails: visually close to the original at a fraction of
+#: the size of a JPEG.
+_THUMB_QUALITY = 60
 #: Most pixels Overture decodes from one image.
 MAX_IMAGE_PIXELS = 50_000_000
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
@@ -94,6 +93,8 @@ class UnsupportedImageFormatError(ValueError):
 
 #: The encoded formats Overture saves, with the extension each is saved under.
 SAVED_IMAGE_EXTENSIONS = frozendict({"JPEG": ".jpg", "PNG": ".png"})  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+#: The media type each saved extension is served as.
+SAVED_MEDIA_TYPES = frozendict({".jpg": "image/jpeg", ".png": "image/png"})  # pyright: ignore[reportCallIssue] -- stale frozendict stub
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,35 +114,33 @@ def get_local_image_size(path: Path) -> tuple[int, int]:
         return 0, 0
 
 
-async def get_local_image_size_async(path: Path) -> tuple[int, int]:
-    """Return local image dimensions without blocking the event loop."""
-    return await owned_thread(get_local_image_size, path)
+def render_thumb(path: Path, bounds: tuple[int, int]) -> bytes:
+    """Return the image at *path* shrunk to fit *bounds*, as AVIF.
 
+    The shown orientation is kept. An image already inside *bounds* is only
+    re-encoded, never enlarged.
 
-def _downscaled_webp(path: Path, max_width: int) -> bytes | None:
+    Raises:
+        UnsupportedImageFormatError: When the file is not a readable image
+            within the pixel limit.
+    """
     try:
         with Image.open(path) as image:
             if image.width * image.height > MAX_IMAGE_PIXELS:
                 raise UnsupportedImageFormatError(
                     "Image dimensions exceed safety limit"
                 )
-            orientation = image.getexif().get(ExifTags.Base.Orientation, 1)
-            turned = orientation in _QUARTER_TURN_ORIENTATIONS
-            shown_width = image.height if turned else image.width
-            if shown_width <= max_width:
-                return None
-            scale = max_width / shown_width
-            # A JPEG decodes straight to a reduced scale, far cheaper than in full.
-            image.draft(
-                "RGB", (round(image.width * scale), round(image.height * scale))
-            )
+            # A JPEG decodes straight to a reduced scale, far cheaper than in
+            # full. Its reduction never leaves less than the thumbnail needs,
+            # whichever way an EXIF orientation turns it.
+            image.draft("RGB", bounds)
             rendition = ImageOps.exif_transpose(image)
-            rendition.thumbnail((max_width, rendition.height))
+            rendition.thumbnail(bounds)
             if rendition.mode not in {"RGB", "RGBA"}:
                 alpha = rendition.has_transparency_data
                 rendition = rendition.convert("RGBA" if alpha else "RGB")
             buffer = BytesIO()
-            rendition.save(buffer, "WEBP", quality=_RENDITION_QUALITY)
+            rendition.save(buffer, "AVIF", quality=_THUMB_QUALITY)
             return buffer.getvalue()
     except UnsupportedImageFormatError:
         raise
@@ -154,38 +153,30 @@ def _downscaled_webp(path: Path, max_width: int) -> bytes | None:
         raise UnsupportedImageFormatError("Unreadable image file") from exc
 
 
-async def downscaled_webp(path: Path, max_width: int) -> bytes | None:
-    """Return the image at *path* scaled down to *max_width* pixels, as WebP.
-
-    The shown orientation is kept. Returns ``None`` when the image is already
-    no wider, so the caller serves the file itself.
-
-    Raises:
-        UnsupportedImageFormatError: When the file is not a readable image
-            within the pixel limit.
-    """
-    async with _IMAGE_RESIZES:
-        return await owned_thread(_downscaled_webp, path, max_width)
-
-
-def encoded_image_format(image_data: bytes) -> str:
-    """Return the Pillow format name, such as ``WEBP``, of readable image bytes."""
+def _inspect_image(source: Path | BytesIO, unreadable: str) -> tuple[str, int, int]:
+    """Return the Pillow format name and dimensions of a readable image."""
     try:
-        with Image.open(BytesIO(image_data)) as image:
+        with Image.open(source) as image:
             if image.width * image.height > MAX_IMAGE_PIXELS:
                 raise UnsupportedImageFormatError(
                     "Image dimensions exceed safety limit"
                 )
             image_format = image.format
+            width, height = image.size
     except UnsupportedImageFormatError:
         raise
     except (UnidentifiedImageError, OSError, ValueError) as exc:
-        raise UnsupportedImageFormatError("Unreadable image bytes") from exc
+        raise UnsupportedImageFormatError(unreadable) from exc
     if image_format is None:
-        raise UnsupportedImageFormatError("Unreadable image bytes")
+        raise UnsupportedImageFormatError(unreadable)
     if image_format not in Image.MIME:
         raise UnsupportedImageFormatError(f"Unsupported image format: {image_format}")
-    return image_format
+    return image_format, width, height
+
+
+def encoded_image_format(image_data: bytes) -> str:
+    """Return the Pillow format name, such as ``WEBP``, of readable image bytes."""
+    return _inspect_image(BytesIO(image_data), "Unreadable image bytes")[0]
 
 
 def saved_image_extension(image_format: str) -> str:
@@ -202,9 +193,25 @@ def saved_image_extension(image_format: str) -> str:
     return extension
 
 
+def inspect_saved_image(source: Path | bytes) -> tuple[str, int, int]:
+    """Return the saved extension and dimensions of a readable JPEG or PNG.
+
+    Raises:
+        UnsupportedImageFormatError: When *source* is not a readable JPEG or PNG
+            within the pixel limit.
+    """
+    if isinstance(source, bytes):
+        image_format, width, height = _inspect_image(
+            BytesIO(source), "Unreadable image bytes"
+        )
+    else:
+        image_format, width, height = _inspect_image(source, "Unreadable image file")
+    return saved_image_extension(image_format), width, height
+
+
 def encoded_image_extension(image_data: bytes) -> str:
     """Return the extension readable JPEG or PNG bytes are saved under."""
-    return saved_image_extension(encoded_image_format(image_data))
+    return inspect_saved_image(image_data)[0]
 
 
 def _url_origin(url: str) -> tuple[str, str, int | None]:
@@ -229,15 +236,6 @@ async def _is_allowed_image_url(
         allowed_private_origin is not None
         and _url_origin(url) == allowed_private_origin
     )
-
-
-def get_image_size_from_bytes(image_data: bytes) -> tuple[int, int]:
-    """Return encoded image dimensions, or ``(0, 0)`` when unreadable."""
-    try:
-        with Image.open(BytesIO(image_data)) as image:
-            return image.size
-    except UnidentifiedImageError, OSError, ValueError:
-        return 0, 0
 
 
 async def _safe_redirect_url(

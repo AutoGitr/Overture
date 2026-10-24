@@ -707,11 +707,17 @@ async def test_shutdown_during_local_commit_preserves_completion(
     original_write = asset_storage.write_file_async
 
     async def slow_write(
-        target_path: str, content: bytes, trusted_root: str
+        target_path: str,
+        content: bytes,
+        trusted_root: str,
+        *,
+        file_hash: str | None = None,
     ) -> StoredFile:
         commit_started.set()
         await stop_requested.wait()
-        return await original_write(target_path, content, trusted_root)
+        return await original_write(
+            target_path, content, trusted_root, file_hash=file_hash
+        )
 
     async def fake_download(
         job: DownloadJob, item: MediaItem, progress: Any

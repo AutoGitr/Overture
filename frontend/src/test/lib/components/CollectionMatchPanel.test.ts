@@ -81,7 +81,7 @@ describe("collection matching and members", () => {
     const member = await screen.findByRole("button", { name: "A New Hope (1977) In library" });
     expect(within(member).getByRole("presentation")).toHaveAttribute(
       "src",
-      "/api/library/items/1/local-image/poster?t=member-poster",
+      "/api/library/items/1/local-image/poster?t=member-poster&size=display",
     );
     await fireEvent.click(member);
     await waitFor(() => expect(route.pathname).toBe("/movies/1-a-new-hope"));

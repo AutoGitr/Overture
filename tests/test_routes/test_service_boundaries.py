@@ -31,6 +31,7 @@ lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.public_dataset.service import PublicDatasetService
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.utils.time import utc_now
@@ -210,6 +211,7 @@ async def test_http_domain_dependency_can_be_substituted(
         database=database,
         publisher=RecordingPublisher(),
         asset_storage=unused(AssetStorage),
+        image_cache=unused(ImageCache),
         provider_registry=NoopProviderRegistry(),
         proxy_clients=unused(ProxyClientManager),
     )

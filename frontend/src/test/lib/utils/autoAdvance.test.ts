@@ -378,7 +378,7 @@ describe("next item preloading", () => {
 
     expect(preloadImages).toHaveBeenCalledExactlyOnceWith(
       [
-        "/api/library/items/300/local-image/poster?t=p3",
+        "/api/library/items/300/local-image/poster?t=p3&size=display",
         "/api/library/items/300/local-image/background?t=b3&size=display",
       ],
       "next",

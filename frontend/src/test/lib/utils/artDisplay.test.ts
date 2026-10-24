@@ -20,14 +20,14 @@ const movie = mediaItem({
 });
 
 describe("art display URLs", () => {
-  it("shows a local poster as its original file and a local background sized", () => {
+  it("shows local art as its cached display thumbnail and opens the original poster", () => {
     expect(itemArtDisplayUrl(movie, "poster")).toBe(
-      "/api/library/items/1/local-image/poster?t=old-hash",
+      "/api/library/items/1/local-image/poster?t=old-hash&size=display",
     );
     expect(itemArtDisplayUrl(movie, "background")).toBe(
       "/api/library/items/1/local-image/background?t=bg-hash&size=display",
     );
-    expect(itemPosterOriginalUrl(movie)).toBe(itemArtDisplayUrl(movie, "poster"));
+    expect(itemPosterOriginalUrl(movie)).toBe("/api/library/items/1/local-image/poster?t=old-hash");
   });
 
   it("asks the media server for a sized copy when local art is absent", () => {

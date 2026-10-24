@@ -134,9 +134,25 @@ class ArtType(StrEnum):
         return 1280 if self is ArtType.BACKGROUND else 600
 
     @property
+    def display_height(self) -> int:
+        """Return how tall, in device pixels, this slot's display rendition is."""
+        if self is ArtType.BACKGROUND:
+            return self.display_width * 9 // 16
+        return self.display_width * 3 // 2
+
+    @property
     def label(self) -> str:
         """Return how the slot is named in prose ("season poster")."""
         return self.value.replace("_", " ")
+
+
+#: The box a thumbnail fits in: the widest and the tallest display rendition of
+#: any slot. Artwork is shown by its thumbnail everywhere in the interface, so
+#: this one box serves every slot and a thumbnail depends on the image alone.
+THUMB_BOUNDS: tuple[int, int] = (
+    max(art_type.display_width for art_type in ArtType),
+    max(art_type.display_height for art_type in ArtType),
+)
 
 
 #: Art types stored against a media item. Ordered for deterministic iteration.

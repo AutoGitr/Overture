@@ -27,11 +27,13 @@ lazy from overture.services.backup.files import (
 lazy from overture.services.backup.service import BackupService
 lazy from overture.services.realtime import RealtimeSnapshotBuilder
 lazy from overture.services.scheduler import ScheduledJobInfo, SchedulerService
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     RecordingPublisher,
     database_for,
+    make_image_cache,
 )
 
 
@@ -54,6 +56,7 @@ async def test_scheduled_backup_is_independent_of_retention(
         scheduler=scheduler,
         events=BackupEvents(publisher),
         store=_store(tmp_path),
+        image_cache=make_image_cache(app_config),
         app_config=app_config,
         database=database,
     )
@@ -68,7 +71,8 @@ async def test_scheduled_backup_is_independent_of_retention(
         operations.append("backup")
         return "backup.db"
 
-    async def retention(*, database: Database) -> None:
+    async def retention(*, database: Database, image_cache: ImageCache) -> None:
+        del image_cache
         assert operations == ["backup"]
         assert publisher.names() == ["backup.started"]
         operations.append("retention")
@@ -100,6 +104,7 @@ async def test_manual_backup_rejects_busy_storage_with_409(
         scheduler=SchedulerService(app_config=app_config),
         events=BackupEvents(publisher),
         store=_store(tmp_path),
+        image_cache=make_image_cache(app_config),
         app_config=app_config,
         database=database,
     )
@@ -120,13 +125,22 @@ async def test_manual_backup_rejects_busy_storage_with_409(
 
 
 @pytest.fixture
+def image_cache(app_config: Settings) -> ImageCache:
+    return make_image_cache(app_config)
+
+
+@pytest.fixture
 def backup_service(
-    tmp_path: Path, app_config: Settings, database: Database
+    tmp_path: Path,
+    app_config: Settings,
+    database: Database,
+    image_cache: ImageCache,
 ) -> BackupService:
     return BackupService(
         scheduler=SchedulerService(app_config=app_config),
         events=BackupEvents(RecordingPublisher()),
         store=_store(tmp_path),
+        image_cache=image_cache,
         app_config=app_config,
         database=database,
     )
@@ -253,6 +267,7 @@ async def test_pre_upgrade_backup_never_applies_retention(
 
 async def test_start_restores_schedule_and_registers_independent_retention(
     backup_service: BackupService,
+    image_cache: ImageCache,
     monkeypatch: pytest.MonkeyPatch,
     database: Database,
     app_config: Settings,
@@ -276,7 +291,7 @@ async def test_start_restores_schedule_and_registers_independent_retention(
     assert saved.retention == retention
     assert saved.next_run is not None
     await backup_service.scheduler.trigger_job("retention")
-    prune.assert_awaited_once_with(database=database)
+    prune.assert_awaited_once_with(database=database, image_cache=image_cache)
 
     disabled = await backup_service.update_schedule(BackupScheduleUpdate(enabled=False))
     assert disabled.enabled is False
@@ -315,6 +330,7 @@ async def test_backup_update_schedule_validates_and_applies_saved_values(
         scheduler=scheduler,
         events=events,
         store=store,
+        image_cache=make_image_cache(app_config),
         app_config=app_config,
         database=database,
     )

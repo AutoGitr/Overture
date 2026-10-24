@@ -25,6 +25,7 @@ lazy from ..schedule_store import (
     save_schedule,
 )
 lazy from ..scheduler import ScheduledJobInfo, SchedulerService
+lazy from ..storage.image_cache import ImageCache
 lazy from .events import BackupEvents
 lazy from .files import BackupInProgressError, BackupStore
 
@@ -45,11 +46,13 @@ class BackupService:
         scheduler: SchedulerService,
         events: BackupEvents,
         store: BackupStore,
+        image_cache: ImageCache,
         app_config: Settings,
         database: Database,
     ) -> None:
         self._app_config = app_config
         self._database = database
+        self._image_cache = image_cache
         self.scheduler = scheduler
         self.events = events
         self.store = store
@@ -175,7 +178,7 @@ class BackupService:
         logger.debug("Backup scheduler started")
 
     async def _run_retention(self) -> None:
-        await run_retention_pass(database=self._database)
+        await run_retention_pass(database=self._database, image_cache=self._image_cache)
 
     async def stop(self) -> None:
         """Drain the current backup and its journal before storage closes."""

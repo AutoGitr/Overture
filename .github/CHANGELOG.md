@@ -17,6 +17,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 - Plex and Jellyfin collections and their members are stored locally and refreshed on full syncs. Set `TMDB_API_KEY` for automatic Plex collection matching, or choose a TMDB collection manually.
+- Local artwork is cached under `<config>/cache/images/{originals,thumbs}` by BLAKE3 hash and served as AVIF display thumbnails across the UI, with cached originals used when opening posters at full size.
 
 ### Removed
 

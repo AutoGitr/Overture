@@ -3,7 +3,8 @@
 Every slot's file columns are written from an :class:`ArtFileFacts` taken here
 or by a finished download, never assembled field by field elsewhere. An
 unchanged stat revision reuses the recorded facts, so a refresh only reads a
-file that has changed.
+file that has changed. Reading one keeps it in the image cache, and its
+fingerprint and size are taken from that copy, so the media folder is read once.
 """
 
 lazy import logging
@@ -26,12 +27,18 @@ lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...domain import ITEM_ART_TYPES, ArtType
 lazy from ...repositories.seasons import SeasonRepository
-lazy from ...utils.image import get_local_image_size_async
+lazy from ...utils.image import UnsupportedImageFormatError
 lazy from ...utils.path import same_revision
 lazy from ...utils.threads import owned_thread
 lazy from ..art.phash import PhashService
 lazy from ..library.completion import auto_unmonitor_completed
-lazy from ..storage.assets import AssetStorage, FolderListing
+lazy from ..storage.assets import (
+    AssetStorage,
+    FolderListing,
+    PathTraversalError,
+    require_folder_path,
+)
+lazy from ..storage.image_cache import ImageCache
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +54,9 @@ UNREADABLE = _Unreadable()
 class _SlotProbe:
     owner: MediaItem | Season
     art_type: ArtType
+    #: The file, and the item folder it must lie inside.
     path: Path | None
+    root: Path | None
     stat: os.stat_result | None
 
 
@@ -63,14 +72,20 @@ class _SlotChange:
 class LocalArtInspector:
     """Read local artwork files into the facts their slots record."""
 
-    def __init__(self, asset_storage: AssetStorage, phash: PhashService) -> None:
+    def __init__(
+        self,
+        asset_storage: AssetStorage,
+        phash: PhashService,
+        image_cache: ImageCache,
+    ) -> None:
         self._asset_storage = asset_storage
         self._phash = phash
+        self._image_cache = image_cache
 
     async def inspect(
-        self, path: Path, known: ArtFileFacts | None
+        self, path: Path, root: Path, known: ArtFileFacts | None
     ) -> ArtFileFacts | _Unreadable:
-        """Return the facts of the file at *path*.
+        """Return the facts of the file at *path*, which lies inside *root*.
 
         Returns:
             The facts, reusing *known* while the stat revision is unchanged, or
@@ -84,9 +99,21 @@ class LocalArtInspector:
         if known is not None and self._unchanged(known, before):
             return known
 
-        file_hash = await self._asset_storage.file_hash_async(path)
-        if file_hash is None:
+        try:
+            original = await self._image_cache.import_original(path, root)
+        except UnsupportedImageFormatError, PathTraversalError:
+            # Not an image that can be shown, but its bytes are still recorded.
+            original = None
+        except OSError:
             return UNREADABLE
+        if original is None:
+            file_hash = await self._asset_storage.file_hash_async(path)
+            if file_hash is None:
+                return UNREADABLE
+        else:
+            file_hash = original.file_hash
+        # The cached copy is read from the config directory, not the media folder.
+        source = path if original is None else original.path
 
         phash = (
             known.phash
@@ -97,18 +124,11 @@ class LocalArtInspector:
         )
         if phash is None:
             try:
-                phash = await self._phash.compute_from_file(str(path))
+                phash = await self._phash.compute_from_file(str(source))
             except (OSError, ValueError, RuntimeError) as exc:
                 # The file exists and its bytes are known; only the image could
                 # not be decoded. Record that rather than pretending it is gone.
                 logger.warning("Could not fingerprint %s: %s", path, exc)
-        width: int | None = None
-        height: int | None = None
-        try:
-            width, height = await get_local_image_size_async(path)
-        except (OSError, ValueError, RuntimeError) as exc:
-            logger.debug("Could not read dimensions of %s: %s", path, exc)
-
         try:
             after = await owned_thread(path.stat)
         except OSError:
@@ -118,8 +138,8 @@ class LocalArtInspector:
         return ArtFileFacts(
             file_hash=file_hash,
             phash=phash,
-            width=width or None,
-            height=height or None,
+            width=(original.width or None) if original is not None else None,
+            height=(original.height or None) if original is not None else None,
             file_mtime_ns=before.st_mtime_ns,
             file_size=before.st_size,
         )
@@ -147,7 +167,8 @@ class LocalArtInspector:
             stat = path.stat() if path is not None else None
         except OSError:
             stat = None
-        return _SlotProbe(season or item, art_type, path, stat)
+        root = Path(require_folder_path(item)) if path is not None else None
+        return _SlotProbe(season or item, art_type, path, root, stat)
 
     def _probe(
         self, item: MediaItem, seasons: list[Season], listing: FolderListing
@@ -178,7 +199,7 @@ class LocalArtInspector:
         slot = find_art_slot(owner, probe.art_type)
         before = art_file_columns(slot)
         known = art_file_facts(slot) if slot is not None else None
-        if probe.path is None:
+        if probe.path is None or probe.root is None:
             after = None
         elif (
             probe.stat is not None
@@ -187,7 +208,7 @@ class LocalArtInspector:
         ):
             after = known
         else:
-            after = await self.inspect(probe.path, known)
+            after = await self.inspect(probe.path, probe.root, known)
         if isinstance(after, _Unreadable) or art_file_columns(after) == before:
             return None
         return _SlotChange(type(owner), owner.id, probe.art_type, before, after)

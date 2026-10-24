@@ -35,7 +35,7 @@ lazy from ..art.phash import PhashService
 lazy from ..art.targets import target_label
 lazy from ..local_assets.service import LocalAssets
 lazy from ..server_identity import resolve_owner_server_id, resolve_server_item_id
-lazy from ..storage.assets import AssetStorage
+lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from .work import AuditTarget, plan_audit
 
 logger = logging.getLogger(__name__)
@@ -132,7 +132,10 @@ async def _audit_art_one(
 
     try:
         local_phash = await local_fingerprint(
-            local_path, art_file_facts(slot) if slot is not None else None, context
+            local_path,
+            Path(require_folder_path(item)),
+            art_file_facts(slot) if slot is not None else None,
+            context,
         )
         image = await fetch_image(
             server_url,
@@ -153,14 +156,16 @@ async def _audit_art_one(
 
 
 async def local_fingerprint(
-    path: Path, known: ArtFileFacts | None, context: AuditContext
+    path: Path, root: Path, known: ArtFileFacts | None, context: AuditContext
 ) -> str:
-    """Return the local file's fingerprint, reusing the recorded one if current.
+    """Return the fingerprint of the local file at *path* inside *root*.
+
+    The recorded one is reused if it is current.
 
     Raises:
         OSError: The file changed or could not be read while it was inspected.
     """
-    facts = await context.local_assets.inspector.inspect(path, known)
+    facts = await context.local_assets.inspector.inspect(path, root, known)
     if not isinstance(facts, ArtFileFacts):
         raise OSError("Local art file changed while it was read")
     if facts.phash is None:

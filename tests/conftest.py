@@ -6,6 +6,7 @@ tests never depend on a local .env, real media-server credentials, or /config.
 
 lazy import asyncio
 lazy import os
+lazy import shutil
 lazy from collections import deque
 lazy from datetime import UTC, datetime
 lazy from typing import Any
@@ -64,6 +65,7 @@ lazy from tests.factories import (
     SeasonFactory,
 )
 lazy from tests.pause_clock import PauseClock
+lazy from tests.runtime_helpers import TEMP_IMAGE_CACHES
 
 
 @pytest.fixture
@@ -102,6 +104,8 @@ def _terminate_phash_pools(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     yield
     for service in services:
         service.shutdown()
+    while TEMP_IMAGE_CACHES:
+        shutil.rmtree(TEMP_IMAGE_CACHES.pop(), ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)

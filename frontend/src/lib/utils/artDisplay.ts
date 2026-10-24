@@ -61,15 +61,14 @@ function itemArtUrl(
 /**
  * The one URL an item's art is shown by, in the sidebar, on the detail page
  * and when fetched ahead, so an image loaded once shows everywhere at once.
- * A local poster is its original file, served as it is; anything else is
- * sized for the detail page, a remote poster by its preview.
+ * Local and media server art use their display thumbnail; a remote poster
+ * uses its preview.
  */
 export function itemArtDisplayUrl(
   item: MediaItemRead | null,
   artType: "poster" | "background",
 ): string | null {
-  const original = artType === "poster" && !!item?.poster_hash;
-  return itemArtUrl(item, artType, original ? undefined : "display");
+  return itemArtUrl(item, artType, "display");
 }
 
 /** The original poster, for opening in a new tab. */

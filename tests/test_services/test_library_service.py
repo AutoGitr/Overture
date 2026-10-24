@@ -1,7 +1,6 @@
 """Library service reads, writes and local images against an isolated database."""
 
 lazy from datetime import UTC, datetime
-lazy from io import BytesIO
 lazy from pathlib import Path
 lazy from typing import cast
 lazy from unittest.mock import patch
@@ -31,16 +30,18 @@ lazy from overture.schemas.library import BulkItemOperation
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.library import service as library_module
 lazy from overture.services.library.service import LibraryService
-lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.services.storage.responses import local_image_response
+lazy from overture.services.storage.assets import AssetStorage, PathTraversalError
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.file import compute_file_hash
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     database_for,
     make_runtime,
     one_session,
+    unused,
 )
 
 
@@ -644,57 +645,67 @@ async def test_deleting_a_media_item_takes_its_seasons_and_artwork_with_it(
     assert await count("art_slots") == 0
 
 
-async def test_local_image_response_rejects_paths_outside_root(tmp_path: Path) -> None:
+async def test_image_cache_rejects_paths_outside_root_and_invalid_hashes(
+    tmp_path: Path,
+) -> None:
+    cache = ImageCache(tmp_path / "cache" / "images")
     root = tmp_path / "library"
     sibling = tmp_path / "library-other"
     root.mkdir()
     sibling.mkdir()
     outside = sibling / "poster.jpg"
-    outside.write_bytes(b"image")
+    _write_jpeg(outside, 100, 150)
 
-    response = await local_image_response(
-        outside, root, slot=None, art_type=ArtType.POSTER, size=None, version=None
-    )
+    with pytest.raises(PathTraversalError):
+        await cache.import_original(outside, root)
 
-    assert response is None
+    assert await cache.original("../etc/passwd") is None
+    assert await cache.original("not-a-blake3-hash") is None
 
 
-def _write_jpeg(path: Path, width: int, height: int) -> None:
+def _write_jpeg(path: Path, width: int, height: int, color: str = "red") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", (width, height), "red").save(path, "JPEG")
+    Image.new("RGB", (width, height), color).save(path, "JPEG")
 
 
-def _record_file(owner: MediaItem | Season, art_type: ArtType, path: Path) -> None:
-    """Record *path* as the slot's scanned file, hashed as ``"h1"``."""
+def _record_file(owner: MediaItem | Season, art_type: ArtType, path: Path) -> str:
+    """Record *path* as the slot's scanned file and return its BLAKE3 hash."""
     file_stat = path.stat()
+    file_hash = compute_file_hash(path)
+    assert file_hash is not None
     write_art_slot(
         owner,
         art_type,
-        file_hash="h1",
+        file_hash=file_hash,
         file_mtime_ns=file_stat.st_mtime_ns,
         file_size=file_stat.st_size,
     )
+    return file_hash
 
 
 async def _poster_movie(
     db_session: AsyncSession, folder: Path, *, width: int = 600
-) -> None:
-    _write_jpeg(folder / "poster.jpg", width, width * 3 // 2)
+) -> str:
+    poster = folder / "poster.jpg"
+    _write_jpeg(poster, width, width * 3 // 2)
     movie = MediaItem(
         id=1, media_type=MediaType.MOVIE, title="Movie", folder_path=str(folder)
     )
     db_session.add(movie)
     await db_session.flush()
-    _record_file(movie, ArtType.POSTER, folder / "poster.jpg")
+    file_hash = _record_file(movie, ArtType.POSTER, poster)
     await db_session.commit()
+    return file_hash
 
 
-def _body_width(response: Response) -> int:
-    with Image.open(BytesIO(bytes(response.body))) as image:
-        return image.width
+def _response_image(response: Response) -> tuple[str | None, tuple[int, int]]:
+    assert isinstance(response, FileResponse)
+    with Image.open(response.path) as image:
+        image.load()
+        return image.format, image.size
 
 
-async def test_local_image_display_is_downscaled_and_cached_while_current(
+async def test_local_image_display_is_downscaled_to_avif_and_served_from_cache(
     tmp_path: Path,
     db_session: AsyncSession,
     *,
@@ -705,19 +716,38 @@ async def test_local_image_display_is_downscaled_and_cached_while_current(
         database=database_for(one_session(db_session)),
         app_config=app_config,
     )
-    await _poster_movie(db_session, tmp_path / "Movie", width=1000)
+    folder = tmp_path / "Movie"
+    file_hash = await _poster_movie(db_session, folder, width=1000)
 
     response = await library_service.serve_local_image(
         db_session,
         item_id=1,
         art_type=ArtType.POSTER,
         size=ImageSize.DISPLAY,
-        version="h1",
+        version=file_hash,
     )
 
-    assert response.media_type == "image/webp"
-    assert _body_width(response) == 600
+    assert isinstance(response, FileResponse)
+    assert response.media_type == "image/avif"
+    assert Path(response.path) == (
+        tmp_path / "cache" / "images" / "thumbs" / file_hash[:2] / f"{file_hash}.avif"
+    )
+    assert _response_image(response) == ("AVIF", (600, 900))
     assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
+
+    # Once cached, serving never touches the media folder again.
+    (folder / "poster.jpg").unlink()
+    cached_original = await library_service.serve_local_image(
+        db_session,
+        item_id=1,
+        art_type=ArtType.POSTER,
+        size=None,
+        version=file_hash,
+    )
+    assert isinstance(cached_original, FileResponse)
+    assert Path(cached_original.path) == (
+        tmp_path / "cache" / "images" / "originals" / file_hash[:2] / f"{file_hash}.jpg"
+    )
 
 
 async def test_local_image_is_not_cached_for_another_version_or_a_changed_file(
@@ -732,8 +762,23 @@ async def test_local_image_is_not_cached_for_another_version_or_a_changed_file(
         app_config=app_config,
     )
     folder = tmp_path / "Movie"
-    await _poster_movie(db_session, folder)
+    file_hash = await _poster_movie(db_session, folder)
 
+    # Replaced outside Overture before the original was cached: the unverified
+    # media-folder file must not be served under the old recorded hash.
+    _write_jpeg(folder / "poster.jpg", 640, 960, color="blue")
+    with pytest.raises(PublicServiceError) as exc_info:
+        await library_service.serve_local_image(
+            db_session,
+            item_id=1,
+            art_type=ArtType.POSTER,
+            size=ImageSize.DISPLAY,
+            version=file_hash,
+        )
+    assert exc_info.value.status_code == 404
+
+    # Restore matching file and request with an older version query parameter.
+    _write_jpeg(folder / "poster.jpg", 600, 900, color="red")
     stale_url = await library_service.serve_local_image(
         db_session,
         item_id=1,
@@ -741,22 +786,10 @@ async def test_local_image_is_not_cached_for_another_version_or_a_changed_file(
         size=ImageSize.DISPLAY,
         version="old",
     )
-    # Replaced outside Overture: the recorded hash no longer describes the file.
-    _write_jpeg(folder / "poster.jpg", 640, 960)
-    replaced = await library_service.serve_local_image(
-        db_session,
-        item_id=1,
-        art_type=ArtType.POSTER,
-        size=ImageSize.DISPLAY,
-        version="h1",
-    )
-
     assert stale_url.headers["Cache-Control"] == "no-cache"
-    assert replaced.headers["Cache-Control"] == "no-cache"
-    assert _body_width(replaced) == 600
 
 
-async def test_local_image_serves_the_file_without_a_size_or_when_already_small(
+async def test_local_image_serves_cached_original_without_size_and_avif_thumb_with_size(
     tmp_path: Path,
     db_session: AsyncSession,
     *,
@@ -767,26 +800,30 @@ async def test_local_image_serves_the_file_without_a_size_or_when_already_small(
         database=database_for(one_session(db_session)),
         app_config=app_config,
     )
-    await _poster_movie(db_session, tmp_path / "Movie")
+    file_hash = await _poster_movie(db_session, tmp_path / "Movie")
 
     original = await library_service.serve_local_image(
-        db_session, item_id=1, art_type=ArtType.POSTER, size=None, version="h1"
+        db_session, item_id=1, art_type=ArtType.POSTER, size=None, version=file_hash
     )
-    # 600px is exactly the display width, so there is nothing to shrink.
     display = await library_service.serve_local_image(
         db_session,
         item_id=1,
         art_type=ArtType.POSTER,
         size=ImageSize.DISPLAY,
-        version="h1",
+        version=file_hash,
     )
 
-    for response in (original, display):
-        assert isinstance(response, FileResponse)
-        assert response.media_type == "image/jpeg"
-        assert response.headers["Cache-Control"] == (
-            "private, max-age=31536000, immutable"
-        )
+    assert isinstance(original, FileResponse)
+    assert original.media_type == "image/jpeg"
+    assert Path(original.path).is_relative_to(
+        tmp_path / "cache" / "images" / "originals"
+    )
+    assert original.headers["Cache-Control"] == "private, max-age=31536000, immutable"
+
+    assert isinstance(display, FileResponse)
+    assert display.media_type == "image/avif"
+    assert Path(display.path).is_relative_to(tmp_path / "cache" / "images" / "thumbs")
+    assert display.headers["Cache-Control"] == "private, max-age=31536000, immutable"
 
 
 async def test_local_image_rejects_season_artwork_for_an_item(
@@ -827,8 +864,12 @@ async def test_local_image_rejects_an_unreadable_file_when_sized(
         app_config=app_config,
     )
     folder = tmp_path / "Movie"
-    await _poster_movie(db_session, folder)
-    (folder / "poster.jpg").write_bytes(b"not an image")
+    file_hash = await _poster_movie(db_session, folder)
+    cached_original = (
+        tmp_path / "cache" / "images" / "originals" / file_hash[:2] / f"{file_hash}.jpg"
+    )
+    cached_original.parent.mkdir(parents=True, exist_ok=True)
+    cached_original.write_bytes(b"not an image")
 
     with pytest.raises(PublicServiceError) as exc_info:
         await library_service.serve_local_image(
@@ -836,7 +877,7 @@ async def test_local_image_rejects_an_unreadable_file_when_sized(
             item_id=1,
             art_type=ArtType.POSTER,
             size=ImageSize.DISPLAY,
-            version="h1",
+            version=file_hash,
         )
 
     assert exc_info.value.status_code == 422
@@ -872,15 +913,15 @@ async def test_local_season_poster_is_downscaled_and_cached_while_current(
     )
     db_session.add(season)
     await db_session.flush()
-    _record_file(season, ArtType.SEASON_POSTER, poster)
+    file_hash = _record_file(season, ArtType.SEASON_POSTER, poster)
     await db_session.commit()
 
     response = await library_service.serve_local_season_image(
-        db_session, season_id=10, size=ImageSize.DISPLAY, version="h1"
+        db_session, season_id=10, size=ImageSize.DISPLAY, version=file_hash
     )
 
-    assert response.media_type == "image/webp"
-    assert _body_width(response) == 600
+    assert response.media_type == "image/avif"
+    assert _response_image(response) == ("AVIF", (600, 900))
     assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
 
 
@@ -1012,6 +1053,7 @@ def _service(database: Database, server: ArtServer) -> LibraryService:
         downloads=cast("DownloadService", None),
         publisher=NullEventPublisher(),
         asset_storage=cast("AssetStorage", None),
+        image_cache=unused(ImageCache),
         provider_registry=NoopProviderRegistry(server),
         proxy_clients=cast("ProxyClientManager", None),
     )

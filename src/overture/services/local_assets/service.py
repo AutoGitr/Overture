@@ -24,6 +24,7 @@ lazy from ...utils.threads import owned_thread
 lazy from ..art.phash import PhashService
 lazy from ..library.items import emit_library_item_upserted, emit_library_items_upserted
 lazy from ..storage.assets import AssetStorage, FolderListing
+lazy from ..storage.image_cache import ImageCache
 lazy from .art import LocalArtInspector
 lazy from .theme import refresh_theme
 
@@ -75,11 +76,12 @@ class LocalAssets:
         *,
         asset_storage: AssetStorage,
         phash: PhashService,
+        image_cache: ImageCache,
         database: Database,
         publisher: protocols.EventPublisher,
     ) -> None:
         self.asset_storage = asset_storage
-        self._art = LocalArtInspector(asset_storage, phash)
+        self._art = LocalArtInspector(asset_storage, phash, image_cache)
         self._database = database
         self._publisher = publisher
 

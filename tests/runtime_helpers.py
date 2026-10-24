@@ -10,6 +10,7 @@ lazy from collections.abc import (
 )
 lazy from contextlib import asynccontextmanager, contextmanager
 lazy from pathlib import Path
+lazy from tempfile import mkdtemp
 lazy from typing import Any, Protocol, cast, override
 
 lazy import httpx2
@@ -33,7 +34,7 @@ lazy from overture.jobs.runner import JobContext
 lazy from overture.jobs.slot import ManagedBackgroundJob
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import RuntimeServices
-lazy from overture.runtime_paths import database_path
+lazy from overture.runtime_paths import database_path, image_cache_path
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.schemas.downloads import DownloadJobEvent
@@ -71,6 +72,7 @@ lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_audit.service import ServerAuditService
 lazy from overture.services.stats.service import StatsService
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.services.themes.service import ThemesService
 lazy from overture.services.themes.youtube_resolver import ThemeAudio, YouTubeResolver
@@ -478,6 +480,7 @@ def make_runtime(
     )
     downloads = NoopDownloads() if downloads is None else downloads
     sync = NoopSync(app_config=app_config) if sync is None else sync
+    image_cache = ImageCache(image_cache_path(config_dir))
     backups = (
         BackupService(
             scheduler=scheduler,
@@ -487,6 +490,7 @@ def make_runtime(
                 config_dir / "backups",
                 timezone=app_config.tzinfo,
             ),
+            image_cache=image_cache,
             app_config=app_config,
             database=database,
         )
@@ -504,7 +508,11 @@ def make_runtime(
         AssetStorage(app_config=app_config) if asset_storage is None else asset_storage
     )
     local_assets = LocalAssets(
-        asset_storage=asset_storage, phash=phash, database=database, publisher=events
+        asset_storage=asset_storage,
+        image_cache=image_cache,
+        phash=phash,
+        database=database,
+        publisher=events,
     )
     art_matcher = unused(ArtMatcher) if art_matcher is None else art_matcher
     proxy_clients = (
@@ -540,6 +548,7 @@ def make_runtime(
             downloads=downloads,
             publisher=events,
             asset_storage=asset_storage,
+            image_cache=image_cache,
             provider_registry=provider_registry,
             proxy_clients=proxy_clients,
         )
@@ -751,6 +760,17 @@ class JobProbe:
         return self.snapshots[0]
 
 
+TEMP_IMAGE_CACHES: list[Path] = []
+
+
+def make_image_cache(app_config: Settings | None = None) -> ImageCache:
+    """Build an isolated image cache for a service test."""
+    del app_config
+    root = Path(mkdtemp(prefix="overture-image-cache-"))
+    TEMP_IMAGE_CACHES.append(root)
+    return ImageCache(root)
+
+
 def make_download_service(
     publisher: protocols.EventPublisher,
     *,
@@ -761,6 +781,7 @@ def make_download_service(
     youtube_resolver: YouTubeResolver,
     app_config: Settings,
     database: Database,
+    image_cache: ImageCache | None = None,
     library_gate: LibraryGate | None = None,
 ) -> DownloadService:
     """Wire a real download queue with the test's external collaborators."""
@@ -768,6 +789,7 @@ def make_download_service(
         art_handler=DownloadArtHandler(
             provider_registry=provider_registry,
             asset_storage=asset_storage,
+            image_cache=image_cache or make_image_cache(app_config),
             phash=phash,
             image_clients=image_clients,
             app_config=app_config,
@@ -794,11 +816,13 @@ def make_local_assets(
     database: Database,
     phash: PhashService | None = None,
     asset_storage: AssetStorage | None = None,
+    image_cache: ImageCache | None = None,
     publisher: protocols.EventPublisher | None = None,
 ) -> LocalAssets:
     """Build the local-file record service the way the runtime does."""
     return LocalAssets(
         asset_storage=asset_storage or AssetStorage(app_config=app_config),
+        image_cache=image_cache or make_image_cache(app_config),
         phash=phash or PhashService(app_config=app_config),
         database=database,
         publisher=publisher or NullEventPublisher(),

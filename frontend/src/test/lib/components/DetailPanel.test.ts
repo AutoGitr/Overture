@@ -196,9 +196,12 @@ describe("DetailPanel images", () => {
       }),
     });
 
-    // The original file the sidebar row loaded, so it is already in the cache.
+    // The cached display thumbnail the sidebar row loaded, so it is already in the browser cache.
     const poster = posterImage(container);
-    expect(poster).toHaveAttribute("src", "/api/library/items/7/local-image/poster?t=p1");
+    expect(poster).toHaveAttribute(
+      "src",
+      "/api/library/items/7/local-image/poster?t=p1&size=display",
+    );
     expect(poster).toHaveAttribute("fetchpriority", "high");
     const background = container.querySelector(".detail-background img");
     expect(background).toHaveAttribute(
@@ -239,7 +242,7 @@ describe("DetailPanel image changes", () => {
     expect(firstBackground).not.toBeInTheDocument();
     expect(posterImage(container)).toHaveAttribute(
       "src",
-      "/api/library/items/8/local-image/poster?t=b",
+      "/api/library/items/8/local-image/poster?t=b&size=display",
     );
   });
 
@@ -257,7 +260,10 @@ describe("DetailPanel image changes", () => {
     artPreviewState.itemUpdated(downloaded);
     await rerender({ item: downloaded });
     expect(posterImage(container)).toBe(poster);
-    expect(poster).toHaveAttribute("src", "/api/library/items/7/local-image/poster?t=new");
+    expect(poster).toHaveAttribute(
+      "src",
+      "/api/library/items/7/local-image/poster?t=new&size=display",
+    );
   });
 });
 

@@ -29,8 +29,8 @@ lazy from ...schemas.library import (
     SeasonRead,
     folder_roots_response,
 )
-lazy from ...utils.assets import ITEM_ASSET_CANDIDATES
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.image import UnsupportedImageFormatError
 lazy from ...utils.threads import owned_thread
 lazy from ..downloads.queue import AssetScope
 lazy from ..downloads.service import DownloadService
@@ -39,9 +39,11 @@ lazy from ..server_identity import resolve_server_item_id
 lazy from ..storage.assets import (
     AssetStorage,
     MissingLocalPathError,
+    PathTraversalError,
     require_folder_path,
 )
-lazy from ..storage.responses import local_image_response
+lazy from ..storage.image_cache import CachedOriginal, ImageCache
+lazy from ..storage.responses import cached_image_response
 lazy from .items import (
     emit_library_item_removed,
     emit_library_item_upserted,
@@ -73,6 +75,7 @@ class LibraryService:
         downloads: DownloadService,
         publisher: protocols.EventPublisher,
         asset_storage: AssetStorage,
+        image_cache: ImageCache,
         provider_registry: ProviderRegistry,
         proxy_clients: ProxyClientManager,
     ) -> None:
@@ -80,6 +83,7 @@ class LibraryService:
         self._database = database
         self._publisher = publisher
         self._storage = asset_storage
+        self._image_cache = image_cache
         self._provider_registry = provider_registry
         self._proxy_clients = proxy_clients
 
@@ -245,6 +249,59 @@ class LibraryService:
         except MissingLocalPathError as exc:
             raise PublicServiceError(400, str(exc)) from exc
 
+    async def _restore_original(
+        self,
+        item: MediaItem,
+        season: Season | None,
+        art_type: ArtType,
+        file_hash: str,
+    ) -> CachedOriginal:
+        """Keep the slot's file again when the cache has lost its image.
+
+        Raises:
+            PublicServiceError: When the file is gone, or is no longer the image
+                the slot records, which the next refresh of the item records.
+        """
+        folder = await self._item_folder(item)
+        path = await owned_thread(
+            self._storage.find_local_art_path, art_type, item=item, season=season
+        )
+        if path is not None:
+            try:
+                original = await self._image_cache.import_original(path, folder)
+            except FileNotFoundError, PathTraversalError:
+                original = None
+            except UnsupportedImageFormatError as exc:
+                raise PublicServiceError(422, "Unreadable image file") from exc
+            if original is not None and original.file_hash == file_hash:
+                return original
+        raise PublicServiceError(404, "File not found")
+
+    async def _serve_cached_image(
+        self,
+        item: MediaItem,
+        season: Season | None,
+        art_type: ArtType,
+        *,
+        size: ImageSize | None,
+        version: str | None,
+    ) -> Response:
+        """Serve the image a slot records from the cache, or its thumbnail."""
+        slot = find_art_slot(season or item, art_type)
+        if slot is None or slot.file_hash is None:
+            raise PublicServiceError(404, "File not found")
+        original = await self._image_cache.original(slot.file_hash)
+        if original is None:
+            original = await self._restore_original(
+                item, season, art_type, slot.file_hash
+            )
+        return await cached_image_response(
+            self._image_cache,
+            original,
+            size=size,
+            current=version == slot.file_hash,
+        )
+
     async def serve_local_season_image(
         self,
         db: AsyncSession,
@@ -253,31 +310,14 @@ class LibraryService:
         size: ImageSize | None,
         version: str | None,
     ) -> Response:
-        """Serve a show season poster from disk, downscaled to *size* if given."""
+        """Serve a show season poster from the cache, or its thumbnail."""
         season = await db.get(Season, season_id)
         if not season:
             raise PublicServiceError(404, "Not found")
         item = await require_item(db, season.media_item_id)
-        folder = await self._item_folder(item)
-
-        local_path = await owned_thread(
-            self._storage.find_local_art_path,
-            ArtType.SEASON_POSTER,
-            item=item,
-            season=season,
+        return await self._serve_cached_image(
+            item, season, ArtType.SEASON_POSTER, size=size, version=version
         )
-        if local_path is not None and (
-            response := await local_image_response(
-                local_path,
-                folder,
-                slot=find_art_slot(season, ArtType.SEASON_POSTER),
-                art_type=ArtType.SEASON_POSTER,
-                size=size,
-                version=version,
-            )
-        ):
-            return response
-        raise PublicServiceError(404, "File not found")
 
     async def serve_local_image(
         self,
@@ -288,20 +328,10 @@ class LibraryService:
         size: ImageSize | None,
         version: str | None,
     ) -> Response:
-        """Serve a local art file for a movie or show, downscaled to *size* if given."""
+        """Serve an item's poster or background from the cache, or its thumbnail."""
         if art_type.owned_by_season:
             raise PublicServiceError(400, "An item has no season artwork")
         item = await require_item(db, item_id)
-        folder = await self._item_folder(item)
-        slot = find_art_slot(item, art_type)
-        for filename in ITEM_ASSET_CANDIDATES[art_type]:
-            if response := await local_image_response(
-                folder / filename,
-                folder,
-                slot=slot,
-                art_type=art_type,
-                size=size,
-                version=version,
-            ):
-                return response
-        raise PublicServiceError(404, "File not found")
+        return await self._serve_cached_image(
+            item, None, art_type, size=size, version=version
+        )

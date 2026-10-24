@@ -617,7 +617,7 @@ class DownloadService:
         """
         storage = self._asset_storage
         try:
-            data_hash = compute_bytes_hash(downloaded.data)
+            data_hash = downloaded.file_hash or compute_bytes_hash(downloaded.data)
             await owned_thread(
                 storage.validate_target,
                 downloaded.target_path,
@@ -631,7 +631,10 @@ class DownloadService:
             if stored is None:
                 written = True
                 stored = await storage.write_file_async(
-                    downloaded.target_path, downloaded.data, downloaded.trusted_root
+                    downloaded.target_path,
+                    downloaded.data,
+                    downloaded.trusted_root,
+                    file_hash=data_hash,
                 )
             else:
                 written = False

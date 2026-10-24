@@ -261,15 +261,13 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         if size is None:
             return ProviderImageRequest(url=f"{plex_base}{path}", headers=headers)
         # The transcoder fills a box, so it gets the slot's shape (16:9 or 2:3).
-        width = art_type.display_width
-        height = width * 9 // 16 if art_type is ArtType.BACKGROUND else width * 3 // 2
         return ProviderImageRequest(
             url=f"{plex_base}/photo/:/transcode",
             headers=headers,
             params={
                 "url": path,
-                "width": str(width),
-                "height": str(height),
+                "width": str(art_type.display_width),
+                "height": str(art_type.display_height),
                 "minSize": "1",
                 "upscale": "0",
             },

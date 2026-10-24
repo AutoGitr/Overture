@@ -13,3 +13,8 @@ def database_path(config_dir: Path) -> Path:
 def database_url(config_dir: Path) -> str:
     """Return the SQLAlchemy URL of the database kept in ``config_dir``."""
     return f"sqlite+aiosqlite:///{database_path(config_dir).as_posix()}"
+
+
+def image_cache_path(config_dir: Path) -> Path:
+    """Return the folder of the image cache kept in ``config_dir``."""
+    return config_dir / "cache" / "images"

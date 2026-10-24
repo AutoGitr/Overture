@@ -17,9 +17,7 @@ lazy from ...utils.errors import public_error_message
 lazy from ...utils.image import (
     RemoteImageError,
     UnsupportedImageFormatError,
-    encoded_image_extension,
     fetch_image_bytes,
-    get_image_size_from_bytes,
 )
 lazy from ...utils.progress import ProgressCallback, StepProgress
 lazy from ...utils.security import remove_sensitive_url_params
@@ -27,6 +25,7 @@ lazy from ...utils.ssrf import is_private_url
 lazy from ...utils.threads import owned_thread
 lazy from ..art.phash import PhashService
 lazy from ..storage.assets import AssetStorage, require_folder_path
+lazy from ..storage.image_cache import ImageCache
 lazy from ..themes.youtube_resolver import DownloadError
 lazy from .results import DownloadedArt, PreparedDownload
 
@@ -39,6 +38,7 @@ class DownloadArtHandler:
         *,
         provider_registry: ProviderRegistry,
         asset_storage: AssetStorage,
+        image_cache: ImageCache,
         phash: PhashService,
         image_clients: ProxyClientManager,
         app_config: Settings,
@@ -48,6 +48,7 @@ class DownloadArtHandler:
         self._database = database
         self.provider_registry = provider_registry
         self.asset_storage = asset_storage
+        self._image_cache = image_cache
         self.phash = phash
         self._image_clients = image_clients
 
@@ -114,7 +115,8 @@ class DownloadArtHandler:
         """Fetch and validate artwork without modifying the destination.
 
         Nothing here writes to the database: the caller records the result in
-        a transaction of its own once the slow part is over.
+        a transaction of its own once the slow part is over. The image is kept
+        in the image cache, which no job result depends on.
 
         Raises:
             DownloadError: When the job is incomplete or the download fails.
@@ -140,16 +142,17 @@ class DownloadArtHandler:
         phash = await self.phash.compute_from_bytes(image_data)
 
         await progress.enter("writing")
+        # Kept before anything is written beside the media, so the slot that
+        # records this image never lacks its cached copy.
         try:
-            ext = encoded_image_extension(image_data)
+            original = await self._image_cache.store_original(image_data)
         except UnsupportedImageFormatError as exc:
             raise DownloadError(str(exc)) from exc
-        width, height = get_image_size_from_bytes(image_data)
         target_path = await owned_thread(
             self.asset_storage.resolve_art_path,
             folder_path=folder_path,
             art_type=art_type,
-            ext=ext,
+            ext=original.extension,
             season_folder_path=season.folder_path if season else None,
             season_num=season.season_num if season else None,
         )
@@ -157,6 +160,7 @@ class DownloadArtHandler:
             target_path=target_path,
             trusted_root=folder_path,
             data=image_data,
+            file_hash=original.file_hash,
             result=DownloadedArt(
                 art_type=art_type,
                 season_id=season.id if season else None,
@@ -166,7 +170,7 @@ class DownloadArtHandler:
                     app_config=self._app_config,
                 ),
                 phash=phash,
-                width=width or None,
-                height=height or None,
+                width=original.width or None,
+                height=original.height or None,
             ),
         )

@@ -61,6 +61,7 @@ lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
+    make_image_cache,
     unused,
 )
 
@@ -287,6 +288,7 @@ def _download_manager(
         art_handler=DownloadArtHandler(
             provider_registry=NoopProviderRegistry(provider),
             asset_storage=asset_storage,
+            image_cache=make_image_cache(app_config),
             phash=phash,
             image_clients=cast("Any", image_clients or StaticImageClients()),
             app_config=app_config,
@@ -769,6 +771,7 @@ async def test_process_art_job_blocks_untrusted_private_url(
     handler = DownloadArtHandler(
         provider_registry=NoopProviderRegistry(provider),
         asset_storage=AssetStorage(app_config=app_config),
+        image_cache=make_image_cache(app_config),
         phash=phash,
         image_clients=cast("Any", StaticImageClients()),
         app_config=app_config,
@@ -828,6 +831,7 @@ async def test_art_download_failures_say_why(
     handler = DownloadArtHandler(
         provider_registry=NoopProviderRegistry(RefreshingProvider()),
         asset_storage=AssetStorage(app_config=app_config),
+        image_cache=make_image_cache(app_config),
         phash=PhashService(app_config=app_config),
         image_clients=cast("Any", StaticImageClients()),
         app_config=app_config,
@@ -1044,6 +1048,7 @@ async def test_snapshot_events_restore_every_persisted_active_download(
         art_handler=DownloadArtHandler(
             provider_registry=NoopProviderRegistry(),
             asset_storage=asset_storage,
+            image_cache=make_image_cache(app_config),
             phash=PhashService(app_config=app_config),
             image_clients=cast("Any", StaticImageClients()),
             app_config=app_config,
@@ -1395,14 +1400,19 @@ async def test_stop_during_file_write_finishes_file_and_metadata(
     original_write = AssetStorage.write_file
 
     def blocked_write(
-        storage: AssetStorage, path: str, content: bytes, root: str
+        storage: AssetStorage,
+        path: str,
+        content: bytes,
+        root: str,
+        *,
+        file_hash: str | None = None,
     ) -> StoredFile:
         loop.call_soon_threadsafe(write_started.set)
         if not release_write.wait(5):
             raise TimeoutError("test did not release the writer")
         if write_fails:
             raise OSError("disk unavailable")
-        stored = original_write(storage, path, content, root)
+        stored = original_write(storage, path, content, root, file_hash=file_hash)
         loop.call_soon_threadsafe(write_finished.set)
         return stored
 
