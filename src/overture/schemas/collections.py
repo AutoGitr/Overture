@@ -1,15 +1,27 @@
 """Collection REST and WebSocket schemas."""
 
 lazy import hashlib
-lazy from typing import Annotated
+lazy from datetime import datetime
+lazy from typing import Annotated, Self
 
-lazy from pydantic import Field
+lazy from pydantic import Field, field_validator, model_validator
 
 lazy from ..config import API_PREFIX
 lazy from ..db.completion import collection_theme_status
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.public_dataset import PublicDatasetCollection
-lazy from ..domain import AssetStatus, CollectionMatch, MediaType, ServerType
+lazy from ..domain import (
+    AssetStatus,
+    CollectionMatch,
+    CollectionMode,
+    CollectionOrder,
+    CollectionPreset,
+    MediaType,
+    RuleSourceType,
+    ServerType,
+    SyncMode,
+)
+lazy from ..integrations.mdblist import mdblist_identifier
 lazy from .base import StrictBaseModel
 lazy from .common import StatusResponse
 lazy from .library import MediaItemRead
@@ -22,6 +34,10 @@ class CollectionRead(StrictBaseModel):
     id: int
     title: str
     summary: str | None = None
+    sort_title: str | None = None
+    collection_mode: CollectionMode | None = None
+    order_type: CollectionOrder = CollectionOrder.RELEASE
+    visible_home: bool = False
     thumb_url: str | None = None
     art_url: str | None = None
     child_count: int = 0
@@ -49,6 +65,7 @@ class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
     members: list[MediaItemRead]
+    rule: CollectionRuleRead | None = None
     #: Why a theme cannot be stored on this collection, if it cannot.
     theme_unavailable: str | None = None
     theme_writable: bool = False
@@ -125,6 +142,10 @@ def collection_read(
         id=row.id or 0,
         title=row.title,
         summary=row.summary,
+        sort_title=row.sort_title,
+        collection_mode=row.collection_mode,
+        order_type=row.order_type,
+        visible_home=row.visible_home,
         thumb_url=_collection_image_url(row.id or 0, "poster", row.thumb_url),
         art_url=_collection_image_url(row.id or 0, "background", row.art_url),
         child_count=row.child_count,
@@ -181,3 +202,115 @@ class CollectionThemeSources(StrictBaseModel):
 
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+
+
+class CollectionOptions(StrictBaseModel):
+    """Editable collection metadata and server display options."""
+
+    title: Annotated[str, Field(min_length=1, max_length=200)]
+    summary: Annotated[str, Field(max_length=10000)] | None = None
+    sort_title: Annotated[str, Field(max_length=200)] | None = None
+    collection_mode: CollectionMode | None = None
+    order_type: CollectionOrder = CollectionOrder.RELEASE
+    visible_home: bool = False
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        """Reject titles that become empty on the media server."""
+        if not value.strip():
+            raise ValueError("A collection needs a title")
+        return value.strip()
+
+
+class CollectionCreate(CollectionOptions):
+    """Create a collection in one selected library."""
+
+    media_type: MediaType
+    library_id: Annotated[str, Field(min_length=1, max_length=200)]
+    member_ids: Annotated[
+        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=10000)
+    ]
+
+
+class CollectionMembersUpdate(StrictBaseModel):
+    """Replace membership and optionally set its display order."""
+
+    member_ids: Annotated[list[Annotated[int, Field(gt=0)]], Field(max_length=10000)]
+    order_type: CollectionOrder
+
+
+class CollectionFilter(StrictBaseModel):
+    """An intersection of filters over the current server library."""
+
+    decade: Annotated[int, Field(ge=1800, le=3000, multiple_of=10)] | None = None
+    studio: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    genre: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+
+
+class CollectionRuleWrite(StrictBaseModel):
+    """A dynamic source with nullable overrides of global defaults."""
+
+    source_type: RuleSourceType
+    source_identifier: Annotated[str, Field(max_length=500)] = ""
+    filters: CollectionFilter = Field(default_factory=CollectionFilter)
+    sync_mode: SyncMode | None = None
+    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
+    delete_below_minimum: bool | None = None
+    sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_source(self) -> Self:
+        """Accept identifiers, never arbitrary fetch URLs or credentials."""
+        if self.source_type is RuleSourceType.TMDB:
+            if (
+                not self.source_identifier.isdecimal()
+                or int(self.source_identifier) <= 0
+            ):
+                raise ValueError("A TMDB rule needs a positive collection ID")
+        elif self.source_type is RuleSourceType.MDBLIST:
+            self.source_identifier = mdblist_identifier(self.source_identifier)
+        elif not self.filters.model_dump(exclude_none=True):
+            raise ValueError("Choose at least one library filter")
+        return self
+
+
+class CollectionRuleRead(CollectionRuleWrite):
+    """Saved rule with its most recent outcome."""
+
+    last_synced_at: datetime | None = None
+    last_error: str | None = None
+
+
+class CollectionSyncResponse(StrictBaseModel):
+    """What one rule run changed."""
+
+    added: int = 0
+    removed: int = 0
+    skipped: bool = False
+    deleted: bool = False
+
+
+class CollectionGenerateRequest(StrictBaseModel):
+    """Preview or generate collections from metadata already in the library."""
+
+    media_type: MediaType
+    library_id: Annotated[str, Field(min_length=1)]
+    preset: CollectionPreset
+    titles: Annotated[list[str], Field(max_length=100)] = Field(default_factory=list)
+
+
+class CollectionPresetRead(StrictBaseModel):
+    """A generator candidate with its matching library count."""
+
+    title: str
+    count: int
+    filters: CollectionFilter
+
+
+class CollectionGenerateResponse(StrictBaseModel):
+    """Per-collection generator results; one failure leaves others intact."""
+
+    created: list[int] = Field(default_factory=list[int])
+    errors: dict[str, str] = Field(default_factory=dict)

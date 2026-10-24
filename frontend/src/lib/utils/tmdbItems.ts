@@ -18,6 +18,12 @@ export type ArtSlotTarget =
       seasonNum: number | null;
     };
 
+export type CollectionArtTarget = {
+  kind: "collection";
+  collectionId: number;
+  mediaType: MediaItemRead["media_type"];
+};
+
 /**
  * Show the item a TMDB title's first selection stored: in the library at
  * once, and in the detail view as auto-advance decides. Nothing moves if the

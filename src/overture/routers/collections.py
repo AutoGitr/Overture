@@ -2,15 +2,26 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Path
+lazy from fastapi import APIRouter, Depends, Path, Query
 lazy from fastapi.responses import Response
 
-lazy from ..dependencies import CollectionsDep
+lazy from ..dependencies import ArtDep, CollectionsDep
+lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
+lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
     BulkCollectionMonitorUpdate,
+    CollectionCreate,
     CollectionDetail,
+    CollectionGenerateRequest,
+    CollectionGenerateResponse,
     CollectionMatchRequest,
+    CollectionMembersUpdate,
+    CollectionOptions,
+    CollectionPresetRead,
     CollectionRead,
+    CollectionRuleRead,
+    CollectionRuleWrite,
+    CollectionSyncResponse,
     CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
@@ -21,6 +32,7 @@ lazy from ..schemas.common import (
     EnqueuedJobResponse,
     MonitoredResponse,
     MonitorUpdate,
+    StatusResponse,
 )
 lazy from .auth import require_auth
 lazy from .parameters import ArtTypePath, ImageSizeQuery, MediaTypeQuery
@@ -148,3 +160,127 @@ async def proxy_collection_image(
 ) -> Response:
     """Proxy a collection's poster or background from the media server."""
     return await collections.proxy_collection_image(collection_id, art_type, size)
+
+
+@router.post("")
+async def create_collection(
+    body: CollectionCreate, collections: CollectionsDep
+) -> CollectionDetail:
+    """Create a collection in a server library."""
+    return await collections.create(body)
+
+
+@router.put("/{collection_id}")
+async def update_collection(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    body: CollectionOptions,
+    collections: CollectionsDep,
+) -> CollectionDetail:
+    """Update collection metadata and display options."""
+    return await collections.update(collection_id, media_type, body)
+
+
+@router.delete("/{collection_id}")
+async def delete_collection(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    collections: CollectionsDep,
+) -> StatusResponse:
+    """Delete the collection while preserving its media."""
+    return await collections.delete(collection_id, media_type)
+
+
+@router.put("/{collection_id}/members")
+async def set_collection_members(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    body: CollectionMembersUpdate,
+    collections: CollectionsDep,
+) -> CollectionDetail:
+    """Replace collection membership and order."""
+    return await collections.set_members(collection_id, media_type, body)
+
+
+@router.put("/{collection_id}/rule")
+async def save_collection_rule(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    body: CollectionRuleWrite,
+    collections: CollectionsDep,
+) -> CollectionRuleRead:
+    """Save a collection's dynamic source and inheritance overrides."""
+    return await collections.save_rule(collection_id, media_type, body)
+
+
+@router.delete("/{collection_id}/rule")
+async def delete_collection_rule(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    collections: CollectionsDep,
+) -> StatusResponse:
+    """Remove a rule while keeping current membership."""
+    return await collections.delete_rule(collection_id, media_type)
+
+
+@router.post("/{collection_id}/sync")
+async def sync_collection_rule(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    collections: CollectionsDep,
+) -> CollectionSyncResponse:
+    """Run the collection's rule immediately."""
+    return await collections.sync_rule(collection_id, media_type)
+
+
+@router.post("/generator/preview")
+async def preview_collection_generator(
+    body: CollectionGenerateRequest, collections: CollectionsDep
+) -> list[CollectionPresetRead]:
+    """Preview library filters before generating collections."""
+    return await collections.presets(body)
+
+
+@router.post("/generator/apply")
+async def generate_collections(
+    body: CollectionGenerateRequest, collections: CollectionsDep
+) -> CollectionGenerateResponse:
+    """Create selected preset collections and their dynamic rules."""
+    return await collections.generate(body)
+
+
+@router.get("/{collection_id}/art/{art_type}/sources")
+async def get_collection_art_sources(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    art_type: ArtTypePath,
+    art: ArtDep,
+) -> ArtSourcesResponse:
+    """Browse shared collection artwork sources."""
+    return await art.get_collection_sources(collection_id, media_type, art_type)
+
+
+@router.put("/{collection_id}/art/{art_type}")
+async def save_collection_art(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    art_type: ArtTypePath,
+    body: SaveArtRequest,
+    art: ArtDep,
+) -> StatusResponse:
+    """Validate and upload artwork to a collection."""
+    return await art.save_collection(collection_id, media_type, art_type, body)
+
+
+@router.post("/{collection_id}/art/{art_type}/match")
+async def match_collection_art(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    art_type: ArtTypePath,
+    art: ArtDep,
+    threshold: Annotated[
+        int, Query(ge=0, le=MATCH_THRESHOLD_MAX)
+    ] = MATCH_THRESHOLD_DEFAULT,
+) -> ArtMatchResponse:
+    """Rank collection art using the shared perceptual hash matcher."""
+    return await art.match_collection(collection_id, media_type, art_type, threshold)

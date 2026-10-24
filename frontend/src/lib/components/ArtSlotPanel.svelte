@@ -3,6 +3,9 @@
   import { onMount } from "svelte";
   import {
     getArtSourcesOptions,
+    getCollectionArtSourcesOptions,
+    saveCollectionArtMutation,
+    matchCollectionArtMutation,
     getTmdbArtSourcesOptions,
     matchArtMutation,
     saveArtMutation,
@@ -19,7 +22,11 @@
   import { parseArtUrl } from "../utils/artUrls";
   import { beginAutoAdvance, handleArtworkSelectionAdvance } from "../utils/autoAdvance";
   import { errorMessage } from "../utils/errors";
-  import { openPersistedItem, type ArtSlotTarget } from "../utils/tmdbItems";
+  import {
+    openPersistedItem,
+    type ArtSlotTarget,
+    type CollectionArtTarget,
+  } from "../utils/tmdbItems";
   import ArtMatchBar from "./ArtMatchBar.svelte";
   import ArtCard from "./ArtCard.svelte";
   import ImageGrid from "./ImageGrid.svelte";
@@ -32,7 +39,7 @@
     artType,
     item,
   }: {
-    slot: ArtSlotTarget;
+    slot: ArtSlotTarget | CollectionArtTarget;
     artType: ArtType;
     /** The stored item the detail view shows. */
     item: MediaItemRead | null;
@@ -41,7 +48,7 @@
   type ArtSelection = Pick<ArtCandidate, "url"> & Partial<Pick<ArtCandidate, "width" | "height">>;
 
   // A TMDB title has no files or server to match against; matching needs a stored item.
-  let canMatch = $derived(slot.kind === "item");
+  let canMatch = $derived(slot.kind === "item" || slot.kind === "collection");
   let tmdbTarget = $derived(
     slot.kind === "catalog"
       ? slot.catalog.entry
@@ -72,7 +79,23 @@
       slot.kind === "tmdb" ||
       (slot.kind === "catalog" && !!tmdbTarget?.tmdb_id && settingsState.current.tmdb_configured),
   }));
-  let sourcesQuery = $derived(slot.kind === "item" ? itemSourcesQuery : tmdbSourcesQuery);
+  const collectionSourcesQuery = createQuery(() => ({
+    ...getCollectionArtSourcesOptions({
+      path: {
+        collection_id: slot.kind === "collection" ? slot.collectionId : 0,
+        art_type: artType,
+      },
+      query: { media_type: slot.kind === "collection" ? slot.mediaType : "movie" },
+    }),
+    enabled: slot.kind === "collection",
+  }));
+  let sourcesQuery = $derived(
+    slot.kind === "collection"
+      ? collectionSourcesQuery
+      : slot.kind === "item"
+        ? itemSourcesQuery
+        : tmdbSourcesQuery,
+  );
   let sources = $derived.by(() => {
     const available = sourcesQuery.data?.sources;
     if (slot.kind !== "catalog") return available ?? null;
@@ -109,10 +132,20 @@
   const matchArtRequest = createMutation(() => matchArtMutation());
   const saveArtRequest = createMutation(() => saveArtMutation());
   const saveTmdbArtRequest = createMutation(() => saveTmdbArtMutation());
-  const match = new ArtMatch((args) => matchArtRequest.mutateAsync(args));
+  const saveCollectionRequest = createMutation(() => saveCollectionArtMutation());
+  const matchCollectionRequest = createMutation(() => matchCollectionArtMutation());
+  const match = new ArtMatch((args) =>
+    slot.kind === "collection"
+      ? matchCollectionRequest.mutateAsync({
+          path: { collection_id: slot.collectionId, art_type: artType },
+          query: { media_type: slot.mediaType, threshold: args.query.threshold },
+        })
+      : matchArtRequest.mutateAsync(args),
+  );
 
   function runMatch() {
     if (slot.kind === "item") void match.run(slot.itemId, artType, slot.seasonId);
+    else if (slot.kind === "collection") void match.run(slot.collectionId, artType, null);
   }
 
   let autoMatch = $derived(canMatch && settingsState.current.auto_match_art);
@@ -142,6 +175,21 @@
     const body = { height: art.height ?? null, url: art.url, width: art.width ?? null };
     saving = true;
     feedback.clear();
+    if (slot.kind === "collection") {
+      try {
+        await saveCollectionRequest.mutateAsync({
+          body,
+          path: { collection_id: slot.collectionId, art_type: artType },
+          query: { media_type: slot.mediaType },
+        });
+        return true;
+      } catch (error) {
+        feedback.error(errorMessage(error, "Artwork upload failed"));
+        return false;
+      } finally {
+        saving = false;
+      }
+    }
     if (slot.kind === "catalog") {
       try {
         if (artType === "season_poster") {

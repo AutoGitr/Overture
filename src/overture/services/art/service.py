@@ -8,15 +8,23 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
-lazy from ...db.art_slots import clear_art_selection, read_art_slot, select_art
+lazy from ...db.art_slots import (
+    ArtFileFacts,
+    clear_art_selection,
+    read_art_slot,
+    record_art_file,
+    select_art,
+)
 lazy from ...db.completion import holds_files
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import ITEM_ART_TYPES, ArtType, JobType
+lazy from ...domain import ITEM_ART_TYPES, ArtType, ImageSize, JobType, MediaType
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.art import (
     ArtMatchResponse,
@@ -29,6 +37,8 @@ lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import (
     RateLimitedError,
+    fetch_image,
+    inspect_saved_image,
     is_valid_aspect_ratio,
     is_valid_image_format,
     raise_if_rate_limited,
@@ -36,13 +46,16 @@ lazy from ...utils.image import (
 )
 lazy from ...utils.security import remove_sensitive_url_params
 lazy from ...utils.ssrf import is_private_url
+lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
+lazy from ..collections import COLLECTIONS_LOCK
 lazy from ..downloads.queue import AssetScope, JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from ..library.items import emit_library_item_upserted, require_item
 lazy from ..public_dataset.schema.contract import canonical_art_url
 lazy from ..storage.assets import AssetStorage
+lazy from ..storage.image_cache import ImageCache
 lazy from .candidates import ArtCandidates, CandidatePolicy, CandidateSources
 lazy from .matcher import ArtMatcher
 
@@ -129,6 +142,7 @@ class ArtService:
         provider_registry: ProviderRegistry,
         candidates: ArtCandidates,
         image_clients: ProxyClientManager,
+        image_cache: ImageCache,
     ) -> None:
         self._config = app_config
         self._database = database
@@ -139,6 +153,7 @@ class ArtService:
         self._provider_registry = provider_registry
         self._candidates = candidates
         self._image_clients = image_clients
+        self._image_cache = image_cache
 
     async def _gather(
         self,
@@ -428,3 +443,146 @@ class ArtService:
         )
 
         return outcome.response
+
+    async def _require_collection(
+        self,
+        db: AsyncSession,
+        collection_id: int,
+        media_type: MediaType,
+        art_type: ArtType,
+    ) -> MediaCollection:
+        if art_type.owned_by_season:
+            raise PublicServiceError(
+                422, "Collections have posters and backgrounds only"
+            )
+        row = await CollectionRepository(db).get_listed(collection_id, media_type)
+        if (
+            row is None
+            or row.server_type is not self._provider_registry.provider.server_type
+        ):
+            raise PublicServiceError(404, "Collection not found")
+        return row
+
+    async def get_collection_sources(
+        self, collection_id: int, media_type: MediaType, art_type: ArtType
+    ) -> ArtSourcesResponse:
+        """Offer collection art through the shared candidate and slot pipeline."""
+        async with self._database.read_session() as db:
+            row = await self._require_collection(
+                db, collection_id, media_type, art_type
+            )
+            policy = CandidatePolicy.of(await get_app_settings(db))
+        sources = await self._candidates.gather_collection(row, art_type, policy)
+        return ArtSourcesResponse(
+            sources=sources.by_source, current_url=read_art_slot(row, art_type).url
+        )
+
+    async def save_collection(
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        art_type: ArtType,
+        body: SaveArtRequest,
+    ) -> StatusResponse:
+        """Upload validated bytes and record their art slot."""
+        async with self._database.read_session() as db:
+            await self._require_collection(db, collection_id, media_type, art_type)
+        selection = await self.prepare_selection(art_type, body)
+        trusted = self._config.is_trusted_media_server_url(selection.target_url)
+        fetched = await fetch_image(
+            selection.target_url,
+            await self._image_clients.get_client(selection.target_url),
+            allow_private=trusted,
+            headers=self._provider_registry.provider.get_download_headers(
+                selection.target_url
+            ),
+        )
+        _, width, height = await owned_thread(inspect_saved_image, fetched.data)
+        async with self._database.read_session() as db:
+            await _require_valid_aspect_ratio(db, art_type, width, height)
+        phash = await self._matcher.phash.compute_from_bytes(fetched.data)
+        original = await self._image_cache.store_original(fetched.data)
+        stat = await owned_thread(original.path.stat)
+        async with (
+            self._asset_storage.asset_locks.acquire(COLLECTIONS_LOCK),
+            self._asset_storage.asset_locks.acquire(f"collection:{collection_id}"),
+        ):
+            async with self._database.read_session() as db:
+                row = await self._require_collection(
+                    db, collection_id, media_type, art_type
+                )
+            await self._provider_registry.provider.upload_collection_art(
+                row.server_item_id, art_type, fetched.data, fetched.media_type
+            )
+            async with self._database.write_session() as db:
+                row = await self._require_collection(
+                    db, collection_id, media_type, art_type
+                )
+                if selection.stored_url:
+                    select_art(row, art_type, selection.stored_url)
+                record_art_file(
+                    row,
+                    art_type,
+                    ArtFileFacts(
+                        original.file_hash,
+                        phash,
+                        width,
+                        height,
+                        stat.st_mtime_ns,
+                        stat.st_size,
+                    ),
+                )
+                row.updated_at = utc_now()
+                # A stable provider path still needs a new browser cache version.
+                if art_type is ArtType.POSTER:
+                    row.thumb_url = original.file_hash
+                else:
+                    row.art_url = original.file_hash
+                db.add(row)
+        await self._publisher.broadcast(
+            "collection.updated", {"collection_id": collection_id}
+        )
+        return StatusResponse(status=Status.OK)
+
+    async def match_collection(
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        art_type: ArtType,
+        threshold: int,
+    ) -> ArtMatchResponse:
+        """Compare collection candidates using the shared pHash ranking and cache."""
+        async with self._database.read_session() as db:
+            row = await self._require_collection(
+                db, collection_id, media_type, art_type
+            )
+        request = await self._provider_registry.provider.build_collection_image_request(
+            row.server_item_id, art_type, ImageSize.DISPLAY
+        )
+        fetched = await fetch_image(
+            request.url,
+            await self._image_clients.get_client(request.url),
+            allow_private=True,
+            headers=request.headers,
+            params=request.params,
+        )
+        reference = await self._matcher.phash.compute_from_bytes(fetched.data)
+        sources = await self.get_collection_sources(collection_id, media_type, art_type)
+        candidates = list(
+            {
+                candidate.url: candidate
+                for group in sources.sources.values()
+                for candidate in group
+            }.values()
+        )
+        comparison = await self._matcher.match_candidates(
+            reference, candidates, threshold
+        )
+        return ArtMatchResponse(
+            matches=comparison.matches,
+            total_compared=comparison.compared,
+            prefiltered=comparison.prefiltered,
+            failed=comparison.failed,
+            errors=comparison.errors,
+            reference="media_server",
+        )

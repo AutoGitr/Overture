@@ -7,6 +7,7 @@ lazy from itertools import batched
 lazy from sqlmodel import col, delete, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection, MediaCollectionMember
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE
@@ -65,8 +66,13 @@ class CollectionRepository:
 
     async def member_ids(self, collection_id: int) -> list[int]:
         """Return the IDs of the stored items a collection holds."""
-        stmt = select(MediaCollectionMember.media_item_id).where(
-            col(MediaCollectionMember.collection_id) == collection_id
+        stmt = (
+            select(col(MediaCollectionMember.media_item_id))
+            .where(col(MediaCollectionMember.collection_id) == collection_id)
+            .order_by(
+                col(MediaCollectionMember.position),
+                col(MediaCollectionMember.media_item_id),
+            )
         )
         return list((await self.session.exec(stmt)).all())
 
@@ -110,6 +116,10 @@ class CollectionRepository:
                 col(MediaCollectionMember.collection_id) == collection_id,
                 col(MediaItem.server_removed_at).is_(None),
             )
+            .order_by(
+                col(MediaCollectionMember.position),
+                col(MediaCollectionMember.media_item_id),
+            )
         )
         return list((await self.session.exec(stmt)).all())
 
@@ -121,7 +131,7 @@ class CollectionRepository:
         for batch in batched(item_ids, CHUNK_SIZE, strict=False):
             stmt = (
                 select(
-                    MediaCollectionMember.media_item_id,
+                    col(MediaCollectionMember.media_item_id),
                     MediaCollection.id,
                 )
                 .join(
@@ -155,8 +165,10 @@ class CollectionRepository:
             )
         )
         self.session.add_all(
-            MediaCollectionMember(collection_id=collection_id, media_item_id=item_id)
-            for item_id in media_item_ids
+            MediaCollectionMember(
+                collection_id=collection_id, media_item_id=item_id, position=position
+            )
+            for position, item_id in enumerate(media_item_ids)
         )
 
     async def delete_ids(self, collection_ids: Sequence[int]) -> None:
@@ -188,3 +200,44 @@ class CollectionRepository:
             )
             updated += result.rowcount
         return updated
+
+    async def library_items(
+        self, media_type: MediaType, library_id: str
+    ) -> list[MediaItem]:
+        """Return active server items in one library, with deterministic order."""
+        return list(
+            (
+                await self.session.exec(
+                    select(MediaItem)
+                    .where(
+                        col(MediaItem.media_type) == media_type,
+                        col(MediaItem.library_id) == library_id,
+                        col(MediaItem.server_removed_at).is_(None),
+                        col(MediaItem.server_item_id).is_not(None),
+                    )
+                    .order_by(col(MediaItem.id))
+                )
+            ).all()
+        )
+
+    async def rule(self, collection_id: int) -> CollectionRule | None:
+        """Return the collection's sole rule."""
+        return (
+            await self.session.exec(
+                select(CollectionRule).where(
+                    col(CollectionRule.collection_id) == collection_id
+                )
+            )
+        ).first()
+
+    async def rules(self) -> list[CollectionRule]:
+        """Return enabled rules in stable order."""
+        return list(
+            (
+                await self.session.exec(
+                    select(CollectionRule)
+                    .where(col(CollectionRule.enabled).is_(True))
+                    .order_by(col(CollectionRule.id))
+                )
+            ).all()
+        )

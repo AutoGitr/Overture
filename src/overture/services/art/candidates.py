@@ -14,17 +14,26 @@ lazy import httpx2
 lazy from sqlalchemy.exc import SQLAlchemyError
 
 lazy from ...config import Settings
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings
 lazy from ...db.session import Database
-lazy from ...domain import ArtSource, ArtType, AspectRatioTolerance, TmdbLanguageFilter
+lazy from ...domain import (
+    ArtSource,
+    ArtType,
+    AspectRatioTolerance,
+    CatalogMediaType,
+    TmdbLanguageFilter,
+)
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.errors import public_error_message
 lazy from ...utils.image import is_valid_aspect_ratio, is_valid_image_format
-lazy from ..public_dataset.lookup import get_art_candidates
+lazy from ..public_dataset.lookup import build_candidate, get_art_candidates
 lazy from ..public_dataset.schema.contract import art_source
+lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from ..server_identity import resolve_server_item_id
 
 logger = logging.getLogger(__name__)
@@ -125,6 +134,11 @@ class ArtCandidates:
             lookups[ArtSource.OVERTUREDB] = self._overturedb_candidates(
                 item, art_type, season_num
             )
+        return await self._resolve(item.title, lookups)
+
+    async def _resolve(
+        self, title: str, lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]]
+    ) -> CandidateSources:
         sources = CandidateSources()
         results = await asyncio.gather(*lookups.values(), return_exceptions=True)
         for name, result in zip(lookups, results, strict=True):
@@ -134,7 +148,7 @@ class ArtCandidates:
                 sources.errors.append(
                     f"{name} artwork lookup failed: {public_error_message(result)}"
                 )
-                logger.warning("%s artwork for %s failed: %s", name, item.title, result)
+                logger.warning("%s artwork for %s failed: %s", name, title, result)
             elif isinstance(result, BaseException):
                 raise result
             else:
@@ -175,6 +189,11 @@ class ArtCandidates:
         )
         if not server_id:
             return []
+        return await self._server_art(server_id, art_type, policy)
+
+    async def _server_art(
+        self, server_id: str, art_type: ArtType, policy: CandidatePolicy
+    ) -> list[ArtCandidate]:
         candidates = await self._providers.provider.get_art_candidates(
             server_id, art_type
         )
@@ -202,3 +221,58 @@ class ArtCandidates:
                 season_num,
                 app_config=self._app_config,
             )
+
+    async def gather_collection(
+        self, collection: MediaCollection, art_type: ArtType, policy: CandidatePolicy
+    ) -> CandidateSources:
+        """Use the same source policy, ordering and error handling for collections."""
+        lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {}
+        if self._app_config.tmdb_configured and collection.tmdb_collection_id:
+            lookups[ArtSource.TMDB] = self._collection_tmdb(
+                collection.tmdb_collection_id, art_type, policy
+            )
+        if not policy.disable_media_server_art:
+            lookups[self._providers.provider.server_type] = self._server_art(
+                collection.server_item_id, art_type, policy
+            )
+        lookups[ArtSource.OVERTUREDB] = self._collection_catalog(collection, art_type)
+        return await self._resolve(collection.title, lookups)
+
+    async def _collection_tmdb(
+        self, tmdb_id: int, art_type: ArtType, policy: CandidatePolicy
+    ) -> list[ArtCandidate]:
+        return [
+            candidate
+            for candidate in await self._tmdb.art_candidates(
+                CatalogMediaType.COLLECTION,
+                tmdb_id,
+                art_type,
+                language_filter=policy.tmdb_language_filter,
+            )
+            if policy.accepts(candidate, art_type)
+        ]
+
+    async def _collection_catalog(
+        self, collection: MediaCollection, art_type: ArtType
+    ) -> list[ArtCandidate]:
+        async with self._database.read_session() as session:
+            schedule = await load_schedule(
+                session, PUBLIC_DATASET_SCHEDULE, timezone=self._app_config.TZ
+            )
+            if not schedule.enabled or not collection.tmdb_collection_id:
+                return []
+            entries = await PublicDatasetRepository(session).collections_by_tmdb_id(
+                {collection.tmdb_collection_id}
+            )
+            entry = entries.get(collection.tmdb_collection_id)
+        url = (
+            (
+                entry.background_url
+                if art_type is ArtType.BACKGROUND
+                else entry.poster_url
+            )
+            if entry
+            else None
+        )
+        candidate = build_candidate(url, art_type)
+        return [candidate] if candidate else []

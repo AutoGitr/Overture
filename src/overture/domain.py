@@ -39,6 +39,46 @@ class CollectionMatch(StrEnum):
     UNMATCHED = "unmatched"
 
 
+class SyncMode(StrEnum):
+    """How a dynamic collection applies source membership."""
+
+    SYNC = "sync"
+    APPEND = "append"
+
+
+class CollectionMode(StrEnum):
+    """Collection visibility on servers supporting library display modes."""
+
+    DEFAULT = "default"
+    HIDE_ITEMS = "hide_items"
+    SHOW_ITEMS = "show_items"
+    HIDE = "hide"
+
+
+class CollectionOrder(StrEnum):
+    """The order in which collection members appear."""
+
+    RELEASE = "release"
+    ALPHA = "alpha"
+    CUSTOM = "custom"
+
+
+class RuleSourceType(StrEnum):
+    """Supported dynamic collection sources."""
+
+    MDBLIST = "mdblist"
+    TMDB = "tmdb"
+    FILTER = "filter"
+
+
+class CollectionPreset(StrEnum):
+    """Library metadata used to generate collections."""
+
+    DECADES = "decades"
+    STUDIOS = "studios"
+    GENRES = "genres"
+
+
 class ThemeIdSource(StrEnum):
     """Evidence used to record an item's selected YouTube ID."""
 

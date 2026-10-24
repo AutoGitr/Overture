@@ -194,6 +194,7 @@ def media_item_read_from_model(
             **item.model_dump(
                 exclude={
                     "director_etag",
+                    "genres",
                     "theme_file_mtime_ns",
                     "theme_file_size",
                     "theme_file_duration",

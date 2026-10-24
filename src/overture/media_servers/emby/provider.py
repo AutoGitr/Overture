@@ -6,7 +6,7 @@ lazy from typing import ClassVar, override
 
 lazy from ...config import Settings
 lazy from ...domain import ServerType
-lazy from ..adapters import ServerItem
+lazy from ..adapters import NoCollectionThemes, ServerItem
 lazy from ..jellyfin.provider import MediaBrowserProvider
 lazy from .client import EmbyClient
 
@@ -18,6 +18,7 @@ class EmbyProvider(MediaBrowserProvider[EmbyClient]):
     """
 
     server_type: ClassVar[ServerType] = ServerType.EMBY
+    collections = NoCollectionThemes()
 
     def __init__(
         self, *, client: EmbyClient | None = None, app_config: Settings

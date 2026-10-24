@@ -1,7 +1,7 @@
 """Single read/write surface for artwork slots.
 
-Media items and seasons both expose artwork rows through an ``art_slots``
-collection, so every helper here works the same way for either owner. Callers
+Items, seasons and collections expose artwork through ``art_slots``, so every
+helper works the same way for all owners. Callers
 name the slot they want with an :class:`~overture.domain.ArtType`; nothing
 outside this module builds slot rows by hand.
 """
@@ -11,23 +11,30 @@ lazy from operator import attrgetter
 
 lazy from ..domain import ArtType
 lazy from .models.art import ART_SLOT_FIELDS, ArtSlot
+lazy from .models.media_collection import MediaCollection
 lazy from .models.media_item import MediaItem
 lazy from .models.season import Season
 
 
-def _slots(owner: MediaItem | Season) -> list[ArtSlot]:
+def _slots(owner: MediaItem | Season | MediaCollection) -> list[ArtSlot]:
     """Return the owner's slot rows."""
     return owner.art_slots
 
 
-def _empty_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot:
+def _empty_slot(
+    owner: MediaItem | Season | MediaCollection, art_type: ArtType
+) -> ArtSlot:
     """Return an unattached slot row of the right type for *owner*."""
+    if isinstance(owner, MediaCollection):
+        return ArtSlot(collection_id=owner.id, art_type=art_type)
     if isinstance(owner, Season):
         return ArtSlot(season_id=owner.id, art_type=art_type)
     return ArtSlot(media_item_id=owner.id, art_type=art_type)
 
 
-def find_art_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot | None:
+def find_art_slot(
+    owner: MediaItem | Season | MediaCollection, art_type: ArtType
+) -> ArtSlot | None:
     """Return the stored slot for *art_type*, or ``None`` when absent."""
     for slot in _slots(owner):
         if slot.art_type == art_type:
@@ -35,7 +42,7 @@ def find_art_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot | Non
     return None
 
 
-def art_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot:
+def art_slot(owner: MediaItem | Season | MediaCollection, art_type: ArtType) -> ArtSlot:
     """Return the slot for *art_type*, creating an empty one when absent.
 
     The new row is attached to the owner's collection, so the ORM inserts it
@@ -49,7 +56,9 @@ def art_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot:
     return created
 
 
-def read_art_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot:
+def read_art_slot(
+    owner: MediaItem | Season | MediaCollection, art_type: ArtType
+) -> ArtSlot:
     """Return the slot for *art_type* without attaching a row to the session.
 
     Use this on read paths; it hands back a detached, empty slot when the
@@ -59,7 +68,7 @@ def read_art_slot(owner: MediaItem | Season, art_type: ArtType) -> ArtSlot:
 
 
 def write_art_slot(
-    owner: MediaItem | Season,
+    owner: MediaItem | Season | MediaCollection,
     art_type: ArtType,
     **fields: object,
 ) -> ArtSlot:
@@ -126,7 +135,9 @@ def art_file_columns(slot: ArtSlot | ArtFileFacts | None) -> ArtFileColumns:
 
 
 def record_art_file(
-    owner: MediaItem | Season, art_type: ArtType, facts: ArtFileFacts | None
+    owner: MediaItem | Season | MediaCollection,
+    art_type: ArtType,
+    facts: ArtFileFacts | None,
 ) -> ArtSlot | None:
     """Record the slot's local file, or its absence when *facts* is ``None``.
 
@@ -143,12 +154,16 @@ def record_art_file(
     return None
 
 
-def select_art(owner: MediaItem | Season, art_type: ArtType, url: str) -> ArtSlot:
+def select_art(
+    owner: MediaItem | Season | MediaCollection, art_type: ArtType, url: str
+) -> ArtSlot:
     """Record *url* as the slot's selected artwork, leaving file facts alone."""
     return write_art_slot(owner, art_type, url=url)
 
 
-def clear_art_selection(owner: MediaItem | Season, art_type: ArtType) -> None:
+def clear_art_selection(
+    owner: MediaItem | Season | MediaCollection, art_type: ArtType
+) -> None:
     """Forget the slot's selected URL; facts about a local file are kept."""
     slot = find_art_slot(owner, art_type)
     if slot is None:
@@ -157,7 +172,7 @@ def clear_art_selection(owner: MediaItem | Season, art_type: ArtType) -> None:
     _drop_if_empty(owner, slot)
 
 
-def _drop_if_empty(owner: MediaItem | Season, slot: ArtSlot) -> None:
+def _drop_if_empty(owner: MediaItem | Season | MediaCollection, slot: ArtSlot) -> None:
     """Delete a row that no longer records a selection or a local file."""
     if slot.url is None and slot.file_hash is None:
         _slots(owner).remove(slot)

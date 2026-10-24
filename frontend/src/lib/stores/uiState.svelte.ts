@@ -19,7 +19,16 @@ import { readJson, writeJson } from "../utils/storage";
 export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
 
 export type PopupType =
-  null | "filters" | "operations" | "settings" | "database" | "overturedb" | "backup" | "stats";
+  | null
+  | "filters"
+  | "operations"
+  | "settings"
+  | "database"
+  | "overturedb"
+  | "backup"
+  | "stats"
+  | "newCollection"
+  | "collectionGenerator";
 
 export type Completeness = "all" | "complete" | "incomplete";
 

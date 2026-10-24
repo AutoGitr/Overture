@@ -127,8 +127,8 @@ async def test_failed_startup_migration_rolls_back_and_restores_foreign_keys(
         def failing_migration(connection: Connection) -> tuple[str, str]:
             connection.exec_driver_sql(
                 "INSERT INTO media_items "
-                "(id, media_type, title, monitored, theme_provenance_cleared) "
-                "VALUES (1, 'show', 'Must roll back', 1, 0)"
+                "(id, media_type, title, monitored, theme_provenance_cleared, genres) "
+                "VALUES (1, 'show', 'Must roll back', 1, 0, '[]')"
             )
             if invalid_reference:
                 connection.exec_driver_sql(
@@ -403,5 +403,81 @@ def test_collection_ids_upgrade_jobs_and_history_and_downgrade_without_loss(
             )
             command.upgrade(config, "head")
             assert conn.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+    finally:
+        engine.dispose()
+
+
+def test_revision_5_preserves_collection_members_art_and_settings() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "4")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "theme_provenance_cleared) VALUES (1, 'movie', 'Movie', 1, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, server_item_id, media_type, "
+                "server_type, title, child_count, monitored, tmdb_match) VALUES "
+                "(1, 'server', 'movie', 'plex', 'Saga', 1, 1, 'auto')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collection_members (collection_id, "
+                "media_item_id) VALUES (1, 1)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (media_item_id, art_type, url) VALUES (1, "
+                "'poster', 'https://example.test/a.jpg')"
+            )
+            # The former singleton may already hold non-default user choices.
+            conn.exec_driver_sql(
+                "INSERT INTO app_settings (id, auto_match_art, workflow, "
+                "theme_search_format, min_duration_seconds, max_duration_seconds, "
+                "normalize_theme_loudness, skip_media_server_tmdb_urls, "
+                "disable_media_server_art, aspect_ratio_tolerance, "
+                "tmdb_language_filter, auto_advance, auto_advance_skip_completed, "
+                "auto_unmonitor) VALUES (1, 1, 'art', 'custom', 30, 300, 1, 0, 0, "
+                "'strict', 'en_null', 0, 1, 'off')"
+            )
+            command.upgrade(config, "head")
+            assert conn.exec_driver_sql(
+                "SELECT collection_sync_mode, collection_minimum_items, "
+                "auto_match_art FROM app_settings"
+            ).one() == ("sync", 1, 1)
+            assert conn.exec_driver_sql(
+                "SELECT order_type, visible_home FROM media_collections"
+            ).one() == ("release", 0)
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT position FROM media_collection_members"
+                ).scalar_one()
+                == 0
+            )
+            assert (
+                conn.exec_driver_sql("SELECT genres FROM media_items").scalar_one()
+                == "[]"
+            )
+            assert (
+                conn.exec_driver_sql("SELECT url FROM art_slots").scalar_one()
+                == "https://example.test/a.jpg"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (collection_id, art_type, url) VALUES (1, "
+                "'poster', 'https://example.test/collection.jpg')"
+            )
+            command.downgrade(config, "4")
+            assert (
+                conn.exec_driver_sql("SELECT url FROM art_slots").scalar_one()
+                == "https://example.test/a.jpg"
+            )
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT media_item_id FROM media_collection_members"
+                ).scalar_one()
+                == 1
+            )
+            command.upgrade(config, "head")
     finally:
         engine.dispose()

@@ -32,6 +32,24 @@ export type AppSettingsRead = {
     auto_match_art: boolean;
     auto_unmonitor: AutoUnmonitor;
     /**
+     * Collection Auto Match Art
+     */
+    collection_auto_match_art: boolean;
+    /**
+     * Collection Auto Match Theme
+     */
+    collection_auto_match_theme: boolean;
+    /**
+     * Collection Delete Below Minimum
+     */
+    collection_delete_below_minimum: boolean;
+    /**
+     * Collection Minimum Items
+     */
+    collection_minimum_items: number;
+    collection_mode_default: CollectionMode;
+    collection_sync_mode: SyncMode;
+    /**
      * Collection Themes Unavailable
      */
     collection_themes_unavailable: string | null;
@@ -106,6 +124,24 @@ export type AppSettingsUpdate = {
      */
     auto_match_art?: boolean | null;
     auto_unmonitor?: AutoUnmonitor | null;
+    /**
+     * Collection Auto Match Art
+     */
+    collection_auto_match_art?: boolean | null;
+    /**
+     * Collection Auto Match Theme
+     */
+    collection_auto_match_theme?: boolean | null;
+    /**
+     * Collection Delete Below Minimum
+     */
+    collection_delete_below_minimum?: boolean | null;
+    /**
+     * Collection Minimum Items
+     */
+    collection_minimum_items?: number | null;
+    collection_mode_default?: CollectionMode | null;
+    collection_sync_mode?: SyncMode | null;
     /**
      * Disable Media Server Art
      */
@@ -1040,6 +1076,41 @@ export type CatalogSeason = {
 };
 
 /**
+ * CollectionCreate
+ *
+ * Create a collection in one selected library.
+ */
+export type CollectionCreate = {
+    collection_mode?: CollectionMode | null;
+    /**
+     * Library Id
+     */
+    library_id: string;
+    media_type: MediaType;
+    /**
+     * Member Ids
+     */
+    member_ids: Array<number>;
+    order_type?: CollectionOrder;
+    /**
+     * Sort Title
+     */
+    sort_title?: string | null;
+    /**
+     * Summary
+     */
+    summary?: string | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean;
+};
+
+/**
  * CollectionDetail
  *
  * One collection with its members and what limits its theme.
@@ -1061,6 +1132,7 @@ export type CollectionDetail = {
      * Child Count
      */
     child_count: number;
+    collection_mode: CollectionMode | null;
     /**
      * Has Theme
      */
@@ -1082,6 +1154,7 @@ export type CollectionDetail = {
      * Monitored
      */
     monitored: boolean;
+    order_type: CollectionOrder;
     /**
      * Public Dataset Complete
      */
@@ -1090,6 +1163,7 @@ export type CollectionDetail = {
      * Public Dataset Themerrdb
      */
     public_dataset_themerrdb: boolean;
+    rule: CollectionRuleRead | null;
     /**
      * Server Added At
      */
@@ -1099,6 +1173,10 @@ export type CollectionDetail = {
      */
     server_link: string | null;
     server_type: ServerType;
+    /**
+     * Sort Title
+     */
+    sort_title: string | null;
     /**
      * Summary
      */
@@ -1126,6 +1204,10 @@ export type CollectionDetail = {
     tmdb_collection_id: number | null;
     tmdb_match: CollectionMatch;
     /**
+     * Visible Home
+     */
+    visible_home: boolean;
+    /**
      * Youtube Duration
      */
     youtube_duration: number | null;
@@ -1145,6 +1227,82 @@ export type CollectionDetail = {
      * Youtube Title
      */
     youtube_title: string | null;
+};
+
+/**
+ * CollectionFilter
+ *
+ * An intersection of filters over the current server library.
+ */
+export type CollectionFilterInput = {
+    /**
+     * Decade
+     */
+    decade?: number | null;
+    /**
+     * Genre
+     */
+    genre?: string | null;
+    /**
+     * Studio
+     */
+    studio?: string | null;
+};
+
+/**
+ * CollectionFilter
+ *
+ * An intersection of filters over the current server library.
+ */
+export type CollectionFilterOutput = {
+    /**
+     * Decade
+     */
+    decade: number | null;
+    /**
+     * Genre
+     */
+    genre: string | null;
+    /**
+     * Studio
+     */
+    studio: string | null;
+};
+
+/**
+ * CollectionGenerateRequest
+ *
+ * Preview or generate collections from metadata already in the library.
+ */
+export type CollectionGenerateRequest = {
+    /**
+     * Library Id
+     */
+    library_id: string;
+    media_type: MediaType;
+    preset: CollectionPreset;
+    /**
+     * Titles
+     */
+    titles?: Array<string>;
+};
+
+/**
+ * CollectionGenerateResponse
+ *
+ * Per-collection generator results; one failure leaves others intact.
+ */
+export type CollectionGenerateResponse = {
+    /**
+     * Created
+     */
+    created: Array<number>;
+    /**
+     * Errors
+     */
+    errors: {
+        [key: string]: string;
+    };
 };
 
 /**
@@ -1171,6 +1329,83 @@ export type CollectionMatchRequest = {
 };
 
 /**
+ * CollectionMembersUpdate
+ *
+ * Replace membership and optionally set its display order.
+ */
+export type CollectionMembersUpdate = {
+    /**
+     * Member Ids
+     */
+    member_ids: Array<number>;
+    order_type: CollectionOrder;
+};
+
+/**
+ * CollectionMode
+ *
+ * Collection visibility on servers supporting library display modes.
+ */
+export type CollectionMode = 'default' | 'hide_items' | 'show_items' | 'hide';
+
+/**
+ * CollectionOptions
+ *
+ * Editable collection metadata and server display options.
+ */
+export type CollectionOptions = {
+    collection_mode?: CollectionMode | null;
+    order_type?: CollectionOrder;
+    /**
+     * Sort Title
+     */
+    sort_title?: string | null;
+    /**
+     * Summary
+     */
+    summary?: string | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean;
+};
+
+/**
+ * CollectionOrder
+ *
+ * The order in which collection members appear.
+ */
+export type CollectionOrder = 'release' | 'alpha' | 'custom';
+
+/**
+ * CollectionPreset
+ *
+ * Library metadata used to generate collections.
+ */
+export type CollectionPreset = 'decades' | 'studios' | 'genres';
+
+/**
+ * CollectionPresetRead
+ *
+ * A generator candidate with its matching library count.
+ */
+export type CollectionPresetRead = {
+    /**
+     * Count
+     */
+    count: number;
+    filters: CollectionFilterOutput;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
  * CollectionRead
  *
  * Media-server collection response.
@@ -1184,6 +1419,7 @@ export type CollectionRead = {
      * Child Count
      */
     child_count: number;
+    collection_mode: CollectionMode | null;
     /**
      * Has Theme
      */
@@ -1201,6 +1437,7 @@ export type CollectionRead = {
      * Monitored
      */
     monitored: boolean;
+    order_type: CollectionOrder;
     /**
      * Public Dataset Complete
      */
@@ -1218,6 +1455,10 @@ export type CollectionRead = {
      */
     server_link: string | null;
     server_type: ServerType;
+    /**
+     * Sort Title
+     */
+    sort_title: string | null;
     /**
      * Summary
      */
@@ -1237,6 +1478,10 @@ export type CollectionRead = {
     tmdb_collection_id: number | null;
     tmdb_match: CollectionMatch;
     /**
+     * Visible Home
+     */
+    visible_home: boolean;
+    /**
      * Youtube Duration
      */
     youtube_duration: number | null;
@@ -1248,6 +1493,100 @@ export type CollectionRead = {
      * Youtube Title
      */
     youtube_title: string | null;
+};
+
+/**
+ * CollectionRuleRead
+ *
+ * Saved rule with its most recent outcome.
+ */
+export type CollectionRuleRead = {
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum: boolean | null;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    filters: CollectionFilterOutput;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Last Synced At
+     */
+    last_synced_at: string | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    /**
+     * Source Identifier
+     */
+    source_identifier: string;
+    source_type: RuleSourceType;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours: number;
+    sync_mode: SyncMode | null;
+};
+
+/**
+ * CollectionRuleWrite
+ *
+ * A dynamic source with nullable overrides of global defaults.
+ */
+export type CollectionRuleWrite = {
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum?: boolean | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    filters?: CollectionFilterInput;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
+    /**
+     * Source Identifier
+     */
+    source_identifier?: string;
+    source_type: RuleSourceType;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours?: number;
+    sync_mode?: SyncMode | null;
+};
+
+/**
+ * CollectionSyncResponse
+ *
+ * What one rule run changed.
+ */
+export type CollectionSyncResponse = {
+    /**
+     * Added
+     */
+    added: number;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Removed
+     */
+    removed: number;
+    /**
+     * Skipped
+     */
+    skipped: boolean;
 };
 
 /**
@@ -2524,6 +2863,13 @@ export type RenameRequest = {
 export type RenameStatus = 'renamed' | 'conflict' | 'error';
 
 /**
+ * RuleSourceType
+ *
+ * Supported dynamic collection sources.
+ */
+export type RuleSourceType = 'mdblist' | 'tmdb' | 'filter';
+
+/**
  * SaveArtRequest
  *
  * The chosen artwork for one slot.
@@ -2835,6 +3181,13 @@ export type StorageSummary = {
      */
     total_footprint_bytes: number;
 };
+
+/**
+ * SyncMode
+ *
+ * How a dynamic collection applies source membership.
+ */
+export type SyncMode = 'sync' | 'append';
 
 /**
  * SyncRunRequest
@@ -4142,6 +4495,31 @@ export type ListCollectionsResponses = {
 
 export type ListCollectionsResponse = ListCollectionsResponses[keyof ListCollectionsResponses];
 
+export type CreateCollectionData = {
+    body: CollectionCreate;
+    path?: never;
+    query?: never;
+    url: '/api/collections';
+};
+
+export type CreateCollectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateCollectionError = CreateCollectionErrors[keyof CreateCollectionErrors];
+
+export type CreateCollectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type CreateCollectionResponse = CreateCollectionResponses[keyof CreateCollectionResponses];
+
 export type BulkSetCollectionMonitoredData = {
     body: BulkCollectionMonitorUpdate;
     path?: never;
@@ -4166,6 +4544,95 @@ export type BulkSetCollectionMonitoredResponses = {
 };
 
 export type BulkSetCollectionMonitoredResponse = BulkSetCollectionMonitoredResponses[keyof BulkSetCollectionMonitoredResponses];
+
+export type GenerateCollectionsData = {
+    body: CollectionGenerateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/collections/generator/apply';
+};
+
+export type GenerateCollectionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GenerateCollectionsError = GenerateCollectionsErrors[keyof GenerateCollectionsErrors];
+
+export type GenerateCollectionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionGenerateResponse;
+};
+
+export type GenerateCollectionsResponse = GenerateCollectionsResponses[keyof GenerateCollectionsResponses];
+
+export type PreviewCollectionGeneratorData = {
+    body: CollectionGenerateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/collections/generator/preview';
+};
+
+export type PreviewCollectionGeneratorErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewCollectionGeneratorError = PreviewCollectionGeneratorErrors[keyof PreviewCollectionGeneratorErrors];
+
+export type PreviewCollectionGeneratorResponses = {
+    /**
+     * Response Preview Collection Generator
+     *
+     * Successful Response
+     */
+    200: Array<CollectionPresetRead>;
+};
+
+export type PreviewCollectionGeneratorResponse = PreviewCollectionGeneratorResponses[keyof PreviewCollectionGeneratorResponses];
+
+export type DeleteCollectionData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}';
+};
+
+export type DeleteCollectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteCollectionError = DeleteCollectionErrors[keyof DeleteCollectionErrors];
+
+export type DeleteCollectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type DeleteCollectionResponse = DeleteCollectionResponses[keyof DeleteCollectionResponses];
 
 export type GetCollectionData = {
     body?: never;
@@ -4203,6 +4670,170 @@ export type GetCollectionResponses = {
 };
 
 export type GetCollectionResponse = GetCollectionResponses[keyof GetCollectionResponses];
+
+export type UpdateCollectionData = {
+    body: CollectionOptions;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}';
+};
+
+export type UpdateCollectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateCollectionError = UpdateCollectionErrors[keyof UpdateCollectionErrors];
+
+export type UpdateCollectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type UpdateCollectionResponse = UpdateCollectionResponses[keyof UpdateCollectionResponses];
+
+export type SaveCollectionArtData = {
+    body: SaveArtRequest;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/art/{art_type}';
+};
+
+export type SaveCollectionArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SaveCollectionArtError = SaveCollectionArtErrors[keyof SaveCollectionArtErrors];
+
+export type SaveCollectionArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type SaveCollectionArtResponse = SaveCollectionArtResponses[keyof SaveCollectionArtResponses];
+
+export type MatchCollectionArtData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Threshold
+         */
+        threshold?: number;
+    };
+    url: '/api/collections/{collection_id}/art/{art_type}/match';
+};
+
+export type MatchCollectionArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MatchCollectionArtError = MatchCollectionArtErrors[keyof MatchCollectionArtErrors];
+
+export type MatchCollectionArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtMatchResponse;
+};
+
+export type MatchCollectionArtResponse = MatchCollectionArtResponses[keyof MatchCollectionArtResponses];
+
+export type GetCollectionArtSourcesData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/art/{art_type}/sources';
+};
+
+export type GetCollectionArtSourcesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionArtSourcesError = GetCollectionArtSourcesErrors[keyof GetCollectionArtSourcesErrors];
+
+export type GetCollectionArtSourcesResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtSourcesResponse;
+};
+
+export type GetCollectionArtSourcesResponse = GetCollectionArtSourcesResponses[keyof GetCollectionArtSourcesResponses];
 
 export type ProxyCollectionImageData = {
     body?: never;
@@ -4314,6 +4945,43 @@ export type SetCollectionMatchResponses = {
 
 export type SetCollectionMatchResponse = SetCollectionMatchResponses[keyof SetCollectionMatchResponses];
 
+export type SetCollectionMembersData = {
+    body: CollectionMembersUpdate;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/members';
+};
+
+export type SetCollectionMembersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetCollectionMembersError = SetCollectionMembersErrors[keyof SetCollectionMembersErrors];
+
+export type SetCollectionMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type SetCollectionMembersResponse = SetCollectionMembersResponses[keyof SetCollectionMembersResponses];
+
 export type SetCollectionMonitoredData = {
     body: MonitorUpdate;
     path: {
@@ -4351,6 +5019,80 @@ export type SetCollectionMonitoredResponses = {
 
 export type SetCollectionMonitoredResponse = SetCollectionMonitoredResponses[keyof SetCollectionMonitoredResponses];
 
+export type DeleteCollectionRuleData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/rule';
+};
+
+export type DeleteCollectionRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteCollectionRuleError = DeleteCollectionRuleErrors[keyof DeleteCollectionRuleErrors];
+
+export type DeleteCollectionRuleResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type DeleteCollectionRuleResponse = DeleteCollectionRuleResponses[keyof DeleteCollectionRuleResponses];
+
+export type SaveCollectionRuleData = {
+    body: CollectionRuleWrite;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/rule';
+};
+
+export type SaveCollectionRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SaveCollectionRuleError = SaveCollectionRuleErrors[keyof SaveCollectionRuleErrors];
+
+export type SaveCollectionRuleResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionRuleRead;
+};
+
+export type SaveCollectionRuleResponse = SaveCollectionRuleResponses[keyof SaveCollectionRuleResponses];
+
 export type GetCollectionSourcesData = {
     body?: never;
     path: {
@@ -4387,6 +5129,43 @@ export type GetCollectionSourcesResponses = {
 };
 
 export type GetCollectionSourcesResponse = GetCollectionSourcesResponses[keyof GetCollectionSourcesResponses];
+
+export type SyncCollectionRuleData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/sync';
+};
+
+export type SyncCollectionRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SyncCollectionRuleError = SyncCollectionRuleErrors[keyof SyncCollectionRuleErrors];
+
+export type SyncCollectionRuleResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionSyncResponse;
+};
+
+export type SyncCollectionRuleResponse = SyncCollectionRuleResponses[keyof SyncCollectionRuleResponses];
 
 export type DeleteCollectionThemeData = {
     body?: never;

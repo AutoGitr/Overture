@@ -27,6 +27,7 @@ lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.server_identity import resolve_server_item_id
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopTmdb,
@@ -140,6 +141,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
             app_config=app_config,
         ),
         image_clients=unused(ProxyClientManager),
+        image_cache=unused(ImageCache),
     )
 
     async def unrelated_write() -> None:

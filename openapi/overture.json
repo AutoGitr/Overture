@@ -33,6 +33,36 @@
             "$ref": "#/components/schemas/AutoUnmonitor",
             "default": "off"
           },
+          "collection_auto_match_art": {
+            "default": false,
+            "title": "Collection Auto Match Art",
+            "type": "boolean"
+          },
+          "collection_auto_match_theme": {
+            "default": false,
+            "title": "Collection Auto Match Theme",
+            "type": "boolean"
+          },
+          "collection_delete_below_minimum": {
+            "default": false,
+            "title": "Collection Delete Below Minimum",
+            "type": "boolean"
+          },
+          "collection_minimum_items": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Collection Minimum Items",
+            "type": "integer"
+          },
+          "collection_mode_default": {
+            "$ref": "#/components/schemas/CollectionMode",
+            "default": "default"
+          },
+          "collection_sync_mode": {
+            "$ref": "#/components/schemas/SyncMode",
+            "default": "sync"
+          },
           "collection_themes_unavailable": {
             "anyOf": [
               {
@@ -127,6 +157,12 @@
           }
         },
         "required": [
+          "collection_sync_mode",
+          "collection_mode_default",
+          "collection_minimum_items",
+          "collection_delete_below_minimum",
+          "collection_auto_match_art",
+          "collection_auto_match_theme",
           "auto_match_art",
           "workflow",
           "theme_search_format",
@@ -202,6 +238,70 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/AutoUnmonitor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Auto Match Art"
+          },
+          "collection_auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Auto Match Theme"
+          },
+          "collection_delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Delete Below Minimum"
+          },
+          "collection_minimum_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Minimum Items"
+          },
+          "collection_mode_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
               },
               {
                 "type": "null"
@@ -2038,6 +2138,88 @@
         "title": "CatalogSeason",
         "type": "object"
       },
+      "CollectionCreate": {
+        "additionalProperties": false,
+        "description": "Create a collection in one selected library.",
+        "properties": {
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "library_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "member_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Member Ids",
+            "type": "array"
+          },
+          "order_type": {
+            "$ref": "#/components/schemas/CollectionOrder",
+            "default": "release"
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "visible_home": {
+            "default": false,
+            "title": "Visible Home",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title",
+          "media_type",
+          "library_id",
+          "member_ids"
+        ],
+        "title": "CollectionCreate",
+        "type": "object"
+      },
       "CollectionDetail": {
         "additionalProperties": false,
         "description": "One collection with its members and what limits its theme.",
@@ -2080,6 +2262,16 @@
             "title": "Child Count",
             "type": "integer"
           },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "has_theme": {
             "default": false,
             "title": "Has Theme",
@@ -2115,6 +2307,10 @@
             "title": "Monitored",
             "type": "boolean"
           },
+          "order_type": {
+            "$ref": "#/components/schemas/CollectionOrder",
+            "default": "release"
+          },
           "public_dataset_complete": {
             "default": false,
             "title": "Public Dataset Complete",
@@ -2124,6 +2320,16 @@
             "default": false,
             "title": "Public Dataset Themerrdb",
             "type": "boolean"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionRuleRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "server_added_at": {
             "anyOf": [
@@ -2149,6 +2355,17 @@
           },
           "server_type": {
             "$ref": "#/components/schemas/ServerType"
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
           },
           "summary": {
             "anyOf": [
@@ -2211,6 +2428,11 @@
             "$ref": "#/components/schemas/CollectionMatch",
             "default": "auto"
           },
+          "visible_home": {
+            "default": false,
+            "title": "Visible Home",
+            "type": "boolean"
+          },
           "youtube_duration": {
             "anyOf": [
               {
@@ -2271,6 +2493,10 @@
           "id",
           "title",
           "summary",
+          "sort_title",
+          "collection_mode",
+          "order_type",
+          "visible_home",
           "thumb_url",
           "art_url",
           "child_count",
@@ -2290,6 +2516,7 @@
           "public_dataset_complete",
           "public_dataset_themerrdb",
           "members",
+          "rule",
           "theme_unavailable",
           "theme_writable",
           "catalog_entry_key",
@@ -2298,6 +2525,165 @@
           "youtube_id_themerrdb"
         ],
         "title": "CollectionDetail",
+        "type": "object"
+      },
+      "CollectionFilter-Input": {
+        "additionalProperties": false,
+        "description": "An intersection of filters over the current server library.",
+        "properties": {
+          "decade": {
+            "anyOf": [
+              {
+                "maximum": 3000.0,
+                "minimum": 1800.0,
+                "multipleOf": 10.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decade"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre"
+          },
+          "studio": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Studio"
+          }
+        },
+        "title": "CollectionFilter",
+        "type": "object"
+      },
+      "CollectionFilter-Output": {
+        "additionalProperties": false,
+        "description": "An intersection of filters over the current server library.",
+        "properties": {
+          "decade": {
+            "anyOf": [
+              {
+                "maximum": 3000.0,
+                "minimum": 1800.0,
+                "multipleOf": 10.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decade"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre"
+          },
+          "studio": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Studio"
+          }
+        },
+        "required": [
+          "decade",
+          "studio",
+          "genre"
+        ],
+        "title": "CollectionFilter",
+        "type": "object"
+      },
+      "CollectionGenerateRequest": {
+        "additionalProperties": false,
+        "description": "Preview or generate collections from metadata already in the library.",
+        "properties": {
+          "library_id": {
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "preset": {
+            "$ref": "#/components/schemas/CollectionPreset"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Titles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "media_type",
+          "library_id",
+          "preset"
+        ],
+        "title": "CollectionGenerateRequest",
+        "type": "object"
+      },
+      "CollectionGenerateResponse": {
+        "additionalProperties": false,
+        "description": "Per-collection generator results; one failure leaves others intact.",
+        "properties": {
+          "created": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "object"
+          }
+        },
+        "required": [
+          "created",
+          "errors"
+        ],
+        "title": "CollectionGenerateResponse",
         "type": "object"
       },
       "CollectionMatch": {
@@ -2337,6 +2723,145 @@
         "title": "CollectionMatchRequest",
         "type": "object"
       },
+      "CollectionMembersUpdate": {
+        "additionalProperties": false,
+        "description": "Replace membership and optionally set its display order.",
+        "properties": {
+          "member_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 10000,
+            "title": "Member Ids",
+            "type": "array"
+          },
+          "order_type": {
+            "$ref": "#/components/schemas/CollectionOrder"
+          }
+        },
+        "required": [
+          "member_ids",
+          "order_type"
+        ],
+        "title": "CollectionMembersUpdate",
+        "type": "object"
+      },
+      "CollectionMode": {
+        "description": "Collection visibility on servers supporting library display modes.",
+        "enum": [
+          "default",
+          "hide_items",
+          "show_items",
+          "hide"
+        ],
+        "title": "CollectionMode",
+        "type": "string"
+      },
+      "CollectionOptions": {
+        "additionalProperties": false,
+        "description": "Editable collection metadata and server display options.",
+        "properties": {
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order_type": {
+            "$ref": "#/components/schemas/CollectionOrder",
+            "default": "release"
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "visible_home": {
+            "default": false,
+            "title": "Visible Home",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "CollectionOptions",
+        "type": "object"
+      },
+      "CollectionOrder": {
+        "description": "The order in which collection members appear.",
+        "enum": [
+          "release",
+          "alpha",
+          "custom"
+        ],
+        "title": "CollectionOrder",
+        "type": "string"
+      },
+      "CollectionPreset": {
+        "description": "Library metadata used to generate collections.",
+        "enum": [
+          "decades",
+          "studios",
+          "genres"
+        ],
+        "title": "CollectionPreset",
+        "type": "string"
+      },
+      "CollectionPresetRead": {
+        "additionalProperties": false,
+        "description": "A generator candidate with its matching library count.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/CollectionFilter-Output"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "count",
+          "filters"
+        ],
+        "title": "CollectionPresetRead",
+        "type": "object"
+      },
       "CollectionRead": {
         "additionalProperties": false,
         "description": "Media-server collection response.",
@@ -2356,6 +2881,16 @@
             "default": 0,
             "title": "Child Count",
             "type": "integer"
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "has_theme": {
             "default": false,
@@ -2384,6 +2919,10 @@
             "default": true,
             "title": "Monitored",
             "type": "boolean"
+          },
+          "order_type": {
+            "$ref": "#/components/schemas/CollectionOrder",
+            "default": "release"
           },
           "public_dataset_complete": {
             "default": false,
@@ -2419,6 +2958,17 @@
           },
           "server_type": {
             "$ref": "#/components/schemas/ServerType"
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
           },
           "summary": {
             "anyOf": [
@@ -2465,6 +3015,11 @@
             "$ref": "#/components/schemas/CollectionMatch",
             "default": "auto"
           },
+          "visible_home": {
+            "default": false,
+            "title": "Visible Home",
+            "type": "boolean"
+          },
           "youtube_duration": {
             "anyOf": [
               {
@@ -2503,6 +3058,10 @@
           "id",
           "title",
           "summary",
+          "sort_title",
+          "collection_mode",
+          "order_type",
+          "visible_home",
           "thumb_url",
           "art_url",
           "child_count",
@@ -2523,6 +3082,210 @@
           "public_dataset_themerrdb"
         ],
         "title": "CollectionRead",
+        "type": "object"
+      },
+      "CollectionRuleRead": {
+        "additionalProperties": false,
+        "description": "Saved rule with its most recent outcome.",
+        "properties": {
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/CollectionFilter-Output"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "source_identifier": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Source Identifier",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/RuleSourceType"
+          },
+          "sync_interval_hours": {
+            "default": 24,
+            "maximum": 8760.0,
+            "minimum": 1.0,
+            "title": "Sync Interval Hours",
+            "type": "integer"
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source_type",
+          "source_identifier",
+          "filters",
+          "sync_mode",
+          "minimum_items",
+          "delete_below_minimum",
+          "sync_interval_hours",
+          "enabled",
+          "last_synced_at",
+          "last_error"
+        ],
+        "title": "CollectionRuleRead",
+        "type": "object"
+      },
+      "CollectionRuleWrite": {
+        "additionalProperties": false,
+        "description": "A dynamic source with nullable overrides of global defaults.",
+        "properties": {
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/CollectionFilter-Input"
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "source_identifier": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Source Identifier",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/RuleSourceType"
+          },
+          "sync_interval_hours": {
+            "default": 24,
+            "maximum": 8760.0,
+            "minimum": 1.0,
+            "title": "Sync Interval Hours",
+            "type": "integer"
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source_type"
+        ],
+        "title": "CollectionRuleWrite",
+        "type": "object"
+      },
+      "CollectionSyncResponse": {
+        "additionalProperties": false,
+        "description": "What one rule run changed.",
+        "properties": {
+          "added": {
+            "default": 0,
+            "title": "Added",
+            "type": "integer"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "removed": {
+            "default": 0,
+            "title": "Removed",
+            "type": "integer"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "added",
+          "removed",
+          "skipped",
+          "deleted"
+        ],
+        "title": "CollectionSyncResponse",
         "type": "object"
       },
       "CollectionThemeDownloadTarget": {
@@ -4936,6 +5699,16 @@
         "title": "RenameStatus",
         "type": "string"
       },
+      "RuleSourceType": {
+        "description": "Supported dynamic collection sources.",
+        "enum": [
+          "mdblist",
+          "tmdb",
+          "filter"
+        ],
+        "title": "RuleSourceType",
+        "type": "string"
+      },
       "SaveArtRequest": {
         "additionalProperties": false,
         "description": "The chosen artwork for one slot.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
@@ -5506,6 +6279,15 @@
         ],
         "title": "StorageSummary",
         "type": "object"
+      },
+      "SyncMode": {
+        "description": "How a dynamic collection applies source membership.",
+        "enum": [
+          "sync",
+          "append"
+        ],
+        "title": "SyncMode",
+        "type": "string"
       },
       "SyncRunRequest": {
         "additionalProperties": false,
@@ -7954,6 +8736,66 @@
         "tags": [
           "collections"
         ]
+      },
+      "post": {
+        "description": "Create a collection in a server library.",
+        "operationId": "create_collection",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Collection",
+        "tags": [
+          "collections"
+        ]
       }
     },
     "/api/collections/bulk-monitored": {
@@ -8018,7 +8860,207 @@
         ]
       }
     },
+    "/api/collections/generator/apply": {
+      "post": {
+        "description": "Create selected preset collections and their dynamic rules.",
+        "operationId": "generate_collections",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionGenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Collections",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/generator/preview": {
+      "post": {
+        "description": "Preview library filters before generating collections.",
+        "operationId": "preview_collection_generator",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionPresetRead"
+                  },
+                  "title": "Response Preview Collection Generator",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Collection Generator",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}": {
+      "delete": {
+        "description": "Delete the collection while preserving its media.",
+        "operationId": "delete_collection",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Collection",
+        "tags": [
+          "collections"
+        ]
+      },
       "get": {
         "description": "Return one collection with its members and catalog themes.",
         "operationId": "get_collection",
@@ -8087,6 +9129,362 @@
           }
         },
         "summary": "Get Collection",
+        "tags": [
+          "collections"
+        ]
+      },
+      "put": {
+        "description": "Update collection metadata and display options.",
+        "operationId": "update_collection",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionOptions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Collection",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/art/{art_type}": {
+      "put": {
+        "description": "Validate and upload artwork to a collection.",
+        "operationId": "save_collection_art",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveArtRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Collection Art",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/art/{art_type}/match": {
+      "post": {
+        "description": "Rank collection art using the shared perceptual hash matcher.",
+        "operationId": "match_collection_art",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "threshold",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Threshold",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtMatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Match Collection Art",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/art/{art_type}/sources": {
+      "get": {
+        "description": "Browse shared collection artwork sources.",
+        "operationId": "get_collection_art_sources",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtSourcesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection Art Sources",
         "tags": [
           "collections"
         ]
@@ -8323,6 +9721,90 @@
         ]
       }
     },
+    "/api/collections/{collection_id}/members": {
+      "put": {
+        "description": "Replace collection membership and order.",
+        "operationId": "set_collection_members",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionMembersUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Collection Members",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/monitored": {
       "patch": {
         "description": "Set whether a collection is monitored.",
@@ -8407,6 +9889,162 @@
         ]
       }
     },
+    "/api/collections/{collection_id}/rule": {
+      "delete": {
+        "description": "Remove a rule while keeping current membership.",
+        "operationId": "delete_collection_rule",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Collection Rule",
+        "tags": [
+          "collections"
+        ]
+      },
+      "put": {
+        "description": "Save a collection's dynamic source and inheritance overrides.",
+        "operationId": "save_collection_rule",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionRuleWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRuleRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Collection Rule",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/sources": {
       "get": {
         "description": "Return the matched catalog's collection theme candidates.",
@@ -8476,6 +10114,80 @@
           }
         },
         "summary": "Get Collection Sources",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/sync": {
+      "post": {
+        "description": "Run the collection's rule immediately.",
+        "operationId": "sync_collection_rule",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Collection Rule",
         "tags": [
           "collections"
         ]

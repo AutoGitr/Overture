@@ -123,6 +123,10 @@ export function season(overrides: Partial<SeasonRead> = {}): SeasonRead {
 export function collection(overrides: Partial<CollectionRead> = {}): CollectionRead {
   return {
     art_url: null,
+    sort_title: null,
+    collection_mode: null,
+    order_type: "release",
+    visible_home: false,
     child_count: 0,
     has_theme: false,
     id: 1,
@@ -150,6 +154,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
 export function collectionDetail(overrides: Partial<CollectionDetail> = {}): CollectionDetail {
   return {
     ...collection(),
+    rule: null,
     catalog_entry_key: null,
     theme_writable: true,
     members: [],

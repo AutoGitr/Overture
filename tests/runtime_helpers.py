@@ -25,6 +25,7 @@ lazy from overture.domain import (
     MediaType,
     TmdbLanguageFilter,
 )
+lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
@@ -77,6 +78,7 @@ lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.services.themes.service import ThemesService
 lazy from overture.services.themes.youtube_resolver import ThemeAudio, YouTubeResolver
 lazy from overture.services.tmdb_items import TmdbItemsService
+lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.security import Redactor, is_sensitive_field
 lazy from overture.ws.connection_manager import ConnectionManager
 lazy from overture.ws.state import BackgroundJobRegistry
@@ -225,7 +227,12 @@ class NoopDownloads(DownloadService):
         return True
 
     def __init__(self) -> None:
-        pass
+        self._asset_locks = KeyedLock[int | str]()
+
+    @property
+    @override
+    def asset_locks(self) -> KeyedLock[int | str]:
+        return self._asset_locks
 
     @property
     def worker_count(self) -> int:
@@ -538,6 +545,7 @@ def make_runtime(
             provider_registry=provider_registry,
             candidates=candidates,
             image_clients=proxy_clients,
+            image_cache=image_cache,
         )
         if art is None
         else art
@@ -572,6 +580,10 @@ def make_runtime(
     )
     collections = (
         CollectionsService(
+            tmdb=tmdb,
+            mdblist=MDBListClient(app_config=app_config),
+            art=art,
+            scheduler=scheduler,
             database=database,
             provider_registry=provider_registry,
             publisher=events,

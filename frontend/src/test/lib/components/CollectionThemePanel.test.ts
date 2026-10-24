@@ -64,7 +64,7 @@ async function renderPage() {
       .queryKey,
     shown,
   );
-  await navigate("/movies/collections/:collectionSlug", {
+  await navigate("/movies/collections/:collectionSlug/themes", {
     params: { collectionSlug: String(shown.id) },
   });
   return renderWithQueryClient(CollectionPage);

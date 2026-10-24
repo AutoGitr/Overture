@@ -11,7 +11,7 @@ lazy import httpx2
 
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import ArtType
+lazy from ...domain import ArtType, CollectionMode, CollectionOrder, MediaType
 lazy from ...integrations.http import LazyClient, create_client
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label, public_art_url
@@ -596,3 +596,148 @@ class PlexClient(MediaServerHttpClient):
         except MediaServerError:
             return False
         return True
+
+    async def _collection_uri(self, member_ids: list[str]) -> str:
+        machine_id = await self.get_machine_identifier()
+        if not machine_id:
+            raise MediaServerError("Plex returned no server identity")
+        return f"server://{machine_id}/com.plexapp.plugins.library/library/metadata/{','.join(member_ids)}"
+
+    async def create_collection(
+        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+    ) -> PlexMetadata:
+        """Create a regular collection, with its initial members."""
+        response = await self._request(
+            "POST",
+            "/library/collections",
+            params={
+                "sectionId": section_key,
+                "title": title,
+                "smart": "0",
+                "type": 1 if media_type is MediaType.MOVIE else 2,
+                "uri": await self._collection_uri(member_ids),
+            },
+        )
+        rows = plex_items(self._json(response))
+        if len(rows) != 1:
+            raise MediaServerError("Plex did not return the new collection")
+        return rows[0]
+
+    async def delete_collection(self, collection_id: str) -> None:
+        """Delete only the collection metadata."""
+        await self._request("DELETE", f"/library/metadata/{collection_id}")
+
+    async def set_collection_members(
+        self,
+        collection_id: str,
+        member_ids: list[str],
+        order: CollectionOrder,
+        *,
+        append: bool = False,
+    ) -> list[str]:
+        """Use Plex's item endpoints; children is a read-only listing."""
+        current_ids = await self.get_collection_member_ids(collection_id)
+        current = set(current_ids)
+        if append:
+            requested = set(member_ids)
+            member_ids = [
+                *member_ids,
+                *(identity for identity in current_ids if identity not in requested),
+            ]
+        wanted = set(member_ids)
+        additions = [item for item in member_ids if item not in current]
+        if additions:
+            await self._request(
+                "PUT",
+                f"/library/collections/{collection_id}/items",
+                params={"uri": await self._collection_uri(additions)},
+            )
+        for item in sorted(current - wanted):
+            await self._request(
+                "DELETE", f"/library/collections/{collection_id}/items/{item}"
+            )
+        if order is CollectionOrder.CUSTOM:
+            for position, item in enumerate(member_ids):
+                await self._request(
+                    "PUT",
+                    f"/library/collections/{collection_id}/items/{item}/move",
+                    params={"after": member_ids[position - 1]} if position else {},
+                )
+
+        return member_ids
+
+    async def update_collection_details(
+        self,
+        collection_id: str,
+        *,
+        title: str,
+        summary: str | None,
+        sort_title: str | None,
+        mode: CollectionMode,
+        order: CollectionOrder,
+        visible_home: bool,
+    ) -> None:
+        """Edit collection metadata and its library visibility preferences."""
+        await self._request(
+            "PUT",
+            f"/library/metadata/{collection_id}",
+            params={
+                "title.value": title,
+                "title.locked": 1,
+                "summary.value": summary or "",
+                "summary.locked": 1,
+                "titleSort.value": sort_title or "",
+                "titleSort.locked": 1,
+            },
+        )
+        await self._request(
+            "PUT",
+            f"/library/metadata/{collection_id}/prefs",
+            params={
+                "collectionMode": {
+                    CollectionMode.DEFAULT: -1,
+                    CollectionMode.HIDE: 0,
+                    CollectionMode.HIDE_ITEMS: 1,
+                    CollectionMode.SHOW_ITEMS: 2,
+                }[mode],
+                "collectionSort": list(CollectionOrder).index(order),
+            },
+        )
+        metadata = await self.get_metadata(collection_id)
+        section_id = metadata.get("librarySectionID") if metadata else None
+        if section_id is None:
+            raise MediaServerError("Plex returned no collection library")
+        path = f"/hubs/sections/{section_id}/manage"
+        data = wire_object(
+            await self._get(path, params={"metadataItemId": collection_id})
+        )
+        container = wire_object(data.get("MediaContainer"))
+        hubs: list[dict[str, Any]] = container.get("Hub") or []
+        hub = next(
+            (
+                row
+                for row in hubs
+                if row.get("identifier")
+                == f"custom.collection.{section_id}.{collection_id}"
+            ),
+            None,
+        )
+        params = {"promotedToOwnHome": int(visible_home)}
+        if hub:
+            await self._request("PUT", f"{path}/{hub['identifier']}", params=params)
+        elif visible_home:
+            await self._request(
+                "POST", path, params={**params, "metadataItemId": collection_id}
+            )
+
+    async def upload_collection_art(
+        self, collection_id: str, art_type: ArtType, image_bytes: bytes, mime_type: str
+    ) -> None:
+        """Upload bytes rather than asking Plex to fetch an arbitrary URL."""
+        endpoint = "art" if art_type is ArtType.BACKGROUND else "posters"
+        await self._request(
+            "POST",
+            f"/library/metadata/{collection_id}/{endpoint}",
+            content=image_bytes,
+            headers={"Content-Type": mime_type},
+        )

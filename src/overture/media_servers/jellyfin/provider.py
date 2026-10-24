@@ -5,7 +5,15 @@ lazy from datetime import datetime
 lazy from typing import ClassVar, override
 
 lazy from ...config import Settings
-lazy from ...domain import ArtType, ImageSize, MediaType, ServerAsset, ServerType
+lazy from ...domain import (
+    ArtType,
+    CollectionMode,
+    CollectionOrder,
+    ImageSize,
+    MediaType,
+    ServerAsset,
+    ServerType,
+)
 lazy from ...utils.time import parse_utc_datetime
 lazy from ..adapters import (
     MAX_SEASONS_PER_SHOW,
@@ -157,6 +165,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             folder_path=_media_browser_item_folder(metadata, media_type),
             director_etag=etag if movie else None,
             studio=studios[0].get("Name") if studios else None,
+            genres=tuple(metadata.get("Genres") or []),
             server_added_at=parse_utc_datetime(
                 metadata.get("DateCreated"), naive_tz=self._app_config.tzinfo
             ),
@@ -276,21 +285,6 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         if theme_id:
             await self.client.delete_item(theme_id)
 
-
-class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
-    """Adapt Jellyfin responses to the shared media-server contract."""
-
-    server_type: ClassVar[ServerType] = ServerType.JELLYFIN
-    collections = FolderThemes()
-
-    def __init__(
-        self, *, client: JellyfinClient | None = None, app_config: Settings
-    ) -> None:
-        super().__init__(
-            client=client or JellyfinClient(app_config=app_config),
-            app_config=app_config,
-        )
-
     @override
     async def list_collections(self) -> list[ServerCollection]:
         """Return every BoxSet; Jellyfin keeps them outside the libraries."""
@@ -327,3 +321,83 @@ class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
                 )
             )
         return results
+
+    @override
+    async def create_collection(
+        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+    ) -> ServerCollection:
+        collection_id = await self.client.create_collection(title, member_ids)
+        metadata = await self.client.get_item(collection_id)
+        return ServerCollection(
+            id=collection_id,
+            title=title,
+            member_ids=tuple(member_ids),
+            server_link=await self.build_item_link(collection_id),
+            library_id=section_key,
+            media_type=media_type,
+            path=metadata.get("Path"),
+        )
+
+    @override
+    async def delete_collection(self, server_collection_id: str) -> None:
+        await self.client.delete_item(server_collection_id)
+
+    @override
+    async def update_collection_details(
+        self,
+        server_collection_id: str,
+        *,
+        title: str,
+        summary: str | None,
+        sort_title: str | None,
+        mode: CollectionMode,
+        order: CollectionOrder,
+        visible_home: bool,
+    ) -> None:
+        await self.client.update_collection_details(
+            server_collection_id, title, summary, sort_title, order
+        )
+
+    @override
+    async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
+        return await self.client.get_boxset_member_ids(server_collection_id)
+
+    @override
+    async def set_collection_members(
+        self,
+        server_collection_id: str,
+        server_item_ids: list[str],
+        *,
+        order: CollectionOrder,
+        append: bool = False,
+    ) -> list[str]:
+        return await self.client.set_collection_members(
+            server_collection_id, server_item_ids, append=append
+        )
+
+    @override
+    async def upload_collection_art(
+        self,
+        server_collection_id: str,
+        art_type: ArtType,
+        image_bytes: bytes,
+        mime_type: str,
+    ) -> None:
+        await self.client.upload_collection_art(
+            server_collection_id, art_type, image_bytes, mime_type
+        )
+
+
+class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
+    """Adapt Jellyfin responses to the shared media-server contract."""
+
+    server_type: ClassVar[ServerType] = ServerType.JELLYFIN
+    collections = FolderThemes()
+
+    def __init__(
+        self, *, client: JellyfinClient | None = None, app_config: Settings
+    ) -> None:
+        super().__init__(
+            client=client or JellyfinClient(app_config=app_config),
+            app_config=app_config,
+        )

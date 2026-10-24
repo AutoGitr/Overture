@@ -3,10 +3,18 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
-lazy from sqlmodel import Field, Index, SQLModel, UniqueConstraint
+lazy from sqlmodel import Field, Index, Relationship, SQLModel, UniqueConstraint
 
-lazy from ...domain import CollectionMatch, MediaType, ServerType, ThemeBulkSource
+lazy from ...domain import (
+    CollectionMatch,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+    ServerType,
+    ThemeBulkSource,
+)
 lazy from ..columns import enum_columns, enum_type
+lazy from .art import ArtSlot
 
 
 class MediaCollectionBase(SQLModel):
@@ -22,6 +30,14 @@ class MediaCollectionBase(SQLModel):
 
     title: str = Field(default="", nullable=False)
     summary: str | None = None
+    sort_title: str | None = None
+    collection_mode: CollectionMode | None = Field(
+        default=None, sa_type=enum_type(CollectionMode)
+    )
+    order_type: CollectionOrder = Field(
+        default=CollectionOrder.RELEASE, sa_type=enum_type(CollectionOrder)
+    )
+    visible_home: bool = False
     library_id: str | None = Field(default=None, index=True)
     child_count: int = Field(default=0, nullable=False)
     # Server image URLs; only their hash leaves the backend, as a cache version.
@@ -77,6 +93,11 @@ class MediaCollection(MediaCollectionBase, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
+    art_slots: list["ArtSlot"] = Relationship(
+        back_populates="collection",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
 
 class MediaCollectionMember(SQLModel, table=True):
@@ -85,6 +106,7 @@ class MediaCollectionMember(SQLModel, table=True):
     __tablename__: ClassVar[Any] = "media_collection_members"
     __table_args__ = (Index("ix_media_collection_members_item", "media_item_id"),)
 
+    position: int = Field(default=0)
     collection_id: int = Field(
         foreign_key="media_collections.id", ondelete="CASCADE", primary_key=True
     )

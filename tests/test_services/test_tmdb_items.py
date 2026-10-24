@@ -43,6 +43,7 @@ lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.themes.service import ThemesService
 lazy from overture.services.tmdb_items import TmdbItemsService
 lazy from overture.utils.errors import PublicServiceError
@@ -187,6 +188,7 @@ def _asset_services(
                 app_config=app_config,
             ),
             image_clients=unused(ProxyClientManager),
+            image_cache=unused(ImageCache),
         ),
         ThemesService(
             database=database,

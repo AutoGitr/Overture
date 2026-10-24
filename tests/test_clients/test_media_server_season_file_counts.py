@@ -290,11 +290,11 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
                 )
             if include_types == "Movie":
                 assert params.get("fields") == (
-                    "ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,Etag"
+                    "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,Etag"
                 )
             else:
                 assert params.get("fields") == (
-                    "ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded"
+                    "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded"
                 )
             assert params.get("enableUserData") == "false"
             if params.get("parentId") == "lib2":
@@ -488,11 +488,11 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
                 )
             if include_types == "Movie":
                 assert params.get("Fields") == (
-                    "ProviderIds,Path,Studios,DateCreated,ProductionYear,Etag"
+                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Etag"
                 )
             else:
                 assert params.get("Fields") == (
-                    "ProviderIds,Path,Studios,DateCreated,ProductionYear"
+                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear"
                 )
             assert params.get("EnableUserData") == "false"
             assert params.get("EnableImages") == "true"

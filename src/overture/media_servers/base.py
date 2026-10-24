@@ -7,7 +7,16 @@ lazy from typing import ClassVar
 
 lazy from ..config import Settings
 lazy from ..db.models.media_item import MediaItem
-lazy from ..domain import ArtType, ImageSize, ServerAsset, ServerType, media_sort_key
+lazy from ..domain import (
+    ArtType,
+    CollectionMode,
+    CollectionOrder,
+    ImageSize,
+    MediaType,
+    ServerAsset,
+    ServerType,
+    media_sort_key,
+)
 lazy from ..schemas.art import ArtCandidate
 lazy from .adapters import (
     CollectionSupport,
@@ -33,6 +42,55 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     async def list_collections(self) -> list[ServerCollection]:
         """Return collections when the provider declares support."""
         return []
+
+    async def create_collection(
+        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+    ) -> ServerCollection:
+        """Create a collection with initial membership."""
+        raise NotImplementedError
+
+    async def delete_collection(self, server_collection_id: str) -> None:
+        """Delete a collection without deleting its media."""
+        raise NotImplementedError
+
+    async def update_collection_details(
+        self,
+        server_collection_id: str,
+        *,
+        title: str,
+        summary: str | None,
+        sort_title: str | None,
+        mode: CollectionMode,
+        order: CollectionOrder,
+        visible_home: bool,
+    ) -> None:
+        """Update collection metadata and supported display options."""
+        raise NotImplementedError
+
+    async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
+        """Read current membership before applying append thresholds."""
+        raise NotImplementedError
+
+    async def set_collection_members(
+        self,
+        server_collection_id: str,
+        server_item_ids: list[str],
+        *,
+        order: CollectionOrder,
+        append: bool = False,
+    ) -> list[str]:
+        """Apply a membership diff, then the supported member order."""
+        raise NotImplementedError
+
+    async def upload_collection_art(
+        self,
+        server_collection_id: str,
+        art_type: ArtType,
+        image_bytes: bytes,
+        mime_type: str,
+    ) -> None:
+        """Upload already validated artwork bytes."""
+        raise NotImplementedError
 
     async def upload_collection_theme(
         self, server_item_id: str, mp3_bytes: bytes

@@ -14,6 +14,7 @@ const EXPENSIVE_STALE_TIME = 5 * 60_000;
  */
 const STALE_TIME_BY_OPERATION: Readonly<Record<string, number>> = {
   getArtSources: EXPENSIVE_STALE_TIME,
+  getCollectionArtSources: EXPENSIVE_STALE_TIME,
   getPublicDatasetStatus: STATUS_STALE_TIME,
   getPublicDatasetRecord: LIST_STALE_TIME,
   listBackups: LIST_STALE_TIME,

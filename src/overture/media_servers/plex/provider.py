@@ -5,7 +5,15 @@ lazy from datetime import datetime
 lazy from typing import ClassVar, Literal, override
 
 lazy from ...config import Settings
-lazy from ...domain import ArtType, ImageSize, MediaType, ServerAsset, ServerType
+lazy from ...domain import (
+    ArtType,
+    CollectionMode,
+    CollectionOrder,
+    ImageSize,
+    MediaType,
+    ServerAsset,
+    ServerType,
+)
 lazy from ...utils.security import remove_sensitive_url_params
 lazy from ...utils.time import parse_utc_datetime
 lazy from ..adapters import (
@@ -193,6 +201,9 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             if movie
             else None,
             studio=metadata.get("studio") or None,
+            genres=tuple(
+                tag for g in metadata.get("Genre") or [] if (tag := g.get("tag"))
+            ),
             server_added_at=parse_utc_datetime(metadata.get("addedAt")),
             server_updated_at=parse_utc_datetime(metadata.get("updatedAt")),
         )
@@ -325,3 +336,70 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     async def delete_collection_theme(self, server_item_id: str) -> None:
         """Delete a Plex collection theme."""
         await self.client.delete_collection_theme(server_item_id)
+
+    @override
+    async def create_collection(
+        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+    ) -> ServerCollection:
+        item = await self.client.create_collection(
+            section_key, title, media_type, member_ids
+        )
+        section = ServerSection(key=section_key, title="", media_type=media_type)
+        return await self._server_collection(
+            item, section, await self.client.get_machine_identifier()
+        )
+
+    @override
+    async def delete_collection(self, server_collection_id: str) -> None:
+        await self.client.delete_collection(server_collection_id)
+
+    @override
+    async def update_collection_details(
+        self,
+        server_collection_id: str,
+        *,
+        title: str,
+        summary: str | None,
+        sort_title: str | None,
+        mode: CollectionMode,
+        order: CollectionOrder,
+        visible_home: bool,
+    ) -> None:
+        await self.client.update_collection_details(
+            server_collection_id,
+            title=title,
+            summary=summary,
+            sort_title=sort_title,
+            mode=mode,
+            order=order,
+            visible_home=visible_home,
+        )
+
+    @override
+    async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
+        return await self.client.get_collection_member_ids(server_collection_id)
+
+    @override
+    async def set_collection_members(
+        self,
+        server_collection_id: str,
+        server_item_ids: list[str],
+        *,
+        order: CollectionOrder,
+        append: bool = False,
+    ) -> list[str]:
+        return await self.client.set_collection_members(
+            server_collection_id, server_item_ids, order, append=append
+        )
+
+    @override
+    async def upload_collection_art(
+        self,
+        server_collection_id: str,
+        art_type: ArtType,
+        image_bytes: bytes,
+        mime_type: str,
+    ) -> None:
+        await self.client.upload_collection_art(
+            server_collection_id, art_type, image_bytes, mime_type
+        )

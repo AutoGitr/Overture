@@ -3,6 +3,7 @@
 lazy from typing import override
 
 lazy from overture.config import Settings
+lazy from overture.domain import MediaType
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.jellyfin.provider import JellyfinProvider
 lazy from overture.media_servers.wire import MediaBrowserItem
@@ -49,3 +50,23 @@ async def test_boxsets_carry_their_folder_tmdb_collection_and_members(
     assert saga.added_at is not None
     assert (custom.tmdb_id, custom.member_ids) == (None, ())
     assert custom.server_link.endswith("details?id=custom")
+
+
+async def test_created_boxset_immediately_has_its_theme_folder(
+    app_config: Settings,
+) -> None:
+    class CreatingClient(Client):
+        @override
+        async def create_collection(self, title: str, member_ids: list[str]) -> str:
+            return "new-boxset"
+
+        @override
+        async def get_item(self, item_id: str) -> MediaBrowserItem:
+            return {"Id": item_id, "Path": "/config/data/collections/New [boxset]"}
+
+    provider = JellyfinProvider(
+        client=CreatingClient(app_config=app_config), app_config=app_config
+    )
+    created = await provider.create_collection("movies", "New", MediaType.MOVIE, ["m1"])
+    assert created.path == "/config/data/collections/New [boxset]"
+    assert created.member_ids == ("m1",)

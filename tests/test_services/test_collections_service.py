@@ -25,7 +25,9 @@ lazy from overture.domain import (
     ServerAsset,
     ServerType,
 )
+lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
+lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin import JellyfinProvider
@@ -36,9 +38,11 @@ lazy from overture.schemas.collections import (
     SetCollectionThemeRequest,
 )
 lazy from overture.schemas.common import Status
+lazy from overture.services.art.service import ArtService
 lazy from overture.services.collections import service as module
 lazy from overture.services.downloads.queue import AssetScope, JobTarget
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.time import utc_now
@@ -120,6 +124,10 @@ def _service(
     supported: bool = True,
 ) -> module.CollectionsService:
     return module.CollectionsService(
+        tmdb=unused(TMDBClient),
+        mdblist=unused(MDBListClient),
+        scheduler=unused(SchedulerService),
+        art=unused(ArtService),
         database=database,
         provider_registry=NoopProviderRegistry(
             provider or FakePlex(app_config=app_config), collections=supported

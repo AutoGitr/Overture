@@ -66,6 +66,9 @@ describe("collection matching and members", () => {
     return { calls };
   }
   it("shows the folder requirement, links the server and catalog, and opens members", async () => {
+    await navigate("/movies/collections/:collectionSlug/themes", {
+      params: { collectionSlug: "12-star-wars" },
+    });
     setup();
     expect(await screen.findByText("Set JELLYFIN_COLLECTIONS_PATH")).toBeInTheDocument();
     expect(screen.queryByLabelText("Search collection themes")).toBeNull();
@@ -78,7 +81,7 @@ describe("collection matching and members", () => {
     await navigate("/movies/collections/:collectionSlug", {
       params: { collectionSlug: "12-star-wars" },
     });
-    const member = await screen.findByRole("button", { name: "A New Hope (1977) In library" });
+    const member = await screen.findByRole("button", { name: "A New Hope (1977)" });
     expect(within(member).getByRole("presentation")).toHaveAttribute(
       "src",
       "/api/library/items/1/local-image/poster?t=member-poster&size=display",

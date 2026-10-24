@@ -39,7 +39,10 @@
   import StatusTab from "./StatusTab.svelte";
   import ThemeSearch from "./ThemeSearch.svelte";
 
-  let { collection: coll }: { collection: CollectionDetail | null } = $props();
+  let {
+    collection: coll,
+    showMembers = true,
+  }: { collection: CollectionDetail | null; showMembers?: boolean } = $props();
   const feedback = createNotifier();
   const deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
   const setThemeRequest = createMutation(() => setCollectionThemeMutation());
@@ -319,7 +322,7 @@
         {/key}
       </div>
     {/if}
-    {#if coll}<CollectionMembers members={coll.members} />{/if}
+    {#if coll && showMembers}<CollectionMembers members={coll.members} />{/if}
   {/snippet}
 </DetailPanelBase>
 

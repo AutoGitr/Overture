@@ -254,6 +254,46 @@
           >
         </div>
       </div>
+      <div class="option-card">
+        <span class="form-label">Collection defaults</span>
+        <div class="options-col">
+          <label class="form-label"
+            >Sync strategy<select bind:value={draft.collection_sync_mode}
+              ><option value="sync">Strict sync</option><option value="append">Append</option
+              ></select
+            ></label
+          >
+          {#if settingsState.current.media_server === "plex"}<label class="form-label"
+              >Collection visibility<select bind:value={draft.collection_mode_default}
+                ><option value="default">Library default</option><option value="hide_items"
+                  >Hide items</option
+                ><option value="show_items">Show collection and items</option><option value="hide"
+                  >Hide collection</option
+                ></select
+              ></label
+            >{/if}
+          <label class="form-label"
+            >Minimum collection members<input
+              type="number"
+              min="1"
+              max="100"
+              bind:value={draft.collection_minimum_items}
+            /></label
+          >
+          <label class="form-row"
+            ><input type="checkbox" bind:checked={draft.collection_delete_below_minimum} />Delete
+            collections below minimum</label
+          >
+          <label class="form-row"
+            ><input type="checkbox" bind:checked={draft.collection_auto_match_art} />Automatically
+            select collection artwork on rule sync</label
+          >
+          <label class="form-row"
+            ><input type="checkbox" bind:checked={draft.collection_auto_match_theme} />Automatically
+            select collection themes on rule sync</label
+          >
+        </div>
+      </div>
     </CardColumn>
   </fieldset>
   {#snippet footer()}

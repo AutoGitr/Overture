@@ -3,6 +3,7 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
+lazy from sqlalchemy import JSON
 lazy from sqlmodel import Field, Index, Relationship, SQLModel
 
 lazy from ...domain import MediaType, ThemeIdSource
@@ -46,6 +47,7 @@ class MediaItemBase(SQLModel):
 
     director: str | None = None
     studio: str | None = None
+    genres: list[str] = Field(default_factory=list, sa_type=JSON)
 
     last_synced_at: datetime | None = None
     last_matched_at: datetime | None = None

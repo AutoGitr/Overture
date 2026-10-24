@@ -10,7 +10,9 @@ lazy from ..db.models.settings import AppSettingsBase
 lazy from ..domain import (
     AspectRatioTolerance,
     AutoUnmonitor,
+    CollectionMode,
     ServerType,
+    SyncMode,
     TmdbLanguageFilter,
     Workflow,
 )
@@ -58,6 +60,12 @@ class AppSettingsUpdate(StrictBaseModel):
     field lists equal.
     """
 
+    collection_sync_mode: SyncMode | None = None
+    collection_mode_default: CollectionMode | None = None
+    collection_minimum_items: int | None = None
+    collection_delete_below_minimum: bool | None = None
+    collection_auto_match_art: bool | None = None
+    collection_auto_match_theme: bool | None = None
     auto_match_art: bool | None = None
     workflow: Workflow | None = None
     theme_search_format: str | None = None

@@ -1,17 +1,18 @@
 """Jellyfin API client and shared MediaBrowser operations."""
 
+lazy import base64
 lazy import operator
 lazy from collections import Counter
 lazy from collections.abc import AsyncIterator
 lazy from itertools import batched
-lazy from typing import ClassVar, override
+lazy from typing import Any, ClassVar, override
 lazy from urllib.parse import urlencode
 
 lazy import httpx2
 lazy from pydantic import TypeAdapter
 
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import ArtType, MediaType
+lazy from ...domain import ArtType, CollectionOrder, MediaType
 lazy from ...schemas.art import ArtCandidate
 lazy from ...services.public_dataset.schema.contract import canonical_art_url
 lazy from ...utils.art_urls import art_preview_url, art_source_label
@@ -27,6 +28,7 @@ lazy from ..wire import (
     media_browser_server_id,
     parse_wire,
     remote_images_page,
+    wire_object,
 )
 
 #: The MediaBrowser image type that holds each art type.
@@ -66,7 +68,7 @@ class JellyfinClient(MediaServerHttpClient):
     #: the server, so listings carry only the movie Etag (its DateLastSaved) and
     #: get_people fetches on change.
     _ITEM_FIELDS: ClassVar[str] = (
-        "ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded"
+        "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded"
     )
 
     @property
@@ -189,7 +191,7 @@ class JellyfinClient(MediaServerHttpClient):
             self.query_params(
                 includeItemTypes="BoxSet",
                 recursive="true",
-                fields="ProviderIds,Path,DateCreated,Overview",
+                fields="Genres,ProviderIds,Path,DateCreated,Overview",
                 enableImages="true",
                 enableImageTypes="Primary,Backdrop",
                 imageTypeLimit="1",
@@ -368,3 +370,73 @@ class JellyfinClient(MediaServerHttpClient):
             return bool(media_browser_server_id(await self._get("/System/Info")))
         except MediaServerError:
             return False
+
+    async def create_collection(self, title: str, member_ids: list[str]) -> str:
+        """Create a BoxSet; credentials remain in the client's headers."""
+        response = await self._request(
+            "POST",
+            "/Collections",
+            params=self.query_params(name=title, ids=",".join(member_ids)),
+        )
+        value = wire_object(self._json(response))
+        if not isinstance(value.get("Id"), str) or not value["Id"]:
+            raise MediaServerError("Media server did not return the new collection ID")
+        return str(value["Id"])
+
+    async def set_collection_members(
+        self, collection_id: str, member_ids: list[str], *, append: bool = False
+    ) -> list[str]:
+        """Apply only additions and removals to a BoxSet."""
+        current_ids = await self.get_boxset_member_ids(collection_id)
+        current = set(current_ids)
+        if append:
+            requested = set(member_ids)
+            member_ids = [
+                *member_ids,
+                *(identity for identity in current_ids if identity not in requested),
+            ]
+        wanted = set(member_ids)
+        for method, ids in (("POST", wanted - current), ("DELETE", current - wanted)):
+            for batch in batched(sorted(ids), self._PAGE_SIZE, strict=False):
+                await self._request(
+                    method,
+                    f"/Collections/{collection_id}/Items",
+                    params=self.query_params(ids=",".join(batch)),
+                )
+
+        return member_ids
+
+    async def update_collection_details(
+        self,
+        collection_id: str,
+        title: str,
+        summary: str | None,
+        sort_title: str | None,
+        order: CollectionOrder,
+    ) -> None:
+        """Preserve metadata fields the server requires in its replacement DTO."""
+        details = await self.collection_metadata(collection_id)
+        details.update(
+            Name=title,
+            Overview=summary or "",
+            ForcedSortName=sort_title or "",
+            DisplayOrder="PremiereDate"
+            if order is CollectionOrder.RELEASE
+            else "SortName",
+        )
+        await self._request("POST", f"/Items/{collection_id}", json=details)
+
+    async def upload_collection_art(
+        self, collection_id: str, art_type: ArtType, image_bytes: bytes, mime_type: str
+    ) -> None:
+        """MediaBrowser accepts base64 image data with the original image type."""
+        await self._request(
+            "POST",
+            f"/Items/{collection_id}/Images/{IMAGE_TYPES[art_type]}",
+            content=base64.b64encode(image_bytes),
+            headers={"Content-Type": mime_type},
+        )
+
+    async def collection_metadata(self, collection_id: str) -> dict[str, Any]:
+        """Read the complete DTO so metadata edits preserve unrelated fields."""
+        return wire_object(await self._get(f"/Items/{collection_id}"))

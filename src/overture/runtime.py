@@ -16,6 +16,7 @@ lazy from sqlmodel import text
 lazy from . import protocols
 lazy from .config import Settings, load_configuration
 lazy from .db.session import Database
+lazy from .integrations.mdblist import MDBListClient
 lazy from .integrations.proxy import ProxyClientManager
 lazy from .integrations.tmdb import TMDBClient
 lazy from .jobs.kinds import JobKind
@@ -150,6 +151,9 @@ class RuntimeServices:
                 "public dataset",
                 self.public_dataset.start,
                 self.public_dataset.stop,
+            ),
+            LifecycleService(
+                "collection rules", self.collections.start, self.collections.stop
             ),
             LifecycleService("scheduler", self.scheduler.start, self.scheduler.stop),
         )
@@ -461,6 +465,7 @@ def build_runtime(
         provider_registry=provider_registry,
         candidates=candidates,
         image_clients=proxy_clients,
+        image_cache=image_cache,
     )
     library = LibraryService(
         database=database,
@@ -483,6 +488,10 @@ def build_runtime(
         config_dir=config_dir,
     )
     collections = CollectionsService(
+        tmdb=tmdb,
+        mdblist=MDBListClient(app_config=app_config),
+        art=art,
+        scheduler=scheduler,
         database=database,
         provider_registry=provider_registry,
         publisher=events,

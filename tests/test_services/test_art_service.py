@@ -25,6 +25,7 @@ lazy from overture.services.art.matcher import ArtMatcher, ArtMatchOutcome
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils import image
 lazy from overture.utils.errors import PublicServiceError
@@ -98,6 +99,7 @@ def _download_service(*, app_config: Settings, database: Database) -> DownloadSe
         asset_storage=AssetStorage(app_config=app_config),
         phash=PhashService(app_config=app_config),
         image_clients=unused(ProxyClientManager),
+        image_cache=unused(ImageCache),
         youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         database=database,
@@ -132,6 +134,7 @@ def _art_service(
             app_config=app_config,
         ),
         image_clients=image_clients or unused(ProxyClientManager),
+        image_cache=unused(ImageCache),
     )
 
 

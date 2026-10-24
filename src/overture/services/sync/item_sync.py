@@ -198,6 +198,7 @@ class ItemReconciler:
                 else None
             ),
             studio=server_item.studio,
+            genres=list(server_item.genres),
             monitored=True,
             server_added_at=server_item.server_added_at,
             created_at=utc_now(),
@@ -280,6 +281,7 @@ class ItemReconciler:
             item.director = None
             item.director_etag = None
         item.studio = server_item.studio
+        item.genres = list(server_item.genres)
 
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
         item.tvdb_id = item.tvdb_id or guid_int(server_item.guids, "tvdb")

@@ -325,6 +325,17 @@
     onSetSort={setSort}
   />
 
+  {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && settingsState.current.collections_supported}
+    <div class="collection-actions">
+      <button class="btn btn-ghost btn-sm" onclick={() => uiState.openPopupByName("newCollection")}
+        >+ Create collection</button
+      >
+      <button
+        class="btn btn-ghost btn-sm"
+        onclick={() => uiState.openPopupByName("collectionGenerator")}>Generate collections</button
+      >
+    </div>
+  {/if}
   {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && collectionsQuery.isError}
     <DataStatus
       label="collections"
@@ -399,6 +410,12 @@
 </aside>
 
 <style>
+  .collection-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
   .sidebar {
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);

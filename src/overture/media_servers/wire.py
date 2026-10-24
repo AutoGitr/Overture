@@ -68,6 +68,8 @@ class PlexMetadata(TypedDict, total=False):
     childCount: int | None
     leafCount: int | None
     studio: str | None
+    Genre: list[PlexDirector] | None
+    librarySectionID: str | int
     addedAt: int | None
     updatedAt: int | None
     Guid: list[PlexGuid] | None
@@ -102,6 +104,7 @@ class MediaBrowserItem(TypedDict, total=False):
     BackdropImageTags: list[str] | None
     People: list[MediaBrowserPerson] | None
     Studios: list[MediaBrowserStudio] | None
+    Genres: list[str] | None
     DateCreated: str | None
     DateLastMediaAdded: str | None
     DateModified: str | None

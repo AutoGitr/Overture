@@ -291,7 +291,7 @@ test("catalog deep links restore movie, show, season and collection views on rel
   }
 });
 
-test("collection poster grids link to members and show collections have no matching controls", async ({
+test("collection member rows show posters, link to items and omit show matching controls", async ({
   page,
 }) => {
   const members = [
@@ -330,8 +330,8 @@ test("collection poster grids link to members and show collections have no match
   );
   await logIn(page, "/movies/collections/1-alien-collection");
   await expect(page.getByRole("region", { name: "TMDB collection match" })).toBeVisible();
-  const first = page.getByRole("button", { name: "Alien (1979) In library", exact: true });
-  const second = page.getByRole("button", { name: "Aliens (1986) In library", exact: true });
+  const first = page.getByRole("button", { name: "Alien (1979)", exact: true });
+  const second = page.getByRole("button", { name: "Aliens (1986)", exact: true });
   await first.scrollIntoViewIfNeeded();
   await expect(first).toBeVisible();
   await expect(second).toBeVisible();
@@ -341,8 +341,7 @@ test("collection poster grids link to members and show collections have no match
   const firstBox = await first.boundingBox();
   const secondBox = await second.boundingBox();
   expect(firstBox).not.toBeNull();
-  expect(secondBox?.y).toBe(firstBox?.y);
-  expect(secondBox?.x).toBeGreaterThan(firstBox?.x ?? 0);
+  expect(secondBox?.y).toBeGreaterThan(firstBox?.y ?? 0);
   await first.click();
   await assertRoute(page, "/movies/1-alien");
 

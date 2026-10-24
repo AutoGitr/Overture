@@ -22,6 +22,7 @@ lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...schemas.sync import SyncScheduleConfig
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
+lazy from ..collections import COLLECTIONS_LOCK
 lazy from ..collections.matching import apply_match
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.queue import AssetScope
@@ -75,97 +76,101 @@ class CollectionSync:
                 JobOutcome.STARTED, "Collections", "reading server collections"
             )
         )
-        listed = await provider.list_collections()
-        async with self._database.read_session() as session:
-            items = await MediaItemRepository(session).facts_by_server_id()
-            existing = {
-                row.server_item_id: row
-                for row in await CollectionRepository(session).list_all()
-                if row.server_type is provider.server_type
-            }
-        seen = {collection.id for collection in listed}
-        newly_matched: list[int] = []
-        matched = 0
-        for collection in listed:
-            if job.stop_requested():
-                return
-            previous = existing.get(collection.id)
-            members = [items[i] for i in collection.member_ids if i in items]
-            media_type = (
-                collection.media_type
-                or _most_common([m.media_type for m in members])
-                or (previous.media_type if previous else MediaType.MOVIE)
-            )
-            library_id = (
-                collection.library_id
-                or _most_common([m.library_id for m in members])
-                or (previous.library_id if previous else None)
-            )
-            if library_ids and library_id not in library_ids:
-                continue
-            async with self._downloads.asset_locks.acquire(
-                f"collection:{previous.id}"
-                if previous
-                else f"new-collection:{provider.server_type}:{collection.id}"
-            ):
-                async with self._database.read_session() as session:
-                    current = await CollectionRepository(session).find_server(
-                        provider.server_type, collection.id
+        async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
+            listed = await provider.list_collections()
+            async with self._database.read_session() as session:
+                items = await MediaItemRepository(session).facts_by_server_id()
+                existing = {
+                    row.server_item_id: row
+                    for row in await CollectionRepository(session).list_all()
+                    if row.server_type is provider.server_type
+                }
+            seen = {collection.id for collection in listed}
+            newly_matched: list[int] = []
+            matched = 0
+            for collection in listed:
+                if job.stop_requested():
+                    return
+                previous = existing.get(collection.id)
+                members = [items[i] for i in collection.member_ids if i in items]
+                media_type = (
+                    collection.media_type
+                    or _most_common([m.media_type for m in members])
+                    or (previous.media_type if previous else MediaType.MOVIE)
+                )
+                library_id = (
+                    collection.library_id
+                    or _most_common([m.library_id for m in members])
+                    or (previous.library_id if previous else None)
+                )
+                if library_ids and library_id not in library_ids:
+                    continue
+                async with self._downloads.asset_locks.acquire(
+                    f"collection:{previous.id}"
+                    if previous
+                    else f"new-collection:{provider.server_type}:{collection.id}"
+                ):
+                    async with self._database.read_session() as session:
+                        current = await CollectionRepository(session).find_server(
+                            provider.server_type, collection.id
+                        )
+                    facts, checked = await self._inspect_theme(
+                        provider, collection, current, previous
                     )
-                facts, checked = await self._inspect_theme(
-                    provider, collection, current, previous
-                )
-                async with self._database.write_session() as session:
-                    row = await self._store(
-                        CollectionRepository(session),
-                        collection,
-                        server_type=provider.server_type,
-                        media_type=media_type,
-                        library_id=library_id,
-                        members=members,
-                        folder_themes=isinstance(provider.collections, FolderThemes),
-                        facts=facts,
-                        theme_checked=checked,
-                        now=utc_now(),
+                    async with self._database.write_session() as session:
+                        row = await self._store(
+                            CollectionRepository(session),
+                            collection,
+                            server_type=provider.server_type,
+                            media_type=media_type,
+                            library_id=library_id,
+                            members=members,
+                            folder_themes=isinstance(
+                                provider.collections, FolderThemes
+                            ),
+                            facts=facts,
+                            theme_checked=checked,
+                            now=utc_now(),
+                        )
+                matched += row.tmdb_collection_id is not None
+                if (
+                    row.id is not None
+                    and row.tmdb_collection_id is not None
+                    and (
+                        previous is None
+                        or previous.tmdb_collection_id != row.tmdb_collection_id
                     )
-            matched += row.tmdb_collection_id is not None
-            if (
-                row.id is not None
-                and row.tmdb_collection_id is not None
-                and (
-                    previous is None
-                    or previous.tmdb_collection_id != row.tmdb_collection_id
+                ):
+                    newly_matched.append(row.id)
+                await self._publisher.broadcast(
+                    "collection.updated", {"collection_id": row.id}
                 )
-            ):
-                newly_matched.append(row.id)
-            await self._publisher.broadcast(
-                "collection.updated", {"collection_id": row.id}
-            )
-        async with self._database.read_session() as session:
-            gone = [
-                row.id
-                for row in await CollectionRepository(session).list_all()
-                if row.id is not None
-                and row.server_type is provider.server_type
-                and row.server_item_id not in seen
-                and (
-                    not library_ids
-                    or (
-                        row.last_synced_at is not None and row.library_id in library_ids
+            async with self._database.read_session() as session:
+                gone = [
+                    row.id
+                    for row in await CollectionRepository(session).list_all()
+                    if row.id is not None
+                    and row.server_type is provider.server_type
+                    and row.server_item_id not in seen
+                    and (
+                        not library_ids
+                        or (
+                            row.last_synced_at is not None
+                            and row.library_id in library_ids
+                        )
                     )
-                )
-            ]
-        for collection_id in gone:
-            async with (
-                self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
-                self._database.write_session() as session,
-            ):
-                await self._downloads.cancel_assets(
-                    session, AssetScope(collection_id=collection_id)
-                )
-                await CollectionRepository(session).delete_ids([collection_id])
-            await self._downloads.committed(session)
-        await self._publisher.broadcast("collections.changed")
+                ]
+            for collection_id in gone:
+                async with (
+                    self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
+                    self._database.write_session() as session,
+                ):
+                    await self._downloads.cancel_assets(
+                        session, AssetScope(collection_id=collection_id)
+                    )
+                    await CollectionRepository(session).delete_ids([collection_id])
+                await self._downloads.committed(session)
+            await self._publisher.broadcast("collections.changed")
         await queue_catalog_themes_for_collections(
             newly_matched,
             theme_order=theme_order,

@@ -21,7 +21,12 @@ class FolderThemes:
     """The server reads collection themes from its metadata folders."""
 
 
-type CollectionSupport = UploadThemes | FolderThemes
+@dataclass(slots=True, frozen=True)
+class NoCollectionThemes:
+    """The server supports collections but cannot store their themes."""
+
+
+type CollectionSupport = UploadThemes | FolderThemes | NoCollectionThemes
 
 
 def server_path(path: str) -> PurePath:
@@ -83,6 +88,7 @@ class ServerItem:
     #: fetches the director only when this differs from the stored version.
     director_etag: str | None = None
     studio: str | None = None
+    genres: tuple[str, ...] = ()
     server_added_at: datetime | None = None
     server_updated_at: datetime | None = None
     seasons: list[ServerSeason] = field(default_factory=list[ServerSeason])

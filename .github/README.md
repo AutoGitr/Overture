@@ -232,6 +232,7 @@ its [settings file](#native-service-settings). Empty values count as unset.
 | `MEDIA_SERVER_API_KEY`    | Yes                |                           | Server token or API key                                                                                                    |
 | `MEDIA_SERVER_VERIFY_TLS` | No                 | `true`                    | Set to `false` only for a self-signed certificate; keep it on for Plex                                                     |
 | `JELLYFIN_COLLECTIONS_PATH` | No | | Local mount of Jellyfin's collections directory, used to write BoxSet themes |
+| `MDBLIST_API_KEY` | No | | Enables dynamic collection membership from MDBList JSON lists; kept on the backend |
 | `TMDB_API_KEY`            | No                 |                           | Enables TMDB artwork and title/collection search directly in the sidebar; recommended for Plex                             |
 | `AUTH_MODE`               | No                 | `password`                | Authentication mode: `password`, `oidc`, `both`, or `none`                                                                 |
 | `APP_PASSWORD_HASH`       | `password`, `both` |                           | [Password](#password) hash; required for `password` and `both` modes                                                       |
@@ -398,7 +399,7 @@ services:
 
 ## Using Overture
 
-1. Run a full **Sync** to import movies, shows and your Plex or Jellyfin collections.
+1. Run a full **Sync** to import movies, shows and your Plex, Jellyfin or Emby collections.
    Collections and their members refresh on full syncs.
 2. Enable [OvertureDB](#overturedb) if you want community picks, then open an
    item to compare artwork and preview themes. Saving a choice downloads it.
@@ -416,9 +417,34 @@ finds their media folder.
 
 ### Collections
 
-Plex and Jellyfin collections appear under **Collections** in the library sidebar.
-Their pages show members in a poster grid linking to each item. Movie collections
-also show TMDB matching controls; TMDB has no show collections. Jellyfin's provider
+Plex, Jellyfin and Emby collections appear under **Collections** in the library
+sidebar. Create a collection with **+ Create collection**, choose its library and
+initial members, or use **Generate collections** to preview and create collections
+by decade, genre or studio. Run a full Sync to import current library metadata.
+
+Collection pages have **Members**, **Art**, **Themes**, **Rule / Sync** and
+**Settings** views. Add or remove library members, edit the collection's title,
+summary and sort title, and browse TMDB, OvertureDB or custom poster/background
+artwork. Plex also supports dragging members into custom order, visibility modes
+and home promotion; Jellyfin and Emby offer release and alphabetical ordering.
+Deleting a collection keeps its media files.
+
+Under **Rule / Sync**, choose an MDBList list, a TMDB movie franchise, or an
+intersection of library filters. Set `MDBLIST_API_KEY` in the environment for
+MDBList; use a list ID, `user/list`, or an HTTPS MDBList list URL. Rules only use
+items already in the selected library. Strict sync mirrors the source; append
+keeps manual members. Each enabled rule runs at its saved interval and can be
+run immediately. Failed source lookups preserve existing membership. Removing a
+rule keeps the collection and its members.
+
+**Settings > Collection defaults** controls the sync strategy, Plex visibility,
+minimum member count, deletion below the minimum, and optional automatic artwork
+and catalog theme selection during rule sync. Rule overrides left blank inherit
+the global setting. Below-minimum rules keep the current collection unless
+deletion is enabled; deleting a collection also removes its rule. Per-collection
+metadata and order are configured in the collection's **Settings** view.
+
+Movie collections also show TMDB matching controls; TMDB has no show collections. Jellyfin's provider
 ID is used when available; otherwise Overture uses a strict majority of members'
 TMDB collection IDs. Set `TMDB_API_KEY` for Plex's automatic matching. You can
 search for a different collection or enter a TMDB collection ID manually, choose
@@ -435,7 +461,8 @@ and run a full Sync. Overture writes `theme.mp3` into the BoxSet folder and asks
 Jellyfin to refresh it. The folder must have a `[boxset]` suffix or contain
 `collection.xml`; Jellyfin can leave out that file when XML saving is disabled.
 Without an accessible mount, the collection page explains why themes cannot be
-applied. An unavailable mount preserves previously saved choices and file facts. Emby collection themes are not supported.
+applied. An unavailable mount preserves previously saved choices and file facts.
+Emby collection themes are not supported.
 
 ### Operations
 

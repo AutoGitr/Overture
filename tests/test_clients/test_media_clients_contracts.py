@@ -578,7 +578,7 @@ def test_active_provider_tracks_configured_media_server(
 
     app_config.MEDIA_SERVER = ServerType.EMBY
     assert isinstance(registry.provider, EmbyProvider)
-    assert registry.collections is None
+    assert registry.collections is registry.provider
 
 
 def test_registry_reuses_one_provider_instance_per_media_server(

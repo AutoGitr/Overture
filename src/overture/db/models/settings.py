@@ -15,6 +15,8 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ...domain import (
     AspectRatioTolerance,
     AutoUnmonitor,
+    CollectionMode,
+    SyncMode,
     TmdbLanguageFilter,
     Workflow,
 )
@@ -35,6 +37,16 @@ class AppSettingsBase(SQLModel):
     their allowed values in the database.
     """
 
+    collection_sync_mode: SyncMode = Field(
+        default=SyncMode.SYNC, sa_type=enum_type(SyncMode)
+    )
+    collection_mode_default: CollectionMode = Field(
+        default=CollectionMode.DEFAULT, sa_type=enum_type(CollectionMode)
+    )
+    collection_minimum_items: int = Field(default=1, ge=1, le=100)
+    collection_delete_below_minimum: bool = False
+    collection_auto_match_art: bool = False
+    collection_auto_match_theme: bool = False
     auto_match_art: bool = False
     workflow: Workflow = Field(default=Workflow.ART, sa_type=enum_type(Workflow))
     theme_search_format: str = Field(

@@ -10,7 +10,11 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file
 lazy from ...domain import JobStatus, ThemeBulkSource
-lazy from ...media_servers.adapters import FolderThemes, UploadThemes
+lazy from ...media_servers.adapters import (
+    FolderThemes,
+    NoCollectionThemes,
+    UploadThemes,
+)
 lazy from ...media_servers.registry import CollectionProvider
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.downloads import DownloadJobRepository
@@ -30,6 +34,8 @@ def collection_themes_unavailable(
     """Return why this provider cannot store a collection theme."""
     if provider is None or provider.collections is None:
         return "The media server has no collections Overture can manage"
+    if isinstance(provider.collections, NoCollectionThemes):
+        return "Emby does not support collection themes"
     if (
         isinstance(provider.collections, FolderThemes)
         and app_config.JELLYFIN_COLLECTIONS_PATH is None

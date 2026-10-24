@@ -62,7 +62,14 @@ const itemSubroutes = {
 
 const collectionSubroutes = {
   "/": loadCollectionPage,
-  "/:collectionSlug": loadCollectionPage,
+  "/:collectionSlug": {
+    "/": loadCollectionPage,
+    "/art": loadCollectionPage,
+    "/art/:subtab": loadCollectionPage,
+    "/themes": loadCollectionPage,
+    "/rule": loadCollectionPage,
+    "/settings": loadCollectionPage,
+  },
 };
 
 const mediaTypeRoutes = {
@@ -129,6 +136,45 @@ export function routedItemId(): number | null {
 export function routedCollectionId(): number | null {
   const slug = parseItemSlug(route.params.collectionSlug);
   return slug?.kind === "item" ? slug.id : null;
+}
+
+export type CollectionView = "members" | "art" | "themes" | "rule" | "settings";
+
+export function routedCollectionView(): CollectionView {
+  if (route.pathname.includes("/art")) return "art";
+  if (route.pathname.endsWith("/themes")) return "themes";
+  if (route.pathname.endsWith("/rule")) return "rule";
+  if (route.pathname.endsWith("/settings")) return "settings";
+  return "members";
+}
+
+export function routedCollectionArtType(): "poster" | "background" {
+  return route.params.subtab === "background" ? "background" : "poster";
+}
+
+export function goToCollectionView(
+  collection: SelectableCollection,
+  view: CollectionView,
+  subtab: "poster" | "background" = "poster",
+): void {
+  const params = { collectionSlug: buildIdSlug(collection.id, collection.title), subtab };
+  if (collection.media_type === "show") {
+    if (view === "members") void navigate("/shows/collections/:collectionSlug", { params });
+    else if (view === "art")
+      void navigate("/shows/collections/:collectionSlug/art/:subtab", { params });
+    else if (view === "themes")
+      void navigate("/shows/collections/:collectionSlug/themes", { params });
+    else if (view === "rule") void navigate("/shows/collections/:collectionSlug/rule", { params });
+    else void navigate("/shows/collections/:collectionSlug/settings", { params });
+  } else {
+    if (view === "members") void navigate("/movies/collections/:collectionSlug", { params });
+    else if (view === "art")
+      void navigate("/movies/collections/:collectionSlug/art/:subtab", { params });
+    else if (view === "themes")
+      void navigate("/movies/collections/:collectionSlug/themes", { params });
+    else if (view === "rule") void navigate("/movies/collections/:collectionSlug/rule", { params });
+    else void navigate("/movies/collections/:collectionSlug/settings", { params });
+  }
 }
 
 /** The URL owns the sidebar's source, tab and mode together. */

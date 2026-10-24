@@ -5,6 +5,7 @@ lazy from .art import (
     ArtSlot,
 )
 lazy from .auth_session import AuthSession
+lazy from .collection_rule import CollectionRule
 lazy from .download_job import DownloadJob, DownloadJobBase
 lazy from .job_result import JobResult, JobRun
 lazy from .media_collection import (
@@ -40,6 +41,7 @@ __all__ = [
     "AppSettingsBase",
     "ArtSlot",
     "AuthSession",
+    "CollectionRule",
     "DownloadJob",
     "DownloadJobBase",
     "JobResult",
