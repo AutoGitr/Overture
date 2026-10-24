@@ -2,14 +2,53 @@
   import type { Snippet } from "svelte";
   import type { ArtType } from "../../generated/rest/types.gen";
 
-  let { artType = "poster", children }: { artType?: ArtType; children: Snippet } = $props();
+  let {
+    artType = "poster",
+    title,
+    count,
+    matched = false,
+    children,
+  }: {
+    artType?: ArtType;
+    title?: string;
+    count?: number;
+    matched?: boolean;
+    children: Snippet;
+  } = $props();
 </script>
 
-<div class="image-grid aspect-{artType}">
-  {@render children()}
+<div class="grid-section">
+  {#if title}
+    <div class="heading">
+      <h3>{title}</h3>
+      {#if count !== undefined}<span class={["badge", matched ? "badge-success" : "badge-muted"]}
+          >{count}</span
+        >{/if}
+    </div>
+  {/if}
+  <div class="image-grid aspect-{artType}">
+    {@render children()}
+  </div>
 </div>
 
 <style>
+  .grid-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  h3 {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+  }
   .image-grid {
     display: grid;
     gap: var(--space-3);

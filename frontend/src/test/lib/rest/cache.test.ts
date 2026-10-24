@@ -4,6 +4,7 @@ import {
   getCatalogEntryOptions,
   getSeasonsOptions,
   getTmdbItemOptions,
+  getTmdbCollectionOptions,
   listCollectionsOptions,
   listItemsOptions,
   listCatalogEntriesOptions,
@@ -312,6 +313,26 @@ describe("TMDB matches", () => {
 });
 
 describe("catalog draft cache", () => {
+  it("refreshes catalog member artwork after draft saves and discards without invalidating TMDB artwork", () => {
+    queryClient.clear();
+    const catalogKey = getTmdbCollectionOptions({
+      path: { collection_id: 10 },
+      query: { artwork_source: "overturedb" },
+    }).queryKey;
+    const tmdbKey = getTmdbCollectionOptions({ path: { collection_id: 10 } }).queryKey;
+    const detail = catalogDetail();
+    for (const draft of [{ ...detail.entry, poster_url: "https://image.test/draft.jpg" }, null]) {
+      queryClient.setQueryData(catalogKey, { tmdb_id: 10, title: "Collection", items: [] });
+      queryClient.setQueryData(tmdbKey, { tmdb_id: 10, title: "Collection", items: [] });
+      storeCatalogDetail(
+        { media_type: "movie", entry_key: detail.entry_key },
+        { ...detail, draft },
+      );
+      expect(queryClient.getQueryState(catalogKey)?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryState(tmdbKey)?.isInvalidated).toBe(false);
+    }
+  });
+
   it("shows draft artwork in cached sidebar rows immediately and restores it on discard", () => {
     queryClient.clear();
     const target = { media_type: "show", entry_key: "tmdb-12" } as const;

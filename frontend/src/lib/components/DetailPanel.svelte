@@ -11,24 +11,16 @@
   import Trash from "@lucide/svelte/icons/trash";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
   import githubIcon from "../../assets/icons/github.svg";
-  import type {
-    ArtType,
-    CatalogEntryDetail,
-    MediaItemRead,
-    TmdbItemPreview,
-  } from "../../generated/rest/types.gen";
-  import { CatalogDraft } from "../utils/catalogDraft";
+  import type { ArtType, MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
+  import type { CatalogContext } from "../utils/catalogDraft";
   import { createSeasonsQuery } from "../rest/queries";
   import {
     getPublicDatasetRecordOptions,
     getPublicDatasetStatusOptions,
-    getTmdbItemOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import {
-    goToItemArt,
-    goToItemThemes,
+    goToItemView,
     goToCatalogEntry,
     goToCollection,
     goToItem,
@@ -62,14 +54,14 @@
   let {
     item = null,
     preview = null,
-    detail = null,
+    catalog = null,
     members,
     view = { mode: "art", artSubTab: "poster", drillSeasonNum: null },
   }: {
     item?: MediaItemRead | null;
     /** A TMDB title open before its first selection stores it as an item. */
     preview?: TmdbItemPreview | null;
-    detail?: CatalogEntryDetail | null;
+    catalog?: CatalogContext | null;
     members?: Snippet;
     view?: ItemView;
   } = $props();
@@ -78,38 +70,9 @@
   let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
 
   const actions = new ItemRecordActions(() => item);
-  // A TMDB title shows like an item; only a stored item has records to manage.
-  let catalogEntry = $derived(detail?.draft ?? detail?.entry);
+  let detail = $derived(catalog?.detail);
+  let catalogEntry = $derived(catalog?.entry);
   let catalogTones = $derived(catalogEntry ? catalogStatus(catalogEntry) : null);
-  let catalogTarget = $derived(
-    detail ? { media_type: detail.entry.media_type, entry_key: detail.entry_key } : null,
-  );
-  const draft = new CatalogDraft(() => catalogTarget);
-  const catalogTmdbQuery = createQuery(() => ({
-    ...getTmdbItemOptions({ path: { media_type: "show", tmdb_id: catalogEntry?.tmdb_id ?? 0 } }),
-    enabled:
-      catalogEntry?.media_type === "show" &&
-      !!catalogEntry.tmdb_id &&
-      settingsState.current.tmdb_configured &&
-      view.mode === "art" &&
-      view.artSubTab === "seasons",
-  }));
-  let catalogSeasons = $derived.by(() => {
-    const merged = new SvelteMap(
-      (catalogTmdbQuery.data?.seasons ?? []).map((season) => [season.season_num, season]),
-    );
-    for (const season of catalogEntry?.seasons ?? []) {
-      merged.set(season.season_num, {
-        ...merged.get(season.season_num),
-        season_num: season.season_num,
-        title: `Season ${season.season_num}`,
-        poster_url: season.poster_url,
-        poster_preview_url: null,
-      });
-    }
-    return [...merged.values()].sort((a, b) => a.season_num - b.season_num);
-  });
-  let catalog = $derived(detail ? { detail, draft, seasons: catalogSeasons } : null);
   let subject = $derived(item ?? preview ?? catalogEntry ?? null);
   let artType = $derived(viewArtType(view));
   const seasonsQuery = createSeasonsQuery(() => item);
@@ -189,10 +152,7 @@
     },
   ];
   let visibleSubTabs = $derived(
-    subTabConfig.filter((t) => {
-      if (t.showOnly && subject?.media_type !== "show") return false;
-      return true;
-    }),
+    subTabConfig.filter((tab) => !tab.showOnly || subject?.media_type === "show"),
   );
 
   // A choice being fetched shows its preview until the item shows the file.
@@ -211,8 +171,8 @@
           : null,
   );
   let subjectKey = $derived(
-    catalogTarget
-      ? `catalog:${catalogTarget.media_type}:${catalogTarget.entry_key}`
+    detail
+      ? `catalog:${detail.entry.media_type}:${detail.entry_key}`
       : item
         ? `item:${item.id}`
         : preview
@@ -220,17 +180,16 @@
           : null,
   );
 
-  function selectArtSubTab(tab: ArtSubTab) {
-    if (catalogTarget)
-      goToCatalogEntry(catalogTarget, { mode: "art", artSubTab: tab, drillSeasonNum: null });
+  function selectView(next: ItemView) {
+    if (catalog) goToCatalogEntry(catalog.target, next);
     else {
       const title = item ?? preview;
-      if (title) goToItemArt(title, tab);
+      if (title) goToItemView(title, next);
     }
   }
 
   function clearArt(tab: ArtSubTab | "all") {
-    if (!catalogEntry)
+    if (!catalog)
       return tab === "all"
         ? actions.clearAllArt()
         : actions.clearArt(
@@ -239,7 +198,7 @@
               ? (seasons.find((season) => season.season_num === view.drillSeasonNum)?.id ?? null)
               : null,
           );
-    void draft.save(
+    void catalog.draft.save(
       tab === "all"
         ? { poster_url: null, background_url: null, seasons: [] }
         : tab === "seasons"
@@ -247,7 +206,7 @@
               seasons:
                 view.drillSeasonNum === null
                   ? []
-                  : (catalogEntry.seasons ?? []).filter(
+                  : (catalog.entry.seasons ?? []).filter(
                       (season) => season.season_num !== view.drillSeasonNum,
                     ),
             }
@@ -302,7 +261,7 @@
 
   {#snippet meta()}
     {#if subject?.year}
-      <span class="detail-year">{subject.year}</span>
+      <span>{subject.year}</span>
     {/if}
     {#if detail?.draft}<span class="badge badge-warning">Draft</span>{/if}
   {/snippet}
@@ -319,8 +278,8 @@
     {/if}
     {#if detail?.draft}<button
         class="btn btn-ghost btn-sm"
-        disabled={draft.busy}
-        onclick={() => draft.discard()}>Discard draft</button
+        disabled={catalog?.draft.busy}
+        onclick={() => catalog?.draft.discard()}>Discard draft</button
       >{/if}
     {#if item?.tmdb_collection_id}<CollectionBadge
         tmdbId={item.tmdb_collection_id}
@@ -345,10 +304,10 @@
       active={view.mode === "art"}
       status={catalogTones?.art ??
         (item && statusTone(item.art_status, downloadState.isDownloadingType(item.id, "art")))}
-      onselect={() => selectArtSubTab("poster")}
+      onselect={() => selectView({ mode: "art", artSubTab: "poster", drillSeasonNum: null })}
       clearLabel="Clear all art"
       onclear={Object.values(savedArt).some(Boolean) ? () => clearArt("all") : null}
-      clearDisabled={draft.busy || actions.clearingArt}
+      clearDisabled={catalog?.draft.busy || actions.clearingArt}
     />
     <StatusTab
       icon={Music}
@@ -356,29 +315,18 @@
       active={view.mode === "themes"}
       status={catalogTones?.theme ??
         (item && statusTone(item.theme_status, downloadState.isDownloadingType(item.id, "theme")))}
-      onselect={() => {
-        if (catalogTarget)
-          goToCatalogEntry(catalogTarget, {
-            mode: "themes",
-            artSubTab: "poster",
-            drillSeasonNum: null,
-          });
-        else {
-          const title = item ?? preview;
-          if (title) goToItemThemes(title);
-        }
-      }}
+      onselect={() => selectView({ mode: "themes", artSubTab: "poster", drillSeasonNum: null })}
       clearLabel="Clear theme"
       onclear={catalogEntry
         ? catalogEntry.youtube_id_overturedb
           ? () => {
-              void draft.save({ youtube_id_overturedb: null });
+              void catalog?.draft.save({ youtube_id_overturedb: null });
             }
           : null
         : hasThemeAttributes(item)
           ? () => actions.clearTheme()
           : null}
-      clearDisabled={draft.busy || actions.themeBusy}
+      clearDisabled={catalog?.draft.busy || actions.themeBusy}
     />
     <!-- A TMDB title has no record until its first selection stores it. -->
     {#if item}
@@ -424,12 +372,12 @@
               item[tab.statusField],
               downloadState.isDownloadingType(item.id, "art", tab.artType),
             ))}
-        onselect={() => selectArtSubTab(tab.key)}
+        onselect={() => selectView({ mode: "art", artSubTab: tab.key, drillSeasonNum: null })}
         clearLabel={tab.key === "seasons" && view.drillSeasonNum !== null
           ? "Clear season poster"
           : `Clear ${tab.label.toLowerCase()}`}
         onclear={savedArt[tab.key] ? () => clearArt(tab.key) : null}
-        clearDisabled={draft.busy || actions.clearingArt}
+        clearDisabled={catalog?.draft.busy || actions.clearingArt}
       />
     {/each}
   {/snippet}
@@ -449,15 +397,6 @@
       />
     {/if}
     {#if view.mode === "art"}
-      {#if catalog && view.artSubTab === "seasons"}
-        <DataStatus
-          label="TMDB seasons"
-          error={catalogTmdbQuery.error}
-          loading={catalogTmdbQuery.isFetching}
-          hasData={catalogTmdbQuery.data !== undefined}
-          onretry={() => catalogTmdbQuery.refetch()}
-        />
-      {/if}
       {#if view.artSubTab === "seasons" && view.drillSeasonNum === null}
         <SeasonGrid {item} {preview} {catalog} />
       {:else}
@@ -471,10 +410,3 @@
     {#if members}{@render members()}{/if}
   {/snippet}
 </DetailPanelBase>
-
-<style>
-  .detail-year {
-    font-size: var(--text-lg);
-    font-family: var(--font-mono);
-  }
-</style>

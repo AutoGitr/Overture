@@ -29,6 +29,7 @@ type TaggedQueryKey = readonly [
     path?: { item_id?: number };
     query?: {
       media_type?: string | null;
+      artwork_source?: string;
     };
   },
 ];
@@ -211,7 +212,10 @@ export function storeCatalogDetail(target: CatalogTarget, detail: CatalogEntryDe
   );
   void queryClient.invalidateQueries({
     predicate: ({ queryKey }) =>
-      isTaggedQuery(queryKey, "listCatalogEntries") || isTaggedQuery(queryKey, "getCatalogCounts"),
+      isTaggedQuery(queryKey, "listCatalogEntries") ||
+      isTaggedQuery(queryKey, "getCatalogCounts") ||
+      (isTaggedQuery(queryKey, "getTmdbCollection") &&
+        queryKey[0].query?.artwork_source === "overturedb"),
   });
 }
 

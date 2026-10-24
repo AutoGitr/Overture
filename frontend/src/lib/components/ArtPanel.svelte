@@ -28,7 +28,7 @@
     catalog?: CatalogContext | null;
   } = $props();
 
-  let subject = $derived(item ?? preview ?? catalog?.detail.draft ?? catalog?.detail.entry);
+  let subject = $derived(item ?? preview ?? catalog?.entry);
   const seasonsQuery = createSeasonsQuery(() => item);
   // A TMDB title's seasons come with it; a stored show's are loaded.
   let seasons = $derived<(SeasonRead | TmdbSeasonPreview)[]>(
@@ -101,10 +101,11 @@
 
   function openSeasons(season: { season_num: number } | null = null) {
     if (catalog)
-      goToCatalogEntry(
-        { media_type: catalog.detail.entry.media_type, entry_key: catalog.detail.entry_key },
-        { mode: "art", artSubTab: "seasons", drillSeasonNum: season?.season_num ?? null },
-      );
+      goToCatalogEntry(catalog.target, {
+        mode: "art",
+        artSubTab: "seasons",
+        drillSeasonNum: season?.season_num ?? null,
+      });
     else {
       const title = item ?? preview;
       if (title) {

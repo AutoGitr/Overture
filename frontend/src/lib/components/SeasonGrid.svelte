@@ -10,7 +10,7 @@
   import { goToCatalogEntry, goToSeason } from "../router/routes";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { remotePosterUrl, seasonPosterUrls } from "../utils/artDisplay";
-  import FallbackImage from "./FallbackImage.svelte";
+  import PosterCard from "./PosterCard.svelte";
   import DataStatus from "./DataStatus.svelte";
   import ImageGrid from "./ImageGrid.svelte";
 
@@ -40,10 +40,11 @@
 
   function drillInto(season: SeasonRead | TmdbSeasonPreview) {
     if (catalog)
-      goToCatalogEntry(
-        { media_type: catalog.detail.entry.media_type, entry_key: catalog.detail.entry_key },
-        { mode: "art", artSubTab: "seasons", drillSeasonNum: season.season_num },
-      );
+      goToCatalogEntry(catalog.target, {
+        mode: "art",
+        artSubTab: "seasons",
+        drillSeasonNum: season.season_num,
+      });
     else if (subject) goToSeason(subject, season);
   }
 </script>
@@ -68,25 +69,15 @@
       {#each seasons as season (season.season_num)}
         {@const { src, fallbackSrc } = posterUrls(season)}
 
-        <button class="season-card card card-interactive" onclick={() => drillInto(season)}>
-          <div class="season-poster">
-            {#snippet placeholder()}
-              <div class="poster-placeholder">
-                <Layers size={24} />
-              </div>
-            {/snippet}
-            <!-- Named by the title below it. -->
-            <FallbackImage {src} {fallbackSrc} alt="" {placeholder} />
-          </div>
-          <div class="season-info">
-            <span class="season-title">{season.title || `Season ${season.season_num}`}</span>
-            {#if "file_count" in season && season.file_count}
-              <span class="season-files"
-                >{season.file_count} file{season.file_count === 1 ? "" : "s"}</span
-              >
-            {/if}
-          </div>
-        </button>
+        <PosterCard
+          title={season.title || `Season ${season.season_num}`}
+          {src}
+          {fallbackSrc}
+          onselect={() => drillInto(season)}
+          meta={"file_count" in season && season.file_count
+            ? `${season.file_count} file${season.file_count === 1 ? "" : "s"}`
+            : null}
+        />
       {/each}
     </ImageGrid>
   {/if}
@@ -105,44 +96,6 @@
     justify-content: center;
     gap: var(--space-3);
     padding: var(--space-10);
-    color: var(--text-tertiary);
-  }
-
-  .season-card {
-    overflow: hidden;
-    padding: 0;
-    text-align: left;
-  }
-
-  .season-poster {
-    aspect-ratio: 2/3;
-    overflow: hidden;
-    background: var(--bg-tertiary);
-  }
-
-  .poster-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-tertiary);
-  }
-
-  .season-info {
-    padding: var(--space-3);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .season-title {
-    font-size: var(--text-sm);
-    font-weight: 500;
-  }
-
-  .season-files {
-    font-size: var(--text-xs);
     color: var(--text-tertiary);
   }
 </style>

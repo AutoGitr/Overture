@@ -3159,6 +3159,10 @@ export type TmdbItemPreview = {
  */
 export type TmdbItemResult = {
     /**
+     * Catalog Entry Key
+     */
+    catalog_entry_key: string | null;
+    /**
      * Existing Item Id
      */
     existing_item_id: number | null;
@@ -5988,7 +5992,14 @@ export type GetTmdbCollectionData = {
          */
         collection_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Artwork Source
+         *
+         * Collection member artwork
+         */
+        artwork_source?: 'tmdb' | 'overturedb';
+    };
     url: '/api/tmdb/collections/{collection_id}';
 };
 

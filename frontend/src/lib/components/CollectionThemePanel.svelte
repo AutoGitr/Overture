@@ -178,7 +178,7 @@
   {/snippet}
 
   {#snippet meta()}
-    <span class="collection-meta">{coll?.child_count} items</span>
+    <span>{coll?.child_count} items</span>
   {/snippet}
 
   {#snippet badges()}
@@ -324,12 +324,6 @@
 </DetailPanelBase>
 
 <style>
-  .collection-meta {
-    color: var(--text-tertiary);
-    font-size: var(--text-lg);
-    font-family: var(--font-mono);
-  }
-
   .theme-panel {
     display: flex;
     flex-direction: column;

@@ -133,11 +133,15 @@ class PublicDatasetRepository:
             for item in items
         ]
 
-    async def list_items(self, media_type: MediaType) -> list[PublicDatasetItem]:
-        """Return every catalog entry of a media type."""
+    async def list_items(
+        self, media_type: MediaType, tmdb_ids: Collection[int] | None = None
+    ) -> list[PublicDatasetItem]:
+        """Return catalog entries of a media type, optionally limited to TMDB IDs."""
         stmt = select(PublicDatasetItem).where(
             col(PublicDatasetItem.media_type) == media_type
         )
+        if tmdb_ids is not None:
+            stmt = stmt.where(col(PublicDatasetItem.tmdb_id).in_(tmdb_ids))
         return list((await self.session.exec(stmt)).all())
 
     async def find_item(

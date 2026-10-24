@@ -4,7 +4,7 @@ An unsaved item is named by its media type and TMDB ID. Its first art or theme
 selection stores it; from then on the item routes take over.
 """
 
-lazy from typing import Annotated
+lazy from typing import Annotated, Literal
 
 lazy from fastapi import APIRouter, Depends, Path, Query
 
@@ -45,9 +45,12 @@ async def search_tmdb(
 async def get_tmdb_collection(
     collection_id: Annotated[int, Path(gt=0, description="TMDB collection ID")],
     tmdb_items: TmdbItemsDep,
+    artwork_source: Annotated[
+        Literal["tmdb", "overturedb"], Query(description="Collection member artwork")
+    ] = "tmdb",
 ) -> TmdbCollectionResponse:
     """List the movies of a TMDB collection."""
-    return await tmdb_items.collection(collection_id)
+    return await tmdb_items.collection(collection_id, artwork_source=artwork_source)
 
 
 @router.get("/{media_type}/{tmdb_id}")

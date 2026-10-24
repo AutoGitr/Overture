@@ -6081,6 +6081,17 @@
         "additionalProperties": false,
         "description": "A movie or show TMDB found.",
         "properties": {
+          "catalog_entry_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Entry Key"
+          },
           "existing_item_id": {
             "anyOf": [
               {
@@ -6151,7 +6162,8 @@
           "year",
           "poster_url",
           "poster_preview_url",
-          "existing_item_id"
+          "existing_item_id",
+          "catalog_entry_key"
         ],
         "title": "TmdbItemResult",
         "type": "object"
@@ -11863,6 +11875,22 @@
               "exclusiveMinimum": 0,
               "title": "Collection Id",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Collection member artwork",
+            "in": "query",
+            "name": "artwork_source",
+            "required": false,
+            "schema": {
+              "default": "tmdb",
+              "description": "Collection member artwork",
+              "enum": [
+                "tmdb",
+                "overturedb"
+              ],
+              "title": "Artwork Source",
+              "type": "string"
             }
           },
           {

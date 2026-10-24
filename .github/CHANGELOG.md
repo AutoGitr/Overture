@@ -24,6 +24,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- OvertureDB item, collection, season and member images now show only catalog artwork or local draft overrides. Missing images use placeholders, and poster cards share consistent typography and spacing.
 - OvertureDB pages reuse library artwork, season and theme views, with consistent links and clearable status badges. Draft artwork appears in the sidebar, and the original catalog artwork is offered only after a draft exists.
 - Full Sync reports collection lookups, respects the selected libraries, and stops pending requests promptly when Stop is selected.
 - Collection members appear in a linked poster grid. TMDB matching is available only for movie collections.

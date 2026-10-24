@@ -21,7 +21,9 @@
   import { errorMessage } from "../utils/errors";
   import { openPersistedItem, type ArtSlotTarget } from "../utils/tmdbItems";
   import ArtMatchBar from "./ArtMatchBar.svelte";
-  import ArtSourceSection from "./ArtSourceSection.svelte";
+  import ArtCard from "./ArtCard.svelte";
+  import ImageGrid from "./ImageGrid.svelte";
+  import { candidateImageUrl } from "../utils/artDisplay";
   import ArtUrlEntry from "./ArtUrlEntry.svelte";
   import DataStatus from "./DataStatus.svelte";
 
@@ -42,7 +44,7 @@
   let canMatch = $derived(slot.kind === "item");
   let tmdbTarget = $derived(
     slot.kind === "catalog"
-      ? (slot.catalog.detail.draft ?? slot.catalog.detail.entry)
+      ? slot.catalog.entry
       : slot.kind === "tmdb"
         ? { media_type: slot.mediaType, tmdb_id: slot.tmdbId }
         : null,
@@ -143,7 +145,7 @@
     if (slot.kind === "catalog") {
       try {
         if (artType === "season_poster") {
-          const entry = slot.catalog.detail.draft ?? slot.catalog.detail.entry;
+          const entry = slot.catalog.entry;
           if (slot.seasonNum === null) return false;
           const seasonNum = slot.seasonNum;
           const seasons = [
@@ -299,14 +301,7 @@
   </ArtMatchBar>
 
   {#if match.results && match.results.length > 0}
-    <ArtSourceSection
-      title="MATCHED"
-      arts={match.results}
-      {artType}
-      disabled={saving}
-      onselect={saveArt}
-      matched
-    />
+    {@render source("MATCHED", match.results, true)}
   {/if}
 
   <DataStatus
@@ -322,18 +317,24 @@
     {/if}
     {#each Object.entries(sources) as [sourceKey, arts] (sourceKey)}
       {#if arts.length > 0}
-        <ArtSourceSection
-          title={sourceKey.toUpperCase()}
-          {arts}
-          {artType}
-          disabled={saving}
-          onselect={saveArt}
-          showSource={sourceKey !== "tmdb"}
-        />
+        {@render source(sourceKey.toUpperCase(), arts, false, sourceKey !== "tmdb")}
       {/if}
     {/each}
   {/if}
 </div>
+
+{#snippet source(title: string, arts: ArtCandidate[], matched = false, showSource = false)}
+  <ImageGrid {title} count={arts.length} {matched} {artType}>
+    {#each arts as art (art.url)}
+      <ArtCard
+        {art}
+        disabled={saving}
+        {showSource}
+        onSelect={(art) => saveArt(art, candidateImageUrl(art))}
+      />
+    {/each}
+  </ImageGrid>
+{/snippet}
 
 <style>
   .art-slot {

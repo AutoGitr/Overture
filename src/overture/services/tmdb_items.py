@@ -10,6 +10,7 @@ lazy import asyncio
 lazy import logging
 lazy from collections.abc import AsyncGenerator, Awaitable
 lazy from contextlib import asynccontextmanager, nullcontext
+lazy from typing import Literal
 
 lazy import httpx2
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -46,6 +47,7 @@ lazy from .downloads.service import DownloadService
 lazy from .library.items import (
     emit_library_item_upserted,
 )
+lazy from .public_dataset.browse import CatalogBrowser
 lazy from .public_dataset.lookup import sources_for
 lazy from .themes.service import ThemesService
 
@@ -104,6 +106,7 @@ class TmdbItemsService:
         themes: ThemesService,
         downloads: DownloadService,
         publisher: protocols.EventPublisher,
+        catalog: CatalogBrowser,
     ) -> None:
         self._config = app_config
         self._database = database
@@ -112,6 +115,7 @@ class TmdbItemsService:
         self._themes = themes
         self._downloads = downloads
         self._publisher = publisher
+        self._catalog = catalog
 
     def _require_configured(self) -> None:
         """Refuse every TMDB request while no API key is set.
@@ -216,7 +220,12 @@ class TmdbItemsService:
             ]
         )
 
-    async def collection(self, collection_id: int) -> TmdbCollectionResponse:
+    async def collection(
+        self,
+        collection_id: int,
+        *,
+        artwork_source: Literal["tmdb", "overturedb"] = "tmdb",
+    ) -> TmdbCollectionResponse:
         """Return a TMDB collection's movies.
 
         Raises:
@@ -231,7 +240,20 @@ class TmdbItemsService:
             existing = await MediaItemRepository(db).ids_by_tmdb_ids(
                 MediaType.MOVIE, {part.tmdb_id for part in collection.parts}
             )
-        return tmdb_collection_response(collection, existing)
+        response = tmdb_collection_response(collection, existing)
+        if artwork_source == "overturedb":
+            catalog = await self._catalog.movie_artwork(
+                {part.tmdb_id for part in collection.parts}
+            )
+            for member in response.items:
+                entry = catalog.get(member.tmdb_id)
+                member.poster_url = entry.poster_url if entry else None
+                member.poster_preview_url = entry.poster_preview_url if entry else None
+                member.catalog_entry_key = entry.entry_key if entry else None
+                if entry:
+                    member.title = entry.title
+                    member.year = entry.year
+        return response
 
     async def preview(self, media_type: MediaType, tmdb_id: int) -> TmdbItemPreview:
         """Describe a TMDB movie or show, naming the stored item it matches."""

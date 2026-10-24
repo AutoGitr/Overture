@@ -400,6 +400,7 @@ describe("Sidebar TMDB search", () => {
     poster_url: null,
     poster_preview_url: null,
     existing_item_id: existing,
+    catalog_entry_key: null,
   });
 
   beforeEach(async () => {

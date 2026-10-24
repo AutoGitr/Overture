@@ -505,6 +505,13 @@ def build_runtime(
         backups=backups,
         collections=collections,
     )
+    public_dataset = PublicDatasetService(
+        scheduler=scheduler,
+        publisher=events,
+        app_config=app_config,
+        database=database,
+        config_dir=config_dir,
+    )
 
     return RuntimeServices(
         app_settings=app_config,
@@ -537,13 +544,7 @@ def build_runtime(
             local_assets=local_assets,
             database=database,
         ),
-        public_dataset=PublicDatasetService(
-            scheduler=scheduler,
-            publisher=events,
-            app_config=app_config,
-            database=database,
-            config_dir=config_dir,
-        ),
+        public_dataset=public_dataset,
         art=art,
         library=library,
         server_audit=server_audit,
@@ -557,6 +558,7 @@ def build_runtime(
             themes=themes,
             downloads=downloads,
             publisher=events,
+            catalog=public_dataset.catalog,
         ),
         asset_manager=asset_manager,
         stats=stats,

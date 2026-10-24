@@ -65,6 +65,7 @@ lazy from overture.services.health import get_service_status
 lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.named_schedules import NamedSchedules
+lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.public_dataset.service import PublicDatasetService
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_audit.service import ServerAuditService
@@ -644,6 +645,7 @@ def make_runtime(
             themes=themes,
             downloads=downloads,
             publisher=events,
+            catalog=CatalogBrowser(database=database, app_config=app_config),
         ),
         asset_manager=asset_manager,
         stats=stats,

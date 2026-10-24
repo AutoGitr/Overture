@@ -42,7 +42,7 @@
 
   const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
   let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
-  let catalogEntry = $derived(catalog?.detail.draft ?? catalog?.detail.entry);
+  let catalogEntry = $derived(catalog?.entry);
   let subject = $derived(item ?? preview ?? catalogEntry);
   const provenanceLabels = {
     download: "Source recorded when downloaded",

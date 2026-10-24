@@ -524,6 +524,10 @@ season and theme views, including status badges with clear buttons on hover.
 Before a draft exists, artwork candidates come from TMDB. After you make a
 draft, the OvertureDB section also offers the original catalog artwork.
 Draft artwork and titles appear in the sidebar as well as on the page.
+Item, collection, season and member images in the OvertureDB view always use
+the catalog, with drafts overriding it everywhere. Missing images show a
+placeholder, even when TMDB or your library has artwork. TMDB still supplies
+editing candidates, season details and collection membership.
 **Discard draft** restores the catalog entry; the Overture icon opens a linked
 item or collection in your library. The GitHub icon appears when a draft differs
 from the catalog and opens an issue with those choices. **Export selections** includes

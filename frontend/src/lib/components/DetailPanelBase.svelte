@@ -106,7 +106,7 @@
         <div class="detail-heading">
           <div class="title-row">
             <h2 class="detail-title">{title}</h2>
-            {@render meta?.()}
+            {#if meta}<div class="detail-meta">{@render meta()}</div>{/if}
           </div>
           <div class="id-badges">
             {@render badges()}
@@ -289,6 +289,15 @@
     flex-wrap: wrap;
   }
 
+  .detail-meta {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    font-size: var(--text-lg);
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+  }
+
   .detail-title {
     font-size: var(--text-3xl);
     font-weight: 700;
@@ -346,6 +355,9 @@
   /* -- Content area ------------------------------------------------------- */
   .detail-content {
     flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
     padding: var(--space-4) var(--gutter) calc(var(--space-6) + var(--safe-area-bottom));
   }
 

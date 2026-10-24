@@ -23,6 +23,8 @@ class TmdbItemResult(StrictBaseModel):
     poster_preview_url: str | None = None
     #: The stored item with this TMDB ID, which opens instead.
     existing_item_id: int | None = None
+    #: The catalog entry to open when viewing OvertureDB collection members.
+    catalog_entry_key: str | None = None
 
 
 class TmdbCollectionResult(StrictBaseModel):

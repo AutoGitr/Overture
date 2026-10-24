@@ -40,6 +40,18 @@ lazy from .schema.contract import (
 type Entry = dict[str, Any]
 
 
+def _draft_entries(
+    drafts: list[PublicDatasetDraft], media_type: CatalogMediaType
+) -> dict[tuple[str, int | str], Entry]:
+    return {
+        (field, value): draft.entry
+        for draft in drafts
+        if draft.media_type is media_type
+        for field in IDENTITY_FIELDS
+        if (value := getattr(draft, field)) is not None
+    }
+
+
 def _item_entry(item: PublicDatasetItem, season_posters: dict[int, str]) -> Entry:
     """Return a stored movie or show as the contract spells the entry."""
     entry: Entry = {
@@ -155,17 +167,26 @@ class CatalogBrowser:
                 ]
             drafts = await PublicDatasetDraftRepository(session).list_all()
             links = await self._library_links(session, media_type)
-        drafted = {
-            (field, value): draft.entry
-            for draft in drafts
-            if draft.media_type is media_type
-            for field in IDENTITY_FIELDS
-            if (value := getattr(draft, field)) is not None
-        }
+        drafted = _draft_entries(drafts, media_type)
         return sorted(
             (self._row(entry, links, drafted) for entry in entries),
             key=lambda row: (row.title.casefold(), row.year or 0, row.entry_key),
         )
+
+    async def movie_artwork(self, tmdb_ids: set[int]) -> dict[int, CatalogEntryRow]:
+        """Return catalog movie rows with draft overrides for collection members."""
+        async with self._database.read_session() as session:
+            await self._require_enabled(session)
+            items = await PublicDatasetRepository(session).list_items(
+                MediaType.MOVIE, tmdb_ids
+            )
+            drafts = await PublicDatasetDraftRepository(session).list_all()
+        drafted = _draft_entries(drafts, CatalogMediaType.MOVIE)
+        return {
+            item.tmdb_id: self._row(_item_entry(item, {}), {}, drafted)
+            for item in items
+            if item.tmdb_id is not None
+        }
 
     @staticmethod
     def _row(

@@ -131,6 +131,32 @@ describe("ArtPanel request ownership", () => {
     stubClipboard();
   });
 
+  it("shows all source candidates with lazy images and highlights local matches", async () => {
+    settingsState.load(appSettings({ auto_match_art: true }));
+    getArtSources.mockResolvedValue({
+      data: {
+        sources: {
+          tmdb: Array.from({ length: 7 }, (_, n) =>
+            artCandidate({ url: `https://image.tmdb.org/t/p/original/${n}.jpg` }),
+          ),
+        },
+      },
+    });
+    matchArt.mockResolvedValue({
+      data: { matches: [artCandidate({ url: "https://image.tmdb.org/t/p/original/matched.jpg" })] },
+    });
+    const view = renderArtTab();
+    await waitFor(() =>
+      expect(view.getAllByRole("button", { name: /^Use artwork/ })).toHaveLength(8),
+    );
+    expect(screen.getByRole("heading", { name: "TMDB" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "MATCHED" })).toBeInTheDocument();
+    expect(screen.getByText("7")).toHaveClass("badge-muted");
+    expect(screen.getByText("1", { selector: "span.badge" })).toHaveClass("badge-success");
+    for (const card of view.getAllByRole("button", { name: /^Use artwork/ }))
+      expect(card.querySelector("img")).toHaveAttribute("loading", "lazy");
+  });
+
   it("advances only after a successful artwork selection", async () => {
     settingsState.load(
       appSettings({

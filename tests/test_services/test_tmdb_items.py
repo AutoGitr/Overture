@@ -1,6 +1,7 @@
 """TMDB results open unsaved and are stored by their first selection."""
 
 lazy from collections.abc import Sequence
+lazy from dataclasses import replace
 lazy from typing import Any, Literal, override
 
 lazy import httpx2
@@ -10,8 +11,9 @@ lazy from sqlmodel import col, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.art_slots import read_art_slot, write_art_slot
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
@@ -31,17 +33,21 @@ lazy from overture.integrations.tmdb import (
     TmdbTitle,
 )
 lazy from overture.schemas.art import ArtCandidate, SaveArtRequest
+lazy from overture.schemas.public_dataset import CatalogDraftUpdate
 lazy from overture.schemas.themes import SelectThemeRequest, ThemeSearchResult
+lazy from overture.schemas.tmdb import TmdbItemResult
 lazy from overture.services.art import service as art_module
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.service import ThemesService
 lazy from overture.services.tmdb_items import TmdbItemsService
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
+lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.factories import MediaItemFactory, PublicDatasetItemFactory
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -215,6 +221,7 @@ def _service(
         themes=themes,
         downloads=downloads,
         publisher=NullEventPublisher(),
+        catalog=CatalogBrowser(database=database, app_config=app_config),
     )
 
 
@@ -278,6 +285,102 @@ async def test_a_collection_lists_its_movies_oldest_first(
     )
 
     assert [item.tmdb_id for item in response.items] == [603, 604]
+
+
+@pytest.mark.parametrize("draft_poster", [f"{IMAGE}/draft.jpg", None])
+async def test_catalog_members_use_only_catalog_or_draft_artwork(
+    draft_poster: str | None,
+    db_session: AsyncSession,
+    *,
+    tmdb_config: Settings,
+    database: Database,
+) -> None:
+    class Tmdb(FakeTmdb):
+        @override
+        async def get_collection(self, collection_id: int) -> TmdbCollection:
+            return replace(
+                COLLECTION,
+                parts=tuple(
+                    replace(part, poster_url=f"{IMAGE}/tmdb-{part.tmdb_id}.jpg")
+                    for part in (
+                        *COLLECTION.parts,
+                        TmdbTitle(605, "Missing", 2005, None, None),
+                    )
+                ),
+            )
+
+    library = MediaItem(media_type=MediaType.MOVIE, tmdb_id=605, title="Library movie")
+    write_art_slot(
+        library, ArtType.POSTER, url=f"{IMAGE}/library.jpg", file_hash="local"
+    )
+    db_session.add_all(
+        [
+            library,
+            PublicDatasetItem(
+                media_type=MediaType.MOVIE,
+                tmdb_id=603,
+                title="Catalog Matrix",
+                year=1999,
+                poster_url=f"{IMAGE}/catalog.jpg",
+            ),
+            PublicDatasetItem(
+                media_type=MediaType.MOVIE,
+                tmdb_id=604,
+                title="Unillustrated movie",
+                year=2003,
+            ),
+        ]
+    )
+    await db_session.commit()
+    await enable_public_dataset(db_session)
+    browser = CatalogBrowser(database=database, app_config=tmdb_config)
+    service = _service(app_config=tmdb_config, database=database, tmdb=Tmdb())
+
+    async def members() -> dict[int, TmdbItemResult]:
+        response = await service.collection(2344, artwork_source="overturedb")
+        return {member.tmdb_id: member for member in response.items}
+
+    original = await members()
+    assert original[603].poster_url == f"{IMAGE}/catalog.jpg"
+    assert (
+        original[603].poster_preview_url
+        == "https://image.tmdb.org/t/p/w342/catalog.jpg"
+    )
+    assert original[603].title == "Catalog Matrix"
+    assert original[604].catalog_entry_key == "tmdb-604"
+    assert original[604].poster_url is None
+    assert original[605].catalog_entry_key is None
+    assert original[605].poster_url is None
+    assert original[605].existing_item_id == library.id
+
+    await browser.save_draft(
+        CatalogMediaType.MOVIE,
+        "tmdb-603",
+        CatalogDraftUpdate(poster_url=draft_poster, tmdb_id=606),
+    )
+    drafted = await members()
+    assert drafted[603].poster_url == draft_poster
+    assert drafted[603].catalog_entry_key == "tmdb-603"
+    if draft_poster is None:
+        assert drafted[603].poster_preview_url is None
+    await browser.discard_draft(CatalogMediaType.MOVIE, "tmdb-603")
+    assert (await members())[603].poster_url == f"{IMAGE}/catalog.jpg"
+
+    tmdb = await service.collection(2344)
+    assert all(
+        member.poster_url == f"{IMAGE}/tmdb-{member.tmdb_id}.jpg"
+        for member in tmdb.items
+    )
+
+
+async def test_catalog_member_artwork_requires_an_enabled_catalog(
+    *, tmdb_config: Settings, database: Database
+) -> None:
+    with pytest.raises(PublicServiceError, match="disabled") as exc:
+        await _service(app_config=tmdb_config, database=database).collection(
+            2344, artwork_source="overturedb"
+        )
+    assert exc.value.status_code == 409
 
 
 async def test_the_preview_names_a_stored_item_matched_by_any_id(

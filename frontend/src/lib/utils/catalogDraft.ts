@@ -5,6 +5,7 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CatalogDraftUpdate,
+  CatalogEntry,
   CatalogEntryDetail,
   TmdbSeasonPreview,
 } from "../../generated/rest/types.gen";
@@ -15,6 +16,8 @@ import { errorMessage } from "./errors";
 
 export type CatalogContext = {
   detail: CatalogEntryDetail;
+  entry: CatalogEntry;
+  target: CatalogTarget;
   draft: CatalogDraft;
   seasons: TmdbSeasonPreview[];
 };
