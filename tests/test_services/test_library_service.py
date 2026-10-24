@@ -39,6 +39,7 @@ lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     database_for,
+    make_local_assets,
     make_runtime,
     one_session,
     unused,
@@ -105,8 +106,8 @@ async def test_library_reports_whether_catalog_ids_agree(
     )
     await db_session.commit()
 
-    result = await service.list_items(db_session)
-    detail = await service.get_item(db_session, 1)
+    result = await service.list_items()
+    detail = await service.get_item(1)
     assert result.items[0].public_dataset_ids == agreement
     assert detail.public_dataset_ids == agreement
 
@@ -139,7 +140,7 @@ async def test_a_theme_is_as_long_as_its_local_file_else_its_video(
     )
     await db_session.commit()
 
-    assert (await service.get_item(db_session, 1)).theme_duration == expected
+    assert (await service.get_item(1)).theme_duration == expected
 
 
 async def test_library_reads_use_cached_theme_state_without_filesystem_access(
@@ -171,8 +172,8 @@ async def test_library_reads_use_cached_theme_state_without_filesystem_access(
         "local_theme_path",
         side_effect=AssertionError("Library reads must not inspect media files"),
     ):
-        result = await library_service.list_items(db_session)
-        item = await library_service.get_item(db_session, 1)
+        result = await library_service.list_items()
+        item = await library_service.get_item(1)
 
     assert [entry.id for entry in result.items] == [1]
     assert result.items[0].theme_file_hash == "theme-hash"
@@ -289,7 +290,7 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
     )
     await db_session.commit()
 
-    result = await library_service.list_items(db_session)
+    result = await library_service.list_items()
     assert [item.title for item in result.items] == [
         "Complete Movie",
         "Missing Hash Movie",
@@ -312,7 +313,7 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
     assert rows["Missing Show"].folder_path is None
     assert rows["Missing Show"].tmdb_id is None
 
-    result = await library_service.list_items(db_session, media_type=MediaType.MOVIE)
+    result = await library_service.list_items(media_type=MediaType.MOVIE)
     assert [item.title for item in result.items] == [
         "Complete Movie",
         "Missing Hash Movie",
@@ -353,9 +354,7 @@ async def test_list_items_reports_where_selected_artwork_comes_from(
     )
     await db_session.commit()
 
-    rows = {
-        row.title: row for row in (await library_service.list_items(db_session)).items
-    }
+    rows = {row.title: row for row in (await library_service.list_items()).items}
 
     assert rows["Movie"].poster_source == "overturedb"
     assert rows["Movie"].background_source == "tmdb"
@@ -452,7 +451,7 @@ async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
     )
     await db_session.commit()
 
-    result = await library_service.list_items(db_session, media_type=MediaType.SHOW)
+    result = await library_service.list_items(media_type=MediaType.SHOW)
     status_by_title = {
         item.title: item.public_dataset_complete for item in result.items
     }
@@ -506,7 +505,7 @@ async def test_get_seasons_hides_empty_rows(
     db_session.add(Season(id=11, media_item_id=1, season_num=2, file_count=0))
     await db_session.commit()
 
-    seasons = await library_service.get_seasons(db_session, 1)
+    seasons = await library_service.get_seasons(1)
 
     assert [season.season_num for season in seasons] == [1]
     assert seasons[0].file_count == 2
@@ -553,10 +552,7 @@ async def test_show_rows_report_season_poster_completeness(
     db_session.add(arted_season)
     await db_session.commit()
 
-    rows = {
-        item.title: item
-        for item in (await library_service.list_items(db_session)).items
-    }
+    rows = {item.title: item for item in (await library_service.list_items()).items}
 
     assert rows["Arted Show"].season_posters_status == "complete"
     assert rows["Arted Show"].art_status == "complete"
@@ -603,7 +599,7 @@ async def test_items_report_incorrect_aspect_ratio_for_the_tolerance_setting(
     db_session.add_all([good, square, unmeasured, season])
     await db_session.commit()
 
-    result = await library_service.list_items(db_session)
+    result = await library_service.list_items()
 
     assert {
         item.title for item in result.items if item.has_incorrect_aspect_ratio
@@ -720,7 +716,6 @@ async def test_local_image_display_is_downscaled_to_avif_and_served_from_cache(
     file_hash = await _poster_movie(db_session, folder, width=1000)
 
     response = await library_service.serve_local_image(
-        db_session,
         item_id=1,
         art_type=ArtType.POSTER,
         size=ImageSize.DISPLAY,
@@ -738,7 +733,6 @@ async def test_local_image_display_is_downscaled_to_avif_and_served_from_cache(
     # Once cached, serving never touches the media folder again.
     (folder / "poster.jpg").unlink()
     cached_original = await library_service.serve_local_image(
-        db_session,
         item_id=1,
         art_type=ArtType.POSTER,
         size=None,
@@ -769,7 +763,6 @@ async def test_local_image_is_not_cached_for_another_version_or_a_changed_file(
     _write_jpeg(folder / "poster.jpg", 640, 960, color="blue")
     with pytest.raises(PublicServiceError) as exc_info:
         await library_service.serve_local_image(
-            db_session,
             item_id=1,
             art_type=ArtType.POSTER,
             size=ImageSize.DISPLAY,
@@ -780,7 +773,6 @@ async def test_local_image_is_not_cached_for_another_version_or_a_changed_file(
     # Restore matching file and request with an older version query parameter.
     _write_jpeg(folder / "poster.jpg", 600, 900, color="red")
     stale_url = await library_service.serve_local_image(
-        db_session,
         item_id=1,
         art_type=ArtType.POSTER,
         size=ImageSize.DISPLAY,
@@ -803,10 +795,9 @@ async def test_local_image_serves_cached_original_without_size_and_avif_thumb_wi
     file_hash = await _poster_movie(db_session, tmp_path / "Movie")
 
     original = await library_service.serve_local_image(
-        db_session, item_id=1, art_type=ArtType.POSTER, size=None, version=file_hash
+        item_id=1, art_type=ArtType.POSTER, size=None, version=file_hash
     )
     display = await library_service.serve_local_image(
-        db_session,
         item_id=1,
         art_type=ArtType.POSTER,
         size=ImageSize.DISPLAY,
@@ -842,7 +833,6 @@ async def test_local_image_rejects_season_artwork_for_an_item(
 
     with pytest.raises(PublicServiceError) as exc_info:
         await library_service.serve_local_image(
-            db_session,
             item_id=1,
             art_type=ArtType.SEASON_POSTER,
             size=None,
@@ -873,7 +863,6 @@ async def test_local_image_rejects_an_unreadable_file_when_sized(
 
     with pytest.raises(PublicServiceError) as exc_info:
         await library_service.serve_local_image(
-            db_session,
             item_id=1,
             art_type=ArtType.POSTER,
             size=ImageSize.DISPLAY,
@@ -917,12 +906,52 @@ async def test_local_season_poster_is_downscaled_and_cached_while_current(
     await db_session.commit()
 
     response = await library_service.serve_local_season_image(
-        db_session, season_id=10, size=ImageSize.DISPLAY, version=file_hash
+        season_id=10, size=ImageSize.DISPLAY, version=file_hash
     )
 
     assert response.media_type == "image/avif"
     assert _response_image(response) == ("AVIF", (600, 900))
     assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
+
+
+async def test_refresh_imports_unchanged_recorded_file_when_cache_is_cold(
+    tmp_path: Path,
+    database: Database,
+    *,
+    app_config: Settings,
+) -> None:
+    folder = tmp_path / "Movie"
+    poster = folder / "poster.jpg"
+    _write_jpeg(poster, 600, 900)
+    file_stat = poster.stat()
+    file_hash = compute_file_hash(poster)
+    assert file_hash is not None
+    async with database.write_session() as session:
+        item = MediaItem(
+            id=1, media_type=MediaType.MOVIE, title="Movie", folder_path=str(folder)
+        )
+        write_art_slot(
+            item,
+            ArtType.POSTER,
+            file_hash=file_hash,
+            phash="0" * 16,
+            width=600,
+            height=900,
+            file_mtime_ns=file_stat.st_mtime_ns,
+            file_size=file_stat.st_size,
+        )
+        session.add(item)
+
+    image_cache = ImageCache(tmp_path / "cache" / "images")
+    local_assets = make_local_assets(
+        app_config=app_config, database=database, image_cache=image_cache
+    )
+    assert not image_cache.has_original(file_hash)
+
+    changed = await local_assets.refresh(1, themes=False)
+
+    assert changed is False
+    assert image_cache.has_original(file_hash)
 
 
 async def test_public_dataset_themerrdb_separation_and_completeness(
@@ -969,7 +998,7 @@ async def test_public_dataset_themerrdb_separation_and_completeness(
     )
     await db_session.commit()
 
-    result = await library_service.list_items(db_session, media_type=MediaType.MOVIE)
+    result = await library_service.list_items(media_type=MediaType.MOVIE)
     by_title = {item.title: item for item in result.items}
 
     t1 = by_title["Themerr Only Movie"]
@@ -1004,9 +1033,7 @@ async def test_bulk_set_monitored(
     )
     assert res.item_ids == [31, 32]
 
-    reads = (
-        await runtime.library.list_items(db_session, media_type=MediaType.MOVIE)
-    ).items
+    reads = (await runtime.library.list_items(media_type=MediaType.MOVIE)).items
     by_id = {item.id: item.monitored for item in reads}
     assert by_id[31] is False
     assert by_id[32] is False

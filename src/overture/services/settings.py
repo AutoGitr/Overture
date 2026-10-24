@@ -1,7 +1,5 @@
 """Application settings route-facing service operations."""
 
-lazy from sqlmodel.ext.asyncio.session import AsyncSession
-
 lazy from .. import protocols
 lazy from ..config import Settings
 lazy from ..db.models.settings import AppSettings, get_app_settings
@@ -40,14 +38,18 @@ def _read(
 
 
 async def get_settings(
-    db: AsyncSession, *, app_config: Settings, provider_registry: ProviderRegistry
+    *,
+    database: Database,
+    app_config: Settings,
+    provider_registry: ProviderRegistry,
 ) -> AppSettingsRead:
     """Return current settings, falling back to defaults when unsaved.
 
     Reading does not write. Settings nobody has saved yet read as their
     defaults; the row appears when :func:`update_settings` saves one.
     """
-    return _read(await get_app_settings(db), app_config, provider_registry)
+    async with database.read_session() as db:
+        return _read(await get_app_settings(db), app_config, provider_registry)
 
 
 async def update_settings(

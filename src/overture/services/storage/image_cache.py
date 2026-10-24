@@ -115,6 +115,10 @@ class ImageCache:
                 return CachedOriginal(file_hash, path)
         return None
 
+    def has_original(self, file_hash: str) -> bool:
+        """Return whether an original with this hash is kept."""
+        return self._find_original(file_hash) is not None
+
     async def original(self, file_hash: str) -> CachedOriginal | None:
         """Return the kept original with this hash, or ``None`` when there is none."""
         return await owned_thread(self._find_original, file_hash)

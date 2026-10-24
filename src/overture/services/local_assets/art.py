@@ -9,6 +9,7 @@ fingerprint and size are taken from that copy, so the media folder is read once.
 
 lazy import logging
 lazy import os
+lazy from contextlib import suppress
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
@@ -152,6 +153,14 @@ class LocalArtInspector:
             and self._phash.is_valid_fingerprint(known.phash)
         )
 
+    def _cached(self, known: ArtFileFacts) -> bool:
+        """Return whether an unchanged image's copy is in the cache."""
+        return (
+            known.width is None
+            or known.height is None
+            or self._image_cache.has_original(known.file_hash)
+        )
+
     def _locate(
         self,
         art_type: ArtType,
@@ -206,6 +215,9 @@ class LocalArtInspector:
             and known is not None
             and self._unchanged(known, probe.stat)
         ):
+            if not await owned_thread(self._cached, known):
+                with suppress(UnsupportedImageFormatError, PathTraversalError, OSError):
+                    await self._image_cache.import_original(probe.path, probe.root)
             after = known
         else:
             after = await self.inspect(probe.path, probe.root, known)

@@ -5,7 +5,7 @@ lazy from typing import Annotated
 lazy from fastapi import APIRouter, Depends, Query
 lazy from fastapi.responses import Response
 
-lazy from ..dependencies import LibraryDep, SessionDep
+lazy from ..dependencies import LibraryDep
 lazy from ..domain import ArtType, MediaType
 lazy from ..schemas.common import (
     MonitoredResponse,
@@ -75,25 +75,23 @@ async def get_libraries(
 
 
 @router.get("/folder-roots")
-async def get_folder_roots(db: SessionDep, library: LibraryDep) -> FolderRootsResponse:
+async def get_folder_roots(library: LibraryDep) -> FolderRootsResponse:
     """Return unique root folder paths derived from media item folder values."""
-    return await library.get_folder_roots(db)
+    return await library.get_folder_roots()
 
 
 @router.get("/items")
 async def list_items(
-    db: SessionDep, library: LibraryDep, media_type: MediaTypeFilter = None
+    library: LibraryDep, media_type: MediaTypeFilter = None
 ) -> MediaItemListResponse:
     """List all visible media items; the client filters, searches and sorts."""
-    return await library.list_items(db, media_type=media_type)
+    return await library.list_items(media_type=media_type)
 
 
 @router.get("/items/{item_id}")
-async def get_item(
-    item_id: ItemIdPath, db: SessionDep, library: LibraryDep
-) -> MediaItemRead:
+async def get_item(item_id: ItemIdPath, library: LibraryDep) -> MediaItemRead:
     """Get a single media item."""
-    return await library.get_item(db, item_id)
+    return await library.get_item(item_id)
 
 
 @router.patch("/items/{item_id}/monitored")
@@ -120,24 +118,21 @@ async def bulk_operate_items(
 
 
 @router.get("/items/{item_id}/seasons")
-async def get_seasons(
-    item_id: ItemIdPath, db: SessionDep, library: LibraryDep
-) -> list[SeasonRead]:
+async def get_seasons(item_id: ItemIdPath, library: LibraryDep) -> list[SeasonRead]:
     """Get season list for a show."""
-    return await library.get_seasons(db, item_id)
+    return await library.get_seasons(item_id)
 
 
 @router.get("/seasons/{season_id}/local-image", response_class=Response)
 async def serve_local_season_image(
     season_id: SeasonIdPath,
-    db: SessionDep,
     library: LibraryDep,
     size: ImageSizeQuery = None,
     version: ImageVersionQuery = None,
 ) -> Response:
     """Serve a show season poster from disk."""
     return await library.serve_local_season_image(
-        db, season_id=season_id, size=size, version=version
+        season_id=season_id, size=size, version=version
     )
 
 
@@ -145,12 +140,11 @@ async def serve_local_season_image(
 async def serve_local_image(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
-    db: SessionDep,
     library: LibraryDep,
     size: ImageSizeQuery = None,
     version: ImageVersionQuery = None,
 ) -> Response:
     """Serve a locally stored poster or background for a movie or show."""
     return await library.serve_local_image(
-        db, item_id=item_id, art_type=art_type, size=size, version=version
+        item_id=item_id, art_type=art_type, size=size, version=version
     )

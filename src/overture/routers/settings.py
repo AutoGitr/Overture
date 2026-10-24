@@ -5,7 +5,6 @@ lazy from fastapi import APIRouter, Depends
 lazy from ..dependencies import (
     DatabaseDep,
     ProviderRegistryDep,
-    SessionDep,
     SettingsDep,
     TmdbDep,
 )
@@ -24,11 +23,11 @@ router = APIRouter(
 
 @router.get("")
 async def get_settings(
-    db: SessionDep, settings: SettingsDep, providers: ProviderRegistryDep
+    database: DatabaseDep, settings: SettingsDep, providers: ProviderRegistryDep
 ) -> AppSettingsRead:
     """Return current settings."""
     return await settings_service.get_settings(
-        db, app_config=settings, provider_registry=providers
+        database=database, app_config=settings, provider_registry=providers
     )
 
 

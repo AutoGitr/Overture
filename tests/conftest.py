@@ -44,7 +44,6 @@ lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database, as_writer, configure_sqlite
-lazy from overture.dependencies import get_session
 lazy from overture.domain import ArtType, MediaType, ServerType
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.main import create_app
@@ -264,24 +263,6 @@ async def db_session(
         as_writer(isolated_engine), expire_on_commit=False
     ) as session:
         yield session
-
-
-@pytest.fixture
-async def app_with_isolated_db(
-    test_app: FastAPI,
-    isolated_engine: AsyncEngine,
-) -> AsyncGenerator[FastAPI]:
-    async def override_get_session() -> AsyncGenerator[AsyncSession]:
-        async with AsyncSession(
-            as_writer(isolated_engine), expire_on_commit=False
-        ) as session:
-            yield session
-
-    test_app.dependency_overrides[get_session] = override_get_session
-    try:
-        yield test_app
-    finally:
-        test_app.dependency_overrides.pop(get_session, None)
 
 
 def _apply_art[OwnerT: MediaItem | Season](

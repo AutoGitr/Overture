@@ -1,10 +1,8 @@
 """FastAPI dependency helpers."""
 
-lazy from collections.abc import AsyncGenerator
 lazy from typing import Annotated
 
 lazy from fastapi import Depends
-lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from starlette.requests import HTTPConnection
 
 lazy from . import protocols
@@ -62,18 +60,6 @@ def get_auth(runtime: RuntimeDep) -> AuthService:
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
 AuthDep = Annotated[AuthService, Depends(get_auth)]
-
-
-async def get_session(database: DatabaseDep) -> AsyncGenerator[AsyncSession]:
-    """Open a read session for the duration of the route function."""
-    async with database.read_session() as session:
-        yield session
-
-
-# Function scope returns the pooled connection once the response is built,
-# not after it is sent: a large image streaming to a slow client would
-# otherwise hold one, and a few of them exhaust the pool for every request.
-SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 
 
 def get_art(runtime: RuntimeDep) -> ArtService:

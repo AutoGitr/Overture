@@ -4,7 +4,6 @@ lazy import logging
 lazy from pathlib import Path
 
 lazy from fastapi.responses import Response
-lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...db.art_slots import find_art_slot
@@ -160,25 +159,28 @@ class LibraryService:
             )
         ]
 
-    async def get_folder_roots(self, db: AsyncSession) -> FolderRootsResponse:
+    async def get_folder_roots(self) -> FolderRootsResponse:
         """Return unique root folder paths derived from media item folders."""
-        return folder_roots_response(await MediaItemRepository(db).folder_roots())
+        async with self._database.read_session() as db:
+            return folder_roots_response(await MediaItemRepository(db).folder_roots())
 
     async def list_items(
-        self, db: AsyncSession, *, media_type: MediaType | None = None
+        self, *, media_type: MediaType | None = None
     ) -> MediaItemListResponse:
         """List all visible media items, optionally of one type.
 
         The client filters, searches and sorts the full list itself.
         """
-        items = await MediaItemRepository(db).list_visible(media_type)
-        reads = await media_item_reads_with_public_dataset_status(db, items)
+        async with self._database.read_session() as db:
+            items = await MediaItemRepository(db).list_visible(media_type)
+            reads = await media_item_reads_with_public_dataset_status(db, items)
         return MediaItemListResponse(items=reads, total=len(reads))
 
-    async def get_item(self, db: AsyncSession, item_id: int) -> MediaItemRead:
+    async def get_item(self, item_id: int) -> MediaItemRead:
         """Get a single media item."""
-        item = await require_item(db, item_id)
-        return (await media_item_reads_with_public_dataset_status(db, [item]))[0]
+        async with self._database.read_session() as db:
+            item = await require_item(db, item_id)
+            return (await media_item_reads_with_public_dataset_status(db, [item]))[0]
 
     async def set_monitored(self, item_id: int, monitored: bool) -> MonitoredResponse:
         """Set whether an item is monitored."""
@@ -228,14 +230,14 @@ class LibraryService:
             item_id, media_type, "library.deleted", self._publisher
         )
 
-    async def get_seasons(self, db: AsyncSession, item_id: int) -> list[SeasonRead]:
+    async def get_seasons(self, item_id: int) -> list[SeasonRead]:
         """Get a show's tracked seasons."""
-        item = await db.get(MediaItem, item_id)
-        if item is None:
-            return []
-        return season_reads(
-            item, await SeasonRepository(db).list_tracked_for_item(item_id)
-        )
+        async with self._database.read_session() as db:
+            item = await db.get(MediaItem, item_id)
+            if item is None:
+                return []
+            seasons = await SeasonRepository(db).list_tracked_for_item(item_id)
+        return season_reads(item, seasons)
 
     @staticmethod
     async def _item_folder(item: MediaItem) -> Path:
@@ -304,24 +306,23 @@ class LibraryService:
 
     async def serve_local_season_image(
         self,
-        db: AsyncSession,
         *,
         season_id: int,
         size: ImageSize | None,
         version: str | None,
     ) -> Response:
         """Serve a show season poster from the cache, or its thumbnail."""
-        season = await db.get(Season, season_id)
-        if not season:
-            raise PublicServiceError(404, "Not found")
-        item = await require_item(db, season.media_item_id)
+        async with self._database.read_session() as db:
+            season = await db.get(Season, season_id)
+            if not season:
+                raise PublicServiceError(404, "Not found")
+            item = await require_item(db, season.media_item_id)
         return await self._serve_cached_image(
             item, season, ArtType.SEASON_POSTER, size=size, version=version
         )
 
     async def serve_local_image(
         self,
-        db: AsyncSession,
         *,
         item_id: int,
         art_type: ArtType,
@@ -331,7 +332,8 @@ class LibraryService:
         """Serve an item's poster or background from the cache, or its thumbnail."""
         if art_type.owned_by_season:
             raise PublicServiceError(400, "An item has no season artwork")
-        item = await require_item(db, item_id)
+        async with self._database.read_session() as db:
+            item = await require_item(db, item_id)
         return await self._serve_cached_image(
             item, None, art_type, size=size, version=version
         )

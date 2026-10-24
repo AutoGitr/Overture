@@ -79,7 +79,7 @@ async def test_get_settings_creates_default_row(
     db_session: AsyncSession, *, app_config: Settings
 ) -> None:
     result = await module.get_settings(
-        db_session,
+        database=database_for(one_session(db_session)),
         app_config=app_config,
         provider_registry=ProviderRegistry(app_config=app_config),
     )
@@ -99,7 +99,7 @@ async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_conf
     app_config.TMDB_API_KEY = SecretStr("a" * 32)
 
     result = await module.get_settings(
-        db_session,
+        database=database_for(one_session(db_session)),
         app_config=app_config,
         provider_registry=ProviderRegistry(app_config=app_config),
     )
@@ -110,13 +110,14 @@ async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_conf
 async def test_get_settings_returns_existing_row_without_recreating(
     db_session: AsyncSession, *, app_config: Settings
 ) -> None:
+    database = database_for(one_session(db_session))
     first = await module.get_settings(
-        db_session,
+        database=database,
         app_config=app_config,
         provider_registry=ProviderRegistry(app_config=app_config),
     )
     second = await module.get_settings(
-        db_session,
+        database=database,
         app_config=app_config,
         provider_registry=ProviderRegistry(app_config=app_config),
     )
@@ -168,13 +169,13 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
 async def test_update_settings_with_no_fields_preserves_existing_row(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
+    database = database_for(one_session(db_session))
     await module.get_settings(
-        db_session,
+        database=database,
         app_config=app_config,
         provider_registry=ProviderRegistry(app_config=app_config),
     )
 
-    database = database_for(one_session(db_session))
     result = await module.update_settings(
         AppSettingsUpdate(),
         app_config=app_config,
@@ -254,7 +255,7 @@ async def test_settings_mapping_includes_environment_fields(
         db_session.add(AppSettings(id=1))
         await db_session.commit()
     result = await module.get_settings(
-        db_session,
+        database=database_for(one_session(db_session)),
         app_config=app_config,
         provider_registry=ProviderRegistry(app_config=app_config),
     )

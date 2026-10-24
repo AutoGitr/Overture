@@ -1,22 +1,22 @@
 """FastAPI application coverage using TestClient."""
 
 lazy from collections import deque
-lazy from collections.abc import AsyncIterator, Iterator
+lazy from collections.abc import Iterator
 lazy from pathlib import Path
 lazy from typing import cast
 
 lazy import pytest
-lazy from fastapi import APIRouter, FastAPI, WebSocket
-lazy from fastapi.responses import StreamingResponse
+lazy from fastapi import FastAPI, WebSocket
 lazy from fastapi.testclient import TestClient
 lazy from pydantic import SecretStr
 lazy from sqlalchemy.pool import QueuePool
-lazy from sqlmodel import select
 lazy from starlette.websockets import WebSocketDisconnect
 
 lazy from overture.config import Settings
+lazy from overture.db.art_slots import write_art_slot
+lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.dependencies import SessionDep
+lazy from overture.domain import ArtType, MediaType
 lazy from overture.main import APP_VERSION, create_app, websocket_endpoint
 lazy from overture.passwords import hash_password
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
@@ -281,25 +281,44 @@ def test_provider_art_rejects_invalid_type(
     assert season_slot.json() == {"detail": "An item has no season artwork"}
 
 
-def test_request_session_returns_its_connection_before_the_response_is_sent(
-    client: TestClient, *, test_app: FastAPI, database: Database
+async def test_local_image_returns_its_connection_before_rendering_thumbnail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    client: TestClient,
+    database: Database,
+    session_token: str,
 ) -> None:
     pool = database.engine.pool
     assert isinstance(pool, QueuePool)
+    async with database.write_session() as session:
+        item = MediaItem(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+            folder_path=str(tmp_path),
+        )
+        write_art_slot(item, ArtType.POSTER, file_hash="a" * 64)
+        session.add(item)
 
-    router = APIRouter()
+    checked_out: list[int] = []
 
-    @router.get("/api/test-session-stream")
-    async def stream(db: SessionDep) -> StreamingResponse:
-        await db.exec(select(1))
+    def fail_render(_path: Path, _bounds: tuple[int, int]) -> bytes:
+        checked_out.append(pool.checkedout())
+        return b""
 
-        async def body() -> AsyncIterator[str]:
-            yield str(pool.checkedout())
+    original = tmp_path / "cache" / "images" / "originals" / "aa" / f"{'a' * 64}.jpg"
+    original.parent.mkdir(parents=True)
+    original.write_bytes(b"")
+    monkeypatch.setattr(
+        "overture.services.storage.image_cache.render_thumb", fail_render
+    )
+    client.cookies.set("overture_token", session_token)
 
-        return StreamingResponse(body())
+    response = client.get("/api/library/items/1/local-image/poster?size=display")
 
-    test_app.include_router(router)
-    assert client.get("/api/test-session-stream").text == "0"
+    assert response.status_code == 200
+    assert checked_out == [0]
 
 
 def test_image_routes_reject_an_unknown_size(
