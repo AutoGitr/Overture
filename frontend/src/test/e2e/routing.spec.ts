@@ -329,7 +329,11 @@ test("collection member rows show posters, link to items and omit show matching 
     }),
   );
   await logIn(page, "/movies/collections/1-alien-collection");
+  await expect(page.getByRole("tab", { name: "Members", selected: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "TMDB collection match" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("region", { name: "TMDB collection match" })).toBeVisible();
+  await page.getByRole("tab", { name: "Members", exact: true }).click();
   const first = page.getByRole("button", { name: "Alien (1979)", exact: true });
   const second = page.getByRole("button", { name: "Aliens (1986)", exact: true });
   await first.scrollIntoViewIfNeeded();
@@ -347,6 +351,8 @@ test("collection member rows show posters, link to items and omit show matching 
 
   await page.goto("/shows/collections/2-tv-collection");
   await expect(page.getByRole("heading", { name: "TV Collection", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("form", { name: "Collection settings", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "TMDB collection match" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Unmatch", exact: true })).toHaveCount(0);
 });

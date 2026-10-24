@@ -293,12 +293,61 @@ describe("collection management", () => {
     goToCollectionView(detail, "art", "background");
     renderWithQueryClient(CollectionPage);
     expect(
-      await screen.findByRole("button", { name: "Background", pressed: true }),
+      await screen.findByRole("tab", { name: "Background", selected: true }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "TMDb" })).toHaveAttribute(
       "href",
       "https://www.themoviedb.org/collection/10/images/backdrops",
     );
+  });
+
+  it("keeps one header and predictable record actions while switching sections", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": detail,
+      "/api/library/items": { items: members, total: members.length },
+      "/api/collections/12/art/poster/sources": { sources: {}, current_url: null },
+      "/api/themes/search": { results: [] },
+    });
+    renderWithQueryClient(CollectionPage);
+    const heading = await screen.findByRole("heading", { name: "Saga" });
+    const recordActions = screen.getByRole("group", { name: "Record actions" });
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(screen.getByRole("tab", { name: "Collection", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Members", selected: true })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "TMDB collection match" })).toBeNull();
+
+    await fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    await fireEvent.input(await screen.findByLabelText("Title"), {
+      target: { value: "Unsaved title" },
+    });
+    expect(screen.getByRole("region", { name: "TMDB collection match" })).toBeInTheDocument();
+
+    for (const section of ["Art", "Themes"] as const) {
+      await fireEvent.click(screen.getByRole("tab", { name: section }));
+      expect(await screen.findByRole("tab", { name: section, selected: true })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Saga" })).toBe(heading);
+      expect(screen.getByRole("group", { name: "Record actions" })).toBe(recordActions);
+      expect(
+        within(recordActions)
+          .getAllByRole("button")
+          .map((button) => button.title),
+      ).toEqual(["Open Database Record", "Unmonitored - click to monitor", "Delete collection"]);
+      expect(screen.queryByRole("tablist", { name: "Collection sections" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "TMDB collection match" })).toBeNull();
+      if (section === "Art") {
+        expect(screen.getByRole("tab", { name: "Poster", selected: true })).toBeInTheDocument();
+        expect(
+          await screen.findByRole("button", { name: "Paste URL & save as poster" }),
+        ).toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole("tablist", { name: "Art categories" })).toBeNull();
+        expect(screen.queryByRole("button", { name: /^Paste URL/ })).toBeNull();
+      }
+    }
+
+    await fireEvent.click(screen.getByRole("tab", { name: "Collection" }));
+    await fireEvent.click(await screen.findByRole("tab", { name: "Settings" }));
+    expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
   });
 
   it("round-trips collection art, rule, theme and settings views in both libraries", async () => {
@@ -311,5 +360,30 @@ describe("collection management", () => {
         if (view === "art") expect(routedCollectionArtType()).toBe("background");
       }
     }
+  });
+
+  it("keeps metadata and rule drafts when monitoring changes from the header", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": detail,
+      "/api/collections/12/monitored": { monitored: true },
+    });
+    goToCollectionView(detail, "settings");
+    renderWithQueryClient(CollectionPage);
+    await fireEvent.input(await screen.findByLabelText("Title"), {
+      target: { value: "Unsaved title" },
+    });
+    await fireEvent.input(screen.getByLabelText("Summary"), {
+      target: { value: "Unsaved summary" },
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "Rule / Sync" }));
+    await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
+      target: { value: "draft/list" },
+    });
+    await fireEvent.click(screen.getByTitle("Unmonitored - click to monitor"));
+    await screen.findByTitle("Monitored - click to unmonitor");
+    expect(screen.getByLabelText("MDBList list URL or ID")).toHaveValue("draft/list");
+    await fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
+    expect(screen.getByLabelText("Summary")).toHaveValue("Unsaved summary");
   });
 });

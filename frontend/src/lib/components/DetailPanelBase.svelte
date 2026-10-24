@@ -29,11 +29,15 @@
     meta?: Snippet;
     /** `IdBadge` links. */
     badges: Snippet;
-    /** The mode tabs (Art, Themes, Database, Monitor, or a subset). */
+    /** The section tabs, such as Collection, Art and Themes. */
     tabs: Snippet;
-    /** The art category tabs, for panels that have them. */
+    /** Record actions share a fixed position beside the mode tabs. */
+    recordActions?: Snippet;
+    /** The active section's category tabs. */
     subtabs?: Snippet;
-    /** Beside the art category tabs. */
+    subtabLabel?: string;
+    showSubtabs?: boolean;
+    /** Actions beside the category tabs. */
     subtabActions?: Snippet;
     content: Snippet;
   }
@@ -53,7 +57,10 @@
     meta,
     badges,
     tabs,
+    recordActions,
     subtabs,
+    subtabLabel = "Art categories",
+    showSubtabs = true,
     subtabActions,
     content,
   }: Props = $props();
@@ -121,10 +128,15 @@
             <div class="mode-tabs tab-bar" role="tablist" aria-label="Detail modes">
               {@render tabs()}
             </div>
+            {#if recordActions}
+              <div class="record-actions tab-bar" role="group" aria-label="Record actions">
+                {@render recordActions()}
+              </div>
+            {/if}
           </div>
-          {#if subtabs}
+          {#if subtabs && showSubtabs}
             <div class="detail-tab-row">
-              <div class="art-subtabs tab-bar" role="tablist" aria-label="Art categories">
+              <div class="detail-subtabs tab-bar" role="tablist" aria-label={subtabLabel}>
                 {@render subtabs()}
               </div>
               {@render subtabActions?.()}
@@ -335,7 +347,7 @@
     scrollbar-width: none;
   }
 
-  .mode-tabs :global(.tab-item.danger) {
+  .record-actions :global(.tab-item.danger) {
     color: var(--danger);
   }
 

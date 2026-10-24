@@ -6,11 +6,11 @@ import {
   listCollectionsOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionDetail } from "../../../generated/rest/types.gen";
-import CollectionThemePanel from "../../../lib/components/CollectionThemePanel.svelte";
+import CollectionManager from "../../../lib/components/CollectionManager.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
-import { navigate } from "../../../lib/router/routes";
+import { goToCollectionView, navigate } from "../../../lib/router/routes";
 import { notificationState } from "../../../lib/stores/notificationState.svelte";
 import { collectionDetail as collection, publicDatasetStatus } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
@@ -51,7 +51,8 @@ function show(coll: CollectionDetail) {
 }
 
 function renderPanel() {
-  return renderWithQueryClient(CollectionThemePanel, { collection: shown });
+  goToCollectionView(shown, "themes");
+  return renderWithQueryClient(CollectionManager, { collection: shown, libraryItems: [] });
 }
 
 /** The panel as its route shows it, following the cached collections list. */
@@ -102,7 +103,11 @@ describe("CollectionThemePanel search", () => {
         youtube_id_overturedb: "original123",
         youtube_id_themerrdb: "themerr12345",
       });
-      const { rerender } = renderWithQueryClient(CollectionThemePanel, { collection: coll });
+      goToCollectionView(coll, "themes");
+      const { rerender } = renderWithQueryClient(CollectionManager, {
+        collection: coll,
+        libraryItems: [],
+      });
       const link = await screen.findByRole("link", { name: "GitHub" });
       const issue = new URL(link.getAttribute("href") ?? "");
       expect(issue.searchParams.get("template")).toBe("collection.yml");

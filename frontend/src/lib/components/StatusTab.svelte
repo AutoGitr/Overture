@@ -8,7 +8,7 @@
     active = false,
     status = null,
     onselect,
-    clearLabel,
+    clearLabel = `Clear ${label.toLowerCase()}`,
     onclear = null,
     clearDisabled = false,
   }: {
@@ -20,7 +20,7 @@
     status?: StatusTone | null;
     /** Opens the section; without it the tab only names the panel shown. */
     onselect?: () => void;
-    clearLabel: string;
+    clearLabel?: string;
     /** Forgets the section's selections; null while there is nothing to forget. */
     onclear?: (() => void) | null;
     clearDisabled?: boolean;

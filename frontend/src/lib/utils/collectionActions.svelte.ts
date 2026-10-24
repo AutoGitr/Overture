@@ -1,0 +1,150 @@
+import { createMutation, createQuery } from "@tanstack/svelte-query";
+import {
+  deleteCollectionThemeMutation,
+  setCollectionThemeMutation,
+  setCollectionMonitoredMutation,
+  getPublicDatasetStatusOptions,
+} from "../../generated/rest/@tanstack/svelte-query.gen";
+import type { CollectionDetail } from "../../generated/rest/types.gen";
+import { patchCollection } from "../rest/cache";
+import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
+import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+import { errorMessage } from "./errors";
+import { buildContributionIssueUrl } from "./publicDataset";
+
+/** Collection asset actions shared by the header and the active section. */
+export class CollectionActions {
+  private readonly feedback = createNotifier();
+  private readonly deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
+  private readonly setThemeRequest = createMutation(() => setCollectionThemeMutation());
+  private readonly setMonitoredRequest = createMutation(() => setCollectionMonitoredMutation());
+  private readonly datasetQuery;
+  private chosen = $state<{ collectionId: number; videoId: string } | null>(null);
+
+  constructor(private readonly current: () => CollectionDetail) {
+    this.datasetQuery = createQuery(() => ({
+      ...getPublicDatasetStatusOptions(),
+      enabled: !!current().tmdb_collection_id,
+    }));
+  }
+
+  get contributionUrl() {
+    const coll = this.current();
+    if (
+      !coll.tmdb_collection_id ||
+      !coll.youtube_id ||
+      !this.datasetQuery.data?.repo_url ||
+      coll.youtube_id === coll.youtube_id_overturedb ||
+      coll.youtube_id === coll.youtube_id_themerrdb
+    )
+      return null;
+    return buildContributionIssueUrl(this.datasetQuery.data.repo_url, {
+      media_type: "collection",
+      title: coll.title,
+      tmdb_id: coll.tmdb_collection_id,
+      tvdb_id: null,
+      imdb_id: null,
+      year: null,
+      poster_url: null,
+      background_url: null,
+      seasons: null,
+      youtube_id_overturedb: coll.youtube_id,
+      youtube_id_themerrdb: null,
+    });
+  }
+
+  private get themeJob() {
+    return downloadState.getCollectionJob(this.current().id);
+  }
+  get activeThemeJob() {
+    const job = this.themeJob;
+    return job?.status === "running" ? job : null;
+  }
+  get themeBusy() {
+    return (
+      this.setThemeRequest.isPending || !!this.activeThemeJob || this.themeJob?.status === "pending"
+    );
+  }
+  get uploading() {
+    return this.themeBusy || this.deleteThemeRequest.isPending;
+  }
+  get uploadingVideoId() {
+    return this.themeBusy && this.chosen?.collectionId === this.current().id
+      ? this.chosen.videoId
+      : null;
+  }
+  get uploadProgressLabel() {
+    return this.activeThemeJob ? downloadStageLabel(this.activeThemeJob) : "";
+  }
+  get monitoring() {
+    return this.setMonitoredRequest.isPending;
+  }
+
+  async toggleMonitored() {
+    if (this.monitoring) return;
+    const target = this.current();
+    this.feedback.clear();
+    try {
+      const { monitored } = await this.setMonitoredRequest.mutateAsync({
+        path: { collection_id: target.id },
+        query: { media_type: target.media_type },
+        body: { monitored: !target.monitored },
+      });
+      patchCollection(target.id, { monitored });
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Toggle monitored failed"));
+    }
+  }
+
+  async selectTheme(videoId: string): Promise<boolean> {
+    if (this.uploading) return false;
+    const target = this.current();
+    this.chosen = { collectionId: target.id, videoId };
+    this.feedback.clear();
+    try {
+      const result = await this.setThemeRequest.mutateAsync({
+        body: { media_type: target.media_type, youtube_id: videoId },
+        path: { collection_id: target.id },
+      });
+      downloadState.trackQueuedCollectionJob({
+        jobId: result.job_id,
+        collectionId: target.id,
+        title: target.title,
+      });
+      return true;
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Upload failed"));
+      return false;
+    }
+  }
+
+  async clearTheme() {
+    if (this.uploading) return;
+    const target = this.current();
+    if (
+      !(await confirmAction({
+        title: "Remove the collection theme?",
+        message: `The theme is removed from ${target.title} on the media server.`,
+        confirmLabel: "Remove",
+        destructive: true,
+      }))
+    )
+      return;
+    this.feedback.clear();
+    try {
+      const cleared = await this.deleteThemeRequest.mutateAsync({
+        path: { collection_id: target.id },
+        query: { media_type: target.media_type },
+      });
+      patchCollection(target.id, {
+        has_theme: cleared.has_theme,
+        youtube_id: null,
+        youtube_title: null,
+        youtube_duration: null,
+        theme_status: cleared.theme_status,
+      });
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Clear failed"));
+    }
+  }
+}

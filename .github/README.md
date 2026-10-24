@@ -422,12 +422,15 @@ sidebar. Create a collection with **+ Create collection**, choose its library an
 initial members, or use **Generate collections** to preview and create collections
 by decade, genre or studio. Run a full Sync to import current library metadata.
 
-Collection pages have **Members**, **Art**, **Themes**, **Rule / Sync** and
-**Settings** views. Add or remove library members, edit the collection's title,
-summary and sort title, and browse TMDB, OvertureDB or custom poster/background
-artwork. Plex also supports custom member order through drag-and-drop or the
-Up/Down buttons, visibility modes and home promotion; Jellyfin and Emby offer release and alphabetical ordering.
-Deleting a collection keeps its media files.
+Items and collections share the same detail header, **Art** and **Themes**
+sections, artwork category tabs and paste control. Database, monitoring and delete
+actions stay beside the section tabs. The **Collection** section groups **Members**,
+**Rule / Sync** and **Settings** in its second tab row; TMDB matching lives under
+**Settings**. Add or remove library members, edit the collection's title, summary
+and sort title, and browse TMDB, OvertureDB or custom poster/background artwork.
+Plex also supports custom member order through drag-and-drop or the Up/Down
+buttons, visibility modes and home promotion; Jellyfin and Emby offer release
+and alphabetical ordering. Deleting a collection keeps its media files.
 
 Under **Rule / Sync**, choose an MDBList list, a TMDB movie franchise, or an
 intersection of library filters. Set `MDBLIST_API_KEY` in the environment for

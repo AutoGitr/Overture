@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DetailPanel from "../../../lib/components/DetailPanel.svelte";
@@ -138,6 +138,19 @@ describe("DetailPanel", () => {
 
     expect(screen.getByTitle("Open Database Record")).toBeInTheDocument();
     expect(screen.getByTitle("Delete Item from Database")).toBeInTheDocument();
+    const controls = screen.getByRole("group", { name: "Record actions" });
+    expect(within(controls).getAllByRole("button")).toHaveLength(3);
+  });
+
+  it("hides artwork categories and paste actions when showing themes", () => {
+    renderWithQueryClient(DetailPanel, {
+      item: mediaItem({ id: 7, title: "The Matrix" }),
+      view: { mode: "themes", artSubTab: "poster", drillSeasonNum: null },
+    });
+    expect(screen.getByRole("tab", { name: "Themes", selected: true })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Art categories" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Paste URL/ })).toBeNull();
+    expect(screen.getByRole("group", { name: "Record actions" })).toBeInTheDocument();
   });
 });
 

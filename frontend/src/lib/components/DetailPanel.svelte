@@ -1,18 +1,13 @@
 <script lang="ts">
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
-  import Database from "@lucide/svelte/icons/database";
-  import Eye from "@lucide/svelte/icons/eye";
-  import EyeOff from "@lucide/svelte/icons/eye-off";
   import Image from "@lucide/svelte/icons/image";
   import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
-  import MountainSnow from "@lucide/svelte/icons/mountain-snow";
   import Music from "@lucide/svelte/icons/music";
-  import Trash from "@lucide/svelte/icons/trash";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
   import githubIcon from "../../assets/icons/github.svg";
-  import type { ArtType, MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
+  import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { createSeasonsQuery } from "../rest/queries";
   import {
@@ -42,6 +37,8 @@
   import { catalogStatus, hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
   import CollectionBadge from "./CollectionBadge.svelte";
   import ArtPanel from "./ArtPanel.svelte";
+  import ArtCategoryTabs, { ART_TABS } from "./ArtCategoryTabs.svelte";
+  import DetailRecordActions from "./DetailRecordActions.svelte";
   import DetailPanelBase from "./DetailPanelBase.svelte";
   import IdBadge from "./IdBadge.svelte";
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
@@ -119,40 +116,18 @@
     window.open(contributionUrl, "_blank", "noopener,noreferrer");
   }
 
-  // -- Art sub-tab config ---------------------------------------------------
-  const subTabConfig: {
-    key: ArtSubTab;
-    label: string;
-    icon: typeof Image;
-    artType: ArtType;
-    statusField: "poster_status" | "background_status" | "season_posters_status";
-    showOnly?: boolean;
-  }[] = [
-    {
-      key: "poster",
-      label: "Poster",
-      icon: Image,
-      artType: "poster",
-      statusField: "poster_status",
-    },
-    {
-      key: "background",
-      label: "Background",
-      icon: MountainSnow,
-      artType: "background",
-      statusField: "background_status",
-    },
-    {
-      key: "seasons",
-      label: "Seasons",
-      icon: Layers,
-      artType: "season_poster",
-      statusField: "season_posters_status",
-      showOnly: true,
-    },
-  ];
-  let visibleSubTabs = $derived(
-    subTabConfig.filter((tab) => !tab.showOnly || subject?.media_type === "show"),
+  let artStatuses = $derived(
+    Object.fromEntries(
+      ART_TABS.map((tab) => [
+        tab.key,
+        catalogTones?.[tab.key] ??
+          (item &&
+            statusTone(
+              item[tab.statusField],
+              downloadState.isDownloadingType(item.id, "art", tab.artType),
+            )),
+      ]),
+    ),
   );
 
   // A choice being fetched shows its preview until the item shows the file.
@@ -236,6 +211,8 @@
 <DetailPanelBase
   isEmpty={!subject}
   {subjectKey}
+  showSubtabs={view.mode === "art"}
+  recordActions={item ? recordActions : undefined}
   {backgroundUrl}
   posterHref={item?.server_link ?? null}
   posterLinkTitle={item?.server_link ? `Open in ${settingsState.media_server_name}` : null}
@@ -328,58 +305,19 @@
           : null}
       clearDisabled={catalog?.draft.busy || actions.themeBusy}
     />
-    <!-- A TMDB title has no record until its first selection stores it. -->
-    {#if item}
-      <button
-        class="tab-item"
-        onclick={() => uiState.openPopupByName("database")}
-        title="Open Database Record"
-      >
-        <Database size={16} /><span>Database</span>
-      </button>
-      <button
-        class={["tab-item", { danger: !item.monitored }]}
-        onclick={() => actions.toggleMonitored()}
-        title={item.monitored ? "Monitored - click to unmonitor" : "Unmonitored - click to monitor"}
-        disabled={actions.monitoring}
-      >
-        {#if item.monitored}
-          <Eye size={16} />
-        {:else}
-          <EyeOff size={16} />
-        {/if}
-      </button>
-      <button
-        class="tab-item danger"
-        onclick={() => actions.delete()}
-        title="Delete Item from Database"
-        disabled={actions.deleting}
-      >
-        <Trash size={16} />
-      </button>
-    {/if}
   {/snippet}
 
   {#snippet subtabs()}
-    {#each visibleSubTabs as tab (tab.key)}
-      <StatusTab
-        icon={tab.icon}
-        label={tab.label}
-        active={view.mode === "art" && view.artSubTab === tab.key}
-        status={catalogTones?.[tab.key] ??
-          (item &&
-            statusTone(
-              item[tab.statusField],
-              downloadState.isDownloadingType(item.id, "art", tab.artType),
-            ))}
-        onselect={() => selectView({ mode: "art", artSubTab: tab.key, drillSeasonNum: null })}
-        clearLabel={tab.key === "seasons" && view.drillSeasonNum !== null
-          ? "Clear season poster"
-          : `Clear ${tab.label.toLowerCase()}`}
-        onclear={savedArt[tab.key] ? () => clearArt(tab.key) : null}
-        clearDisabled={catalog?.draft.busy || actions.clearingArt}
-      />
-    {/each}
+    <ArtCategoryTabs
+      active={view.artSubTab}
+      seasons={subject?.media_type === "show"}
+      statuses={artStatuses}
+      clearable={savedArt}
+      clearDisabled={catalog?.draft.busy || actions.clearingArt}
+      clearSeason={view.drillSeasonNum !== null}
+      onselect={(tab) => selectView({ mode: "art", artSubTab: tab, drillSeasonNum: null })}
+      onclear={clearArt}
+    />
   {/snippet}
 
   {#snippet subtabActions()}
@@ -410,3 +348,16 @@
     {#if members}{@render members()}{/if}
   {/snippet}
 </DetailPanelBase>
+
+{#snippet recordActions()}
+  {#if item}
+    <DetailRecordActions
+      monitored={item.monitored}
+      monitoring={actions.monitoring}
+      deleting={actions.deleting}
+      deleteLabel="Delete Item from Database"
+      ontoggle={() => void actions.toggleMonitored()}
+      ondelete={() => void actions.delete()}
+    />
+  {/if}
+{/snippet}

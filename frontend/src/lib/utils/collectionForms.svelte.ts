@@ -13,7 +13,6 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
-  CollectionOptions,
   CollectionOrder,
   CollectionPreset,
   CollectionRuleWrite,
@@ -26,21 +25,21 @@ import { errorMessage } from "./errors";
 
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
-  options: CollectionOptions = $derived.by(() => {
-    const collection = this.current();
-    const draft = $state<CollectionOptions>({
-      title: collection.title,
-      summary: collection.summary,
-      sort_title: collection.sort_title,
-      collection_mode: collection.collection_mode,
-      order_type: collection.order_type,
-      visible_home: collection.visible_home,
-    });
-    return draft;
-  });
+  // Drafts reset when saved fields change, not when unrelated collection data changes.
+  private savedTitle = $derived.by(() => this.current().title);
+  title = $derived(this.savedTitle);
+  private savedSummary = $derived.by(() => this.current().summary);
+  summary = $derived(this.savedSummary);
+  private savedSortTitle = $derived.by(() => this.current().sort_title);
+  sortTitle = $derived(this.savedSortTitle);
+  private savedCollectionMode = $derived.by(() => this.current().collection_mode);
+  collectionMode = $derived(this.savedCollectionMode);
+  private savedVisibleHome = $derived.by(() => this.current().visible_home);
+  visibleHome = $derived(this.savedVisibleHome);
+  private savedRule = $derived.by(() => this.current().rule);
 
   rule: CollectionRuleWrite = $derived.by(() => {
-    const rule = this.current().rule;
+    const rule = this.savedRule;
     const { last_error: _error, last_synced_at: _synced, ...saved } = rule ?? {};
     const draft = $state<CollectionRuleWrite>(
       rule
@@ -103,7 +102,17 @@ export class CollectionEditor {
   save() {
     return this.perform(async () => {
       storeCollectionDetail(
-        await this.updateRequest.mutateAsync({ ...this.target, body: this.options }),
+        await this.updateRequest.mutateAsync({
+          ...this.target,
+          body: {
+            title: this.title,
+            summary: this.summary,
+            sort_title: this.sortTitle,
+            collection_mode: this.collectionMode,
+            order_type: this.collection.order_type,
+            visible_home: this.visibleHome,
+          },
+        }),
       );
       this.feedback.success("Collection settings saved.");
     });

@@ -14,7 +14,7 @@ describe("collection matching and members", () => {
   beforeEach(async () => {
     queryClient.clear();
     settingsState.load(appSettings({ media_server: "jellyfin", collections_supported: true }));
-    await navigate("/movies/collections/:collectionSlug", {
+    await navigate("/movies/collections/:collectionSlug/settings", {
       params: { collectionSlug: "12-star-wars" },
     });
   });
@@ -111,7 +111,7 @@ describe("collection matching and members", () => {
   });
 
   it("does not offer TMDB matching for show collections", async () => {
-    await navigate("/shows/collections/:collectionSlug", {
+    await navigate("/shows/collections/:collectionSlug/settings", {
       params: { collectionSlug: "12-shows" },
     });
     mockFetchRoutes({

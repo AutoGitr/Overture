@@ -1,4 +1,11 @@
 <script lang="ts">
+  import ArrowUp from "@lucide/svelte/icons/arrow-up";
+  import ArrowDown from "@lucide/svelte/icons/arrow-down";
+  import GripVertical from "@lucide/svelte/icons/grip-vertical";
+  import X from "@lucide/svelte/icons/x";
+  import Film from "@lucide/svelte/icons/film";
+  import DetailSection from "./DetailSection.svelte";
+  import FallbackImage from "./FallbackImage.svelte";
   import type { MediaItemRead, TmdbItemResult } from "../../generated/rest/types.gen";
   import { goToCatalogEntry, goToItem } from "../router/routes";
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
@@ -58,11 +65,39 @@
 <section aria-label="Collection members">
   {#if editor}
     {@const currentMembers = editor.collection.members}
-    <div class="options-col">
-      <label class="form-label">
-        Add item
-        <input type="search" placeholder="Search library" bind:value={search} />
-      </label>
+    <DetailSection
+      title="Members"
+      description={editor.collection.server_type === "plex"
+        ? "Add library items, choose an order, or drag members into place."
+        : "Add or remove library items and choose their display order."}
+    >
+      <div class="member-toolbar">
+        <label class="form-label">
+          Add item
+          <input type="search" placeholder="Search library" bind:value={search} />
+        </label>
+        <label class="form-label">
+          Sort members
+          <select
+            value={editor.collection.order_type}
+            disabled={editor.busy}
+            onchange={(event) => {
+              const order = event.currentTarget.value;
+              if (order === "release" || order === "alpha" || order === "custom")
+                void editor.setMembers(
+                  currentMembers.map((member) => member.id),
+                  order,
+                );
+            }}
+          >
+            <option value="release">Release date</option>
+            <option value="alpha">Alphabetical</option>
+            {#if editor.collection.server_type === "plex"}
+              <option value="custom">Custom</option>
+            {/if}
+          </select>
+        </label>
+      </div>
       {#if search.trim()}
         {#each available.slice(0, 20) as item (item.id)}
           <button
@@ -78,92 +113,85 @@
         {#if !available.length}<p class="text-muted">No matching library items.</p>{/if}
       {/if}
 
-      <label class="form-label">
-        Sort members
-        <select
-          value={editor.collection.order_type}
-          disabled={editor.busy}
-          onchange={(event) => {
-            const order = event.currentTarget.value;
-            if (order === "release" || order === "alpha" || order === "custom")
-              void editor.setMembers(
-                currentMembers.map((member) => member.id),
-                order,
-              );
-          }}
-        >
-          <option value="release">Release date</option>
-          <option value="alpha">Alphabetical</option>
-          {#if editor.collection.server_type === "plex"}
-            <option value="custom">Custom</option>
-          {/if}
-        </select>
-      </label>
-
-      <ol class="member-list">
-        {#each currentMembers as member, index (member.id)}
-          <li
-            class="member-row"
-            ondragover={(event) => {
-              if (editor.collection.server_type === "plex") event.preventDefault();
-            }}
-            ondrop={(event) => {
-              if (editor.collection.server_type !== "plex") return;
-              event.preventDefault();
-              if (dragging !== null && dragging !== member.id) {
-                void editor.moveMember(dragging, index);
-              }
-              dragging = null;
-            }}
-          >
-            {#if editor.collection.server_type === "plex"}
-              <button
-                type="button"
-                class="btn btn-ghost"
-                draggable={!editor.busy}
-                aria-label={`Drag ${member.title} to reorder`}
-                disabled={editor.busy}
-                ondragstart={(event) => {
-                  dragging = member.id;
-                  event.dataTransfer?.setData("text/plain", String(member.id));
-                }}
-                ondragend={() => (dragging = null)}>::</button
-              >
-              <button
-                type="button"
-                class="btn btn-ghost"
-                aria-label={`Move ${member.title} up`}
-                disabled={editor.busy || index === 0}
-                onclick={() => void editor.moveMember(member.id, index - 1)}>Up</button
-              >
-              <button
-                type="button"
-                class="btn btn-ghost"
-                aria-label={`Move ${member.title} down`}
-                disabled={editor.busy || index === currentMembers.length - 1}
-                onclick={() => void editor.moveMember(member.id, index + 1)}>Down</button
-              >
-            {/if}
-            <button type="button" class="btn btn-ghost member-title" onclick={() => open(member)}>
-              <img
-                class="member-poster"
-                src={itemArtDisplayUrl(member, "poster") ?? undefined}
-                alt=""
-              />
-              {member.title}
-              {member.year ? `(${member.year})` : ""}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost"
-              disabled={editor.busy}
-              aria-label={`Remove ${member.title} from collection`}
-              onclick={() => void editor.removeMember(member.id)}>Remove</button
+      {#if currentMembers.length}
+        <ol class="member-list">
+          {#each currentMembers as member, index (member.id)}
+            <li
+              class="member-row"
+              ondragover={(event) => {
+                if (editor.collection.server_type === "plex") event.preventDefault();
+              }}
+              ondrop={(event) => {
+                if (editor.collection.server_type !== "plex") return;
+                event.preventDefault();
+                if (dragging !== null && dragging !== member.id) {
+                  void editor.moveMember(dragging, index);
+                }
+                dragging = null;
+              }}
             >
-          </li>
-        {/each}
-      </ol>
-    </div>
+              {#if editor.collection.server_type === "plex"}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-icon drag-handle"
+                  draggable={!editor.busy}
+                  aria-label={`Drag ${member.title} to reorder`}
+                  disabled={editor.busy}
+                  ondragstart={(event) => {
+                    dragging = member.id;
+                    if (event.dataTransfer) {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", String(member.id));
+                    }
+                  }}
+                  ondragend={() => (dragging = null)}><GripVertical size={16} /></button
+                >
+              {/if}
+              <button type="button" class="btn btn-ghost member-title" onclick={() => open(member)}>
+                <span class="member-poster"
+                  ><FallbackImage
+                    src={itemArtDisplayUrl(member, "poster")}
+                    alt=""
+                    placeholder={memberPlaceholder}
+                  /></span
+                >
+                <span class="member-name">
+                  {member.title}
+                  {member.year ? `(${member.year})` : ""}
+                </span>
+              </button>
+              <div class="member-actions">
+                {#if editor.collection.server_type === "plex"}
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon"
+                    aria-label={`Move ${member.title} up`}
+                    disabled={editor.busy || index === 0}
+                    onclick={() => void editor.moveMember(member.id, index - 1)}
+                    ><ArrowUp size={16} /></button
+                  >
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon"
+                    aria-label={`Move ${member.title} down`}
+                    disabled={editor.busy || index === currentMembers.length - 1}
+                    onclick={() => void editor.moveMember(member.id, index + 1)}
+                    ><ArrowDown size={16} /></button
+                  >
+                {/if}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-icon"
+                  disabled={editor.busy}
+                  aria-label={`Remove ${member.title} from collection`}
+                  onclick={() => void editor.removeMember(member.id)}><X size={16} /></button
+                >
+              </div>
+            </li>
+          {/each}
+        </ol>
+      {:else}<p class="text-muted">No members yet. Search your library to add an item.</p>{/if}
+    </DetailSection>
   {:else}
     <ImageGrid title="Members" count={members.length}>
       {#if members.length === 0}<p class="text-muted">No members found.</p>{/if}
@@ -179,30 +207,63 @@
   {/if}
 </section>
 
+{#snippet memberPlaceholder()}<Film size={16} />{/snippet}
+
 <style>
+  .member-toolbar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: var(--space-4);
+  }
+  .member-toolbar .form-label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
   .member-list {
     list-style: none;
     padding: 0;
+    margin: var(--space-4) 0 0;
   }
-
   .member-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
     border-bottom: var(--border-subtle);
-    flex-wrap: wrap;
   }
-
+  .member-row:last-child {
+    border-bottom: 0;
+  }
+  .drag-handle {
+    cursor: grab;
+    flex-shrink: 0;
+  }
   .member-poster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     width: 32px;
     aspect-ratio: 2 / 3;
-    object-fit: cover;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-tertiary);
   }
-
   .member-title {
     flex: 1;
-    min-width: 120px;
+    min-width: 0;
     justify-content: flex-start;
     text-align: left;
+  }
+  .member-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .member-actions {
+    display: flex;
+    flex-shrink: 0;
   }
 </style>
