@@ -6,7 +6,6 @@ lazy from typing import Any, ClassVar
 lazy from sqlmodel import Field, Index, Relationship, SQLModel, UniqueConstraint
 
 lazy from ...domain import (
-    CollectionMatch,
     CollectionMode,
     CollectionOrder,
     MediaType,
@@ -52,9 +51,6 @@ class MediaCollectionBase(SQLModel):
     # TMDB collection ID the server itself names, such as a BoxSet's.
     provider_tmdb_id: int | None = None
     tmdb_collection_id: int | None = Field(default=None, index=True)
-    tmdb_match: CollectionMatch = Field(
-        default=CollectionMatch.AUTO, sa_type=enum_type(CollectionMatch)
-    )
 
     # Source metadata for the theme installed through Overture.
     youtube_id: str | None = None

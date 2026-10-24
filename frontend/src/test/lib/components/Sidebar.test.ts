@@ -59,6 +59,42 @@ describe("Sidebar", () => {
     );
   });
 
+  it("hides grouped collections until the group is opened and keeps that group while opening art", async () => {
+    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+      collection({ id: 1, title: "Saga", collection_group: "Weekend", art_status: "complete" }),
+      collection({ id: 2, title: "Loose" }),
+    ]);
+    await navigate("/movies/collections");
+    render(SidebarHarness, { props: { client, movies: [movie] } });
+    expect(await screen.findByRole("button", { name: "Open group Weekend" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Select collection Saga" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Select collection Loose" })).toBeVisible();
+    await fireEvent.click(screen.getByRole("button", { name: "Open group Weekend" }));
+    expect(await screen.findByRole("button", { name: "Select collection Saga" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Select collection Loose" })).toBeNull();
+    const art = screen.getByRole("button", { name: "Open art for Saga" });
+    expect(art).toHaveAttribute("data-status", "success");
+    await fireEvent.click(art);
+    await waitFor(() => expect(route.pathname).toBe("/movies/collections/1-saga/art/poster"));
+    expect(screen.getByRole("button", { name: "Select collection Saga" })).toBeVisible();
+    await fireEvent.click(screen.getByRole("button", { name: "Back to results" }));
+    expect(await screen.findByRole("button", { name: "Open group Weekend" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Select collection Saga" })).toBeNull();
+  });
+
+  it("shows collection art and theme badges except themes on Emby", async () => {
+    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+      collection({ id: 1, title: "Plex", server_type: "plex" }),
+      collection({ id: 2, title: "Emby", server_type: "emby" }),
+    ]);
+    await navigate("/movies/collections");
+    render(SidebarHarness, { props: { client } });
+    expect(await screen.findByRole("button", { name: "Open art for Emby" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open themes for Emby" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Open themes for Plex" }));
+    await waitFor(() => expect(route.pathname).toBe("/movies/collections/1-plex/themes"));
+  });
+
   it("remembers the scroll position of each tab separately", async () => {
     vi.useFakeTimers();
     try {
@@ -485,8 +521,8 @@ describe("Sidebar TMDB search", () => {
     const view = render(SidebarHarness, { props: { client, movies: [stored], totalMovies: 1 } });
     await screen.findByRole("button", { name: "Select The Matrix Reloaded" });
     expect(
-      screen.queryByRole("button", { name: "Open art for The Matrix Reloaded" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Open art for The Matrix Reloaded" }),
+    ).toHaveAttribute("data-status", "danger");
 
     // The first selection stores it; the cached search result still says it is new.
     const reloaded = mediaItem({

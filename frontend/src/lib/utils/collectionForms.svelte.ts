@@ -19,6 +19,10 @@ import type {
   MediaType,
   MediaItemRead,
   RuleSourceType,
+  CollectionMode,
+  CollectionOptions,
+  LibrarySectionRead,
+  TmdbCollectionResponse,
 } from "../../generated/rest/types.gen";
 import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
 import { goToCollection, goToCollectionsList } from "../router/routes";
@@ -41,6 +45,22 @@ export class CollectionEditor {
   collectionMode = $derived(this.savedCollectionMode);
   private savedVisibleHome = $derived.by(() => this.current().visible_home);
   visibleHome = $derived(this.savedVisibleHome);
+  libraryId = $derived.by(() => this.current().library_id ?? "");
+  private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
+  tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
+  readonly creating = false;
+  get serverType() {
+    return this.collection.server_type;
+  }
+  get mediaType() {
+    return this.collection.media_type;
+  }
+  get existingRule() {
+    return this.collection.rule;
+  }
+  get orderType() {
+    return this.collection.order_type;
+  }
   private savedRule = $derived.by(() => this.current().rule);
 
   sourceType: RuleSourceType | "manual" = $derived(this.savedRule?.source_type ?? "manual");
@@ -51,16 +71,7 @@ export class CollectionEditor {
     const draft = $state<CollectionRuleWrite>(
       rule
         ? { ...saved, source_type: rule.source_type, filters: { ...rule.filters } }
-        : {
-            source_type: "mdblist",
-            source_identifier: "",
-            filters: {},
-            sync_mode: null,
-            minimum_items: null,
-            delete_below_minimum: null,
-            enabled: true,
-            sync_interval_hours: 24,
-          },
+        : defaultCollectionRule(),
     );
     return draft;
   });
@@ -134,15 +145,7 @@ export class CollectionEditor {
       const draft = $state.snapshot(this.rule);
       const saved = await this.updateRequest.mutateAsync({
         ...this.target,
-        body: {
-          title: this.title,
-          summary: this.summary,
-          sort_title: this.sortTitle,
-          collection_group: this.collectionGroup || null,
-          collection_mode: this.collectionMode,
-          order_type: this.collection.order_type,
-          visible_home: this.visibleHome,
-        },
+        body: collectionOptions(this),
       });
       storeCollectionDetail(saved);
       const rule = await this.persistRule(source, draft);
@@ -234,17 +237,13 @@ export class CollectionEditor {
 }
 
 /** Creation and generator drafts; network results stay in mutation observers. */
-export class CollectionCreation {
-  title = $state("");
+export class CollectionGenerator {
   libraryId = $state("");
-  readonly memberIds = new SvelteSet<number>();
-  search = $state("");
   preset: CollectionPreset = $state("decades");
   readonly titles = new SvelteSet<string>();
 
   readonly preview = createMutation(() => previewCollectionGeneratorMutation());
   readonly generateRequest = createMutation(() => generateCollectionsMutation());
-  readonly createRequest = createMutation(() => createCollectionMutation());
   private readonly feedback = createNotifier();
 
   constructor(readonly mediaType: MediaType) {}
@@ -263,34 +262,9 @@ export class CollectionCreation {
     this.titles.clear();
   }
 
-  toggle(id: number) {
-    if (!this.memberIds.delete(id)) {
-      this.memberIds.add(id);
-    }
-  }
-
   toggleTitle(title: string) {
     if (!this.titles.delete(title)) {
       this.titles.add(title);
-    }
-  }
-
-  async create(): Promise<boolean> {
-    try {
-      const collection = await this.createRequest.mutateAsync({
-        body: {
-          title: this.title.trim(),
-          library_id: this.libraryId,
-          media_type: this.mediaType,
-          member_ids: Array.from(this.memberIds),
-        },
-      });
-      storeCollectionDetail(collection);
-      goToCollection(collection);
-      return true;
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Collection creation failed"));
-      return false;
     }
   }
 
@@ -312,6 +286,129 @@ export class CollectionCreation {
       return Object.keys(result.errors).length === 0;
     } catch (error) {
       this.feedback.error(errorMessage(error, "Generation failed"));
+      return false;
+    }
+  }
+}
+
+function defaultCollectionRule(identifier = ""): CollectionRuleWrite {
+  return {
+    source_type: "mdblist",
+    source_identifier: identifier,
+    filters: {},
+    sync_mode: null,
+    minimum_items: null,
+    delete_below_minimum: null,
+    enabled: true,
+    sync_interval_hours: 24,
+  };
+}
+
+function collectionOptions(form: CollectionEditor | CollectionDraft): CollectionOptions {
+  return {
+    title: form.title.trim(),
+    summary: form.summary,
+    sort_title: form.sortTitle,
+    collection_group: form.collectionGroup || null,
+    tmdb_collection_id: form.tmdbCollectionId ?? null,
+    collection_mode: form.collectionMode,
+    order_type: form.orderType,
+    visible_home: form.visibleHome,
+  };
+}
+
+/** An unsaved collection, created only after its Configure form is submitted. */
+export class CollectionDraft {
+  readonly creating = true;
+  title = $derived.by(() => this.seed()?.title ?? "");
+  summary = $state<string | null>(null);
+  sortTitle = $state<string | null>(null);
+  collectionGroup = $state("");
+  tmdbCollectionId = $derived.by(() => this.seed()?.tmdb_id);
+  collectionMode = $state<CollectionMode | null>(null);
+  visibleHome = $state(false);
+  private onlyLibrary = $derived.by(() =>
+    this.libraries().length === 1 ? (this.libraries()[0]?.id ?? "") : "",
+  );
+  libraryId = $derived(this.onlyLibrary);
+  sourceType: RuleSourceType | "manual" = $derived.by(() => (this.seed() ? "tmdb" : "manual"));
+  rule = $derived.by(() => {
+    const seed = this.seed();
+    const draft = $state(defaultCollectionRule(seed ? String(seed.tmdb_id) : ""));
+    return draft;
+  });
+  orderType = $state<CollectionOrder>("release");
+  readonly memberIds = new SvelteSet<number>();
+  memberSearch = $state("");
+  readonly request = createMutation(() => createCollectionMutation());
+  private readonly feedback = createNotifier();
+
+  constructor(
+    readonly mediaType: MediaType,
+    private readonly libraries: () => LibrarySectionRead[],
+    private readonly seed: () => TmdbCollectionResponse | null,
+  ) {}
+  get serverType() {
+    return settingsState.current.media_server;
+  }
+  get existingRule() {
+    return null;
+  }
+  get busy() {
+    return this.request.isPending;
+  }
+  get canSubmit() {
+    return (
+      !!this.libraryId &&
+      !!this.title.trim() &&
+      (this.sourceType !== "manual" || this.memberIds.size > 0)
+    );
+  }
+  get manualMembersAllowed() {
+    return (
+      this.sourceType === "manual" ||
+      (this.rule.sync_mode ?? settingsState.current.collection_sync_mode) === "append"
+    );
+  }
+
+  selectLibrary(id: string) {
+    this.libraryId = id;
+    this.memberIds.clear();
+  }
+  availableMembers(items: MediaItemRead[]) {
+    const query = this.memberSearch.trim().toLowerCase();
+    return items.filter(
+      (item) =>
+        item.library_id === this.libraryId &&
+        item.server_item_id &&
+        !item.server_removed_at &&
+        item.title.toLowerCase().includes(query),
+    );
+  }
+  toggle(id: number) {
+    if (!this.memberIds.delete(id)) this.memberIds.add(id);
+  }
+
+  async save() {
+    if (this.busy) return false;
+    try {
+      const collection = await this.request.mutateAsync({
+        body: {
+          ...collectionOptions(this),
+          media_type: this.mediaType,
+          library_id: this.libraryId,
+          member_ids: [...this.memberIds],
+          rule:
+            this.sourceType === "manual"
+              ? null
+              : { ...$state.snapshot(this.rule), source_type: this.sourceType },
+        },
+      });
+      storeCollectionDetail(collection);
+      goToCollection(collection);
+      return true;
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Collection creation failed"));
       return false;
     }
   }

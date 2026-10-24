@@ -516,7 +516,6 @@ async def test_presets_preview_and_generate_persistent_rules(
             assert detail.rule.source_identifier == "10"
             assert len(detail.members) == 3
             assert detail.tmdb_collection_id == 10
-            assert detail.tmdb_match_confidence == 1.0
 
 
 async def test_generator_counts_failures_and_does_not_accept_stale_selection(
@@ -684,7 +683,9 @@ async def test_franchise_generator_excludes_existing_matches_with_other_titles(
 ) -> None:
     identity = await create(manager)
     await manager.service.update(
-        identity, MediaType.MOVIE, CollectionOptions(title="My franchise")
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="My franchise", tmdb_collection_id=10),
     )
     body = CollectionGenerateRequest(
         media_type=MediaType.MOVIE,
@@ -713,3 +714,51 @@ async def test_franchise_generator_respects_minimum_and_missing_tmdb(
         session.add(settings)
     manager.tmdb.found = False
     assert await manager.service.presets(body) == []
+
+
+async def test_explicit_identity_survives_membership_changes(manager: Manager) -> None:
+    identity = await create(manager)
+    detail = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert detail.tmdb_collection_id is None
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", tmdb_collection_id=99),
+    )
+    detail = await manager.service.set_members(
+        identity,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(
+            member_ids=manager.ids, order_type=CollectionOrder.RELEASE
+        ),
+    )
+    assert detail.tmdb_collection_id == 99
+    detail = await manager.service.update(
+        identity, MediaType.MOVIE, CollectionOptions(title="Renamed")
+    )
+    assert detail.tmdb_collection_id == 99
+    detail = await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Renamed", tmdb_collection_id=None),
+    )
+    assert detail.tmdb_collection_id is None
+
+
+async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Dynamic",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                source_type=RuleSourceType.TMDB, source_identifier="10"
+            ),
+        )
+    )
+    assert detail.tmdb_collection_id == 10
+    assert [member.tmdb_id for member in detail.members] == [11, 12]
+    assert detail.rule is not None
+    assert detail.rule.source_identifier == "10"

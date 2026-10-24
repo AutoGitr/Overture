@@ -1,11 +1,13 @@
 <script lang="ts">
   import Layers from "@lucide/svelte/icons/layers";
-  import Image from "@lucide/svelte/icons/image";
-  import Music from "@lucide/svelte/icons/music";
   import Settings from "@lucide/svelte/icons/settings";
   import githubIcon from "../../assets/icons/github.svg";
   import { SERVER_DISPLAY_NAMES } from "../../generated/settings";
-  import type { CollectionDetail, MediaItemRead } from "../../generated/rest/types.gen";
+  import type {
+    CollectionDetail,
+    MediaItemRead,
+    LibrarySectionRead,
+  } from "../../generated/rest/types.gen";
   import { CollectionEditor } from "../utils/collectionForms.svelte";
   import { CollectionActions } from "../utils/collectionActions.svelte";
   import {
@@ -16,6 +18,7 @@
   } from "../router/routes";
   import { statusTone } from "../utils/sidebarDomain";
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
+  import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
   import ThemeStatus from "./ThemeStatus.svelte";
   import ThemeActions from "./ThemeActions.svelte";
@@ -27,13 +30,20 @@
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import IdBadge from "./IdBadge.svelte";
   import StatusTab from "./StatusTab.svelte";
+  import AssetModeTabs from "./AssetModeTabs.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
 
   let {
     collection,
     libraryItems,
     groups,
-  }: { collection: CollectionDetail; libraryItems: MediaItemRead[]; groups: string[] } = $props();
+    libraries,
+  }: {
+    collection: CollectionDetail;
+    libraryItems: MediaItemRead[];
+    groups: string[];
+    libraries: LibrarySectionRead[];
+  } = $props();
 
   const editor = new CollectionEditor(() => collection);
   const actions = new CollectionActions(() => collection);
@@ -108,20 +118,22 @@
       active={managing}
       onselect={() => goToCollectionView(collection, "configure")}
     />
-    <StatusTab
-      icon={Image}
-      label="Art"
-      active={view === "art"}
-      onselect={() => goToCollectionView(collection, "art", artType)}
-    />
-    <StatusTab
-      icon={Music}
-      label="Themes"
-      active={view === "themes"}
-      status={collection.theme_unavailable
+    <AssetModeTabs
+      mode={view}
+      artStatus={statusTone(collection.art_status, actions.clearingArt)}
+      themeStatus={collection.theme_unavailable
         ? null
         : statusTone(collection.theme_status, actions.themeBusy)}
-      onselect={() => goToCollectionView(collection, "themes")}
+      onart={() => goToCollectionView(collection, "art", artType)}
+      onthemes={() => goToCollectionView(collection, "themes")}
+      onclearart={collection.poster_url || collection.background_url
+        ? () => void actions.clearArt("all")
+        : null}
+      oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"
+        ? () => void actions.clearTheme()
+        : null}
+      artBusy={actions.clearingArt}
+      themeBusy={actions.uploading}
     />
   {/snippet}
   {#snippet recordActions()}
@@ -136,20 +148,26 @@
   {/snippet}
   {#snippet subtabs()}
     {#if managing}
-      <span class="text-muted">Jump:</span>
-      {#each ["General", "Builder", "Members"] as section (section)}
-        <a class="tab-item" href={`#${formId}-${section.toLowerCase()}`}>{section}</a>
-      {/each}
+      <ConfigureNavigation {formId} />
     {:else if view === "themes"}
       <ThemeStatus
         status={collection.theme_status}
-        duration={collection.theme_duration}
+        duration={collection.theme_status === "missing" ? null : collection.theme_duration}
         title={collection.youtube_title}
         unavailable={collection.theme_unavailable}
       />
     {:else}
       <ArtCategoryTabs
         active={artType}
+        statuses={{
+          poster: statusTone(collection.poster_status, actions.clearingArt),
+          background: statusTone(collection.background_status, actions.clearingArt),
+        }}
+        clearable={{ poster: !!collection.poster_url, background: !!collection.background_url }}
+        clearDisabled={actions.clearingArt}
+        onclear={(tab) => {
+          if (tab !== "seasons") void actions.clearArt(tab);
+        }}
         onselect={(tab) => {
           if (tab === "poster" || tab === "background") goToCollectionView(collection, "art", tab);
         }}
@@ -179,7 +197,7 @@
   {/snippet}
   {#snippet content()}
     {#if managing}
-      <CollectionConfigure {collection} {editor} {libraryItems} {groups} {formId} />
+      <CollectionConfigure {collection} {editor} {libraryItems} {groups} {formId} {libraries} />
     {:else if view === "themes"}
       <CollectionThemePanel {collection} {actions} searchInputId={themeInputId} />
     {:else}
@@ -188,6 +206,7 @@
           slot={{
             kind: "collection",
             collectionId: collection.id,
+            tmdbId: collection.tmdb_collection_id,
             mediaType: collection.media_type,
           }}
           {artType}

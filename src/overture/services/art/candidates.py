@@ -226,6 +226,8 @@ class ArtCandidates:
         self, collection: MediaCollection, art_type: ArtType, policy: CandidatePolicy
     ) -> CandidateSources:
         """Use the same source policy, ordering and error handling for collections."""
+        if collection.tmdb_collection_id is None:
+            return CandidateSources()
         lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {}
         if self._app_config.tmdb_configured and collection.tmdb_collection_id:
             lookups[ArtSource.TMDB] = self._collection_tmdb(

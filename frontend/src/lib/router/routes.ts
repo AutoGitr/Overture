@@ -1,4 +1,4 @@
-import { createRouter } from "sv-router";
+import { createRouter, searchParams } from "sv-router";
 import type { ArtType, CatalogMediaType } from "../../generated/rest/types.gen";
 import { settingsState } from "../stores/settingsState.svelte";
 import type { SidebarMode, SidebarSource, SidebarTab } from "../utils/sidebarDomain";
@@ -61,6 +61,7 @@ const itemSubroutes = {
 };
 
 const collectionSubroutes = {
+  "/new": loadCollectionPage,
   "/": loadCollectionPage,
   "/:collectionSlug": {
     "/": loadCollectionPage,
@@ -157,17 +158,31 @@ export function goToCollectionView(
 ): void {
   const params = { collectionSlug: buildIdSlug(collection.id, collection.title), subtab };
   if (collection.media_type === "show") {
-    if (view === "configure") void navigate("/shows/collections/:collectionSlug", { params });
+    if (view === "configure")
+      void navigate("/shows/collections/:collectionSlug", { params, search: sidebarSearch() });
     else if (view === "art")
-      void navigate("/shows/collections/:collectionSlug/art/:subtab", { params });
+      void navigate("/shows/collections/:collectionSlug/art/:subtab", {
+        params,
+        search: sidebarSearch(),
+      });
     else if (view === "themes")
-      void navigate("/shows/collections/:collectionSlug/themes", { params });
+      void navigate("/shows/collections/:collectionSlug/themes", {
+        params,
+        search: sidebarSearch(),
+      });
   } else {
-    if (view === "configure") void navigate("/movies/collections/:collectionSlug", { params });
+    if (view === "configure")
+      void navigate("/movies/collections/:collectionSlug", { params, search: sidebarSearch() });
     else if (view === "art")
-      void navigate("/movies/collections/:collectionSlug/art/:subtab", { params });
+      void navigate("/movies/collections/:collectionSlug/art/:subtab", {
+        params,
+        search: sidebarSearch(),
+      });
     else if (view === "themes")
-      void navigate("/movies/collections/:collectionSlug/themes", { params });
+      void navigate("/movies/collections/:collectionSlug/themes", {
+        params,
+        search: sidebarSearch(),
+      });
   }
 }
 
@@ -208,20 +223,43 @@ export function goToCatalogEntry(entry: CatalogTarget, view?: ItemView): void {
   };
   if (entry.media_type === "collection") {
     if (view?.mode === "themes")
-      void navigate("/overturedb/movies/collections/:entrySlug/themes", { params });
+      void navigate("/overturedb/movies/collections/:entrySlug/themes", {
+        params,
+        search: sidebarSearch(),
+      });
     else if (view)
-      void navigate("/overturedb/movies/collections/:entrySlug/art/:subtab", { params });
-    else void navigate("/overturedb/movies/collections/:entrySlug", { params });
+      void navigate("/overturedb/movies/collections/:entrySlug/art/:subtab", {
+        params,
+        search: sidebarSearch(),
+      });
+    else
+      void navigate("/overturedb/movies/collections/:entrySlug", {
+        params,
+        search: sidebarSearch(),
+      });
   } else if (entry.media_type === "show") {
-    if (view?.mode === "themes") void navigate("/overturedb/shows/:entrySlug/themes", { params });
+    if (view?.mode === "themes")
+      void navigate("/overturedb/shows/:entrySlug/themes", { params, search: sidebarSearch() });
     else if (view?.drillSeasonNum !== null && view?.drillSeasonNum !== undefined)
-      void navigate("/overturedb/shows/:entrySlug/art/seasons/:seasonNum", { params });
-    else if (view) void navigate("/overturedb/shows/:entrySlug/art/:subtab", { params });
-    else void navigate("/overturedb/shows/:entrySlug", { params });
+      void navigate("/overturedb/shows/:entrySlug/art/seasons/:seasonNum", {
+        params,
+        search: sidebarSearch(),
+      });
+    else if (view)
+      void navigate("/overturedb/shows/:entrySlug/art/:subtab", {
+        params,
+        search: sidebarSearch(),
+      });
+    else void navigate("/overturedb/shows/:entrySlug", { params, search: sidebarSearch() });
   } else {
-    if (view?.mode === "themes") void navigate("/overturedb/movies/:entrySlug/themes", { params });
-    else if (view) void navigate("/overturedb/movies/:entrySlug/art/:subtab", { params });
-    else void navigate("/overturedb/movies/:entrySlug", { params });
+    if (view?.mode === "themes")
+      void navigate("/overturedb/movies/:entrySlug/themes", { params, search: sidebarSearch() });
+    else if (view)
+      void navigate("/overturedb/movies/:entrySlug/art/:subtab", {
+        params,
+        search: sidebarSearch(),
+      });
+    else void navigate("/overturedb/movies/:entrySlug", { params, search: sidebarSearch() });
   }
 }
 
@@ -267,13 +305,49 @@ export function goToCollectionsList(tab: SidebarTab): void {
   else void navigate("/movies/collections");
 }
 
+export function goToNewCollection(tab: SidebarTab, tmdbId?: number): void {
+  const search = {
+    draft: crypto.randomUUID(),
+    ...(tmdbId === undefined ? {} : { tmdb_id: tmdbId }),
+  };
+  if (tab === "show") void navigate("/shows/collections/new", { search });
+  else void navigate("/movies/collections/new", { search });
+}
+
+export function sidebarGroup(): string | null {
+  const value = searchParams.get("collection_group");
+  return typeof value === "string" && value.startsWith("group:") ? value.slice(6) : null;
+}
+
+export function openSidebarGroup(group: string | null): void {
+  if (group === null) searchParams.delete("collection_group");
+  else searchParams.set("collection_group", `group:${group}`);
+}
+
+function sidebarSearch(): Record<string, string | number | boolean> {
+  const search: Record<string, string | number | boolean> = {};
+  for (const key of ["collection_group", "tmdb_collection", "tmdb_query"]) {
+    const value = searchParams.get(key);
+    if (value !== null) search[key] = value;
+  }
+  return search;
+}
+
+export { searchParams };
+
 /** Navigate to a specific collection. */
 export function goToCollection(collection: SelectableCollection): void {
   const collectionSlug = buildIdSlug(collection.id, collection.title);
   if (collection.media_type === "show") {
-    void navigate("/shows/collections/:collectionSlug", { params: { collectionSlug } });
+    void navigate("/shows/collections/:collectionSlug", {
+      params: { collectionSlug },
+      search: sidebarSearch(),
+    });
   } else {
-    void navigate("/movies/collections/:collectionSlug", { params: { collectionSlug } });
+    void navigate("/movies/collections/:collectionSlug", {
+      params: { collectionSlug },
+      search: sidebarSearch(),
+    });
   }
 }
 
@@ -285,8 +359,8 @@ export function goToItem(
 ): Promise<unknown> {
   const params = { itemSlug: itemSlug(item) };
   return item.media_type === "show"
-    ? navigate("/shows/:itemSlug", { params, replace })
-    : navigate("/movies/:itemSlug", { params, replace });
+    ? navigate("/shows/:itemSlug", { params, replace, search: sidebarSearch() })
+    : navigate("/movies/:itemSlug", { params, replace, search: sidebarSearch() });
 }
 
 /** Navigate to an item's Art tab, optionally on a specific sub-tab. */
@@ -297,17 +371,18 @@ export function goToItemArt(
 ): void {
   const params = { itemSlug: itemSlug(item), subtab };
   if (item.media_type === "show") {
-    void navigate("/shows/:itemSlug/art/:subtab", { params, replace });
+    void navigate("/shows/:itemSlug/art/:subtab", { params, replace, search: sidebarSearch() });
   } else {
-    void navigate("/movies/:itemSlug/art/:subtab", { params, replace });
+    void navigate("/movies/:itemSlug/art/:subtab", { params, replace, search: sidebarSearch() });
   }
 }
 
 /** Navigate to an item's Themes tab. */
 export function goToItemThemes(item: SelectableItem, { replace }: NavigateOptions = {}): void {
   const params = { itemSlug: itemSlug(item) };
-  if (item.media_type === "show") void navigate("/shows/:itemSlug/themes", { params, replace });
-  else void navigate("/movies/:itemSlug/themes", { params, replace });
+  if (item.media_type === "show")
+    void navigate("/shows/:itemSlug/themes", { params, replace, search: sidebarSearch() });
+  else void navigate("/movies/:itemSlug/themes", { params, replace, search: sidebarSearch() });
 }
 
 /** Drill into a specific season's art for a show. */
@@ -318,9 +393,17 @@ export function goToSeason(
 ): void {
   const params = { itemSlug: itemSlug(item), seasonNum: String(season.season_num) };
   if (item.media_type === "show") {
-    void navigate("/shows/:itemSlug/art/seasons/:seasonNum", { params, replace });
+    void navigate("/shows/:itemSlug/art/seasons/:seasonNum", {
+      params,
+      replace,
+      search: sidebarSearch(),
+    });
   } else {
-    void navigate("/movies/:itemSlug/art/seasons/:seasonNum", { params, replace });
+    void navigate("/movies/:itemSlug/art/seasons/:seasonNum", {
+      params,
+      replace,
+      search: sidebarSearch(),
+    });
   }
 }
 

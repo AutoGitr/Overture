@@ -65,9 +65,7 @@
       : searchFieldGroups(sidebarTab, tmdbConfigured),
   );
   // TMDB results are not the library: its filters and sort do not apply to them.
-  let searchingTmdb = $derived(
-    source === "library" && sidebarMode === "items" && searchField === "tmdb",
-  );
+  let searchingTmdb = $derived(source === "library" && searchField === "tmdb");
   let isDefaultSort = $derived(sortField === "title" && sortDir === "asc");
   let placeholder = $derived.by(() => {
     const fieldPlaceholder = SIDEBAR_SEARCH_FIELDS[searchField].placeholder;

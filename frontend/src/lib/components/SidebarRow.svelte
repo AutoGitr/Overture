@@ -1,10 +1,8 @@
 <script lang="ts">
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import EyeOff from "@lucide/svelte/icons/eye-off";
-  import Image from "@lucide/svelte/icons/image";
   import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
-  import Music from "@lucide/svelte/icons/music";
   import type {
     CatalogEntryRow,
     CollectionRead,
@@ -19,6 +17,7 @@
     remotePosterUrl,
   } from "../utils/artDisplay";
   import { catalogStatus, type StatusTone } from "../utils/sidebarDomain";
+  import SidebarAssetBadges from "./SidebarAssetBadges.svelte";
   import FallbackImage from "./FallbackImage.svelte";
 
   let {
@@ -29,6 +28,7 @@
     item = null,
     collection = null,
     tmdbResult = null,
+    hideTheme = false,
     artStatus = null,
     themeStatus = null,
     onSelect,
@@ -43,6 +43,7 @@
     collection?: CollectionRead | null;
     /** A TMDB search result, not yet stored. */
     tmdbResult?: TmdbItemResult | TmdbCollectionResult | null;
+    hideTheme?: boolean;
     artStatus?: StatusTone | null;
     themeStatus?: StatusTone | null;
     onSelect: () => void | Promise<void>;
@@ -187,28 +188,14 @@
       </div>
     </button>
 
-    {#if catalogEntry || item || collection}
-      <div class="item-badges">
-        {#if !collection}
-          <button
-            type="button"
-            class="item-badge"
-            aria-label={`Open art for ${row.title}`}
-            title="Art"
-            data-status={catalogTones?.art ?? artStatus}
-            onclick={onOpenArt}><Image size={18} /></button
-          >
-        {/if}
-        <button
-          type="button"
-          class="item-badge"
-          aria-label={`Open themes for ${row.title}`}
-          title="Theme Music"
-          data-status={catalogTones?.theme ?? themeStatus}
-          onclick={collection ? onSelect : onOpenThemes}><Music size={18} /></button
-        >
-      </div>
-    {/if}
+    <SidebarAssetBadges
+      title={row.title}
+      artStatus={catalogTones?.art ?? artStatus}
+      themeStatus={catalogTones?.theme ?? themeStatus}
+      hideTheme={hideTheme || collection?.server_type === "emby"}
+      onart={onOpenArt}
+      onthemes={onOpenThemes}
+    />
   </div>
 {/if}
 
@@ -344,44 +331,6 @@
     gap: var(--space-2);
     color: var(--text-tertiary);
     font-size: var(--text-xs);
-  }
-
-  .item-badges {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    flex-shrink: 0;
-    flex-direction: column;
-    gap: var(--space-1);
-    pointer-events: none;
-  }
-
-  /* Status is carried by one tone (data-status, app.css): a full-strength icon
-     and outline on the panel's own surface, so no tint dilutes the contrast. */
-  .item-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    color: var(--tone, var(--text-tertiary));
-    background: var(--bg-primary);
-    border: 1.5px solid var(--tone, var(--text-tertiary));
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-
-  button.item-badge {
-    pointer-events: auto;
-  }
-
-  button.item-badge:hover {
-    background: oklch(from var(--tone, var(--text-tertiary)) l c h / 0.18);
-  }
-
-  button.item-badge:focus-visible {
-    outline: 2px solid var(--tone, var(--text-tertiary));
-    outline-offset: 1px;
   }
 
   .sidebar-item :global(.item-unmonitored) {

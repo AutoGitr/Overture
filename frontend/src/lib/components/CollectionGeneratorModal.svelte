@@ -1,11 +1,11 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
   import { getLibrariesOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { CollectionCreation } from "../utils/collectionForms.svelte";
+  import { CollectionGenerator } from "../utils/collectionForms.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import DataStatus from "./DataStatus.svelte";
   import PopupShell from "./PopupShell.svelte";
-  const form = new CollectionCreation(uiState.sidebarTab);
+  const form = new CollectionGenerator(uiState.sidebarTab);
   const libraries = createQuery(() =>
     getLibrariesOptions({ query: { media_type: form.mediaType } }),
   );

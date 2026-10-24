@@ -56,6 +56,7 @@ function renderPanel() {
     collection: shown,
     libraryItems: [],
     groups: [],
+    libraries: [],
   });
 }
 
@@ -112,6 +113,7 @@ describe("CollectionThemePanel search", () => {
         collection: coll,
         libraryItems: [],
         groups: [],
+        libraries: [],
       });
       const link = await screen.findByRole("link", { name: "GitHub" });
       const issue = new URL(link.getAttribute("href") ?? "");

@@ -152,6 +152,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
                 server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
+                tmdb_collection_id=10,
                 last_synced_at=utc_now(),
             )
         )
@@ -205,6 +206,15 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         result = await service.match_collection(1, MediaType.MOVIE, ArtType.POSTER, 5)
         assert result.reference == "media_server"
         assert result.total_compared == 1
+        state = await service.clear_collection(1, MediaType.MOVIE, ArtType.POSTER)
+        assert state.poster_url is None
+        assert state.poster_status == "partial"
+        async with database.read_session() as session:
+            cleared = await CollectionRepository(session).get(1)
+            assert cleared is not None
+            assert cleared.thumb_url is not None
+            assert read_art_slot(cleared, ArtType.POSTER).file_hash is not None
+        assert len(provider.uploads) == 1
         with pytest.raises(PublicServiceError, match="posters and backgrounds"):
             await service.get_collection_sources(
                 1, MediaType.MOVIE, ArtType.SEASON_POSTER
@@ -284,3 +294,9 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
     assert partial.by_source["tmdb"] == []
     assert partial.by_source["overturedb"][0].url == URL
     assert len(partial.errors) == 1
+
+    row.tmdb_collection_id = None
+    assert (
+        await candidates.gather_collection(row, ArtType.POSTER, policy)
+        == CandidateSources()
+    )

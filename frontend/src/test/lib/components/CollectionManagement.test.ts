@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
-import NewCollectionModal from "../../../lib/components/NewCollectionModal.svelte";
+import NewCollectionPage from "../../../lib/router/pages/NewCollectionPage.svelte";
 import CollectionGeneratorModal from "../../../lib/components/CollectionGeneratorModal.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import {
@@ -15,6 +15,7 @@ import {
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import { appSettings, collectionDetail, mediaItem } from "../../helpers/fixtures";
+import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 import type { CollectionRuleRead } from "../../../generated/rest/types.gen";
 
@@ -171,6 +172,74 @@ describe("collection management", () => {
     expect(boxes[1]?.contains(screen.getByRole("tablist", { name: "Art categories" }))).toBe(true);
   });
 
+  it("defaults a fresh draft to its only library and leaves multiple libraries unselected", async () => {
+    mockFetchRoutes({
+      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/items": { items: members, total: 2 },
+      "/api/collections/groups": [],
+    });
+    const view = renderWithQueryClient(NewCollectionPage);
+    await waitFor(() => expect(screen.getByLabelText("Library")).toHaveValue("movies"));
+    expect(screen.getByLabelText("Title")).toHaveValue("");
+    view.unmount();
+    queryClient.clear();
+    mockFetchRoutes({
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", count: 2 },
+        { id: "other", title: "Other", count: 1 },
+      ],
+      "/api/collections/groups": [],
+    });
+    renderWithQueryClient(NewCollectionPage);
+    await screen.findByRole("option", { name: "Other" });
+    expect(screen.getByLabelText("Library")).toHaveValue("");
+  });
+
+  it("edits an explicit TMDB ID without matching or automatic voting controls", async () => {
+    const { calls } = mockFetchRoutes({
+      "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
+      "/api/collections/groups": [],
+    });
+    renderWithQueryClient(CollectionPage);
+    const input = await screen.findByLabelText("TMDB collection ID");
+    expect(input).toHaveValue(10);
+    expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
+    await fireEvent.input(input, { target: { value: "99" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    expect(
+      JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
+    ).toMatchObject({ tmdb_collection_id: 99 });
+  });
+
+  it("shows collection artwork status, clears a selected slot, and skips candidates without an ID", async () => {
+    const selected = {
+      ...detail,
+      poster_url: "https://example.test/poster.jpg",
+      poster_status: "complete",
+      art_status: "partial",
+    };
+    const { calls } = mockFetchRoutes({
+      "/api/collections/12": selected,
+      "/api/collections/12/art/poster": {
+        poster_url: null,
+        background_url: null,
+        poster_status: "partial",
+        background_status: "missing",
+        art_status: "partial",
+      },
+    });
+    goToCollectionView(detail, "art");
+    renderWithQueryClient(CollectionPage);
+    const clear = await screen.findByRole("button", { name: "Clear poster" });
+    expect(clear.querySelector("[data-status]")).toHaveAttribute("data-status", "success");
+    await fireEvent.click(clear);
+    await answerConfirmation(true);
+    await waitFor(() => expect(calls.some((call) => call.init.method === "DELETE")).toBe(true));
+    expect(calls.some((call) => call.url.includes("/sources"))).toBe(false);
+    expect(await screen.findByText(/Set a TMDB collection ID to browse/)).toBeVisible();
+  });
+
   it("creates a collection with selected library members", async () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/groups": [],
@@ -178,12 +247,12 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": detail,
     });
-    renderWithQueryClient(NewCollectionModal);
+    renderWithQueryClient(NewCollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await fireEvent.click(await screen.findByRole("checkbox", { name: "First" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection (1 members)" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
     await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
@@ -311,19 +380,19 @@ describe("collection management", () => {
       "/api/library/items": { items: [...members, third], total: 3 },
       "/api/collections": detail,
     });
-    renderWithQueryClient(NewCollectionModal);
+    renderWithQueryClient(NewCollectionPage);
     expect(screen.getByLabelText("Search members")).toBeDisabled();
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await fireEvent.click(await screen.findByRole("checkbox", { name: "First" }));
-    const submit = screen.getByRole("button", { name: "Create collection (1 members)" });
+    const submit = screen.getByRole("button", { name: "Create collection" });
     expect(submit).toBeDisabled();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "  Saga  " } });
     expect(submit).toBeEnabled();
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "other" } });
-    expect(screen.getByRole("button", { name: "Create collection (0 members)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create collection" })).toBeDisabled();
     await fireEvent.click(await screen.findByRole("checkbox", { name: "Third" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection (1 members)" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
@@ -341,12 +410,12 @@ describe("collection management", () => {
           ? Response.json({ detail: "Create refused" }, { status: 422 })
           : Response.json(detail),
     });
-    renderWithQueryClient(NewCollectionModal);
+    renderWithQueryClient(NewCollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await fireEvent.click(await screen.findByRole("checkbox", { name: "First" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection (1 members)" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Create refused");
     await fireEvent.click(await screen.findByRole("button", { name: "Retry collection creation" }));
     await waitFor(() => expect(attempts).toBe(2));
@@ -406,11 +475,11 @@ describe("collection management", () => {
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByRole("tab", { name: "Configure", selected: true })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "TMDB collection match" })).toBeInTheDocument();
+    expect(screen.getByLabelText("TMDB collection ID")).toBeInTheDocument();
     await fireEvent.input(await screen.findByLabelText("Title"), {
       target: { value: "Unsaved title" },
     });
-    expect(screen.getByRole("region", { name: "TMDB collection match" })).toBeInTheDocument();
+    expect(screen.getByLabelText("TMDB collection ID")).toBeInTheDocument();
 
     for (const section of ["Art", "Themes"] as const) {
       await fireEvent.click(screen.getByRole("tab", { name: section }));

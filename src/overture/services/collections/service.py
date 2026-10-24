@@ -20,7 +20,6 @@ lazy from ...db.session import Database
 lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import (
     ArtType,
-    CollectionMatch,
     CollectionMode,
     CollectionOrder,
     CollectionPreset,
@@ -36,7 +35,6 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.adapters import UploadThemes
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.art import SaveArtRequest
 lazy from ...schemas.collections import (
@@ -45,7 +43,6 @@ lazy from ...schemas.collections import (
     CollectionFilter,
     CollectionGenerateRequest,
     CollectionGenerateResponse,
-    CollectionMatchRequest,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionPresetRead,
@@ -85,7 +82,6 @@ lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from ..scheduler import SchedulerService
 lazy from ..themes.youtube_resolver import DownloadError
 lazy from . import COLLECTIONS_LOCK
-lazy from .matching import apply_match
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +267,8 @@ class CollectionsService:
     async def create(self, body: CollectionCreate) -> CollectionDetail:
         """Create on the server, then record its complete local membership."""
         self._validate_options(body)
+        if body.tmdb_collection_id is not None:
+            self._require_movie_collections(body.media_type)
         items = self._sort_members(
             self._resolve_members(
                 body.member_ids,
@@ -280,7 +278,31 @@ class CollectionsService:
         )
         async with self._database.read_session() as session:
             defaults = await get_app_settings(session)
-        if len(items) < defaults.collection_minimum_items:
+        if body.rule is not None:
+            if body.rule.source_type is RuleSourceType.TMDB:
+                self._require_movie_collections(body.media_type)
+            source = await self._source_members(
+                MediaCollection(
+                    media_type=body.media_type,
+                    server_type=self._provider().server_type,
+                    server_item_id="",
+                    library_id=body.library_id,
+                ),
+                self._rule_row(0, body.rule),
+            )
+            mode = body.rule.sync_mode or defaults.collection_sync_mode
+            source_ids = {item.id for item in source}
+            items = (
+                source + [item for item in items if item.id not in source_ids]
+                if mode is SyncMode.APPEND
+                else source
+            )
+        minimum = (
+            body.rule.minimum_items
+            if body.rule and body.rule.minimum_items is not None
+            else defaults.collection_minimum_items
+        )
+        if len(items) < minimum:
             raise PublicServiceError(
                 422, "Collection has fewer members than the global minimum"
             )
@@ -316,9 +338,10 @@ class CollectionsService:
                 last_synced_at=now,
                 created_at=now,
                 updated_at=now,
-                **body.model_dump(exclude={"media_type", "library_id", "member_ids"}),
+                **body.model_dump(
+                    exclude={"media_type", "library_id", "member_ids", "rule"}
+                ),
             )
-            apply_match(row, [item.tmdb_collection_id for item in items])
             await self._push_options(row, body)
             if body.order_type is CollectionOrder.CUSTOM:
                 await self._provider().set_collection_members(
@@ -332,6 +355,10 @@ class CollectionsService:
                 await CollectionRepository(session).replace_members(
                     row.id or 0, [item.id or 0 for item in items]
                 )
+                if body.rule is not None:
+                    if body.rule.source_type is RuleSourceType.TMDB:
+                        row.tmdb_collection_id = int(body.rule.source_identifier)
+                    session.add(self._rule_row(row.id or 0, body.rule))
         await self._publisher.broadcast("collections.changed")
         return await self.get_collection(row.id or 0, body.media_type)
 
@@ -340,6 +367,8 @@ class CollectionsService:
     ) -> CollectionDetail:
         """Edit collection metadata without touching movie or show metadata."""
         self._validate_options(body)
+        if body.tmdb_collection_id is not None:
+            self._require_movie_collections(media_type)
         async with (
             self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
             self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
@@ -349,7 +378,10 @@ class CollectionsService:
             await self._push_options(row, body)
             async with self._database.write_session() as session:
                 row = await self._require(session, collection_id, media_type)
-                row.sqlmodel_update(body.model_dump())
+                fields = body.model_dump()
+                if "tmdb_collection_id" not in body.model_fields_set:
+                    fields.pop("tmdb_collection_id")
+                row.sqlmodel_update(fields)
                 row.updated_at = utc_now()
                 session.add(row)
         await self._publisher.broadcast(
@@ -410,15 +442,6 @@ class CollectionsService:
             current.child_count = len(server_ids)
             current.order_type = order
             current.updated_at = utc_now()
-            apply_match(
-                current,
-                [
-                    by_server_id[identity].tmdb_collection_id
-                    if identity in by_server_id
-                    else None
-                    for identity in server_ids
-                ],
-            )
             session.add(current)
         await self._publisher.broadcast("collection.updated", {"collection_id": row.id})
 
@@ -451,12 +474,21 @@ class CollectionsService:
             await self._set_members_locked(row, items, body.order_type)
         return await self.get_collection(collection_id, media_type)
 
+    @staticmethod
+    def _rule_row(collection_id: int, body: CollectionRuleWrite) -> CollectionRule:
+        fields = body.model_dump(exclude={"filters"})
+        return CollectionRule(
+            collection_id=collection_id,
+            filter_json=body.filters.model_dump_json(),
+            **fields,
+        )
+
     async def save_rule(
         self, collection_id: int, media_type: MediaType, body: CollectionRuleWrite
     ) -> CollectionRuleRead:
         """Persist validated rule settings; polling sees them after commit."""
         if body.source_type is RuleSourceType.TMDB:
-            self._require_movie_matching(media_type)
+            self._require_movie_collections(media_type)
         async with (
             self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
             self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
@@ -493,9 +525,12 @@ class CollectionsService:
                 rule.last_error = None
                 rule.last_synced_at = None
                 session.add(rule)
-                if use_source_order:
+                if use_source_order or body.source_type is RuleSourceType.TMDB:
                     row = await self._require(session, collection_id, media_type)
-                    row.order_type = CollectionOrder.CUSTOM
+                    if use_source_order:
+                        row.order_type = CollectionOrder.CUSTOM
+                    if body.source_type is RuleSourceType.TMDB:
+                        row.tmdb_collection_id = int(body.source_identifier)
                     session.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
@@ -672,7 +707,7 @@ class CollectionsService:
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
                 app_config=self._app_config,
             )
-        if defaults.collection_auto_match_art:
+        if defaults.collection_auto_match_art and row.tmdb_collection_id is not None:
             for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
                 if read_art_slot(row, art_type).url:
                     continue
@@ -722,7 +757,7 @@ class CollectionsService:
             and row.server_type is self._provider().server_type
         }
         if body.preset is CollectionPreset.TMDB_COLLECTIONS:
-            self._require_movie_matching(body.media_type)
+            self._require_movie_collections(body.media_type)
             used_ids = {
                 row.tmdb_collection_id
                 for row in existing
@@ -796,6 +831,7 @@ class CollectionsService:
                     CollectionCreate(
                         title=title,
                         collection_group=body.preset.collection_group,
+                        tmdb_collection_id=tmdb_id,
                         library_id=body.library_id,
                         media_type=body.media_type,
                         member_ids=[
@@ -912,15 +948,6 @@ class CollectionsService:
         )
         return CollectionDetail(
             **collection_read(row, entry).model_dump(),
-            tmdb_match_confidence=(
-                sum(
-                    item.tmdb_collection_id == row.tmdb_collection_id
-                    for item in members
-                )
-                / max(row.child_count, len(members))
-                if row.tmdb_collection_id is not None and (row.child_count or members)
-                else None
-            ),
             theme_duration=row.theme_file_duration or row.youtube_duration,
             members=member_reads,
             rule=rule,
@@ -1053,50 +1080,12 @@ class CollectionsService:
         await self._publisher.broadcast("collections.changed")
         return BulkMonitorResponse(updated=updated)
 
-    async def set_match(
-        self, collection_id: int, body: CollectionMatchRequest
-    ) -> CollectionDetail:
-        """Match a collection to a TMDB collection, or keep it unmatched."""
-        self._require_movie_matching(body.media_type)
-        async with self._database.write_session() as session:
-            row = await self._require(session, collection_id, body.media_type)
-            row.tmdb_collection_id = body.tmdb_collection_id
-            row.tmdb_match = (
-                CollectionMatch.MANUAL
-                if body.tmdb_collection_id is not None
-                else CollectionMatch.UNMATCHED
-            )
-            row.updated_at = utc_now()
-            session.add(row)
-        await self._publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
-        )
-        return await self.get_collection(collection_id, body.media_type)
-
-    async def reset_match(
-        self, collection_id: int, media_type: MediaType
-    ) -> CollectionDetail:
-        """Let the server's ID and the members decide the match again."""
-        self._require_movie_matching(media_type)
-        async with self._database.write_session() as session:
-            row = await self._require(session, collection_id, media_type)
-            row.tmdb_match = CollectionMatch.AUTO
-            member_ids = await CollectionRepository(session).member_ids(row.id or 0)
-            facts = await MediaItemRepository(session).tmdb_collection_ids(member_ids)
-            facts.extend([None] * max(0, row.child_count - len(facts)))
-            row.tmdb_collection_id = None
-            apply_match(row, facts)
-            row.updated_at = utc_now()
-            session.add(row)
-        await self._publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
-        )
-        return await self.get_collection(collection_id, media_type)
-
     @staticmethod
-    def _require_movie_matching(media_type: MediaType) -> None:
+    def _require_movie_collections(media_type: MediaType) -> None:
         if media_type is not MediaType.MOVIE:
-            raise PublicServiceError(422, "TMDB matching is only available for movies")
+            raise PublicServiceError(
+                422, "TMDB collections are only available for movies"
+            )
 
     async def proxy_collection_image(
         self, collection_id: int, art_type: ArtType, size: ImageSize | None

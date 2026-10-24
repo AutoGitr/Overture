@@ -418,19 +418,24 @@ finds their media folder.
 ### Collections
 
 Plex, Jellyfin and Emby collections appear under **Collections** in the library
-sidebar. Create a collection with **+ Create collection**, choose its library and
-initial members, or use **Generate collections** to preview and create collections
+sidebar. **+ Create collection** opens a fresh Configure page with empty/default
+fields. Its Library selector defaults to the sole available library; otherwise
+choose one, then select initial members or a builder source, or use **Generate collections** to preview and create collections
 by TMDB movie franchise, decade, genre or studio. TMDB franchise previews use
 franchise memberships imported by a full Sync and require `TMDB_API_KEY`. Run a full Sync to import current library metadata.
 
-Items and collections share two continuous header boxes. The upper box holds
+Collections in a group appear only after opening that group in the sidebar.
+Library groups and TMDB franchises share the same drill-in/back navigation.
+Art and theme badges are always available; Emby collections omit the theme badge.
+
+Items and collections share two continuous header boxes sized to their contents. The upper box holds
 **Art**, **Themes**, and record actions; collections also have **Configure**.
 The lower box stays visible at a fixed height while switching modes, with artwork
 categories and **Paste Art**, theme status and duration with **Search YouTube**
-and **Clear**, or Configure jump links with **Save Changes** and **Sync Now**.
+and **Clear**, or Configure section links with **Save Changes** and **Sync Now**.
 
 **Configure** brings General & Server Display, Builder & Dynamic Rules Engine,
-movie franchise matching, Resolved Members, and the Danger Zone into one page.
+explicit movie franchise identity, Resolved Members, and the Danger Zone into one page.
 Edit title, summary, sort title and collection group; choose an existing or preset
 group, or type a custom name. Generated collections receive `default-tmdb-collections`,
 `default-decades`, `default-genres` or `default-studios` automatically.
@@ -454,11 +459,13 @@ the global setting. Below-minimum rules keep the current collection unless
 deletion is enabled; deleting a collection also removes its rule. Per-collection
 metadata and order are configured on the collection's **Configure** page.
 
-Movie collections also show TMDB matching controls; TMDB has no show collections. Jellyfin's provider
-ID is used when available; otherwise Overture uses a strict majority of members'
-TMDB collection IDs. Set `TMDB_API_KEY` for Plex's automatic matching. You can
-search for a different collection or enter a TMDB collection ID manually, choose
-**Unmatch**, or **Reset to auto**.
+A movie collection's optional **TMDB collection ID** is its explicit identity.
+Existing IDs are preserved during upgrade; changing members never guesses or
+replaces an ID. A TMDB builder sets the ID from its franchise source. Other
+collections can use manual membership, lists, or presets with an optional group.
+Collections without an ID offer custom artwork paste and skip candidate lookup.
+Art, Themes, Poster and Background controls share status and clear actions;
+clearing artwork forgets its selection and keeps the server image.
 
 Full Sync looks up unchecked movies' TMDB memberships within the selected
 libraries, including movies outside server collections. It reports that work
@@ -498,7 +505,7 @@ for artwork already on disk. Select **Include collection themes** to fill matche
 collections in the selected libraries, or use **Current sidebar items** from the
 collection list to target its filtered rows. Collections use OvertureDB and
 ThemerrDB in the configured order; YouTube search applies to movies and shows.
-New collection matches found by a full Sync also use the catalog theme order of
+New collection IDs imported by a full Sync also use the catalog theme order of
 an enabled incremental schedule covering their library.
 
 <details>

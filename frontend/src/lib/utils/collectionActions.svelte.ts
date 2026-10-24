@@ -1,6 +1,8 @@
 import { createMutation, createQuery } from "@tanstack/svelte-query";
 import {
   deleteCollectionThemeMutation,
+  clearCollectionArtMutation,
+  clearAllCollectionArtMutation,
   setCollectionThemeMutation,
   setCollectionMonitoredMutation,
   getPublicDatasetStatusOptions,
@@ -15,6 +17,8 @@ import { buildContributionIssueUrl } from "./publicDataset";
 /** Collection asset actions shared by the header and the active section. */
 export class CollectionActions {
   private readonly feedback = createNotifier();
+  private readonly clearArtRequest = createMutation(() => clearCollectionArtMutation());
+  private readonly clearAllArtRequest = createMutation(() => clearAllCollectionArtMutation());
   private readonly deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
   private readonly setThemeRequest = createMutation(() => setCollectionThemeMutation());
   private readonly setMonitoredRequest = createMutation(() => setCollectionMonitoredMutation());
@@ -115,6 +119,38 @@ export class CollectionActions {
     } catch (error) {
       this.feedback.error(errorMessage(error, "Upload failed"));
       return false;
+    }
+  }
+
+  get clearingArt() {
+    return this.clearArtRequest.isPending || this.clearAllArtRequest.isPending;
+  }
+
+  async clearArt(artType: "poster" | "background" | "all") {
+    if (this.clearingArt) return;
+    if (
+      !(await confirmAction({
+        title: "Forget selected collection artwork?",
+        message: "Artwork on the media server is kept.",
+        confirmLabel: "Forget",
+      }))
+    )
+      return;
+    const collection = this.current();
+    try {
+      const result =
+        artType === "all"
+          ? await this.clearAllArtRequest.mutateAsync({
+              path: { collection_id: collection.id },
+              query: { media_type: collection.media_type },
+            })
+          : await this.clearArtRequest.mutateAsync({
+              path: { collection_id: collection.id, art_type: artType },
+              query: { media_type: collection.media_type },
+            });
+      patchCollection(collection.id, result);
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Clear artwork failed"));
     }
   }
 

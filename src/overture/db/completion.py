@@ -16,6 +16,7 @@ lazy from sqlmodel import and_, col, or_
 lazy from ..domain import ArtType, AssetStatus, MediaType
 lazy from .art_slots import find_art_slot
 lazy from .models.art import ArtSlot
+lazy from .models.media_collection import MediaCollection
 lazy from .models.media_item import MediaItem
 lazy from .models.season import Season
 
@@ -111,6 +112,31 @@ def art_completion(item: MediaItem, seasons: Sequence[Season]) -> ArtCompletion:
         art_status=_status(
             complete=all(part == "complete" for part in parts),
             started=any(part is not AssetStatus.MISSING for part in parts),
+        ),
+    )
+
+
+def collection_art_completion(collection: MediaCollection) -> ArtCompletion:
+    """Summarise selected collection art and the copies held by its server."""
+
+    def status(art_type: ArtType, server_url: str | None) -> AssetStatus:
+        slot = find_art_slot(collection, art_type)
+        return _status(
+            complete=slot_complete(slot, files=True),
+            started=_slot_started(slot) or server_url is not None,
+        )
+
+    poster = status(ArtType.POSTER, collection.thumb_url)
+    background = status(ArtType.BACKGROUND, collection.art_url)
+    return ArtCompletion(
+        poster_status=poster,
+        background_status=background,
+        season_posters_status=AssetStatus.MISSING,
+        art_status=_status(
+            complete=poster is AssetStatus.COMPLETE
+            and background is AssetStatus.COMPLETE,
+            started=poster is not AssetStatus.MISSING
+            or background is not AssetStatus.MISSING,
         ),
     )
 

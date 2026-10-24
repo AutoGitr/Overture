@@ -185,7 +185,7 @@ export function startupLoader(page: Page) {
 /** Assert the exact path, with no hash, once the app has navigated there. */
 export async function assertRoute(page: Page, expectedPath: string) {
   await expect(page).toHaveURL(
-    new RegExp(`${expectedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+    new RegExp(`${expectedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\?[^#]*)?$`),
   );
   expect(new URL(page.url()).pathname).toBe(expectedPath);
   expect(new URL(page.url()).hash).toBe("");

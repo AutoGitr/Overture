@@ -15,19 +15,24 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Build dynamic collections from MDBList lists, TMDB franchises or library filters, with scheduled sync, inherited defaults and minimum member thresholds. Set `MDBLIST_API_KEY` for MDBList; the generator previews decade, genre and studio collections before creation.
 
 - Browse the full OvertureDB catalog from the sidebar, filter movies, shows and collections, and save local artwork and theme drafts to contribute through GitHub or the ZIP export.
-- Collection pages show their members, TMDB matching controls and OvertureDB/ThemerrDB theme candidates. Jellyfin 12 collection themes write into a mounted collections directory configured with `JELLYFIN_COLLECTIONS_PATH`.
+- Collection pages show their members, explicit TMDB identity and OvertureDB/ThemerrDB theme candidates. Jellyfin 12 collection themes write into a mounted collections directory configured with `JELLYFIN_COLLECTIONS_PATH`.
 
-- Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly matched collections can receive catalog themes automatically from an enabled incremental sync policy.
+- Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly identified collections can receive catalog themes automatically from an enabled incremental sync policy.
 
 ### Changed
 
-- Item and collection headers use two continuous, stable boxes. Collections consolidate metadata, builder rules, TMDB matching and live members into Configure, with shared Save Changes and Sync Now controls.
+- Collection groups hide their contents until opened, and share sidebar browsing with TMDB franchises. Art/theme badges and detail controls now share status and clear behavior; Emby collections hide unsupported theme badges.
+- Creating a collection opens a fresh Configure page with library selection instead of a popup. Collection TMDB IDs are explicit and survive membership changes; existing IDs are preserved on upgrade, and automatic voting/matching controls are removed.
+- Detail header boxes size to their contents with consistent button spacing and icon-only record actions. Collections without TMDB IDs skip artwork candidate requests.
 
-- Plex and Jellyfin collections and their members are stored locally and refreshed on full syncs. Set `TMDB_API_KEY` for automatic Plex collection matching, or choose a TMDB collection manually.
+- Item and collection headers use two continuous, stable boxes. Collections consolidate metadata, builder rules, explicit TMDB IDs and live members into Configure, with shared Save Changes and Sync Now controls.
+
+- Plex and Jellyfin collections and their members are stored locally and refreshed on full syncs. Set an explicit TMDB collection ID for franchise artwork and catalog theme suggestions.
 - Local artwork is cached under `<config>/cache/images/{originals,thumbs}` by BLAKE3 hash and served as AVIF display thumbnails across the UI, with cached originals used when opening posters at full size.
 
 ### Removed
 
+- Collection matching endpoints and automatic member voting. Set `tmdb_collection_id` through collection creation or update instead.
 - The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
 
 ### Fixed
@@ -37,9 +42,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - OvertureDB item, collection, season and member images now show only catalog artwork or local draft overrides. Missing images use placeholders, and poster cards share consistent typography and spacing.
 - OvertureDB pages reuse library artwork, season and theme views, with consistent links and clearable status badges. Draft artwork appears in the sidebar, and the original catalog artwork is offered only after a draft exists.
 - Full Sync reports collection lookups, respects the selected libraries, and stops pending requests promptly when Stop is selected.
-- Collection members appear in a linked poster grid. TMDB matching is available only for movie collections.
+- Collection members appear in a linked poster grid. TMDB identity is available only for movie collections.
 - Collection routes and queued downloads use stable database IDs, with migrated history and cascading cleanup. Jellyfin theme files retain their hashes and source provenance independently of Plex theme IDs.
-- Unknown collection members count toward the matching majority. Unavailable Jellyfin mounts preserve saved state, and listed BoxSets keep manual matches even when none of their members are visible locally.
+- Unavailable Jellyfin mounts preserve saved state, and listed BoxSets keep their explicit IDs even when none of their members are visible locally.
 - Catalog drafts stay editable after correcting their only identifier. Collection theme exports preserve ThemerrDB attribution, and catalog counts no longer require downloading the entire catalog.
 
 - When YouTube or an artwork source such as ThePosterDB rate-limits Overture, Overture pauses its requests to that service, for longer each time the limit repeats. Theme and artwork downloads and bulk runs wait the pause out; theme searches, artwork matching, choosing artwork and media-server previews in the UI say when to try again.

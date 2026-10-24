@@ -15,6 +15,10 @@
     goToCatalogEntry,
     routedCatalogEntry,
     goToCollection,
+    goToCollectionView,
+    goToNewCollection,
+    sidebarGroup,
+    openSidebarGroup,
     goToItem,
     goToItemArt,
     goToItemThemes,
@@ -37,6 +41,8 @@
   import { readJson, writeJson } from "../utils/storage";
   import DataStatus from "./DataStatus.svelte";
   import SidebarControls from "./SidebarControls.svelte";
+  import SidebarGroupBrowser from "./SidebarGroupBrowser.svelte";
+  import SidebarGroupRow from "./SidebarGroupRow.svelte";
   import SidebarList from "./SidebarList.svelte";
   import SidebarRow from "./SidebarRow.svelte";
   import SidebarTabs from "./SidebarTabs.svelte";
@@ -63,7 +69,10 @@
 
   const collectionsQuery = createQuery(() => ({
     ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled: uiState.sidebarSource === "library" && uiState.sidebarMode === "collections",
+    enabled:
+      settingsState.current.collections_supported &&
+      uiState.sidebarSource === "library" &&
+      (uiState.sidebarMode === "collections" || uiState.searchField === "tmdb"),
   }));
   let collections = $derived(collectionsQuery.data ?? []);
 
@@ -147,7 +156,9 @@
   }
 
   /** Each tab and mode keeps its own place in the list for the session. */
-  let scrollKey = $derived(`overture_sidebar_scroll:${section}`);
+  let scrollKey = $derived(
+    `overture_sidebar_scroll:${section}${sidebarGroup() ? `:${sidebarGroup()}` : ""}`,
+  );
   let savedScroll = $derived(readJson(scrollKey, 0, "session"));
   /** The pending write of the offset; scrolling writes at most every 200 ms. */
   let scrollSave: ReturnType<typeof setTimeout> | undefined;
@@ -160,9 +171,7 @@
 
   // The TMDB field searches TMDB instead of filtering the library.
   let searchingTmdb = $derived(
-    uiState.sidebarSource === "library" &&
-      uiState.sidebarMode === "items" &&
-      uiState.searchField === "tmdb",
+    uiState.sidebarSource === "library" && uiState.searchField === "tmdb",
   );
   let libraryItems = $derived(uiState.sidebarTab === "movie" ? movies : shows);
 
@@ -201,12 +210,24 @@
     }),
   );
 
+  let collectionGroups = $derived(
+    [
+      ...new Set(
+        filteredCollections.flatMap((row) => (row.collection_group ? [row.collection_group] : [])),
+      ),
+    ].sort(),
+  );
+  let currentGroup = $derived(sidebarGroup());
+  let visibleCollections = $derived(
+    filteredCollections.filter((row) => row.collection_group === currentGroup),
+  );
+
   $effect(() => {
     sidebarState.collections =
       uiState.sidebarSource === "library" &&
       uiState.sidebarMode === "collections" &&
       collectionsQuery.isSuccess
-        ? { type: uiState.sidebarTab, collectionIds: filteredCollections.map((row) => row.id) }
+        ? { type: uiState.sidebarTab, collectionIds: visibleCollections.map((row) => row.id) }
         : null;
     return () => {
       sidebarState.collections = null;
@@ -219,7 +240,9 @@
   let collectionsMessage = $derived(
     collectionsQuery.isError && !collectionsQuery.data
       ? "Collections unavailable"
-      : collectionsQuery.data && filteredCollections.length === 0
+      : collectionsQuery.data &&
+          visibleCollections.length === 0 &&
+          (currentGroup !== null || collectionGroups.length === 0)
         ? "No collections found"
         : "",
   );
@@ -251,11 +274,14 @@
     {index}
     active={routedCollectionId() === collection.id}
     {collection}
+    artStatus={sidebarDomain.statusTone(collection.art_status, false)}
     themeStatus={sidebarDomain.statusTone(
       collection.theme_status,
       downloadState.isDownloadingCollection(collection.id),
     )}
     onSelect={() => openDetail(() => goToCollection(collection))}
+    onOpenArt={() => openDetail(() => goToCollectionView(collection, "art"))}
+    onOpenThemes={() => openDetail(() => goToCollectionView(collection, "themes"))}
   />
 {/snippet}
 
@@ -274,6 +300,15 @@
       openDetail(() =>
         goToCatalogEntry(entry, { mode: "themes", artSubTab: "poster", drillSeasonNum: null }),
       )}
+  />
+{/snippet}
+
+{#snippet collectionGroupRow(group: string, _index: number, style: string)}
+  <SidebarGroupRow
+    title={group}
+    count={filteredCollections.filter((row) => row.collection_group === group).length}
+    {style}
+    onselect={() => openSidebarGroup(group)}
   />
 {/snippet}
 
@@ -327,7 +362,9 @@
 
   {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && settingsState.current.collections_supported}
     <div class="collection-actions">
-      <button class="btn btn-ghost btn-sm" onclick={() => uiState.openPopupByName("newCollection")}
+      <button
+        class="btn btn-ghost btn-sm"
+        onclick={() => openDetail(() => goToNewCollection(uiState.sidebarTab))}
         >+ Create collection</button
       >
       <button
@@ -382,6 +419,8 @@
           tab={uiState.sidebarTab}
           {libraryItems}
           {libraryRow}
+          {collections}
+          collectionsOnly={uiState.sidebarMode === "collections"}
           onOpen={openDetail}
         />
       {:else if uiState.sidebarMode === "items"}
@@ -395,14 +434,21 @@
           entry={libraryRow}
         />
       {:else}
-        <SidebarList
-          rows={filteredCollections}
+        <SidebarGroupBrowser
+          groups={collectionGroups}
+          rows={visibleCollections}
+          selected={currentGroup}
+          groupTitle={(group) => group}
+          groupKey={(group) => group}
+          groupPoster={() => null}
+          groupEntry={collectionGroupRow}
+          entry={collectionRow}
+          onback={() => openSidebarGroup(null)}
           loading={collectionsQuery.isFetching && !collectionsQuery.data}
           message={collectionsMessage}
           scrollOffset={savedScroll}
           getKey={(collection) => collection.id}
           posterUrl={(collection) => collectionImageUrl(collection.thumb_url)}
-          entry={collectionRow}
         />
       {/if}
     {/key}

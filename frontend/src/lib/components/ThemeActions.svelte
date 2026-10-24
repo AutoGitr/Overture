@@ -25,7 +25,7 @@
 <button
   type="button"
   class="tab-item"
-  aria-label="Clear theme"
+  aria-label="Clear theme selection"
   disabled={disabled || clearDisabled}
   onclick={onclear}
 >

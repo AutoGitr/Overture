@@ -10,11 +10,11 @@ lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
 lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
     BulkCollectionMonitorUpdate,
+    CollectionArtwork,
     CollectionCreate,
     CollectionDetail,
     CollectionGenerateRequest,
     CollectionGenerateResponse,
-    CollectionMatchRequest,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionPresetRead,
@@ -72,16 +72,6 @@ async def get_collection(
     return await collections.get_collection(collection_id, media_type)
 
 
-@router.put("/{collection_id}/match")
-async def set_collection_match(
-    collection_id: CollectionIdPath,
-    body: CollectionMatchRequest,
-    collections: CollectionsDep,
-) -> CollectionDetail:
-    """Match a collection to a TMDB collection, or keep it unmatched."""
-    return await collections.set_match(collection_id, body)
-
-
 @router.get("/{collection_id}/sources")
 async def get_collection_sources(
     collection_id: CollectionIdPath,
@@ -94,16 +84,6 @@ async def get_collection_sources(
         youtube_id_overturedb=detail.youtube_id_overturedb,
         youtube_id_themerrdb=detail.youtube_id_themerrdb,
     )
-
-
-@router.delete("/{collection_id}/match")
-async def reset_collection_match(
-    collection_id: CollectionIdPath,
-    collections: CollectionsDep,
-    media_type: MediaTypeQuery,
-) -> CollectionDetail:
-    """Let the server and the members decide the TMDB collection again."""
-    return await collections.reset_match(collection_id, media_type)
 
 
 @router.get("/{collection_id}/theme")
@@ -255,6 +235,25 @@ async def generate_collections(
 ) -> CollectionGenerateResponse:
     """Create selected preset collections and their dynamic rules."""
     return await collections.generate(body)
+
+
+@router.delete("/{collection_id}/art")
+async def clear_all_collection_art(
+    collection_id: CollectionIdPath, media_type: MediaTypeQuery, art: ArtDep
+) -> CollectionArtwork:
+    """Forget all selected collection artwork, preserving the server copies."""
+    return await art.clear_collection(collection_id, media_type, None)
+
+
+@router.delete("/{collection_id}/art/{art_type}")
+async def clear_collection_art(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    art_type: ArtTypePath,
+    art: ArtDep,
+) -> CollectionArtwork:
+    """Forget one selected collection artwork slot."""
+    return await art.clear_collection(collection_id, media_type, art_type)
 
 
 @router.get("/{collection_id}/art/{art_type}/sources")

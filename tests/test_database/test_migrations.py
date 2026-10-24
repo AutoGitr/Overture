@@ -294,7 +294,7 @@ def test_revision_4_clears_only_show_collection_matches() -> None:
                 "('movies', 'movie', 'plex', 'Movies', 2, 10, 'manual', 1, NULL), "
                 "('shows', 'show', 'plex', 'Shows', 2, 20, 'manual', 0, 'abcDEF12345')"
             )
-            command.upgrade(config, "head")
+            command.upgrade(config, "4")
             expected = [
                 ("movies", 10, "manual", 1, None),
                 ("shows", None, "auto", 0, "abcDEF12345"),
@@ -519,5 +519,37 @@ def test_collection_group_upgrade_preserves_existing_collections() -> None:
                 ).scalar()
                 is None
             )
+    finally:
+        engine.dispose()
+
+
+def test_explicit_collection_identity_preserves_ids_and_downgrades_to_choices() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "6bb24ff9b36c")
+            connection.exec_driver_sql(
+                "INSERT INTO media_collections (server_item_id, media_type, "
+                "server_type, title, child_count, monitored, tmdb_match, "
+                "tmdb_collection_id, order_type, visible_home) VALUES "
+                "('one','movie','plex','One',1,1,'auto',10,'release',0), "
+                "('two','movie','plex','Two',1,1,'unmatched',NULL,'release',0)"
+            )
+            command.upgrade(config, "head")
+            assert connection.exec_driver_sql(
+                "SELECT tmdb_collection_id FROM media_collections "
+                "ORDER BY server_item_id"
+            ).all() == [(10,), (None,)]
+            assert "tmdb_match" not in {
+                column["name"]
+                for column in inspect(connection).get_columns("media_collections")
+            }
+            command.downgrade(config, "6bb24ff9b36c")
+            assert connection.exec_driver_sql(
+                "SELECT tmdb_match FROM media_collections ORDER BY server_item_id"
+            ).all() == [("manual",), ("unmatched",)]
+            command.upgrade(config, "head")
     finally:
         engine.dispose()

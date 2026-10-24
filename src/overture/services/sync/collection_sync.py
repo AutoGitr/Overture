@@ -23,7 +23,6 @@ lazy from ...schemas.sync import SyncScheduleConfig
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
-lazy from ..collections.matching import apply_match
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.queue import AssetScope
 lazy from ..downloads.service import DownloadService
@@ -86,8 +85,8 @@ class CollectionSync:
                     if row.server_type is provider.server_type
                 }
             seen = {collection.id for collection in listed}
-            newly_matched: list[int] = []
-            matched = 0
+            newly_identified: list[int] = []
+            identified = 0
             for collection in listed:
                 if job.stop_requested():
                     return
@@ -132,7 +131,7 @@ class CollectionSync:
                             theme_checked=checked,
                             now=utc_now(),
                         )
-                matched += row.tmdb_collection_id is not None
+                identified += row.tmdb_collection_id is not None
                 if (
                     row.id is not None
                     and row.tmdb_collection_id is not None
@@ -141,7 +140,7 @@ class CollectionSync:
                         or previous.tmdb_collection_id != row.tmdb_collection_id
                     )
                 ):
-                    newly_matched.append(row.id)
+                    newly_identified.append(row.id)
                 await self._publisher.broadcast(
                     "collection.updated", {"collection_id": row.id}
                 )
@@ -172,19 +171,20 @@ class CollectionSync:
                 await self._downloads.committed(session)
             await self._publisher.broadcast("collections.changed")
         await queue_catalog_themes_for_collections(
-            newly_matched,
+            newly_identified,
             theme_order=theme_order,
             downloads=self._downloads,
             app_config=self._config,
             database=self._database,
         )
-        if theme_order is IncrementalThemeOrder.OFF and newly_matched:
-            await self._queue_incremental_choices(newly_matched)
+        if theme_order is IncrementalThemeOrder.OFF and newly_identified:
+            await self._queue_incremental_choices(newly_identified)
         await job.progress(
             log=log_entry(
                 JobOutcome.STARTED,
                 "Collections",
-                f"{len(listed)} listed, {matched} matched to TMDB, {len(gone)} removed",
+                f"{len(listed)} listed, {identified} with TMDB IDs, "
+                f"{len(gone)} removed",
             )
         )
 
@@ -276,6 +276,9 @@ class CollectionSync:
             media_type=media_type,
             server_type=server_type,
             created_at=now,
+            tmdb_collection_id=collection.tmdb_id
+            if media_type is MediaType.MOVIE
+            else None,
         )
         row.sqlmodel_update(
             {
@@ -318,11 +321,6 @@ class CollectionSync:
                 row.server_theme_id = None
             else:
                 row.server_theme_id = collection.theme_id
-        apply_match(
-            row,
-            [member.tmdb_collection_id for member in members]
-            + [None] * max(0, len(collection.member_ids) - len(members)),
-        )
         repository.session.add(row)
         await repository.session.flush()
         if row.id is None:

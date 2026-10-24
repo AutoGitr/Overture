@@ -104,8 +104,11 @@ describe("DetailPanel", () => {
     );
     expect(screen.queryByTitle("Open Database Record")).not.toBeInTheDocument();
     expect(screen.queryByTitle("Delete Item from Database")).not.toBeInTheDocument();
-    // Nothing is stored yet: no section has a status or anything to forget.
-    expect(container.querySelector(".detail-sections [data-status]")).toBeNull();
+    // An unsaved title has missing selections, while TMDB artwork remains a preview.
+    expect(screen.getByRole("tab", { name: "Art" }).querySelector("[data-status]")).toHaveAttribute(
+      "data-status",
+      "danger",
+    );
     expect(screen.queryByRole("button", { name: /^Clear/ })).not.toBeInTheDocument();
   });
 

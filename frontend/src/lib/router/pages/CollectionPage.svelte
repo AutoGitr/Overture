@@ -2,14 +2,20 @@
   import { createQuery } from "@tanstack/svelte-query";
   import {
     getCollectionOptions,
+    getLibrariesOptions,
     listItemsOptions,
     listCollectionGroupsOptions,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
+  import NewCollectionPage from "./NewCollectionPage.svelte";
   import CollectionManager from "../../components/CollectionManager.svelte";
   import DataStatus from "../../components/DataStatus.svelte";
   import { uiState } from "../../stores/uiState.svelte";
-  import { routedCollectionId, routedCollectionView } from "../routes";
+  import { route, routedCollectionId, routedCollectionView } from "../routes";
 
+  let creating = $derived(route.pathname.endsWith("/collections/new"));
+  const libraries = createQuery(() =>
+    getLibrariesOptions({ query: { media_type: uiState.sidebarTab } }),
+  );
   let collectionId = $derived(routedCollectionId());
   const collectionQuery = createQuery(() => ({
     ...getCollectionOptions({
@@ -30,7 +36,7 @@
     enabled: collection !== null && routedCollectionView() === "configure",
   }));
   $effect(() => {
-    uiState.mobileShowDetail = collectionId !== null;
+    uiState.mobileShowDetail = creating || collectionId !== null;
   });
 </script>
 
@@ -43,7 +49,9 @@
     onretry={() => collectionQuery.refetch()}
   />
 {/if}
-{#if collection}
+{#if creating}
+  {#key `${uiState.sidebarTab}:${route.search.draft ?? ""}`}<NewCollectionPage />{/key}
+{:else if collection}
   {#if routedCollectionView() === "configure"}
     <DataStatus
       label="collection groups"
@@ -55,6 +63,7 @@
   {/if}
   {#key collectionId}<CollectionManager
       {collection}
+      libraries={libraries.data ?? []}
       groups={groupsQuery.data ?? []}
       libraryItems={itemsQuery.data?.items ?? []}
     />{/key}

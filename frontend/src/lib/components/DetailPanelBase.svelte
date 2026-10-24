@@ -300,7 +300,7 @@
 
   .detail-sections {
     width: 100%;
-    align-items: stretch;
+    align-items: var(--header-align);
   }
 
   /* -- Poster: same width as a poster candidate card ---------------------- */
@@ -376,9 +376,9 @@
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0;
-    width: 100%;
+    justify-content: flex-start;
+    gap: var(--space-1);
+    width: fit-content;
     height: 46px;
     flex-shrink: 0;
     max-width: 100%;
@@ -401,13 +401,6 @@
     flex-shrink: 0;
     gap: var(--space-1);
     white-space: nowrap;
-  }
-
-  .record-actions,
-  .section-actions {
-    margin-left: var(--space-2);
-    padding-left: var(--space-2);
-    border-left: var(--border-subtle);
   }
 
   .record-actions :global(.tab-item.danger) {

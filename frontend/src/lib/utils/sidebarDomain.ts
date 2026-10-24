@@ -544,7 +544,12 @@ export function filterSidebarCollections(options: {
 }): CollectionRead[] {
   const predicates: Predicate<CollectionRead>[] = sharedPredicates(options.filters);
   const query = options.searchQuery.trim().toLowerCase();
-  if (query) predicates.push((collection) => collection.title.toLowerCase().includes(query));
+  if (query)
+    predicates.push(
+      (collection) =>
+        collection.title.toLowerCase().includes(query) ||
+        (collection.collection_group?.toLowerCase().includes(query) ?? false),
+    );
   return options.collections
     .filter((collection) => predicates.every((matches) => matches(collection)))
     .sort((a, b) => titleCollator.compare(a.title, b.title));

@@ -31,6 +31,7 @@ lazy from ...schemas.art import (
     ArtSourcesResponse,
     SaveArtRequest,
 )
+lazy from ...schemas.collections import CollectionArtwork, collection_artwork
 lazy from ...schemas.common import SaveSelectionResponse, Status, StatusResponse
 lazy from ...schemas.library import ItemSelectionResponse
 lazy from ...utils.art_urls import public_art_url
@@ -544,6 +545,28 @@ class ArtService:
         )
         return StatusResponse(status=Status.OK)
 
+    async def clear_collection(
+        self, collection_id: int, media_type: MediaType, art_type: ArtType | None
+    ) -> CollectionArtwork:
+        """Forget collection artwork selections while preserving server images."""
+        async with (
+            self._asset_storage.asset_locks.acquire(COLLECTIONS_LOCK),
+            self._asset_storage.asset_locks.acquire(f"collection:{collection_id}"),
+            self._database.write_session() as db,
+        ):
+            row = await self._require_collection(
+                db, collection_id, media_type, art_type or ArtType.POSTER
+            )
+            for slot_type in (art_type,) if art_type is not None else ITEM_ART_TYPES:
+                clear_art_selection(row, slot_type)
+            row.updated_at = utc_now()
+            db.add(row)
+            result = collection_artwork(row)
+        await self._publisher.broadcast(
+            "collection.updated", {"collection_id": collection_id}
+        )
+        return result
+
     async def match_collection(
         self,
         collection_id: int,
@@ -555,6 +578,10 @@ class ArtService:
         async with self._database.read_session() as db:
             row = await self._require_collection(
                 db, collection_id, media_type, art_type
+            )
+        if row.tmdb_collection_id is None:
+            raise PublicServiceError(
+                422, "Set a TMDB collection ID before matching artwork"
             )
         request = await self._provider_registry.provider.build_collection_image_request(
             row.server_item_id, art_type, ImageSize.DISPLAY

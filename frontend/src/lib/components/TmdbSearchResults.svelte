@@ -1,6 +1,4 @@
 <script lang="ts">
-  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
-  import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
   import {
@@ -9,22 +7,37 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
     MediaItemRead,
+    CollectionRead,
     TmdbCollectionResult,
     TmdbItemResult,
   } from "../../generated/rest/types.gen";
-  import { goToItem, routedItem } from "../router/routes";
+  import {
+    goToItem,
+    goToItemArt,
+    goToItemThemes,
+    goToNewCollection,
+    goToCollectionView,
+    routedItem,
+    searchParams,
+  } from "../router/routes";
+  import { settingsState } from "../stores/settingsState.svelte";
+  import { downloadState } from "../stores/downloadState.svelte";
+  import { statusTone } from "../utils/sidebarDomain";
   import { sidebarState, type AdvanceEntry } from "../stores/sidebarState.svelte";
   import { debounced } from "../utils/delayedFlag.svelte";
   import type { SidebarTab } from "../utils/sidebarDomain";
   import DataStatus from "./DataStatus.svelte";
   import SidebarRow from "./SidebarRow.svelte";
-  import VirtualList from "./VirtualList.svelte";
+  import SidebarGroupBrowser from "./SidebarGroupBrowser.svelte";
+  import { remotePosterUrl } from "../utils/artDisplay";
 
   let {
     query,
     tab,
     libraryItems,
     libraryRow,
+    collections = [],
+    collectionsOnly = false,
     onOpen,
   }: {
     query: string;
@@ -32,27 +45,41 @@
     /** The tab's stored items; a result that is one of them shows as it. */
     libraryItems: MediaItemRead[];
     libraryRow: Snippet<[MediaItemRead, number, string]>;
+    collections?: CollectionRead[];
+    collectionsOnly?: boolean;
     onOpen: (navigate: () => void) => void;
   } = $props();
 
   type Result = TmdbItemResult | TmdbCollectionResult;
 
   const search = debounced(() => query.trim());
-  // The collection expanded in the list, kept only for the search it came from.
-  let expanded = $state<{ search: string; collection: TmdbCollectionResult } | null>(null);
-  let collection = $derived(expanded?.search === search.current ? expanded.collection : null);
-
   const resultsQuery = createQuery(() => ({
     ...searchTmdbOptions({ query: { media_type: tab, query: search.current } }),
     enabled: search.current.length > 0,
   }));
+  let groups = $derived(
+    resultsQuery.data?.results.filter(
+      (row): row is TmdbCollectionResult => row.kind === "collection",
+    ) ?? [],
+  );
+  let collection = $derived(
+    searchParams.get("tmdb_query") === search.current
+      ? (groups.find((group) => group.tmdb_id === Number(searchParams.get("tmdb_collection"))) ??
+          null)
+      : null,
+  );
   const collectionQuery = createQuery(() => ({
     ...getTmdbCollectionOptions({ path: { collection_id: collection?.tmdb_id ?? 0 } }),
     enabled: collection !== null,
   }));
   let activeQuery = $derived(collection ? collectionQuery : resultsQuery);
-  let rows = $derived<Result[]>(
-    collection ? (collectionQuery.data?.items ?? []) : (resultsQuery.data?.results ?? []),
+  let rows = $derived<TmdbItemResult[]>(
+    collection
+      ? (collectionQuery.data?.items ?? [])
+      : collectionsOnly
+        ? []
+        : (resultsQuery.data?.results.filter((row): row is TmdbItemResult => row.kind === "item") ??
+          []),
   );
   // The library list is kept current (selections, sync, live events), while
   // a search result keeps the stored state from when it ran. Matching by TMDB
@@ -94,23 +121,36 @@
 
   function select(result: Result) {
     if (result.kind === "collection") {
-      expanded = { search: search.current, collection: result };
+      searchParams.set("tmdb_query", search.current, { replace: true });
+      searchParams.set("tmdb_collection", result.tmdb_id);
       return;
     }
     const { existing_item_id: id, title, media_type } = result;
     onOpen(() => void goToItem(id === null ? result : { id, title, media_type }));
   }
+  function openAssets(result: Result, mode: "art" | "themes") {
+    if (result.kind === "item") {
+      const item =
+        storedItem(result) ??
+        (result.existing_item_id === null
+          ? result
+          : { id: result.existing_item_id, title: result.title, media_type: result.media_type });
+      onOpen(() => (mode === "art" ? goToItemArt(item) : goToItemThemes(item)));
+      return;
+    }
+    const existing = collections.find((entry) => entry.tmdb_collection_id === result.tmdb_id);
+    onOpen(() =>
+      existing ? goToCollectionView(existing, mode) : goToNewCollection("movie", result.tmdb_id),
+    );
+  }
+
+  function back() {
+    searchParams.delete("tmdb_collection");
+    searchParams.delete("tmdb_query", undefined, { replace: true });
+  }
 </script>
 
 <div class="tmdb-results">
-  {#if collection}
-    <button type="button" class="collection-back" onclick={() => (expanded = null)}>
-      <ArrowLeft size={14} />
-      <span>Back to results</span>
-    </button>
-    <div class="collection-heading truncate">{collection.title}</div>
-  {/if}
-
   {#if search.current}
     <DataStatus
       label={collection ? "TMDB collection" : "TMDB results"}
@@ -120,44 +160,61 @@
       onretry={() => activeQuery.refetch()}
     />
   {/if}
-
   <div class="tmdb-list">
-    {#if !search.current}
-      <div class="tmdb-empty">Search TMDB by title or ID</div>
-    {:else if activeQuery.isPending}
-      <div class="tmdb-empty">
-        <LoaderCircle size={24} class="animate-spin" />
-      </div>
-    {:else if activeQuery.isSuccess && rows.length === 0}
-      <div class="tmdb-empty">No TMDB results</div>
-    {:else}
-      <VirtualList
-        width="100%"
-        itemCount={rows.length}
-        itemSize={88}
-        getKey={(index) => `${rows[index]?.kind}-${rows[index]?.tmdb_id ?? index}`}
-      >
-        {#snippet row(index: number, style: string)}
-          {@const result = rows[index]}
-          {#if result}
-            {@const stored = storedItem(result)}
-            {#if stored}
-              {@render libraryRow(stored, index, style)}
-            {:else}
-              <SidebarRow
-                {style}
-                {index}
-                active={isActive(result)}
-                tmdbResult={result}
-                onSelect={() => select(result)}
-              />
-            {/if}
-          {/if}
-        {/snippet}
-      </VirtualList>
-    {/if}
+    <SidebarGroupBrowser
+      groups={search.current ? groups : []}
+      {rows}
+      selected={collection}
+      groupTitle={(group) => group.title}
+      groupKey={(group) => String(group.tmdb_id)}
+      groupPoster={remotePosterUrl}
+      groupEntry={collectionRow}
+      entry={itemRow}
+      getKey={(item) => item.tmdb_id}
+      posterUrl={remotePosterUrl}
+      onback={back}
+      loading={!!search.current && activeQuery.isPending}
+      message={!search.current
+        ? "Search TMDB by title or ID"
+        : activeQuery.isSuccess && !rows.length && (collection || !groups.length)
+          ? "No TMDB results"
+          : ""}
+    />
   </div>
 </div>
+
+{#snippet collectionRow(result: TmdbCollectionResult, index: number, style: string)}
+  {@render resultRow(result, index, style)}
+{/snippet}
+{#snippet itemRow(result: TmdbItemResult, index: number, style: string)}
+  {@const stored = storedItem(result)}
+  {#if stored}{@render libraryRow(stored, index, style)}{:else}{@render resultRow(
+      result,
+      index,
+      style,
+    )}{/if}
+{/snippet}
+{#snippet resultRow(result: Result, index: number, style: string)}
+  {@const storedCollection =
+    result.kind === "collection"
+      ? collections.find((entry) => entry.tmdb_collection_id === result.tmdb_id)
+      : undefined}
+  <SidebarRow
+    {style}
+    {index}
+    active={isActive(result)}
+    tmdbResult={result}
+    hideTheme={result.kind === "collection" && settingsState.current.media_server === "emby"}
+    artStatus={statusTone(storedCollection?.art_status ?? "missing", false)}
+    themeStatus={statusTone(
+      storedCollection?.theme_status ?? "missing",
+      !!storedCollection && downloadState.isDownloadingCollection(storedCollection.id),
+    )}
+    onSelect={() => select(result)}
+    onOpenArt={() => openAssets(result, "art")}
+    onOpenThemes={() => openAssets(result, "themes")}
+  />
+{/snippet}
 
 <style>
   .tmdb-results {
@@ -165,40 +222,8 @@
     flex-direction: column;
     height: 100%;
   }
-
   .tmdb-list {
     flex: 1;
     min-height: 0;
-  }
-
-  .collection-back {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    color: var(--accent);
-    font-size: var(--text-sm);
-    text-align: left;
-  }
-
-  .collection-back:hover {
-    background: var(--bg-hover);
-  }
-
-  .collection-heading {
-    padding: 0 var(--space-3) var(--space-2);
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    border-bottom: var(--border-subtle);
-  }
-
-  .tmdb-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-10);
-    color: var(--text-tertiary);
-    font-size: var(--text-sm);
   }
 </style>

@@ -17,7 +17,6 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
-    CollectionMatch,
     IncrementalThemeOrder,
     MediaType,
     ServerType,
@@ -27,7 +26,6 @@ lazy from overture.jobs.runner import ManagedJob, run_managed_job
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
-lazy from overture.services.collections.matching import derive_tmdb_collection
 lazy from overture.services.collections.theme_files import (
     collection_folder,
     inspect_theme_file,
@@ -38,23 +36,6 @@ lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry, unused
-
-
-@pytest.mark.parametrize(
-    ("provider_id", "members", "expected"),
-    [
-        (7, [1, 1], 7),
-        (None, [10, 10, None], 10),
-        (None, [10, None, None], None),
-        (None, [10, 11], None),
-        (None, [10, 10, 11], 10),
-        (None, [], None),
-    ],
-)
-def test_a_server_id_wins_then_only_a_strict_majority_of_members_matches(
-    provider_id: int | None, members: list[int | None], expected: int | None
-) -> None:
-    assert derive_tmdb_collection(provider_id, members) == expected
 
 
 def test_collection_folders_resolve_by_name_inside_the_root(tmp_path: Path) -> None:
@@ -207,7 +188,6 @@ async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
                     server_theme_id="/theme/old",
                     monitored=False,
                     tmdb_collection_id=99,
-                    tmdb_match=CollectionMatch.MANUAL,
                 ),
                 MediaCollection(
                     server_item_id="kept",
@@ -480,7 +460,6 @@ async def test_a_listed_boxset_without_local_members_preserves_manual_matching(
                 media_type=MediaType.MOVIE,
                 library_id="1",
                 tmdb_collection_id=99,
-                tmdb_match=CollectionMatch.MANUAL,
                 last_synced_at=utc_now(),
             )
         )
@@ -516,7 +495,7 @@ def test_boxset_marker_or_xml_is_required_and_theme_symlinks_cannot_escape(
         inspect_theme_file(plain)
 
 
-async def test_a_new_match_queues_catalog_themes_when_incremental_downloads_are_enabled(
+async def test_a_new_explicit_identity_queues_incremental_catalog_themes(
     *, app_config: Settings, database: Database
 ) -> None:
     await _seed_movies(database)
@@ -528,7 +507,7 @@ async def test_a_new_match_queues_catalog_themes_when_incremental_downloads_are_
         )
         await enable_public_dataset(session)
     await _run(
-        Server(_collection("saga", "m0", "m1", "unknown")),
+        Server(_collection("saga", "m0", "m1", "unknown", tmdb_id=10)),
         database,
         app_config,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,

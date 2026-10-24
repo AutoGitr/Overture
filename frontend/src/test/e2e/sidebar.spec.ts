@@ -64,7 +64,7 @@ test("sidebar row hit areas preserve selection, poster links, and badge actions"
   await assertRoute(page, "/movies/100-movie-099");
 });
 
-test("a collection's decorative theme badge selects its row", async ({ page }) => {
+test("a collection theme badge opens its theme view", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
@@ -76,10 +76,8 @@ test("a collection's decorative theme badge selects its row", async ({ page }) =
   await page.getByRole("button", { name: "Collections", exact: true }).click();
   const row = page.locator(".sidebar-item").filter({ hasText: "Action" });
   await expect(row).toBeVisible();
-  const badge = await row.locator(".item-badge").boundingBox();
-  expect(badge).not.toBeNull();
-  await page.mouse.click(badge!.x + badge!.width / 2, badge!.y + badge!.height / 2);
-  await assertRoute(page, "/movies/collections/1-action");
+  await row.getByRole("button", { name: "Open themes for Action" }).click();
+  await assertRoute(page, "/movies/collections/1-action/themes");
   await page.goBack();
   await assertRoute(page, "/movies/collections");
   await expect(row).toBeVisible();

@@ -28,7 +28,7 @@
   onclick={() => uiState.openPopupByName("database")}
   title="Open Database Record"
 >
-  <Database size={16} /><span>Database</span>
+  <Database size={16} />
 </button>
 <button
   type="button"
@@ -39,7 +39,6 @@
   disabled={monitoring}
 >
   {#if monitored}<Eye size={16} />{:else}<EyeOff size={16} />{/if}
-  <span>{monitored ? "Monitored" : "Unmonitored"}</span>
 </button>
 <button
   type="button"
@@ -49,5 +48,4 @@
   disabled={deleting}
 >
   <Trash size={16} />
-  <span>Delete</span>
 </button>

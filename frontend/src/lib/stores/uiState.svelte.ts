@@ -27,7 +27,6 @@ export type PopupType =
   | "overturedb"
   | "backup"
   | "stats"
-  | "newCollection"
   | "collectionGenerator";
 
 export type Completeness = "all" | "complete" | "incomplete";

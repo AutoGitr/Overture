@@ -121,18 +121,20 @@ test("collection creation uses the selected library and members", async ({ page 
         member_ids: [1],
       });
       await route.fulfill({ json: detail });
-    } else if (path === "/api/collections") await route.fulfill({ json: [] });
+    } else if (path === "/api/collections" || path === "/api/collections/groups")
+      await route.fulfill({ json: [] });
     else await route.fulfill({ json: detail });
   });
   await logIn(page);
   await page.goto("/movies/collections");
   await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create collection", exact: true });
-  await dialog.getByLabel("Title", { exact: true }).fill("New collection");
-  await dialog.getByRole("combobox", { name: "Library", exact: true }).selectOption("movies");
-  await dialog.getByRole("checkbox", { name: "First", exact: true }).check();
-  await dialog.getByRole("button", { name: "Create collection (1 members)" }).click();
-  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("movies");
+  await page.getByLabel("Title", { exact: true }).fill("New collection");
+  await page.getByRole("checkbox", { name: "First", exact: true }).check();
+  await page.getByRole("button", { name: "Create collection", exact: true }).click();
+  await expect(page).toHaveURL(/collections\/12-new-collection$/);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
 });
 
@@ -199,4 +201,75 @@ test("Emby collections clearly explain unsupported themes", async ({ page }) => 
     page.getByText("Emby does not support collection themes", { exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Search collection themes")).toHaveCount(0);
+});
+
+test("groups hide collections until opened, preserve browsing on asset navigation, and skip unidentified artwork candidates", async ({
+  page,
+}) => {
+  const grouped = collectionDetail({
+    id: 12,
+    title: "Grouped saga",
+    collection_group: "Weekend",
+    members: [first],
+    library_id: "movies",
+  });
+  const loose = collectionDetail({ id: 13, title: "Loose saga", members: [second] });
+  let candidateRequests = 0;
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+  );
+  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [grouped, loose] }));
+  await page.route("**/api/collections/12?*", (route) => route.fulfill({ json: grouped }));
+  await page.route("**/api/collections/12/art/*/sources?*", (route) => {
+    candidateRequests += 1;
+    return route.fulfill({ json: { sources: {}, current_url: null } });
+  });
+  await logIn(page, "/movies/collections");
+  await expect(page.getByRole("button", { name: "Open group Weekend" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open group Weekend" }).click();
+  await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select collection Loose saga" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open art for Grouped saga" }).click();
+  await expect(
+    page.getByText(/Set a TMDB collection ID to browse artwork candidates/),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Background", exact: true }).click();
+  await expect(
+    page.getByText(/Set a TMDB collection ID to browse artwork candidates/),
+  ).toBeVisible();
+  expect(candidateRequests).toBe(0);
+  await page.reload();
+  if (await page.getByRole("button", { name: "Toggle sidebar" }).isVisible())
+    await page.getByRole("button", { name: "Toggle sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to results" }).click();
+  await expect(page.getByRole("button", { name: "Open group Weekend" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toHaveCount(0);
+});
+
+test("creating again opens a fresh draft and multiple libraries require a choice", async ({
+  page,
+}) => {
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+  );
+  await page.route("**/api/library/libraries?*", (route) =>
+    route.fulfill({
+      json: [
+        { id: "movies", title: "Movies", count: 1 },
+        { id: "other", title: "Other", count: 1 },
+      ],
+    }),
+  );
+  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  await logIn(page, "/movies/collections");
+  await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("");
+  await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
+  if (await page.getByRole("button", { name: "Toggle sidebar" }).isVisible())
+    await page.getByRole("button", { name: "Toggle sidebar" }).click();
+  await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("");
 });

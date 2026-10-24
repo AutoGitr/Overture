@@ -48,7 +48,9 @@
   type ArtSelection = Pick<ArtCandidate, "url"> & Partial<Pick<ArtCandidate, "width" | "height">>;
 
   // A TMDB title has no files or server to match against; matching needs a stored item.
-  let canMatch = $derived(slot.kind === "item" || slot.kind === "collection");
+  let canMatch = $derived(
+    slot.kind === "item" || (slot.kind === "collection" && slot.tmdbId !== null),
+  );
   let tmdbTarget = $derived(
     slot.kind === "catalog"
       ? slot.catalog.entry
@@ -87,7 +89,7 @@
       },
       query: { media_type: slot.kind === "collection" ? slot.mediaType : "movie" },
     }),
-    enabled: slot.kind === "collection",
+    enabled: slot.kind === "collection" && slot.tmdbId !== null,
   }));
   let sourcesQuery = $derived(
     slot.kind === "collection"
@@ -359,6 +361,11 @@
     hasData={sourcesQuery.data !== undefined}
     onretry={() => sourcesQuery.refetch()}
   />
+  {#if slot.kind === "collection" && slot.tmdbId === null}
+    <p class="text-muted">
+      Set a TMDB collection ID to browse artwork candidates, or paste custom artwork.
+    </p>
+  {/if}
   {#if sources}
     {#if sourcesQuery.isSuccess && Object.values(sources).every((arts) => arts.length === 0)}
       <p class="text-muted">No art sources found.</p>

@@ -27,18 +27,6 @@ class CatalogMediaType(StrEnum):
     COLLECTION = "collection"
 
 
-class CollectionMatch(StrEnum):
-    """How a media-server collection got its TMDB collection.
-
-    ``auto`` follows the server's own ID or the collection's members;
-    ``manual`` and ``unmatched`` are the user's choice and survive syncs.
-    """
-
-    AUTO = "auto"
-    MANUAL = "manual"
-    UNMATCHED = "unmatched"
-
-
 class SyncMode(StrEnum):
     """How a dynamic collection applies source membership."""
 

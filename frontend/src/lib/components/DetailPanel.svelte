@@ -1,9 +1,7 @@
 <script lang="ts">
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
-  import Image from "@lucide/svelte/icons/image";
   import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
-  import Music from "@lucide/svelte/icons/music";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
   import githubIcon from "../../assets/icons/github.svg";
@@ -44,7 +42,7 @@
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import PasteArtButton from "./PasteArtButton.svelte";
   import SeasonGrid from "./SeasonGrid.svelte";
-  import StatusTab from "./StatusTab.svelte";
+  import AssetModeTabs from "./AssetModeTabs.svelte";
   import ThemePanel from "./ThemePanel.svelte";
   import ThemeStatus from "./ThemeStatus.svelte";
   import ThemeActions from "./ThemeActions.svelte";
@@ -125,11 +123,10 @@
       ART_TABS.map((tab) => [
         tab.key,
         catalogTones?.[tab.key] ??
-          (item &&
-            statusTone(
-              item[tab.statusField],
-              downloadState.isDownloadingType(item.id, "art", tab.artType),
-            )),
+          statusTone(
+            item?.[tab.statusField] ?? "missing",
+            !!item && downloadState.isDownloadingType(item.id, "art", tab.artType),
+          ),
       ]),
     ),
   );
@@ -280,24 +277,30 @@
   {/snippet}
 
   {#snippet tabs()}
-    <StatusTab
-      icon={Image}
-      label="Art"
-      active={view.mode === "art"}
-      status={catalogTones?.art ??
-        (item && statusTone(item.art_status, downloadState.isDownloadingType(item.id, "art")))}
-      onselect={() => selectView({ mode: "art", artSubTab: "poster", drillSeasonNum: null })}
-      clearLabel="Clear all art"
-      onclear={Object.values(savedArt).some(Boolean) ? () => clearArt("all") : null}
-      clearDisabled={catalog?.draft.busy || actions.clearingArt}
-    />
-    <StatusTab
-      icon={Music}
-      label="Themes"
-      active={view.mode === "themes"}
-      status={catalogTones?.theme ??
-        (item && statusTone(item.theme_status, downloadState.isDownloadingType(item.id, "theme")))}
-      onselect={() => selectView({ mode: "themes", artSubTab: "poster", drillSeasonNum: null })}
+    <AssetModeTabs
+      mode={view.mode}
+      artStatus={catalogTones?.art ??
+        statusTone(
+          item?.art_status ?? "missing",
+          !!item && downloadState.isDownloadingType(item.id, "art"),
+        )}
+      themeStatus={catalogTones?.theme ??
+        statusTone(
+          item?.theme_status ?? "missing",
+          !!item && downloadState.isDownloadingType(item.id, "theme"),
+        )}
+      onart={() => selectView({ mode: "art", artSubTab: "poster", drillSeasonNum: null })}
+      onthemes={() => selectView({ mode: "themes", artSubTab: "poster", drillSeasonNum: null })}
+      onclearart={Object.values(savedArt).some(Boolean) ? () => clearArt("all") : null}
+      oncleartheme={catalogEntry?.youtube_id_overturedb
+        ? () => {
+            void catalog?.draft.save({ youtube_id_overturedb: null });
+          }
+        : hasThemeAttributes(item)
+          ? () => void actions.clearTheme()
+          : null}
+      artBusy={!!catalog?.draft.busy || actions.clearingArt}
+      themeBusy={!!catalog?.draft.busy || actions.themeBusy}
     />
   {/snippet}
 

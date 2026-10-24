@@ -7,12 +7,13 @@ lazy from typing import Annotated, Self
 lazy from pydantic import Field, field_validator, model_validator
 
 lazy from ..config import API_PREFIX
-lazy from ..db.completion import collection_theme_status
+lazy from ..db.art_slots import read_art_slot
+lazy from ..db.completion import collection_art_completion, collection_theme_status
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.public_dataset import PublicDatasetCollection
 lazy from ..domain import (
+    ArtType,
     AssetStatus,
-    CollectionMatch,
     CollectionMode,
     CollectionOrder,
     CollectionPreset,
@@ -28,7 +29,29 @@ lazy from .library import MediaItemRead
 lazy from .validators import YouTubeId
 
 
-class CollectionRead(StrictBaseModel):
+class CollectionArtwork(StrictBaseModel):
+    """Selected collection artwork and its completion state."""
+
+    poster_url: str | None = None
+    background_url: str | None = None
+    poster_status: AssetStatus = AssetStatus.MISSING
+    background_status: AssetStatus = AssetStatus.MISSING
+    art_status: AssetStatus = AssetStatus.MISSING
+
+
+def collection_artwork(row: MediaCollection) -> CollectionArtwork:
+    """Project the collection's art slots without exposing server URLs."""
+    completion = collection_art_completion(row)
+    return CollectionArtwork(
+        poster_url=read_art_slot(row, ArtType.POSTER).url,
+        background_url=read_art_slot(row, ArtType.BACKGROUND).url,
+        poster_status=completion.poster_status,
+        background_status=completion.background_status,
+        art_status=completion.art_status,
+    )
+
+
+class CollectionRead(CollectionArtwork):
     """Media-server collection response."""
 
     id: int
@@ -55,7 +78,6 @@ class CollectionRead(StrictBaseModel):
     theme_status: AssetStatus = AssetStatus.MISSING
     monitored: bool = True
     tmdb_collection_id: int | None = None
-    tmdb_match: CollectionMatch = CollectionMatch.AUTO
     #: The catalog has an OvertureDB theme for the collection's TMDB collection.
     public_dataset_complete: bool = False
     #: The catalog has a ThemerrDB theme for it.
@@ -65,7 +87,6 @@ class CollectionRead(StrictBaseModel):
 class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
-    tmdb_match_confidence: float | None = None
     theme_duration: int | None = None
     members: list[MediaItemRead]
     rule: CollectionRuleRead | None = None
@@ -78,13 +99,6 @@ class CollectionDetail(CollectionRead):
     #: The catalog's theme candidates for the collection.
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
-
-
-class CollectionMatchRequest(StrictBaseModel):
-    """Match a collection to a TMDB collection; ``None`` keeps it unmatched."""
-
-    media_type: MediaType
-    tmdb_collection_id: Annotated[int, Field(gt=0)] | None
 
 
 class CollectionThemeStatusResponse(StrictBaseModel):
@@ -142,6 +156,7 @@ def collection_read(
     """Map a stored collection and its catalog entry to public output."""
     has_theme = row.server_theme_id is not None or row.theme_file_hash is not None
     return CollectionRead(
+        **collection_artwork(row).model_dump(),
         id=row.id or 0,
         title=row.title,
         summary=row.summary,
@@ -169,7 +184,6 @@ def collection_read(
         ),
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
-        tmdb_match=row.tmdb_match,
         public_dataset_complete=bool(catalog and catalog.youtube_id_overturedb),
         public_dataset_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
@@ -215,6 +229,7 @@ class CollectionOptions(StrictBaseModel):
     summary: Annotated[str, Field(max_length=10000)] | None = None
     sort_title: Annotated[str, Field(max_length=200)] | None = None
     collection_group: Annotated[str, Field(max_length=200)] | None = None
+    tmdb_collection_id: Annotated[int, Field(gt=0)] | None = None
     collection_mode: CollectionMode | None = None
     order_type: CollectionOrder = CollectionOrder.RELEASE
     visible_home: bool = False
@@ -240,8 +255,9 @@ class CollectionCreate(CollectionOptions):
     media_type: MediaType
     library_id: Annotated[str, Field(min_length=1, max_length=200)]
     member_ids: Annotated[
-        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=10000)
-    ]
+        list[Annotated[int, Field(gt=0)]], Field(max_length=10000)
+    ] = Field(default_factory=list[int])
+    rule: CollectionRuleWrite | None = None
 
 
 class CollectionMembersUpdate(StrictBaseModel):

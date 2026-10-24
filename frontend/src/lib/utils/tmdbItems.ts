@@ -21,6 +21,7 @@ export type ArtSlotTarget =
 export type CollectionArtTarget = {
   kind: "collection";
   collectionId: number;
+  tmdbId: number | null;
   mediaType: MediaItemRead["media_type"];
 };
 

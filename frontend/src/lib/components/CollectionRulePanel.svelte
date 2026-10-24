@@ -1,7 +1,7 @@
 <script lang="ts">
   import DetailForm from "./DetailForm.svelte";
-  import type { CollectionEditor } from "../utils/collectionForms.svelte";
-  let { editor }: { editor: CollectionEditor } = $props();
+  import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
+  let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
   let filters = $derived(editor.rule.filters ?? {});
 </script>
 
@@ -13,8 +13,9 @@
   <label class="form-label"
     >Source <select bind:value={editor.sourceType}
       ><option value="manual">Manual</option><option value="mdblist">MDBList</option
-      >{#if editor.collection.media_type === "movie"}<option value="tmdb">TMDB franchise</option
-        >{/if}<option value="filter">Library filter</option></select
+      >{#if editor.mediaType === "movie"}<option value="tmdb">TMDB franchise</option>{/if}<option
+        value="filter">Library filter</option
+      ></select
     ></label
   >
   {#if editor.sourceType !== "manual"}
@@ -93,11 +94,11 @@
     <label class="form-row"
       ><input type="checkbox" bind:checked={editor.rule.enabled} />Enable scheduled sync</label
     >
-    {#if editor.collection.rule}
+    {#if editor.existingRule}
       <div class="form-wide options-col">
-        <p class="hint">Last run: {editor.collection.rule.last_synced_at ?? "Never"}</p>
-        {#if editor.collection.rule.last_error}<p role="alert" class="text-danger">
-            {editor.collection.rule.last_error}
+        <p class="hint">Last run: {editor.existingRule.last_synced_at ?? "Never"}</p>
+        {#if editor.existingRule.last_error}<p role="alert" class="text-danger">
+            {editor.existingRule.last_error}
           </p>{/if}
       </div>
     {/if}

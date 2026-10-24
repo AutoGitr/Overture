@@ -2138,6 +2138,55 @@
         "title": "CatalogSeason",
         "type": "object"
       },
+      "CollectionArtwork": {
+        "additionalProperties": false,
+        "description": "Selected collection artwork and its completion state.",
+        "properties": {
+          "art_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "background_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "poster_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          }
+        },
+        "required": [
+          "poster_url",
+          "background_url",
+          "poster_status",
+          "background_status",
+          "art_status"
+        ],
+        "title": "CollectionArtwork",
+        "type": "object"
+      },
       "CollectionCreate": {
         "additionalProperties": false,
         "description": "Create a collection in one selected library.",
@@ -2179,13 +2228,22 @@
               "type": "integer"
             },
             "maxItems": 10000,
-            "minItems": 1,
             "title": "Member Ids",
             "type": "array"
           },
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionRuleWrite"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sort_title": {
             "anyOf": [
@@ -2217,6 +2275,18 @@
             "title": "Title",
             "type": "string"
           },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
           "visible_home": {
             "default": false,
             "title": "Visible Home",
@@ -2226,8 +2296,7 @@
         "required": [
           "title",
           "media_type",
-          "library_id",
-          "member_ids"
+          "library_id"
         ],
         "title": "CollectionCreate",
         "type": "object"
@@ -2236,6 +2305,10 @@
         "additionalProperties": false,
         "description": "One collection with its members and what limits its theme.",
         "properties": {
+          "art_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
           "art_url": {
             "anyOf": [
               {
@@ -2246,6 +2319,21 @@
               }
             ],
             "title": "Art Url"
+          },
+          "background_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
           },
           "catalog_entry_key": {
             "anyOf": [
@@ -2333,6 +2421,21 @@
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release"
+          },
+          "poster_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
           },
           "public_dataset_complete": {
             "default": false,
@@ -2458,21 +2561,6 @@
             ],
             "title": "Tmdb Collection Id"
           },
-          "tmdb_match": {
-            "$ref": "#/components/schemas/CollectionMatch",
-            "default": "auto"
-          },
-          "tmdb_match_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tmdb Match Confidence"
-          },
           "visible_home": {
             "default": false,
             "title": "Visible Home",
@@ -2535,6 +2623,11 @@
           }
         },
         "required": [
+          "poster_url",
+          "background_url",
+          "poster_status",
+          "background_status",
+          "art_status",
           "id",
           "title",
           "summary",
@@ -2558,10 +2651,8 @@
           "theme_status",
           "monitored",
           "tmdb_collection_id",
-          "tmdb_match",
           "public_dataset_complete",
           "public_dataset_themerrdb",
-          "tmdb_match_confidence",
           "theme_duration",
           "members",
           "rule",
@@ -2734,43 +2825,6 @@
         "title": "CollectionGenerateResponse",
         "type": "object"
       },
-      "CollectionMatch": {
-        "description": "How a media-server collection got its TMDB collection.\n\n``auto`` follows the server's own ID or the collection's members;\n``manual`` and ``unmatched`` are the user's choice and survive syncs.",
-        "enum": [
-          "auto",
-          "manual",
-          "unmatched"
-        ],
-        "title": "CollectionMatch",
-        "type": "string"
-      },
-      "CollectionMatchRequest": {
-        "additionalProperties": false,
-        "description": "Match a collection to a TMDB collection; ``None`` keeps it unmatched.",
-        "properties": {
-          "media_type": {
-            "$ref": "#/components/schemas/MediaType"
-          },
-          "tmdb_collection_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tmdb Collection Id"
-          }
-        },
-        "required": [
-          "media_type",
-          "tmdb_collection_id"
-        ],
-        "title": "CollectionMatchRequest",
-        "type": "object"
-      },
       "CollectionMembersUpdate": {
         "additionalProperties": false,
         "description": "Replace membership and optionally set its display order.",
@@ -2866,6 +2920,18 @@
             "title": "Title",
             "type": "string"
           },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
           "visible_home": {
             "default": false,
             "title": "Visible Home",
@@ -2939,6 +3005,10 @@
         "additionalProperties": false,
         "description": "Media-server collection response.",
         "properties": {
+          "art_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
           "art_url": {
             "anyOf": [
               {
@@ -2949,6 +3019,21 @@
               }
             ],
             "title": "Art Url"
+          },
+          "background_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
           },
           "child_count": {
             "default": 0,
@@ -3007,6 +3092,21 @@
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release"
+          },
+          "poster_status": {
+            "$ref": "#/components/schemas/AssetStatus",
+            "default": "missing"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
           },
           "public_dataset_complete": {
             "default": false,
@@ -3095,10 +3195,6 @@
             ],
             "title": "Tmdb Collection Id"
           },
-          "tmdb_match": {
-            "$ref": "#/components/schemas/CollectionMatch",
-            "default": "auto"
-          },
           "visible_home": {
             "default": false,
             "title": "Visible Home",
@@ -3139,6 +3235,11 @@
           }
         },
         "required": [
+          "poster_url",
+          "background_url",
+          "poster_status",
+          "background_status",
+          "art_status",
           "id",
           "title",
           "summary",
@@ -3162,7 +3263,6 @@
           "theme_status",
           "monitored",
           "tmdb_collection_id",
-          "tmdb_match",
           "public_dataset_complete",
           "public_dataset_themerrdb"
         ],
@@ -9367,7 +9467,163 @@
         ]
       }
     },
+    "/api/collections/{collection_id}/art": {
+      "delete": {
+        "description": "Forget all selected collection artwork, preserving the server copies.",
+        "operationId": "clear_all_collection_art",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionArtwork"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear All Collection Art",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/art/{art_type}": {
+      "delete": {
+        "description": "Forget one selected collection artwork slot.",
+        "operationId": "clear_collection_art",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionArtwork"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Collection Art",
+        "tags": [
+          "collections"
+        ]
+      },
       "put": {
         "description": "Validate and upload artwork to a collection.",
         "operationId": "save_collection_art",
@@ -9721,152 +9977,6 @@
           }
         },
         "summary": "Proxy Collection Image",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/{collection_id}/match": {
-      "delete": {
-        "description": "Let the server and the members decide the TMDB collection again.",
-        "operationId": "reset_collection_match",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Media type ('movie' or 'show')",
-            "in": "query",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/MediaType",
-              "description": "Media type ('movie' or 'show')"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Reset Collection Match",
-        "tags": [
-          "collections"
-        ]
-      },
-      "put": {
-        "description": "Match a collection to a TMDB collection, or keep it unmatched.",
-        "operationId": "set_collection_match",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionMatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Set Collection Match",
         "tags": [
           "collections"
         ]
