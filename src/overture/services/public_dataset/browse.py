@@ -156,7 +156,7 @@ class CatalogBrowser:
             drafts = await PublicDatasetDraftRepository(session).list_all()
             links = await self._library_links(session, media_type)
         drafted = {
-            (field, value)
+            (field, value): draft.entry
             for draft in drafts
             if draft.media_type is media_type
             for field in IDENTITY_FIELDS
@@ -171,15 +171,16 @@ class CatalogBrowser:
     def _row(
         entry: Entry,
         links: dict[tuple[str, int | str], int],
-        drafted: set[tuple[str, int | str]],
+        drafted: dict[tuple[str, int | str], Entry],
     ) -> CatalogEntryRow:
         identities = _identities(entry)
         link = next((links[key] for key in identities if key in links), None)
-        poster = entry.get("poster_url")
+        effective = next((drafted[key] for key in identities if key in drafted), entry)
+        poster = effective.get("poster_url")
         return CatalogEntryRow(
             **{
                 name: value
-                for name, value in entry.items()
+                for name, value in effective.items()
                 if name not in {"seasons", "poster_url"}
             },
             entry_key=entry_file_stem(entry),
@@ -187,7 +188,7 @@ class CatalogBrowser:
             poster_preview_url=art_preview_url(poster, ArtType.POSTER)
             if poster
             else None,
-            season_posters=len(entry.get("seasons") or []),
+            season_posters=len(effective.get("seasons") or []),
             has_draft=any(key in drafted for key in identities),
             library_item_id=link
             if entry["media_type"] != CatalogMediaType.COLLECTION
@@ -257,7 +258,7 @@ class CatalogBrowser:
             media_type, _identities(entry)
         )
         links = await self._library_links(session, media_type, entry)
-        row = self._row(entry, links, set())
+        row = self._row(entry, links, {})
         return CatalogEntryDetail(
             entry_key=row.entry_key,
             entry=CatalogEntry.model_validate(entry),

@@ -1,5 +1,5 @@
-import type { CatalogMediaType, MediaItemRead } from "../../generated/rest/types.gen";
-import type { CatalogDraft } from "./catalogDraft";
+import type { MediaItemRead } from "../../generated/rest/types.gen";
+import type { CatalogContext } from "./catalogDraft";
 import { upsertLibraryItem } from "../rest/cache";
 import { beginAutoAdvance, handleFirstSelectionAdvance, type FirstSelection } from "./autoAdvance";
 
@@ -7,10 +7,7 @@ import { beginAutoAdvance, handleFirstSelectionAdvance, type FirstSelection } fr
 export type ArtSlotTarget =
   | {
       kind: "catalog";
-      draft: CatalogDraft;
-      mediaType: CatalogMediaType;
-      entryKey: string;
-      tmdbId: number | null;
+      catalog: CatalogContext;
       seasonNum: number | null;
     }
   | { kind: "item"; itemId: number; seasonId: number | null }

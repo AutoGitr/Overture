@@ -6,6 +6,7 @@ import {
   getTmdbItemOptions,
   listCollectionsOptions,
   listItemsOptions,
+  listCatalogEntriesOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { client } from "../../../generated/rest/client.gen";
 import type {
@@ -33,6 +34,7 @@ import {
   mediaItem,
   catalogDetail,
   catalogEntry,
+  catalogRow,
 } from "../../helpers/fixtures";
 
 const movie = mediaItem({
@@ -310,6 +312,54 @@ describe("TMDB matches", () => {
 });
 
 describe("catalog draft cache", () => {
+  it("shows draft artwork in cached sidebar rows immediately and restores it on discard", () => {
+    queryClient.clear();
+    const target = { media_type: "show", entry_key: "tmdb-12" } as const;
+    const listKey = listCatalogEntriesOptions({ query: { media_type: "show" } }).queryKey;
+    const movieListKey = listCatalogEntriesOptions({ query: { media_type: "movie" } }).queryKey;
+    const row = catalogRow({
+      ...target,
+      tmdb_id: 12,
+      poster_url: "https://image.test/old.jpg",
+      poster_preview_url: "https://image.test/old-preview.jpg",
+      library_item_id: 7,
+    });
+    const other = catalogRow({ entry_key: "tmdb-12", tmdb_id: 12 });
+    const detail = catalogDetail({
+      ...target,
+      entry: catalogEntry({ media_type: "show", tmdb_id: 12, poster_url: row.poster_url }),
+      library_item_id: 7,
+    });
+    queryClient.setQueryData(listKey, [row]);
+    queryClient.setQueryData(movieListKey, [other]);
+
+    storeCatalogDetail(target, {
+      ...detail,
+      draft: {
+        ...detail.entry,
+        poster_url: "https://image.test/draft.jpg",
+        background_url: "https://image.test/background.jpg",
+        seasons: [{ season_num: 1, poster_url: "https://image.test/season.jpg" }],
+      },
+    });
+    expect(queryClient.getQueryData(listKey)).toEqual([
+      expect.objectContaining({
+        poster_url: "https://image.test/draft.jpg",
+        poster_preview_url: null,
+        background_url: "https://image.test/background.jpg",
+        season_posters: 1,
+        has_draft: true,
+        library_item_id: 7,
+      }),
+    ]);
+    expect(queryClient.getQueryData(movieListKey)).toEqual([other]);
+
+    storeCatalogDetail(target, detail);
+    expect(queryClient.getQueryData(listKey)).toEqual([
+      expect.objectContaining({ poster_url: row.poster_url, season_posters: 0, has_draft: false }),
+    ]);
+  });
+
   it("updates every identity alias for the same entry while keeping other media types separate", () => {
     queryClient.clear();
     const oldKey = getCatalogEntryOptions({

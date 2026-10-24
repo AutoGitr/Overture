@@ -4,7 +4,7 @@ lazy from collections import Counter
 lazy from collections.abc import Sequence
 
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...domain import CollectionMatch
+lazy from ...domain import CollectionMatch, MediaType
 
 
 def derive_tmdb_collection(
@@ -32,6 +32,8 @@ def apply_match(
 
     A manual match or unmatch is the user's choice and is left alone.
     """
+    if collection.media_type is not MediaType.MOVIE:
+        return False
     if collection.tmdb_match is not CollectionMatch.AUTO:
         return False
     derived = derive_tmdb_collection(collection.provider_tmdb_id, member_collection_ids)

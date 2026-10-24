@@ -1,6 +1,7 @@
 """Sync engine workflow and scheduler tests."""
 
 lazy import asyncio
+lazy import threading
 lazy from collections.abc import AsyncIterator, Callable
 lazy from dataclasses import replace
 lazy from datetime import UTC, datetime
@@ -8,6 +9,7 @@ lazy from pathlib import Path
 lazy from typing import Any, override
 
 lazy import pytest
+lazy from pydantic import SecretStr
 lazy from sqlmodel import col, select
 
 lazy from overture.config import Settings
@@ -15,7 +17,7 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaType, ServerType
-lazy from overture.integrations.tmdb import TMDBClient
+lazy from overture.integrations.tmdb import TMDBClient, TmdbDetails
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.jobs.progress_log import JobLogEntry, JobOutcome, log_entry
 lazy from overture.jobs.runner import JobContext
@@ -120,6 +122,38 @@ async def test_staged_listing_rejects_unbounded_show_seasons(tmp_path: Path) -> 
         with pytest.raises(MediaServerError, match="too many seasons"):
             await listing.append([show])
         assert await listing.count() == 0
+
+
+async def test_staged_listing_closes_when_cancelled_while_opening(
+    tmp_path: Path,
+) -> None:
+    opened = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+
+    class DelayedListing(StagedListing):
+        @override
+        def _create(self) -> None:
+            super()._create()
+            loop.call_soon_threadsafe(opened.set)
+            release.wait()
+
+    listing = DelayedListing(tmp_path / "provider.sqlite")
+
+    async def stage() -> None:
+        async with listing:
+            raise AssertionError("Cancelled listing must not be entered")
+
+    task = asyncio.create_task(stage())
+    try:
+        await asyncio.wait_for(opened.wait(), 2)
+        task.cancel()
+    finally:
+        release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    with pytest.raises(RuntimeError, match="not open"):
+        _ = listing.connection
 
 
 async def test_staged_sync_assigns_shared_guid_items_to_distinct_rows(
@@ -706,6 +740,81 @@ async def test_start_background_sync_rejects_duplicate_running_task(
         await task
     await engine.job.wait_idle()
     assert engine.job.running is False
+
+
+@pytest.mark.parametrize("phase", ["collection listing", "TMDB collection lookup"])
+async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
+    phase: str,
+    tmp_path: Path,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+    app_config.TMDB_API_KEY = SecretStr("key")
+
+    async def wait_for_cancel() -> None:
+        entered.set()
+        try:
+            await asyncio.Future[None]()
+        finally:
+            cancelled.set()
+
+    class Provider(FakeProvider):
+        @override
+        async def list_collections(self) -> list[ServerCollection]:
+            if phase == "collection listing":
+                await wait_for_cancel()
+            return [
+                ServerCollection(
+                    id="saga",
+                    title="Saga",
+                    server_link="https://server.test/saga",
+                    member_ids=("server-42",),
+                    media_type=MediaType.MOVIE,
+                )
+            ]
+
+    class Tmdb(TMDBClient):
+        def __init__(self) -> None:
+            pass
+
+        @override
+        async def get_details(
+            self, media_type: MediaType, tmdb_id: int
+        ) -> TmdbDetails | None:
+            await wait_for_cancel()
+            return None
+
+    publisher = RecordingPublisher()
+    engine = SyncEngine(
+        tmdb_client=Tmdb(),
+        config_dir=tmp_path,
+        downloads=NoopDownloads(),
+        provider_registry=NoopProviderRegistry(Provider()),
+        scheduler=SchedulerService(app_config=app_config),
+        publisher=publisher,
+        library_gate=LibraryGate(),
+        local_assets=make_local_assets(app_config=app_config, database=database),
+        app_config=app_config,
+        database=database,
+    )
+    try:
+        assert engine.start_background_sync()
+        await asyncio.wait_for(entered.wait(), 3)
+        assert engine.job.request_stop()
+        await asyncio.wait_for(engine.job.wait_idle(), 2)
+        assert cancelled.is_set()
+        assert not engine.job.running
+        terminal = [
+            name
+            for name, _ in publisher.events
+            if name in {"sync.completed", "sync.failed", "sync.stopped"}
+        ]
+        assert terminal == ["sync.stopped"]
+    finally:
+        await engine.stop()
 
 
 @pytest.mark.parametrize("failure", [None, "fetch", "reconcile", "partial", "cancel"])

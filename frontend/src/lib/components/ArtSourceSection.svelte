@@ -2,6 +2,7 @@
   import type { ArtCandidate, ArtType } from "../../generated/rest/types.gen";
   import { candidateImageUrl } from "../utils/artDisplay";
   import ArtCard from "./ArtCard.svelte";
+  import ImageGrid from "./ImageGrid.svelte";
 
   /** One source's artwork candidates as a grid; images load as they scroll into view. */
   let {
@@ -33,7 +34,7 @@
     </span>
   </div>
 
-  <div class="art-grid aspect-{artType}">
+  <ImageGrid {artType}>
     {#each arts as art (art.url)}
       <ArtCard
         {art}
@@ -42,7 +43,7 @@
         {showSource}
       />
     {/each}
-  </div>
+  </ImageGrid>
 </div>
 
 <style>
@@ -64,37 +65,5 @@
     letter-spacing: 0.08em;
     color: var(--text-tertiary);
     text-transform: uppercase;
-  }
-
-  .art-grid {
-    display: grid;
-    gap: var(--space-3);
-    align-items: start;
-  }
-
-  /* Fixed-width poster columns, so candidates match the header poster exactly. */
-  .art-grid.aspect-poster,
-  .art-grid.aspect-season_poster {
-    --art-aspect: 2 / 3;
-
-    grid-template-columns: repeat(auto-fill, var(--art-poster-width));
-  }
-
-  .art-grid.aspect-background {
-    --art-aspect: 16 / 9;
-
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  }
-
-  /* Same breakpoint as the detail-header poster, which matches one column. */
-  @container detail-panel (max-width: 480px) {
-    .art-grid.aspect-poster,
-    .art-grid.aspect-season_poster {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .art-grid.aspect-background {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

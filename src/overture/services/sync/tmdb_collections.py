@@ -6,9 +6,12 @@ lazy from itertools import batched
 
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.session import CHUNK_SIZE, Database
+lazy from ...db.session import Database
 lazy from ...domain import MediaType
 lazy from ...integrations.tmdb import TMDBClient
+lazy from ...jobs.progress_log import JobOutcome, log_entry
+lazy from ...jobs.runner import ManagedJob
+lazy from ...jobs.tally import SyncTally
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...utils.errors import public_error_message
 
@@ -32,23 +35,33 @@ class TmdbCollectionEnrichment:
         self._database = database
         self._tmdb = tmdb_client
 
-    async def run(self) -> int:
-        """Look up every movie not yet checked; return how many were checked."""
-        if not self._config.tmdb_configured:
+    async def run(
+        self, job: ManagedJob[SyncTally], *, library_ids: list[str] | None = None
+    ) -> int:
+        """Look up unchecked movies, reporting each bounded batch."""
+        if not self._config.tmdb_configured or job.stop_requested():
             return 0
         async with self._database.read_session() as session:
             targets = await MediaItemRepository(
                 session
-            ).movies_without_tmdb_collection_check()
+            ).movies_without_tmdb_collection_check(library_ids)
         checked = 0
-        semaphore = asyncio.Semaphore(_CONCURRENCY)
 
         async def lookup(tmdb_id: int) -> int | None:
-            async with semaphore:
-                details = await self._tmdb.get_details(MediaType.MOVIE, tmdb_id)
+            details = await self._tmdb.get_details(MediaType.MOVIE, tmdb_id)
             return details.collection_id if details else None
 
-        for chunk in batched(targets, CHUNK_SIZE, strict=False):
+        for index, chunk in enumerate(batched(targets, _CONCURRENCY, strict=False)):
+            if job.stop_requested():
+                break
+            await job.progress(
+                log=log_entry(
+                    JobOutcome.STARTED,
+                    "Collections",
+                    f"checking TMDB memberships {index * _CONCURRENCY + 1}"
+                    f"-{index * _CONCURRENCY + len(chunk)} of {len(targets)}",
+                )
+            )
             results = await asyncio.gather(
                 *(lookup(tmdb_id) for _, tmdb_id in chunk), return_exceptions=True
             )

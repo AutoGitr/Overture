@@ -18,7 +18,7 @@
     itemPosterOriginalUrl,
     remotePosterUrl,
   } from "../utils/artDisplay";
-  import type { StatusTone } from "../utils/sidebarDomain";
+  import { catalogStatus, type StatusTone } from "../utils/sidebarDomain";
   import FallbackImage from "./FallbackImage.svelte";
 
   let {
@@ -50,6 +50,8 @@
     onOpenThemes?: () => void | Promise<void>;
   } = $props();
 
+  let catalogTones = $derived(catalogEntry ? catalogStatus(catalogEntry) : null);
+
   interface Row {
     title: string;
     selectLabel: string;
@@ -67,7 +69,7 @@
       return {
         title: catalogEntry.title,
         selectLabel: `Select ${catalogEntry.title}`,
-        meta: catalogEntry.has_draft ? "Draft" : catalogEntry.year,
+        meta: catalogEntry.year,
         unmonitored: false,
         icon:
           catalogEntry.media_type === "collection"
@@ -76,7 +78,13 @@
               ? MonitorPlay
               : Clapperboard,
         src: remotePosterUrl(catalogEntry),
-        link: null,
+        link: catalogEntry.poster_url
+          ? {
+              href: catalogEntry.poster_url,
+              label: `Open poster for ${catalogEntry.title} in new tab`,
+              title: "Open poster in new tab",
+            }
+          : null,
       };
     }
     if (item) {
@@ -171,6 +179,7 @@
           {#if row.meta}
             <span>{row.meta}</span>
           {/if}
+          {#if catalogEntry?.has_draft}<span class="badge badge-warning">Draft</span>{/if}
           {#if row.unmonitored}
             <EyeOff size={12} class="item-unmonitored" />
           {/if}
@@ -178,58 +187,26 @@
       </div>
     </button>
 
-    {#if catalogEntry}
+    {#if catalogEntry || item || collection}
       <div class="item-badges">
+        {#if !collection}
+          <button
+            type="button"
+            class="item-badge"
+            aria-label={`Open art for ${row.title}`}
+            title="Art"
+            data-status={catalogTones?.art ?? artStatus}
+            onclick={onOpenArt}><Image size={18} /></button
+          >
+        {/if}
         <button
           type="button"
           class="item-badge"
-          aria-label={`Open art for ${catalogEntry.title}`}
-          title="Art"
-          data-status={catalogEntry.poster_url && catalogEntry.background_url
-            ? "success"
-            : "danger"}
-          onclick={onOpenArt}><Image size={18} /></button
-        >
-        <button
-          type="button"
-          class="item-badge"
-          aria-label={`Open themes for ${catalogEntry.title}`}
+          aria-label={`Open themes for ${row.title}`}
           title="Theme Music"
-          data-status={catalogEntry.youtube_id_overturedb || catalogEntry.youtube_id_themerrdb
-            ? "success"
-            : "danger"}
-          onclick={onOpenThemes}><Music size={18} /></button
+          data-status={catalogTones?.theme ?? themeStatus}
+          onclick={collection ? onSelect : onOpenThemes}><Music size={18} /></button
         >
-      </div>
-    {:else if item}
-      <div class="item-badges">
-        <button
-          type="button"
-          class="item-badge"
-          aria-label={`Open art for ${item.title}`}
-          title="Art"
-          data-status={artStatus}
-          onclick={onOpenArt}
-        >
-          <Image size={18} />
-        </button>
-
-        <button
-          type="button"
-          class="item-badge"
-          aria-label={`Open themes for ${item.title}`}
-          title="Theme Music"
-          data-status={themeStatus}
-          onclick={onOpenThemes}
-        >
-          <Music size={18} />
-        </button>
-      </div>
-    {:else if collection}
-      <div class="item-badges">
-        <span class="item-badge" data-status={themeStatus} title="Theme Music">
-          <Music size={18} />
-        </span>
       </div>
     {/if}
   </div>

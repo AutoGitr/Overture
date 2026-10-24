@@ -23,7 +23,6 @@ lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.collections import (
     CollectionDetail,
     CollectionMatchRequest,
-    CollectionMember,
     CollectionRead,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
@@ -48,6 +47,7 @@ lazy from ..downloads.collection_theme import (
 )
 lazy from ..downloads.queue import AssetScope, JobTarget
 lazy from ..downloads.service import DownloadService
+lazy from ..library.items import media_item_reads_with_public_dataset_status
 lazy from ..provider_images import proxy_provider_image
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from ..themes.youtube_resolver import DownloadError
@@ -139,6 +139,9 @@ class CollectionsService:
         async with self._database.read_session() as session:
             row = await self._require(session, collection_id, media_type)
             members = await CollectionRepository(session).members(row.id or 0)
+            member_reads = await media_item_reads_with_public_dataset_status(
+                session, members
+            )
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
@@ -151,16 +154,7 @@ class CollectionsService:
         return CollectionDetail(
             **collection_read(row, entry).model_dump(),
             members=sorted(
-                (
-                    CollectionMember(
-                        id=member.id or 0,
-                        title=member.title,
-                        year=member.year,
-                        media_type=member.media_type,
-                        tmdb_id=member.tmdb_id,
-                    )
-                    for member in members
-                ),
+                member_reads,
                 key=lambda member: (member.year or 0, member.title.casefold()),
             ),
             theme_unavailable=reason,
@@ -296,6 +290,7 @@ class CollectionsService:
         self, collection_id: int, body: CollectionMatchRequest
     ) -> CollectionDetail:
         """Match a collection to a TMDB collection, or keep it unmatched."""
+        self._require_movie_matching(body.media_type)
         async with self._database.write_session() as session:
             row = await self._require(session, collection_id, body.media_type)
             row.tmdb_collection_id = body.tmdb_collection_id
@@ -315,6 +310,7 @@ class CollectionsService:
         self, collection_id: int, media_type: MediaType
     ) -> CollectionDetail:
         """Let the server's ID and the members decide the match again."""
+        self._require_movie_matching(media_type)
         async with self._database.write_session() as session:
             row = await self._require(session, collection_id, media_type)
             row.tmdb_match = CollectionMatch.AUTO
@@ -322,13 +318,18 @@ class CollectionsService:
             facts = await MediaItemRepository(session).tmdb_collection_ids(member_ids)
             facts.extend([None] * max(0, row.child_count - len(facts)))
             row.tmdb_collection_id = None
-            apply_match(row, facts if media_type is MediaType.MOVIE else [])
+            apply_match(row, facts)
             row.updated_at = utc_now()
             session.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
         )
         return await self.get_collection(collection_id, media_type)
+
+    @staticmethod
+    def _require_movie_matching(media_type: MediaType) -> None:
+        if media_type is not MediaType.MOVIE:
+            raise PublicServiceError(422, "TMDB matching is only available for movies")
 
     async def proxy_collection_image(
         self, collection_id: int, art_type: ArtType, size: ImageSize | None

@@ -1,5 +1,6 @@
 """Sync execution isolated from the scheduler and job lifecycle manager."""
 
+lazy import asyncio
 lazy from pathlib import Path
 lazy from typing import Any
 
@@ -34,18 +35,38 @@ async def run_sync(
     tally = SyncTally()
     async with run_managed_job(context, tally) as job:
         await job.started()
+        if job.stop_requested():
+            return
 
-        tmdb_items = await tmdb_seasons.targets()
-        await _sync_with_provider(
-            job,
-            provider_registry.provider,
-            reconciler,
-            library_ids=library_ids,
-            config_dir=config_dir,
-            tmdb_count=len(tmdb_items),
-        )
-        await tmdb_seasons.run(tmdb_items, job)
-        await collections.run(job, library_ids=library_ids)
+        async def sync() -> None:
+            tmdb_items = await tmdb_seasons.targets()
+            await _sync_with_provider(
+                job,
+                provider_registry.provider,
+                reconciler,
+                library_ids=library_ids,
+                config_dir=config_dir,
+                tmdb_count=len(tmdb_items),
+            )
+            await tmdb_seasons.run(tmdb_items, job)
+            await collections.run(job, library_ids=library_ids)
+
+        # A stop must interrupt provider calls and rate-limit waits as well
+        # as the loops between them. Each writer rolls back on cancellation.
+        worker = asyncio.create_task(sync())
+        stopper = asyncio.create_task(context.stop_event.wait())
+        try:
+            await asyncio.wait((worker, stopper), return_when=asyncio.FIRST_COMPLETED)
+            if job.stop_requested():
+                worker.cancel()
+            await worker
+        except asyncio.CancelledError:
+            if not job.stop_requested():
+                raise
+        finally:
+            worker.cancel()
+            stopper.cancel()
+            await asyncio.gather(worker, stopper, return_exceptions=True)
 
 
 async def _sync_with_provider(

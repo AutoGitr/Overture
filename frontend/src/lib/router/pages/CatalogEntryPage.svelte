@@ -3,9 +3,12 @@
   import {
     getCatalogEntryOptions,
     getPublicDatasetStatusOptions,
+    getTmdbCollectionOptions,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
-  import CatalogDetailPanel from "../../components/CatalogDetailPanel.svelte";
+  import DetailPanel from "../../components/DetailPanel.svelte";
+  import CollectionMembers from "../../components/CollectionMembers.svelte";
   import DataStatus from "../../components/DataStatus.svelte";
+  import { settingsState } from "../../stores/settingsState.svelte";
   import { uiState } from "../../stores/uiState.svelte";
   import { routedCatalogEntry, routedItemView } from "../routes";
 
@@ -14,6 +17,15 @@
   const query = createQuery(() => ({
     ...getCatalogEntryOptions({ path: target ?? { media_type: "movie", entry_key: "" } }),
     enabled: !!target && status.data?.enabled === true,
+  }));
+  let detail = $derived(query.data ?? null);
+  let entry = $derived(detail?.draft ?? detail?.entry);
+  const membersQuery = createQuery(() => ({
+    ...getTmdbCollectionOptions({ path: { collection_id: entry?.tmdb_id ?? 0 } }),
+    enabled:
+      target?.media_type === "collection" &&
+      !!entry?.tmdb_id &&
+      settingsState.current.tmdb_configured,
   }));
   $effect(() => {
     uiState.mobileShowDetail = true;
@@ -35,5 +47,20 @@
       void query.refetch();
     }}
   />
-  <CatalogDetailPanel detail={query.data ?? null} view={routedItemView()} />
+  <DetailPanel {detail} view={routedItemView()}>
+    {#snippet members()}
+      {#if target.media_type === "collection"}
+        {#if settingsState.current.tmdb_configured}
+          <DataStatus
+            label="collection members"
+            error={membersQuery.error}
+            loading={membersQuery.isFetching}
+            hasData={membersQuery.data !== undefined}
+            onretry={() => membersQuery.refetch()}
+          />
+          {#if membersQuery.data}<CollectionMembers members={membersQuery.data.items} />{/if}
+        {:else}<p class="text-muted">Configure TMDB to see this collection's members.</p>{/if}
+      {/if}
+    {/snippet}
+  </DetailPanel>
 {/if}

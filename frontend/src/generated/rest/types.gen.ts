@@ -1077,7 +1077,7 @@ export type CollectionDetail = {
     /**
      * Members
      */
-    members: Array<CollectionMember>;
+    members: Array<MediaItemRead>;
     /**
      * Monitored
      */
@@ -1168,31 +1168,6 @@ export type CollectionMatchRequest = {
      * Tmdb Collection Id
      */
     tmdb_collection_id: number | null;
-};
-
-/**
- * CollectionMember
- *
- * A stored item a collection holds.
- */
-export type CollectionMember = {
-    /**
-     * Id
-     */
-    id: number;
-    media_type: MediaType;
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Tmdb Id
-     */
-    tmdb_id: number | null;
-    /**
-     * Year
-     */
-    year: number | null;
 };
 
 /**

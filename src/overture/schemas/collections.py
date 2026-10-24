@@ -12,6 +12,7 @@ lazy from ..db.models.public_dataset import PublicDatasetCollection
 lazy from ..domain import AssetStatus, CollectionMatch, MediaType, ServerType
 lazy from .base import StrictBaseModel
 lazy from .common import StatusResponse
+lazy from .library import MediaItemRead
 lazy from .validators import YouTubeId
 
 
@@ -44,20 +45,10 @@ class CollectionRead(StrictBaseModel):
     public_dataset_themerrdb: bool = False
 
 
-class CollectionMember(StrictBaseModel):
-    """A stored item a collection holds."""
-
-    id: int
-    title: str
-    year: int | None = None
-    media_type: MediaType
-    tmdb_id: int | None = None
-
-
 class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
-    members: list[CollectionMember]
+    members: list[MediaItemRead]
     #: Why a theme cannot be stored on this collection, if it cannot.
     theme_unavailable: str | None = None
     theme_writable: bool = False

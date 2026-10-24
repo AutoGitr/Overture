@@ -166,6 +166,9 @@ async def test_drafts_hold_valid_changes_until_they_match_the_entry(
     assert saved.entry.poster_url == "https://image.tmdb.org/t/p/original/poster.jpg"
     (row,) = await browser.list_entries(CatalogMediaType.SHOW)
     assert row.has_draft is True
+    assert row.poster_url == saved.draft.poster_url
+    assert row.poster_preview_url == "https://image.tmdb.org/t/p/w342/new.jpg"
+    assert row.season_posters == 1
 
     with pytest.raises(PublicServiceError) as exc_info:
         await browser.save_draft(
@@ -184,6 +187,9 @@ async def test_drafts_hold_valid_changes_until_they_match_the_entry(
         ),
     )
     assert reverted.draft is None
+    (row,) = await browser.list_entries(CatalogMediaType.SHOW)
+    assert row.has_draft is False
+    assert row.poster_url == saved.entry.poster_url
 
 
 async def test_collection_drafts_take_only_collection_fields(
@@ -261,7 +267,10 @@ async def test_correcting_a_drafts_only_identity_keeps_it_editable_and_exportabl
     )
     assert saved.draft is not None
     assert saved.draft.tmdb_id == 11
-    assert (await browser.list_entries(CatalogMediaType.COLLECTION))[0].has_draft
+    (row,) = await browser.list_entries(CatalogMediaType.COLLECTION)
+    assert row.has_draft
+    assert row.entry_key == "tmdb-10"
+    assert row.tmdb_id == 11
     saved = await browser.save_draft(
         CatalogMediaType.COLLECTION,
         "tmdb-10",

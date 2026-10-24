@@ -9,6 +9,7 @@ lazy from fastapi.responses import Response
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
+lazy from overture.db.art_slots import write_art_slot
 lazy from overture.db.models.media_collection import (
     MediaCollection,
     MediaCollectionMember,
@@ -202,6 +203,12 @@ async def test_get_collection_lists_members_and_catalog_candidates(
 ) -> None:
     row = await _collection(db_session, tmdb_collection_id=10)
     newer = MediaItem(media_type=MediaType.MOVIE, title="Empire", year=1980)
+    write_art_slot(
+        newer,
+        ArtType.POSTER,
+        url="https://image.tmdb.org/t/p/original/empire.jpg",
+        file_hash="poster-hash",
+    )
     older = MediaItem(media_type=MediaType.MOVIE, title="Star Wars", year=1977)
     db_session.add_all([newer, older])
     await db_session.flush()
@@ -222,6 +229,11 @@ async def test_get_collection_lists_members_and_catalog_candidates(
     )
 
     assert [member.title for member in detail.members] == ["Star Wars", "Empire"]
+    assert detail.members[1].poster_hash == "poster-hash"
+    assert (
+        detail.members[1].poster_preview_url
+        == "https://image.tmdb.org/t/p/w342/empire.jpg"
+    )
     assert detail.catalog_title == "Star Wars Collection"
     assert detail.youtube_id_themerrdb == "b" * 11
     assert detail.theme_unavailable is None
@@ -370,6 +382,42 @@ async def test_a_manual_match_holds_until_reset_to_the_members(
     )
     assert (reset.tmdb_collection_id, reset.tmdb_match) == (10, CollectionMatch.AUTO)
     assert [event for event, _ in publisher.broadcasts] == ["collection.updated"] * 3
+
+
+@pytest.mark.parametrize("operation", ["match", "unmatch", "reset"])
+async def test_show_collections_cannot_be_matched(
+    operation: str,
+    db_session: AsyncSession,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    row = MediaCollection(
+        server_item_id="shows",
+        media_type=MediaType.SHOW,
+        server_type=ServerType.PLEX,
+        last_synced_at=utc_now(),
+    )
+    db_session.add(row)
+    await db_session.commit()
+    publisher = FakePublisher()
+    service = _service(app_config=app_config, database=database, publisher=publisher)
+
+    request = (
+        service.reset_match(row.id or 0, MediaType.SHOW)
+        if operation == "reset"
+        else service.set_match(
+            row.id or 0,
+            CollectionMatchRequest(
+                media_type=MediaType.SHOW,
+                tmdb_collection_id=10 if operation == "match" else None,
+            ),
+        )
+    )
+    with pytest.raises(PublicServiceError, match="only available for movies") as exc:
+        await request
+    assert exc.value.status_code == 422
+    assert publisher.broadcasts == []
 
 
 async def test_proxy_collection_image_has_no_season_posters(

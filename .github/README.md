@@ -417,11 +417,16 @@ finds their media folder.
 ### Collections
 
 Plex and Jellyfin collections appear under **Collections** in the library sidebar.
-Their pages list members and show the matched TMDB collection. Jellyfin's provider
+Their pages show members in a poster grid linking to each item. Movie collections
+also show TMDB matching controls; TMDB has no show collections. Jellyfin's provider
 ID is used when available; otherwise Overture uses a strict majority of members'
 TMDB collection IDs. Set `TMDB_API_KEY` for Plex's automatic matching. You can
 search for a different collection or enter a TMDB collection ID manually, choose
 **Unmatch**, or **Reset to auto**.
+
+Full Sync looks up unchecked movies' TMDB memberships within the selected
+libraries, including movies outside server collections. It reports that work
+in its log and stops pending requests when you select **Stop**.
 
 Collection themes include OvertureDB and ThemerrDB candidates alongside YouTube
 search. Plex receives the theme through its API. For Jellyfin 12, mount its
@@ -514,9 +519,14 @@ membership. Catalog links use TMDB, TVDB or IMDb identities, for example
 `/overturedb/shows/tvdb-81189`.
 
 Artwork and theme choices in this view become local drafts. They do not change
-library selections or download files. **Discard draft** restores the catalog
-entry; **Open in library** opens a linked item or collection. **Contribute to
-OvertureDB** opens an issue with the draft's choices. **Export selections** includes
+library selections or download files. Catalog pages share the library's artwork,
+season and theme views, including status badges with clear buttons on hover.
+Before a draft exists, artwork candidates come from TMDB. After you make a
+draft, the OvertureDB section also offers the original catalog artwork.
+Draft artwork and titles appear in the sidebar as well as on the page.
+**Discard draft** restores the catalog entry; the Overture icon opens a linked
+item or collection in your library. The GitHub icon appears when a draft differs
+from the catalog and opens an issue with those choices. **Export selections** includes
 all local drafts along with library selections and matched collection themes.
 The OvertureDB popup shows collection and draft counts.
 

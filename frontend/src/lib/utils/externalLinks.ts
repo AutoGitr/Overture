@@ -1,4 +1,4 @@
-import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
+import type { CatalogMediaType, MediaItemRead } from "../../generated/rest/types.gen";
 import { slugify } from "./slug";
 
 export function buildTmdbCollectionUrl(id: number): string {
@@ -6,7 +6,10 @@ export function buildTmdbCollectionUrl(id: number): string {
 }
 
 /** What the detail view shows: a stored item, or a TMDB title not yet stored. */
-export type DetailSubject = MediaItemRead | TmdbItemPreview;
+export type DetailSubject = Pick<
+  MediaItemRead,
+  "title" | "year" | "tmdb_id" | "tvdb_id" | "imdb_id"
+> & { media_type: CatalogMediaType };
 
 type DetailMode = "art" | "themes" | string;
 
@@ -17,6 +20,7 @@ export function buildTmdbUrl(
   season: { season_num: number } | null,
 ) {
   if (!item?.tmdb_id) return null;
+  if (item.media_type === "collection") return buildTmdbCollectionUrl(item.tmdb_id);
   const base = `https://www.themoviedb.org/${item.media_type === "movie" ? "movie" : "tv"}/${item.tmdb_id}`;
   if (mode !== "art") return base;
   if (artType === "poster") return `${base}/images/posters`;
@@ -28,7 +32,7 @@ export function buildTmdbUrl(
 }
 
 export function buildFanartUrl(item: DetailSubject | null, mode: DetailMode, artType: string) {
-  if (!item) return null;
+  if (!item || item.media_type === "collection") return null;
   const id = item.media_type === "movie" ? item.tmdb_id : item.tvdb_id;
   if (!id) return null;
   const kind = item.media_type === "movie" ? "movie" : "series";
@@ -40,7 +44,7 @@ export function buildFanartUrl(item: DetailSubject | null, mode: DetailMode, art
 }
 
 export function buildTvdbUrl(item: DetailSubject | null) {
-  if (!item?.tvdb_id || !item.title) return null;
+  if (!item?.tvdb_id || !item.title || item.media_type === "collection") return null;
   return `https://thetvdb.com/${item.media_type === "movie" ? "movies" : "series"}/${slugify(item.title)}`;
 }
 
@@ -53,7 +57,12 @@ export function buildLetterboxdUrl(item: DetailSubject | null) {
 export function buildPosterDbUrl(item: DetailSubject | null) {
   if (!item?.title) return null;
   const term = encodeURIComponent(item.title).replace(/%20/g, "+");
-  const section = item.media_type === "movie" ? "movies" : "shows";
+  const section =
+    item.media_type === "collection"
+      ? "collections"
+      : item.media_type === "movie"
+        ? "movies"
+        : "shows";
   return `https://theposterdb.com/search?term=${term}&section=${section}`;
 }
 

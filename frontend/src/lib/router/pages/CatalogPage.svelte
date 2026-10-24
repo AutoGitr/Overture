@@ -1,5 +1,5 @@
 <script lang="ts">
-  import CatalogDetailPanel from "../../components/CatalogDetailPanel.svelte";
+  import DetailPanel from "../../components/DetailPanel.svelte";
   import { uiState } from "../../stores/uiState.svelte";
 
   $effect(() => {
@@ -7,4 +7,4 @@
   });
 </script>
 
-<CatalogDetailPanel />
+<DetailPanel />

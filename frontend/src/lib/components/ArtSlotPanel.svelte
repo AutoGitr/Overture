@@ -3,7 +3,6 @@
   import { onMount } from "svelte";
   import {
     getArtSourcesOptions,
-    getCatalogEntryOptions,
     getTmdbArtSourcesOptions,
     matchArtMutation,
     saveArtMutation,
@@ -41,6 +40,13 @@
 
   // A TMDB title has no files or server to match against; matching needs a stored item.
   let canMatch = $derived(slot.kind === "item");
+  let tmdbTarget = $derived(
+    slot.kind === "catalog"
+      ? (slot.catalog.detail.draft ?? slot.catalog.detail.entry)
+      : slot.kind === "tmdb"
+        ? { media_type: slot.mediaType, tmdb_id: slot.tmdbId }
+        : null,
+  );
 
   const itemSourcesQuery = createQuery(() => ({
     ...getArtSourcesOptions({
@@ -52,8 +58,8 @@
   const tmdbSourcesQuery = createQuery(() => ({
     ...getTmdbArtSourcesOptions({
       path: {
-        media_type: slot.kind === "tmdb" || slot.kind === "catalog" ? slot.mediaType : "movie",
-        tmdb_id: slot.kind === "tmdb" || slot.kind === "catalog" ? (slot.tmdbId ?? 0) : 0,
+        media_type: tmdbTarget?.media_type ?? "movie",
+        tmdb_id: tmdbTarget?.tmdb_id ?? 0,
         art_type: artType,
       },
       query: {
@@ -62,46 +68,38 @@
     }),
     enabled:
       slot.kind === "tmdb" ||
-      (slot.kind === "catalog" && !!slot.tmdbId && settingsState.current.tmdb_configured),
+      (slot.kind === "catalog" && !!tmdbTarget?.tmdb_id && settingsState.current.tmdb_configured),
   }));
-  const catalogQuery = createQuery(() => ({
-    ...getCatalogEntryOptions({
-      path: {
-        media_type: slot.kind === "catalog" ? slot.mediaType : "movie",
-        entry_key: slot.kind === "catalog" ? slot.entryKey : "",
-      },
-    }),
-    enabled: slot.kind === "catalog",
-  }));
-  function catalogArt(draft: boolean): ArtCandidate[] {
-    const entry = draft ? catalogQuery.data?.draft : catalogQuery.data?.entry;
+  let sourcesQuery = $derived(slot.kind === "item" ? itemSourcesQuery : tmdbSourcesQuery);
+  let sources = $derived.by(() => {
+    const available = sourcesQuery.data?.sources;
+    if (slot.kind !== "catalog") return available ?? null;
+    const entry = slot.catalog.detail.entry;
     const url =
       artType === "season_poster"
-        ? entry?.seasons?.find(
-            (season) => slot.kind === "catalog" && season.season_num === slot.seasonNum,
-          )?.poster_url
+        ? entry?.seasons?.find((season) => season.season_num === slot.seasonNum)?.poster_url
         : artType === "background"
           ? entry?.background_url
           : entry?.poster_url;
-    return url
-      ? [
-          {
-            url,
-            art_type: artType,
-            source: "overturedb",
-            width: null,
-            height: null,
-            hamming: null,
-            iso_639_1: null,
-            perfect_match: null,
-            preview_url: null,
-            title: draft ? "Draft" : "Catalog",
-          },
-        ]
-      : [];
-  }
-  let sourcesQuery = $derived(slot.kind === "item" ? itemSourcesQuery : tmdbSourcesQuery);
-  let sources = $derived(sourcesQuery.data?.sources ?? null);
+    const original: ArtCandidate[] =
+      url && slot.catalog.detail.draft
+        ? [
+            {
+              url,
+              art_type: artType,
+              source: "overturedb",
+              width: null,
+              height: null,
+              hamming: null,
+              iso_639_1: null,
+              perfect_match: null,
+              preview_url: null,
+              title: null,
+            },
+          ]
+        : [];
+    return { tmdb: available?.tmdb ?? [], overturedb: original };
+  });
   // Typed/pasted URL entry, shown when the clipboard cannot be read directly.
   let manualEntry = $state(false);
 
@@ -134,7 +132,7 @@
    * which the detail page then shows until the server has fetched the file.
    */
   async function saveArt(art: ArtSelection, previewUrl: string | null = null) {
-    if (saving || (slot.kind === "catalog" && slot.draft.busy)) return false;
+    if (saving || (slot.kind === "catalog" && slot.catalog.draft.busy)) return false;
     if (!art.url) {
       feedback.warning("No art URL selected");
       return false;
@@ -145,16 +143,16 @@
     if (slot.kind === "catalog") {
       try {
         if (artType === "season_poster") {
-          const entry = catalogQuery.data?.draft ?? catalogQuery.data?.entry;
-          if (!entry || slot.seasonNum === null) return false;
+          const entry = slot.catalog.detail.draft ?? slot.catalog.detail.entry;
+          if (slot.seasonNum === null) return false;
           const seasonNum = slot.seasonNum;
           const seasons = [
             ...(entry.seasons ?? []).filter((season) => season.season_num !== seasonNum),
             { season_num: seasonNum, poster_url: art.url },
           ].sort((a, b) => a.season_num - b.season_num);
-          return await slot.draft.save({ seasons });
+          return await slot.catalog.draft.save({ seasons });
         }
-        return await slot.draft.save(
+        return await slot.catalog.draft.save(
           artType === "background" ? { background_url: art.url } : { poster_url: art.url },
         );
       } finally {
@@ -299,21 +297,6 @@
       {/if}
     {/snippet}
   </ArtMatchBar>
-
-  {#if slot.kind === "catalog"}
-    {#each [false, true] as draft (draft)}
-      {@const arts = catalogArt(draft)}
-      {#if arts.length}
-        <ArtSourceSection
-          title={draft ? "DRAFT" : "CATALOG"}
-          {arts}
-          {artType}
-          disabled={saving}
-          onselect={saveArt}
-        />
-      {/if}
-    {/each}
-  {/if}
 
   {#if match.results && match.results.length > 0}
     <ArtSourceSection

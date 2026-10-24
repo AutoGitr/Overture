@@ -54,8 +54,8 @@ export class ItemRecordActions {
     return this.#delete.isPending;
   }
 
-  /** Forget one art tab's saved selection; the seasons tab forgets every season's. */
-  async clearArt(tab: ArtSubTab): Promise<void> {
+  /** Forget a tab's selections, or only the season being viewed. */
+  async clearArt(tab: ArtSubTab, seasonId: number | null = null): Promise<void> {
     const item = this.item();
     if (!item || this.clearingArt) return;
     if (!(await this.#confirm(`Forget the saved ${tab} selection?`, ARTWORK_KEPT))) {
@@ -64,6 +64,7 @@ export class ItemRecordActions {
     await this.#run("Clear art failed", () =>
       this.#clearArt.mutateAsync({
         path: { item_id: item.id, art_type: tab === "seasons" ? "season_poster" : tab },
+        ...(seasonId === null ? {} : { query: { season_id: seasonId } }),
       }),
     );
   }

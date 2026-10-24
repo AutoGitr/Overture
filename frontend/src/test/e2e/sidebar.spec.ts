@@ -1,5 +1,12 @@
 import { assertRoute, expect, logIn, test } from "./fixtures";
-import { appSettings, catalogDetail, catalogRow, collection, mediaItem } from "../helpers/fixtures";
+import {
+  appSettings,
+  catalogDetail,
+  catalogEntry,
+  catalogRow,
+  collection,
+  mediaItem,
+} from "../helpers/fixtures";
 
 test("sidebar row hit areas preserve selection, poster links, and badge actions", async ({
   page,
@@ -112,7 +119,16 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   page,
   isMobile,
 }) => {
-  let detail = catalogDetail();
+  let detail = catalogDetail({
+    entry: catalogEntry({ poster_url: "https://image.tmdb.org/t/p/original/catalog.jpg" }),
+    library_item_id: 1,
+  });
+  await page.route("https://image.tmdb.org/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="3"/>',
+    }),
+  );
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ tmdb_configured: true, auto_match_art: false }) }),
   );
@@ -122,7 +138,7 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
       json:
         type === "movie"
           ? [
-              catalogRow({ has_draft: !!detail.draft }),
+              catalogRow({ ...(detail.draft ?? detail.entry), has_draft: !!detail.draft }),
               catalogRow({ entry_key: "tmdb-329865", title: "Arrival", tmdb_id: 329865 }),
             ]
           : [],
@@ -137,7 +153,7 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
       draft:
         route.request().method() === "DELETE"
           ? null
-          : { ...detail.entry, ...route.request().postDataJSON() },
+          : { ...(detail.draft ?? detail.entry), ...route.request().postDataJSON() },
     };
     return route.fulfill({ json: detail });
   });
@@ -167,9 +183,21 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   await expect(page.getByRole("button", { name: "Select Arrival", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Select Alien", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Alien", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "TMDB", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^(CATALOG|DRAFT)$/ })).toHaveCount(0);
+  await expect(page.getByTitle("Contribute to OvertureDB", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open in library", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Use artwork 1000x1500 from tmdb" }).click();
   await expect(page.getByRole("button", { name: "Discard draft" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toBeVisible();
+  await expect(page.getByTitle("Contribute to OvertureDB", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear poster", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear artwork", exact: true })).toHaveCount(0);
   if (isMobile) await page.getByLabel("Toggle sidebar").click();
+  await expect(
+    page.getByRole("link", { name: "Open poster for Alien in new tab" }),
+  ).toHaveAttribute("href", "https://image.tmdb.org/t/p/original/poster.jpg");
   await page.getByRole("button", { name: "Open filters" }).click();
   await expect(page.getByText("Monitor status", { exact: true })).toHaveCount(0);
   await page
@@ -182,6 +210,8 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   await page.getByRole("button", { name: "Select Alien", exact: true }).click();
   await page.getByRole("button", { name: "Discard draft" }).click();
   await expect(page.getByRole("button", { name: "Discard draft" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toHaveCount(0);
+  await expect(page.getByTitle("Contribute to OvertureDB", { exact: true })).toHaveCount(0);
   if (isMobile) await page.getByLabel("Toggle sidebar").click();
   await expect(page.getByText("No catalog entries found", { exact: true })).toBeVisible();
   await page

@@ -1,10 +1,14 @@
 <script lang="ts">
-  import type { CollectionMember, TmdbItemResult } from "../../generated/rest/types.gen";
+  import Layers from "@lucide/svelte/icons/layers";
+  import type { MediaItemRead, TmdbItemResult } from "../../generated/rest/types.gen";
   import { goToItem } from "../router/routes";
+  import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
+  import FallbackImage from "./FallbackImage.svelte";
+  import ImageGrid from "./ImageGrid.svelte";
 
-  let { members }: { members: (CollectionMember | TmdbItemResult)[] } = $props();
+  let { members }: { members: (MediaItemRead | TmdbItemResult)[] } = $props();
 
-  function open(member: CollectionMember | TmdbItemResult) {
+  function open(member: MediaItemRead | TmdbItemResult) {
     const id = "id" in member ? member.id : member.existing_item_id;
     if (id) void goToItem({ id, title: member.title, media_type: member.media_type });
     else if (member.tmdb_id)
@@ -19,14 +23,24 @@
 <section class="members" aria-label="Collection members">
   <h3>Members</h3>
   {#if members.length === 0}<p class="text-muted">No members found.</p>{/if}
-  {#each members as member ("id" in member ? member.id : member.tmdb_id)}
-    <button class="member" onclick={() => open(member)}>
-      <span>{member.title}{member.year ? ` (${member.year})` : ""}</span>
-      {#if "id" in member || member.existing_item_id}<span class="badge badge-muted"
-          >In library</span
-        >{/if}
-    </button>
-  {/each}
+  <ImageGrid>
+    {#each members as member ("id" in member ? member.id : member.tmdb_id)}
+      <button class="member card card-interactive" onclick={() => open(member)}>
+        <div class="member-poster">
+          {#snippet placeholder()}<Layers size={32} />{/snippet}
+          <FallbackImage
+            src={"id" in member ? itemArtDisplayUrl(member, "poster") : remotePosterUrl(member)}
+            alt=""
+            {placeholder}
+          />
+        </div>
+        <span class="member-title">{member.title}{member.year ? ` (${member.year})` : ""}</span>
+        {#if "id" in member || member.existing_item_id}<span class="badge badge-muted"
+            >In library</span
+          >{/if}
+      </button>
+    {/each}
+  </ImageGrid>
 </section>
 
 <style>
@@ -40,17 +54,24 @@
   }
   .member {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
+    flex-direction: column;
     text-align: left;
-    padding: var(--space-2);
-    border-radius: var(--radius-sm);
+    padding: 0;
+    overflow: hidden;
   }
-  .member:hover {
-    background: var(--bg-hover);
+  .member-poster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: var(--art-aspect);
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+  }
+  .member-title {
+    padding: var(--space-3);
   }
   .member .badge {
-    flex-shrink: 0;
+    margin: 0 var(--space-3) var(--space-3);
   }
 </style>

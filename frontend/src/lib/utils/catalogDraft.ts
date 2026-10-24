@@ -3,11 +3,21 @@ import {
   discardCatalogDraftMutation,
   saveCatalogDraftMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
-import type { CatalogDraftUpdate } from "../../generated/rest/types.gen";
+import type {
+  CatalogDraftUpdate,
+  CatalogEntryDetail,
+  TmdbSeasonPreview,
+} from "../../generated/rest/types.gen";
 import { storeCatalogDetail } from "../rest/cache";
 import type { CatalogTarget } from "../router/routes";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
+
+export type CatalogContext = {
+  detail: CatalogEntryDetail;
+  draft: CatalogDraft;
+  seasons: TmdbSeasonPreview[];
+};
 
 /** Persist catalog choices without applying them to the media library. */
 export class CatalogDraft {

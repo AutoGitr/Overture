@@ -24,6 +24,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- OvertureDB pages reuse library artwork, season and theme views, with consistent links and clearable status badges. Draft artwork appears in the sidebar, and the original catalog artwork is offered only after a draft exists.
+- Full Sync reports collection lookups, respects the selected libraries, and stops pending requests promptly when Stop is selected.
+- Collection members appear in a linked poster grid. TMDB matching is available only for movie collections.
 - Collection routes and queued downloads use stable database IDs, with migrated history and cascading cleanup. Jellyfin theme files retain their hashes and source provenance independently of Plex theme IDs.
 - Unknown collection members count toward the matching majority. Unavailable Jellyfin mounts preserve saved state, and listed BoxSets keep manual matches even when none of their members are visible locally.
 - Catalog drafts stay editable after correcting their only identifier. Collection theme exports preserve ThemerrDB attribution, and catalog counts no longer require downloading the entire catalog.

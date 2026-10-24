@@ -6,18 +6,26 @@
     icon,
     alt,
     onclick,
+    onselect,
   }: {
-    href: string;
     title: string;
     icon: string;
     alt: string;
-    onclick?: (event: MouseEvent) => void;
-  } = $props();
+  } & (
+    | { href: string; onclick?: (event: MouseEvent) => void; onselect?: never }
+    | { href?: never; onclick?: never; onselect: () => void }
+  ) = $props();
 </script>
 
-<a class="id-badge" {href} target="_blank" rel="noopener noreferrer" {title} {onclick}>
-  <img src={icon} {alt} />
-</a>
+{#if href}
+  <a class="id-badge" {href} target="_blank" rel="noopener noreferrer" {title} {onclick}>
+    <img src={icon} {alt} />
+  </a>
+{:else}
+  <button type="button" class="id-badge" {title} aria-label={title} onclick={onselect}>
+    <img src={icon} {alt} />
+  </button>
+{/if}
 
 <style>
   .id-badge {

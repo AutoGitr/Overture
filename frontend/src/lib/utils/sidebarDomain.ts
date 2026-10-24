@@ -89,6 +89,29 @@ export function filterCatalogEntries(options: {
 }
 export type SidebarSortDir = "asc" | "desc";
 export type StatusTone = "success" | "warning" | "danger" | "downloading";
+
+/** Catalog badges describe the selections the entry currently holds. */
+export function catalogStatus(entry: {
+  media_type: CatalogEntryRow["media_type"];
+  poster_url: string | null;
+  background_url: string | null;
+  youtube_id_overturedb: string | null;
+  youtube_id_themerrdb: string | null;
+  seasons?: { season_num: number; poster_url: string | null }[] | null;
+  season_posters?: number;
+}): Record<"poster" | "background" | "seasons" | "art" | "theme", StatusTone> {
+  const poster = !!entry.poster_url;
+  const background = !!entry.background_url;
+  const seasons = entry.seasons?.some((season) => !!season.poster_url) ?? !!entry.season_posters;
+  const artwork = [poster, background, ...(entry.media_type === "show" ? [seasons] : [])];
+  return {
+    poster: poster ? "success" : "danger",
+    background: background ? "success" : "danger",
+    seasons: seasons ? "success" : "danger",
+    art: artwork.every(Boolean) ? "success" : artwork.some(Boolean) ? "warning" : "danger",
+    theme: entry.youtube_id_overturedb || entry.youtube_id_themerrdb ? "success" : "danger",
+  };
+}
 export type ThemeSource = NonNullable<MediaItemRead["youtube_id_source"]>;
 export type ArtSource = NonNullable<MediaItemRead["poster_source"]>;
 export type AssetStatus = MediaItemRead["art_status"];

@@ -3,23 +3,22 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   getCatalogEntryOptions,
   getPublicDatasetStatusOptions,
-} from "../../../generated/rest/@tanstack/svelte-query.gen";
-import type { CatalogDraftUpdate } from "../../../generated/rest/types.gen";
-import CatalogEntryPage from "../../../lib/router/pages/CatalogEntryPage.svelte";
-import CatalogCollectionPage from "../../../lib/router/pages/CatalogCollectionPage.svelte";
-import { queryClient } from "../../../lib/rest/queryClient";
-import { navigate, route } from "../../../lib/router/routes";
-import { settingsState } from "../../../lib/stores/settingsState.svelte";
-import { notificationState } from "../../../lib/stores/notificationState.svelte";
-import { mockFetchRoutes } from "../../helpers/fetch";
+} from "../../../../generated/rest/@tanstack/svelte-query.gen";
+import type { CatalogDraftUpdate } from "../../../../generated/rest/types.gen";
+import CatalogEntryPage from "../../../../lib/router/pages/CatalogEntryPage.svelte";
+import { queryClient } from "../../../../lib/rest/queryClient";
+import { navigate, route } from "../../../../lib/router/routes";
+import { settingsState } from "../../../../lib/stores/settingsState.svelte";
+import { notificationState } from "../../../../lib/stores/notificationState.svelte";
+import { mockFetchRoutes } from "../../../helpers/fetch";
 import {
   appSettings,
   artCandidate,
   catalogDetail,
   catalogEntry,
   publicDatasetStatus,
-} from "../../helpers/fixtures";
-import { renderWithQueryClient } from "../../helpers/render";
+} from "../../../helpers/fixtures";
+import { renderWithQueryClient } from "../../../helpers/render";
 
 const poster = "https://image.tmdb.org/t/p/original/chosen.jpg";
 
@@ -55,6 +54,153 @@ describe("catalog detail drafts", () => {
     return result;
   }
 
+  it("shows the canonical catalog response when opened through an identity alias", async () => {
+    settingsState.load(appSettings({ tmdb_configured: true }));
+    await navigate("/overturedb/shows/:entrySlug/art/:subtab", {
+      params: { entrySlug: "tvdb-81189", subtab: "poster" },
+    });
+    const detail = catalogDetail({
+      entry_key: "tmdb-1396",
+      entry: catalogEntry({
+        media_type: "show",
+        title: "Breaking Bad",
+        tmdb_id: 1396,
+        tvdb_id: 81189,
+        poster_url: "https://image.tmdb.org/t/p/original/catalog.jpg",
+      }),
+    });
+    const { calls } = mockFetchRoutes({
+      "/api/public-dataset/catalog/show/tvdb-81189": detail,
+      "/api/tmdb/show/1396/art/poster/sources": {
+        sources: { tmdb: [artCandidate({ url: poster })] },
+      },
+      "/api/public-dataset/catalog/show/tmdb-1396/draft": {
+        ...detail,
+        draft: { ...detail.entry, poster_url: poster },
+      },
+    });
+    renderWithQueryClient(CatalogEntryPage);
+
+    expect(await screen.findByRole("heading", { name: "Breaking Bad" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "TMDb" })).toHaveAttribute(
+      "href",
+      "https://www.themoviedb.org/tv/1396/images/posters",
+    );
+    expect(route.pathname).toBe("/overturedb/shows/tvdb-81189/art/poster");
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
+    );
+    expect(await screen.findByRole("heading", { name: "OVERTUREDB" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard draft" })).toBeInTheDocument();
+    expect(
+      calls
+        .filter(
+          (call) =>
+            call.url.includes("/catalog/show/") &&
+            (!call.init.method || call.init.method === "GET"),
+        )
+        .map((call) => new URL(call.url, "http://localhost").pathname),
+    ).toEqual(["/api/public-dataset/catalog/show/tvdb-81189"]);
+  });
+
+  it("loads collection members for the draft's corrected TMDB identity", async () => {
+    settingsState.load(appSettings({ tmdb_configured: true }));
+    await navigate("/overturedb/movies/collections/:entrySlug/themes", {
+      params: { entrySlug: "tmdb-10" },
+    });
+    const detail = catalogDetail({
+      entry_key: "tmdb-10",
+      entry: catalogEntry({ media_type: "collection", title: "Original collection", tmdb_id: 10 }),
+      draft: catalogEntry({ media_type: "collection", title: "Corrected collection", tmdb_id: 21 }),
+    });
+    const { calls } = mockFetchRoutes({
+      "/api/public-dataset/catalog/collection/tmdb-10": detail,
+      "/api/tmdb/collections/21": {
+        tmdb_id: 21,
+        title: "Corrected collection",
+        items: [
+          {
+            kind: "item",
+            title: "Corrected member",
+            media_type: "movie",
+            tmdb_id: 22,
+            existing_item_id: null,
+            year: 2001,
+          },
+        ],
+      },
+      "/api/themes/search": { results: [] },
+    });
+    renderWithQueryClient(CatalogEntryPage);
+
+    expect(
+      await screen.findByRole("button", { name: "Corrected member (2001)" }),
+    ).toBeInTheDocument();
+    expect(calls.some((call) => call.url.includes("/tmdb/collections/21"))).toBe(true);
+    expect(calls.some((call) => call.url.includes("/tmdb/collections/10"))).toBe(false);
+  });
+
+  it.each(["movie", "collection"] as const)(
+    "shares artwork sources and badges for catalog %s drafts",
+    async (mediaType) => {
+      settingsState.load(appSettings({ tmdb_configured: true }));
+      if (mediaType === "collection")
+        await navigate("/overturedb/movies/collections/:entrySlug/art/:subtab", {
+          params: { entrySlug: "tmdb-348", subtab: "poster" },
+        });
+      const original = "https://image.tmdb.org/t/p/original/catalog.jpg";
+      let detail = catalogDetail({
+        entry: catalogEntry({ media_type: mediaType, poster_url: original }),
+      });
+      mockFetchRoutes({
+        [`/api/public-dataset/catalog/${mediaType}/tmdb-348`]: () => Response.json(detail),
+        [`/api/public-dataset/catalog/${mediaType}/tmdb-348/draft`]: ({
+          init,
+        }: {
+          init: RequestInit;
+        }) => {
+          detail = {
+            ...detail,
+            draft:
+              init.method === "DELETE"
+                ? null
+                : catalogEntry({ ...detail.entry, poster_url: poster }),
+          };
+          return Response.json(detail);
+        },
+        [`/api/tmdb/${mediaType}/348/art/poster/sources`]: {
+          sources: {
+            tmdb: [artCandidate({ url: poster })],
+            overturedb: [artCandidate({ url: original, source: "overturedb" })],
+          },
+        },
+        "/api/tmdb/collections/348": { tmdb_id: 348, title: "Alien", items: [] },
+      });
+      renderWithQueryClient(CatalogEntryPage);
+      await screen.findByRole("heading", { name: "TMDB" });
+      expect(screen.queryByRole("heading", { name: "OVERTUREDB" })).toBeNull();
+      expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
+      expect(screen.getByRole("link", { name: "TMDb" })).toContainElement(
+        screen.getByAltText("TMDb"),
+      );
+      expect(screen.getByRole("button", { name: "Clear poster" })).toBeInTheDocument();
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
+      );
+      expect(await screen.findAllByRole("heading", { name: "OVERTUREDB" })).toHaveLength(1);
+      expect(screen.queryByRole("heading", { name: "CATALOG" })).toBeNull();
+      expect(screen.queryByRole("heading", { name: "DRAFT" })).toBeNull();
+      expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+        "title",
+        "Contribute to OvertureDB",
+      );
+      await fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+      await waitFor(() => expect(screen.queryByRole("heading", { name: "OVERTUREDB" })).toBeNull());
+      expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
+    },
+  );
+
   it("saves a poster draft, contributes it, and discards it without changing the library", async () => {
     settingsState.load(appSettings({ tmdb_configured: true }));
     const { calls } = server(catalogDetail({ library_item_id: 9 }));
@@ -63,9 +209,7 @@ describe("catalog detail drafts", () => {
       await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
     );
     expect(await screen.findByText("Draft", { selector: ".badge" })).toBeInTheDocument();
-    const issue = new URL(
-      screen.getByRole("link", { name: "Contribute to OvertureDB" }).getAttribute("href") ?? "",
-    );
+    const issue = new URL(screen.getByRole("link", { name: "GitHub" }).getAttribute("href") ?? "");
     expect(issue.searchParams.get("poster_url")).toBe(poster);
     expect(
       calls
@@ -93,7 +237,7 @@ describe("catalog detail drafts", () => {
       JSON.stringify({ youtube_id_overturedb: "abcDEF123_4" }),
     );
     expect(screen.getByText("ThemerrDB", { selector: ".badge" })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: "Clear catalog theme" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
     await waitFor(() =>
       expect(calls.filter((call) => call.init.method === "PUT").at(-1)?.init.body).toBe(
         JSON.stringify({ youtube_id_overturedb: null }),
@@ -160,12 +304,12 @@ describe("catalog detail drafts", () => {
         { season_num: 1, poster_url: poster },
       ]),
     );
-    await fireEvent.click(await screen.findByRole("button", { name: "Clear artwork" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Clear season poster" }));
     await waitFor(() =>
       expect(detail.draft?.seasons).toEqual([{ season_num: 1, poster_url: poster }]),
     );
     expect(calls.some((call) => call.url.startsWith("/api/tmdb"))).toBe(false);
-    await fireEvent.click(screen.getByRole("button", { name: "All seasons" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Alien" }));
     expect(await screen.findByRole("button", { name: "Season 1" })).toBeInTheDocument();
   });
 
@@ -196,10 +340,10 @@ describe("catalog detail drafts", () => {
       },
       "/api/themes/search": { results: [] },
     });
-    renderWithQueryClient(CatalogCollectionPage);
+    renderWithQueryClient(CatalogEntryPage);
     const members = await screen.findByRole("region", { name: "Collection members" });
     expect(within(members).getByText("In library")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "TMDB 10" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "TMDb" })).toHaveAttribute(
       "href",
       "https://www.themoviedb.org/collection/10",
     );
@@ -243,7 +387,7 @@ describe("catalog detail drafts", () => {
     );
     await waitFor(() => expect(finish).toBeDefined());
     expect(screen.getByRole("button", { name: "Discard draft" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Clear artwork" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Clear poster" })).toBeDisabled();
     finish?.(Response.json(initial));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Discard draft" })).toBeEnabled(),

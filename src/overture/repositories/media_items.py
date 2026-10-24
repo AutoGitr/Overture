@@ -403,7 +403,9 @@ class MediaItemRepository:
             found.extend(await self.session.exec(stmt))
         return found
 
-    async def movies_without_tmdb_collection_check(self) -> list[tuple[int, int]]:
+    async def movies_without_tmdb_collection_check(
+        self, library_ids: list[str] | None = None
+    ) -> list[tuple[int, int]]:
         """Return ``(id, tmdb_id)`` of visible movies whose collection is unknown."""
         stmt = select(MediaItem.id, MediaItem.tmdb_id).where(
             col(MediaItem.media_type) == MediaType.MOVIE,
@@ -414,6 +416,8 @@ class MediaItemRepository:
                 col(MediaItem.tmdb_collection_checked_id) != col(MediaItem.tmdb_id),
             ),
         )
+        if library_ids:
+            stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
         return [
             (item_id, tmdb_id)
             for item_id, tmdb_id in await self.session.exec(stmt)

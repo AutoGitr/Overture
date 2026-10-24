@@ -7,18 +7,28 @@
     TmdbSeasonPreview,
   } from "../../generated/rest/types.gen";
   import { createSeasonsQuery } from "../rest/queries";
-  import { goToSeason } from "../router/routes";
+  import { goToCatalogEntry, goToSeason } from "../router/routes";
+  import type { CatalogContext } from "../utils/catalogDraft";
   import { remotePosterUrl, seasonPosterUrls } from "../utils/artDisplay";
   import FallbackImage from "./FallbackImage.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import ImageGrid from "./ImageGrid.svelte";
 
-  let { item, preview }: { item: MediaItemRead | null; preview: TmdbItemPreview | null } = $props();
+  let {
+    item,
+    preview,
+    catalog = null,
+  }: {
+    item: MediaItemRead | null;
+    preview: TmdbItemPreview | null;
+    catalog?: CatalogContext | null;
+  } = $props();
 
   let subject = $derived(item ?? preview);
   const seasonsQuery = createSeasonsQuery(() => item);
   // A TMDB title's seasons come with it; a stored show's are loaded.
   let seasons = $derived<(SeasonRead | TmdbSeasonPreview)[]>(
-    item ? (seasonsQuery.data ?? []) : (preview?.seasons ?? []),
+    catalog ? catalog.seasons : item ? (seasonsQuery.data ?? []) : (preview?.seasons ?? []),
   );
   let seasonsLoaded = $derived(!item || seasonsQuery.isSuccess);
 
@@ -29,7 +39,12 @@
   }
 
   function drillInto(season: SeasonRead | TmdbSeasonPreview) {
-    if (subject) goToSeason(subject, season);
+    if (catalog)
+      goToCatalogEntry(
+        { media_type: catalog.detail.entry.media_type, entry_key: catalog.detail.entry_key },
+        { mode: "art", artSubTab: "seasons", drillSeasonNum: season.season_num },
+      );
+    else if (subject) goToSeason(subject, season);
   }
 </script>
 
@@ -49,7 +64,7 @@
       <p>No seasons found</p>
     </div>
   {:else if seasons.length > 0}
-    <div class="grid">
+    <ImageGrid>
       {#each seasons as season (season.season_num)}
         {@const { src, fallbackSrc } = posterUrls(season)}
 
@@ -73,7 +88,7 @@
           </div>
         </button>
       {/each}
-    </div>
+    </ImageGrid>
   {/if}
 </div>
 
@@ -91,12 +106,6 @@
     gap: var(--space-3);
     padding: var(--space-10);
     color: var(--text-tertiary);
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--space-4);
   }
 
   .season-card {
@@ -135,12 +144,5 @@
   .season-files {
     font-size: var(--text-xs);
     color: var(--text-tertiary);
-  }
-
-  @media (max-width: 480px) {
-    .grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-3);
-    }
   }
 </style>

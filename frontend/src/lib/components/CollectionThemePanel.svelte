@@ -7,30 +7,31 @@
   import Layers from "@lucide/svelte/icons/layers";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import Music from "@lucide/svelte/icons/music";
-  import { createMutation } from "@tanstack/svelte-query";
+  import { createMutation, createQuery } from "@tanstack/svelte-query";
   import type { CollectionDetail, ThemeSearchResult } from "../../generated/rest/types.gen";
-  import youtubeIcon from "../../assets/icons/youtube.svg";
+  import githubIcon from "../../assets/icons/github.svg";
   import { patchCollection } from "../rest/cache";
   import {
     deleteCollectionThemeMutation,
     setCollectionThemeMutation,
     setCollectionMonitoredMutation,
+    getPublicDatasetStatusOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { goToCatalogEntry } from "../router/routes";
-  import { buildTmdbCollectionUrl } from "../utils/externalLinks";
+  import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import CollectionMatchPanel from "./CollectionMatchPanel.svelte";
   import CollectionMembers from "./CollectionMembers.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
   import { errorMessage } from "../utils/errors";
   import { statusTone } from "../utils/sidebarDomain";
+  import { buildContributionIssueUrl } from "../utils/publicDataset";
   import {
     buildCollectionThemeSearchQuery,
     mergeThemeResults,
-    youtubeSearchUrl,
     youtubeShortUrl,
   } from "../utils/themeSearch";
   import DetailPanelBase from "./DetailPanelBase.svelte";
@@ -43,6 +44,33 @@
   const deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
   const setThemeRequest = createMutation(() => setCollectionThemeMutation());
   const setMonitoredRequest = createMutation(() => setCollectionMonitoredMutation());
+  const datasetQuery = createQuery(() => ({
+    ...getPublicDatasetStatusOptions(),
+    enabled: !!coll?.tmdb_collection_id,
+  }));
+  let contributionUrl = $derived.by(() => {
+    if (
+      !coll?.tmdb_collection_id ||
+      !coll.youtube_id ||
+      !datasetQuery.data?.repo_url ||
+      coll.youtube_id === coll.youtube_id_overturedb ||
+      coll.youtube_id === coll.youtube_id_themerrdb
+    )
+      return null;
+    return buildContributionIssueUrl(datasetQuery.data.repo_url, {
+      media_type: "collection",
+      title: coll.title,
+      tmdb_id: coll.tmdb_collection_id,
+      tvdb_id: null,
+      imdb_id: null,
+      year: null,
+      poster_url: null,
+      background_url: null,
+      seasons: null,
+      youtube_id_overturedb: coll.youtube_id,
+      youtube_id_themerrdb: null,
+    });
+  });
 
   let collectionThemeJob = $derived(coll ? downloadState.getCollectionJob(coll.id) : null);
   let activeThemeJob = $derived(
@@ -154,38 +182,39 @@
   {/snippet}
 
   {#snippet badges()}
-    {#if coll?.tmdb_collection_id}
-      <a
-        class="btn btn-ghost btn-sm"
-        href={buildTmdbCollectionUrl(coll.tmdb_collection_id)}
-        target="_blank"
-        rel="noreferrer">TMDB {coll.tmdb_collection_id}</a
-      >
-      {#if coll.catalog_entry_key}<button
-          class="btn btn-ghost btn-sm"
-          onclick={() => {
+    {#if coll}
+      <ExternalLinkBadges
+        subject={{
+          title: coll.title,
+          year: null,
+          media_type: "collection",
+          tmdb_id: coll.tmdb_collection_id,
+          tvdb_id: null,
+          imdb_id: null,
+        }}
+        mode="themes"
+        artType="poster"
+        season={null}
+      />
+      {#if coll.catalog_entry_key}<IdBadge
+          title="Open in OvertureDB"
+          icon="/favicon.svg"
+          alt="OvertureDB"
+          onselect={() => {
             if (coll?.catalog_entry_key)
               goToCatalogEntry({
                 media_type: "collection",
                 entry_key: coll.catalog_entry_key,
               });
-          }}>Open in OvertureDB</button
-        >{/if}
+          }}
+        />{/if}
     {/if}
-    {#if coll?.server_link}<a
-        class="btn btn-ghost btn-sm"
-        href={coll.server_link}
-        target="_blank"
-        rel="noreferrer">Open in {settingsState.media_server_name}</a
-      >{/if}
-    {#if coll?.title}
-      <IdBadge
-        href={youtubeSearchUrl(buildCollectionThemeSearchQuery(coll.title))}
-        title="Search YouTube"
-        icon={youtubeIcon}
-        alt="YouTube"
-      />
-    {/if}
+    {#if contributionUrl}<IdBadge
+        href={contributionUrl}
+        title="Contribute to OvertureDB"
+        icon={githubIcon}
+        alt="GitHub"
+      />{/if}
   {/snippet}
 
   {#snippet tabs()}
@@ -223,7 +252,7 @@
 
   {#snippet content()}
     {#if coll}
-      <CollectionMatchPanel collection={coll} />
+      {#if coll.media_type === "movie"}<CollectionMatchPanel collection={coll} />{/if}
       {#if coll.theme_unavailable}<p class="text-muted">{coll.theme_unavailable}</p>{/if}
     {/if}
     {#if coll && !coll.theme_unavailable}

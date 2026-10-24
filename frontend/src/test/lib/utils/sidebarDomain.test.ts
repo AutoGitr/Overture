@@ -3,6 +3,7 @@ import type { MediaItemRead } from "../../../generated/rest/types.gen";
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
   CATALOG_FILTER_KEYS,
+  catalogStatus,
   defaultCatalogFilters,
   filterCatalogEntries,
   filterSidebarCollections,
@@ -17,6 +18,24 @@ import {
   statusTone,
 } from "../../../lib/utils/sidebarDomain";
 import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
+
+describe("catalog badge status", () => {
+  it("uses the same selections for detail and sidebar tones", () => {
+    const entry = catalogRow({
+      media_type: "show",
+      poster_url: "https://images.test/poster.jpg",
+      background_url: "https://images.test/background.jpg",
+    });
+    expect(catalogStatus(entry).art).toBe("warning");
+    expect(catalogStatus({ ...entry, season_posters: 1 })).toEqual(
+      catalogStatus({
+        ...entry,
+        seasons: [{ season_num: 1, poster_url: "https://images.test/season.jpg" }],
+      }),
+    );
+    expect(catalogStatus({ ...entry, season_posters: 1 }).art).toBe("success");
+  });
+});
 
 function withFilters(patch: Partial<FilterState>): FilterState {
   return { ...defaultFilters(), ...patch };

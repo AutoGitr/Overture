@@ -1,5 +1,11 @@
 import { assertRoute, expect, logIn, startupLoader, test } from "./fixtures";
-import { appSettings, catalogDetail, collection, collectionDetail } from "../helpers/fixtures";
+import {
+  appSettings,
+  catalogDetail,
+  collection,
+  collectionDetail,
+  mediaItem,
+} from "../helpers/fixtures";
 
 test("default redirect opens shows when no movie libraries exist", async ({ page }) => {
   await page.route("**/api/library/libraries?*", (request) =>
@@ -283,4 +289,65 @@ test("catalog deep links restore movie, show, season and collection views on rel
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     await assertRoute(page, path);
   }
+});
+
+test("collection poster grids link to members and show collections have no matching controls", async ({
+  page,
+}) => {
+  const members = [
+    mediaItem({
+      id: 1,
+      title: "Alien",
+      year: 1979,
+      poster_url: "https://image.tmdb.org/t/p/original/alien.jpg",
+    }),
+    mediaItem({
+      id: 3,
+      title: "Aliens",
+      year: 1986,
+      poster_url: "https://image.tmdb.org/t/p/original/aliens.jpg",
+    }),
+  ];
+  const requestedPosters: string[] = [];
+  await page.route("https://image.tmdb.org/**", (route) => {
+    requestedPosters.push(route.request().url());
+    return route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="3"/>',
+    });
+  });
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ collections_supported: true, tmdb_configured: true }) }),
+  );
+  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections/1?*", (route) =>
+    route.fulfill({ json: collectionDetail({ id: 1, title: "Alien Collection", members }) }),
+  );
+  await page.route("**/api/collections/2?*", (route) =>
+    route.fulfill({
+      json: collectionDetail({ id: 2, title: "TV Collection", media_type: "show" }),
+    }),
+  );
+  await logIn(page, "/movies/collections/1-alien-collection");
+  await expect(page.getByRole("region", { name: "TMDB collection match" })).toBeVisible();
+  const first = page.getByRole("button", { name: "Alien (1979) In library", exact: true });
+  const second = page.getByRole("button", { name: "Aliens (1986) In library", exact: true });
+  await first.scrollIntoViewIfNeeded();
+  await expect(first).toBeVisible();
+  await expect(second).toBeVisible();
+  await expect
+    .poll(() => requestedPosters)
+    .toEqual(expect.arrayContaining(members.map((member) => member.poster_url)));
+  const firstBox = await first.boundingBox();
+  const secondBox = await second.boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(secondBox?.y).toBe(firstBox?.y);
+  expect(secondBox?.x).toBeGreaterThan(firstBox?.x ?? 0);
+  await first.click();
+  await assertRoute(page, "/movies/1-alien");
+
+  await page.goto("/shows/collections/2-tv-collection");
+  await expect(page.getByRole("heading", { name: "TV Collection", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "TMDB collection match" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Unmatch", exact: true })).toHaveCount(0);
 });

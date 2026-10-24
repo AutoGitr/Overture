@@ -66,10 +66,15 @@ class CollectionSync:
         """Refresh collections, then queue catalog themes for new matches."""
         if job.stop_requested():
             return
-        await self._enrichment.run()
+        await self._enrichment.run(job, library_ids=library_ids)
         provider = self._registry.collections
         if provider is None or job.stop_requested():
             return
+        await job.progress(
+            log=log_entry(
+                JobOutcome.STARTED, "Collections", "reading server collections"
+            )
+        )
         listed = await provider.list_collections()
         async with self._database.read_session() as session:
             items = await MediaItemRepository(session).facts_by_server_id()
@@ -311,9 +316,7 @@ class CollectionSync:
         apply_match(
             row,
             [member.tmdb_collection_id for member in members]
-            + [None] * max(0, len(collection.member_ids) - len(members))
-            if media_type is MediaType.MOVIE
-            else [],
+            + [None] * max(0, len(collection.member_ids) - len(members)),
         )
         repository.session.add(row)
         await repository.session.flush()

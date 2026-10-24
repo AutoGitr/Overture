@@ -9,7 +9,6 @@
     selectTmdbThemeMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
-    CatalogEntryDetail,
     MediaItemRead,
     ThemeSearchResult,
     TmdbItemPreview,
@@ -18,10 +17,14 @@
   import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
-  import type { CatalogDraft } from "../utils/catalogDraft";
+  import type { CatalogContext } from "../utils/catalogDraft";
   import { errorMessage } from "../utils/errors";
   import { beginAutoAdvance, handleThemeSelectionAdvance } from "../utils/autoAdvance";
-  import { buildThemeSearchQuery, mergeThemeResults } from "../utils/themeSearch";
+  import {
+    buildCollectionThemeSearchQuery,
+    buildThemeSearchQuery,
+    mergeThemeResults,
+  } from "../utils/themeSearch";
   import { openPersistedItem } from "../utils/tmdbItems";
   import DataStatus from "./DataStatus.svelte";
   import ThemeSearch from "./ThemeSearch.svelte";
@@ -32,7 +35,7 @@
     catalog = null,
   }: {
     item?: MediaItemRead | null;
-    catalog?: { detail: CatalogEntryDetail; draft: CatalogDraft } | null;
+    catalog?: CatalogContext | null;
     /** A TMDB title not yet stored: its first theme selection stores it. */
     preview?: TmdbItemPreview | null;
   } = $props();
@@ -208,10 +211,12 @@
     {#key subjectKey}
       <ThemeSearch
         label="Search themes"
-        initialQuery={buildThemeSearchQuery(
-          { title: subject.title, year: subject.year ?? null },
-          settingsState.current.theme_search_format,
-        )}
+        initialQuery={catalogEntry?.media_type === "collection"
+          ? buildCollectionThemeSearchQuery(subject.title)
+          : buildThemeSearchQuery(
+              { title: subject.title, year: subject.year ?? null },
+              settingsState.current.theme_search_format,
+            )}
         videoIds={candidateVideoIds}
         present={presentResults}
         currentYoutubeId={catalogEntry?.youtube_id_overturedb ?? item?.youtube_id ?? null}

@@ -17,7 +17,11 @@
     buildTmdbUrl,
     buildTvdbUrl,
   } from "../utils/externalLinks";
-  import { buildThemeSearchQuery, youtubeSearchUrl } from "../utils/themeSearch";
+  import {
+    buildCollectionThemeSearchQuery,
+    buildThemeSearchQuery,
+    youtubeSearchUrl,
+  } from "../utils/themeSearch";
   import IdBadge from "./IdBadge.svelte";
 
   /**
@@ -42,7 +46,11 @@
   let letterboxdUrl = $derived(buildLetterboxdUrl(subject));
   let youtubeUrl = $derived(
     subject && mode === "themes"
-      ? youtubeSearchUrl(buildThemeSearchQuery(subject, settingsState.current.theme_search_format))
+      ? youtubeSearchUrl(
+          subject.media_type === "collection"
+            ? buildCollectionThemeSearchQuery(subject.title)
+            : buildThemeSearchQuery(subject, settingsState.current.theme_search_format),
+        )
       : null,
   );
   let posterDbUrl = $derived(mode === "art" ? buildPosterDbUrl(subject) : null);

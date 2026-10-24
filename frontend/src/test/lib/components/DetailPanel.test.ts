@@ -298,6 +298,24 @@ describe("DetailPanel record actions", () => {
     expect(clearArt.mock.calls[0]?.[0]).not.toHaveProperty("query");
   });
 
+  it("forgets only the season being viewed", async () => {
+    clearArt.mockResolvedValue({ data: { status: "cleared" } });
+    renderWithQueryClient(DetailPanel, {
+      item: firefly,
+      view: { mode: "art", artSubTab: "seasons", drillSeasonNum: 2 },
+    });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Clear season poster" }));
+
+    await waitFor(() => expect(clearArt).toHaveBeenCalledOnce());
+    expect(clearArt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { item_id: 7, art_type: "season_poster" },
+        query: { season_id: 2 },
+      }),
+    );
+  });
+
   it("forgets one artwork type and leaves the update to the live connection", async () => {
     clearArt.mockResolvedValue({ data: { status: "cleared" } });
     renderWithQueryClient(DetailPanel, { item: alien });

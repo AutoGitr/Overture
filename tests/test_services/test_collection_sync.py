@@ -23,7 +23,7 @@ lazy from overture.domain import (
     ServerType,
 )
 lazy from overture.integrations.tmdb import TMDBClient, TmdbDetails
-lazy from overture.jobs.runner import run_managed_job
+lazy from overture.jobs.runner import ManagedJob, run_managed_job
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
@@ -92,7 +92,9 @@ class NoTmdb(TmdbCollectionEnrichment):
         pass
 
     @override
-    async def run(self) -> int:
+    async def run(
+        self, job: ManagedJob[SyncTally], *, library_ids: list[str] | None = None
+    ) -> int:
         return 0
 
 
@@ -348,8 +350,9 @@ async def test_enrichment_asks_tmdb_once_per_tmdb_id(
         app_config=app_config, database=database, tmdb_client=Tmdb()
     )
 
-    assert await enrichment.run() == 2
-    assert await enrichment.run() == 0
+    async with run_managed_job(JobProbe().context, SyncTally()) as job:
+        assert await enrichment.run(job) == 2
+        assert await enrichment.run(job) == 0
 
     assert sorted(asked) == [1, 2]
     async with database.read_session() as session:
@@ -366,7 +369,64 @@ async def test_enrichment_does_nothing_without_a_tmdb_key(
     enrichment = TmdbCollectionEnrichment(
         app_config=app_config, database=database, tmdb_client=unused(TMDBClient)
     )
-    assert await enrichment.run() == 0
+    async with run_managed_job(JobProbe().context, SyncTally()) as job:
+        assert await enrichment.run(job) == 0
+
+
+@pytest.mark.parametrize("library_ids", [None, ["2"]])
+async def test_collection_discovery_includes_ungrouped_movies_in_the_sync_scope(
+    library_ids: list[str] | None,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    app_config.TMDB_API_KEY = SecretStr("key")
+    asked: list[int] = []
+
+    class Tmdb(TMDBClient):
+        def __init__(self) -> None:
+            pass
+
+        @override
+        async def get_details(
+            self, media_type: MediaType, tmdb_id: int
+        ) -> TmdbDetails | None:
+            asked.append(tmdb_id)
+            return None
+
+    async with database.write_session() as session:
+        session.add_all(
+            MediaItem(
+                media_type=MediaType.MOVIE,
+                title=f"Movie {n}",
+                server_item_id=f"m{n}",
+                library_id=str(n),
+                tmdb_id=n,
+            )
+            for n in range(1, 4)
+        )
+    server = Server()
+    probe = JobProbe()
+    sync = CollectionSync(
+        provider_registry=NoopProviderRegistry(server, collections=False),
+        enrichment=TmdbCollectionEnrichment(
+            app_config=app_config, database=database, tmdb_client=Tmdb()
+        ),
+        downloads=make_bulk_downloads(
+            app_config=app_config, database=database, provider=server
+        ),
+        publisher=NullEventPublisher(),
+        app_config=app_config,
+        database=database,
+    )
+    async with run_managed_job(probe.context, SyncTally()) as job:
+        await sync.run(job, library_ids=library_ids)
+
+    assert sorted(asked) == ([2] if library_ids else [1, 2, 3])
+    assert any(
+        "checking TMDB memberships" in payload.get("log", {}).get("reason", "")
+        for _, payload in probe.events
+    )
 
 
 @pytest.mark.parametrize("unavailable_mount", [None, "missing"])

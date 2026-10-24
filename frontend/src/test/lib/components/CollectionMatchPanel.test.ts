@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getCollectionOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { queryClient } from "../../../lib/rest/queryClient";
@@ -7,7 +7,7 @@ import { navigate, route } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { notificationState } from "../../../lib/stores/notificationState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { appSettings, collectionDetail } from "../../helpers/fixtures";
+import { appSettings, collectionDetail, mediaItem } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 describe("collection matching and members", () => {
@@ -25,7 +25,16 @@ describe("collection matching and members", () => {
       server_type: "jellyfin",
       tmdb_collection_id: 10,
       theme_unavailable: "Set JELLYFIN_COLLECTIONS_PATH",
-      members: [{ id: 1, title: "A New Hope", media_type: "movie", tmdb_id: 11, year: 1977 }],
+      members: [
+        mediaItem({
+          id: 1,
+          title: "A New Hope",
+          media_type: "movie",
+          tmdb_id: 11,
+          year: 1977,
+          poster_hash: "member-poster",
+        }),
+      ],
       catalog_title: "Star Wars",
       catalog_entry_key: "tmdb-10",
       server_link: "https://server.test/collection",
@@ -69,9 +78,12 @@ describe("collection matching and members", () => {
     await navigate("/movies/collections/:collectionSlug", {
       params: { collectionSlug: "12-star-wars" },
     });
-    await fireEvent.click(
-      await screen.findByRole("button", { name: "A New Hope (1977) In library" }),
+    const member = await screen.findByRole("button", { name: "A New Hope (1977) In library" });
+    expect(within(member).getByRole("presentation")).toHaveAttribute(
+      "src",
+      "/api/library/items/1/local-image/poster?t=member-poster",
     );
+    await fireEvent.click(member);
     await waitFor(() => expect(route.pathname).toBe("/movies/1-a-new-hope"));
   });
   it("manually matches by ID without TMDB configured, unmatches, and resets to auto", async () => {
@@ -93,6 +105,24 @@ describe("collection matching and members", () => {
           .queryKey,
       ),
     ).toMatchObject({ tmdb_collection_id: 10, tmdb_match: "auto" });
+  });
+
+  it("does not offer TMDB matching for show collections", async () => {
+    await navigate("/shows/collections/:collectionSlug", {
+      params: { collectionSlug: "12-shows" },
+    });
+    mockFetchRoutes({
+      "/api/collections/12": collectionDetail({
+        id: 12,
+        title: "Shows",
+        media_type: "show",
+        theme_unavailable: "Read only",
+      }),
+    });
+    renderWithQueryClient(CollectionPage);
+    await screen.findByRole("heading", { name: "Shows" });
+    expect(screen.queryByRole("region", { name: "TMDB collection match" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Unmatch" })).toBeNull();
   });
   it("searches TMDB collections and ignores item search results", async () => {
     settingsState.load(appSettings({ tmdb_configured: true }));

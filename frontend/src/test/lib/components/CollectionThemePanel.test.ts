@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCollectionOptions,
+  getPublicDatasetStatusOptions,
   listCollectionsOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionDetail } from "../../../generated/rest/types.gen";
@@ -11,7 +12,7 @@ import { ApiError } from "../../../lib/rest/transport";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { navigate } from "../../../lib/router/routes";
 import { notificationState } from "../../../lib/stores/notificationState.svelte";
-import { collectionDetail as collection } from "../../helpers/fixtures";
+import { collectionDetail as collection, publicDatasetStatus } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -87,6 +88,31 @@ describe("CollectionThemePanel search", () => {
     searchYoutube.mockResolvedValue({ data: { results: [] } });
     setCollectionTheme.mockResolvedValue({ data: { job_id: "col-theme-job" } });
   });
+
+  it.each([true, false])(
+    "offers contribution only for a different selection with catalog enabled=%s",
+    async (enabled) => {
+      queryClient.setQueryData(
+        getPublicDatasetStatusOptions().queryKey,
+        publicDatasetStatus({ enabled }),
+      );
+      const coll = collection({
+        tmdb_collection_id: 10,
+        youtube_id: "newtheme123",
+        youtube_id_overturedb: "original123",
+        youtube_id_themerrdb: "themerr12345",
+      });
+      const { rerender } = renderWithQueryClient(CollectionThemePanel, { collection: coll });
+      const link = await screen.findByRole("link", { name: "GitHub" });
+      const issue = new URL(link.getAttribute("href") ?? "");
+      expect(issue.searchParams.get("template")).toBe("collection.yml");
+      expect(issue.searchParams.get("youtube_id")).toBe("newtheme123");
+      await rerender({ collection: { ...coll, youtube_id: coll.youtube_id_themerrdb } });
+      expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
+      await rerender({ collection: { ...coll, youtube_id: coll.youtube_id_overturedb } });
+      expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
+    },
+  );
 
   it("switches search button label to Select when input is a YouTube URL and selects directly on click", async () => {
     renderPanel();

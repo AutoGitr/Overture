@@ -2105,7 +2105,7 @@
           },
           "members": {
             "items": {
-              "$ref": "#/components/schemas/CollectionMember"
+              "$ref": "#/components/schemas/MediaItemRead"
             },
             "title": "Members",
             "type": "array"
@@ -2335,54 +2335,6 @@
           "tmdb_collection_id"
         ],
         "title": "CollectionMatchRequest",
-        "type": "object"
-      },
-      "CollectionMember": {
-        "additionalProperties": false,
-        "description": "A stored item a collection holds.",
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "media_type": {
-            "$ref": "#/components/schemas/MediaType"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "tmdb_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tmdb Id"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "year",
-          "media_type",
-          "tmdb_id"
-        ],
-        "title": "CollectionMember",
         "type": "object"
       },
       "CollectionRead": {

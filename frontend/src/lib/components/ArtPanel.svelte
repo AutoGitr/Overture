@@ -8,7 +8,8 @@
     TmdbSeasonPreview,
   } from "../../generated/rest/types.gen";
   import { createSeasonsQuery } from "../rest/queries";
-  import { goToSeason, goToSeasonsList } from "../router/routes";
+  import { goToCatalogEntry, goToSeason, goToSeasonsList } from "../router/routes";
+  import type { CatalogContext } from "../utils/catalogDraft";
   import type { ArtSlotTarget } from "../utils/tmdbItems";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import DataStatus from "./DataStatus.svelte";
@@ -18,28 +19,39 @@
     preview,
     artType,
     drillSeasonNum,
+    catalog = null,
   }: {
     item: MediaItemRead | null;
     preview: TmdbItemPreview | null;
     artType: ArtType;
     drillSeasonNum: number | null;
+    catalog?: CatalogContext | null;
   } = $props();
 
-  let subject = $derived(item ?? preview);
+  let subject = $derived(item ?? preview ?? catalog?.detail.draft ?? catalog?.detail.entry);
   const seasonsQuery = createSeasonsQuery(() => item);
   // A TMDB title's seasons come with it; a stored show's are loaded.
   let seasons = $derived<(SeasonRead | TmdbSeasonPreview)[]>(
-    item ? (seasonsQuery.data ?? []) : (preview?.seasons ?? []),
+    catalog ? catalog.seasons : item ? (seasonsQuery.data ?? []) : (preview?.seasons ?? []),
   );
   let seasonsLoaded = $derived(!item || seasonsQuery.isSuccess);
   let drillSeason = $derived(
-    seasons.find((season) => season.season_num === drillSeasonNum) ?? null,
+    seasons.find((season) => season.season_num === drillSeasonNum) ??
+      (catalog && drillSeasonNum !== null
+        ? { season_num: drillSeasonNum, title: `Season ${drillSeasonNum}` }
+        : null),
   );
   let seasonId = $derived(
     seasonsQuery.data?.find((season) => season.season_num === drillSeason?.season_num)?.id ?? null,
   );
 
   let slot = $derived.by((): ArtSlotTarget | null => {
+    if (catalog)
+      return {
+        kind: "catalog",
+        catalog,
+        seasonNum: drillSeasonNum,
+      };
     if (artType === "season_poster" && !drillSeason) return null;
     if (item) return { kind: "item", itemId: item.id, seasonId };
     if (!preview) return null;
@@ -53,12 +65,15 @@
   let slotKey = $derived(
     slot?.kind === "item"
       ? `${slot.itemId}-${artType}-${slot.seasonId ?? ""}`
-      : `tmdb-${slot?.mediaType}-${slot?.tmdbId}-${artType}-${slot?.seasonNum ?? ""}`,
+      : slot?.kind === "catalog"
+        ? `catalog-${slot.catalog.detail.entry.media_type}-${slot.catalog.detail.entry_key}-${artType}-${slot.seasonNum ?? ""}`
+        : `tmdb-${slot?.mediaType}-${slot?.tmdbId}-${artType}-${slot?.seasonNum ?? ""}`,
   );
 
   $effect(() => {
-    if (!subject || artType !== "season_poster") return;
-    if (seasonsLoaded && !drillSeason) goToSeasonsList(subject);
+    if (catalog || artType !== "season_poster") return;
+    const title = item ?? preview;
+    if (title && seasonsLoaded && !drillSeason) goToSeasonsList(title);
   });
 
   let breadcrumbs = $derived(
@@ -71,7 +86,9 @@
   );
 
   let seasonIndex = $derived(
-    drillSeason && artType === "season_poster" ? seasons.indexOf(drillSeason) : -1,
+    drillSeason && artType === "season_poster"
+      ? seasons.findIndex((season) => season.season_num === drillSeason.season_num)
+      : -1,
   );
 
   let canGoPrev = $derived(seasonIndex > 0);
@@ -79,7 +96,22 @@
 
   function goToOffset(offset: number) {
     const next = seasons[seasonIndex + offset];
-    if (subject && next) goToSeason(subject, next);
+    if (next) openSeasons(next);
+  }
+
+  function openSeasons(season: { season_num: number } | null = null) {
+    if (catalog)
+      goToCatalogEntry(
+        { media_type: catalog.detail.entry.media_type, entry_key: catalog.detail.entry_key },
+        { mode: "art", artSubTab: "seasons", drillSeasonNum: season?.season_num ?? null },
+      );
+    else {
+      const title = item ?? preview;
+      if (title) {
+        if (season) goToSeason(title, season);
+        else goToSeasonsList(title);
+      }
+    }
   }
 </script>
 
@@ -101,12 +133,7 @@
             <ChevronRight size={12} />
           {/if}
           {#if idx < breadcrumbs.length - 1}
-            <button
-              class="breadcrumb-link"
-              onclick={() => {
-                if (subject) goToSeasonsList(subject);
-              }}>{label}</button
-            >
+            <button class="breadcrumb-link" onclick={() => openSeasons()}>{label}</button>
           {:else}
             <span class="breadcrumb-current">{label}</span>
           {/if}

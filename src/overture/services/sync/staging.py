@@ -32,7 +32,11 @@ class StagedListing:
         self._connection: sqlite3.Connection | None = None
 
     async def __aenter__(self) -> Self:
-        await self.create()
+        try:
+            await self.create()
+        except BaseException:
+            await self.close()
+            raise
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -52,6 +56,7 @@ class StagedListing:
         connection = sqlite3.connect(
             self.path, isolation_level=None, check_same_thread=False
         )
+        self._connection = connection
         connection.execute("PRAGMA locking_mode=EXCLUSIVE")
         connection.execute("PRAGMA journal_mode=MEMORY")
         connection.execute("PRAGMA synchronous=OFF")
@@ -65,7 +70,6 @@ class StagedListing:
             "CREATE UNIQUE INDEX mapped_item ON items (mapped_id) "
             "WHERE mapped_id IS NOT NULL"
         )
-        self._connection = connection
 
     async def close(self) -> None:
         if self._connection is not None:

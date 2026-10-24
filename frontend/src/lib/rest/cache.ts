@@ -9,6 +9,7 @@ import {
 import type {
   BulkItemOperation,
   CatalogEntryDetail,
+  CatalogEntryRow,
   CollectionDetail,
   CollectionRead,
   MediaItemListResponse,
@@ -189,6 +190,25 @@ export function storeCatalogDetail(target: CatalogTarget, detail: CatalogEntryDe
         : current,
   );
   queryClient.setQueryData(getCatalogEntryOptions({ path: target }).queryKey, detail);
+  const { seasons, ...entry } = detail.draft ?? detail.entry;
+  queryClient.setQueriesData<CatalogEntryRow[]>(
+    { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "listCatalogEntries") },
+    (rows) =>
+      rows?.map((row) =>
+        row.entry_key === detail.entry_key && row.media_type === detail.entry.media_type
+          ? {
+              ...row,
+              ...entry,
+              has_draft: detail.draft !== null,
+              season_posters: seasons?.length ?? 0,
+              poster_preview_url:
+                row.poster_url === entry.poster_url ? row.poster_preview_url : null,
+              library_item_id: detail.library_item_id,
+              library_collection_id: detail.library_collection_id,
+            }
+          : row,
+      ),
+  );
   void queryClient.invalidateQueries({
     predicate: ({ queryKey }) =>
       isTaggedQuery(queryKey, "listCatalogEntries") || isTaggedQuery(queryKey, "getCatalogCounts"),

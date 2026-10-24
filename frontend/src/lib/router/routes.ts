@@ -79,10 +79,10 @@ const catalogEntrySubroutes = {
   "/themes": () => import("./pages/CatalogEntryPage.svelte"),
 };
 const catalogCollectionSubroutes = {
-  "/": () => import("./pages/CatalogCollectionPage.svelte"),
-  "/art": () => import("./pages/CatalogCollectionPage.svelte"),
-  "/art/:subtab": () => import("./pages/CatalogCollectionPage.svelte"),
-  "/themes": () => import("./pages/CatalogCollectionPage.svelte"),
+  "/": () => import("./pages/CatalogEntryPage.svelte"),
+  "/art": () => import("./pages/CatalogEntryPage.svelte"),
+  "/art/:subtab": () => import("./pages/CatalogEntryPage.svelte"),
+  "/themes": () => import("./pages/CatalogEntryPage.svelte"),
 };
 
 export const { navigate, route } = createRouter({

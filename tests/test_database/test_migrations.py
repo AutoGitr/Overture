@@ -280,6 +280,36 @@ def test_revision_2_moves_collection_choices_and_keeps_the_setting() -> None:
         engine.dispose()
 
 
+def test_revision_4_clears_only_show_collection_matches() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "3")
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (server_item_id, media_type, "
+                "server_type, title, child_count, tmdb_collection_id, tmdb_match, "
+                "monitored, youtube_id) VALUES "
+                "('movies', 'movie', 'plex', 'Movies', 2, 10, 'manual', 1, NULL), "
+                "('shows', 'show', 'plex', 'Shows', 2, 20, 'manual', 0, 'abcDEF12345')"
+            )
+            command.upgrade(config, "head")
+            expected = [
+                ("movies", 10, "manual", 1, None),
+                ("shows", None, "auto", 0, "abcDEF12345"),
+            ]
+            query = (
+                "SELECT server_item_id, tmdb_collection_id, tmdb_match, "
+                "monitored, youtube_id FROM media_collections ORDER BY server_item_id"
+            )
+            assert conn.exec_driver_sql(query).all() == expected
+            command.downgrade(config, "3")
+            assert conn.exec_driver_sql(query).all() == expected
+    finally:
+        engine.dispose()
+
+
 @pytest.mark.parametrize("revision", ["1", "2"])
 def test_collection_ids_upgrade_jobs_and_history_and_downgrade_without_loss(
     revision: str,
