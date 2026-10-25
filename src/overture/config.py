@@ -118,7 +118,7 @@ def _app_url(value: str) -> str:
     return origin
 
 
-def _media_server_url(value: str) -> str:
+def _service_url(value: str, setting_name: str) -> str:
     """Normalize a credential-free HTTP URL while preserving a safe base path."""
     candidate = value.strip()
     if not candidate:
@@ -127,20 +127,35 @@ def _media_server_url(value: str) -> str:
         parsed = urlsplit(candidate)
         _ = parsed.port
     except ValueError as exc:
-        raise ValueError("MEDIA_SERVER_URL is not a valid URL") from exc
+        raise ValueError(f"{setting_name} is not a valid URL") from exc
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("MEDIA_SERVER_URL must be an absolute HTTP or HTTPS URL")
+        raise ValueError(f"{setting_name} must be an absolute HTTP or HTTPS URL")
     if parsed.username or parsed.password:
-        raise ValueError("MEDIA_SERVER_URL must not contain credentials")
+        raise ValueError(f"{setting_name} must not contain credentials")
     if parsed.query or parsed.fragment:
-        raise ValueError("MEDIA_SERVER_URL must not contain a query or fragment")
+        raise ValueError(f"{setting_name} must not contain a query or fragment")
     if any(part in {".", ".."} for part in unquote(parsed.path).split("/")):
-        raise ValueError("MEDIA_SERVER_URL contains an unsafe path")
+        raise ValueError(f"{setting_name} contains an unsafe path")
     origin = normalise_origin(candidate)
     if not origin:
-        raise ValueError("MEDIA_SERVER_URL is not a valid URL")
+        raise ValueError(f"{setting_name} is not a valid URL")
     path = parsed.path.rstrip("/")
     return f"{origin}{path}"
+
+
+def _media_server_url(value: str) -> str:
+    """Normalize MEDIA_SERVER_URL."""
+    return _service_url(value, "MEDIA_SERVER_URL")
+
+
+def _radarr_url(value: str) -> str:
+    """Normalize RADARR_URL."""
+    return _service_url(value, "RADARR_URL")
+
+
+def _sonarr_url(value: str) -> str:
+    """Normalize SONARR_URL."""
+    return _service_url(value, "SONARR_URL")
 
 
 def _proxy_networks(value: object) -> object:
@@ -237,6 +252,12 @@ class Settings(RuntimeSettings):
 
     TMDB_API_KEY: SecretStr = SecretStr("")
     MDBLIST_API_KEY: SecretStr = SecretStr("")
+    RADARR_URL: Annotated[str, AfterValidator(_radarr_url)] = ""
+    RADARR_API_KEY: SecretStr = SecretStr("")
+    RADARR_VERIFY_TLS: bool = True
+    SONARR_URL: Annotated[str, AfterValidator(_sonarr_url)] = ""
+    SONARR_API_KEY: SecretStr = SecretStr("")
+    SONARR_VERIFY_TLS: bool = True
     # Jellyfin's collections metadata folder, mounted into Overture, where it
     # writes each collection's theme.mp3.
     JELLYFIN_COLLECTIONS_PATH: Path | None = None
@@ -326,7 +347,7 @@ class Settings(RuntimeSettings):
 
     @model_validator(mode="after")
     def validate_service_pairs(self) -> Self:
-        """Reject partially configured media-server credentials."""
+        """Reject partially configured service credentials."""
         missing = [
             name
             for name in ("MEDIA_SERVER_URL", "MEDIA_SERVER_API_KEY")
@@ -337,6 +358,10 @@ class Settings(RuntimeSettings):
                 "Media Server Configuration Error: missing required setting(s): "
                 + ", ".join(missing)
             )
+        if bool(self.RADARR_URL) != bool(self.RADARR_API_KEY.get_secret_value()):
+            raise ValueError("RADARR_URL and RADARR_API_KEY are required together")
+        if bool(self.SONARR_URL) != bool(self.SONARR_API_KEY.get_secret_value()):
+            raise ValueError("SONARR_URL and SONARR_API_KEY are required together")
         return self
 
     def is_trusted_proxy(self, value: str) -> bool:
@@ -409,6 +434,21 @@ class Settings(RuntimeSettings):
     def tmdb_configured(self) -> bool:
         """Return whether TMDB access is configured."""
         return bool(self.TMDB_API_KEY)
+
+    @property
+    def mdblist_configured(self) -> bool:
+        """Return whether MDBList access is configured."""
+        return bool(self.MDBLIST_API_KEY)
+
+    @property
+    def radarr_configured(self) -> bool:
+        """Return whether Radarr access is configured."""
+        return bool(self.RADARR_URL and self.RADARR_API_KEY)
+
+    @property
+    def sonarr_configured(self) -> bool:
+        """Return whether Sonarr access is configured."""
+        return bool(self.SONARR_URL and self.SONARR_API_KEY)
 
     @property
     def tzinfo(self) -> zoneinfo.ZoneInfo:

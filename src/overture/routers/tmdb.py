@@ -17,6 +17,7 @@ lazy from ..schemas.themes import SelectThemeRequest
 lazy from ..schemas.tmdb import (
     TmdbCollectionResponse,
     TmdbItemPreview,
+    TmdbPersonSearchResponse,
     TmdbSearchResponse,
 )
 lazy from .auth import require_auth
@@ -39,6 +40,15 @@ async def search_tmdb(
 ) -> TmdbSearchResponse:
     """Search TMDB by title; a number is also looked up as a TMDB ID."""
     return await tmdb_items.search(media_type, query)
+
+
+@router.get("/people/search")
+async def search_tmdb_people(
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+    tmdb_items: TmdbItemsDep,
+) -> TmdbPersonSearchResponse:
+    """Search TMDB people by name or numeric person ID."""
+    return await tmdb_items.search_people(query)
 
 
 @router.get("/collections/{collection_id}")

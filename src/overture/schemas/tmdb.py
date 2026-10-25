@@ -6,7 +6,7 @@ lazy from typing import Annotated, Literal
 lazy from pydantic import Field
 
 lazy from ..domain import ArtType, MediaType
-lazy from ..integrations.tmdb import TmdbCollection, TmdbDetails, TmdbTitle
+lazy from ..integrations.tmdb import TmdbCollection, TmdbDetails, TmdbPerson, TmdbTitle
 lazy from ..utils.art_urls import art_preview_url
 lazy from .base import StrictBaseModel
 
@@ -46,6 +46,22 @@ class TmdbSearchResponse(StrictBaseModel):
     """TMDB search results: movies or shows first, then collections."""
 
     results: list[TmdbSearchResult]
+
+
+class TmdbPersonResult(StrictBaseModel):
+    """A person TMDB found for a person collection builder."""
+
+    tmdb_id: int
+    name: str
+    known_for_department: str | None = None
+    profile_url: str | None = None
+    profile_preview_url: str | None = None
+
+
+class TmdbPersonSearchResponse(StrictBaseModel):
+    """TMDB person search results."""
+
+    results: list[TmdbPersonResult]
 
 
 class TmdbCollectionResponse(StrictBaseModel):
@@ -111,6 +127,17 @@ def tmdb_collection_result(title: TmdbTitle) -> TmdbCollectionResult:
         title=title.title,
         poster_url=title.poster_url,
         poster_preview_url=_preview(title.poster_url, ArtType.POSTER),
+    )
+
+
+def tmdb_person_result(person: TmdbPerson) -> TmdbPersonResult:
+    """Map a TMDB person to its search result."""
+    return TmdbPersonResult(
+        tmdb_id=person.tmdb_id,
+        name=person.name,
+        known_for_department=person.known_for_department,
+        profile_url=person.profile_url,
+        profile_preview_url=_preview(person.profile_url, ArtType.POSTER),
     )
 
 

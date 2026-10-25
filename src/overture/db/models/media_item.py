@@ -48,6 +48,20 @@ class MediaItemBase(SQLModel):
     director: str | None = None
     studio: str | None = None
     genres: list[str] = Field(default_factory=list, sa_type=JSON)
+    actors: list[str] = Field(default_factory=list, sa_type=JSON)
+    writers: list[str] = Field(default_factory=list, sa_type=JSON)
+    producers: list[str] = Field(default_factory=list, sa_type=JSON)
+    countries: list[str] = Field(default_factory=list, sa_type=JSON)
+    labels: list[str] = Field(default_factory=list, sa_type=JSON)
+    tags: list[str] = Field(default_factory=list, sa_type=JSON)
+    content_rating: str | None = None
+    resolution: str | None = None
+    audio_language: str | None = None
+    rating: float | None = None
+    duration_minutes: int | None = None
+    unplayed: bool | None = None
+    in_progress: bool | None = None
+    release_date: str | None = None
 
     last_synced_at: datetime | None = None
     last_matched_at: datetime | None = None

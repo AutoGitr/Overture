@@ -16,12 +16,17 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ...domain import (
     AspectRatioTolerance,
     AutoUnmonitor,
+    CollectionFiltering,
     CollectionMode,
+    CollectionOrder,
     SyncMode,
     TmdbLanguageFilter,
     Workflow,
 )
-lazy from ...utils.collection_formats import validate_sort_title_format
+lazy from ...utils.collection_formats import (
+    validate_sort_title_format,
+    validate_summary_format,
+)
 lazy from ..columns import enum_columns, enum_type
 
 #: The settings row is a singleton; pinning its key makes that a database rule
@@ -45,11 +50,24 @@ class AppSettingsBase(SQLModel):
     collection_mode_default: CollectionMode = Field(
         default=CollectionMode.DEFAULT, sa_type=enum_type(CollectionMode)
     )
+    collection_order_default: CollectionOrder = Field(
+        default=CollectionOrder.RELEASE, sa_type=enum_type(CollectionOrder)
+    )
+    collection_filtering_default: CollectionFiltering = Field(
+        default=CollectionFiltering.ADMIN, sa_type=enum_type(CollectionFiltering)
+    )
+    collection_visible_home: bool = False
+    collection_visible_shared: bool = False
+    collection_visible_library: bool = False
     collection_minimum_items: int = Field(default=1, ge=1, le=100)
     collection_delete_below_minimum: bool = False
     collection_auto_match_art: bool = False
     collection_auto_match_theme: bool = False
     collection_sort_title_format: str = Field(default="", max_length=200)
+    collection_summary_format: str = Field(default="", max_length=2000)
+    collection_delete_when_inactive: bool = False
+    collection_sync_interval_hours: int = Field(default=24, ge=0, le=8760)
+    collection_sync_enabled: bool = True
     auto_match_art: bool = False
     workflow: Workflow = Field(default=Workflow.ART, sa_type=enum_type(Workflow))
     theme_search_format: str = Field(
@@ -79,6 +97,12 @@ class AppSettingsBase(SQLModel):
     def valid_collection_sort_title_format(cls, value: str) -> str:
         """Use the same template syntax as generators and bulk operations."""
         return validate_sort_title_format(value)
+
+    @field_validator("collection_summary_format")
+    @classmethod
+    def valid_collection_summary_format(cls, value: str) -> str:
+        """Use the same summary template syntax across all policy tiers."""
+        return validate_summary_format(value)
 
     @classmethod
     def defaults(cls) -> dict[str, Any]:

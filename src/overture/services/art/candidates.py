@@ -228,16 +228,17 @@ class ArtCandidates:
         """Use the same source policy, ordering and error handling for collections."""
         if collection.tmdb_collection_id is None:
             return CandidateSources()
-        lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {}
+        lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {
+            ArtSource.OVERTUREDB: self._collection_catalog(collection, art_type)
+        }
         if self._app_config.tmdb_configured and collection.tmdb_collection_id:
             lookups[ArtSource.TMDB] = self._collection_tmdb(
                 collection.tmdb_collection_id, art_type, policy
             )
-        if not policy.disable_media_server_art:
+        if not policy.disable_media_server_art and collection.server_item_id:
             lookups[self._providers.provider.server_type] = self._server_art(
                 collection.server_item_id, art_type, policy
             )
-        lookups[ArtSource.OVERTUREDB] = self._collection_catalog(collection, art_type)
         return await self._resolve(collection.title, lookups)
 
     async def _collection_tmdb(

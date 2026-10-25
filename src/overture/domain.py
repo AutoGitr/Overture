@@ -51,6 +51,98 @@ class CollectionOrder(StrEnum):
     CUSTOM = "custom"
 
 
+class CollectionKind(StrEnum):
+    """How a collection's membership is maintained on the media server."""
+
+    REGULAR = "regular"
+    SMART = "smart"
+
+
+class CollectionFiltering(StrEnum):
+    """User-context filtering mode for Plex smart collections."""
+
+    ADMIN = "admin"
+    USER = "user"
+
+
+class SmartSortOrder(StrEnum):
+    """Sort order applied to a smart collection."""
+
+    RELEASE_DESC = "release.desc"
+    RELEASE_ASC = "release.asc"
+    TITLE_ASC = "title.asc"
+    TITLE_DESC = "title.desc"
+    ADDED_DESC = "added.desc"
+    ADDED_ASC = "added.asc"
+    RATING_DESC = "rating.desc"
+    CRITIC_RATING_DESC = "critic_rating.desc"
+    AUDIENCE_RATING_DESC = "audience_rating.desc"
+    PLAYS_DESC = "plays.desc"
+    DURATION_DESC = "duration.desc"
+    DURATION_ASC = "duration.asc"
+    RANDOM = "random"
+
+
+class BuilderType(StrEnum):
+    """Supported collection builder source types."""
+
+    TMDB_COLLECTION = "tmdb_collection"
+    TMDB_ITEM = "tmdb_item"
+    TMDB_PERSON = "tmdb_person"
+    MDBLIST = "mdblist"
+    RADARR_TAG = "radarr_tag"
+    SONARR_TAG = "sonarr_tag"
+    LIBRARY_FILTER = "library_filter"
+
+
+class TmdbPersonRole(StrEnum):
+    """Credit roles included by a TMDB person builder."""
+
+    ACTOR = "actor"
+    DIRECTOR = "director"
+    WRITER = "writer"
+    PRODUCER = "producer"
+    BIOGRAPHY = "biography"
+
+
+class FilterField(StrEnum):
+    """Library metadata field evaluated by a filter condition."""
+
+    TITLE = "title"
+    GENRE = "genre"
+    STUDIO = "studio"
+    ACTOR = "actor"
+    DIRECTOR = "director"
+    WRITER = "writer"
+    PRODUCER = "producer"
+    COUNTRY = "country"
+    LABEL = "label"
+    TAG = "tag"
+    CONTENT_RATING = "content_rating"
+    RESOLUTION = "resolution"
+    AUDIO_LANGUAGE = "audio_language"
+    YEAR = "year"
+    DECADE = "decade"
+    RATING = "rating"
+    DURATION_MINUTES = "duration_minutes"
+    UNPLAYED = "unplayed"
+    IN_PROGRESS = "in_progress"
+    ADDED_WITHIN_DAYS = "added_within_days"
+    RELEASED_WITHIN_DAYS = "released_within_days"
+
+
+class FilterOperator(StrEnum):
+    """Comparison operator for a filter condition."""
+
+    IS = "is"
+    IS_NOT = "is_not"
+    CONTAINS = "contains"
+    DOES_NOT_CONTAIN = "does_not_contain"
+    STARTS_WITH = "starts_with"
+    GTE = "gte"
+    LTE = "lte"
+
+
 class RuleSourceType(StrEnum):
     """Supported dynamic collection sources."""
 

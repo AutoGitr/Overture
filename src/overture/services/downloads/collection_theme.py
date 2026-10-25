@@ -94,6 +94,8 @@ async def store_collection_theme(
         row = await CollectionRepository(session).get(job.collection_id)
     if row is None or row.server_type is not provider.server_type:
         raise DownloadError("Collection no longer exists on the configured server")
+    if row.server_item_id is None:
+        raise DownloadError("The collection is inactive and has no server copy")
     server_theme_id = None
     facts = None
     if isinstance(provider.collections, UploadThemes):

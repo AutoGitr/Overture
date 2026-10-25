@@ -10,7 +10,9 @@ lazy from ..db.models.settings import AppSettingsBase
 lazy from ..domain import (
     AspectRatioTolerance,
     AutoUnmonitor,
+    CollectionFiltering,
     CollectionMode,
+    CollectionOrder,
     ServerType,
     SyncMode,
     TmdbLanguageFilter,
@@ -35,6 +37,9 @@ class AppSettingsRead(AppSettingsBase):
     updated_at: datetime | None = None
     media_server: ServerType | None = None
     tmdb_configured: bool = False
+    mdblist_configured: bool = False
+    radarr_configured: bool = False
+    sonarr_configured: bool = False
     #: The media server has collections Overture can manage.
     collections_supported: bool = False
     #: Why collection themes cannot be stored, when they cannot.
@@ -62,11 +67,20 @@ class AppSettingsUpdate(StrictBaseModel):
 
     collection_sync_mode: SyncMode | None = None
     collection_mode_default: CollectionMode | None = None
+    collection_order_default: CollectionOrder | None = None
+    collection_filtering_default: CollectionFiltering | None = None
+    collection_visible_home: bool | None = None
+    collection_visible_shared: bool | None = None
+    collection_visible_library: bool | None = None
     collection_minimum_items: int | None = None
     collection_delete_below_minimum: bool | None = None
     collection_auto_match_art: bool | None = None
     collection_auto_match_theme: bool | None = None
     collection_sort_title_format: str | None = None
+    collection_summary_format: str | None = None
+    collection_delete_when_inactive: bool | None = None
+    collection_sync_interval_hours: int | None = None
+    collection_sync_enabled: bool | None = None
     auto_match_art: bool | None = None
     workflow: Workflow | None = None
     theme_search_format: str | None = None

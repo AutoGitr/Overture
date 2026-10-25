@@ -7,6 +7,7 @@ lazy from typing import ClassVar, Literal, override
 lazy from ...config import Settings
 lazy from ...domain import (
     ArtType,
+    CollectionFiltering,
     CollectionMode,
     CollectionOrder,
     ImageSize,
@@ -182,6 +183,12 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         rating_key = str(metadata.get("ratingKey", ""))
         movie = media_type is MediaType.MOVIE
         directors = metadata.get("Director") or []
+        media_list = metadata.get("Media") or []
+        first_media = media_list[0] if media_list else None
+        raw_rating = metadata.get("rating") or metadata.get("audienceRating")
+        duration_ms = metadata.get("duration")
+        view_count = metadata.get("viewCount")
+        view_offset = metadata.get("viewOffset")
         return ServerItem(
             id=rating_key,
             title=metadata.get("title", ""),
@@ -204,6 +211,33 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             genres=tuple(
                 tag for g in metadata.get("Genre") or [] if (tag := g.get("tag"))
             ),
+            actors=tuple(
+                tag for r in metadata.get("Role") or [] if (tag := r.get("tag"))
+            ),
+            writers=tuple(
+                tag for w in metadata.get("Writer") or [] if (tag := w.get("tag"))
+            ),
+            producers=tuple(
+                tag for p in metadata.get("Producer") or [] if (tag := p.get("tag"))
+            ),
+            countries=tuple(
+                tag for c in metadata.get("Country") or [] if (tag := c.get("tag"))
+            ),
+            labels=tuple(
+                tag for lbl in metadata.get("Label") or [] if (tag := lbl.get("tag"))
+            ),
+            content_rating=metadata.get("contentRating") or None,
+            resolution=(first_media.get("videoResolution") if first_media else None)
+            or None,
+            rating=float(raw_rating) if isinstance(raw_rating, int | float) else None,
+            duration_minutes=int(duration_ms // 60000)
+            if isinstance(duration_ms, int) and duration_ms > 0
+            else None,
+            unplayed=(view_count == 0) if isinstance(view_count, int) else None,
+            in_progress=bool(view_offset and view_offset > 0)
+            if view_offset is not None or view_count is not None
+            else None,
+            release_date=metadata.get("originallyAvailableAt") or None,
             server_added_at=parse_utc_datetime(metadata.get("addedAt")),
             server_updated_at=parse_utc_datetime(metadata.get("updatedAt")),
         )
@@ -309,6 +343,8 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     ) -> ServerCollection:
         rating_key = str(item["ratingKey"])
         thumb, art, theme = item.get("thumb"), item.get("art"), item.get("theme")
+        raw_smart = item.get("smart")
+        is_smart = str(raw_smart) in {"1", "true", "True"}
         return ServerCollection(
             id=rating_key,
             title=item.get("title") or "",
@@ -319,6 +355,8 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             media_type=section.media_type,
             library_id=section.key,
             summary=item.get("summary") or None,
+            sort_title=item.get("titleSort") or None,
+            smart=is_smart,
             thumb_url=await self.client.asset_url(thumb) if thumb else None,
             art_url=await self.client.asset_url(art) if art else None,
             theme_id=str(theme) if theme else None,
@@ -350,6 +388,52 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         )
 
     @override
+    async def create_smart_collection(
+        self,
+        section_key: str,
+        title: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> ServerCollection:
+        item = await self.client.create_smart_collection(
+            section_key, title, media_type, filter_query
+        )
+        section = ServerSection(key=section_key, title="", media_type=media_type)
+        return await self._server_collection(
+            item, section, await self.client.get_machine_identifier()
+        )
+
+    @override
+    async def update_smart_collection_filter(
+        self,
+        server_collection_id: str,
+        section_key: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> None:
+        await self.client.update_smart_collection_filter(
+            server_collection_id, section_key, media_type, filter_query
+        )
+
+    @override
+    async def sync_item_labels(
+        self,
+        section_key: str,
+        media_type: MediaType,
+        label: str,
+        *,
+        add_ids: list[str],
+        remove_ids: list[str],
+    ) -> None:
+        await self.client.sync_item_labels(
+            section_key,
+            media_type,
+            label,
+            add_ids=add_ids,
+            remove_ids=remove_ids,
+        )
+
+    @override
     async def delete_collection(self, server_collection_id: str) -> None:
         await self.client.delete_collection(server_collection_id)
 
@@ -364,6 +448,9 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         mode: CollectionMode,
         order: CollectionOrder,
         visible_home: bool,
+        visible_shared: bool = False,
+        visible_library: bool = False,
+        filtering: CollectionFiltering | None = None,
     ) -> None:
         await self.client.update_collection_details(
             server_collection_id,
@@ -373,6 +460,9 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             mode=mode,
             order=order,
             visible_home=visible_home,
+            visible_shared=visible_shared,
+            visible_library=visible_library,
+            filtering=filtering,
         )
 
     @override

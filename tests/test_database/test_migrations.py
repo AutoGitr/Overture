@@ -11,6 +11,7 @@ lazy from sqlalchemy import (
     MetaData,
     Table,
     create_engine,
+    insert,
     inspect,
     text,
 )
@@ -21,6 +22,7 @@ lazy from overture.db import metadata
 lazy from overture.db import session as session_module
 lazy from overture.db.models.collection_rule import CollectionRule
 lazy from overture.db.models.media_collection import MediaCollection
+lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database, alembic_config, run_migrations
 lazy from overture.domain import MediaType, RuleSourceType, ServerType
@@ -131,10 +133,12 @@ async def test_failed_startup_migration_rolls_back_and_restores_foreign_keys(
         await database.initialize()
 
         def failing_migration(connection: Connection) -> tuple[str, str]:
-            connection.exec_driver_sql(
-                "INSERT INTO media_items "
-                "(id, media_type, title, monitored, theme_provenance_cleared, genres) "
-                "VALUES (1, 'show', 'Must roll back', 1, 0, '[]')"
+            connection.execute(
+                insert(MediaItem).values(
+                    **MediaItem(
+                        id=1, media_type=MediaType.SHOW, title="Must roll back"
+                    ).model_dump()
+                )
             )
             if invalid_reference:
                 connection.exec_driver_sql(
@@ -577,7 +581,7 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
             conn.execute(
                 settings.insert().values(
                     **AppSettings(collection_minimum_items=4).model_dump(
-                        exclude={"collection_sort_title_format"}
+                        include={column.name for column in settings.columns}
                     )
                 )
             )
@@ -590,7 +594,9 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
                         server_type=ServerType.PLEX,
                         title="Saga",
                         collection_group="Weekend",
-                    ).model_dump()
+                    ).model_dump(
+                        include={column.name for column in collections.columns}
+                    )
                 )
             )
             conn.execute(
@@ -600,7 +606,7 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
                         source_type=RuleSourceType.MDBLIST,
                         source_identifier="42",
                         minimum_items=2,
-                    ).model_dump(exclude={"auto_match_art", "auto_match_theme"})
+                    ).model_dump(include={column.name for column in rules.columns})
                 )
             )
             command.upgrade(config, "8bfb249cdcbd")
@@ -624,6 +630,14 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
                 ).scalar_one()
                 == 0
             )
+            command.upgrade(config, "head")
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT builders_json FROM collection_rules"
+                ).scalar_one()
+                == '[{"type": "mdblist", "identifiers": ["42"]}]'
+            )
+            command.downgrade(config, "8bfb249cdcbd")
             command.downgrade(config, "de75601826ea")
             assert "collection_groups" not in inspect(conn).get_table_names()
             assert (

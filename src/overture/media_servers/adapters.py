@@ -5,7 +5,12 @@ lazy from dataclasses import dataclass, field
 lazy from datetime import datetime
 lazy from pathlib import PurePath, PurePosixPath, PureWindowsPath
 
-lazy from ..domain import MediaType
+lazy from ..domain import (
+    CollectionFiltering,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+)
 lazy from ..jobs.progress_log import JobLogEntry
 
 MAX_SEASONS_PER_SHOW = 1000
@@ -89,6 +94,20 @@ class ServerItem:
     director_etag: str | None = None
     studio: str | None = None
     genres: tuple[str, ...] = ()
+    actors: tuple[str, ...] = ()
+    writers: tuple[str, ...] = ()
+    producers: tuple[str, ...] = ()
+    countries: tuple[str, ...] = ()
+    labels: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+    content_rating: str | None = None
+    resolution: str | None = None
+    audio_language: str | None = None
+    rating: float | None = None
+    duration_minutes: int | None = None
+    unplayed: bool | None = None
+    in_progress: bool | None = None
+    release_date: str | None = None
     server_added_at: datetime | None = None
     server_updated_at: datetime | None = None
     seasons: list[ServerSeason] = field(default_factory=list[ServerSeason])
@@ -110,6 +129,14 @@ class ServerCollection:
     media_type: MediaType | None = None
     library_id: str | None = None
     summary: str | None = None
+    sort_title: str | None = None
+    smart: bool = False
+    collection_mode: CollectionMode | None = None
+    order_type: CollectionOrder | None = None
+    collection_filtering: CollectionFiltering | None = None
+    visible_home: bool = False
+    visible_shared: bool = False
+    visible_library: bool = False
     thumb_url: str | None = None
     art_url: str | None = None
     theme_id: str | None = None

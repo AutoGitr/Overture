@@ -142,7 +142,7 @@ async def _run(
 async def _rows(database: Database) -> dict[str, MediaCollection]:
     async with database.read_session() as session:
         rows = (await session.exec(select(MediaCollection))).all()
-    return {row.server_item_id: row for row in rows}
+    return {row.server_item_id: row for row in rows if row.server_item_id}
 
 
 async def test_sync_stores_collections_with_members_and_their_tmdb_match(

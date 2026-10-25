@@ -42,6 +42,8 @@ class PlexPart(TypedDict, total=False):
 
 class PlexMedia(TypedDict, total=False):
     Part: list[PlexPart] | None
+    videoResolution: str | None
+    audioCodec: str | None
 
 
 class PlexLocation(TypedDict, total=False):
@@ -59,16 +61,33 @@ class PlexDirector(TypedDict, total=False):
 class PlexMetadata(TypedDict, total=False):
     ratingKey: Required[Identifier | int]
     title: str
+    titleSort: str | None
+    smart: bool | str | int | None
+    collectionMode: int | str | None
+    collectionSort: int | str | None
+    collectionFiltering: int | str | None
     year: int | None
     index: int
     thumb: str | None
     art: str | None
     theme: str | None
     summary: str | None
+    contentRating: str | None
+    rating: float | int | None
+    audienceRating: float | int | None
+    duration: int | None
+    viewCount: int | None
+    viewOffset: int | None
+    originallyAvailableAt: str | None
     childCount: int | None
     leafCount: int | None
     studio: str | None
     Genre: list[PlexDirector] | None
+    Role: list[PlexDirector] | None
+    Writer: list[PlexDirector] | None
+    Producer: list[PlexDirector] | None
+    Country: list[PlexDirector] | None
+    Label: list[PlexDirector] | None
     librarySectionID: str | int
     addedAt: int | None
     updatedAt: int | None
@@ -105,6 +124,11 @@ class MediaBrowserItem(TypedDict, total=False):
     People: list[MediaBrowserPerson] | None
     Studios: list[MediaBrowserStudio] | None
     Genres: list[str] | None
+    Tags: list[str] | None
+    ProductionLocations: list[str] | None
+    OfficialRating: str | None
+    CommunityRating: float | int | None
+    PremiereDate: str | None
     DateCreated: str | None
     DateLastMediaAdded: str | None
     DateModified: str | None

@@ -13,10 +13,9 @@ import {
 } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { appSettings, collectionDetail, mediaItem } from "../../helpers/fixtures";
+import { appSettings, collectionDetail, collectionRule, mediaItem } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
-import type { CollectionRuleRead } from "../../../generated/rest/types.gen";
 
 const members = [
   mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" }),
@@ -30,20 +29,7 @@ const detail = collectionDetail({
   members,
   child_count: 2,
 });
-const rule: CollectionRuleRead = {
-  source_type: "mdblist",
-  source_identifier: "user/list",
-  filters: { decade: null, studio: null, genre: null },
-  sync_mode: null,
-  minimum_items: null,
-  delete_below_minimum: null,
-  auto_match_art: null,
-  auto_match_theme: null,
-  sync_interval_hours: 24,
-  enabled: true,
-  last_error: null,
-  last_synced_at: null,
-};
+const rule = collectionRule();
 
 describe("collection management", () => {
   beforeEach(async () => {

@@ -6,6 +6,8 @@ lazy from typing import Any, ClassVar
 lazy from sqlmodel import Field, Index, Relationship, SQLModel, UniqueConstraint
 
 lazy from ...domain import (
+    CollectionFiltering,
+    CollectionKind,
     CollectionMode,
     CollectionOrder,
     MediaType,
@@ -20,16 +22,22 @@ class MediaCollectionBase(SQLModel):
     """Base model holding media-server collection fields."""
 
     # Provider IDs are scoped to their server type; public callers use id.
-    server_item_id: str = Field(nullable=False, index=True)
+    # Null when a dynamic or seasonal collection is currently withheld from the server.
+    server_item_id: str | None = Field(default=None, nullable=True, index=True)
 
     media_type: MediaType = Field(sa_type=enum_type(MediaType), index=True)
 
     # Which media server supplied this collection
     server_type: ServerType = Field(sa_type=enum_type(ServerType))
 
+    kind: CollectionKind = Field(
+        default=CollectionKind.REGULAR, sa_type=enum_type(CollectionKind)
+    )
     title: str = Field(default="", nullable=False)
     summary: str | None = None
     sort_title: str | None = None
+    sort_title_format: str | None = None
+    summary_format: str | None = None
     collection_group: str | None = Field(default=None, index=True)
     collection_mode: CollectionMode | None = Field(
         default=None, sa_type=enum_type(CollectionMode)
@@ -37,7 +45,15 @@ class MediaCollectionBase(SQLModel):
     order_type: CollectionOrder = Field(
         default=CollectionOrder.RELEASE, sa_type=enum_type(CollectionOrder)
     )
+    collection_filtering: CollectionFiltering | None = Field(
+        default=None, sa_type=enum_type(CollectionFiltering)
+    )
     visible_home: bool = False
+    visible_shared: bool = False
+    visible_library: bool = False
+    active_start_mmdd: str | None = None
+    active_end_mmdd: str | None = None
+    delete_when_inactive: bool | None = None
     library_id: str | None = Field(default=None, index=True)
     child_count: int = Field(default=0, nullable=False)
     # Server image URLs; only their hash leaves the backend, as a cache version.
@@ -51,6 +67,7 @@ class MediaCollectionBase(SQLModel):
     # TMDB collection ID the server itself names, such as a BoxSet's.
     provider_tmdb_id: int | None = None
     tmdb_collection_id: int | None = Field(default=None, index=True)
+    auto_generated_tmdb_id: int | None = Field(default=None, index=True)
 
     # Source metadata for the theme installed through Overture.
     youtube_id: str | None = None

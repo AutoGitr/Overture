@@ -193,13 +193,27 @@ def media_item_read_from_model(
         {
             **item.model_dump(
                 exclude={
+                    "actors",
+                    "audio_language",
+                    "content_rating",
+                    "countries",
                     "director_etag",
+                    "duration_minutes",
                     "genres",
+                    "in_progress",
+                    "labels",
+                    "producers",
+                    "rating",
+                    "release_date",
+                    "resolution",
+                    "tags",
                     "theme_file_mtime_ns",
                     "theme_file_size",
                     "theme_file_duration",
                     "theme_provenance_cleared",
                     "tmdb_collection_checked_id",
+                    "unplayed",
+                    "writers",
                 }
             ),
             **_art_slot_fields(poster, "poster"),

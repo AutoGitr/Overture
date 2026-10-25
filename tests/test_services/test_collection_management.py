@@ -14,16 +14,27 @@ lazy from overture.db.models.settings import AppSettings, get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
+    CollectionFiltering,
+    CollectionKind,
     CollectionMode,
     CollectionOrder,
     CollectionPreset,
+    FilterField,
+    FilterOperator,
     MediaType,
     RuleSourceType,
+    SmartSortOrder,
     SyncMode,
+    TmdbPersonRole,
 )
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
-lazy from overture.integrations.tmdb import TMDBClient, TmdbCollection, TmdbTitle
+lazy from overture.integrations.tmdb import (
+    TMDBClient,
+    TmdbCollection,
+    TmdbPerson,
+    TmdbTitle,
+)
 lazy from overture.media_servers.adapters import ServerCollection, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
@@ -38,6 +49,13 @@ lazy from overture.schemas.collections import (
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionRuleWrite,
+    DynamicTmdbGroupConfig,
+    FilterCondition,
+    FilterGroup,
+    LibraryFilterBuilder,
+    SmartCollectionConfig,
+    TmdbItemBuilder,
+    TmdbPersonBuilder,
 )
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.services.art.service import ArtService
@@ -60,6 +78,9 @@ class Provider(PlexProvider):
         self.members: dict[str, list[str]] = {}
         self.options: dict[str, tuple[str, CollectionMode, CollectionOrder, bool]] = {}
         self.sort_titles: dict[str, str | None] = {}
+        self.summaries: dict[str, str | None] = {}
+        self.smart_filters: dict[str, str] = {}
+        self.synced_labels: list[tuple[str, list[str], list[str]]] = []
         self.fail = False
 
     @override
@@ -85,6 +106,47 @@ class Provider(PlexProvider):
         )
 
     @override
+    async def create_smart_collection(
+        self, section_key: str, title: str, media_type: MediaType, filter_query: str
+    ) -> ServerCollection:
+        if self.fail:
+            raise MediaServerError("Smart create failed")
+        self.created.append(title)
+        identity = str(len(self.created))
+        self.smart_filters[identity] = filter_query
+        return ServerCollection(
+            identity,
+            title,
+            (),
+            "https://server.test/collection",
+            media_type=media_type,
+            library_id=section_key,
+            smart=True,
+        )
+
+    @override
+    async def update_smart_collection_filter(
+        self,
+        server_collection_id: str,
+        section_key: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> None:
+        self.smart_filters[server_collection_id] = filter_query
+
+    @override
+    async def sync_item_labels(
+        self,
+        section_key: str,
+        media_type: MediaType,
+        label: str,
+        *,
+        add_ids: list[str],
+        remove_ids: list[str],
+    ) -> None:
+        self.synced_labels.append((label, add_ids, remove_ids))
+
+    @override
     async def update_collection_details(
         self,
         server_collection_id: str,
@@ -95,9 +157,13 @@ class Provider(PlexProvider):
         mode: CollectionMode,
         order: CollectionOrder,
         visible_home: bool,
+        visible_shared: bool = False,
+        visible_library: bool = False,
+        filtering: CollectionFiltering | None = None,
     ) -> None:
         self.options[server_collection_id] = title, mode, order, visible_home
         self.sort_titles[server_collection_id] = sort_title
+        self.summaries[server_collection_id] = summary
 
     @override
     async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
@@ -160,12 +226,31 @@ class Tmdb(TMDBClient):
         return TmdbCollection(
             collection_id,
             "Saga",
-            None,
+            "Collection overview",
             (
                 TmdbTitle(12, "Second", 2005, "2005-01-01", None),
                 TmdbTitle(11, "First", 1995, "1995-01-01", None),
             ),
         )
+
+    @override
+    async def get_person(self, person_id: int) -> TmdbPerson | None:
+        if not self.found:
+            return None
+        return TmdbPerson(
+            person_id, "Director Name", "Directing", None, "Person biography"
+        )
+
+    @override
+    async def get_person_credits(
+        self,
+        person_id: int,
+        media_type: MediaType,
+        roles: frozenset[TmdbPersonRole] | set[TmdbPersonRole],
+    ) -> tuple[int, ...]:
+        if not self.found:
+            return ()
+        return (11, 13)
 
 
 class Art(ArtService):
@@ -930,3 +1015,133 @@ async def test_sort_title_templates_reject_attribute_access_and_unbounded_format
 ) -> None:
     with pytest.raises(ValueError, match="sort_title_format"):
         CollectionGroupPolicy(sort_title_format=template)
+
+
+async def test_composable_builders_and_person_biography_summary(
+    manager: Manager,
+) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Directors",
+        CollectionGroupPolicy(summary_format="Famous director. {summary}"),
+    )
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Director Spotlight",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Directors",
+            order_type=CollectionOrder.CUSTOM,
+            rule=CollectionRuleWrite(
+                builders=[
+                    TmdbPersonBuilder(
+                        person_id=500,
+                        roles=[TmdbPersonRole.DIRECTOR],
+                        use_biography=True,
+                    ),
+                    TmdbItemBuilder(tmdb_ids=[12]),
+                ]
+            ),
+        )
+    )
+    assert [m.tmdb_id for m in detail.members] == [11, 13, 12]
+    assert detail.summary == "Famous director. Person biography"
+    assert manager.provider.summaries["1"] == "Famous director. Person biography"
+
+
+async def test_smart_collection_with_managed_label_and_filters(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Requests",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            kind=CollectionKind.SMART,
+            collection_filtering=CollectionFiltering.USER,
+            rule=CollectionRuleWrite(
+                builders=[
+                    LibraryFilterBuilder(
+                        filter_group=FilterGroup(
+                            mode="all",
+                            conditions=[
+                                FilterCondition(
+                                    field=FilterField.YEAR,
+                                    operator=FilterOperator.GTE,
+                                    value=2000,
+                                )
+                            ],
+                        ),
+                    )
+                ],
+                managed_label="request",
+                smart_filter=SmartCollectionConfig(
+                    sort_by=SmartSortOrder.ADDED_DESC,
+                    filter_group=FilterGroup(
+                        mode="all",
+                        conditions=[
+                            FilterCondition(
+                                field=FilterField.LABEL,
+                                operator=FilterOperator.IS,
+                                value="request",
+                            ),
+                            FilterCondition(
+                                field=FilterField.UNPLAYED,
+                                operator=FilterOperator.IS,
+                                value=True,
+                            ),
+                        ],
+                    ),
+                ),
+            ),
+        )
+    )
+    assert detail.kind is CollectionKind.SMART
+    assert manager.provider.synced_labels == [("request", ["m1", "m2"], [])]
+    assert (
+        manager.provider.smart_filters["1"]
+        == "sort=addedAt:desc&push=1&label==request&unwatched=1&pop=1"
+    )
+
+
+async def test_seasonal_inactive_withholds_and_deletes_server_collection(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Holiday",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11, 12])],
+                delete_when_inactive=True,
+            ),
+        )
+    )
+    assert detail.withheld
+    assert manager.provider.created == []
+
+
+async def test_dynamic_tmdb_group_discovers_and_creates_franchises(
+    manager: Manager,
+) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Franchises",
+        CollectionGroupPolicy(
+            minimum_items=2,
+            sort_title_format="+1_{title}",
+            dynamic_tmdb=DynamicTmdbGroupConfig(
+                enabled=True,
+                library_id="movies",
+            ),
+        ),
+    )
+    await manager.service.sync_group(MediaType.MOVIE, "Franchises")
+    listed = await manager.service.list_collections(MediaType.MOVIE)
+    assert len(listed) == 1
+    assert listed[0].title == "Saga"
+    assert listed[0].collection_group == "Franchises"
+    assert listed[0].sort_title == "+1_Saga"

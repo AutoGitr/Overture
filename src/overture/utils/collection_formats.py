@@ -1,9 +1,14 @@
-"""Restricted sort-title templates shared by collection workflows."""
+"""Restricted templates and seasonal date windows shared by collection workflows."""
 
+lazy import re
+lazy from datetime import date
 lazy from string import Formatter
 lazy from typing import Annotated
 
 lazy from pydantic import AfterValidator, Field
+
+_SUMMARY_FIELDS = frozenset({"title", "group", "start_date", "end_date", "summary"})
+_DAYS_IN_MONTH = (0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
 
 def validate_sort_title_format(value: str) -> str:
@@ -25,3 +30,76 @@ def format_sort_title(template: str, *, title: str, group: str | None) -> str:
     if len(result) > 200:
         raise ValueError("The formatted sort title must be at most 200 characters")
     return result
+
+
+def validate_summary_format(value: str) -> str:
+    """Allow literal text and summary fields without attribute access or formats."""
+    for _, name, spec, conversion in Formatter().parse(value):
+        if name is not None and (name not in _SUMMARY_FIELDS or spec or conversion):
+            raise ValueError(
+                "Use only {title}, {group}, {start_date}, {end_date} and {summary} "
+                "in summary templates"
+            )
+    return value
+
+
+type SummaryFormat = Annotated[
+    str, Field(max_length=2000), AfterValidator(validate_summary_format)
+]
+
+
+def format_summary(
+    template: str,
+    *,
+    title: str,
+    group: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    summary: str | None = None,
+) -> str:
+    """Render a validated summary template."""
+    result = validate_summary_format(template).format(
+        title=title,
+        group=group or "",
+        start_date=start_date or "",
+        end_date=end_date or "",
+        summary=summary or "",
+    )
+    if len(result) > 2000:
+        raise ValueError("The formatted summary must be at most 2000 characters")
+    return result
+
+
+def validate_seasonal_mmdd(value: str) -> str:
+    """Validate an ``MM-DD`` calendar date."""
+    value = value.strip()
+    if not re.fullmatch(r"[0-9]{2}-[0-9]{2}", value):
+        raise ValueError("Use MM-DD format for seasonal dates (for example 12-01)")
+    month, day = int(value[:2]), int(value[3:])
+    if month < 1 or month > 12 or day < 1 or day > _DAYS_IN_MONTH[month]:
+        raise ValueError(f"{value!r} is not a valid calendar date")
+    return value
+
+
+type SeasonalDate = Annotated[
+    str, Field(min_length=5, max_length=5), AfterValidator(validate_seasonal_mmdd)
+]
+
+
+def is_within_active_window(
+    start_mmdd: str | None,
+    end_mmdd: str | None,
+    today: date,
+) -> bool:
+    """Return whether *today* falls within the inclusive ``[start, end]`` window.
+
+    Handles year-wrapping ranges such as ``12-31`` through ``01-04``.
+    """
+    if not start_mmdd or not end_mmdd:
+        return True
+    start = validate_seasonal_mmdd(start_mmdd)
+    end = validate_seasonal_mmdd(end_mmdd)
+    current = f"{today.month:02d}-{today.day:02d}"
+    if start <= end:
+        return start <= current <= end
+    return current >= start or current <= end

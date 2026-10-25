@@ -4,7 +4,14 @@ lazy from typing import Any, ClassVar
 
 lazy from sqlmodel import Field, SQLModel, UniqueConstraint
 
-lazy from ...domain import CollectionMode, MediaType, ServerType, SyncMode
+lazy from ...domain import (
+    CollectionFiltering,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+    ServerType,
+    SyncMode,
+)
 lazy from ..columns import enum_columns, enum_type
 
 
@@ -24,9 +31,25 @@ class CollectionGroup(SQLModel, table=True):
     collection_mode: CollectionMode | None = Field(
         default=None, sa_type=enum_type(CollectionMode)
     )
+    order_type: CollectionOrder | None = Field(
+        default=None, sa_type=enum_type(CollectionOrder)
+    )
+    collection_filtering: CollectionFiltering | None = Field(
+        default=None, sa_type=enum_type(CollectionFiltering)
+    )
+    visible_home: bool | None = None
+    visible_shared: bool | None = None
+    visible_library: bool | None = None
     sort_title_format: str | None = None
+    summary_format: str | None = None
+    active_start_mmdd: str | None = None
+    active_end_mmdd: str | None = None
+    delete_when_inactive: bool | None = None
     auto_match_art: bool | None = None
     auto_match_theme: bool | None = None
+    sync_interval_hours: int | None = None
+    sync_enabled: bool | None = None
+    dynamic_tmdb_json: str | None = None
 
 
 enum_columns(CollectionGroup)

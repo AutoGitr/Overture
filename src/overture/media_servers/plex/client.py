@@ -11,7 +11,13 @@ lazy import httpx2
 
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import ArtType, CollectionMode, CollectionOrder, MediaType
+lazy from ...domain import (
+    ArtType,
+    CollectionFiltering,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+)
 lazy from ...integrations.http import LazyClient, create_client
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label, public_art_url
@@ -603,6 +609,19 @@ class PlexClient(MediaServerHttpClient):
             raise MediaServerError("Plex returned no server identity")
         return f"server://{machine_id}/com.plexapp.plugins.library/library/metadata/{','.join(member_ids)}"
 
+    async def _smart_collection_uri(
+        self, section_key: str, media_type: MediaType, filter_query: str
+    ) -> str:
+        machine_id = await self.get_machine_identifier()
+        if not machine_id:
+            raise MediaServerError("Plex returned no server identity")
+        type_num = 1 if media_type is MediaType.MOVIE else 2
+        suffix = f"&{filter_query}" if filter_query else ""
+        return (
+            f"server://{machine_id}/com.plexapp.plugins.library"
+            f"/library/sections/{section_key}/all?type={type_num}{suffix}"
+        )
+
     async def create_collection(
         self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> PlexMetadata:
@@ -622,6 +641,85 @@ class PlexClient(MediaServerHttpClient):
         if len(rows) != 1:
             raise MediaServerError("Plex did not return the new collection")
         return rows[0]
+
+    async def create_smart_collection(
+        self,
+        section_key: str,
+        title: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> PlexMetadata:
+        """Create a smart collection backed by a Plex filter query."""
+        response = await self._request(
+            "POST",
+            "/library/collections",
+            params={
+                "sectionId": section_key,
+                "title": title,
+                "smart": "1",
+                "type": 1 if media_type is MediaType.MOVIE else 2,
+                "uri": await self._smart_collection_uri(
+                    section_key, media_type, filter_query
+                ),
+            },
+        )
+        rows = plex_items(self._json(response))
+        if len(rows) != 1:
+            raise MediaServerError("Plex did not return the new smart collection")
+        return rows[0]
+
+    async def update_smart_collection_filter(
+        self,
+        collection_id: str,
+        section_key: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> None:
+        """Update the filter URI of an existing smart collection."""
+        await self._request(
+            "PUT",
+            f"/library/collections/{collection_id}/items",
+            params={
+                "uri": await self._smart_collection_uri(
+                    section_key, media_type, filter_query
+                )
+            },
+        )
+
+    async def sync_item_labels(
+        self,
+        section_key: str,
+        media_type: MediaType,
+        label: str,
+        *,
+        add_ids: list[str],
+        remove_ids: list[str],
+    ) -> None:
+        """Apply batched label additions and removals in a Plex section."""
+        type_num = 1 if media_type is MediaType.MOVIE else 2
+        if add_ids:
+            await self._request(
+                "PUT",
+                f"/library/sections/{section_key}/all",
+                params={
+                    "type": type_num,
+                    "id": ",".join(add_ids),
+                    "includeExternalMedia": 1,
+                    "label[0].tag.tag": label,
+                    "label.locked": 1,
+                },
+            )
+        if remove_ids:
+            await self._request(
+                "PUT",
+                f"/library/sections/{section_key}/all",
+                params={
+                    "type": type_num,
+                    "id": ",".join(remove_ids),
+                    "includeExternalMedia": 1,
+                    "label[].tag.tag-": label,
+                },
+            )
 
     async def delete_collection(self, collection_id: str) -> None:
         """Delete only the collection metadata."""
@@ -656,7 +754,8 @@ class PlexClient(MediaServerHttpClient):
             await self._request(
                 "DELETE", f"/library/collections/{collection_id}/items/{item}"
             )
-        if order is CollectionOrder.CUSTOM:
+        server_order = [item for item in current_ids if item in wanted] + additions
+        if order is CollectionOrder.CUSTOM and server_order != member_ids:
             for position, item in enumerate(member_ids):
                 await self._request(
                     "PUT",
@@ -676,6 +775,9 @@ class PlexClient(MediaServerHttpClient):
         mode: CollectionMode,
         order: CollectionOrder,
         visible_home: bool,
+        visible_shared: bool = False,
+        visible_library: bool = False,
+        filtering: CollectionFiltering | None = None,
     ) -> None:
         """Edit collection metadata and its library visibility preferences."""
         await self._request(
@@ -690,18 +792,23 @@ class PlexClient(MediaServerHttpClient):
                 "titleSort.locked": 1,
             },
         )
+        prefs: dict[str, int] = {
+            "collectionMode": {
+                CollectionMode.DEFAULT: -1,
+                CollectionMode.HIDE: 0,
+                CollectionMode.HIDE_ITEMS: 1,
+                CollectionMode.SHOW_ITEMS: 2,
+            }[mode],
+            "collectionSort": list(CollectionOrder).index(order),
+        }
+        if filtering is not None:
+            prefs["collectionFiltering"] = (
+                1 if filtering is CollectionFiltering.ADMIN else 0
+            )
         await self._request(
             "PUT",
             f"/library/metadata/{collection_id}/prefs",
-            params={
-                "collectionMode": {
-                    CollectionMode.DEFAULT: -1,
-                    CollectionMode.HIDE: 0,
-                    CollectionMode.HIDE_ITEMS: 1,
-                    CollectionMode.SHOW_ITEMS: 2,
-                }[mode],
-                "collectionSort": list(CollectionOrder).index(order),
-            },
+            params=prefs,
         )
         metadata = await self.get_metadata(collection_id)
         section_id = metadata.get("librarySectionID") if metadata else None
@@ -722,10 +829,14 @@ class PlexClient(MediaServerHttpClient):
             ),
             None,
         )
-        params = {"promotedToOwnHome": int(visible_home)}
+        params: dict[str, int | str] = {"promotedToOwnHome": int(visible_home)}
+        if visible_shared or (hub and hub.get("promotedToSharedHome")):
+            params["promotedToSharedHome"] = int(visible_shared)
+        if visible_library or (hub and hub.get("promotedToRecommended")):
+            params["promotedToRecommended"] = int(visible_library)
         if hub:
             await self._request("PUT", f"{path}/{hub['identifier']}", params=params)
-        elif visible_home:
+        elif visible_home or visible_shared or visible_library:
             await self._request(
                 "POST", path, params={**params, "metadataItemId": collection_id}
             )

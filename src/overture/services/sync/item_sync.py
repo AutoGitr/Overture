@@ -199,6 +199,20 @@ class ItemReconciler:
             ),
             studio=server_item.studio,
             genres=list(server_item.genres),
+            actors=list(server_item.actors),
+            writers=list(server_item.writers),
+            producers=list(server_item.producers),
+            countries=list(server_item.countries),
+            labels=list(server_item.labels),
+            tags=list(server_item.tags),
+            content_rating=server_item.content_rating,
+            resolution=server_item.resolution,
+            audio_language=server_item.audio_language,
+            rating=server_item.rating,
+            duration_minutes=server_item.duration_minutes,
+            unplayed=server_item.unplayed,
+            in_progress=server_item.in_progress,
+            release_date=server_item.release_date,
             monitored=True,
             server_added_at=server_item.server_added_at,
             created_at=utc_now(),
@@ -282,6 +296,20 @@ class ItemReconciler:
             item.director_etag = None
         item.studio = server_item.studio
         item.genres = list(server_item.genres)
+        item.actors = list(server_item.actors)
+        item.writers = list(server_item.writers)
+        item.producers = list(server_item.producers)
+        item.countries = list(server_item.countries)
+        item.labels = list(server_item.labels)
+        item.tags = list(server_item.tags)
+        item.content_rating = server_item.content_rating
+        item.resolution = server_item.resolution
+        item.audio_language = server_item.audio_language
+        item.rating = server_item.rating
+        item.duration_minutes = server_item.duration_minutes
+        item.unplayed = server_item.unplayed
+        item.in_progress = server_item.in_progress
+        item.release_date = server_item.release_date
 
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
         item.tvdb_id = item.tvdb_id or guid_int(server_item.guids, "tvdb")

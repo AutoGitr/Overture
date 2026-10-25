@@ -13,6 +13,7 @@ lazy from ..domain import (
     CatalogMediaType,
     MediaType,
     TmdbLanguageFilter,
+    TmdbPersonRole,
 )
 lazy from ..schemas.art import ArtCandidate
 lazy from ..services.public_dataset.schema.contract import canonical_art_url
@@ -110,6 +111,17 @@ class TmdbCollection:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class TmdbPerson:
+    """One person (actor, director, writer, producer) as TMDB lists them."""
+
+    tmdb_id: int
+    name: str
+    known_for_department: str | None
+    profile_url: str | None
+    biography: str | None = None
+
+
 def _image_url(path: object) -> str | None:
     """Return the canonical original-size URL of a TMDB image path."""
     if not isinstance(path, str) or not path:
@@ -142,6 +154,52 @@ def _title(data: dict[str, Any]) -> TmdbTitle:
         year=_year(date),
         release_date=date,
         poster_url=_image_url(data.get("poster_path")),
+    )
+
+
+def _person(data: dict[str, Any]) -> TmdbPerson:
+    """Read a person from a TMDB search or details payload."""
+    dept = data.get("known_for_department")
+    bio = data.get("biography")
+    return TmdbPerson(
+        tmdb_id=int(data["id"]),
+        name=str(data.get("name") or ""),
+        known_for_department=str(dept) if isinstance(dept, str) and dept else None,
+        profile_url=_image_url(data.get("profile_path")),
+        biography=str(bio).strip() if isinstance(bio, str) and bio.strip() else None,
+    )
+
+
+def _is_self_credit(credit: dict[str, Any]) -> bool:
+    """Return whether a cast credit is a self/biography appearance."""
+    character = str(credit.get("character") or "").strip().casefold()
+    if not character:
+        return False
+    return character in {
+        "self",
+        "himself",
+        "herself",
+        "themselves",
+    } or character.startswith(("self ", "himself ", "herself "))
+
+
+def _matches_crew_role(
+    credit: dict[str, Any], roles: frozenset[TmdbPersonRole]
+) -> bool:
+    """Return whether a crew credit matches any requested person role."""
+    department = str(credit.get("department") or "").strip().casefold()
+    job = str(credit.get("job") or "").strip().casefold()
+    if TmdbPersonRole.DIRECTOR in roles and (
+        job == "director" or department == "directing"
+    ):
+        return True
+    if TmdbPersonRole.WRITER in roles and (
+        department == "writing"
+        or job in {"writer", "screenplay", "story", "characters", "teleplay"}
+    ):
+        return True
+    return TmdbPersonRole.PRODUCER in roles and (
+        department == "production" or job in {"producer", "executive producer"}
     )
 
 
@@ -316,6 +374,72 @@ class TMDBClient:
             title=title.title,
             poster_url=title.poster_url,
             parts=tuple(_title(part) for part in _records(data, "parts")),
+        )
+
+    async def get_person(self, person_id: int) -> TmdbPerson | None:
+        """Return a TMDB person by ID, or ``None``."""
+        data = await self._cache.get_or_compute(
+            ("person", person_id),
+            self._get_found,
+            f"/person/{person_id}",
+        )
+        return _person(data) if data else None
+
+    async def search_people(self, query: str) -> tuple[TmdbPerson, ...]:
+        """Return the first page of TMDB's person search."""
+        data = await self._cache.get_or_compute(
+            ("search", "person", query.casefold()),
+            self._get,
+            "/search/person",
+            params={"query": query, "include_adult": "false"},
+        )
+        return tuple(_person(result) for result in _records(data, "results"))
+
+    async def get_person_credits(
+        self,
+        person_id: int,
+        media_type: MediaType,
+        roles: frozenset[TmdbPersonRole] | set[TmdbPersonRole],
+    ) -> tuple[int, ...]:
+        """Return TMDB IDs of movies or shows credited to *person_id* in *roles*."""
+        role_set = frozenset(roles)
+        if not role_set:
+            return ()
+        endpoint = (
+            f"/person/{person_id}/movie_credits"
+            if media_type is MediaType.MOVIE
+            else f"/person/{person_id}/tv_credits"
+        )
+        data = await self._cache.get_or_compute(
+            ("person_credits", person_id, media_type.value),
+            self._get_found,
+            endpoint,
+        )
+        if not data:
+            return ()
+        matched: dict[int, tuple[str, int]] = {}
+        include_actor = TmdbPersonRole.ACTOR in role_set
+        include_bio = TmdbPersonRole.BIOGRAPHY in role_set
+        if include_actor or include_bio:
+            for credit in _records(data, "cast"):
+                is_self = _is_self_credit(credit)
+                if (include_actor and not is_self) or (include_bio and is_self):
+                    title = _title(credit)
+                    matched.setdefault(
+                        title.tmdb_id, (title.release_date or "9999", title.tmdb_id)
+                    )
+        if role_set.intersection(
+            {TmdbPersonRole.DIRECTOR, TmdbPersonRole.WRITER, TmdbPersonRole.PRODUCER}
+        ):
+            for credit in _records(data, "crew"):
+                if _matches_crew_role(credit, role_set):
+                    title = _title(credit)
+                    matched.setdefault(
+                        title.tmdb_id, (title.release_date or "9999", title.tmdb_id)
+                    )
+        return tuple(
+            tmdb_id
+            for tmdb_id, _sort_key in sorted(matched.items(), key=lambda kv: kv[1])
         )
 
     async def test_connection(self) -> bool:

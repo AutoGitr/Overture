@@ -1,8 +1,9 @@
 """Collection service operations."""
 
 lazy import logging
-lazy from datetime import timedelta
+lazy from datetime import datetime, timedelta
 lazy from pathlib import Path
+lazy from typing import Any
 
 lazy from fastapi import Response
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -21,6 +22,8 @@ lazy from ...db.session import Database
 lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import (
     ArtType,
+    CollectionFiltering,
+    CollectionKind,
     CollectionMode,
     CollectionOrder,
     CollectionPreset,
@@ -30,17 +33,21 @@ lazy from ...domain import (
     ServerType,
     SyncMode,
 )
+lazy from ...integrations.arr import ArrClient
 lazy from ...integrations.mdblist import MDBListClient
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...integrations.tmdb import TMDBClient
-lazy from ...media_servers.adapters import UploadThemes
+lazy from ...jobs.gate import LibraryGate
+lazy from ...media_servers.adapters import ServerCollection, UploadThemes
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.art import SaveArtRequest
 lazy from ...schemas.collections import (
+    ArrTagRead,
     BulkCollectionOperation,
     BulkCollectionOperationResult,
+    CollectionBuilder,
     CollectionCreate,
     CollectionDetail,
     CollectionFilter,
@@ -56,7 +63,18 @@ lazy from ...schemas.collections import (
     CollectionSyncResponse,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
+    DynamicTmdbGroupConfig,
+    LibraryFilterBuilder,
+    MdblistBuilder,
+    RadarrTagBuilder,
     SetCollectionThemeRequest,
+    SmartCollectionConfig,
+    SonarrTagBuilder,
+    TmdbCollectionBuilder,
+    TmdbItemBuilder,
+    TmdbPersonBuilder,
+    builders_adapter,
+    builders_from_legacy,
     collection_read,
     collection_theme_status_response,
 )
@@ -68,7 +86,11 @@ lazy from ...schemas.common import (
     StatusResponse,
 )
 lazy from ...utils.assets import THEME_FILENAME
-lazy from ...utils.collection_formats import format_sort_title
+lazy from ...utils.collection_formats import (
+    format_sort_title,
+    format_summary,
+    is_within_active_window,
+)
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.threads import owned_thread
@@ -87,7 +109,8 @@ lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from ..scheduler import SchedulerService
 lazy from ..themes.youtube_resolver import DownloadError
 lazy from . import COLLECTIONS_LOCK
-lazy from .policy import CollectionPolicy, resolve_policy
+lazy from .filters import compile_plex_smart_filter, evaluate_filter_group
+lazy from .policy import CollectionPolicy, RuleOrPolicy, resolve_policy
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +125,16 @@ async def catalog_collections(
     if not schedule.enabled or not tmdb_ids:
         return {}
     return await PublicDatasetRepository(session).collections_by_tmdb_id(tmdb_ids)
+
+
+def _strip_affixes(title: str, *, prefix: str, suffix: str) -> str:
+    """Strip configured prefix and suffix from a TMDB collection title."""
+    cleaned = title.strip()
+    if prefix and cleaned.casefold().startswith(prefix.casefold()):
+        cleaned = cleaned[len(prefix) :].strip()
+    if suffix and cleaned.casefold().endswith(suffix.casefold()):
+        cleaned = cleaned[: -len(suffix)].strip()
+    return cleaned or title.strip()
 
 
 class CollectionsService:
@@ -120,6 +153,9 @@ class CollectionsService:
         mdblist: MDBListClient,
         scheduler: SchedulerService,
         art: ArtService,
+        radarr: ArrClient | None = None,
+        sonarr: ArrClient | None = None,
+        library_gate: LibraryGate | None = None,
     ) -> None:
         self._database = database
         self._provider_registry = provider_registry
@@ -131,6 +167,19 @@ class CollectionsService:
         self._mdblist = mdblist
         self._scheduler = scheduler
         self._art = art
+        self._radarr = radarr or ArrClient(
+            kind="radarr",
+            base_url=app_config.RADARR_URL,
+            api_key=app_config.RADARR_API_KEY.get_secret_value(),
+            verify_tls=app_config.RADARR_VERIFY_TLS,
+        )
+        self._sonarr = sonarr or ArrClient(
+            kind="sonarr",
+            base_url=app_config.SONARR_URL,
+            api_key=app_config.SONARR_API_KEY.get_secret_value(),
+            verify_tls=app_config.SONARR_VERIFY_TLS,
+        )
+        self._library_gate = library_gate
 
     async def start(self) -> None:
         """Register a bounded poll; each rule owns its persisted due time."""
@@ -142,22 +191,65 @@ class CollectionsService:
         """Remove polling before the runtime closes its HTTP clients."""
         self._scheduler.remove_job("collection-rules")
         await self._mdblist.close()
+        await self._radarr.close()
+        await self._sonarr.close()
+
+    async def list_radarr_tags(self) -> list[ArrTagRead]:
+        """Return all tags configured in Radarr."""
+        return [
+            ArrTagRead(id=tag.id, label=tag.label)
+            for tag in await self._radarr.list_tags()
+        ]
+
+    async def list_sonarr_tags(self) -> list[ArrTagRead]:
+        """Return all tags configured in Sonarr."""
+        return [
+            ArrTagRead(id=tag.id, label=tag.label)
+            for tag in await self._sonarr.list_tags()
+        ]
 
     async def sync_due(self) -> None:
         """Run due rules independently so one failed source cannot stop others."""
         if self._provider_registry.collections is None:
             return
+        if (
+            self._library_gate is not None
+            and self._library_gate.blocker("downloads") is not None
+        ):
+            return
         async with self._database.read_session() as session:
-            rules = await CollectionRepository(session).rules()
+            rules = await CollectionRepository(session).rules(enabled_only=False)
+            groups = await CollectionRepository(session).group_policies(
+                self._provider().server_type, MediaType.MOVIE
+            )
+        for group in groups:
+            if group.dynamic_tmdb_json:
+                try:
+                    config = DynamicTmdbGroupConfig.model_validate_json(
+                        group.dynamic_tmdb_json
+                    )
+                    if config.enabled:
+                        await self._sync_dynamic_tmdb_group(group, config)
+                except Exception as exc:
+                    logger.warning(
+                        "Dynamic TMDB group %s failed: %s",
+                        group.name,
+                        sanitise_error(str(exc)),
+                    )
         now = utc_now()
         for rule in rules:
-            if rule.last_synced_at and now < rule.last_synced_at + timedelta(
-                hours=rule.sync_interval_hours
-            ):
-                continue
             async with self._database.read_session() as session:
                 row = await CollectionRepository(session).get(rule.collection_id)
-            if row is None or row.server_type is not self._provider().server_type:
+                if row is None or row.server_type is not self._provider().server_type:
+                    continue
+                policy = await self._policy(
+                    session, row.media_type, row.collection_group, rule
+                )
+            if not policy.sync_enabled or policy.sync_interval_hours <= 0:
+                continue
+            if rule.last_synced_at and now < rule.last_synced_at + timedelta(
+                hours=policy.sync_interval_hours
+            ):
                 continue
             try:
                 await self.sync_rule(rule.collection_id, row.media_type, scheduled=True)
@@ -169,12 +261,35 @@ class CollectionsService:
                 )
 
     @staticmethod
-    def _rule_read(rule: CollectionRule | None) -> CollectionRuleRead | None:
+    def _rule_builders(rule: CollectionRule) -> list[CollectionBuilder]:
+        if rule.builders_json:
+            return builders_adapter.validate_json(rule.builders_json)
+        filters = CollectionFilter.model_validate_json(rule.filter_json or "{}")
+        return builders_from_legacy(rule.source_type, rule.source_identifier, filters)
+
+    @staticmethod
+    def _rule_smart_filter(rule: CollectionRule) -> SmartCollectionConfig | None:
+        if not rule.smart_filter_json:
+            return None
+        return SmartCollectionConfig.model_validate_json(rule.smart_filter_json)
+
+    @classmethod
+    def _rule_read(cls, rule: CollectionRule | None) -> CollectionRuleRead | None:
         if rule is None:
             return None
         return CollectionRuleRead(
-            **rule.model_dump(exclude={"id", "collection_id", "filter_json"}),
+            **rule.model_dump(
+                exclude={
+                    "id",
+                    "collection_id",
+                    "filter_json",
+                    "builders_json",
+                    "smart_filter_json",
+                }
+            ),
             filters=CollectionFilter.model_validate_json(rule.filter_json or "{}"),
+            builders=cls._rule_builders(rule),
+            smart_filter=cls._rule_smart_filter(rule),
         )
 
     @staticmethod
@@ -220,14 +335,22 @@ class CollectionsService:
                 raise PublicServiceError(
                     422, "Custom member order is only supported by Plex"
                 )
-            if isinstance(options, CollectionOptions) and (
-                options.collection_mode not in {None, CollectionMode.DEFAULT}
-                or options.visible_home
-            ):
-                raise PublicServiceError(
-                    422,
-                    "Visibility and home promotion require Plex",
-                )
+            if isinstance(options, CollectionOptions):
+                if options.kind is CollectionKind.SMART:
+                    raise PublicServiceError(
+                        422, "Smart collections are only supported by Plex"
+                    )
+                if (
+                    options.collection_mode not in {None, CollectionMode.DEFAULT}
+                    or options.visible_home
+                    or options.visible_shared
+                    or options.visible_library
+                    or options.collection_filtering is not None
+                ):
+                    raise PublicServiceError(
+                        422,
+                        "Visibility and home promotion require Plex",
+                    )
 
     async def _library_items(
         self, library_id: str, media_type: MediaType
@@ -256,21 +379,58 @@ class CollectionsService:
         return [by_id[item_id] for item_id in ids]
 
     async def _push_options(
-        self, row: MediaCollection, options: CollectionOptions
+        self,
+        row: MediaCollection,
+        options: CollectionOptions,
+        rule: RuleOrPolicy = None,
     ) -> None:
+        if row.server_item_id is None:
+            return
         async with self._database.read_session() as session:
+            if rule is None and row.id is not None:
+                rule = await CollectionRepository(session).rule(row.id)
             policy = await self._policy(
-                session, row.media_type, options.collection_group
+                session, row.media_type, options.collection_group, rule
             )
         sort_title = self._inherited_sort_title(options, policy)
+        summary = self._inherited_summary(options, policy)
+        order = (
+            options.order_type
+            if "order_type" in options.model_fields_set
+            else policy.order_type
+        )
+        visible_home = (
+            options.visible_home
+            if "visible_home" in options.model_fields_set
+            else policy.visible_home
+        )
+        visible_shared = (
+            options.visible_shared
+            if "visible_shared" in options.model_fields_set
+            else policy.visible_shared
+        )
+        visible_library = (
+            options.visible_library
+            if "visible_library" in options.model_fields_set
+            else policy.visible_library
+        )
+        filtering = options.collection_filtering or (
+            policy.collection_filtering
+            if options.kind is CollectionKind.SMART
+            or policy.collection_filtering is not CollectionFiltering.ADMIN
+            else None
+        )
         await self._provider().update_collection_details(
             row.server_item_id,
             title=options.title,
-            summary=options.summary,
+            summary=summary,
             sort_title=sort_title,
             mode=options.collection_mode or policy.collection_mode,
-            order=options.order_type,
-            visible_home=options.visible_home,
+            order=order,
+            visible_home=visible_home,
+            visible_shared=visible_shared,
+            visible_library=visible_library,
+            filtering=filtering,
         )
 
     @staticmethod
@@ -289,64 +449,197 @@ class CollectionsService:
             raise PublicServiceError(422, str(exc)) from exc
 
     @staticmethod
-    def _formatted_options[T: CollectionOptions](body: T) -> T:
-        if body.sort_title_format is None:
-            return body
+    def _inherited_summary(
+        options: CollectionOptions, policy: CollectionPolicy
+    ) -> str | None:
+        template = options.summary_format or policy.summary_format
+        if not template:
+            return options.summary
+        if options.summary is not None and "{summary}" not in template:
+            return options.summary
         try:
-            return body.model_copy(
-                update={
-                    "sort_title": format_sort_title(
-                        body.sort_title_format,
-                        title=body.title,
-                        group=body.collection_group,
-                    )
-                }
+            return format_summary(
+                template,
+                title=options.title,
+                group=options.collection_group,
+                start_date=options.active_start_mmdd or policy.active_start_mmdd,
+                end_date=options.active_end_mmdd or policy.active_end_mmdd,
+                summary=options.summary,
             )
         except ValueError as exc:
             raise PublicServiceError(422, str(exc)) from exc
 
+    @staticmethod
+    def _formatted_options[T: CollectionOptions](body: T) -> T:
+        updates: dict[str, object] = {}
+        if body.sort_title_format is not None:
+            try:
+                updates["sort_title"] = format_sort_title(
+                    body.sort_title_format,
+                    title=body.title,
+                    group=body.collection_group,
+                )
+            except ValueError as exc:
+                raise PublicServiceError(422, str(exc)) from exc
+        if body.summary_format is not None and body.summary is None:
+            try:
+                updates["summary"] = format_summary(
+                    body.summary_format,
+                    title=body.title,
+                    group=body.collection_group,
+                    start_date=body.active_start_mmdd,
+                    end_date=body.active_end_mmdd,
+                )
+            except ValueError as exc:
+                raise PublicServiceError(422, str(exc)) from exc
+        return body.model_copy(update=updates) if updates else body
+
+    def _validate_rule_media_type(
+        self, media_type: MediaType, body: CollectionRuleWrite
+    ) -> None:
+        if body.source_type is RuleSourceType.TMDB:
+            self._require_movie_collections(media_type)
+        for builder in body.builders:
+            if isinstance(builder, TmdbCollectionBuilder | RadarrTagBuilder):
+                self._require_movie_collections(media_type)
+            elif isinstance(builder, SonarrTagBuilder):
+                self._require_show_collections(media_type)
+        if (
+            body.smart_filter is not None
+            and self._provider().server_type is not ServerType.PLEX
+        ):
+            raise PublicServiceError(
+                422, "Smart collections are only supported by Plex"
+            )
+
+    async def _prepare_create_rule(
+        self,
+        body: CollectionCreate,
+        policy: CollectionPolicy,
+        items: list[MediaItem],
+    ) -> tuple[CollectionCreate, CollectionRule | None, list[MediaItem]]:
+        if body.rule is None:
+            return body, None, items
+        self._validate_rule_media_type(body.media_type, body.rule)
+        temp_collection = MediaCollection(
+            media_type=body.media_type,
+            server_type=self._provider().server_type,
+            server_item_id="",
+            library_id=body.library_id,
+            kind=body.kind,
+        )
+        temp_rule = self._rule_row(0, body.rule)
+        for builder in self._rule_builders(temp_rule):
+            if (
+                isinstance(builder, TmdbPersonBuilder)
+                and builder.use_biography
+                and body.summary is None
+            ):
+                person = await self._tmdb.get_person(builder.person_id)
+                if person is not None and person.biography:
+                    body = body.model_copy(update={"summary": person.biography})
+        if temp_rule.builders_json:
+            source = await self._source_members(temp_collection, temp_rule)
+            source_ids = {item.id for item in source}
+            items = (
+                source + [item for item in items if item.id not in source_ids]
+                if policy.sync_mode is SyncMode.APPEND
+                else source
+            )
+        return body, temp_rule, items
+
+    async def _create_server_collection(
+        self,
+        body: CollectionCreate,
+        temp_rule: CollectionRule | None,
+        items: list[MediaItem],
+        library_items: list[MediaItem],
+        *,
+        withhold: bool,
+    ) -> tuple[ServerCollection | None, list[MediaItem]]:
+        if body.kind is CollectionKind.SMART and (
+            body.rule is None or body.rule.smart_filter is None
+        ):
+            raise PublicServiceError(
+                422, "Smart collections require a smart filter configuration"
+            )
+        if withhold:
+            return None, items
+        if (
+            body.kind is CollectionKind.SMART
+            and body.rule is not None
+            and body.rule.smart_filter is not None
+        ):
+            if (
+                body.rule.managed_label
+                and temp_rule is not None
+                and temp_rule.builders_json
+            ):
+                await self._sync_managed_label(
+                    body.library_id,
+                    body.media_type,
+                    body.rule.managed_label,
+                    items,
+                    library_items,
+                )
+            filter_query = compile_plex_smart_filter(
+                body.rule.smart_filter,
+                managed_label=body.rule.managed_label,
+            )
+            server = await self._provider().create_smart_collection(
+                body.library_id,
+                body.title,
+                body.media_type,
+                filter_query,
+            )
+            by_server_id = {
+                item.server_item_id: item
+                for item in library_items
+                if item.server_item_id
+            }
+            matched = [
+                by_server_id[sid] for sid in server.member_ids if sid in by_server_id
+            ]
+            return server, matched
+        server = await self._provider().create_collection(
+            body.library_id,
+            body.title,
+            body.media_type,
+            [item.server_item_id for item in items if item.server_item_id],
+        )
+        return server, items
+
     async def create(self, body: CollectionCreate) -> CollectionDetail:
         """Create on the server, then record its complete local membership."""
+        if body.rule is not None and body.rule.smart_filter is not None:
+            body = body.model_copy(update={"kind": CollectionKind.SMART})
         body = self._formatted_options(body)
         self._validate_options(body)
         if body.tmdb_collection_id is not None:
             self._require_movie_collections(body.media_type)
+        library_items = await self._library_items(body.library_id, body.media_type)
         items = self._sort_members(
-            self._resolve_members(
-                body.member_ids,
-                await self._library_items(body.library_id, body.media_type),
-            ),
+            self._resolve_members(body.member_ids, library_items),
             body.order_type,
         )
         async with self._database.read_session() as session:
             policy = await self._policy(
                 session, body.media_type, body.collection_group, body.rule
             )
-        if body.rule is not None:
-            if body.rule.source_type is RuleSourceType.TMDB:
-                self._require_movie_collections(body.media_type)
-            source = await self._source_members(
-                MediaCollection(
-                    media_type=body.media_type,
-                    server_type=self._provider().server_type,
-                    server_item_id="",
-                    library_id=body.library_id,
-                ),
-                self._rule_row(0, body.rule),
-            )
-            mode = policy.sync_mode
-            source_ids = {item.id for item in source}
-            items = (
-                source + [item for item in items if item.id not in source_ids]
-                if mode is SyncMode.APPEND
-                else source
-            )
-        self._inherited_sort_title(body, policy)
-        minimum = policy.minimum_items
-        if len(items) < minimum:
+        body, temp_rule, items = await self._prepare_create_rule(body, policy, items)
+        effective_sort_title = self._inherited_sort_title(body, policy)
+        effective_summary = self._inherited_summary(body, policy)
+        if body.kind is not CollectionKind.SMART and len(items) < policy.minimum_items:
             raise PublicServiceError(
                 422, "Collection has fewer members than the effective minimum"
             )
+        today = datetime.now(self._app_config.tzinfo).date()
+        active = is_within_active_window(
+            body.active_start_mmdd or policy.active_start_mmdd,
+            body.active_end_mmdd or policy.active_end_mmdd,
+            today,
+        )
+        withhold = not active and policy.delete_when_inactive
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
             async with self._database.read_session() as session:
                 existing = await CollectionRepository(session).list_listed(
@@ -361,36 +654,37 @@ class CollectionsService:
                 raise PublicServiceError(
                     409, "A collection with this title already exists in this library"
                 )
-            server = await self._provider().create_collection(
-                body.library_id,
-                body.title,
-                body.media_type,
-                [item.server_item_id for item in items if item.server_item_id],
+            server, items = await self._create_server_collection(
+                body, temp_rule, items, library_items, withhold=withhold
             )
             now = utc_now()
+            fields: dict[str, Any] = body.model_dump(
+                exclude={"media_type", "library_id", "member_ids", "rule"}
+            )
+            fields.update(sort_title=effective_sort_title, summary=effective_summary)
             row = MediaCollection(
-                server_item_id=server.id,
+                server_item_id=server.id if server is not None else None,
                 server_type=self._provider().server_type,
                 media_type=body.media_type,
                 library_id=body.library_id,
-                child_count=len(items),
-                server_link=server.server_link,
-                server_path=server.path,
+                child_count=(
+                    len(server.member_ids)
+                    if body.kind is CollectionKind.SMART and server is not None
+                    else len(items)
+                ),
+                server_link=server.server_link if server is not None else None,
+                server_path=server.path if server is not None else None,
                 last_synced_at=now,
                 created_at=now,
                 updated_at=now,
-                **body.model_dump(
-                    exclude={
-                        "media_type",
-                        "library_id",
-                        "member_ids",
-                        "rule",
-                        "sort_title_format",
-                    }
-                ),
+                **fields,
             )
-            await self._push_options(row, body)
-            if body.order_type is CollectionOrder.CUSTOM:
+            await self._push_options(row, body, body.rule)
+            if (
+                body.kind is CollectionKind.REGULAR
+                and body.order_type is CollectionOrder.CUSTOM
+                and row.server_item_id is not None
+            ):
                 await self._provider().set_collection_members(
                     row.server_item_id,
                     [item.server_item_id for item in items if item.server_item_id],
@@ -403,11 +697,24 @@ class CollectionsService:
                     row.id or 0, [item.id or 0 for item in items]
                 )
                 if body.rule is not None:
-                    if body.rule.source_type is RuleSourceType.TMDB:
-                        row.tmdb_collection_id = int(body.rule.source_identifier)
+                    primary_tmdb = self._primary_tmdb_collection_id(body.rule)
+                    if primary_tmdb is not None and row.tmdb_collection_id is None:
+                        row.tmdb_collection_id = primary_tmdb
                     session.add(self._rule_row(row.id or 0, body.rule))
         await self._publisher.broadcast("collections.changed")
         return await self.get_collection(row.id or 0, body.media_type)
+
+    @staticmethod
+    def _primary_tmdb_collection_id(body: CollectionRuleWrite) -> int | None:
+        if (
+            body.source_type is RuleSourceType.TMDB
+            and body.source_identifier.isdecimal()
+        ):
+            return int(body.source_identifier)
+        for builder in body.builders:
+            if isinstance(builder, TmdbCollectionBuilder):
+                return builder.collection_id
+        return None
 
     async def update(
         self, collection_id: int, media_type: MediaType, body: CollectionOptions
@@ -437,22 +744,40 @@ class CollectionsService:
         await self._push_options(row, body)
         async with self._database.write_session() as session:
             row = await self._require(session, row.id or 0, row.media_type)
-            fields = body.model_dump(exclude={"sort_title_format"})
+            fields = body.model_dump()
             if "tmdb_collection_id" not in body.model_fields_set:
                 fields.pop("tmdb_collection_id")
+            if "kind" not in body.model_fields_set:
+                fields.pop("kind")
             row.sqlmodel_update(fields)
             row.updated_at = utc_now()
             session.add(row)
 
     async def _delete_locked(self, row: MediaCollection) -> None:
         collection_id = row.id or 0
-        await self._provider().delete_collection(row.server_item_id)
+        if row.server_item_id is not None:
+            await self._provider().delete_collection(row.server_item_id)
         async with self._database.write_session() as session:
             await self._downloads.cancel_assets(
                 session, AssetScope(collection_id=collection_id)
             )
             await CollectionRepository(session).delete_ids([collection_id])
         await self._downloads.committed(session)
+        await self._publisher.broadcast("collections.changed")
+
+    async def _withhold_locked(self, row: MediaCollection) -> None:
+        """Remove a collection from the server while keeping its Overture rule."""
+        collection_id = row.id or 0
+        if row.server_item_id is not None:
+            await self._provider().delete_collection(row.server_item_id)
+        async with self._database.write_session() as session:
+            current = await CollectionRepository(session).get(collection_id)
+            if current is not None:
+                current.server_item_id = None
+                current.child_count = 0
+                current.updated_at = utc_now()
+                session.add(current)
+            await CollectionRepository(session).replace_members(collection_id, [])
         await self._publisher.broadcast("collections.changed")
 
     async def delete(self, collection_id: int, media_type: MediaType) -> StatusResponse:
@@ -475,12 +800,30 @@ class CollectionsService:
         append: bool = False,
     ) -> None:
         items = self._sort_members(items, order)
-        server_ids = await self._provider().set_collection_members(
-            row.server_item_id,
-            [item.server_item_id for item in items if item.server_item_id],
-            order=order,
-            append=append,
-        )
+        if row.server_item_id is None:
+            server = await self._provider().create_collection(
+                row.library_id or "",
+                row.title,
+                row.media_type,
+                [item.server_item_id for item in items if item.server_item_id],
+            )
+            row.server_item_id = server.id
+            row.server_link = server.server_link
+            row.server_path = server.path
+            server_ids = list(server.member_ids)
+            if order is CollectionOrder.CUSTOM:
+                server_ids = await self._provider().set_collection_members(
+                    row.server_item_id,
+                    [item.server_item_id for item in items if item.server_item_id],
+                    order=order,
+                )
+        else:
+            server_ids = await self._provider().set_collection_members(
+                row.server_item_id,
+                [item.server_item_id for item in items if item.server_item_id],
+                order=order,
+                append=append,
+            )
         async with self._database.read_session() as session:
             library_items = await CollectionRepository(session).library_items(
                 row.media_type, row.library_id or ""
@@ -494,6 +837,9 @@ class CollectionsService:
         async with self._database.write_session() as session:
             current = await self._require(session, row.id or 0, row.media_type)
             await CollectionRepository(session).replace_members(row.id or 0, stored_ids)
+            current.server_item_id = row.server_item_id
+            current.server_link = row.server_link
+            current.server_path = row.server_path
             current.child_count = len(server_ids)
             current.order_type = order
             current.updated_at = utc_now()
@@ -511,6 +857,10 @@ class CollectionsService:
         ):
             async with self._database.read_session() as session:
                 row = await self._require(session, collection_id, media_type)
+            if row.kind is CollectionKind.SMART:
+                raise PublicServiceError(
+                    422, "Smart collection members are controlled by their filter"
+                )
             items = self._resolve_members(
                 body.member_ids,
                 await self._library_items(row.library_id or "", media_type),
@@ -518,13 +868,17 @@ class CollectionsService:
             await self._push_options(
                 row,
                 CollectionOptions(
+                    kind=row.kind,
                     title=row.title,
                     summary=row.summary,
                     sort_title=row.sort_title,
                     collection_group=row.collection_group,
                     collection_mode=row.collection_mode,
                     order_type=body.order_type,
+                    collection_filtering=row.collection_filtering,
                     visible_home=row.visible_home,
+                    visible_shared=row.visible_shared,
+                    visible_library=row.visible_library,
                 ),
             )
             await self._set_members_locked(row, items, body.order_type)
@@ -532,10 +886,20 @@ class CollectionsService:
 
     @staticmethod
     def _rule_row(collection_id: int, body: CollectionRuleWrite) -> CollectionRule:
-        fields = body.model_dump(exclude={"filters"})
+        fields = body.model_dump(exclude={"filters", "builders", "smart_filter"})
         return CollectionRule(
             collection_id=collection_id,
             filter_json=body.filters.model_dump_json(),
+            builders_json=(
+                builders_adapter.dump_json(body.builders).decode()
+                if body.builders
+                else None
+            ),
+            smart_filter_json=(
+                body.smart_filter.model_dump_json()
+                if body.smart_filter is not None
+                else None
+            ),
             **fields,
         )
 
@@ -543,8 +907,7 @@ class CollectionsService:
         self, collection_id: int, media_type: MediaType, body: CollectionRuleWrite
     ) -> CollectionRuleRead:
         """Persist validated rule settings; polling sees them after commit."""
-        if body.source_type is RuleSourceType.TMDB:
-            self._require_movie_collections(media_type)
+        self._validate_rule_media_type(media_type, body)
         async with (
             self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
             self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
@@ -554,6 +917,7 @@ class CollectionsService:
                 existing = await CollectionRepository(session).rule(collection_id)
             use_source_order = (
                 existing is None
+                and body.order_type is None
                 and body.source_type is RuleSourceType.MDBLIST
                 and row.server_type is ServerType.PLEX
             )
@@ -561,33 +925,45 @@ class CollectionsService:
                 await self._push_options(
                     row,
                     CollectionOptions(
+                        kind=row.kind,
                         title=row.title,
                         summary=row.summary,
                         sort_title=row.sort_title,
                         collection_group=row.collection_group,
                         collection_mode=row.collection_mode,
                         order_type=CollectionOrder.CUSTOM,
+                        collection_filtering=row.collection_filtering,
                         visible_home=row.visible_home,
+                        visible_shared=row.visible_shared,
+                        visible_library=row.visible_library,
                     ),
+                    body,
                 )
             async with self._database.write_session() as session:
                 await self._require(session, collection_id, media_type)
                 rule = await CollectionRepository(session).rule(collection_id)
-                fields = body.model_dump(exclude={"filters"})
-                fields["filter_json"] = body.filters.model_dump_json()
+                new_row = self._rule_row(collection_id, body)
+                fields = new_row.model_dump(exclude={"id", "collection_id"})
                 if rule is None:
-                    rule = CollectionRule(collection_id=collection_id, **fields)
+                    rule = new_row
                 else:
                     rule.sqlmodel_update(fields)
                 rule.last_error = None
                 rule.last_synced_at = None
                 session.add(rule)
-                if use_source_order or body.source_type is RuleSourceType.TMDB:
+                primary_tmdb = self._primary_tmdb_collection_id(body)
+                if (
+                    use_source_order
+                    or primary_tmdb is not None
+                    or body.smart_filter is not None
+                ):
                     row = await self._require(session, collection_id, media_type)
                     if use_source_order:
                         row.order_type = CollectionOrder.CUSTOM
-                    if body.source_type is RuleSourceType.TMDB:
-                        row.tmdb_collection_id = int(body.source_identifier)
+                    if primary_tmdb is not None:
+                        row.tmdb_collection_id = primary_tmdb
+                    if body.smart_filter is not None:
+                        row.kind = CollectionKind.SMART
                     session.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
@@ -615,21 +991,50 @@ class CollectionsService:
         )
         return StatusResponse(status=Status.DELETED)
 
-    async def _source_members(
-        self, row: MediaCollection, rule: CollectionRule
+    async def _resolve_builder(
+        self,
+        row: MediaCollection,
+        builder: CollectionBuilder,
+        items: list[MediaItem],
     ) -> list[MediaItem]:
-        async with self._database.read_session() as session:
-            items = await CollectionRepository(session).library_items(
-                row.media_type, row.library_id or ""
+        if isinstance(builder, LibraryFilterBuilder):
+            return evaluate_filter_group(items, builder.filter_group)
+        if isinstance(builder, RadarrTagBuilder):
+            matches = await self._radarr.external_ids_for_tags(builder.tags)
+            tmdb_set = set(matches.tmdb_ids)
+            imdb_set = set(matches.imdb_ids)
+            return [
+                item
+                for item in items
+                if (item.tmdb_id is not None and item.tmdb_id in tmdb_set)
+                or (item.imdb_id is not None and item.imdb_id in imdb_set)
+            ]
+        if isinstance(builder, SonarrTagBuilder):
+            matches = await self._sonarr.external_ids_for_tags(builder.tags)
+            tmdb_set = set(matches.tmdb_ids)
+            tvdb_set = set(matches.tvdb_ids)
+            imdb_set = set(matches.imdb_ids)
+            return [
+                item
+                for item in items
+                if (item.tmdb_id is not None and item.tmdb_id in tmdb_set)
+                or (item.tvdb_id is not None and item.tvdb_id in tvdb_set)
+                or (item.imdb_id is not None and item.imdb_id in imdb_set)
+            ]
+        if isinstance(builder, MdblistBuilder):
+            ids: list[int] = []
+            for identifier in builder.identifiers:
+                ids.extend(await self._mdblist.tmdb_ids(identifier, row.media_type))
+        elif isinstance(builder, TmdbItemBuilder):
+            ids = list(builder.tmdb_ids)
+        elif isinstance(builder, TmdbPersonBuilder):
+            ids = list(
+                await self._tmdb.get_person_credits(
+                    builder.person_id, row.media_type, set(builder.roles)
+                )
             )
-        if rule.source_type is RuleSourceType.FILTER:
-            return self._filter_items(
-                items, CollectionFilter.model_validate_json(rule.filter_json or "{}")
-            )
-        if rule.source_type is RuleSourceType.MDBLIST:
-            ids = await self._mdblist.tmdb_ids(rule.source_identifier, row.media_type)
         else:
-            franchise = await self._tmdb.get_collection(int(rule.source_identifier))
+            franchise = await self._tmdb.get_collection(builder.collection_id)
             if franchise is None:
                 raise PublicServiceError(
                     404, "TMDB collection not found; membership was kept"
@@ -641,10 +1046,247 @@ class CollectionsService:
                     key=lambda part: (part.release_date or "", part.tmdb_id),
                 )
             ]
-        rank = {tmdb_id: index for index, tmdb_id in enumerate(ids)}
+        rank: dict[int, int] = {}
+        for index, tmdb_id in enumerate(ids):
+            rank.setdefault(tmdb_id, index)
         return sorted(
             [item for item in items if item.tmdb_id in rank],
             key=lambda item: (rank[item.tmdb_id or 0], item.id or 0),
+        )
+
+    async def _source_members(
+        self, row: MediaCollection, rule: CollectionRule
+    ) -> list[MediaItem]:
+        async with self._database.read_session() as session:
+            items = await CollectionRepository(session).library_items(
+                row.media_type, row.library_id or ""
+            )
+        builders = self._rule_builders(rule)
+        if not builders:
+            return []
+        combined: dict[int, MediaItem] = {}
+        for builder in builders:
+            for item in await self._resolve_builder(row, builder, items):
+                if item.id is not None:
+                    combined.setdefault(item.id, item)
+        return list(combined.values())
+
+    async def _sync_managed_label(
+        self,
+        library_id: str,
+        media_type: MediaType,
+        label: str,
+        wanted: list[MediaItem],
+        library_items: list[MediaItem],
+    ) -> None:
+        wanted_server_ids = {
+            item.server_item_id for item in wanted if item.server_item_id
+        }
+        currently_labeled = {
+            item.server_item_id
+            for item in library_items
+            if item.server_item_id
+            and any(existing.casefold() == label.casefold() for existing in item.labels)
+        }
+        add_ids = sorted(wanted_server_ids - currently_labeled)
+        remove_ids = sorted(currently_labeled - wanted_server_ids)
+        if not add_ids and not remove_ids:
+            return
+        await self._provider().sync_item_labels(
+            library_id,
+            media_type,
+            label,
+            add_ids=add_ids,
+            remove_ids=remove_ids,
+        )
+        async with self._database.write_session() as session:
+            for item in await CollectionRepository(session).library_items(
+                media_type, library_id
+            ):
+                if item.server_item_id in add_ids:
+                    if not any(
+                        existing.casefold() == label.casefold()
+                        for existing in item.labels
+                    ):
+                        item.labels = [*item.labels, label]
+                        session.add(item)
+                elif item.server_item_id in remove_ids:
+                    item.labels = [
+                        existing
+                        for existing in item.labels
+                        if existing.casefold() != label.casefold()
+                    ]
+                    session.add(item)
+
+    async def _sync_smart_rule_locked(
+        self,
+        row: MediaCollection,
+        rule: CollectionRule,
+        current: list[MediaItem],
+        library_items: list[MediaItem],
+    ) -> CollectionSyncResponse:
+        collection_id = row.id or 0
+        media_type = row.media_type
+        smart_filter = self._rule_smart_filter(rule)
+        if smart_filter is None:
+            raise PublicServiceError(
+                422, "Smart collection has no filter configuration"
+            )
+        if rule.builders_json and rule.managed_label:
+            wanted_labeled = await self._source_members(row, rule)
+            await self._sync_managed_label(
+                row.library_id or "",
+                media_type,
+                rule.managed_label,
+                wanted_labeled,
+                library_items,
+            )
+        filter_query = compile_plex_smart_filter(
+            smart_filter, managed_label=rule.managed_label
+        )
+        if row.server_item_id is None:
+            server = await self._provider().create_smart_collection(
+                row.library_id or "",
+                row.title,
+                media_type,
+                filter_query,
+            )
+            row.server_item_id = server.id
+            row.server_link = server.server_link
+        else:
+            await self._provider().update_smart_collection_filter(
+                row.server_item_id,
+                row.library_id or "",
+                media_type,
+                filter_query,
+            )
+        await self._push_options(
+            row,
+            CollectionOptions(
+                kind=CollectionKind.SMART,
+                title=row.title,
+                summary=row.summary,
+                sort_title=row.sort_title,
+                collection_group=row.collection_group,
+                collection_mode=row.collection_mode,
+                order_type=row.order_type,
+                collection_filtering=row.collection_filtering,
+                visible_home=row.visible_home,
+                visible_shared=row.visible_shared,
+                visible_library=row.visible_library,
+            ),
+            rule,
+        )
+        remote_ids = await self._provider().get_collection_member_ids(
+            row.server_item_id
+        )
+        by_server_id = {
+            item.server_item_id: item for item in library_items if item.server_item_id
+        }
+        stored_ids = [
+            by_server_id[sid].id or 0 for sid in remote_ids if sid in by_server_id
+        ]
+        old_ids = {item.id or 0 for item in current}
+        new_ids = set(stored_ids)
+        async with self._database.write_session() as session:
+            saved_row = await self._require(session, collection_id, media_type)
+            await CollectionRepository(session).replace_members(
+                collection_id, stored_ids
+            )
+            saved_row.server_item_id = row.server_item_id
+            saved_row.server_link = row.server_link
+            saved_row.kind = CollectionKind.SMART
+            saved_row.child_count = len(remote_ids)
+            saved_row.updated_at = utc_now()
+            session.add(saved_row)
+        return CollectionSyncResponse(
+            added=len(new_ids - old_ids),
+            removed=len(old_ids - new_ids),
+        )
+
+    async def _sync_regular_rule_locked(
+        self,
+        row: MediaCollection,
+        rule: CollectionRule,
+        policy: CollectionPolicy,
+        current: list[MediaItem],
+        library_items: list[MediaItem],
+    ) -> CollectionSyncResponse:
+        wanted = await self._source_members(row, rule)
+        if rule.managed_label and self._provider().server_type is ServerType.PLEX:
+            await self._sync_managed_label(
+                row.library_id or "",
+                row.media_type,
+                rule.managed_label,
+                wanted,
+                library_items,
+            )
+        mode = policy.sync_mode
+        member_count = len(wanted)
+        if mode is SyncMode.APPEND and row.server_item_id is not None:
+            remote_ids = await self._provider().get_collection_member_ids(
+                row.server_item_id
+            )
+            member_count = len(
+                set(remote_ids) | {item.server_item_id for item in wanted}
+            )
+        if member_count < policy.minimum_items:
+            if policy.delete_below_minimum:
+                await self._delete_locked(row)
+                return CollectionSyncResponse(deleted=True, removed=len(current))
+            return CollectionSyncResponse(skipped=True)
+        old = {item.id for item in current}
+        new = {item.id for item in wanted}
+        effective_order = (
+            rule.order_type if rule.order_type is not None else row.order_type
+        )
+        await self._set_members_locked(
+            row,
+            wanted,
+            effective_order,
+            append=mode is SyncMode.APPEND,
+        )
+        await self._push_options(
+            row,
+            CollectionOptions(
+                kind=row.kind,
+                title=row.title,
+                summary=row.summary,
+                sort_title=row.sort_title,
+                collection_group=row.collection_group,
+                collection_mode=row.collection_mode,
+                order_type=effective_order,
+                collection_filtering=row.collection_filtering,
+                visible_home=row.visible_home,
+                visible_shared=row.visible_shared,
+                visible_library=row.visible_library,
+            ),
+            rule,
+        )
+        return CollectionSyncResponse(
+            added=len(new - old),
+            removed=len(old - new) if mode is SyncMode.SYNC else 0,
+        )
+
+    async def _execute_rule_sync(
+        self,
+        row: MediaCollection,
+        rule: CollectionRule,
+        policy: CollectionPolicy,
+        current: list[MediaItem],
+        library_items: list[MediaItem],
+        *,
+        active: bool,
+    ) -> CollectionSyncResponse:
+        if not active:
+            if policy.delete_when_inactive and row.server_item_id is not None:
+                await self._withhold_locked(row)
+                return CollectionSyncResponse(deleted=True, removed=len(current))
+            return CollectionSyncResponse(skipped=True)
+        if row.kind is CollectionKind.SMART or rule.smart_filter_json is not None:
+            return await self._sync_smart_rule_locked(row, rule, current, library_items)
+        return await self._sync_regular_rule_locked(
+            row, rule, policy, current, library_items
         )
 
     async def sync_rule(
@@ -662,62 +1304,34 @@ class CollectionsService:
                     session, media_type, row.collection_group, rule
                 )
                 current = await CollectionRepository(session).members(collection_id)
+                library_items = await CollectionRepository(session).library_items(
+                    media_type, row.library_id or ""
+                )
             if rule is None:
                 raise PublicServiceError(404, "Collection has no dynamic rule")
             if scheduled and (
-                not rule.enabled
+                not policy.sync_enabled
+                or policy.sync_interval_hours <= 0
                 or (
                     rule.last_synced_at is not None
                     and utc_now()
-                    < rule.last_synced_at + timedelta(hours=rule.sync_interval_hours)
+                    < rule.last_synced_at + timedelta(hours=policy.sync_interval_hours)
                 )
             ):
                 return CollectionSyncResponse(skipped=True)
             error = None
             try:
-                wanted = await self._source_members(row, rule)
-                mode = policy.sync_mode
-                minimum = policy.minimum_items
-                delete = policy.delete_below_minimum
-                member_count = len(wanted)
-                if mode is SyncMode.APPEND:
-                    remote_ids = await self._provider().get_collection_member_ids(
-                        row.server_item_id
-                    )
-                    member_count = len(
-                        set(remote_ids) | {item.server_item_id for item in wanted}
-                    )
-                if member_count < minimum:
-                    if delete:
-                        await self._delete_locked(row)
-                        return CollectionSyncResponse(
-                            deleted=True, removed=len(current)
-                        )
-                    result = CollectionSyncResponse(skipped=True)
-                else:
-                    old, new = (
-                        {item.id for item in current},
-                        {item.id for item in wanted},
-                    )
-                    await self._push_options(
-                        row,
-                        CollectionOptions(
-                            title=row.title,
-                            summary=row.summary,
-                            sort_title=row.sort_title,
-                            collection_group=row.collection_group,
-                            collection_mode=row.collection_mode,
-                            order_type=row.order_type,
-                            visible_home=row.visible_home,
-                        ),
-                    )
-                    await self._set_members_locked(
-                        row, wanted, row.order_type, append=mode is SyncMode.APPEND
-                    )
-                    result = CollectionSyncResponse(
-                        added=len(new - old),
-                        removed=len(old - new) if mode is SyncMode.SYNC else 0,
-                    )
+                today = datetime.now(self._app_config.tzinfo).date()
+                active = is_within_active_window(
+                    row.active_start_mmdd or policy.active_start_mmdd,
+                    row.active_end_mmdd or policy.active_end_mmdd,
+                    today,
+                )
+                result = await self._execute_rule_sync(
+                    row, rule, policy, current, library_items, active=active
+                )
+                if result.deleted and active:
+                    return result
                 error = None
             except Exception as exc:
                 error = sanitise_error(str(exc))
@@ -732,23 +1346,28 @@ class CollectionsService:
                 await self._publisher.broadcast(
                     "collection.updated", {"collection_id": collection_id}
                 )
-        if not result.skipped:
-            try:
-                await self._auto_assets(collection_id, media_type)
-            except Exception as exc:
-                message = "Members synced; automatic assets failed: " + sanitise_error(
-                    str(exc)
-                )
-                async with self._database.write_session() as session:
-                    saved = await CollectionRepository(session).rule(collection_id)
-                    if saved is not None:
-                        saved.last_error = message
-                        session.add(saved)
-                await self._publisher.broadcast(
-                    "collection.updated", {"collection_id": collection_id}
-                )
-                raise PublicServiceError(502, message) from exc
+        if not result.skipped and not result.deleted:
+            await self._run_post_sync_assets(collection_id, media_type)
         return result
+
+    async def _run_post_sync_assets(
+        self, collection_id: int, media_type: MediaType
+    ) -> None:
+        try:
+            await self._auto_assets(collection_id, media_type)
+        except Exception as exc:
+            message = "Members synced; automatic assets failed: " + sanitise_error(
+                str(exc)
+            )
+            async with self._database.write_session() as session:
+                saved = await CollectionRepository(session).rule(collection_id)
+                if saved is not None:
+                    saved.last_error = message
+                    session.add(saved)
+            await self._publisher.broadcast(
+                "collection.updated", {"collection_id": collection_id}
+            )
+            raise PublicServiceError(502, message) from exc
 
     async def _auto_assets(self, collection_id: int, media_type: MediaType) -> None:
         async with self._database.read_session() as session:
@@ -760,6 +1379,8 @@ class CollectionsService:
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
                 app_config=self._app_config,
             )
+        if row.server_item_id is None:
+            return
         if policy.auto_match_art and row.tmdb_collection_id is not None:
             for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
                 if read_art_slot(row, art_type).url:
@@ -808,10 +1429,7 @@ class CollectionsService:
         session: AsyncSession,
         media_type: MediaType,
         group: str | None,
-        rule: CollectionRule
-        | CollectionRuleWrite
-        | CollectionGroupPolicy
-        | None = None,
+        rule: RuleOrPolicy = None,
     ) -> CollectionPolicy:
         return resolve_policy(
             await get_app_settings(session),
@@ -829,11 +1447,17 @@ class CollectionsService:
             row = await CollectionRepository(session).group_policy(
                 self._provider().server_type, media_type, name.strip()
             )
-        return (
-            CollectionGroupPolicy.model_validate(row, from_attributes=True)
-            if row
-            else CollectionGroupPolicy()
+        if row is None:
+            return CollectionGroupPolicy()
+        dynamic_tmdb = (
+            DynamicTmdbGroupConfig.model_validate_json(row.dynamic_tmdb_json)
+            if row.dynamic_tmdb_json
+            else None
         )
+        data = row.model_dump(
+            exclude={"id", "server_type", "media_type", "name", "dynamic_tmdb_json"}
+        )
+        return CollectionGroupPolicy(**data, dynamic_tmdb=dynamic_tmdb)
 
     async def save_group_policy(
         self, media_type: MediaType, name: str, body: CollectionGroupPolicy
@@ -842,11 +1466,18 @@ class CollectionsService:
         name = name.strip()
         if not name:
             raise PublicServiceError(422, "A group needs a name")
-        if (
-            self._provider().server_type is not ServerType.PLEX
-            and body.collection_mode not in {None, CollectionMode.DEFAULT}
+        if self._provider().server_type is not ServerType.PLEX and (
+            body.collection_mode not in {None, CollectionMode.DEFAULT}
+            or body.visible_home
+            or body.visible_shared
+            or body.visible_library
+            or body.collection_filtering is not None
         ):
             raise PublicServiceError(422, "Collection visibility requires Plex")
+        if body.dynamic_tmdb is not None and media_type is not MediaType.MOVIE:
+            raise PublicServiceError(
+                422, "Dynamic TMDB franchise discovery is only available for movies"
+            )
         async with self._database.write_session() as session:
             row = await CollectionRepository(session).group_policy(
                 self._provider().server_type, media_type, name
@@ -857,10 +1488,192 @@ class CollectionsService:
                     media_type=media_type,
                     name=name,
                 )
-            row.sqlmodel_update(body.model_dump())
+            fields = body.model_dump(exclude={"dynamic_tmdb"})
+            fields["dynamic_tmdb_json"] = (
+                body.dynamic_tmdb.model_dump_json()
+                if body.dynamic_tmdb is not None
+                else None
+            )
+            row.sqlmodel_update(fields)
             session.add(row)
         await self._publisher.broadcast("collections.changed")
         return body
+
+    async def sync_group(
+        self, media_type: MediaType, name: str
+    ) -> CollectionGenerateResponse:
+        """Run dynamic TMDB discovery (if enabled) and sync rules in *name*."""
+        name = name.strip()
+        async with self._database.read_session() as session:
+            group = await CollectionRepository(session).group_policy(
+                self._provider().server_type, media_type, name
+            )
+        response = CollectionGenerateResponse()
+        if group is not None and group.dynamic_tmdb_json:
+            config = DynamicTmdbGroupConfig.model_validate_json(group.dynamic_tmdb_json)
+            if config.enabled:
+                discovered = await self._sync_dynamic_tmdb_group(group, config)
+                response.created.extend(discovered.created)
+                response.errors.update(discovered.errors)
+        async with self._database.read_session() as session:
+            rows = [
+                row
+                for row in await CollectionRepository(session).list_listed(media_type)
+                if row.server_type is self._provider().server_type
+                and row.collection_group == name
+                and row.id is not None
+            ]
+            rules = {
+                rule.collection_id: rule
+                for rule in await CollectionRepository(session).rules(
+                    enabled_only=False
+                )
+            }
+        for row in rows:
+            if (
+                row.id is not None
+                and row.id in rules
+                and row.id not in response.created
+            ):
+                try:
+                    await self.sync_rule(row.id, media_type)
+                except Exception as exc:
+                    response.errors[row.title] = sanitise_error(str(exc))
+        return response
+
+    def _dynamic_tmdb_exclusions(
+        self,
+        group_name: str,
+        config: DynamicTmdbGroupConfig,
+        existing: list[MediaCollection],
+        rules: list[CollectionRule],
+    ) -> tuple[set[int], set[int]]:
+        existing_by_id = {row.id: row for row in existing if row.id is not None}
+        excluded_ids: set[int] = set(config.exclude_tmdb_ids)
+        in_group_tmdb_ids: set[int] = set()
+        for row in existing:
+            tmdb_id = row.tmdb_collection_id or row.auto_generated_tmdb_id
+            if tmdb_id is None:
+                continue
+            if row.collection_group == group_name:
+                in_group_tmdb_ids.add(tmdb_id)
+            elif config.auto_exclude_from_other_collections:
+                excluded_ids.add(tmdb_id)
+        if config.auto_exclude_from_other_collections:
+            for rule in rules:
+                owner = existing_by_id.get(rule.collection_id)
+                if owner is None or owner.collection_group == group_name:
+                    continue
+                for builder in self._rule_builders(rule):
+                    if isinstance(builder, TmdbCollectionBuilder):
+                        excluded_ids.add(builder.collection_id)
+        return excluded_ids, in_group_tmdb_ids
+
+    async def _sync_dynamic_tmdb_group(
+        self,
+        group: CollectionGroup,
+        config: DynamicTmdbGroupConfig,
+    ) -> CollectionGenerateResponse:
+        """Auto-discover and sync TMDB franchise collections for *group*."""
+        items = await self._library_items(config.library_id, MediaType.MOVIE)
+        async with self._database.read_session() as session:
+            policy = await self._policy(session, MediaType.MOVIE, group.name)
+            existing = [
+                row
+                for row in await CollectionRepository(session).list_listed(
+                    MediaType.MOVIE
+                )
+                if row.library_id == config.library_id
+                and row.server_type is self._provider().server_type
+            ]
+            rules = await CollectionRepository(session).rules(enabled_only=False)
+        excluded_ids, in_group_tmdb_ids = self._dynamic_tmdb_exclusions(
+            group.name, config, existing, rules
+        )
+        used_titles = {row.title.casefold() for row in existing}
+        counts: dict[int, int] = {}
+        for item in items:
+            if item.tmdb_collection_id is not None:
+                counts[item.tmdb_collection_id] = (
+                    counts.get(item.tmdb_collection_id, 0) + 1
+                )
+
+        response = CollectionGenerateResponse()
+        for tmdb_id, count in sorted(counts.items()):
+            if (
+                tmdb_id in excluded_ids
+                or tmdb_id in in_group_tmdb_ids
+                or count < policy.minimum_items
+            ):
+                continue
+            franchise = await self._tmdb.get_collection(tmdb_id)
+            if franchise is None:
+                continue
+            source_ids = {part.tmdb_id for part in franchise.parts}
+            matched_count = sum(item.tmdb_id in source_ids for item in items)
+            if matched_count < policy.minimum_items:
+                continue
+            title = _strip_affixes(
+                franchise.title,
+                prefix=config.strip_prefix,
+                suffix=config.strip_suffix,
+            )
+            if title.casefold() in used_titles:
+                continue
+            try:
+                detail = await self.create(
+                    CollectionCreate(
+                        title=title,
+                        collection_group=group.name,
+                        tmdb_collection_id=tmdb_id,
+                        library_id=config.library_id,
+                        media_type=MediaType.MOVIE,
+                        rule=CollectionRuleWrite(
+                            source_type=RuleSourceType.TMDB,
+                            source_identifier=str(tmdb_id),
+                            builders=[TmdbCollectionBuilder(collection_id=tmdb_id)],
+                        ),
+                    )
+                )
+                async with self._database.write_session() as session:
+                    created_row = await CollectionRepository(session).get(detail.id)
+                    if created_row is not None:
+                        created_row.auto_generated_tmdb_id = tmdb_id
+                        session.add(created_row)
+                used_titles.add(title.casefold())
+                response.created.append(detail.id)
+                await self._auto_assets(detail.id, MediaType.MOVIE)
+            except Exception as exc:
+                response.errors[title] = sanitise_error(str(exc))
+        return response
+
+    @staticmethod
+    def _apply_bulk_option(
+        row: MediaCollection, body: BulkCollectionOperation
+    ) -> CollectionOptions:
+        options = CollectionOptions.model_validate(row, from_attributes=True)
+        if body.operation == "set_group":
+            options.collection_group = (
+                body.collection_group.strip() or None if body.collection_group else None
+            )
+        elif body.operation == "set_order" and body.order_type is not None:
+            options.order_type = body.order_type
+        elif body.operation == "set_visibility":
+            if "collection_mode" in body.model_fields_set:
+                options.collection_mode = body.collection_mode
+            if body.visible_home is not None:
+                options.visible_home = body.visible_home
+            if body.visible_shared is not None:
+                options.visible_shared = body.visible_shared
+            if body.visible_library is not None:
+                options.visible_library = body.visible_library
+        elif body.sort_title_format is not None:
+            options.sort_title = format_sort_title(
+                body.sort_title_format,
+                title=row.title,
+                group=row.collection_group,
+            )
+        return options
 
     async def bulk_operation(
         self, body: BulkCollectionOperation
@@ -889,32 +1702,9 @@ class CollectionsService:
                             row = await self._require(
                                 session, collection_id, body.media_type
                             )
-                        options = CollectionOptions.model_validate(
-                            row, from_attributes=True
+                        await self._update_locked(
+                            row, self._apply_bulk_option(row, body)
                         )
-                        if body.operation == "set_group":
-                            options.collection_group = (
-                                body.collection_group.strip() or None
-                                if body.collection_group
-                                else None
-                            )
-                        elif (
-                            body.operation == "set_order"
-                            and body.order_type is not None
-                        ):
-                            options.order_type = body.order_type
-                        elif body.operation == "set_visibility":
-                            if "collection_mode" in body.model_fields_set:
-                                options.collection_mode = body.collection_mode
-                            if body.visible_home is not None:
-                                options.visible_home = body.visible_home
-                        elif body.sort_title_format is not None:
-                            options.sort_title = format_sort_title(
-                                body.sort_title_format,
-                                title=row.title,
-                                group=row.collection_group,
-                            )
-                        await self._update_locked(row, options)
                     await self._publisher.broadcast(
                         "collection.updated", {"collection_id": collection_id}
                     )
@@ -1217,7 +2007,7 @@ class CollectionsService:
         provider = self._provider()
         async with self._database.read_session() as session:
             row = await CollectionRepository(session).get(collection_id)
-        if row is None:
+        if row is None or row.server_item_id is None:
             raise PublicServiceError(404, "Collection not found")
         if isinstance(provider.collections, UploadThemes):
             await provider.delete_collection_theme(row.server_item_id)
@@ -1307,8 +2097,13 @@ class CollectionsService:
     def _require_movie_collections(media_type: MediaType) -> None:
         if media_type is not MediaType.MOVIE:
             raise PublicServiceError(
-                422, "TMDB collections are only available for movies"
+                422, "TMDB collections and Radarr tags are only available for movies"
             )
+
+    @staticmethod
+    def _require_show_collections(media_type: MediaType) -> None:
+        if media_type is not MediaType.SHOW:
+            raise PublicServiceError(422, "Sonarr tags are only available for TV shows")
 
     async def proxy_collection_image(
         self, collection_id: int, art_type: ArtType, size: ImageSize | None
@@ -1319,7 +2114,7 @@ class CollectionsService:
             raise PublicServiceError(404, "Collection image not found")
         async with self._database.read_session() as session:
             row = await CollectionRepository(session).get(collection_id)
-        if row is None or row.last_synced_at is None:
+        if row is None or row.last_synced_at is None or row.server_item_id is None:
             raise PublicServiceError(404, "Collection not found")
         request = await provider.build_collection_image_request(
             row.server_item_id, art_type, size

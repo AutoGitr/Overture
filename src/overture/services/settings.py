@@ -27,6 +27,9 @@ def _read(
         update={
             "media_server": app_config.MEDIA_SERVER,
             "tmdb_configured": app_config.tmdb_configured,
+            "mdblist_configured": app_config.mdblist_configured,
+            "radarr_configured": app_config.radarr_configured,
+            "sonarr_configured": app_config.sonarr_configured,
             "collections_supported": collections is not None,
             "collection_themes_unavailable": collection_themes_unavailable(
                 collections, app_config

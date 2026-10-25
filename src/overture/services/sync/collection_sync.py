@@ -10,7 +10,13 @@ lazy from ...config import Settings
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, theme_file_facts
-lazy from ...domain import IncrementalThemeOrder, MediaType, ScheduleKind, ServerType
+lazy from ...domain import (
+    CollectionKind,
+    IncrementalThemeOrder,
+    MediaType,
+    ScheduleKind,
+    ServerType,
+)
 lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import SyncTally
@@ -150,6 +156,7 @@ class CollectionSync:
                     for row in await CollectionRepository(session).list_all()
                     if row.id is not None
                     and row.server_type is provider.server_type
+                    and row.server_item_id is not None
                     and row.server_item_id not in seen
                     and (
                         not library_ids
@@ -283,8 +290,12 @@ class CollectionSync:
         row.sqlmodel_update(
             {
                 "media_type": media_type,
+                "kind": (
+                    CollectionKind.SMART if collection.smart else CollectionKind.REGULAR
+                ),
                 "title": collection.title,
                 "summary": collection.summary,
+                "sort_title": collection.sort_title or row.sort_title,
                 "library_id": library_id,
                 "child_count": len(collection.member_ids),
                 "thumb_url": collection.thumb_url,

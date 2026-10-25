@@ -9,6 +9,7 @@ lazy from ..config import Settings
 lazy from ..db.models.media_item import MediaItem
 lazy from ..domain import (
     ArtType,
+    CollectionFiltering,
     CollectionMode,
     CollectionOrder,
     ImageSize,
@@ -49,6 +50,38 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """Create a collection with initial membership."""
         raise NotImplementedError
 
+    async def create_smart_collection(
+        self,
+        section_key: str,
+        title: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> ServerCollection:
+        """Create a smart collection backed by a server filter query."""
+        raise NotImplementedError
+
+    async def update_smart_collection_filter(
+        self,
+        server_collection_id: str,
+        section_key: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> None:
+        """Update the server filter query of an existing smart collection."""
+        raise NotImplementedError
+
+    async def sync_item_labels(
+        self,
+        section_key: str,
+        media_type: MediaType,
+        label: str,
+        *,
+        add_ids: list[str],
+        remove_ids: list[str],
+    ) -> None:
+        """Add and remove a managed label on library items."""
+        raise NotImplementedError
+
     async def delete_collection(self, server_collection_id: str) -> None:
         """Delete a collection without deleting its media."""
         raise NotImplementedError
@@ -63,6 +96,9 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         mode: CollectionMode,
         order: CollectionOrder,
         visible_home: bool,
+        visible_shared: bool = False,
+        visible_library: bool = False,
+        filtering: CollectionFiltering | None = None,
     ) -> None:
         """Update collection metadata and supported display options."""
         raise NotImplementedError

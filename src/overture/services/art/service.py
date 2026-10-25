@@ -512,6 +512,10 @@ class ArtService:
                 row = await self._require_collection(
                     db, collection_id, media_type, art_type
                 )
+            if row.server_item_id is None:
+                raise PublicServiceError(
+                    409, "The collection is inactive and has no server copy"
+                )
             await self._provider_registry.provider.upload_collection_art(
                 row.server_item_id, art_type, fetched.data, fetched.media_type
             )
@@ -582,6 +586,10 @@ class ArtService:
         if row.tmdb_collection_id is None:
             raise PublicServiceError(
                 422, "Set a TMDB collection ID before matching artwork"
+            )
+        if row.server_item_id is None:
+            raise PublicServiceError(
+                409, "The collection is inactive and has no server copy"
             )
         request = await self._provider_registry.provider.build_collection_image_request(
             row.server_item_id, art_type, ImageSize.DISPLAY

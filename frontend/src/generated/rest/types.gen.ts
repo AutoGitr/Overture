@@ -44,19 +44,49 @@ export type AppSettingsRead = {
      */
     collection_delete_below_minimum: boolean;
     /**
+     * Collection Delete When Inactive
+     */
+    collection_delete_when_inactive: boolean;
+    collection_filtering_default: CollectionFiltering;
+    /**
      * Collection Minimum Items
      */
     collection_minimum_items: number;
     collection_mode_default: CollectionMode;
+    collection_order_default: CollectionOrder;
     /**
      * Collection Sort Title Format
      */
     collection_sort_title_format: string;
+    /**
+     * Collection Summary Format
+     */
+    collection_summary_format: string;
+    /**
+     * Collection Sync Enabled
+     */
+    collection_sync_enabled: boolean;
+    /**
+     * Collection Sync Interval Hours
+     */
+    collection_sync_interval_hours: number;
     collection_sync_mode: SyncMode;
     /**
      * Collection Themes Unavailable
      */
     collection_themes_unavailable: string | null;
+    /**
+     * Collection Visible Home
+     */
+    collection_visible_home: boolean;
+    /**
+     * Collection Visible Library
+     */
+    collection_visible_library: boolean;
+    /**
+     * Collection Visible Shared
+     */
+    collection_visible_shared: boolean;
     /**
      * Collections Supported
      */
@@ -69,6 +99,10 @@ export type AppSettingsRead = {
      * Max Duration Seconds
      */
     max_duration_seconds: number;
+    /**
+     * Mdblist Configured
+     */
+    mdblist_configured: boolean;
     media_server: ServerType | null;
     /**
      * Min Duration Seconds
@@ -79,9 +113,17 @@ export type AppSettingsRead = {
      */
     normalize_theme_loudness: boolean;
     /**
+     * Radarr Configured
+     */
+    radarr_configured: boolean;
+    /**
      * Skip Media Server Tmdb Urls
      */
     skip_media_server_tmdb_urls: boolean;
+    /**
+     * Sonarr Configured
+     */
+    sonarr_configured: boolean;
     /**
      * Theme Download Workers
      */
@@ -141,15 +183,45 @@ export type AppSettingsUpdate = {
      */
     collection_delete_below_minimum?: boolean | null;
     /**
+     * Collection Delete When Inactive
+     */
+    collection_delete_when_inactive?: boolean | null;
+    collection_filtering_default?: CollectionFiltering | null;
+    /**
      * Collection Minimum Items
      */
     collection_minimum_items?: number | null;
     collection_mode_default?: CollectionMode | null;
+    collection_order_default?: CollectionOrder | null;
     /**
      * Collection Sort Title Format
      */
     collection_sort_title_format?: string | null;
+    /**
+     * Collection Summary Format
+     */
+    collection_summary_format?: string | null;
+    /**
+     * Collection Sync Enabled
+     */
+    collection_sync_enabled?: boolean | null;
+    /**
+     * Collection Sync Interval Hours
+     */
+    collection_sync_interval_hours?: number | null;
     collection_sync_mode?: SyncMode | null;
+    /**
+     * Collection Visible Home
+     */
+    collection_visible_home?: boolean | null;
+    /**
+     * Collection Visible Library
+     */
+    collection_visible_library?: boolean | null;
+    /**
+     * Collection Visible Shared
+     */
+    collection_visible_shared?: boolean | null;
     /**
      * Disable Media Server Art
      */
@@ -176,6 +248,22 @@ export type AppSettingsUpdate = {
     theme_search_format?: string | null;
     tmdb_language_filter?: TmdbLanguageFilter | null;
     workflow?: Workflow | null;
+};
+
+/**
+ * ArrTagRead
+ *
+ * One tag configured on Radarr or Sonarr.
+ */
+export type ArrTagRead = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Label
+     */
+    label: string;
 };
 
 /**
@@ -842,6 +930,14 @@ export type BulkCollectionOperation = {
      * Visible Home
      */
     visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
 };
 
 /**
@@ -1152,17 +1248,57 @@ export type CollectionArtwork = {
     poster_url: string | null;
 };
 
+export type CollectionBuilderInput = ({
+    type: 'tmdb_collection';
+} & TmdbCollectionBuilderInput) | ({
+    type: 'tmdb_item';
+} & TmdbItemBuilderInput) | ({
+    type: 'tmdb_person';
+} & TmdbPersonBuilderInput) | ({
+    type: 'mdblist';
+} & MdblistBuilderInput) | ({
+    type: 'radarr_tag';
+} & RadarrTagBuilderInput) | ({
+    type: 'sonarr_tag';
+} & SonarrTagBuilderInput) | ({
+    type: 'library_filter';
+} & LibraryFilterBuilderInput);
+
+export type CollectionBuilderOutput = ({
+    type: 'tmdb_collection';
+} & TmdbCollectionBuilderOutput) | ({
+    type: 'tmdb_item';
+} & TmdbItemBuilderOutput) | ({
+    type: 'tmdb_person';
+} & TmdbPersonBuilderOutput) | ({
+    type: 'mdblist';
+} & MdblistBuilderOutput) | ({
+    type: 'radarr_tag';
+} & RadarrTagBuilderOutput) | ({
+    type: 'sonarr_tag';
+} & SonarrTagBuilderOutput) | ({
+    type: 'library_filter';
+} & LibraryFilterBuilderOutput);
+
 /**
  * CollectionCreate
  *
  * Create a collection in one selected library.
  */
 export type CollectionCreate = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
+    collection_filtering?: CollectionFiltering | null;
     /**
      * Collection Group
      */
     collection_group?: string | null;
     collection_mode?: CollectionMode | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    kind?: CollectionKind;
     /**
      * Library Id
      */
@@ -1183,6 +1319,7 @@ export type CollectionCreate = {
      * Summary
      */
     summary?: string | null;
+    summary_format?: SummaryFormat | null;
     /**
      * Title
      */
@@ -1195,6 +1332,14 @@ export type CollectionCreate = {
      * Visible Home
      */
     visible_home?: boolean;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean;
 };
 
 /**
@@ -1203,11 +1348,23 @@ export type CollectionCreate = {
  * One collection with its members and what limits its theme.
  */
 export type CollectionDetail = {
+    /**
+     * Active End Mmdd
+     */
+    active_end_mmdd: string | null;
+    /**
+     * Active Start Mmdd
+     */
+    active_start_mmdd: string | null;
     art_status: AssetStatus;
     /**
      * Art Url
      */
     art_url: string | null;
+    /**
+     * Auto Generated Tmdb Id
+     */
+    auto_generated_tmdb_id: number | null;
     background_status: AssetStatus;
     /**
      * Background Url
@@ -1229,11 +1386,16 @@ export type CollectionDetail = {
      * Child Count
      */
     child_count: number;
+    collection_filtering: CollectionFiltering | null;
     /**
      * Collection Group
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
     effective_sync_mode: SyncMode;
     /**
      * Has Theme
@@ -1243,6 +1405,7 @@ export type CollectionDetail = {
      * Id
      */
     id: number;
+    kind: CollectionKind;
     /**
      * Library Id
      */
@@ -1285,9 +1448,17 @@ export type CollectionDetail = {
      */
     sort_title: string | null;
     /**
+     * Sort Title Format
+     */
+    sort_title_format: string | null;
+    /**
      * Summary
      */
     summary: string | null;
+    /**
+     * Summary Format
+     */
+    summary_format: string | null;
     /**
      * Theme Duration
      */
@@ -1317,6 +1488,18 @@ export type CollectionDetail = {
      * Visible Home
      */
     visible_home: boolean;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean;
+    /**
+     * Withheld
+     */
+    withheld: boolean;
     /**
      * Youtube Duration
      */
@@ -1380,11 +1563,20 @@ export type CollectionFilterOutput = {
 };
 
 /**
+ * CollectionFiltering
+ *
+ * User-context filtering mode for Plex smart collections.
+ */
+export type CollectionFiltering = 'admin' | 'user';
+
+/**
  * CollectionGenerateRequest
  *
  * Preview or generate collections from metadata already in the library.
  */
 export type CollectionGenerateRequest = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
     /**
      * Auto Match Art
      */
@@ -1393,6 +1585,7 @@ export type CollectionGenerateRequest = {
      * Auto Match Theme
      */
     auto_match_theme?: boolean | null;
+    collection_filtering?: CollectionFiltering | null;
     /**
      * Collection Group
      */
@@ -1403,6 +1596,11 @@ export type CollectionGenerateRequest = {
      */
     delete_below_minimum?: boolean | null;
     /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    dynamic_tmdb?: DynamicTmdbGroupConfigInput | null;
+    /**
      * Library Id
      */
     library_id: string;
@@ -1411,13 +1609,35 @@ export type CollectionGenerateRequest = {
      * Minimum Items
      */
     minimum_items?: number | null;
+    order_type?: CollectionOrder | null;
     preset: CollectionPreset;
     sort_title_format?: SortTitleFormat | null;
+    summary_format?: SummaryFormat | null;
+    /**
+     * Sync Enabled
+     */
+    sync_enabled?: boolean | null;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours?: number | null;
     sync_mode?: SyncMode | null;
     /**
      * Titles
      */
     titles?: Array<string>;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
 };
 
 /**
@@ -1444,6 +1664,8 @@ export type CollectionGenerateResponse = {
  * Nullable group defaults; null inherits the application setting.
  */
 export type CollectionGroupPolicyInput = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
     /**
      * Auto Match Art
      */
@@ -1452,17 +1674,45 @@ export type CollectionGroupPolicyInput = {
      * Auto Match Theme
      */
     auto_match_theme?: boolean | null;
+    collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
     /**
      * Delete Below Minimum
      */
     delete_below_minimum?: boolean | null;
     /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    dynamic_tmdb?: DynamicTmdbGroupConfigInput | null;
+    /**
      * Minimum Items
      */
     minimum_items?: number | null;
+    order_type?: CollectionOrder | null;
     sort_title_format?: SortTitleFormat | null;
+    summary_format?: SummaryFormat | null;
+    /**
+     * Sync Enabled
+     */
+    sync_enabled?: boolean | null;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours?: number | null;
     sync_mode?: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
 };
 
 /**
@@ -1471,6 +1721,8 @@ export type CollectionGroupPolicyInput = {
  * Nullable group defaults; null inherits the application setting.
  */
 export type CollectionGroupPolicyOutput = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
     /**
      * Auto Match Art
      */
@@ -1479,18 +1731,53 @@ export type CollectionGroupPolicyOutput = {
      * Auto Match Theme
      */
     auto_match_theme: boolean | null;
+    collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
     /**
      * Delete Below Minimum
      */
     delete_below_minimum: boolean | null;
     /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
+    dynamic_tmdb: DynamicTmdbGroupConfigOutput | null;
+    /**
      * Minimum Items
      */
     minimum_items: number | null;
+    order_type: CollectionOrder | null;
     sort_title_format: SortTitleFormat | null;
+    summary_format: SummaryFormat | null;
+    /**
+     * Sync Enabled
+     */
+    sync_enabled: boolean | null;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours: number | null;
     sync_mode: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean | null;
 };
+
+/**
+ * CollectionKind
+ *
+ * How a collection's membership is maintained on the media server.
+ */
+export type CollectionKind = 'regular' | 'smart';
 
 /**
  * CollectionMembersUpdate
@@ -1518,11 +1805,19 @@ export type CollectionMode = 'default' | 'hide_items' | 'show_items' | 'hide';
  * Editable collection metadata and server display options.
  */
 export type CollectionOptions = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
+    collection_filtering?: CollectionFiltering | null;
     /**
      * Collection Group
      */
     collection_group?: string | null;
     collection_mode?: CollectionMode | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    kind?: CollectionKind;
     order_type?: CollectionOrder;
     /**
      * Sort Title
@@ -1533,6 +1828,7 @@ export type CollectionOptions = {
      * Summary
      */
     summary?: string | null;
+    summary_format?: SummaryFormat | null;
     /**
      * Title
      */
@@ -1545,6 +1841,14 @@ export type CollectionOptions = {
      * Visible Home
      */
     visible_home?: boolean;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean;
 };
 
 /**
@@ -1588,11 +1892,23 @@ export type CollectionPresetRead = {
  * Media-server collection response.
  */
 export type CollectionRead = {
+    /**
+     * Active End Mmdd
+     */
+    active_end_mmdd: string | null;
+    /**
+     * Active Start Mmdd
+     */
+    active_start_mmdd: string | null;
     art_status: AssetStatus;
     /**
      * Art Url
      */
     art_url: string | null;
+    /**
+     * Auto Generated Tmdb Id
+     */
+    auto_generated_tmdb_id: number | null;
     background_status: AssetStatus;
     /**
      * Background Url
@@ -1606,11 +1922,16 @@ export type CollectionRead = {
      * Child Count
      */
     child_count: number;
+    collection_filtering: CollectionFiltering | null;
     /**
      * Collection Group
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
     /**
      * Has Theme
      */
@@ -1619,6 +1940,7 @@ export type CollectionRead = {
      * Id
      */
     id: number;
+    kind: CollectionKind;
     /**
      * Library Id
      */
@@ -1656,9 +1978,17 @@ export type CollectionRead = {
      */
     sort_title: string | null;
     /**
+     * Sort Title Format
+     */
+    sort_title_format: string | null;
+    /**
      * Summary
      */
     summary: string | null;
+    /**
+     * Summary Format
+     */
+    summary_format: string | null;
     theme_status: AssetStatus;
     /**
      * Thumb Url
@@ -1676,6 +2006,18 @@ export type CollectionRead = {
      * Visible Home
      */
     visible_home: boolean;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean;
+    /**
+     * Withheld
+     */
+    withheld: boolean;
     /**
      * Youtube Duration
      */
@@ -1696,6 +2038,8 @@ export type CollectionRead = {
  * Saved rule with its most recent outcome.
  */
 export type CollectionRuleRead = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
     /**
      * Auto Match Art
      */
@@ -1705,9 +2049,19 @@ export type CollectionRuleRead = {
      */
     auto_match_theme: boolean | null;
     /**
+     * Builders
+     */
+    builders: Array<CollectionBuilderOutput>;
+    collection_filtering: CollectionFiltering | null;
+    collection_mode: CollectionMode | null;
+    /**
      * Delete Below Minimum
      */
     delete_below_minimum: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
     /**
      * Enabled
      */
@@ -1722,27 +2076,49 @@ export type CollectionRuleRead = {
      */
     last_synced_at: string | null;
     /**
+     * Managed Label
+     */
+    managed_label: string | null;
+    /**
      * Minimum Items
      */
     minimum_items: number | null;
+    order_type: CollectionOrder | null;
+    smart_filter: SmartCollectionConfigOutput | null;
+    sort_title_format: SortTitleFormat | null;
     /**
      * Source Identifier
      */
     source_identifier: string;
     source_type: RuleSourceType;
+    summary_format: SummaryFormat | null;
     /**
      * Sync Interval Hours
      */
     sync_interval_hours: number;
     sync_mode: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean | null;
 };
 
 /**
  * CollectionRuleWrite
  *
- * A dynamic source with nullable overrides of global defaults.
+ * Composable dynamic builders or smart filter with nullable policy overrides.
  */
 export type CollectionRuleWrite = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
     /**
      * Auto Match Art
      */
@@ -1752,28 +2128,58 @@ export type CollectionRuleWrite = {
      */
     auto_match_theme?: boolean | null;
     /**
+     * Builders
+     */
+    builders?: Array<CollectionBuilderInput>;
+    collection_filtering?: CollectionFiltering | null;
+    collection_mode?: CollectionMode | null;
+    /**
      * Delete Below Minimum
      */
     delete_below_minimum?: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
     /**
      * Enabled
      */
     enabled?: boolean;
     filters?: CollectionFilterInput;
     /**
+     * Managed Label
+     */
+    managed_label?: string | null;
+    /**
      * Minimum Items
      */
     minimum_items?: number | null;
+    order_type?: CollectionOrder | null;
+    smart_filter?: SmartCollectionConfigInput | null;
+    sort_title_format?: SortTitleFormat | null;
     /**
      * Source Identifier
      */
     source_identifier?: string;
-    source_type: RuleSourceType;
+    source_type?: RuleSourceType;
+    summary_format?: SummaryFormat | null;
     /**
      * Sync Interval Hours
      */
     sync_interval_hours?: number;
     sync_mode?: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
 };
 
 /**
@@ -2057,6 +2463,70 @@ export type DownloadJobMetadata = {
 export type DownloadStatus = 'pending' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';
 
 /**
+ * DynamicTmdbGroupConfig
+ *
+ * Automatic TMDB franchise collection discovery for a collection group.
+ */
+export type DynamicTmdbGroupConfigInput = {
+    /**
+     * Auto Exclude From Other Collections
+     */
+    auto_exclude_from_other_collections?: boolean;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Exclude Tmdb Ids
+     */
+    exclude_tmdb_ids?: Array<number>;
+    /**
+     * Library Id
+     */
+    library_id: string;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix?: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix?: string;
+};
+
+/**
+ * DynamicTmdbGroupConfig
+ *
+ * Automatic TMDB franchise collection discovery for a collection group.
+ */
+export type DynamicTmdbGroupConfigOutput = {
+    /**
+     * Auto Exclude From Other Collections
+     */
+    auto_exclude_from_other_collections: boolean;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Exclude Tmdb Ids
+     */
+    exclude_tmdb_ids: Array<number>;
+    /**
+     * Library Id
+     */
+    library_id: string;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix: string;
+};
+
+/**
  * EnqueuedJobResponse
  *
  * A download job that was queued.
@@ -2071,6 +2541,88 @@ export type EnqueuedJobResponse = {
      */
     status: 'enqueued';
 };
+
+/**
+ * FilterCondition
+ *
+ * One atomic library or smart-collection filter condition.
+ */
+export type FilterConditionInput = {
+    field: FilterField;
+    operator?: FilterOperator;
+    /**
+     * Value
+     */
+    value: string | number | number | boolean;
+};
+
+/**
+ * FilterCondition
+ *
+ * One atomic library or smart-collection filter condition.
+ */
+export type FilterConditionOutput = {
+    field: FilterField;
+    operator: FilterOperator;
+    /**
+     * Value
+     */
+    value: string | number | number | boolean;
+};
+
+/**
+ * FilterField
+ *
+ * Library metadata field evaluated by a filter condition.
+ */
+export type FilterField = 'title' | 'genre' | 'studio' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'tag' | 'content_rating' | 'resolution' | 'audio_language' | 'year' | 'decade' | 'rating' | 'duration_minutes' | 'unplayed' | 'in_progress' | 'added_within_days' | 'released_within_days';
+
+/**
+ * FilterGroup
+ *
+ * Boolean group of conditions and nested filter groups.
+ */
+export type FilterGroupInput = {
+    /**
+     * Conditions
+     */
+    conditions?: Array<FilterConditionInput>;
+    /**
+     * Groups
+     */
+    groups?: Array<FilterGroupInput>;
+    /**
+     * Mode
+     */
+    mode?: 'all' | 'any';
+};
+
+/**
+ * FilterGroup
+ *
+ * Boolean group of conditions and nested filter groups.
+ */
+export type FilterGroupOutput = {
+    /**
+     * Conditions
+     */
+    conditions: Array<FilterConditionOutput>;
+    /**
+     * Groups
+     */
+    groups: Array<FilterGroupOutput>;
+    /**
+     * Mode
+     */
+    mode: 'all' | 'any';
+};
+
+/**
+ * FilterOperator
+ *
+ * Comparison operator for a filter condition.
+ */
+export type FilterOperator = 'is' | 'is_not' | 'contains' | 'does_not_contain' | 'starts_with' | 'gte' | 'lte';
 
 /**
  * FixAuditRequest
@@ -2324,6 +2876,32 @@ export type JsonValue = string | number | number | boolean | Array<JsonValue> | 
     [key: string]: JsonValue;
 } | null;
 
+/**
+ * LibraryFilterBuilder
+ *
+ * Resolve library items matching a structured filter tree.
+ */
+export type LibraryFilterBuilderInput = {
+    filter_group: FilterGroupInput;
+    /**
+     * Type
+     */
+    type?: 'library_filter';
+};
+
+/**
+ * LibraryFilterBuilder
+ *
+ * Resolve library items matching a structured filter tree.
+ */
+export type LibraryFilterBuilderOutput = {
+    filter_group: FilterGroupOutput;
+    /**
+     * Type
+     */
+    type: 'library_filter';
+};
+
 export type LibraryIds = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
 
 /**
@@ -2437,6 +3015,38 @@ export type LogoutResponse = {
 };
 
 export type MatchReference = 'local_file' | 'media_server' | 'saved_url';
+
+/**
+ * MdblistBuilder
+ *
+ * Resolve one or more MDBList lists in source order.
+ */
+export type MdblistBuilderInput = {
+    /**
+     * Identifiers
+     */
+    identifiers: Array<string>;
+    /**
+     * Type
+     */
+    type?: 'mdblist';
+};
+
+/**
+ * MdblistBuilder
+ *
+ * Resolve one or more MDBList lists in source order.
+ */
+export type MdblistBuilderOutput = {
+    /**
+     * Identifiers
+     */
+    identifiers: Array<string>;
+    /**
+     * Type
+     */
+    type: 'mdblist';
+};
 
 /**
  * MeResponse
@@ -2963,6 +3573,38 @@ export type PublicError = {
 };
 
 /**
+ * RadarrTagBuilder
+ *
+ * Resolve movies carrying one or more Radarr tags.
+ */
+export type RadarrTagBuilderInput = {
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Type
+     */
+    type?: 'radarr_tag';
+};
+
+/**
+ * RadarrTagBuilder
+ *
+ * Resolve movies carrying one or more Radarr tags.
+ */
+export type RadarrTagBuilderOutput = {
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Type
+     */
+    type: 'radarr_tag';
+};
+
+/**
  * ReadinessResponse
  *
  * Readiness response.
@@ -3210,6 +3852,8 @@ export type SeasonRead = {
     title: string | null;
 };
 
+export type SeasonalDate = string;
+
 /**
  * SelectThemeRequest
  *
@@ -3327,6 +3971,73 @@ export type SetCollectionThemeRequest = {
     youtube_id: YouTubeId;
 };
 
+/**
+ * SmartCollectionConfig
+ *
+ * Server-side smart collection filter, sort order and item limit.
+ */
+export type SmartCollectionConfigInput = {
+    filter_group?: FilterGroupInput;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+    sort_by?: SmartSortOrder;
+};
+
+/**
+ * SmartCollectionConfig
+ *
+ * Server-side smart collection filter, sort order and item limit.
+ */
+export type SmartCollectionConfigOutput = {
+    filter_group: FilterGroupOutput;
+    /**
+     * Limit
+     */
+    limit: number | null;
+    sort_by: SmartSortOrder;
+};
+
+/**
+ * SmartSortOrder
+ *
+ * Sort order applied to a smart collection.
+ */
+export type SmartSortOrder = 'release.desc' | 'release.asc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'rating.desc' | 'critic_rating.desc' | 'audience_rating.desc' | 'plays.desc' | 'duration.desc' | 'duration.asc' | 'random';
+
+/**
+ * SonarrTagBuilder
+ *
+ * Resolve shows carrying one or more Sonarr tags.
+ */
+export type SonarrTagBuilderInput = {
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Type
+     */
+    type?: 'sonarr_tag';
+};
+
+/**
+ * SonarrTagBuilder
+ *
+ * Resolve shows carrying one or more Sonarr tags.
+ */
+export type SonarrTagBuilderOutput = {
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Type
+     */
+    type: 'sonarr_tag';
+};
+
 export type SortTitleFormat = string;
 
 export type SourceOrderArtBulkSource = UniqueListArtBulkSourceMinLenMinLength1;
@@ -3394,6 +4105,8 @@ export type StorageSummary = {
      */
     total_footprint_bytes: number;
 };
+
+export type SummaryFormat = string;
 
 /**
  * SyncMode
@@ -3620,6 +4333,38 @@ export type ThemeStats = {
 };
 
 /**
+ * TmdbCollectionBuilder
+ *
+ * Resolve movies belonging to one TMDB franchise collection.
+ */
+export type TmdbCollectionBuilderInput = {
+    /**
+     * Collection Id
+     */
+    collection_id: number;
+    /**
+     * Type
+     */
+    type?: 'tmdb_collection';
+};
+
+/**
+ * TmdbCollectionBuilder
+ *
+ * Resolve movies belonging to one TMDB franchise collection.
+ */
+export type TmdbCollectionBuilderOutput = {
+    /**
+     * Collection Id
+     */
+    collection_id: number;
+    /**
+     * Type
+     */
+    type: 'tmdb_collection';
+};
+
+/**
  * TmdbCollectionResponse
  *
  * A TMDB collection with its movies.
@@ -3665,6 +4410,38 @@ export type TmdbCollectionResult = {
      * Tmdb Id
      */
     tmdb_id: number;
+};
+
+/**
+ * TmdbItemBuilder
+ *
+ * Resolve explicit TMDB movie or show IDs in order.
+ */
+export type TmdbItemBuilderInput = {
+    /**
+     * Tmdb Ids
+     */
+    tmdb_ids: Array<number>;
+    /**
+     * Type
+     */
+    type?: 'tmdb_item';
+};
+
+/**
+ * TmdbItemBuilder
+ *
+ * Resolve explicit TMDB movie or show IDs in order.
+ */
+export type TmdbItemBuilderOutput = {
+    /**
+     * Tmdb Ids
+     */
+    tmdb_ids: Array<number>;
+    /**
+     * Type
+     */
+    type: 'tmdb_item';
 };
 
 /**
@@ -3765,6 +4542,109 @@ export type TmdbItemResult = {
  * Which TMDB image languages are offered as candidates.
  */
 export type TmdbLanguageFilter = 'en_null' | 'all';
+
+/**
+ * TmdbPersonBuilder
+ *
+ * Resolve movies or shows credited to a TMDB person in selected roles.
+ */
+export type TmdbPersonBuilderInput = {
+    /**
+     * Person Id
+     */
+    person_id: number;
+    /**
+     * Person Name
+     */
+    person_name?: string | null;
+    /**
+     * Roles
+     */
+    roles?: Array<TmdbPersonRole>;
+    /**
+     * Type
+     */
+    type?: 'tmdb_person';
+    /**
+     * Use Biography
+     */
+    use_biography?: boolean;
+};
+
+/**
+ * TmdbPersonBuilder
+ *
+ * Resolve movies or shows credited to a TMDB person in selected roles.
+ */
+export type TmdbPersonBuilderOutput = {
+    /**
+     * Person Id
+     */
+    person_id: number;
+    /**
+     * Person Name
+     */
+    person_name: string | null;
+    /**
+     * Roles
+     */
+    roles: Array<TmdbPersonRole>;
+    /**
+     * Type
+     */
+    type: 'tmdb_person';
+    /**
+     * Use Biography
+     */
+    use_biography: boolean;
+};
+
+/**
+ * TmdbPersonResult
+ *
+ * A person TMDB found for a person collection builder.
+ */
+export type TmdbPersonResult = {
+    /**
+     * Known For Department
+     */
+    known_for_department: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Profile Preview Url
+     */
+    profile_preview_url: string | null;
+    /**
+     * Profile Url
+     */
+    profile_url: string | null;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number;
+};
+
+/**
+ * TmdbPersonRole
+ *
+ * Credit roles included by a TMDB person builder.
+ */
+export type TmdbPersonRole = 'actor' | 'director' | 'writer' | 'producer' | 'biography';
+
+/**
+ * TmdbPersonSearchResponse
+ *
+ * TMDB person search results.
+ */
+export type TmdbPersonSearchResponse = {
+    /**
+     * Results
+     */
+    results: Array<TmdbPersonResult>;
+};
 
 /**
  * TmdbSearchResponse
@@ -4903,6 +5783,40 @@ export type SaveCollectionGroupPolicyResponses = {
 
 export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
 
+export type SyncCollectionGroupData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/collections/group-policy/sync';
+};
+
+export type SyncCollectionGroupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SyncCollectionGroupError = SyncCollectionGroupErrors[keyof SyncCollectionGroupErrors];
+
+export type SyncCollectionGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type SyncCollectionGroupResponse = SyncCollectionGroupResponses[keyof SyncCollectionGroupResponses];
+
 export type ListCollectionGroupsData = {
     body?: never;
     path?: never;
@@ -4934,6 +5848,60 @@ export type ListCollectionGroupsResponses = {
 };
 
 export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
+
+export type ListRadarrTagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/collections/tags/radarr';
+};
+
+export type ListRadarrTagsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListRadarrTagsError = ListRadarrTagsErrors[keyof ListRadarrTagsErrors];
+
+export type ListRadarrTagsResponses = {
+    /**
+     * Response List Radarr Tags
+     *
+     * Successful Response
+     */
+    200: Array<ArrTagRead>;
+};
+
+export type ListRadarrTagsResponse = ListRadarrTagsResponses[keyof ListRadarrTagsResponses];
+
+export type ListSonarrTagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/collections/tags/sonarr';
+};
+
+export type ListSonarrTagsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSonarrTagsError = ListSonarrTagsErrors[keyof ListSonarrTagsErrors];
+
+export type ListSonarrTagsResponses = {
+    /**
+     * Response List Sonarr Tags
+     *
+     * Successful Response
+     */
+    200: Array<ArrTagRead>;
+};
+
+export type ListSonarrTagsResponse = ListSonarrTagsResponses[keyof ListSonarrTagsResponses];
 
 export type DeleteCollectionData = {
     body?: never;
@@ -7146,6 +8114,36 @@ export type GetTmdbCollectionResponses = {
 };
 
 export type GetTmdbCollectionResponse = GetTmdbCollectionResponses[keyof GetTmdbCollectionResponses];
+
+export type SearchTmdbPeopleData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Query
+         */
+        query: string;
+    };
+    url: '/api/tmdb/people/search';
+};
+
+export type SearchTmdbPeopleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SearchTmdbPeopleError = SearchTmdbPeopleErrors[keyof SearchTmdbPeopleErrors];
+
+export type SearchTmdbPeopleResponses = {
+    /**
+     * Successful Response
+     */
+    200: TmdbPersonSearchResponse;
+};
+
+export type SearchTmdbPeopleResponse = SearchTmdbPeopleResponses[keyof SearchTmdbPeopleResponses];
 
 export type SearchTmdbData = {
     body?: never;

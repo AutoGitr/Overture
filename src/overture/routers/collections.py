@@ -9,6 +9,7 @@ lazy from ..dependencies import ArtDep, CollectionsDep
 lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
 lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
+    ArrTagRead,
     BulkCollectionMonitorUpdate,
     BulkCollectionOperation,
     BulkCollectionOperationResult,
@@ -35,6 +36,7 @@ lazy from ..schemas.common import (
     EnqueuedJobResponse,
     MonitoredResponse,
     MonitorUpdate,
+    Status,
     StatusResponse,
 )
 lazy from .auth import require_auth
@@ -84,6 +86,29 @@ async def save_collection_group_policy(
 ) -> CollectionGroupPolicy:
     """Save defaults inherited by collections assigned to this group."""
     return await collections.save_group_policy(media_type, name, body)
+
+
+@router.post("/group-policy/sync")
+async def sync_collection_group(
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+) -> StatusResponse:
+    """Run dynamic discovery and sync rules for a collection group."""
+    await collections.sync_group(media_type, name)
+    return StatusResponse(status=Status.OK)
+
+
+@router.get("/tags/radarr")
+async def list_radarr_tags(collections: CollectionsDep) -> list[ArrTagRead]:
+    """Return available Radarr tags when Radarr is configured."""
+    return await collections.list_radarr_tags()
+
+
+@router.get("/tags/sonarr")
+async def list_sonarr_tags(collections: CollectionsDep) -> list[ArrTagRead]:
+    """Return available Sonarr tags when Sonarr is configured."""
+    return await collections.list_sonarr_tags()
 
 
 @router.post("/bulk-operation")

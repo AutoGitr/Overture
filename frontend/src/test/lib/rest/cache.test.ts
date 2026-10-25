@@ -34,6 +34,7 @@ import { mockFetch } from "../../helpers/fetch";
 import {
   collection as fixtureCollection,
   collectionDetail,
+  collectionRule,
   season as fixtureSeason,
   mediaItem,
   catalogDetail,
@@ -87,20 +88,7 @@ describe("REST cache helpers", () => {
     }).queryKey;
     queryClient.setQueryData(firstKey, first);
     queryClient.setQueryData(otherKey, other);
-    const rule = {
-      source_type: "tmdb",
-      source_identifier: "10",
-      filters: { decade: null, studio: null, genre: null },
-      sync_mode: null,
-      minimum_items: null,
-      delete_below_minimum: null,
-      auto_match_art: null,
-      auto_match_theme: null,
-      sync_interval_hours: 24,
-      enabled: true,
-      last_error: null,
-      last_synced_at: null,
-    } satisfies NonNullable<typeof first.rule>;
+    const rule = collectionRule({ source_type: "tmdb", source_identifier: "10" });
     patchCollectionRule(1, rule);
     expect(queryClient.getQueryData(firstKey)).toEqual({ ...first, rule });
     expect(queryClient.getQueryData(otherKey)).toBe(other);

@@ -498,6 +498,7 @@ def build_runtime(
         downloads=downloads,
         proxy_clients=proxy_clients,
         app_config=app_config,
+        library_gate=background_jobs.library_gate,
     )
     themes = ThemesService(
         database=database,

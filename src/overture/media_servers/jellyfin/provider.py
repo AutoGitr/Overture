@@ -7,6 +7,7 @@ lazy from typing import ClassVar, override
 lazy from ...config import Settings
 lazy from ...domain import (
     ArtType,
+    CollectionFiltering,
     CollectionMode,
     CollectionOrder,
     ImageSize,
@@ -139,10 +140,13 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         """Normalize one item, without its seasons, into a ServerItem."""
         item_id = metadata["Id"]
         studios = metadata.get("Studios") or []
+        people = metadata.get("People") or []
         etag = metadata.get("Etag")
         movie = media_type is MediaType.MOVIE
         if movie and not etag:
             raise MediaServerError("Media server returned a movie without an Etag")
+        raw_rating = metadata.get("CommunityRating")
+        runtime_ticks = metadata.get("RunTimeTicks")
         return ServerItem(
             id=item_id,
             title=metadata.get("Name") or "",
@@ -166,6 +170,29 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             director_etag=etag if movie else None,
             studio=studios[0].get("Name") if studios else None,
             genres=tuple(metadata.get("Genres") or []),
+            actors=tuple(
+                name
+                for person in people
+                if person.get("Type") == "Actor" and (name := person.get("Name"))
+            ),
+            writers=tuple(
+                name
+                for person in people
+                if person.get("Type") == "Writer" and (name := person.get("Name"))
+            ),
+            producers=tuple(
+                name
+                for person in people
+                if person.get("Type") == "Producer" and (name := person.get("Name"))
+            ),
+            countries=tuple(metadata.get("ProductionLocations") or []),
+            tags=tuple(metadata.get("Tags") or []),
+            content_rating=metadata.get("OfficialRating") or None,
+            rating=float(raw_rating) if isinstance(raw_rating, int | float) else None,
+            duration_minutes=int(runtime_ticks // 600_000_000)
+            if isinstance(runtime_ticks, int) and runtime_ticks > 0
+            else None,
+            release_date=(metadata.get("PremiereDate") or "")[:10] or None,
             server_added_at=parse_utc_datetime(
                 metadata.get("DateCreated"), naive_tz=self._app_config.tzinfo
             ),
@@ -353,6 +380,9 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         mode: CollectionMode,
         order: CollectionOrder,
         visible_home: bool,
+        visible_shared: bool = False,
+        visible_library: bool = False,
+        filtering: CollectionFiltering | None = None,
     ) -> None:
         await self.client.update_collection_details(
             server_collection_id, title, summary, sort_title, order

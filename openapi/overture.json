@@ -48,6 +48,15 @@
             "title": "Collection Delete Below Minimum",
             "type": "boolean"
           },
+          "collection_delete_when_inactive": {
+            "default": false,
+            "title": "Collection Delete When Inactive",
+            "type": "boolean"
+          },
+          "collection_filtering_default": {
+            "$ref": "#/components/schemas/CollectionFiltering",
+            "default": "admin"
+          },
           "collection_minimum_items": {
             "default": 1,
             "maximum": 100.0,
@@ -59,11 +68,33 @@
             "$ref": "#/components/schemas/CollectionMode",
             "default": "default"
           },
+          "collection_order_default": {
+            "$ref": "#/components/schemas/CollectionOrder",
+            "default": "release"
+          },
           "collection_sort_title_format": {
             "default": "",
             "maxLength": 200,
             "title": "Collection Sort Title Format",
             "type": "string"
+          },
+          "collection_summary_format": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Collection Summary Format",
+            "type": "string"
+          },
+          "collection_sync_enabled": {
+            "default": true,
+            "title": "Collection Sync Enabled",
+            "type": "boolean"
+          },
+          "collection_sync_interval_hours": {
+            "default": 24,
+            "maximum": 8760.0,
+            "minimum": 0.0,
+            "title": "Collection Sync Interval Hours",
+            "type": "integer"
           },
           "collection_sync_mode": {
             "$ref": "#/components/schemas/SyncMode",
@@ -79,6 +110,21 @@
               }
             ],
             "title": "Collection Themes Unavailable"
+          },
+          "collection_visible_home": {
+            "default": false,
+            "title": "Collection Visible Home",
+            "type": "boolean"
+          },
+          "collection_visible_library": {
+            "default": false,
+            "title": "Collection Visible Library",
+            "type": "boolean"
+          },
+          "collection_visible_shared": {
+            "default": false,
+            "title": "Collection Visible Shared",
+            "type": "boolean"
           },
           "collections_supported": {
             "default": false,
@@ -96,6 +142,11 @@
             "minimum": 0.0,
             "title": "Max Duration Seconds",
             "type": "integer"
+          },
+          "mdblist_configured": {
+            "default": false,
+            "title": "Mdblist Configured",
+            "type": "boolean"
           },
           "media_server": {
             "anyOf": [
@@ -119,9 +170,19 @@
             "title": "Normalize Theme Loudness",
             "type": "boolean"
           },
+          "radarr_configured": {
+            "default": false,
+            "title": "Radarr Configured",
+            "type": "boolean"
+          },
           "skip_media_server_tmdb_urls": {
             "default": false,
             "title": "Skip Media Server Tmdb Urls",
+            "type": "boolean"
+          },
+          "sonarr_configured": {
+            "default": false,
+            "title": "Sonarr Configured",
             "type": "boolean"
           },
           "theme_download_workers": {
@@ -165,11 +226,20 @@
         "required": [
           "collection_sync_mode",
           "collection_mode_default",
+          "collection_order_default",
+          "collection_filtering_default",
+          "collection_visible_home",
+          "collection_visible_shared",
+          "collection_visible_library",
           "collection_minimum_items",
           "collection_delete_below_minimum",
           "collection_auto_match_art",
           "collection_auto_match_theme",
           "collection_sort_title_format",
+          "collection_summary_format",
+          "collection_delete_when_inactive",
+          "collection_sync_interval_hours",
+          "collection_sync_enabled",
           "auto_match_art",
           "workflow",
           "theme_search_format",
@@ -186,6 +256,9 @@
           "updated_at",
           "media_server",
           "tmdb_configured",
+          "mdblist_configured",
+          "radarr_configured",
+          "sonarr_configured",
           "collections_supported",
           "collection_themes_unavailable",
           "art_download_workers",
@@ -284,6 +357,27 @@
             ],
             "title": "Collection Delete Below Minimum"
           },
+          "collection_delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Delete When Inactive"
+          },
+          "collection_filtering_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_minimum_items": {
             "anyOf": [
               {
@@ -305,6 +399,16 @@
               }
             ]
           },
+          "collection_order_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_sort_title_format": {
             "anyOf": [
               {
@@ -316,6 +420,39 @@
             ],
             "title": "Collection Sort Title Format"
           },
+          "collection_summary_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Summary Format"
+          },
+          "collection_sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Sync Enabled"
+          },
+          "collection_sync_interval_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Sync Interval Hours"
+          },
           "collection_sync_mode": {
             "anyOf": [
               {
@@ -325,6 +462,39 @@
                 "type": "null"
               }
             ]
+          },
+          "collection_visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Visible Home"
+          },
+          "collection_visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Visible Library"
+          },
+          "collection_visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Visible Shared"
           },
           "disable_media_server_art": {
             "anyOf": [
@@ -414,6 +584,26 @@
           }
         },
         "title": "AppSettingsUpdate",
+        "type": "object"
+      },
+      "ArrTagRead": {
+        "additionalProperties": false,
+        "description": "One tag configured on Radarr or Sonarr.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ArrTagRead",
         "type": "object"
       },
       "ArtBulkSource": {
@@ -1657,6 +1847,28 @@
               }
             ],
             "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
           }
         },
         "required": [
@@ -2334,10 +2546,114 @@
         "title": "CollectionArtwork",
         "type": "object"
       },
+      "CollectionBuilder-Input": {
+        "discriminator": {
+          "mapping": {
+            "library_filter": "#/components/schemas/LibraryFilterBuilder-Input",
+            "mdblist": "#/components/schemas/MdblistBuilder-Input",
+            "radarr_tag": "#/components/schemas/RadarrTagBuilder-Input",
+            "sonarr_tag": "#/components/schemas/SonarrTagBuilder-Input",
+            "tmdb_collection": "#/components/schemas/TmdbCollectionBuilder-Input",
+            "tmdb_item": "#/components/schemas/TmdbItemBuilder-Input",
+            "tmdb_person": "#/components/schemas/TmdbPersonBuilder-Input"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TmdbCollectionBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbItemBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbPersonBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/MdblistBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/RadarrTagBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/SonarrTagBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/LibraryFilterBuilder-Input"
+          }
+        ]
+      },
+      "CollectionBuilder-Output": {
+        "discriminator": {
+          "mapping": {
+            "library_filter": "#/components/schemas/LibraryFilterBuilder-Output",
+            "mdblist": "#/components/schemas/MdblistBuilder-Output",
+            "radarr_tag": "#/components/schemas/RadarrTagBuilder-Output",
+            "sonarr_tag": "#/components/schemas/SonarrTagBuilder-Output",
+            "tmdb_collection": "#/components/schemas/TmdbCollectionBuilder-Output",
+            "tmdb_item": "#/components/schemas/TmdbItemBuilder-Output",
+            "tmdb_person": "#/components/schemas/TmdbPersonBuilder-Output"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TmdbCollectionBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbItemBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbPersonBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/MdblistBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/RadarrTagBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/SonarrTagBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/LibraryFilterBuilder-Output"
+          }
+        ]
+      },
       "CollectionCreate": {
         "additionalProperties": false,
         "description": "Create a collection in one selected library.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_group": {
             "anyOf": [
               {
@@ -2359,6 +2675,21 @@
                 "type": "null"
               }
             ]
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CollectionKind",
+            "default": "regular"
           },
           "library_id": {
             "maxLength": 200,
@@ -2426,6 +2757,16 @@
             ],
             "title": "Summary"
           },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "title": {
             "maxLength": 200,
             "minLength": 1,
@@ -2448,6 +2789,16 @@
             "default": false,
             "title": "Visible Home",
             "type": "boolean"
+          },
+          "visible_library": {
+            "default": false,
+            "title": "Visible Library",
+            "type": "boolean"
+          },
+          "visible_shared": {
+            "default": false,
+            "title": "Visible Shared",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2462,6 +2813,28 @@
         "additionalProperties": false,
         "description": "One collection with its members and what limits its theme.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active End Mmdd"
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Start Mmdd"
+          },
           "art_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -2476,6 +2849,17 @@
               }
             ],
             "title": "Art Url"
+          },
+          "auto_generated_tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generated Tmdb Id"
           },
           "background_status": {
             "$ref": "#/components/schemas/AssetStatus",
@@ -2524,6 +2908,16 @@
             "title": "Child Count",
             "type": "integer"
           },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_group": {
             "anyOf": [
               {
@@ -2545,6 +2939,17 @@
               }
             ]
           },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
           "effective_sync_mode": {
             "$ref": "#/components/schemas/SyncMode",
             "default": "sync"
@@ -2557,6 +2962,10 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CollectionKind",
+            "default": "regular"
           },
           "library_id": {
             "anyOf": [
@@ -2659,6 +3068,17 @@
             ],
             "title": "Sort Title"
           },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title Format"
+          },
           "summary": {
             "anyOf": [
               {
@@ -2669,6 +3089,17 @@
               }
             ],
             "title": "Summary"
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Format"
           },
           "theme_duration": {
             "anyOf": [
@@ -2730,6 +3161,21 @@
           "visible_home": {
             "default": false,
             "title": "Visible Home",
+            "type": "boolean"
+          },
+          "visible_library": {
+            "default": false,
+            "title": "Visible Library",
+            "type": "boolean"
+          },
+          "visible_shared": {
+            "default": false,
+            "title": "Visible Shared",
+            "type": "boolean"
+          },
+          "withheld": {
+            "default": false,
+            "title": "Withheld",
             "type": "boolean"
           },
           "youtube_duration": {
@@ -2795,13 +3241,23 @@
           "background_status",
           "art_status",
           "id",
+          "kind",
           "title",
           "summary",
           "sort_title",
+          "sort_title_format",
+          "summary_format",
           "collection_group",
           "collection_mode",
           "order_type",
+          "collection_filtering",
           "visible_home",
+          "visible_shared",
+          "visible_library",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "delete_when_inactive",
+          "withheld",
           "thumb_url",
           "art_url",
           "child_count",
@@ -2818,6 +3274,7 @@
           "theme_status",
           "monitored",
           "tmdb_collection_id",
+          "auto_generated_tmdb_id",
           "public_dataset_complete",
           "public_dataset_themerrdb",
           "effective_sync_mode",
@@ -2935,10 +3392,39 @@
         "title": "CollectionFilter",
         "type": "object"
       },
+      "CollectionFiltering": {
+        "description": "User-context filtering mode for Plex smart collections.",
+        "enum": [
+          "admin",
+          "user"
+        ],
+        "title": "CollectionFiltering",
+        "type": "string"
+      },
       "CollectionGenerateRequest": {
         "additionalProperties": false,
         "description": "Preview or generate collections from metadata already in the library.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -2960,6 +3446,16 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "collection_group": {
             "anyOf": [
@@ -2994,6 +3490,27 @@
             ],
             "title": "Delete Below Minimum"
           },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "dynamic_tmdb": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DynamicTmdbGroupConfig-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "library_id": {
             "minLength": 1,
             "title": "Library Id",
@@ -3015,6 +3532,16 @@
             ],
             "title": "Minimum Items"
           },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "preset": {
             "$ref": "#/components/schemas/CollectionPreset"
           },
@@ -3027,6 +3554,40 @@
                 "type": "null"
               }
             ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
+          },
+          "sync_interval_hours": {
+            "anyOf": [
+              {
+                "maximum": 8760.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Hours"
           },
           "sync_mode": {
             "anyOf": [
@@ -3045,6 +3606,39 @@
             "maxItems": 100,
             "title": "Titles",
             "type": "array"
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
           }
         },
         "required": [
@@ -3085,6 +3679,26 @@
         "additionalProperties": false,
         "description": "Nullable group defaults; null inherits the application setting.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -3107,6 +3721,16 @@
             ],
             "title": "Auto Match Theme"
           },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_mode": {
             "anyOf": [
               {
@@ -3128,6 +3752,27 @@
             ],
             "title": "Delete Below Minimum"
           },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "dynamic_tmdb": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DynamicTmdbGroupConfig-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -3141,6 +3786,16 @@
             ],
             "title": "Minimum Items"
           },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "sort_title_format": {
             "anyOf": [
               {
@@ -3151,6 +3806,40 @@
               }
             ]
           },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
+          },
+          "sync_interval_hours": {
+            "anyOf": [
+              {
+                "maximum": 8760.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Hours"
+          },
           "sync_mode": {
             "anyOf": [
               {
@@ -3160,6 +3849,39 @@
                 "type": "null"
               }
             ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
           }
         },
         "title": "CollectionGroupPolicy",
@@ -3169,6 +3891,26 @@
         "additionalProperties": false,
         "description": "Nullable group defaults; null inherits the application setting.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -3191,6 +3933,16 @@
             ],
             "title": "Auto Match Theme"
           },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_mode": {
             "anyOf": [
               {
@@ -3212,6 +3964,27 @@
             ],
             "title": "Delete Below Minimum"
           },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "dynamic_tmdb": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DynamicTmdbGroupConfig-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -3225,6 +3998,16 @@
             ],
             "title": "Minimum Items"
           },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "sort_title_format": {
             "anyOf": [
               {
@@ -3235,6 +4018,40 @@
               }
             ]
           },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
+          },
+          "sync_interval_hours": {
+            "anyOf": [
+              {
+                "maximum": 8760.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Hours"
+          },
           "sync_mode": {
             "anyOf": [
               {
@@ -3244,6 +4061,39 @@
                 "type": "null"
               }
             ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
           }
         },
         "required": [
@@ -3251,12 +4101,33 @@
           "minimum_items",
           "delete_below_minimum",
           "collection_mode",
+          "order_type",
+          "collection_filtering",
+          "visible_home",
+          "visible_shared",
+          "visible_library",
           "sort_title_format",
+          "summary_format",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "delete_when_inactive",
           "auto_match_art",
-          "auto_match_theme"
+          "auto_match_theme",
+          "sync_interval_hours",
+          "sync_enabled",
+          "dynamic_tmdb"
         ],
         "title": "CollectionGroupPolicy",
         "type": "object"
+      },
+      "CollectionKind": {
+        "description": "How a collection's membership is maintained on the media server.",
+        "enum": [
+          "regular",
+          "smart"
+        ],
+        "title": "CollectionKind",
+        "type": "string"
       },
       "CollectionMembersUpdate": {
         "additionalProperties": false,
@@ -3297,6 +4168,36 @@
         "additionalProperties": false,
         "description": "Editable collection metadata and server display options.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_group": {
             "anyOf": [
               {
@@ -3318,6 +4219,21 @@
                 "type": "null"
               }
             ]
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CollectionKind",
+            "default": "regular"
           },
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
@@ -3357,6 +4273,16 @@
             ],
             "title": "Summary"
           },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "title": {
             "maxLength": 200,
             "minLength": 1,
@@ -3378,6 +4304,16 @@
           "visible_home": {
             "default": false,
             "title": "Visible Home",
+            "type": "boolean"
+          },
+          "visible_library": {
+            "default": false,
+            "title": "Visible Library",
+            "type": "boolean"
+          },
+          "visible_shared": {
+            "default": false,
+            "title": "Visible Shared",
             "type": "boolean"
           }
         },
@@ -3448,6 +4384,28 @@
         "additionalProperties": false,
         "description": "Media-server collection response.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active End Mmdd"
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Start Mmdd"
+          },
           "art_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -3462,6 +4420,17 @@
               }
             ],
             "title": "Art Url"
+          },
+          "auto_generated_tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generated Tmdb Id"
           },
           "background_status": {
             "$ref": "#/components/schemas/AssetStatus",
@@ -3488,6 +4457,16 @@
             "title": "Child Count",
             "type": "integer"
           },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "collection_group": {
             "anyOf": [
               {
@@ -3509,6 +4488,17 @@
               }
             ]
           },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
           "has_theme": {
             "default": false,
             "title": "Has Theme",
@@ -3517,6 +4507,10 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CollectionKind",
+            "default": "regular"
           },
           "library_id": {
             "anyOf": [
@@ -3602,6 +4596,17 @@
             ],
             "title": "Sort Title"
           },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title Format"
+          },
           "summary": {
             "anyOf": [
               {
@@ -3612,6 +4617,17 @@
               }
             ],
             "title": "Summary"
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Format"
           },
           "theme_status": {
             "$ref": "#/components/schemas/AssetStatus",
@@ -3646,6 +4662,21 @@
           "visible_home": {
             "default": false,
             "title": "Visible Home",
+            "type": "boolean"
+          },
+          "visible_library": {
+            "default": false,
+            "title": "Visible Library",
+            "type": "boolean"
+          },
+          "visible_shared": {
+            "default": false,
+            "title": "Visible Shared",
+            "type": "boolean"
+          },
+          "withheld": {
+            "default": false,
+            "title": "Withheld",
             "type": "boolean"
           },
           "youtube_duration": {
@@ -3689,13 +4720,23 @@
           "background_status",
           "art_status",
           "id",
+          "kind",
           "title",
           "summary",
           "sort_title",
+          "sort_title_format",
+          "summary_format",
           "collection_group",
           "collection_mode",
           "order_type",
+          "collection_filtering",
           "visible_home",
+          "visible_shared",
+          "visible_library",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "delete_when_inactive",
+          "withheld",
           "thumb_url",
           "art_url",
           "child_count",
@@ -3712,6 +4753,7 @@
           "theme_status",
           "monitored",
           "tmdb_collection_id",
+          "auto_generated_tmdb_id",
           "public_dataset_complete",
           "public_dataset_themerrdb"
         ],
@@ -3722,6 +4764,26 @@
         "additionalProperties": false,
         "description": "Saved rule with its most recent outcome.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -3744,6 +4806,33 @@
             ],
             "title": "Auto Match Theme"
           },
+          "builders": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionBuilder-Output"
+            },
+            "title": "Builders",
+            "type": "array"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "delete_below_minimum": {
             "anyOf": [
               {
@@ -3754,6 +4843,17 @@
               }
             ],
             "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
           },
           "enabled": {
             "default": true,
@@ -3786,6 +4886,19 @@
             ],
             "title": "Last Synced At"
           },
+          "managed_label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed Label"
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -3799,6 +4912,36 @@
             ],
             "title": "Minimum Items"
           },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "smart_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SmartCollectionConfig-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_identifier": {
             "default": "",
             "maxLength": 500,
@@ -3806,7 +4949,18 @@
             "type": "string"
           },
           "source_type": {
-            "$ref": "#/components/schemas/RuleSourceType"
+            "$ref": "#/components/schemas/RuleSourceType",
+            "default": "filter"
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sync_interval_hours": {
             "default": 24,
@@ -3824,15 +4978,62 @@
                 "type": "null"
               }
             ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
           }
         },
         "required": [
           "source_type",
           "source_identifier",
           "filters",
+          "builders",
+          "smart_filter",
+          "managed_label",
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
+          "collection_mode",
+          "order_type",
+          "collection_filtering",
+          "visible_home",
+          "visible_shared",
+          "visible_library",
+          "sort_title_format",
+          "summary_format",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "delete_when_inactive",
           "auto_match_art",
           "auto_match_theme",
           "sync_interval_hours",
@@ -3845,8 +5046,28 @@
       },
       "CollectionRuleWrite": {
         "additionalProperties": false,
-        "description": "A dynamic source with nullable overrides of global defaults.",
+        "description": "Composable dynamic builders or smart filter with nullable policy overrides.",
         "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -3869,6 +5090,33 @@
             ],
             "title": "Auto Match Theme"
           },
+          "builders": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionBuilder-Input"
+            },
+            "title": "Builders",
+            "type": "array"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "delete_below_minimum": {
             "anyOf": [
               {
@@ -3880,6 +5128,17 @@
             ],
             "title": "Delete Below Minimum"
           },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -3887,6 +5146,19 @@
           },
           "filters": {
             "$ref": "#/components/schemas/CollectionFilter-Input"
+          },
+          "managed_label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed Label"
           },
           "minimum_items": {
             "anyOf": [
@@ -3901,6 +5173,36 @@
             ],
             "title": "Minimum Items"
           },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "smart_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SmartCollectionConfig-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_identifier": {
             "default": "",
             "maxLength": 500,
@@ -3908,7 +5210,18 @@
             "type": "string"
           },
           "source_type": {
-            "$ref": "#/components/schemas/RuleSourceType"
+            "$ref": "#/components/schemas/RuleSourceType",
+            "default": "filter"
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sync_interval_hours": {
             "default": 24,
@@ -3926,11 +5239,41 @@
                 "type": "null"
               }
             ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
           }
         },
-        "required": [
-          "source_type"
-        ],
         "title": "CollectionRuleWrite",
         "type": "object"
       },
@@ -4410,6 +5753,105 @@
         "title": "DownloadStatus",
         "type": "string"
       },
+      "DynamicTmdbGroupConfig-Input": {
+        "additionalProperties": false,
+        "description": "Automatic TMDB franchise collection discovery for a collection group.",
+        "properties": {
+          "auto_exclude_from_other_collections": {
+            "default": true,
+            "title": "Auto Exclude From Other Collections",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "exclude_tmdb_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "title": "Exclude Tmdb Ids",
+            "type": "array"
+          },
+          "library_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "strip_prefix": {
+            "default": "The ",
+            "maxLength": 100,
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": " Collection",
+            "maxLength": 100,
+            "title": "Strip Suffix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "library_id"
+        ],
+        "title": "DynamicTmdbGroupConfig",
+        "type": "object"
+      },
+      "DynamicTmdbGroupConfig-Output": {
+        "additionalProperties": false,
+        "description": "Automatic TMDB franchise collection discovery for a collection group.",
+        "properties": {
+          "auto_exclude_from_other_collections": {
+            "default": true,
+            "title": "Auto Exclude From Other Collections",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "exclude_tmdb_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "title": "Exclude Tmdb Ids",
+            "type": "array"
+          },
+          "library_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "strip_prefix": {
+            "default": "The ",
+            "maxLength": 100,
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": " Collection",
+            "maxLength": 100,
+            "title": "Strip Suffix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "library_id",
+          "strip_prefix",
+          "strip_suffix",
+          "exclude_tmdb_ids",
+          "auto_exclude_from_other_collections"
+        ],
+        "title": "DynamicTmdbGroupConfig",
+        "type": "object"
+      },
       "EnqueuedJobResponse": {
         "additionalProperties": false,
         "description": "A download job that was queued.",
@@ -4431,6 +5873,188 @@
         ],
         "title": "EnqueuedJobResponse",
         "type": "object"
+      },
+      "FilterCondition-Input": {
+        "additionalProperties": false,
+        "description": "One atomic library or smart-collection filter condition.",
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/FilterField"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/FilterOperator",
+            "default": "is"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "field",
+          "value"
+        ],
+        "title": "FilterCondition",
+        "type": "object"
+      },
+      "FilterCondition-Output": {
+        "additionalProperties": false,
+        "description": "One atomic library or smart-collection filter condition.",
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/FilterField"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/FilterOperator",
+            "default": "is"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "field",
+          "operator",
+          "value"
+        ],
+        "title": "FilterCondition",
+        "type": "object"
+      },
+      "FilterField": {
+        "description": "Library metadata field evaluated by a filter condition.",
+        "enum": [
+          "title",
+          "genre",
+          "studio",
+          "actor",
+          "director",
+          "writer",
+          "producer",
+          "country",
+          "label",
+          "tag",
+          "content_rating",
+          "resolution",
+          "audio_language",
+          "year",
+          "decade",
+          "rating",
+          "duration_minutes",
+          "unplayed",
+          "in_progress",
+          "added_within_days",
+          "released_within_days"
+        ],
+        "title": "FilterField",
+        "type": "string"
+      },
+      "FilterGroup-Input": {
+        "additionalProperties": false,
+        "description": "Boolean group of conditions and nested filter groups.",
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/FilterCondition-Input"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/FilterGroup-Input"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "mode": {
+            "default": "all",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "FilterGroup",
+        "type": "object"
+      },
+      "FilterGroup-Output": {
+        "additionalProperties": false,
+        "description": "Boolean group of conditions and nested filter groups.",
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/FilterCondition-Output"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/FilterGroup-Output"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "mode": {
+            "default": "all",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "conditions",
+          "groups"
+        ],
+        "title": "FilterGroup",
+        "type": "object"
+      },
+      "FilterOperator": {
+        "description": "Comparison operator for a filter condition.",
+        "enum": [
+          "is",
+          "is_not",
+          "contains",
+          "does_not_contain",
+          "starts_with",
+          "gte",
+          "lte"
+        ],
+        "title": "FilterOperator",
+        "type": "string"
       },
       "FixAuditRequest": {
         "additionalProperties": false,
@@ -4880,6 +6504,47 @@
           }
         ]
       },
+      "LibraryFilterBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve library items matching a structured filter tree.",
+        "properties": {
+          "filter_group": {
+            "$ref": "#/components/schemas/FilterGroup-Input"
+          },
+          "type": {
+            "const": "library_filter",
+            "default": "library_filter",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter_group"
+        ],
+        "title": "LibraryFilterBuilder",
+        "type": "object"
+      },
+      "LibraryFilterBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve library items matching a structured filter tree.",
+        "properties": {
+          "filter_group": {
+            "$ref": "#/components/schemas/FilterGroup-Output"
+          },
+          "type": {
+            "const": "library_filter",
+            "default": "library_filter",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "filter_group"
+        ],
+        "title": "LibraryFilterBuilder",
+        "type": "object"
+      },
       "LibraryIds": {
         "$ref": "#/components/schemas/UniqueList_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1___MaxLen_max_length_128______MaxLen_max_length_200_",
         "maxItems": 200
@@ -5050,6 +6715,63 @@
           "saved_url"
         ],
         "type": "string"
+      },
+      "MdblistBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve one or more MDBList lists in source order.",
+        "properties": {
+          "identifiers": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Identifiers",
+            "type": "array"
+          },
+          "type": {
+            "const": "mdblist",
+            "default": "mdblist",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifiers"
+        ],
+        "title": "MdblistBuilder",
+        "type": "object"
+      },
+      "MdblistBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve one or more MDBList lists in source order.",
+        "properties": {
+          "identifiers": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Identifiers",
+            "type": "array"
+          },
+          "type": {
+            "const": "mdblist",
+            "default": "mdblist",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "identifiers"
+        ],
+        "title": "MdblistBuilder",
+        "type": "object"
       },
       "MeResponse": {
         "additionalProperties": false,
@@ -6224,6 +7946,63 @@
         "title": "PublicError",
         "type": "object"
       },
+      "RadarrTagBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve movies carrying one or more Radarr tags.",
+        "properties": {
+          "tags": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          },
+          "type": {
+            "const": "radarr_tag",
+            "default": "radarr_tag",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tags"
+        ],
+        "title": "RadarrTagBuilder",
+        "type": "object"
+      },
+      "RadarrTagBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve movies carrying one or more Radarr tags.",
+        "properties": {
+          "tags": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          },
+          "type": {
+            "const": "radarr_tag",
+            "default": "radarr_tag",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "tags"
+        ],
+        "title": "RadarrTagBuilder",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "additionalProperties": false,
         "description": "Readiness response.",
@@ -6660,6 +8439,11 @@
         "title": "SeasonRead",
         "type": "object"
       },
+      "SeasonalDate": {
+        "maxLength": 5,
+        "minLength": 5,
+        "type": "string"
+      },
       "SelectThemeRequest": {
         "additionalProperties": false,
         "description": "The chosen theme video; the item comes from the request path.",
@@ -6840,6 +8624,144 @@
         "title": "SetCollectionThemeRequest",
         "type": "object"
       },
+      "SmartCollectionConfig-Input": {
+        "additionalProperties": false,
+        "description": "Server-side smart collection filter, sort order and item limit.",
+        "properties": {
+          "filter_group": {
+            "$ref": "#/components/schemas/FilterGroup-Input"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "sort_by": {
+            "$ref": "#/components/schemas/SmartSortOrder",
+            "default": "release.desc"
+          }
+        },
+        "title": "SmartCollectionConfig",
+        "type": "object"
+      },
+      "SmartCollectionConfig-Output": {
+        "additionalProperties": false,
+        "description": "Server-side smart collection filter, sort order and item limit.",
+        "properties": {
+          "filter_group": {
+            "$ref": "#/components/schemas/FilterGroup-Output"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "sort_by": {
+            "$ref": "#/components/schemas/SmartSortOrder",
+            "default": "release.desc"
+          }
+        },
+        "required": [
+          "filter_group",
+          "sort_by",
+          "limit"
+        ],
+        "title": "SmartCollectionConfig",
+        "type": "object"
+      },
+      "SmartSortOrder": {
+        "description": "Sort order applied to a smart collection.",
+        "enum": [
+          "release.desc",
+          "release.asc",
+          "title.asc",
+          "title.desc",
+          "added.desc",
+          "added.asc",
+          "rating.desc",
+          "critic_rating.desc",
+          "audience_rating.desc",
+          "plays.desc",
+          "duration.desc",
+          "duration.asc",
+          "random"
+        ],
+        "title": "SmartSortOrder",
+        "type": "string"
+      },
+      "SonarrTagBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve shows carrying one or more Sonarr tags.",
+        "properties": {
+          "tags": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          },
+          "type": {
+            "const": "sonarr_tag",
+            "default": "sonarr_tag",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tags"
+        ],
+        "title": "SonarrTagBuilder",
+        "type": "object"
+      },
+      "SonarrTagBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve shows carrying one or more Sonarr tags.",
+        "properties": {
+          "tags": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          },
+          "type": {
+            "const": "sonarr_tag",
+            "default": "sonarr_tag",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "tags"
+        ],
+        "title": "SonarrTagBuilder",
+        "type": "object"
+      },
       "SortTitleFormat": {
         "maxLength": 200,
         "type": "string"
@@ -6963,6 +8885,10 @@
         ],
         "title": "StorageSummary",
         "type": "object"
+      },
+      "SummaryFormat": {
+        "maxLength": 2000,
+        "type": "string"
       },
       "SyncMode": {
         "description": "How a dynamic collection applies source membership.",
@@ -7348,6 +9274,51 @@
         "title": "ThemeStats",
         "type": "object"
       },
+      "TmdbCollectionBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve movies belonging to one TMDB franchise collection.",
+        "properties": {
+          "collection_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Collection Id",
+            "type": "integer"
+          },
+          "type": {
+            "const": "tmdb_collection",
+            "default": "tmdb_collection",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection_id"
+        ],
+        "title": "TmdbCollectionBuilder",
+        "type": "object"
+      },
+      "TmdbCollectionBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve movies belonging to one TMDB franchise collection.",
+        "properties": {
+          "collection_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Collection Id",
+            "type": "integer"
+          },
+          "type": {
+            "const": "tmdb_collection",
+            "default": "tmdb_collection",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "collection_id"
+        ],
+        "title": "TmdbCollectionBuilder",
+        "type": "object"
+      },
       "TmdbCollectionResponse": {
         "additionalProperties": false,
         "description": "A TMDB collection with its movies.",
@@ -7425,6 +9396,61 @@
           "poster_preview_url"
         ],
         "title": "TmdbCollectionResult",
+        "type": "object"
+      },
+      "TmdbItemBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve explicit TMDB movie or show IDs in order.",
+        "properties": {
+          "tmdb_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Tmdb Ids",
+            "type": "array"
+          },
+          "type": {
+            "const": "tmdb_item",
+            "default": "tmdb_item",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tmdb_ids"
+        ],
+        "title": "TmdbItemBuilder",
+        "type": "object"
+      },
+      "TmdbItemBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve explicit TMDB movie or show IDs in order.",
+        "properties": {
+          "tmdb_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Tmdb Ids",
+            "type": "array"
+          },
+          "type": {
+            "const": "tmdb_item",
+            "default": "tmdb_item",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "tmdb_ids"
+        ],
+        "title": "TmdbItemBuilder",
         "type": "object"
       },
       "TmdbItemPreview": {
@@ -7642,6 +9668,190 @@
         ],
         "title": "TmdbLanguageFilter",
         "type": "string"
+      },
+      "TmdbPersonBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve movies or shows credited to a TMDB person in selected roles.",
+        "properties": {
+          "person_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Person Id",
+            "type": "integer"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/TmdbPersonRole"
+            },
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          },
+          "type": {
+            "const": "tmdb_person",
+            "default": "tmdb_person",
+            "title": "Type",
+            "type": "string"
+          },
+          "use_biography": {
+            "default": false,
+            "title": "Use Biography",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "person_id"
+        ],
+        "title": "TmdbPersonBuilder",
+        "type": "object"
+      },
+      "TmdbPersonBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve movies or shows credited to a TMDB person in selected roles.",
+        "properties": {
+          "person_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Person Id",
+            "type": "integer"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/TmdbPersonRole"
+            },
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          },
+          "type": {
+            "const": "tmdb_person",
+            "default": "tmdb_person",
+            "title": "Type",
+            "type": "string"
+          },
+          "use_biography": {
+            "default": false,
+            "title": "Use Biography",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "person_id",
+          "person_name",
+          "roles",
+          "use_biography"
+        ],
+        "title": "TmdbPersonBuilder",
+        "type": "object"
+      },
+      "TmdbPersonResult": {
+        "additionalProperties": false,
+        "description": "A person TMDB found for a person collection builder.",
+        "properties": {
+          "known_for_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known For Department"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "profile_preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Preview Url"
+          },
+          "profile_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Url"
+          },
+          "tmdb_id": {
+            "title": "Tmdb Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tmdb_id",
+          "name",
+          "known_for_department",
+          "profile_url",
+          "profile_preview_url"
+        ],
+        "title": "TmdbPersonResult",
+        "type": "object"
+      },
+      "TmdbPersonRole": {
+        "description": "Credit roles included by a TMDB person builder.",
+        "enum": [
+          "actor",
+          "director",
+          "writer",
+          "producer",
+          "biography"
+        ],
+        "title": "TmdbPersonRole",
+        "type": "string"
+      },
+      "TmdbPersonSearchResponse": {
+        "additionalProperties": false,
+        "description": "TMDB person search results.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TmdbPersonResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "TmdbPersonSearchResponse",
+        "type": "object"
       },
       "TmdbSearchResponse": {
         "additionalProperties": false,
@@ -9888,6 +12098,79 @@
         ]
       }
     },
+    "/api/collections/group-policy/sync": {
+      "post": {
+        "description": "Run dynamic discovery and sync rules for a collection group.",
+        "operationId": "sync_collection_group",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Collection Group",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/groups": {
       "get": {
         "description": "Return default and custom collection groups for this media type.",
@@ -9949,6 +12232,118 @@
           }
         },
         "summary": "List Collection Groups",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/tags/radarr": {
+      "get": {
+        "description": "Return available Radarr tags when Radarr is configured.",
+        "operationId": "list_radarr_tags",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ArrTagRead"
+                  },
+                  "title": "Response List Radarr Tags",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Radarr Tags",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/tags/sonarr": {
+      "get": {
+        "description": "Return available Sonarr tags when Sonarr is configured.",
+        "operationId": "list_sonarr_tags",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ArrTagRead"
+                  },
+                  "title": "Response List Sonarr Tags",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sonarr Tags",
         "tags": [
           "collections"
         ]
@@ -14623,6 +17018,69 @@
           }
         },
         "summary": "Get Tmdb Collection",
+        "tags": [
+          "tmdb"
+        ]
+      }
+    },
+    "/api/tmdb/people/search": {
+      "get": {
+        "description": "Search TMDB people by name or numeric person ID.",
+        "operationId": "search_tmdb_people",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TmdbPersonSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Tmdb People",
         "tags": [
           "tmdb"
         ]

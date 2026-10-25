@@ -33,11 +33,13 @@ lazy from ..schemas.themes import SelectThemeRequest
 lazy from ..schemas.tmdb import (
     TmdbCollectionResponse,
     TmdbItemPreview,
+    TmdbPersonSearchResponse,
     TmdbSearchResponse,
     tmdb_collection_response,
     tmdb_collection_result,
     tmdb_item_preview,
     tmdb_item_result,
+    tmdb_person_result,
 )
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
@@ -218,6 +220,30 @@ class TmdbItemsService:
                     for collection in collections.values()
                 ),
             ]
+        )
+
+    async def search_people(self, query: str) -> TmdbPersonSearchResponse:
+        """Search TMDB people by name or numeric person ID."""
+        self._require_configured()
+        query = query.strip()
+        if not query:
+            return TmdbPersonSearchResponse(results=[])
+        if query.isdigit():
+            person, found = await self._fetch(
+                asyncio.gather(
+                    self._tmdb.get_person(int(query)),
+                    self._tmdb.search_people(query),
+                )
+            )
+            people = {
+                entry.tmdb_id: entry
+                for entry in (*((person,) if person else ()), *found)
+            }
+        else:
+            found = await self._fetch(self._tmdb.search_people(query))
+            people = {entry.tmdb_id: entry for entry in found}
+        return TmdbPersonSearchResponse(
+            results=[tmdb_person_result(entry) for entry in people.values()]
         )
 
     async def collection(
