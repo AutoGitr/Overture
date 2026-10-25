@@ -505,7 +505,7 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
     });
     renderWithQueryClient(CollectionPage);
-    expect(await screen.findByRole("region", { name: "General & Server Display" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Collection Setup" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Danger Zone" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Delete collection" })).toHaveLength(1);
   });

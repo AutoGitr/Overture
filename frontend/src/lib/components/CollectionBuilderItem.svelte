@@ -88,6 +88,8 @@
 </script>
 
 {#snippet tagPicker(title: string, tags: { id: number; label: string }[] | undefined)}
+  {@const builderTags =
+    builder.type === "radarr_tag" || builder.type === "sonarr_tag" ? (builder.tags ?? []) : []}
   <div class="form-label">
     <span>{title}</span>
     {#if tags && tags.length > 0}
@@ -96,7 +98,7 @@
           <button
             type="button"
             class="tag-chip"
-            class:active={(builder.tags ?? []).includes(tag.label)}
+            class:active={builderTags.includes(tag.label)}
             onclick={() => toggleTag(tag.label)}
           >
             {tag.label}
@@ -107,7 +109,7 @@
     <input
       type="text"
       placeholder="Tag names separated by comma"
-      value={(builder.tags ?? []).join(", ")}
+      value={builderTags.join(", ")}
       oninput={(e) => {
         if (builder.type === "radarr_tag" || builder.type === "sonarr_tag") {
           builder.tags = splitList(e.currentTarget.value);

@@ -391,10 +391,7 @@ export class CollectionDraft {
           media_type: this.mediaType,
           library_id: this.libraryId,
           member_ids: [...this.memberIds],
-          rule:
-            this.sourceType === "manual"
-              ? null
-              : $state.snapshot(this.rule),
+          rule: this.sourceType === "manual" ? null : $state.snapshot(this.rule),
         },
       });
       storeCollectionDetail(collection);

@@ -115,7 +115,7 @@
   {#if draft}
     <fieldset class="options-col" disabled={request.isPending || syncGroupRequest.isPending}>
       <legend>Group defaults</legend>
-      <CollectionPolicyFields policy={draft} prefix="Group " plex={serverType === "plex"} />
+      <CollectionPolicyFields bind:policy={draft} prefix="Group " plex={serverType === "plex"} />
 
       <label class="form-row">
         <input

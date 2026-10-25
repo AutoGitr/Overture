@@ -476,13 +476,13 @@ describe("Collection Builders UI", () => {
       goToCollectionView(detail, "configure");
       renderWithQueryClient(CollectionPage);
 
-      const startInput = await screen.findByLabelText(/Rule active start \(MM-DD\)/i);
+      const startInput = await screen.findByLabelText(/^Active start \(MM-DD\)/i);
       await fireEvent.input(startInput, { target: { value: "12-15" } });
 
-      const endInput = screen.getByLabelText(/Rule active end \(MM-DD\)/i);
+      const endInput = screen.getByLabelText(/^Active end \(MM-DD\)/i);
       await fireEvent.input(endInput, { target: { value: "01-05" } });
 
-      const templateInput = screen.getByLabelText(/Rule summary template/i);
+      const templateInput = screen.getByLabelText(/^Summary template/i);
       await fireEvent.input(templateInput, { target: { value: "{title} seasonal" } });
     });
 
@@ -495,7 +495,7 @@ describe("Collection Builders UI", () => {
       renderWithQueryClient(CollectionPage);
 
       await fireEvent.change(await screen.findByLabelText("Source"), {
-        target: { value: "composite" },
+        target: { value: "builders" },
       });
 
       const addBtn = await screen.findByRole("button", { name: "MDBList" });
@@ -519,25 +519,25 @@ describe("Collection Builders UI", () => {
       goToCollectionView(detail, "configure");
       renderWithQueryClient(CollectionPage);
 
-      const generalSection = await screen.findByRole("region", { name: "General" });
-      const general = within(generalSection);
+      const displaySection = await screen.findByRole("region", { name: "Display" });
+      const display = within(displaySection);
 
-      const summaryFormatInput = general.getByLabelText(/^Summary template/i);
+      const summaryFormatInput = display.getByLabelText(/^Summary template/i);
       await fireEvent.input(summaryFormatInput, { target: { value: "{title} - {group}" } });
 
-      const startInput = general.getByLabelText(/^Active start/i);
+      const startInput = display.getByLabelText(/^Active start/i);
       await fireEvent.input(startInput, { target: { value: "12-15" } });
 
-      const endInput = general.getByLabelText(/^Active end/i);
+      const endInput = display.getByLabelText(/^Active end/i);
       await fireEvent.input(endInput, { target: { value: "01-05" } });
 
-      const visibleShared = general.getByLabelText(/Visible to shared users/i);
+      const visibleShared = display.getByLabelText(/Visible to shared users/i);
       await fireEvent.click(visibleShared);
 
-      const visibleLibrary = general.getByLabelText(/Visible in library recommended/i);
+      const visibleLibrary = display.getByLabelText(/Visible in library recommended/i);
       await fireEvent.click(visibleLibrary);
 
-      const filterSelect = general.getByLabelText(/Collection filtering/i);
+      const filterSelect = display.getByLabelText(/Collection filtering/i);
       await fireEvent.change(filterSelect, { target: { value: "admin" } });
 
       await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));

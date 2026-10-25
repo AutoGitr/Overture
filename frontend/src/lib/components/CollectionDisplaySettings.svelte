@@ -6,53 +6,24 @@
 
   let {
     editor = $bindable(),
-    groups,
-    libraries,
+    libraries = [],
   }: {
     editor: CollectionEditor | CollectionDraft;
-    groups: string[];
-    libraries: LibrarySectionRead[];
+    libraries?: LibrarySectionRead[];
   } = $props();
 
-  const groupListId = $props.id();
   let plex = $derived(editor.serverType === "plex");
 </script>
 
 <DetailForm
-  title="General & Server Display"
-  description="Manage the collection's metadata, active seasonal windows, and how it appears in your library."
+  title="Server Display & Scheduling"
+  description="Configure sort titles, summaries, seasonal visibility windows, and media server promotion."
   busy={editor.busy}
 >
-  <div class="form-label">
-    <label for={`${groupListId}-library`}>Library</label>
-    <select
-      id={`${groupListId}-library`}
-      required
-      value={editor.libraryId}
-      disabled={!editor.creating}
-      onchange={(event) => {
-        if (editor.creating) editor.selectLibrary(event.currentTarget.value);
-      }}
-    >
-      <option value="">Select a library</option>
-      {#if !editor.creating && editor.libraryId && !libraries.some((library) => library.id === editor.libraryId)}
-        <option value={editor.libraryId}>{editor.libraryId}</option>
-      {/if}
-      {#each libraries as library (library.id)}
-        <option value={library.id}>{library.title}</option>
-      {/each}
-    </select>
-  </div>
-
-  <label class="form-label">
-    Title
-    <input required maxlength="200" bind:value={editor.title} />
-  </label>
-
   <div class="options-col">
     <label class="form-label">
       Sort title
-      <input maxlength="200" bind:value={editor.sortTitle} />
+      <input maxlength="200" bind:value={editor.sortTitle} placeholder="Sort title override" />
     </label>
     <div class="form-row">
       {#each ["!", "+", "01_"] as prefix (prefix)}
@@ -75,7 +46,8 @@
 
   <label class="form-label form-wide">
     Summary
-    <textarea maxlength="10000" bind:value={editor.summary}></textarea>
+    <textarea maxlength="10000" bind:value={editor.summary} placeholder="Collection overview"
+    ></textarea>
   </label>
 
   <label class="form-label">
@@ -90,28 +62,6 @@
       &#123;summary&#125;.
     </span>
   </label>
-
-  <label class="form-label">
-    Collection Group
-    <input
-      list={groupListId}
-      maxlength="200"
-      bind:value={editor.collectionGroup}
-      placeholder="Ungrouped"
-    />
-    <datalist id={groupListId}>
-      {#each groups as group (group)}
-        <option value={group}></option>
-      {/each}
-    </datalist>
-  </label>
-
-  {#if editor.mediaType === "movie" && editor.sourceType !== "tmdb"}
-    <label class="form-label">
-      TMDB collection ID
-      <input type="number" min="1" step="1" bind:value={editor.tmdbCollectionId} />
-    </label>
-  {/if}
 
   <div class="seasonal-row">
     <label class="form-label">
@@ -156,7 +106,7 @@
       </select>
     </label>
 
-    <div class="options-col">
+    <div class="options-col form-wide">
       <span class="hint">Media server home and promotion</span>
       <label class="form-row">
         <input type="checkbox" bind:checked={editor.visibleHome} />
@@ -187,6 +137,11 @@
   .seasonal-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-4);
+  }
+  @media (max-width: 640px) {
+    .seasonal-row {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

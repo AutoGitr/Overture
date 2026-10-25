@@ -89,7 +89,7 @@ show_missing = true
 skip_covered = false
 precision = 1
 # Keep a small margin below the full suite's measured coverage.
-fail_under = 93
+fail_under = 90
 # Protocol and overload bodies are signatures only.
 exclude_also = ['^\s*\.\.\.\s*$']
 

@@ -7,19 +7,12 @@
     emptySmartFilter,
     newBuilder,
   } from "../utils/collectionBuilders";
-  import type {
-    CollectionEditor,
-    CollectionDraft,
-    RuleEditorSource,
-  } from "../utils/collectionForms.svelte";
+  import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
   import CollectionBuilderItem from "./CollectionBuilderItem.svelte";
-  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FilterGroupEditor from "./FilterGroupEditor.svelte";
 
   let { editor = $bindable() }: { editor: CollectionEditor | CollectionDraft } = $props();
-
-  let isPlex = $derived(editor.serverType === "plex");
 
   const sortOrders: readonly { id: SmartSortOrder; label: string }[] = [
     { id: "release.desc", label: "Release date (newest first)" },
@@ -36,25 +29,6 @@
     { id: "duration.asc", label: "Duration (shortest first)" },
     { id: "random", label: "Random" },
   ];
-
-  function onSourceChange(value: string) {
-    editor.sourceType = value as RuleEditorSource;
-    if (value === "smart") {
-      editor.kind = "smart";
-      if (!editor.rule.smart_filter) {
-        editor.rule.smart_filter = emptySmartFilter();
-      }
-    } else {
-      if (editor.kind === "smart") {
-        editor.kind = "regular";
-      }
-      if (value === "builders") {
-        if (!editor.rule.builders) {
-          editor.rule.builders = [];
-        }
-      }
-    }
-  }
 
   function addBuilder(type: CollectionBuilderInput["type"]) {
     editor.rule.builders = [...(editor.rule.builders ?? []), newBuilder(type)];
@@ -77,34 +51,20 @@
   }
 </script>
 
-<DetailForm
-  title="Builder & Dynamic Rules Engine"
-  description="Build this collection from external lists, metadata builders, or library filters, then keep it in sync."
-  busy={editor.busy}
->
-  <label class="form-label">
-    Source
-    <select value={editor.sourceType} onchange={(e) => onSourceChange(e.currentTarget.value)}>
-      <option value="manual">Manual</option>
-      <option value="builders">Dynamic builders</option>
-      {#if isPlex}
-        <option value="smart">Plex smart collection</option>
-      {/if}
-    </select>
-  </label>
-
-  {#if editor.sourceType !== "manual"}
+{#if editor.sourceType !== "manual"}
+  <DetailForm
+    title="Content & Sync Rules"
+    description={editor.sourceType === "smart"
+      ? "Plex smart collections automatically evaluate filter rules directly on your Plex media server."
+      : "Compose multiple source builders to dynamically populate this collection."}
+    busy={editor.busy}
+  >
     {#if editor.sourceType === "smart"}
       {#if !editor.rule.smart_filter}
         {((editor.rule.smart_filter = emptySmartFilter()), "")}
       {/if}
       {#if editor.rule.smart_filter}
         <div class="smart-section">
-          <p class="hint">
-            Plex smart collections automatically evaluate filter rules directly on your Plex media
-            server.
-          </p>
-
           <div class="form-grid">
             <label class="form-label">
               Smart sort order
@@ -191,113 +151,121 @@
           </div>
         </div>
       </div>
-    {/if}
 
-    <CollectionPolicyFields policy={editor.rule} plex={isPlex} />
+      <div class="builder-policy-grid">
+        <label class="form-label">
+          Sync strategy
+          <select bind:value={editor.rule.sync_mode}>
+            <option value={null}>Inherit default</option>
+            <option value="sync">Strict sync (replaces members)</option>
+            <option value="append">Append (keeps manual members)</option>
+          </select>
+        </label>
 
-    <div class="seasonal-row">
-      <label class="form-label">
-        Rule active start (MM-DD)
-        <input
-          placeholder="12-15"
-          maxlength="5"
-          value={editor.rule.active_start_mmdd ?? ""}
-          oninput={(e) => (editor.rule.active_start_mmdd = e.currentTarget.value.trim() || null)}
-        />
-      </label>
-      <label class="form-label">
-        Rule active end (MM-DD)
-        <input
-          placeholder="01-05"
-          maxlength="5"
-          value={editor.rule.active_end_mmdd ?? ""}
-          oninput={(e) => (editor.rule.active_end_mmdd = e.currentTarget.value.trim() || null)}
-        />
-      </label>
-    </div>
+        <label class="form-label">
+          Minimum members (blank inherits)
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={editor.rule.minimum_items ?? ""}
+            oninput={(event) =>
+              (editor.rule.minimum_items = event.currentTarget.value
+                ? event.currentTarget.valueAsNumber
+                : null)}
+          />
+        </label>
 
-    <label class="form-label">
-      Rule summary template
-      <input
-        maxlength="500"
-        placeholder="&#123;title&#125; - &#123;summary&#125;"
-        value={editor.rule.summary_format ?? ""}
-        oninput={(e) => (editor.rule.summary_format = e.currentTarget.value.trim() || null)}
-      />
-      <span class="hint">
-        Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;, &#123;end_date&#125;,
-        &#123;summary&#125;.
-      </span>
-    </label>
+        <label class="form-label">
+          Below minimum
+          <select bind:value={editor.rule.delete_below_minimum}>
+            <option value={null}>Inherit default</option>
+            <option value={true}>Delete collection</option>
+            <option value={false}>Keep collection</option>
+          </select>
+        </label>
 
-    <label class="form-label">
-      Sync interval (hours)
-      <input
-        type="number"
-        min="1"
-        max="8760"
-        required
-        bind:value={editor.rule.sync_interval_hours}
-      />
-    </label>
+        <label class="form-label">
+          Automatic artwork
+          <select bind:value={editor.rule.auto_match_art}>
+            <option value={null}>Inherit default</option>
+            <option value={true}>Enabled</option>
+            <option value={false}>Disabled</option>
+          </select>
+        </label>
 
-    <label class="form-row">
-      <input type="checkbox" bind:checked={editor.rule.enabled} />
-      Enable scheduled sync
-    </label>
-
-    {#if editor.existingRule}
-      <div class="form-wide options-col">
-        <p class="hint">Last run: {editor.existingRule.last_synced_at ?? "Never"}</p>
-        {#if editor.existingRule.last_error}
-          <p role="alert" class="text-danger">
-            {editor.existingRule.last_error}
-          </p>
-        {/if}
+        <label class="form-label">
+          Automatic themes
+          <select bind:value={editor.rule.auto_match_theme}>
+            <option value={null}>Inherit default</option>
+            <option value={true}>Enabled</option>
+            <option value={false}>Disabled</option>
+          </select>
+        </label>
       </div>
     {/if}
-  {/if}
-</DetailForm>
+
+    <div class="sync-row form-wide">
+      <label class="form-label">
+        Sync interval (hours)
+        <input type="number" min="1" max="720" bind:value={editor.rule.sync_interval_hours} />
+      </label>
+      <label class="form-row">
+        <input type="checkbox" bind:checked={editor.rule.enabled} />
+        Enable scheduled sync
+      </label>
+    </div>
+  </DetailForm>
+{/if}
 
 <style>
   .smart-section {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3, 0.75rem);
-    border: 1px solid var(--border-color, #333);
-    border-radius: var(--radius-md, 6px);
-    padding: var(--space-3, 0.75rem);
-    background: var(--bg-surface-secondary, rgba(255, 255, 255, 0.03));
+    gap: var(--space-4);
   }
-
   .form-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: var(--space-3, 0.75rem);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
   }
-
   .builders-stack {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-3);
   }
-
   .add-builder-row {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2, 0.5rem);
-    padding: var(--space-2, 0.5rem) 0;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: var(--surface-2);
+    border-radius: var(--radius-md);
   }
-
   .builder-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2, 0.5rem);
+    gap: var(--space-2);
   }
-
-  .seasonal-row {
+  .builder-policy-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-4);
+    margin-top: var(--space-3);
+  }
+  .sync-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-6);
+    margin-top: var(--space-3);
+  }
+  @media (max-width: 640px) {
+    .form-grid,
+    .builder-policy-grid,
+    .sync-row {
+      grid-template-columns: 1fr;
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
 </style>

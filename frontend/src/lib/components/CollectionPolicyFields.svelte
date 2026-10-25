@@ -19,7 +19,7 @@
   };
 
   let {
-    policy,
+    policy = $bindable(),
     prefix = "",
     plex = false,
   }: {
