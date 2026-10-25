@@ -122,6 +122,7 @@ export function season(overrides: Partial<SeasonRead> = {}): SeasonRead {
 
 export function collection(overrides: Partial<CollectionRead> = {}): CollectionRead {
   return {
+    below_minimum: false,
     art_url: null,
     sort_title: null,
     collection_group: null,
@@ -159,6 +160,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
 export function collectionDetail(overrides: Partial<CollectionDetail> = {}): CollectionDetail {
   return {
     ...collection(),
+    effective_sync_mode: "sync",
     rule: null,
     theme_duration: null,
     catalog_entry_key: null,

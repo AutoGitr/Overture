@@ -2,7 +2,7 @@
 
 lazy import hashlib
 lazy from datetime import datetime
-lazy from typing import Annotated, Self
+lazy from typing import Annotated, Literal, Self
 
 lazy from pydantic import Field, field_validator, model_validator
 
@@ -23,6 +23,7 @@ lazy from ..domain import (
     SyncMode,
 )
 lazy from ..integrations.mdblist import mdblist_identifier
+lazy from ..utils.collection_formats import SortTitleFormat
 lazy from .base import StrictBaseModel
 lazy from .common import StatusResponse
 lazy from .library import MediaItemRead
@@ -65,6 +66,7 @@ class CollectionRead(CollectionArtwork):
     thumb_url: str | None = None
     art_url: str | None = None
     child_count: int = 0
+    below_minimum: bool = False
     media_type: MediaType
     library_id: str | None = None
     server_added_at: str | None = None
@@ -87,6 +89,7 @@ class CollectionRead(CollectionArtwork):
 class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
+    effective_sync_mode: SyncMode = SyncMode.SYNC
     theme_duration: int | None = None
     members: list[MediaItemRead]
     rule: CollectionRuleRead | None = None
@@ -228,6 +231,7 @@ class CollectionOptions(StrictBaseModel):
     title: Annotated[str, Field(min_length=1, max_length=200)]
     summary: Annotated[str, Field(max_length=10000)] | None = None
     sort_title: Annotated[str, Field(max_length=200)] | None = None
+    sort_title_format: SortTitleFormat | None = None
     collection_group: Annotated[str, Field(max_length=200)] | None = None
     tmdb_collection_id: Annotated[int, Field(gt=0)] | None = None
     collection_mode: CollectionMode | None = None
@@ -284,6 +288,8 @@ class CollectionRuleWrite(StrictBaseModel):
     sync_mode: SyncMode | None = None
     minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
     delete_below_minimum: bool | None = None
+    auto_match_art: bool | None = None
+    auto_match_theme: bool | None = None
     sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
     enabled: bool = True
 
@@ -319,12 +325,25 @@ class CollectionSyncResponse(StrictBaseModel):
     deleted: bool = False
 
 
-class CollectionGenerateRequest(StrictBaseModel):
+class CollectionGroupPolicy(StrictBaseModel):
+    """Nullable group defaults; null inherits the application setting."""
+
+    sync_mode: SyncMode | None = None
+    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
+    delete_below_minimum: bool | None = None
+    collection_mode: CollectionMode | None = None
+    sort_title_format: SortTitleFormat | None = None
+    auto_match_art: bool | None = None
+    auto_match_theme: bool | None = None
+
+
+class CollectionGenerateRequest(CollectionGroupPolicy):
     """Preview or generate collections from metadata already in the library."""
 
     media_type: MediaType
     library_id: Annotated[str, Field(min_length=1)]
     preset: CollectionPreset
+    collection_group: Annotated[str, Field(max_length=200)] | None = None
     titles: Annotated[list[str], Field(max_length=100)] = Field(default_factory=list)
 
 
@@ -342,3 +361,53 @@ class CollectionGenerateResponse(StrictBaseModel):
 
     created: list[int] = Field(default_factory=list[int])
     errors: dict[str, str] = Field(default_factory=dict)
+
+
+class BulkCollectionOperation(StrictBaseModel):
+    """One bounded operation over an explicit collection selection."""
+
+    collection_ids: Annotated[
+        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
+    ]
+    media_type: MediaType
+    operation: Literal[
+        "set_visibility",
+        "set_order",
+        "set_monitored",
+        "set_group",
+        "apply_sort_title_format",
+        "trigger_sync",
+        "delete",
+    ]
+    collection_mode: CollectionMode | None = None
+    visible_home: bool | None = None
+    order_type: CollectionOrder | None = None
+    monitored: bool | None = None
+    collection_group: Annotated[str, Field(max_length=200)] | None = None
+    sort_title_format: SortTitleFormat | None = None
+
+    @model_validator(mode="after")
+    def validate_operation(self) -> Self:
+        """Reject missing operation arguments before any server writes."""
+        if len(set(self.collection_ids)) != len(self.collection_ids):
+            raise ValueError("Select distinct collections")
+        required = {
+            "set_order": self.order_type,
+            "set_monitored": self.monitored,
+            "apply_sort_title_format": self.sort_title_format,
+        }
+        if self.operation in required and required[self.operation] is None:
+            raise ValueError("The operation requires a value")
+        if self.operation == "set_visibility" and not {
+            "collection_mode",
+            "visible_home",
+        }.intersection(self.model_fields_set):
+            raise ValueError("Choose visibility or home promotion")
+        return self
+
+
+class BulkCollectionOperationResult(StrictBaseModel):
+    """Successful identities and sanitised errors, committed independently."""
+
+    collection_ids: list[int] = Field(default_factory=list[int])
+    errors: dict[int, str] = Field(default_factory=dict[int, str])

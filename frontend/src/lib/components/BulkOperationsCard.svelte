@@ -5,7 +5,10 @@
     listItemsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
-    BulkCollectionMonitorUpdate,
+    BulkCollectionOperation,
+    BulkCollectionOperationResult,
+    CollectionMode,
+    CollectionOrder,
     BulkItemOperation,
     BulkItemOperationResult,
     CollectionRead,
@@ -14,6 +17,9 @@
   import { applyBulkItemOperation, bulkSetCollectionMonitoredInCache } from "../rest/cache";
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { uiState, type FilterState } from "../stores/uiState.svelte";
+  import { sidebarGroup } from "../router/routes";
+  import { settingsState } from "../stores/settingsState.svelte";
+  import { runBulkCollections } from "../utils/bulkCollections";
   import { errorMessage } from "../utils/errors";
   import {
     filterSidebarCollections,
@@ -39,7 +45,7 @@
     filters: FilterState;
     publicDatasetEnabled: boolean;
     itemsRequest: Request<BulkItemOperation, BulkItemOperationResult>;
-    collectionsRequest: Request<BulkCollectionMonitorUpdate, unknown>;
+    collectionsRequest: Request<BulkCollectionOperation, BulkCollectionOperationResult>;
   } = $props();
 
   const itemsQuery = createQuery(() => ({
@@ -70,7 +76,9 @@
           collections: collectionsQuery.data ?? [],
           filters,
           searchQuery: uiState.searchQuery,
-        })
+        }).filter(
+          (collection) => sidebarGroup() === null || collection.collection_group === sidebarGroup(),
+        )
       : [],
   );
   let noun = $derived(
@@ -103,8 +111,12 @@
       return { operation, count: item_ids.length };
     }
     if (collectionsRequest.isPending && collectionsRequest.variables) {
-      const { monitored, collection_ids } = collectionsRequest.variables.body;
-      return { operation: monitored ? "monitor" : "unmonitor", count: collection_ids.length };
+      const { operation, monitored, collection_ids } = collectionsRequest.variables.body;
+      return {
+        operation:
+          operation === "set_monitored" ? (monitored ? "monitor" : "unmonitor") : operation,
+        count: collection_ids.length,
+      };
     }
     return null;
   });
@@ -183,14 +195,68 @@
         );
       } else {
         const ids = collections.filter((c) => c.monitored !== monitored).map((c) => c.id);
-        await collectionsRequest.mutateAsync({
-          body: { collection_ids: ids, media_type: uiState.sidebarTab, monitored },
-        });
-        bulkSetCollectionMonitoredInCache(ids, monitored);
-        feedback.success(`${monitored ? "Monitored" : "Unmonitored"} ${ids.length} collections.`);
+        const result = await runBulkCollections(
+          {
+            collection_ids: ids,
+            media_type: uiState.sidebarTab,
+            operation: "set_monitored",
+            monitored,
+          },
+          (body) => collectionsRequest.mutateAsync({ body }),
+        );
+        bulkSetCollectionMonitoredInCache(result.collection_ids, monitored);
+        feedback.success(
+          `${monitored ? "Monitored" : "Unmonitored"} ${result.collection_ids.length} collections.`,
+        );
+        for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
       }
     } catch (err: unknown) {
       feedback.error(errorMessage(err, `Failed to ${actionWord.toLowerCase()}`));
+    }
+  }
+  let collectionOperation = $state<BulkCollectionOperation["operation"]>("trigger_sync");
+  let targetGroup = $state("");
+  let template = $state("{title}");
+  let visibility = $state<CollectionMode | null>(null);
+  let home = $state(false);
+  let order = $state<CollectionOrder>("release");
+
+  async function runCollectionOperation() {
+    if (busy || !resultsReady || !collections.length) return;
+    const operation = collectionOperation;
+    const ids = collections.map((collection) => collection.id);
+    if (
+      !(await confirmAction({
+        title: `Apply to ${ids.length} filtered collections?`,
+        message:
+          operation === "delete"
+            ? "Collections will be deleted from the active media server and Overture. Movies, shows and media files are kept."
+            : "Apply the chosen operation to every collection matching these filters and the open group.",
+        confirmLabel: operation === "delete" ? "Delete collections" : "Apply",
+        destructive: operation === "delete",
+      }))
+    )
+      return;
+    const body: BulkCollectionOperation = {
+      collection_ids: ids,
+      media_type: uiState.sidebarTab,
+      operation,
+    };
+    if (operation === "set_group") body.collection_group = targetGroup || null;
+    if (operation === "apply_sort_title_format") body.sort_title_format = template;
+    if (operation === "set_order") body.order_type = order;
+    if (operation === "set_visibility") {
+      body.collection_mode = visibility;
+      body.visible_home = home;
+    }
+    try {
+      const result = await runBulkCollections(body, (body) =>
+        collectionsRequest.mutateAsync({ body }),
+      );
+      feedback.success(`Updated ${result.collection_ids.length} collections.`);
+      for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
+    } catch (error) {
+      feedback.error(errorMessage(error, "Collection operation failed"));
     }
   }
 </script>
@@ -258,11 +324,68 @@
       </button>
     {/if}
   </div>
+  {#if !forItems}
+    <fieldset class="options-col" disabled={busy || !resultsReady || matchCount === 0}>
+      <legend>Collection operations</legend>
+      <label class="form-label"
+        >Operation
+        <select bind:value={collectionOperation}>
+          <option value="trigger_sync">Sync dynamic collections</option>
+          <option value="set_group">Assign group</option>
+          <option value="set_order">Set member order</option>
+          <option value="apply_sort_title_format">Format sort titles</option>
+          {#if settingsState.current.media_server === "plex"}<option value="set_visibility"
+              >Set visibility</option
+            >{/if}
+          <option value="delete">Delete collections</option>
+        </select>
+      </label>
+      {#if collectionOperation === "set_group"}<label class="form-label"
+          >Target group<input
+            maxlength="200"
+            bind:value={targetGroup}
+            placeholder="Ungrouped"
+          /></label
+        >
+      {:else if collectionOperation === "apply_sort_title_format"}<label class="form-label"
+          >Sort title template<input maxlength="200" bind:value={template} /><span class="hint"
+            >Use &#123;title&#125; and &#123;group&#125;.</span
+          ></label
+        >
+      {:else if collectionOperation === "set_order"}<label class="form-label"
+          >Member order<select bind:value={order}
+            ><option value="release">Release date</option><option value="alpha">Alphabetical</option
+            >{#if settingsState.current.media_server === "plex"}<option value="custom"
+                >Custom</option
+              >{/if}</select
+          ></label
+        >
+      {:else if collectionOperation === "set_visibility"}
+        <label class="form-label"
+          >Visibility<select bind:value={visibility}
+            ><option value={null}>Inherit group or global default</option><option value="default"
+              >Library default</option
+            ><option value="hide_items">Hide items</option><option value="show_items"
+              >Show collection and items</option
+            ><option value="hide">Hide collection</option></select
+          ></label
+        >
+        <label class="form-row"><input type="checkbox" bind:checked={home} />Visible on home</label>
+      {/if}
+      <button
+        type="button"
+        class={["btn", collectionOperation === "delete" ? "btn-danger" : "btn-secondary"]}
+        onclick={() => void runCollectionOperation()}>Apply to {matchCount} collections</button
+      >
+    </fieldset>
+  {/if}
   {#if running && running.operation !== "monitor" && running.operation !== "unmonitor"}
     <p class="action-feedback" role="status">
       {running.operation === "delete"
-        ? "Deleting items"
-        : `Clearing ${running.operation === "artwork" ? "artwork" : "theme"} selections`}:
+        ? `Deleting ${noun}`
+        : forItems
+          ? `Clearing ${running.operation === "artwork" ? "artwork" : "theme"} selections`
+          : "Updating collections"}:
       {running.count}
       {noun}...
     </p>

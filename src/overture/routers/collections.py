@@ -10,11 +10,14 @@ lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
 lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
     BulkCollectionMonitorUpdate,
+    BulkCollectionOperation,
+    BulkCollectionOperationResult,
     CollectionArtwork,
     CollectionCreate,
     CollectionDetail,
     CollectionGenerateRequest,
     CollectionGenerateResponse,
+    CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionPresetRead,
@@ -60,6 +63,36 @@ async def list_collection_groups(
 ) -> list[str]:
     """Return default and custom collection groups for this media type."""
     return await collections.groups(media_type)
+
+
+@router.get("/group-policy")
+async def get_collection_group_policy(
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+) -> CollectionGroupPolicy:
+    """Read a group's nullable overrides for the active media server."""
+    return await collections.group_policy(media_type, name)
+
+
+@router.put("/group-policy")
+async def save_collection_group_policy(
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+    body: CollectionGroupPolicy,
+) -> CollectionGroupPolicy:
+    """Save defaults inherited by collections assigned to this group."""
+    return await collections.save_group_policy(media_type, name, body)
+
+
+@router.post("/bulk-operation")
+async def bulk_operate_collections(
+    collections: CollectionsDep,
+    body: BulkCollectionOperation,
+) -> BulkCollectionOperationResult:
+    """Run one operation independently for every selected collection."""
+    return await collections.bulk_operation(body)
 
 
 @router.get("/{collection_id}")

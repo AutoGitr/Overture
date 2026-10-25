@@ -54,6 +54,7 @@ describe("uiState persisted filters", () => {
 
     expect(uiState.movieFilters).toEqual({
       monitored: "monitored",
+      collectionSize: "all",
       art: "complete",
       theme: "all",
       overtureDb: "complete",
@@ -76,11 +77,13 @@ describe("uiState persisted filters", () => {
 
     uiState.movieFilters.art = "incomplete";
     uiState.movieFilters.mediaServer = "missing";
+    uiState.movieFilters.collectionSize = "empty";
     uiState.saveFilters();
 
     expect(JSON.parse(localStorage.getItem("movieFilters")!)).toMatchObject({
       art: "incomplete",
       mediaServer: "missing",
+      collectionSize: "empty",
     });
   });
 

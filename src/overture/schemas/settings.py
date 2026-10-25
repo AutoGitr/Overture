@@ -66,6 +66,7 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_delete_below_minimum: bool | None = None
     collection_auto_match_art: bool | None = None
     collection_auto_match_theme: bool | None = None
+    collection_sort_title_format: str | None = None
     auto_match_art: bool | None = None
     workflow: Workflow | None = None
     theme_search_format: str | None = None

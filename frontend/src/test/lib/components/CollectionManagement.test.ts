@@ -1,8 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
-import NewCollectionPage from "../../../lib/router/pages/NewCollectionPage.svelte";
-import CollectionGeneratorModal from "../../../lib/components/CollectionGeneratorModal.svelte";
+import CollectionGenerator from "../../../lib/components/CollectionGenerator.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import {
   goToCollectionView,
@@ -38,6 +37,8 @@ const rule: CollectionRuleRead = {
   sync_mode: null,
   minimum_items: null,
   delete_below_minimum: null,
+  auto_match_art: null,
+  auto_match_theme: null,
   sync_interval_hours: 24,
   enabled: true,
   last_error: null,
@@ -178,7 +179,8 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/groups": [],
     });
-    const view = renderWithQueryClient(NewCollectionPage);
+    await navigate("/movies/collections/new");
+    const view = renderWithQueryClient(CollectionPage);
     await waitFor(() => expect(screen.getByLabelText("Library")).toHaveValue("movies"));
     expect(screen.getByLabelText("Title")).toHaveValue("");
     view.unmount();
@@ -190,7 +192,8 @@ describe("collection management", () => {
       ],
       "/api/collections/groups": [],
     });
-    renderWithQueryClient(NewCollectionPage);
+    await navigate("/movies/collections/new");
+    renderWithQueryClient(CollectionPage);
     await screen.findByRole("option", { name: "Other" });
     expect(screen.getByLabelText("Library")).toHaveValue("");
   });
@@ -247,7 +250,8 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": detail,
     });
-    renderWithQueryClient(NewCollectionPage);
+    await navigate("/movies/collections/new");
+    renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
@@ -268,9 +272,16 @@ describe("collection management", () => {
       ],
       "/api/collections/generator/apply": { created: [12], errors: {} },
     });
-    renderWithQueryClient(CollectionGeneratorModal);
+    const view = renderWithQueryClient(CollectionGenerator, {
+      libraries: [{ id: "movies", title: "Movies", count: 2 }],
+      mediaType: "movie",
+      libraryId: "movies",
+    });
+    await fireEvent.click(view.container.querySelector("summary") ?? document.body);
     await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.change(screen.getByLabelText("Generator library"), {
+      target: { value: "movies" },
+    });
     await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
     await fireEvent.click(await screen.findByRole("checkbox", { name: "1990s (2 members)" }));
     await fireEvent.click(screen.getByRole("button", { name: "Generate selected collections" }));
@@ -289,9 +300,16 @@ describe("collection management", () => {
       ],
       "/api/collections/generator/apply": { created: [12], errors: {} },
     });
-    renderWithQueryClient(CollectionGeneratorModal);
+    const view = renderWithQueryClient(CollectionGenerator, {
+      libraries: [{ id: "movies", title: "Movies", count: 2 }],
+      mediaType: "movie",
+      libraryId: "movies",
+    });
+    await fireEvent.click(view.container.querySelector("summary") ?? document.body);
     await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.change(screen.getByLabelText("Generator library"), {
+      target: { value: "movies" },
+    });
     await fireEvent.change(screen.getByLabelText("Group by"), {
       target: { value: "tmdb_collections" },
     });
@@ -380,7 +398,8 @@ describe("collection management", () => {
       "/api/library/items": { items: [...members, third], total: 3 },
       "/api/collections": detail,
     });
-    renderWithQueryClient(NewCollectionPage);
+    await navigate("/movies/collections/new");
+    renderWithQueryClient(CollectionPage);
     expect(screen.getByLabelText("Search members")).toBeDisabled();
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
@@ -410,7 +429,8 @@ describe("collection management", () => {
           ? Response.json({ detail: "Create refused" }, { status: 422 })
           : Response.json(detail),
     });
-    renderWithQueryClient(NewCollectionPage);
+    await navigate("/movies/collections/new");
+    renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
@@ -544,5 +564,96 @@ describe("collection management", () => {
 
     expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
     expect(screen.getByLabelText("Summary")).toHaveValue("Unsaved summary");
+  });
+  it("keeps generation inside General and offers only the header delete action", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": detail,
+      "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: members, total: 2 },
+    });
+    renderWithQueryClient(CollectionPage);
+    const general = await screen.findByRole("region", { name: "General & Server Display" });
+    expect(within(general).getByText("Generate collections")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Danger Zone" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Delete collection" })).toHaveLength(1);
+    expect(screen.queryByLabelText("Generator library")).not.toBeInTheDocument();
+  });
+
+  it("loads and saves group defaults without submitting the collection", async () => {
+    const policy = {
+      sync_mode: null,
+      minimum_items: 3,
+      delete_below_minimum: null,
+      collection_mode: null,
+      sort_title_format: null,
+      auto_match_art: null,
+      auto_match_theme: null,
+    };
+    const { calls } = mockFetchRoutes({
+      "/api/collections/12": { ...detail, collection_group: "Weekend" },
+      "/api/collections/groups": ["Weekend"],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: members, total: 2 },
+      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : policy),
+    });
+    renderWithQueryClient(CollectionPage);
+    const summary = await screen.findByText("Defaults for group: Weekend");
+    expect(calls.some((call) => call.url.includes("group-policy"))).toBe(false);
+    await fireEvent.click(summary);
+    await fireEvent.input(await screen.findByLabelText("Group Minimum members (blank inherits)"), {
+      target: { value: "2" },
+    });
+    await fireEvent.change(screen.getByLabelText("Group Below minimum"), {
+      target: { value: "false" },
+    });
+    await fireEvent.click(screen.getByLabelText("Inherit global sort title template"));
+    await fireEvent.input(screen.getByRole("textbox", { name: /^Group sort title template/ }), {
+      target: { value: "+{title}" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Save group defaults" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    const saved = calls.find((call) => call.init.method === "PUT");
+    expect(saved?.url).toContain("/api/collections/group-policy?");
+    expect(JSON.parse(String(saved?.init.body))).toMatchObject({
+      minimum_items: 2,
+      delete_below_minimum: false,
+      sort_title_format: "+{title}",
+    });
+  });
+
+  it("reuses the TMDB roster grid to show owned and missing source titles", async () => {
+    mockFetchRoutes({
+      "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
+      "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: members, total: 2 },
+      "/api/tmdb/collections/10": {
+        tmdb_id: 10,
+        title: "Saga",
+        items: [
+          {
+            kind: "item",
+            media_type: "movie",
+            tmdb_id: 11,
+            title: "Owned source movie",
+            existing_item_id: 1,
+          },
+          {
+            kind: "item",
+            media_type: "movie",
+            tmdb_id: 99,
+            title: "Missing source movie",
+            existing_item_id: null,
+          },
+        ],
+      },
+    });
+    renderWithQueryClient(CollectionPage);
+    const roster = await screen.findByRole("region", { name: "Source roster" });
+    expect(await within(roster).findByText("Owned source movie")).toBeInTheDocument();
+    expect(within(roster).getByText("Missing source movie")).toBeInTheDocument();
+    expect(within(roster).getAllByText("In library")).toHaveLength(1);
   });
 });

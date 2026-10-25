@@ -9,6 +9,7 @@ and the frontend's defaults are generated from it.
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
+lazy from pydantic import field_validator
 lazy from sqlmodel import CheckConstraint, Field, SQLModel
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -20,6 +21,7 @@ lazy from ...domain import (
     TmdbLanguageFilter,
     Workflow,
 )
+lazy from ...utils.collection_formats import validate_sort_title_format
 lazy from ..columns import enum_columns, enum_type
 
 #: The settings row is a singleton; pinning its key makes that a database rule
@@ -47,6 +49,7 @@ class AppSettingsBase(SQLModel):
     collection_delete_below_minimum: bool = False
     collection_auto_match_art: bool = False
     collection_auto_match_theme: bool = False
+    collection_sort_title_format: str = Field(default="", max_length=200)
     auto_match_art: bool = False
     workflow: Workflow = Field(default=Workflow.ART, sa_type=enum_type(Workflow))
     theme_search_format: str = Field(
@@ -70,6 +73,12 @@ class AppSettingsBase(SQLModel):
     auto_unmonitor: AutoUnmonitor = Field(
         default=AutoUnmonitor.OFF, sa_type=enum_type(AutoUnmonitor)
     )
+
+    @field_validator("collection_sort_title_format")
+    @classmethod
+    def valid_collection_sort_title_format(cls, value: str) -> str:
+        """Use the same template syntax as generators and bulk operations."""
+        return validate_sort_title_format(value)
 
     @classmethod
     def defaults(cls) -> dict[str, Any]:

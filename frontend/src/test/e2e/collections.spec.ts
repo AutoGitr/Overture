@@ -66,6 +66,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
   const actions = page.getByRole("group", { name: "Record actions", exact: true });
   await expect(actions.getByRole("button")).toHaveCount(3);
+  await expect(page.getByRole("region", { name: "Danger Zone", exact: true })).toHaveCount(0);
   const sections = page.locator(".detail-sections");
   const boxes = sections.locator(":scope > .tab-bar");
   await expect(boxes).toHaveCount(2);
@@ -272,4 +273,58 @@ test("creating again opens a fresh draft and multiple libraries require a choice
   await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
   await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("");
+});
+
+test("collection generation lives inside General and uses its own overrides", async ({ page }) => {
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+  );
+  await page.route("**/api/library/libraries?*", (route) =>
+    route.fulfill({ json: [{ id: "movies", title: "Movies", count: 2 }] }),
+  );
+  await page.route("**/api/library/items?*", (route) =>
+    route.fulfill({ json: { items: [first, second], total: 2 } }),
+  );
+  await page.route("**/api/collections/groups?*", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections/generator/preview", (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({
+      library_id: "movies",
+      collection_group: "Weekend",
+      minimum_items: 2,
+      sync_mode: "append",
+    });
+    return route.fulfill({ json: [{ title: "2000s", count: 2, filters: { decade: 2000 } }] });
+  });
+  await page.route("**/api/collections/generator/apply", (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({
+      titles: ["2000s"],
+      minimum_items: 2,
+      collection_group: "Weekend",
+    });
+    return route.fulfill({ json: { created: [12], errors: {} } });
+  });
+  await logIn(page);
+  await page.goto("/movies/collections/new");
+  const general = page.getByRole("region", { name: "General & Server Display", exact: true });
+  await general.getByText("Generate collections", { exact: true }).click();
+  await expect(
+    general.getByRole("combobox", { name: "Generator library", exact: true }),
+  ).toHaveValue("movies");
+  await general.getByLabel("Target collection group", { exact: true }).fill("Weekend");
+  await general.getByLabel("Generator Minimum members (blank inherits)", { exact: true }).fill("2");
+  await general
+    .getByRole("combobox", { name: "Generator Sync strategy", exact: true })
+    .selectOption("append");
+  await general.getByRole("button", { name: "Preview collections", exact: true }).click();
+  await general.getByRole("checkbox", { name: "2000s (2 members)", exact: true }).check();
+  await general.getByRole("button", { name: "Generate selected collections", exact: true }).click();
+  await expect(
+    general.getByRole("checkbox", { name: "2000s (2 members)", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Danger Zone", exact: true })).toHaveCount(0);
+  await expect(page.locator("body")).toHaveJSProperty(
+    "scrollWidth",
+    await page.locator("body").evaluate((element) => element.clientWidth),
+  );
 });

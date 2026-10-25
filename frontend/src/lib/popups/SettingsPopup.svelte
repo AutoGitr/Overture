@@ -57,8 +57,8 @@
       // Library items carry has_incorrect_aspect_ratio, computed for the tolerance.
       await invalidateTags(
         settingsState.current.aspect_ratio_tolerance === previousTolerance
-          ? ["art"]
-          : ["art", "library"],
+          ? ["art", "collections"]
+          : ["art", "library", "collections"],
       );
       saveAppearancePreferences(appearance);
       settingsState.show_background_image = appearance.showBackgroundImage;
@@ -284,6 +284,17 @@
             ><input type="checkbox" bind:checked={draft.collection_delete_below_minimum} />Delete
             collections below minimum</label
           >
+          <label class="form-label"
+            >Default collection sort title template
+            <input
+              maxlength="200"
+              bind:value={draft.collection_sort_title_format}
+              placeholder="+&#123;title&#125;"
+            />
+            <span class="hint"
+              >Use &#123;title&#125; and &#123;group&#125;. Blank keeps the collection's sort title.</span
+            >
+          </label>
           <label class="form-row"
             ><input type="checkbox" bind:checked={draft.collection_auto_match_art} />Automatically
             select collection artwork on rule sync</label

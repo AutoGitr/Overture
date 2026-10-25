@@ -24,6 +24,8 @@ class CollectionRule(SQLModel, table=True):
     sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
     minimum_items: int | None = None
     delete_below_minimum: bool | None = None
+    auto_match_art: bool | None = None
+    auto_match_theme: bool | None = None
     sync_interval_hours: int = Field(default=24)
     last_synced_at: datetime | None = None
     last_error: str | None = None

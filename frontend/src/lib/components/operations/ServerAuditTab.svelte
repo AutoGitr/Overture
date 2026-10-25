@@ -16,6 +16,7 @@
   import CardColumn from "../CardColumn.svelte";
   import FolderScopeCard from "../FolderScopeCard.svelte";
   import PendingButton from "../PendingButton.svelte";
+  import EmptyCollectionsCard from "./EmptyCollectionsCard.svelte";
   import JobFooter from "./JobFooter.svelte";
   import ServerAuditResultsPanel from "../ServerAuditResultsPanel.svelte";
   import { libraryGate } from "../../stores/libraryGate.svelte";
@@ -185,6 +186,7 @@
 
 {#if !hasResults}
   <CardColumn>
+    <EmptyCollectionsCard {isActive} />
     <FolderScopeCard {scope} />
     <ArtTypeFiltersCard
       {artTypes}

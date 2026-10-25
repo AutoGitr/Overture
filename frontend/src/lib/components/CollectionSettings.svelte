@@ -1,4 +1,6 @@
 <script lang="ts">
+  import CollectionGenerator from "./CollectionGenerator.svelte";
+  import CollectionGroupSettings from "./CollectionGroupSettings.svelte";
   import DetailForm from "./DetailForm.svelte";
   import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
@@ -55,6 +57,11 @@
         >{/each}
     </div>
   </div>
+  <label class="form-label"
+    >Apply sort title template
+    <input maxlength="200" bind:value={editor.sortTitleFormat} placeholder="+&#123;title&#125;" />
+    <span class="hint">Use &#123;title&#125; and &#123;group&#125;. Applied when saving.</span>
+  </label>
   <label class="form-label form-wide"
     >Summary <textarea maxlength="10000" bind:value={editor.summary}></textarea></label
   >
@@ -79,7 +86,7 @@
   {#if plex}
     <label class="form-label"
       >Visibility <select bind:value={editor.collectionMode}
-        ><option value={null}>Inherit global default</option><option value="default"
+        ><option value={null}>Inherit group or global default</option><option value="default"
           >Library default</option
         ><option value="hide_items">Hide items</option><option value="show_items"
           >Show collection and items</option
@@ -89,5 +96,13 @@
     <label class="form-row"
       ><input type="checkbox" bind:checked={editor.visibleHome} />Visible on home</label
     >
+  {/if}
+  <CollectionGenerator {libraries} mediaType={editor.mediaType} libraryId={editor.libraryId} />
+  {#if editor.collectionGroup.trim()}
+    <CollectionGroupSettings
+      group={editor.collectionGroup.trim()}
+      mediaType={editor.mediaType}
+      serverType={editor.serverType}
+    />
   {/if}
 </DetailForm>

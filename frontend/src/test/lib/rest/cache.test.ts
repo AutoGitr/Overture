@@ -94,6 +94,8 @@ describe("REST cache helpers", () => {
       sync_mode: null,
       minimum_items: null,
       delete_below_minimum: null,
+      auto_match_art: null,
+      auto_match_theme: null,
       sync_interval_hours: 24,
       enabled: true,
       last_error: null,

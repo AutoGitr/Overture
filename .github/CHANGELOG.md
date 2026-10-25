@@ -9,6 +9,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Collection group defaults for sync, minimum membership, automatic assets, Plex visibility and sort-title templates, with individual rule overrides. Filtered bulk actions and empty-collection maintenance keep media files intact.
+- Collection Configure shows TMDB source rosters, including missing franchise movies.
+
 - Generate TMDB franchise collections from a synced movie library, and organize collections with preset or custom groups.
 
 - Create, edit and delete Plex, Jellyfin and Emby collections, manage library members, and select collection posters and backgrounds. Plex supports custom member order, collection visibility and home promotion.
@@ -20,6 +23,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly identified collections can receive catalog themes automatically from an enabled incremental sync policy.
 
 ### Changed
+
+- Collection creation uses the existing collection page with empty/default values. Generate collections is embedded in General & Server Display; delete collections through the header icon.
 
 - Collection groups hide their contents until opened, and share sidebar browsing with TMDB franchises. Art/theme badges and detail controls now share status and clear behavior; Emby collections hide unsupported theme badges.
 - Creating a collection opens a fresh Configure page with library selection instead of a popup. Collection TMDB IDs are explicit and survive membership changes; existing IDs are preserved on upgrade, and automatic voting/matching controls are removed.

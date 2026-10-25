@@ -420,7 +420,7 @@ finds their media folder.
 Plex, Jellyfin and Emby collections appear under **Collections** in the library
 sidebar. **+ Create collection** opens a fresh Configure page with empty/default
 fields. Its Library selector defaults to the sole available library; otherwise
-choose one, then select initial members or a builder source, or use **Generate collections** to preview and create collections
+choose one, then select initial members or a builder source, or expand **Generate collections** inside **General & Server Display** to preview and create collections
 by TMDB movie franchise, decade, genre or studio. TMDB franchise previews use
 franchise memberships imported by a full Sync and require `TMDB_API_KEY`. Run a full Sync to import current library metadata.
 
@@ -435,10 +435,10 @@ categories and **Paste Art**, theme status and duration with **Search YouTube**
 and **Clear**, or Configure section links with **Save Changes** and **Sync Now**.
 
 **Configure** brings General & Server Display, Builder & Dynamic Rules Engine,
-explicit movie franchise identity, Resolved Members, and the Danger Zone into one page.
+explicit movie franchise identity, and Resolved Members into one page. The header's delete icon removes the collection.
 Edit title, summary, sort title and collection group; choose an existing or preset
 group, or type a custom name. Generated collections receive `default-tmdb-collections`,
-`default-decades`, `default-genres` or `default-studios` automatically.
+`default-decades`, `default-genres` or `default-studios` by default; the generator can use a custom target group.
 Plex supports visibility and home promotion, custom member ordering by drag-and-drop
 or keyboard-accessible Up/Down buttons; Jellyfin and Emby offer release and
 alphabetical ordering. Deleting a collection preserves its underlying media.
@@ -454,10 +454,31 @@ its members. **Save Changes** saves metadata and the builder configuration.
 
 **Settings > Collection defaults** controls the sync strategy, Plex visibility,
 minimum member count, deletion below the minimum, and optional automatic artwork
-and catalog theme selection during rule sync. Rule overrides left blank inherit
-the global setting. Below-minimum rules keep the current collection unless
+and catalog theme selection during rule sync. Expand **Defaults for group** in
+General & Server Display to override those operational settings, Plex visibility,
+and sort-title formatting for a group on the active server and media type.
+Rule choices take precedence over group defaults, then global defaults; a blank
+choice inherits and an explicit Disabled or Keep choice overrides Enabled or Delete.
+Group defaults apply on the next collection save or rule sync. The generator can
+set per-collection rule overrides, including minimum members, before generating.
+Sort-title templates support `{title}` and `{group}` globally, for a group, in
+the generator, on a collection's form, and through filtered bulk operations.
+Explicit sort titles take precedence over inherited templates. Templates reject
+attribute access, conversions, formatting directives and results over 200 characters. Below-minimum rules keep the current collection unless
 deletion is enabled; deleting a collection also removes its rule. Per-collection
 metadata and order are configured on the collection's **Configure** page.
+
+Use **Filters > Collection size** to show empty collections or collections below
+their effective minimum. The filter popup's bulk operations respect search,
+library filters and the open group: monitor, assign groups, order members, set
+Plex visibility, format sort titles, sync rules or delete collections. Each target
+commits independently and failures are reported individually. **Operations >
+Server audit > Empty collections** also reviews and removes these collections.
+Deletion always keeps the underlying media. Generation remains selective; new
+qualifying collections appear on the next generator preview.
+
+Movie collections with a TMDB ID show the existing source roster grid beside
+resolved members, including library matches and missing franchise titles.
 
 A movie collection's optional **TMDB collection ID** is its explicit identity.
 Existing IDs are preserved during upgrade; changing members never guesses or

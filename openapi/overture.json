@@ -59,6 +59,12 @@
             "$ref": "#/components/schemas/CollectionMode",
             "default": "default"
           },
+          "collection_sort_title_format": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Collection Sort Title Format",
+            "type": "string"
+          },
           "collection_sync_mode": {
             "$ref": "#/components/schemas/SyncMode",
             "default": "sync"
@@ -163,6 +169,7 @@
           "collection_delete_below_minimum",
           "collection_auto_match_art",
           "collection_auto_match_theme",
+          "collection_sort_title_format",
           "auto_match_art",
           "workflow",
           "theme_search_format",
@@ -297,6 +304,17 @@
                 "type": "null"
               }
             ]
+          },
+          "collection_sort_title_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Sort Title Format"
           },
           "collection_sync_mode": {
             "anyOf": [
@@ -1546,6 +1564,135 @@
         "title": "BulkCollectionMonitorUpdate",
         "type": "object"
       },
+      "BulkCollectionOperation": {
+        "additionalProperties": false,
+        "description": "One bounded operation over an explicit collection selection.",
+        "properties": {
+          "collection_group": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
+          },
+          "collection_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Collection Ids",
+            "type": "array"
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "monitored": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitored"
+          },
+          "operation": {
+            "enum": [
+              "set_visibility",
+              "set_order",
+              "set_monitored",
+              "set_group",
+              "apply_sort_title_format",
+              "trigger_sync",
+              "delete"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          }
+        },
+        "required": [
+          "collection_ids",
+          "media_type",
+          "operation"
+        ],
+        "title": "BulkCollectionOperation",
+        "type": "object"
+      },
+      "BulkCollectionOperationResult": {
+        "additionalProperties": false,
+        "description": "Successful identities and sanitised errors, committed independently.",
+        "properties": {
+          "collection_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Collection Ids",
+            "type": "array"
+          },
+          "errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection_ids",
+          "errors"
+        ],
+        "title": "BulkCollectionOperationResult",
+        "type": "object"
+      },
       "BulkItemOperation": {
         "additionalProperties": false,
         "description": "Apply an operation to item records.",
@@ -2257,6 +2404,16 @@
             ],
             "title": "Sort Title"
           },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "summary": {
             "anyOf": [
               {
@@ -2335,6 +2492,11 @@
             ],
             "title": "Background Url"
           },
+          "below_minimum": {
+            "default": false,
+            "title": "Below Minimum",
+            "type": "boolean"
+          },
           "catalog_entry_key": {
             "anyOf": [
               {
@@ -2382,6 +2544,10 @@
                 "type": "null"
               }
             ]
+          },
+          "effective_sync_mode": {
+            "$ref": "#/components/schemas/SyncMode",
+            "default": "sync"
           },
           "has_theme": {
             "default": false,
@@ -2639,6 +2805,7 @@
           "thumb_url",
           "art_url",
           "child_count",
+          "below_minimum",
           "media_type",
           "library_id",
           "server_added_at",
@@ -2653,6 +2820,7 @@
           "tmdb_collection_id",
           "public_dataset_complete",
           "public_dataset_themerrdb",
+          "effective_sync_mode",
           "theme_duration",
           "members",
           "rule",
@@ -2771,6 +2939,61 @@
         "additionalProperties": false,
         "description": "Preview or generate collections from metadata already in the library.",
         "properties": {
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "collection_group": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
           "library_id": {
             "minLength": 1,
             "title": "Library Id",
@@ -2779,8 +3002,41 @@
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
           },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
           "preset": {
             "$ref": "#/components/schemas/CollectionPreset"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "titles": {
             "items": {
@@ -2823,6 +3079,183 @@
           "errors"
         ],
         "title": "CollectionGenerateResponse",
+        "type": "object"
+      },
+      "CollectionGroupPolicy-Input": {
+        "additionalProperties": false,
+        "description": "Nullable group defaults; null inherits the application setting.",
+        "properties": {
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CollectionGroupPolicy",
+        "type": "object"
+      },
+      "CollectionGroupPolicy-Output": {
+        "additionalProperties": false,
+        "description": "Nullable group defaults; null inherits the application setting.",
+        "properties": {
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "sync_mode",
+          "minimum_items",
+          "delete_below_minimum",
+          "collection_mode",
+          "sort_title_format",
+          "auto_match_art",
+          "auto_match_theme"
+        ],
+        "title": "CollectionGroupPolicy",
         "type": "object"
       },
       "CollectionMembersUpdate": {
@@ -2901,6 +3334,16 @@
               }
             ],
             "title": "Sort Title"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "summary": {
             "anyOf": [
@@ -3034,6 +3477,11 @@
               }
             ],
             "title": "Background Url"
+          },
+          "below_minimum": {
+            "default": false,
+            "title": "Below Minimum",
+            "type": "boolean"
           },
           "child_count": {
             "default": 0,
@@ -3251,6 +3699,7 @@
           "thumb_url",
           "art_url",
           "child_count",
+          "below_minimum",
           "media_type",
           "library_id",
           "server_added_at",
@@ -3273,6 +3722,28 @@
         "additionalProperties": false,
         "description": "Saved rule with its most recent outcome.",
         "properties": {
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
           "delete_below_minimum": {
             "anyOf": [
               {
@@ -3362,6 +3833,8 @@
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
+          "auto_match_art",
+          "auto_match_theme",
           "sync_interval_hours",
           "enabled",
           "last_synced_at",
@@ -3374,6 +3847,28 @@
         "additionalProperties": false,
         "description": "A dynamic source with nullable overrides of global defaults.",
         "properties": {
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
           "delete_below_minimum": {
             "anyOf": [
               {
@@ -6345,6 +6840,10 @@
         "title": "SetCollectionThemeRequest",
         "type": "object"
       },
+      "SortTitleFormat": {
+        "maxLength": 200,
+        "type": "string"
+      },
       "SourceOrder_ArtBulkSource_": {
         "$ref": "#/components/schemas/UniqueList_ArtBulkSource__MinLen_min_length_1_",
         "minItems": 1
@@ -9045,6 +9544,68 @@
         ]
       }
     },
+    "/api/collections/bulk-operation": {
+      "post": {
+        "description": "Run one operation independently for every selected collection.",
+        "operationId": "bulk_operate_collections",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCollectionOperation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCollectionOperationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Operate Collections",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/generator/apply": {
       "post": {
         "description": "Create selected preset collections and their dynamic rules.",
@@ -9168,6 +9729,160 @@
           }
         },
         "summary": "Preview Collection Generator",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/group-policy": {
+      "get": {
+        "description": "Read a group's nullable overrides for the active media server.",
+        "operationId": "get_collection_group_policy",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionGroupPolicy-Output"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection Group Policy",
+        "tags": [
+          "collections"
+        ]
+      },
+      "put": {
+        "description": "Save defaults inherited by collections assigned to this group.",
+        "operationId": "save_collection_group_policy",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGroupPolicy-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionGroupPolicy-Output"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Collection Group Policy",
         "tags": [
           "collections"
         ]

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import DetailForm from "./DetailForm.svelte";
   import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
   let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
@@ -56,32 +57,7 @@
         /></label
       >
     {/if}
-    <label class="form-label"
-      >Sync strategy <select bind:value={editor.rule.sync_mode}
-        ><option value={null}>Inherit global default</option><option value="sync"
-          >Strict sync</option
-        ><option value="append">Append, keep manual members</option></select
-      ></label
-    >
-    <label class="form-label"
-      >Minimum members (blank inherits)<input
-        type="number"
-        min="1"
-        max="100"
-        value={editor.rule.minimum_items ?? ""}
-        oninput={(event) =>
-          (editor.rule.minimum_items = event.currentTarget.value
-            ? event.currentTarget.valueAsNumber
-            : null)}
-      /></label
-    >
-    <label class="form-label"
-      >Below minimum <select bind:value={editor.rule.delete_below_minimum}
-        ><option value={null}>Inherit global default</option><option value={false}
-          >Keep collection</option
-        ><option value={true}>Delete collection</option></select
-      ></label
-    >
+    <CollectionPolicyFields policy={editor.rule} />
     <label class="form-label"
       >Sync interval (hours)<input
         type="number"

@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getSettingsOptions,
+  listCollectionsOptions,
   listItemsOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import SettingsPopup from "../../../lib/popups/SettingsPopup.svelte";
@@ -159,6 +160,8 @@ describe("SettingsPopup", () => {
     "refreshes library items only when the aspect ratio tolerance changes (%s)",
     async (tolerance, refreshed) => {
       const itemsKey = listItemsOptions({ query: { media_type: "movie" } }).queryKey;
+      const collectionsKey = listCollectionsOptions({ query: { media_type: "movie" } }).queryKey;
+      queryClient.setQueryData(collectionsKey, []);
       queryClient.setQueryData(itemsKey, { items: [], total: 0 });
       updateSettings.mockResolvedValue({ data: { aspect_ratio_tolerance: tolerance } });
       renderWithQueryClient(SettingsPopup);
@@ -170,6 +173,7 @@ describe("SettingsPopup", () => {
 
       await waitFor(() => expect(uiState.openPopup).toBeNull());
       expect(queryClient.getQueryState(itemsKey)?.isInvalidated).toBe(refreshed);
+      expect(queryClient.getQueryState(collectionsKey)?.isInvalidated).toBe(true);
     },
   );
 

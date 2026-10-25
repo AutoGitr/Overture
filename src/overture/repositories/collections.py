@@ -7,6 +7,7 @@ lazy from itertools import batched
 lazy from sqlmodel import col, delete, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ..db.models.collection_group import CollectionGroup
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection, MediaCollectionMember
 lazy from ..db.models.media_item import MediaItem
@@ -19,6 +20,37 @@ class CollectionRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def group_policies(
+        self, server_type: ServerType, media_type: MediaType
+    ) -> list[CollectionGroup]:
+        """Return defaults scoped to the active server and media type."""
+        return list(
+            (
+                await self.session.exec(
+                    select(CollectionGroup).where(
+                        col(CollectionGroup.server_type) == server_type,
+                        col(CollectionGroup.media_type) == media_type,
+                    )
+                )
+            ).all()
+        )
+
+    async def group_policy(
+        self, server_type: ServerType, media_type: MediaType, name: str | None
+    ) -> CollectionGroup | None:
+        """Return one group's defaults without conflating ungrouped collections."""
+        if not name:
+            return None
+        return (
+            await self.session.exec(
+                select(CollectionGroup).where(
+                    col(CollectionGroup.server_type) == server_type,
+                    col(CollectionGroup.media_type) == media_type,
+                    col(CollectionGroup.name) == name,
+                )
+            )
+        ).first()
 
     async def get(
         self, collection_id: int, media_type: MediaType | None = None
@@ -230,14 +262,11 @@ class CollectionRepository:
             )
         ).first()
 
-    async def rules(self) -> list[CollectionRule]:
-        """Return enabled rules in stable order."""
+    async def rules(self, *, enabled_only: bool = True) -> list[CollectionRule]:
+        """Return rules in stable order, optionally including disabled rules."""
+        stmt = select(CollectionRule)
+        if enabled_only:
+            stmt = stmt.where(col(CollectionRule.enabled).is_(True))
         return list(
-            (
-                await self.session.exec(
-                    select(CollectionRule)
-                    .where(col(CollectionRule.enabled).is_(True))
-                    .order_by(col(CollectionRule.id))
-                )
-            ).all()
+            (await self.session.exec(stmt.order_by(col(CollectionRule.id)))).all()
         )

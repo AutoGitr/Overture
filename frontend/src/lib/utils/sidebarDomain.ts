@@ -425,7 +425,7 @@ export function hasVisibleActiveFilters(
     filters.theme !== "all" ||
     filters.libraryIds.length > 0 ||
     isRangeActive(filters.themeLength);
-  if (mode === "collections") return shared;
+  if (mode === "collections") return shared || filters.collectionSize !== "all";
   return (
     shared ||
     filters.art !== "all" ||
@@ -543,6 +543,10 @@ export function filterSidebarCollections(options: {
   searchQuery: string;
 }): CollectionRead[] {
   const predicates: Predicate<CollectionRead>[] = sharedPredicates(options.filters);
+  if (options.filters.collectionSize === "empty")
+    predicates.push((collection) => collection.child_count === 0);
+  if (options.filters.collectionSize === "below_minimum")
+    predicates.push((collection) => collection.below_minimum);
   const query = options.searchQuery.trim().toLowerCase();
   if (query)
     predicates.push(

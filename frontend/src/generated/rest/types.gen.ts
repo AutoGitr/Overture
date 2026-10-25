@@ -48,6 +48,10 @@ export type AppSettingsRead = {
      */
     collection_minimum_items: number;
     collection_mode_default: CollectionMode;
+    /**
+     * Collection Sort Title Format
+     */
+    collection_sort_title_format: string;
     collection_sync_mode: SyncMode;
     /**
      * Collection Themes Unavailable
@@ -141,6 +145,10 @@ export type AppSettingsUpdate = {
      */
     collection_minimum_items?: number | null;
     collection_mode_default?: CollectionMode | null;
+    /**
+     * Collection Sort Title Format
+     */
+    collection_sort_title_format?: string | null;
     collection_sync_mode?: SyncMode | null;
     /**
      * Disable Media Server Art
@@ -805,6 +813,56 @@ export type BulkCollectionMonitorUpdate = {
 };
 
 /**
+ * BulkCollectionOperation
+ *
+ * One bounded operation over an explicit collection selection.
+ */
+export type BulkCollectionOperation = {
+    /**
+     * Collection Group
+     */
+    collection_group?: string | null;
+    /**
+     * Collection Ids
+     */
+    collection_ids: Array<number>;
+    collection_mode?: CollectionMode | null;
+    media_type: MediaType;
+    /**
+     * Monitored
+     */
+    monitored?: boolean | null;
+    /**
+     * Operation
+     */
+    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'trigger_sync' | 'delete';
+    order_type?: CollectionOrder | null;
+    sort_title_format?: SortTitleFormat | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+};
+
+/**
+ * BulkCollectionOperationResult
+ *
+ * Successful identities and sanitised errors, committed independently.
+ */
+export type BulkCollectionOperationResult = {
+    /**
+     * Collection Ids
+     */
+    collection_ids: Array<number>;
+    /**
+     * Errors
+     */
+    errors: {
+        [key: string]: string;
+    };
+};
+
+/**
  * BulkItemOperation
  *
  * Apply an operation to item records.
@@ -1120,6 +1178,7 @@ export type CollectionCreate = {
      * Sort Title
      */
     sort_title?: string | null;
+    sort_title_format?: SortTitleFormat | null;
     /**
      * Summary
      */
@@ -1155,6 +1214,10 @@ export type CollectionDetail = {
      */
     background_url: string | null;
     /**
+     * Below Minimum
+     */
+    below_minimum: boolean;
+    /**
      * Catalog Entry Key
      */
     catalog_entry_key: string | null;
@@ -1171,6 +1234,7 @@ export type CollectionDetail = {
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
+    effective_sync_mode: SyncMode;
     /**
      * Has Theme
      */
@@ -1322,11 +1386,34 @@ export type CollectionFilterOutput = {
  */
 export type CollectionGenerateRequest = {
     /**
+     * Auto Match Art
+     */
+    auto_match_art?: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme?: boolean | null;
+    /**
+     * Collection Group
+     */
+    collection_group?: string | null;
+    collection_mode?: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum?: boolean | null;
+    /**
      * Library Id
      */
     library_id: string;
     media_type: MediaType;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
     preset: CollectionPreset;
+    sort_title_format?: SortTitleFormat | null;
+    sync_mode?: SyncMode | null;
     /**
      * Titles
      */
@@ -1349,6 +1436,60 @@ export type CollectionGenerateResponse = {
     errors: {
         [key: string]: string;
     };
+};
+
+/**
+ * CollectionGroupPolicy
+ *
+ * Nullable group defaults; null inherits the application setting.
+ */
+export type CollectionGroupPolicyInput = {
+    /**
+     * Auto Match Art
+     */
+    auto_match_art?: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme?: boolean | null;
+    collection_mode?: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum?: boolean | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
+    sort_title_format?: SortTitleFormat | null;
+    sync_mode?: SyncMode | null;
+};
+
+/**
+ * CollectionGroupPolicy
+ *
+ * Nullable group defaults; null inherits the application setting.
+ */
+export type CollectionGroupPolicyOutput = {
+    /**
+     * Auto Match Art
+     */
+    auto_match_art: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme: boolean | null;
+    collection_mode: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum: boolean | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    sort_title_format: SortTitleFormat | null;
+    sync_mode: SyncMode | null;
 };
 
 /**
@@ -1387,6 +1528,7 @@ export type CollectionOptions = {
      * Sort Title
      */
     sort_title?: string | null;
+    sort_title_format?: SortTitleFormat | null;
     /**
      * Summary
      */
@@ -1456,6 +1598,10 @@ export type CollectionRead = {
      * Background Url
      */
     background_url: string | null;
+    /**
+     * Below Minimum
+     */
+    below_minimum: boolean;
     /**
      * Child Count
      */
@@ -1551,6 +1697,14 @@ export type CollectionRead = {
  */
 export type CollectionRuleRead = {
     /**
+     * Auto Match Art
+     */
+    auto_match_art: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme: boolean | null;
+    /**
      * Delete Below Minimum
      */
     delete_below_minimum: boolean | null;
@@ -1589,6 +1743,14 @@ export type CollectionRuleRead = {
  * A dynamic source with nullable overrides of global defaults.
  */
 export type CollectionRuleWrite = {
+    /**
+     * Auto Match Art
+     */
+    auto_match_art?: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme?: boolean | null;
     /**
      * Delete Below Minimum
      */
@@ -3165,6 +3327,8 @@ export type SetCollectionThemeRequest = {
     youtube_id: YouTubeId;
 };
 
+export type SortTitleFormat = string;
+
 export type SourceOrderArtBulkSource = UniqueListArtBulkSourceMinLenMinLength1;
 
 export type SourceOrderThemeBulkSource = UniqueListThemeBulkSourceMinLenMinLength1;
@@ -4594,6 +4758,31 @@ export type BulkSetCollectionMonitoredResponses = {
 
 export type BulkSetCollectionMonitoredResponse = BulkSetCollectionMonitoredResponses[keyof BulkSetCollectionMonitoredResponses];
 
+export type BulkOperateCollectionsData = {
+    body: BulkCollectionOperation;
+    path?: never;
+    query?: never;
+    url: '/api/collections/bulk-operation';
+};
+
+export type BulkOperateCollectionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BulkOperateCollectionsError = BulkOperateCollectionsErrors[keyof BulkOperateCollectionsErrors];
+
+export type BulkOperateCollectionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BulkCollectionOperationResult;
+};
+
+export type BulkOperateCollectionsResponse = BulkOperateCollectionsResponses[keyof BulkOperateCollectionsResponses];
+
 export type GenerateCollectionsData = {
     body: CollectionGenerateRequest;
     path?: never;
@@ -4645,6 +4834,74 @@ export type PreviewCollectionGeneratorResponses = {
 };
 
 export type PreviewCollectionGeneratorResponse = PreviewCollectionGeneratorResponses[keyof PreviewCollectionGeneratorResponses];
+
+export type GetCollectionGroupPolicyData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/collections/group-policy';
+};
+
+export type GetCollectionGroupPolicyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionGroupPolicyError = GetCollectionGroupPolicyErrors[keyof GetCollectionGroupPolicyErrors];
+
+export type GetCollectionGroupPolicyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionGroupPolicyOutput;
+};
+
+export type GetCollectionGroupPolicyResponse = GetCollectionGroupPolicyResponses[keyof GetCollectionGroupPolicyResponses];
+
+export type SaveCollectionGroupPolicyData = {
+    body: CollectionGroupPolicyInput;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/collections/group-policy';
+};
+
+export type SaveCollectionGroupPolicyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SaveCollectionGroupPolicyError = SaveCollectionGroupPolicyErrors[keyof SaveCollectionGroupPolicyErrors];
+
+export type SaveCollectionGroupPolicyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionGroupPolicyOutput;
+};
+
+export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
 
 export type ListCollectionGroupsData = {
     body?: never;

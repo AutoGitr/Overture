@@ -5,8 +5,8 @@
     getLibrariesOptions,
     listItemsOptions,
     listCollectionGroupsOptions,
+    getTmdbCollectionOptions,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
-  import NewCollectionPage from "./NewCollectionPage.svelte";
   import CollectionManager from "../../components/CollectionManager.svelte";
   import DataStatus from "../../components/DataStatus.svelte";
   import { uiState } from "../../stores/uiState.svelte";
@@ -27,13 +27,24 @@
   let collection = $derived(
     collectionQuery.data?.id === collectionId ? collectionQuery.data : null,
   );
+  let seedId = $derived(
+    creating
+      ? Number(route.search.tmdb_id) || 0
+      : routedCollectionView() === "configure"
+        ? (collection?.tmdb_collection_id ?? 0)
+        : 0,
+  );
+  const seed = createQuery(() => ({
+    ...getTmdbCollectionOptions({ path: { collection_id: seedId } }),
+    enabled: seedId > 0,
+  }));
   const itemsQuery = createQuery(() => ({
     ...listItemsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled: collection !== null && routedCollectionView() === "configure",
+    enabled: creating || (collection !== null && routedCollectionView() === "configure"),
   }));
   const groupsQuery = createQuery(() => ({
     ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled: collection !== null && routedCollectionView() === "configure",
+    enabled: creating || (collection !== null && routedCollectionView() === "configure"),
   }));
   $effect(() => {
     uiState.mobileShowDetail = creating || collectionId !== null;
@@ -49,10 +60,29 @@
     onretry={() => collectionQuery.refetch()}
   />
 {/if}
-{#if creating}
-  {#key `${uiState.sidebarTab}:${route.search.draft ?? ""}`}<NewCollectionPage />{/key}
-{:else if collection}
-  {#if routedCollectionView() === "configure"}
+{#if creating || collection}
+  {#if creating || routedCollectionView() === "configure"}
+    <DataStatus
+      label="libraries"
+      error={libraries.error}
+      loading={libraries.isFetching}
+      hasData={libraries.data !== undefined}
+      onretry={() => libraries.refetch()}
+    />
+    <DataStatus
+      label="library items"
+      error={itemsQuery.error}
+      loading={itemsQuery.isFetching}
+      hasData={itemsQuery.data !== undefined}
+      onretry={() => itemsQuery.refetch()}
+    />
+    {#if seedId}<DataStatus
+        label="TMDB collection"
+        error={seed.error}
+        loading={seed.isFetching}
+        hasData={seed.data !== undefined}
+        onretry={() => seed.refetch()}
+      />{/if}
     <DataStatus
       label="collection groups"
       error={groupsQuery.error}
@@ -61,8 +91,10 @@
       onretry={() => groupsQuery.refetch()}
     />
   {/if}
-  {#key collectionId}<CollectionManager
+  {#key creating ? `${uiState.sidebarTab}:${route.search.draft ?? ""}` : collectionId}<CollectionManager
       {collection}
+      seed={creating ? (seed.data ?? null) : null}
+      sourceRoster={creating ? [] : (seed.data?.items ?? [])}
       libraries={libraries.data ?? []}
       groups={groupsQuery.data ?? []}
       libraryItems={itemsQuery.data?.items ?? []}

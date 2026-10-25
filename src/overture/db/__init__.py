@@ -4,6 +4,7 @@ from sqlmodel import SQLModel
 
 from .models.art import ArtSlot as ArtSlot
 from .models.auth_session import AuthSession as AuthSession
+from .models.collection_group import CollectionGroup as CollectionGroup
 from .models.collection_rule import CollectionRule as CollectionRule
 from .models.download_job import DownloadJob as DownloadJob
 from .models.job_result import JobLogLine as JobLogLine
@@ -32,6 +33,7 @@ __all__ = [
     "AppSettings",
     "ArtSlot",
     "AuthSession",
+    "CollectionGroup",
     "CollectionRule",
     "DownloadJob",
     "JobLogLine",

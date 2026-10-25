@@ -19,15 +19,7 @@ import { readJson, writeJson } from "../utils/storage";
 export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
 
 export type PopupType =
-  | null
-  | "filters"
-  | "operations"
-  | "settings"
-  | "database"
-  | "overturedb"
-  | "backup"
-  | "stats"
-  | "collectionGenerator";
+  null | "filters" | "operations" | "settings" | "database" | "overturedb" | "backup" | "stats";
 
 export type Completeness = "all" | "complete" | "incomplete";
 
@@ -39,6 +31,7 @@ export interface NumberRange {
 
 export interface FilterState {
   monitored: "all" | "monitored" | "unmonitored";
+  collectionSize: "all" | "empty" | "below_minimum";
   art: Completeness;
   theme: Completeness;
   overtureDb: Completeness;
@@ -55,6 +48,7 @@ export interface FilterState {
 
 const DEFAULT_FILTERS: FilterState = {
   monitored: "all",
+  collectionSize: "all",
   art: "all",
   theme: "all",
   overtureDb: "all",
@@ -124,6 +118,11 @@ function normalizeFilters(value: unknown): FilterState {
 
   return {
     monitored: stringOption(source.monitored, MONITORED_FILTERS, defaults.monitored),
+    collectionSize: stringOption(
+      source.collectionSize,
+      ["all", "empty", "below_minimum"] as const,
+      defaults.collectionSize,
+    ),
     art: stringOption(source.art, COMPLETENESS_FILTERS, defaults.art),
     theme: stringOption(source.theme, COMPLETENESS_FILTERS, defaults.theme),
     overtureDb: stringOption(source.overtureDb, COMPLETENESS_FILTERS, defaults.overtureDb),

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type {
     CollectionDetail,
+    TmdbItemResult,
     MediaItemRead,
     LibrarySectionRead,
   } from "../../generated/rest/types.gen";
@@ -17,8 +18,10 @@
     groups,
     formId,
     libraries,
+    sourceRoster = [],
   }: {
     collection?: CollectionDetail;
+    sourceRoster?: TmdbItemResult[];
     editor: CollectionEditor | CollectionDraft;
     libraryItems: MediaItemRead[];
     groups: string[];
@@ -74,18 +77,15 @@
 {#if collection && editor instanceof CollectionEditor}
   <section id={`${formId}-members`} aria-label="Resolved members" tabindex="-1">
     <CollectionMembers members={collection.members} {editor} {libraryItems} />
+    {#if sourceRoster.length}
+      <DetailSection
+        title="Source roster"
+        description="Movies in the TMDB franchise, including titles missing from your library."
+      >
+        <CollectionMembers members={sourceRoster} />
+      </DetailSection>
+    {/if}
   </section>
-  <DetailSection
-    title="Danger Zone"
-    description="Deleting this collection preserves its underlying movies, shows and media files."
-  >
-    <button
-      type="button"
-      class="btn btn-danger"
-      disabled={editor.busy}
-      onclick={() => void editor.delete()}>Delete collection</button
-    >
-  </DetailSection>
 {/if}
 
 <style>

@@ -30,9 +30,11 @@ lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtRequest
 lazy from overture.schemas.collections import (
+    BulkCollectionOperation,
     CollectionCreate,
     CollectionFilter,
     CollectionGenerateRequest,
+    CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionRuleWrite,
@@ -57,6 +59,7 @@ class Provider(PlexProvider):
         self.deleted: list[str] = []
         self.members: dict[str, list[str]] = {}
         self.options: dict[str, tuple[str, CollectionMode, CollectionOrder, bool]] = {}
+        self.sort_titles: dict[str, str | None] = {}
         self.fail = False
 
     @override
@@ -94,6 +97,7 @@ class Provider(PlexProvider):
         visible_home: bool,
     ) -> None:
         self.options[server_collection_id] = title, mode, order, visible_home
+        self.sort_titles[server_collection_id] = sort_title
 
     @override
     async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
@@ -514,7 +518,7 @@ async def test_presets_preview_and_generate_persistent_rules(
         )
         if preset is CollectionPreset.TMDB_COLLECTIONS:
             assert detail.rule.source_identifier == "10"
-            assert len(detail.members) == 3
+            assert len(detail.members) == preview[0].count == 2
             assert detail.tmdb_collection_id == 10
 
 
@@ -762,3 +766,167 @@ async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
     assert [member.tmdb_id for member in detail.members] == [11, 12]
     assert detail.rule is not None
     assert detail.rule.source_identifier == "10"
+
+
+async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        session.add(
+            AppSettings(
+                collection_minimum_items=3,
+                collection_delete_below_minimum=True,
+                collection_auto_match_art=True,
+            )
+        )
+    policy = CollectionGroupPolicy(
+        sync_mode=SyncMode.SYNC,
+        minimum_items=2,
+        delete_below_minimum=False,
+        auto_match_art=False,
+        collection_mode=CollectionMode.HIDE,
+        sort_title_format="+{group} - {title}",
+    )
+    await manager.service.save_group_policy(MediaType.MOVIE, "Weekend", policy)
+    assert await manager.service.group_policy(MediaType.MOVIE, "Weekend") == policy
+    assert (
+        await manager.service.group_policy(MediaType.SHOW, "Weekend")
+        == CollectionGroupPolicy()
+    )
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    assert manager.provider.options["1"][1] is CollectionMode.HIDE
+    assert manager.provider.sort_titles["1"] == "+Weekend - Saga"
+    await manager.service.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(source_type=RuleSourceType.MDBLIST, source_identifier="42"),
+    )
+    await manager.service.sync_rule(identity, MediaType.MOVIE)
+    detail = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert len(detail.members) == 2
+    assert not detail.below_minimum
+    assert manager.art.selections == []
+    await manager.service.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            source_type=RuleSourceType.MDBLIST,
+            source_identifier="42",
+            minimum_items=3,
+            delete_below_minimum=False,
+        ),
+    )
+    result = await manager.service.sync_rule(identity, MediaType.MOVIE)
+    assert result.skipped
+    assert not result.deleted
+    listed = await manager.service.list_collections(MediaType.MOVIE)
+    assert listed[0].below_minimum
+    await manager.service.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            source_type=RuleSourceType.MDBLIST,
+            source_identifier="42",
+            minimum_items=1,
+            sync_mode=SyncMode.APPEND,
+        ),
+    )
+    assert (
+        await manager.service.get_collection(identity, MediaType.MOVIE)
+    ).effective_sync_mode is SyncMode.APPEND
+
+
+async def test_generator_overrides_group_threshold_and_persists_rule_choices(
+    manager: Manager,
+) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE, "Weekend", CollectionGroupPolicy(minimum_items=3)
+    )
+    body = CollectionGenerateRequest(
+        media_type=MediaType.MOVIE,
+        library_id="movies",
+        preset=CollectionPreset.DECADES,
+        collection_group="Weekend",
+        minimum_items=2,
+        sync_mode=SyncMode.APPEND,
+        auto_match_art=False,
+        titles=["2000s"],
+        sort_title_format="!{title}",
+    )
+    preview = await manager.service.presets(body)
+    assert [(row.title, row.count) for row in preview] == [("2000s", 2)]
+    result = await manager.service.generate(body)
+    assert not result.errors
+    detail = await manager.service.get_collection(result.created[0], MediaType.MOVIE)
+    assert detail.rule is not None
+    assert detail.rule.minimum_items == 2
+    assert detail.rule.sync_mode is SyncMode.APPEND
+    assert detail.rule.auto_match_art is False
+    assert detail.collection_group == "Weekend"
+    assert detail.sort_title == "!2000s"
+    assert manager.provider.sort_titles["1"] == "!2000s"
+
+
+async def test_bulk_operations_commit_successes_and_report_invalid_targets(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    result = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            collection_ids=[999, identity],
+            media_type=MediaType.MOVIE,
+            operation="set_group",
+            collection_group=" Weekend ",
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert set(result.errors) == {999}
+    detail = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert detail.collection_group == "Weekend"
+    result = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            collection_ids=[identity],
+            media_type=MediaType.MOVIE,
+            operation="apply_sort_title_format",
+            sort_title_format="+{group}: {title}",
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert manager.provider.sort_titles["1"] == "+Weekend: Saga"
+    result = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            collection_ids=[identity],
+            media_type=MediaType.MOVIE,
+            operation="set_monitored",
+            monitored=False,
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert not (
+        await manager.service.get_collection(identity, MediaType.MOVIE)
+    ).monitored
+    result = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="delete"
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert manager.provider.deleted == ["1"]
+    async with database.read_session() as session:
+        assert await session.get(MediaItem, manager.ids[0]) is not None
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["{title.__class__}", "{0}", "{index}", "{title!r}", "{title:>1000}", "{"],
+)
+async def test_sort_title_templates_reject_attribute_access_and_unbounded_formats(
+    template: str,
+) -> None:
+    with pytest.raises(ValueError, match="sort_title_format"):
+        CollectionGroupPolicy(sort_title_format=template)

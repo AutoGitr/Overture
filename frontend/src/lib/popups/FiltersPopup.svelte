@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createMutation, createQuery } from "@tanstack/svelte-query";
   import {
-    bulkSetCollectionMonitoredMutation,
+    bulkOperateCollectionsMutation,
     bulkOperateItemsMutation,
     getLibrariesOptions,
     getPublicDatasetStatusOptions,
@@ -76,9 +76,7 @@
       : draft.libraryIds,
   });
 
-  const bulkSetCollectionMonitoredRequest = createMutation(() =>
-    bulkSetCollectionMonitoredMutation(),
-  );
+  const bulkSetCollectionMonitoredRequest = createMutation(() => bulkOperateCollectionsMutation());
   const bulkItemsRequest = createMutation(() => bulkOperateItemsMutation());
 
   let bulkActionBusy = $derived(
@@ -161,6 +159,16 @@
             bind:value={draft.monitored}
           />
 
+          {#if uiState.sidebarMode === "collections"}
+            <label class="form-label"
+              >Collection size
+              <select bind:value={draft.collectionSize}>
+                <option value="all">All collections</option>
+                <option value="empty">Empty collections</option>
+                <option value="below_minimum">Below minimum</option>
+              </select>
+            </label>
+          {/if}
           {#if uiState.sidebarMode === "items"}
             <span class="form-label">Media server</span>
             <SegmentedControl

@@ -1,14 +1,18 @@
 import { fireEvent, waitFor, within } from "@testing-library/svelte";
 import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
 import { beforeEach, describe, expect, it } from "vitest";
-import { listItemsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import {
+  listCollectionsOptions,
+  listItemsOptions,
+} from "../../../generated/rest/@tanstack/svelte-query.gen";
 import type { MediaItemListResponse } from "../../../generated/rest/types.gen";
+import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import FiltersPopup from "../../../lib/popups/FiltersPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
-import { navigate } from "../../../lib/router/routes";
+import { navigate, openSidebarGroup } from "../../../lib/router/routes";
 import { defaultFilters, uiState } from "../../../lib/stores/uiState.svelte";
-import { mockFetch, mockFetchSequence } from "../../helpers/fetch";
-import { publicDatasetStatus, mediaItem } from "../../helpers/fixtures";
+import { mockFetch, mockFetchRoutes, mockFetchSequence } from "../../helpers/fetch";
+import { publicDatasetStatus, mediaItem, collection, appSettings } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -356,5 +360,65 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await waitFor(() => expect(view.getByRole("alert")).toHaveTextContent("Delete failed"));
     expect(calls.filter((call) => call.init.method === "POST")).toHaveLength(1);
     expect(view.getByRole("button", { name: "Delete from Overture 3" })).toBeEnabled();
+  });
+  it.each([
+    ["set_group", { collection_group: "Weekend" }],
+    ["set_order", { order_type: "alpha" }],
+    ["apply_sort_title_format", { sort_title_format: "+{title}" }],
+    ["set_visibility", { collection_mode: "hide", visible_home: true }],
+    ["trigger_sync", {}],
+    ["delete", {}],
+  ])("applies %s only to filtered collections in the open group", async (operation, expected) => {
+    await navigate("/movies/collections");
+    openSidebarGroup("Weekend");
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+      collection({
+        id: 1,
+        title: "Empty",
+        collection_group: "Weekend",
+        child_count: 0,
+        below_minimum: true,
+      }),
+      collection({
+        id: 2,
+        title: "Other group",
+        collection_group: "Other",
+        child_count: 0,
+        below_minimum: true,
+      }),
+      collection({
+        id: 3,
+        title: "Populated",
+        collection_group: "Weekend",
+        child_count: 2,
+        below_minimum: false,
+      }),
+    ]);
+    const { calls } = mockFetchRoutes({
+      "/api/library/libraries": [],
+      "/api/collections/bulk-operation": { collection_ids: [1], errors: {} },
+    });
+    const view = renderWithQueryClient(FiltersPopup);
+    await fireEvent.change(view.getByLabelText("Collection size"), { target: { value: "empty" } });
+    await fireEvent.change(view.getByLabelText("Operation"), { target: { value: operation } });
+    if (operation === "set_group")
+      await fireEvent.input(view.getByLabelText("Target group"), { target: { value: "Weekend" } });
+    if (operation === "set_order")
+      await fireEvent.change(view.getByLabelText("Member order"), { target: { value: "alpha" } });
+    if (operation === "apply_sort_title_format")
+      await fireEvent.input(view.getByRole("textbox", { name: /^Sort title template/ }), {
+        target: { value: "+{title}" },
+      });
+    if (operation === "set_visibility") {
+      await fireEvent.change(view.getByLabelText("Visibility"), { target: { value: "hide" } });
+      await fireEvent.click(view.getByLabelText("Visible on home"));
+    }
+    await fireEvent.click(view.getByRole("button", { name: "Apply to 1 collections" }));
+    await answerConfirmation(true);
+    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    expect(
+      JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
+    ).toEqual({ collection_ids: [1], media_type: "movie", operation, ...expected });
   });
 });

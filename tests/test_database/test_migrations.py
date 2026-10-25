@@ -8,6 +8,8 @@ lazy import pytest
 lazy from alembic import command
 lazy from sqlalchemy import (
     CheckConstraint,
+    MetaData,
+    Table,
     create_engine,
     inspect,
     text,
@@ -17,7 +19,11 @@ lazy from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 lazy from overture.db import metadata
 lazy from overture.db import session as session_module
+lazy from overture.db.models.collection_rule import CollectionRule
+lazy from overture.db.models.media_collection import MediaCollection
+lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database, alembic_config, run_migrations
+lazy from overture.domain import MediaType, RuleSourceType, ServerType
 lazy from overture.migrations import versions_at_head
 
 
@@ -551,5 +557,80 @@ def test_explicit_collection_identity_preserves_ids_and_downgrades_to_choices() 
                 "SELECT tmdb_match FROM media_collections ORDER BY server_item_id"
             ).all() == [("manual",), ("unmatched",)]
             command.upgrade(config, "head")
+    finally:
+        engine.dispose()
+
+
+def test_collection_group_policy_migration_preserves_existing_settings_and_rules() -> (
+    None
+):
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "de75601826ea")
+            old = MetaData()
+            settings = Table("app_settings", old, autoload_with=conn)
+            collections = Table("media_collections", old, autoload_with=conn)
+            rules = Table("collection_rules", old, autoload_with=conn)
+            conn.execute(
+                settings.insert().values(
+                    **AppSettings(collection_minimum_items=4).model_dump(
+                        exclude={"collection_sort_title_format"}
+                    )
+                )
+            )
+            conn.execute(
+                collections.insert().values(
+                    **MediaCollection(
+                        id=1,
+                        server_item_id="c1",
+                        media_type=MediaType.MOVIE,
+                        server_type=ServerType.PLEX,
+                        title="Saga",
+                        collection_group="Weekend",
+                    ).model_dump()
+                )
+            )
+            conn.execute(
+                rules.insert().values(
+                    **CollectionRule(
+                        collection_id=1,
+                        source_type=RuleSourceType.MDBLIST,
+                        source_identifier="42",
+                        minimum_items=2,
+                    ).model_dump(exclude={"auto_match_art", "auto_match_theme"})
+                )
+            )
+            command.upgrade(config, "8bfb249cdcbd")
+            assert conn.exec_driver_sql(
+                "SELECT collection_minimum_items, collection_sort_title_format "
+                "FROM app_settings"
+            ).one() == (4, "")
+            assert conn.exec_driver_sql(
+                "SELECT minimum_items, auto_match_art, auto_match_theme "
+                "FROM collection_rules"
+            ).one() == (2, None, None)
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT collection_group FROM media_collections"
+                ).scalar_one()
+                == "Weekend"
+            )
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT count(*) FROM collection_groups"
+                ).scalar_one()
+                == 0
+            )
+            command.downgrade(config, "de75601826ea")
+            assert "collection_groups" not in inspect(conn).get_table_names()
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT minimum_items FROM collection_rules"
+                ).scalar_one()
+                == 2
+            )
     finally:
         engine.dispose()

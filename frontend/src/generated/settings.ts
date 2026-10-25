@@ -13,6 +13,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_delete_below_minimum: false,
   collection_minimum_items: 1,
   collection_mode_default: "default",
+  collection_sort_title_format: "",
   collection_sync_mode: "sync",
   disable_media_server_art: false,
   max_duration_seconds: 300,

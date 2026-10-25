@@ -367,10 +367,6 @@
         onclick={() => openDetail(() => goToNewCollection(uiState.sidebarTab))}
         >+ Create collection</button
       >
-      <button
-        class="btn btn-ghost btn-sm"
-        onclick={() => uiState.openPopupByName("collectionGenerator")}>Generate collections</button
-      >
     </div>
   {/if}
   {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && collectionsQuery.isError}

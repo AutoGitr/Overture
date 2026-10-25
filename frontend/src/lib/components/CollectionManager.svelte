@@ -7,8 +7,13 @@
     CollectionDetail,
     MediaItemRead,
     LibrarySectionRead,
+    TmdbCollectionResponse,
+    TmdbItemResult,
   } from "../../generated/rest/types.gen";
-  import { CollectionEditor } from "../utils/collectionForms.svelte";
+  import { untrack } from "svelte";
+  import { uiState } from "../stores/uiState.svelte";
+  import DataStatus from "./DataStatus.svelte";
+  import { CollectionDraft, CollectionEditor } from "../utils/collectionForms.svelte";
   import { CollectionActions } from "../utils/collectionActions.svelte";
   import {
     goToCatalogEntry,
@@ -38,18 +43,33 @@
     libraryItems,
     groups,
     libraries,
+    seed = null,
+    sourceRoster = [],
   }: {
-    collection: CollectionDetail;
+    collection: CollectionDetail | null;
+    seed?: TmdbCollectionResponse | null;
+    sourceRoster?: TmdbItemResult[];
     libraryItems: MediaItemRead[];
     groups: string[];
     libraries: LibrarySectionRead[];
   } = $props();
 
-  const editor = new CollectionEditor(() => collection);
-  const actions = new CollectionActions(() => collection);
+  function currentCollection(): CollectionDetail {
+    if (!collection) throw new Error("The saved collection must remain mounted");
+    return collection;
+  }
+  const editor = untrack(() => collection)
+    ? new CollectionEditor(currentCollection)
+    : new CollectionDraft(
+        uiState.sidebarTab,
+        () => libraries,
+        () => seed,
+      );
+  const actions =
+    editor instanceof CollectionEditor ? new CollectionActions(currentCollection) : null;
   let view = $derived(routedCollectionView());
   let artType = $derived(routedCollectionArtType());
-  let managing = $derived(view === "configure");
+  let managing = $derived(editor.creating || view === "configure");
   const panelId = $props.id();
   const formId = `${panelId}-configure`;
   const themeInputId = `${panelId}-theme-search`;
@@ -58,13 +78,13 @@
 <DetailPanelBase
   emptyMessage="Select a collection from the sidebar"
   isEmpty={false}
-  subjectKey={`collection:${collection.id}`}
-  title={collection.title}
-  summary={collection.summary}
-  posterUrl={collectionImageUrl(collection.thumb_url)}
-  backgroundUrl={collectionImageUrl(collection.art_url)}
-  posterHref={collection.server_link}
-  posterLinkTitle={collection.server_link
+  subjectKey={collection ? `collection:${collection.id}` : "new-collection"}
+  title={collection?.title ?? "New collection"}
+  summary={collection?.summary}
+  posterUrl={collectionImageUrl(collection?.thumb_url ?? null)}
+  backgroundUrl={collectionImageUrl(collection?.art_url ?? null)}
+  posterHref={collection?.server_link}
+  posterLinkTitle={collection?.server_link
     ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
     : null}
   subtabLabel={managing
@@ -76,39 +96,44 @@
 >
   {#snippet emptyIcon()}<Layers size={64} />{/snippet}
   {#snippet posterIcon()}<Layers size={48} />{/snippet}
-  {#snippet meta()}<span>{collection.child_count} items</span>{/snippet}
+  {#snippet meta()}{#if collection}<span>{collection.child_count} items</span>{/if}{/snippet}
   {#snippet badges()}
-    <ExternalLinkBadges
-      subject={{
-        title: collection.title,
-        year: null,
-        media_type: "collection",
-        tmdb_id: collection.tmdb_collection_id,
-        tvdb_id: null,
-        imdb_id: null,
-      }}
-      mode={view === "themes" ? "themes" : "art"}
-      artType={view === "art" ? artType : "poster"}
-      season={null}
-    />
-    {#if collection.catalog_entry_key}
-      <IdBadge
-        title="Open in OvertureDB"
-        icon="/favicon.svg"
-        alt="OvertureDB"
-        onselect={() => {
-          if (collection.catalog_entry_key)
-            goToCatalogEntry({ media_type: "collection", entry_key: collection.catalog_entry_key });
+    {#if collection && actions}
+      <ExternalLinkBadges
+        subject={{
+          title: collection.title,
+          year: null,
+          media_type: "collection",
+          tmdb_id: collection.tmdb_collection_id,
+          tvdb_id: null,
+          imdb_id: null,
         }}
+        mode={view === "themes" ? "themes" : "art"}
+        artType={view === "art" ? artType : "poster"}
+        season={null}
       />
-    {/if}
-    {#if actions.contributionUrl}
-      <IdBadge
-        href={actions.contributionUrl}
-        title="Contribute to OvertureDB"
-        icon={githubIcon}
-        alt="GitHub"
-      />
+      {#if collection.catalog_entry_key}
+        <IdBadge
+          title="Open in OvertureDB"
+          icon="/favicon.svg"
+          alt="OvertureDB"
+          onselect={() => {
+            if (collection.catalog_entry_key)
+              goToCatalogEntry({
+                media_type: "collection",
+                entry_key: collection.catalog_entry_key,
+              });
+          }}
+        />
+      {/if}
+      {#if actions.contributionUrl}
+        <IdBadge
+          href={actions.contributionUrl}
+          title="Contribute to OvertureDB"
+          icon={githubIcon}
+          alt="GitHub"
+        />
+      {/if}
     {/if}
   {/snippet}
   {#snippet tabs()}
@@ -116,47 +141,51 @@
       icon={Settings}
       label="Configure"
       active={managing}
-      onselect={() => goToCollectionView(collection, "configure")}
+      onselect={() => {
+        if (collection) goToCollectionView(collection, "configure");
+      }}
     />
-    <AssetModeTabs
-      mode={view}
-      artStatus={statusTone(collection.art_status, actions.clearingArt)}
-      themeStatus={collection.theme_unavailable
-        ? null
-        : statusTone(collection.theme_status, actions.themeBusy)}
-      onart={() => goToCollectionView(collection, "art", artType)}
-      onthemes={() => goToCollectionView(collection, "themes")}
-      onclearart={collection.poster_url || collection.background_url
-        ? () => void actions.clearArt("all")
-        : null}
-      oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"
-        ? () => void actions.clearTheme()
-        : null}
-      artBusy={actions.clearingArt}
-      themeBusy={actions.uploading}
-    />
+    {#if collection && actions}<AssetModeTabs
+        mode={view}
+        artStatus={statusTone(collection.art_status, actions.clearingArt)}
+        themeStatus={collection.theme_unavailable
+          ? null
+          : statusTone(collection.theme_status, actions.themeBusy)}
+        onart={() => goToCollectionView(collection, "art", artType)}
+        onthemes={() => goToCollectionView(collection, "themes")}
+        onclearart={collection.poster_url || collection.background_url
+          ? () => void actions.clearArt("all")
+          : null}
+        oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"
+          ? () => void actions.clearTheme()
+          : null}
+        artBusy={actions.clearingArt}
+        themeBusy={actions.uploading}
+      />{/if}
   {/snippet}
   {#snippet recordActions()}
-    <DetailRecordActions
-      monitored={collection.monitored}
-      monitoring={actions.monitoring}
-      deleting={editor.busy || actions.uploading}
-      deleteLabel="Delete collection"
-      ontoggle={() => void actions.toggleMonitored()}
-      ondelete={() => void editor.delete()}
-    />
+    {#if collection && actions && editor instanceof CollectionEditor}
+      <DetailRecordActions
+        monitored={collection.monitored}
+        monitoring={actions.monitoring}
+        deleting={editor.busy || actions.uploading}
+        deleteLabel="Delete collection"
+        ontoggle={() => void actions.toggleMonitored()}
+        ondelete={() => void editor.delete()}
+      />
+    {/if}
   {/snippet}
   {#snippet subtabs()}
     {#if managing}
       <ConfigureNavigation {formId} />
-    {:else if view === "themes"}
+    {:else if collection && view === "themes"}
       <ThemeStatus
         status={collection.theme_status}
         duration={collection.theme_status === "missing" ? null : collection.theme_duration}
         title={collection.youtube_title}
         unavailable={collection.theme_unavailable}
       />
-    {:else}
+    {:else if collection && actions}
       <ArtCategoryTabs
         active={artType}
         statuses={{
@@ -176,17 +205,23 @@
   {/snippet}
   {#snippet subtabActions()}
     {#if managing}
-      <button class="tab-item" type="submit" form={formId} disabled={editor.busy}
-        >Save Changes</button
-      >
       <button
         class="tab-item"
-        type="button"
-        disabled={editor.busy || !collection.rule}
-        onclick={() => void editor.sync()}>Sync Now</button
+        type="submit"
+        form={formId}
+        disabled={editor.busy || (editor instanceof CollectionDraft && !editor.canSubmit)}
+        >{editor.creating ? "Create collection" : "Save Changes"}</button
       >
+      {#if collection && editor instanceof CollectionEditor}<button
+          class="tab-item"
+          type="button"
+          disabled={editor.busy || !collection.rule}
+          onclick={() => {
+            if (editor instanceof CollectionEditor) void editor.sync();
+          }}>Sync Now</button
+        >{/if}
     {:else if view === "art"}<PasteArtButton />
-    {:else}
+    {:else if collection && actions}
       <ThemeActions
         inputId={themeInputId}
         disabled={!!collection.theme_unavailable || actions.uploading}
@@ -197,10 +232,25 @@
   {/snippet}
   {#snippet content()}
     {#if managing}
-      <CollectionConfigure {collection} {editor} {libraryItems} {groups} {formId} {libraries} />
-    {:else if view === "themes"}
+      {#if editor instanceof CollectionDraft && editor.request.error}<DataStatus
+          label="collection creation"
+          error={editor.request.error}
+          loading={false}
+          hasData={false}
+          onretry={() => editor.save()}
+        />{/if}
+      <CollectionConfigure
+        {sourceRoster}
+        collection={collection ?? undefined}
+        {editor}
+        {libraryItems}
+        {groups}
+        {formId}
+        {libraries}
+      />
+    {:else if collection && actions && view === "themes"}
       <CollectionThemePanel {collection} {actions} searchInputId={themeInputId} />
-    {:else}
+    {:else if collection}
       {#key `${collection.id}-${artType}`}
         <ArtSlotPanel
           slot={{

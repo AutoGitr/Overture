@@ -21,7 +21,12 @@ describe("CollectionPage", () => {
   });
 
   it("selects the collection its URL names once its detail has loaded", async () => {
-    mockFetchRoutes({ "/api/collections/groups": [], "/api/collections/12": action });
+    mockFetchRoutes({
+      "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: [], total: 0 },
+      "/api/collections/12": action,
+    });
     await openCollection("12-action");
 
     renderWithQueryClient(CollectionPage);
@@ -33,6 +38,8 @@ describe("CollectionPage", () => {
   it("selects nothing for a collection the server no longer lists", async () => {
     const { fetchMock } = mockFetchRoutes({
       "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: [], total: 0 },
       "/api/collections/12": () =>
         Response.json({ detail: "Collection not found" }, { status: 404 }),
     });
@@ -60,6 +67,8 @@ describe("CollectionPage", () => {
     let available = false;
     mockFetchRoutes({
       "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: [], total: 0 },
       "/api/collections/12": () =>
         available
           ? Response.json(action)

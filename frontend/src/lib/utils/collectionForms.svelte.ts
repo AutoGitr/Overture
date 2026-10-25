@@ -35,6 +35,7 @@ export class CollectionEditor {
   // Drafts reset when saved fields change, not when unrelated collection data changes.
   private savedTitle = $derived.by(() => this.current().title);
   title = $derived(this.savedTitle);
+  sortTitleFormat = $state("");
   private savedSummary = $derived.by(() => this.current().summary);
   summary = $derived(this.savedSummary);
   private savedSortTitle = $derived.by(() => this.current().sort_title);
@@ -81,7 +82,7 @@ export class CollectionEditor {
 
   get manualMembersAllowed() {
     const rule = this.collection.rule;
-    return !rule || (rule.sync_mode ?? settingsState.current.collection_sync_mode) === "append";
+    return !rule || (rule.sync_mode ?? this.collection.effective_sync_mode) === "append";
   }
 
   availableMembers(libraryItems: MediaItemRead[]) {
@@ -148,6 +149,7 @@ export class CollectionEditor {
         body: collectionOptions(this),
       });
       storeCollectionDetail(saved);
+      this.sortTitleFormat = "";
       const rule = await this.persistRule(source, draft);
       patchCollectionRule(saved.id, rule);
       this.feedback.success("Collection changes saved.");
@@ -238,7 +240,15 @@ export class CollectionEditor {
 
 /** Creation and generator drafts; network results stay in mutation observers. */
 export class CollectionGenerator {
-  libraryId = $state("");
+  libraryId = $derived.by(() => this.defaultLibrary());
+  collectionGroup = $state("");
+  sync_mode = $state<CollectionRuleWrite["sync_mode"]>(null);
+  minimum_items = $state<number | null>(null);
+  delete_below_minimum = $state<boolean | null>(null);
+  auto_match_art = $state<boolean | null>(null);
+  auto_match_theme = $state<boolean | null>(null);
+  collection_mode = $state<CollectionMode | null>(null);
+  sort_title_format = $state("");
   preset: CollectionPreset = $state("decades");
   readonly titles = new SvelteSet<string>();
 
@@ -246,13 +256,24 @@ export class CollectionGenerator {
   readonly generateRequest = createMutation(() => generateCollectionsMutation());
   private readonly feedback = createNotifier();
 
-  constructor(readonly mediaType: MediaType) {}
+  constructor(
+    readonly mediaType: MediaType,
+    private readonly defaultLibrary: () => string = () => "",
+  ) {}
 
   get body() {
     return {
       media_type: this.mediaType,
       library_id: this.libraryId,
       preset: this.preset,
+      collection_group: this.collectionGroup || null,
+      sync_mode: this.sync_mode,
+      minimum_items: this.minimum_items,
+      delete_below_minimum: this.delete_below_minimum,
+      auto_match_art: this.auto_match_art,
+      auto_match_theme: this.auto_match_theme,
+      collection_mode: this.collection_mode,
+      sort_title_format: this.sort_title_format || null,
       titles: Array.from(this.titles),
     };
   }
@@ -299,6 +320,8 @@ function defaultCollectionRule(identifier = ""): CollectionRuleWrite {
     sync_mode: null,
     minimum_items: null,
     delete_below_minimum: null,
+    auto_match_art: null,
+    auto_match_theme: null,
     enabled: true,
     sync_interval_hours: 24,
   };
@@ -309,6 +332,7 @@ function collectionOptions(form: CollectionEditor | CollectionDraft): Collection
     title: form.title.trim(),
     summary: form.summary,
     sort_title: form.sortTitle,
+    sort_title_format: form.sortTitleFormat || null,
     collection_group: form.collectionGroup || null,
     tmdb_collection_id: form.tmdbCollectionId ?? null,
     collection_mode: form.collectionMode,
@@ -320,6 +344,7 @@ function collectionOptions(form: CollectionEditor | CollectionDraft): Collection
 /** An unsaved collection, created only after its Configure form is submitted. */
 export class CollectionDraft {
   readonly creating = true;
+  sortTitleFormat = $state("");
   title = $derived.by(() => this.seed()?.title ?? "");
   summary = $state<string | null>(null);
   sortTitle = $state<string | null>(null);
