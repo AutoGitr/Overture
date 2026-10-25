@@ -26,6 +26,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Example Docker Compose configuration delegates all environment variables directly to `.env`.
 - Collection creation uses the existing collection page with empty/default values. Generate collections is embedded in General & Server Display; delete collections through the header icon.
 
 - Collection groups hide their contents until opened, and share sidebar browsing with TMDB franchises. Art/theme badges and detail controls now share status and clear behavior; Emby collections hide unsupported theme badges.
@@ -39,6 +40,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 
+- Legacy collection preset generator and single-source rule endpoints in favor of composable builders and group dynamic discovery.
 - Collection matching endpoints and automatic member voting. Set `tmdb_collection_id` through collection creation or update instead.
 - The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
 

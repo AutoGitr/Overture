@@ -6,7 +6,6 @@
     emptyFilterGroup,
     emptySmartFilter,
     newBuilder,
-    splitList,
   } from "../utils/collectionBuilders";
   import type {
     CollectionEditor,
@@ -20,7 +19,6 @@
 
   let { editor = $bindable() }: { editor: CollectionEditor | CollectionDraft } = $props();
 
-  let filters = $derived(editor.rule.filters ?? {});
   let isPlex = $derived(editor.serverType === "plex");
 
   const sortOrders: readonly { id: SmartSortOrder; label: string }[] = [
@@ -50,45 +48,31 @@
       if (editor.kind === "smart") {
         editor.kind = "regular";
       }
-      if (value === "composite") {
-        if (!editor.rule.builders || editor.rule.builders.length === 0) {
-          editor.rule.builders = [
-            newBuilder(editor.mediaType === "movie" ? "tmdb_collection" : "mdblist"),
-          ];
+      if (value === "builders") {
+        if (!editor.rule.builders) {
+          editor.rule.builders = [];
         }
-      } else if (value === "mdblist") {
-        editor.rule.source_identifier = editor.rule.source_identifier || "";
-        editor.rule.builders = [
-          { type: "mdblist", identifiers: splitList(editor.rule.source_identifier) },
-        ];
-      } else if (value === "tmdb") {
-        editor.rule.source_identifier = editor.rule.source_identifier || "";
-        editor.rule.builders = [
-          { type: "tmdb_collection", collection_id: Number(editor.rule.source_identifier) || 0 },
-        ];
       }
     }
   }
 
   function addBuilder(type: CollectionBuilderInput["type"]) {
-    if (!editor.rule.builders) {
-      editor.rule.builders = [];
-    }
-    editor.rule.builders.push(newBuilder(type));
-    editor.sourceType = "composite";
+    editor.rule.builders = [...(editor.rule.builders ?? []), newBuilder(type)];
   }
 
   function removeBuilder(index: number) {
     if (!editor.rule.builders) return;
-    editor.rule.builders.splice(index, 1);
+    editor.rule.builders = editor.rule.builders.filter((_, i) => i !== index);
   }
 
   function moveBuilder(fromIndex: number, toIndex: number) {
     if (!editor.rule.builders) return;
     if (toIndex < 0 || toIndex >= editor.rule.builders.length) return;
-    const [item] = editor.rule.builders.splice(fromIndex, 1);
+    const next = [...editor.rule.builders];
+    const [item] = next.splice(fromIndex, 1);
     if (item) {
-      editor.rule.builders.splice(toIndex, 0, item);
+      next.splice(toIndex, 0, item);
+      editor.rule.builders = next;
     }
   }
 </script>
@@ -102,12 +86,7 @@
     Source
     <select value={editor.sourceType} onchange={(e) => onSourceChange(e.currentTarget.value)}>
       <option value="manual">Manual</option>
-      <option value="mdblist">MDBList</option>
-      {#if editor.mediaType === "movie"}
-        <option value="tmdb">TMDB franchise</option>
-      {/if}
-      <option value="filter">Library filter</option>
-      <option value="composite">Multi-source builders</option>
+      <option value="builders">Dynamic builders</option>
       {#if isPlex}
         <option value="smart">Plex smart collection</option>
       {/if}
@@ -178,7 +157,7 @@
           {/if}
         </div>
       {/if}
-    {:else if editor.sourceType === "composite"}
+    {:else}
       <div class="builders-stack">
         {#each editor.rule.builders ?? [] as _builder, i (i)}
           {#if editor.rule.builders && editor.rule.builders[i]}
@@ -211,91 +190,6 @@
             {/each}
           </div>
         </div>
-      </div>
-    {:else if editor.sourceType === "filter"}
-      <label class="form-label">
-        Decade
-        <input
-          type="number"
-          min="1800"
-          max="3000"
-          step="10"
-          value={filters.decade ?? ""}
-          oninput={(event) =>
-            (editor.rule.filters = {
-              ...filters,
-              decade: event.currentTarget.value ? event.currentTarget.valueAsNumber : null,
-            })}
-        />
-      </label>
-      <label class="form-label">
-        Studio
-        <input
-          value={filters.studio ?? ""}
-          oninput={(event) =>
-            (editor.rule.filters = { ...filters, studio: event.currentTarget.value || null })}
-        />
-      </label>
-      <label class="form-label">
-        Genre
-        <input
-          value={filters.genre ?? ""}
-          oninput={(event) =>
-            (editor.rule.filters = { ...filters, genre: event.currentTarget.value || null })}
-        />
-      </label>
-      <div class="form-wide">
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm"
-          onclick={() => (editor.sourceType = "composite")}
-        >
-          <Plus size={14} />
-          Switch to composable filter tree &amp; multi-source builders
-        </button>
-      </div>
-    {:else}
-      <label class="form-label">
-        {editor.sourceType === "mdblist" ? "MDBList list URL or ID" : "TMDB franchise ID"}
-        <input
-          required
-          bind:value={editor.rule.source_identifier}
-          oninput={(e) => {
-            if (editor.sourceType === "mdblist") {
-              editor.rule.builders = [
-                { type: "mdblist", identifiers: splitList(e.currentTarget.value) },
-              ];
-            } else if (editor.sourceType === "tmdb") {
-              editor.rule.builders = [
-                { type: "tmdb_collection", collection_id: Number(e.currentTarget.value) || 0 },
-              ];
-            }
-          }}
-        />
-      </label>
-      <div class="form-wide">
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm"
-          onclick={() => {
-            if (editor.sourceType === "mdblist") {
-              editor.rule.builders = [
-                { type: "mdblist", identifiers: splitList(editor.rule.source_identifier ?? "") },
-              ];
-            } else if (editor.sourceType === "tmdb") {
-              editor.rule.builders = [
-                {
-                  type: "tmdb_collection",
-                  collection_id: Number(editor.rule.source_identifier) || 0,
-                },
-              ];
-            }
-            editor.sourceType = "composite";
-          }}
-        >
-          <Plus size={14} />
-          Add another source (combine with other builders)
-        </button>
       </div>
     {/if}
 

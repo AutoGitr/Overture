@@ -16,12 +16,9 @@ lazy from ..schemas.collections import (
     CollectionArtwork,
     CollectionCreate,
     CollectionDetail,
-    CollectionGenerateRequest,
-    CollectionGenerateResponse,
     CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
-    CollectionPresetRead,
     CollectionRead,
     CollectionRuleRead,
     CollectionRuleWrite,
@@ -277,22 +274,6 @@ async def sync_collection_rule(
 ) -> CollectionSyncResponse:
     """Run the collection's rule immediately."""
     return await collections.sync_rule(collection_id, media_type)
-
-
-@router.post("/generator/preview")
-async def preview_collection_generator(
-    body: CollectionGenerateRequest, collections: CollectionsDep
-) -> list[CollectionPresetRead]:
-    """Preview library filters before generating collections."""
-    return await collections.presets(body)
-
-
-@router.post("/generator/apply")
-async def generate_collections(
-    body: CollectionGenerateRequest, collections: CollectionsDep
-) -> CollectionGenerateResponse:
-    """Create selected preset collections and their dynamic rules."""
-    return await collections.generate(body)
 
 
 @router.delete("/{collection_id}/art")

@@ -3291,107 +3291,6 @@
         "title": "CollectionDetail",
         "type": "object"
       },
-      "CollectionFilter-Input": {
-        "additionalProperties": false,
-        "description": "An intersection of filters over the current server library.",
-        "properties": {
-          "decade": {
-            "anyOf": [
-              {
-                "maximum": 3000.0,
-                "minimum": 1800.0,
-                "multipleOf": 10.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decade"
-          },
-          "genre": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Genre"
-          },
-          "studio": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Studio"
-          }
-        },
-        "title": "CollectionFilter",
-        "type": "object"
-      },
-      "CollectionFilter-Output": {
-        "additionalProperties": false,
-        "description": "An intersection of filters over the current server library.",
-        "properties": {
-          "decade": {
-            "anyOf": [
-              {
-                "maximum": 3000.0,
-                "minimum": 1800.0,
-                "multipleOf": 10.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decade"
-          },
-          "genre": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Genre"
-          },
-          "studio": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Studio"
-          }
-        },
-        "required": [
-          "decade",
-          "studio",
-          "genre"
-        ],
-        "title": "CollectionFilter",
-        "type": "object"
-      },
       "CollectionFiltering": {
         "description": "User-context filtering mode for Plex smart collections.",
         "enum": [
@@ -3400,280 +3299,6 @@
         ],
         "title": "CollectionFiltering",
         "type": "string"
-      },
-      "CollectionGenerateRequest": {
-        "additionalProperties": false,
-        "description": "Preview or generate collections from metadata already in the library.",
-        "properties": {
-          "active_end_mmdd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeasonalDate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "active_start_mmdd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeasonalDate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
-          },
-          "auto_match_theme": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Theme"
-          },
-          "collection_filtering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionFiltering"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "collection_group": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Group"
-          },
-          "collection_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "delete_below_minimum": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delete Below Minimum"
-          },
-          "delete_when_inactive": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delete When Inactive"
-          },
-          "dynamic_tmdb": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DynamicTmdbGroupConfig-Input"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "library_id": {
-            "minLength": 1,
-            "title": "Library Id",
-            "type": "string"
-          },
-          "media_type": {
-            "$ref": "#/components/schemas/MediaType"
-          },
-          "minimum_items": {
-            "anyOf": [
-              {
-                "maximum": 100.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Minimum Items"
-          },
-          "order_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionOrder"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "preset": {
-            "$ref": "#/components/schemas/CollectionPreset"
-          },
-          "sort_title_format": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SortTitleFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "summary_format": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SummaryFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
-          "sync_interval_hours": {
-            "anyOf": [
-              {
-                "maximum": 8760.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Interval Hours"
-          },
-          "sync_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "titles": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 100,
-            "title": "Titles",
-            "type": "array"
-          },
-          "visible_home": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Home"
-          },
-          "visible_library": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Library"
-          },
-          "visible_shared": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Shared"
-          }
-        },
-        "required": [
-          "media_type",
-          "library_id",
-          "preset"
-        ],
-        "title": "CollectionGenerateRequest",
-        "type": "object"
-      },
-      "CollectionGenerateResponse": {
-        "additionalProperties": false,
-        "description": "Per-collection generator results; one failure leaves others intact.",
-        "properties": {
-          "created": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Created",
-            "type": "array"
-          },
-          "errors": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Errors",
-            "type": "object"
-          }
-        },
-        "required": [
-          "created",
-          "errors"
-        ],
-        "title": "CollectionGenerateResponse",
-        "type": "object"
       },
       "CollectionGroupPolicy-Input": {
         "additionalProperties": false,
@@ -4100,6 +3725,9 @@
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
+          "auto_match_art",
+          "auto_match_theme",
+          "delete_when_inactive",
           "collection_mode",
           "order_type",
           "collection_filtering",
@@ -4110,9 +3738,6 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "delete_when_inactive",
-          "auto_match_art",
-          "auto_match_theme",
           "sync_interval_hours",
           "sync_enabled",
           "dynamic_tmdb"
@@ -4332,53 +3957,6 @@
         ],
         "title": "CollectionOrder",
         "type": "string"
-      },
-      "CollectionPreset": {
-        "description": "Library metadata used to generate collections.",
-        "enum": [
-          "tmdb_collections",
-          "decades",
-          "studios",
-          "genres"
-        ],
-        "title": "CollectionPreset",
-        "type": "string"
-      },
-      "CollectionPresetRead": {
-        "additionalProperties": false,
-        "description": "A generator candidate with its matching library count.",
-        "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "filters": {
-            "$ref": "#/components/schemas/CollectionFilter-Output"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "tmdb_collection_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tmdb Collection Id"
-          }
-        },
-        "required": [
-          "title",
-          "count",
-          "filters",
-          "tmdb_collection_id"
-        ],
-        "title": "CollectionPresetRead",
-        "type": "object"
       },
       "CollectionRead": {
         "additionalProperties": false,
@@ -4860,9 +4438,6 @@
             "title": "Enabled",
             "type": "boolean"
           },
-          "filters": {
-            "$ref": "#/components/schemas/CollectionFilter-Output"
-          },
           "last_error": {
             "anyOf": [
               {
@@ -4942,16 +4517,6 @@
               }
             ]
           },
-          "source_identifier": {
-            "default": "",
-            "maxLength": 500,
-            "title": "Source Identifier",
-            "type": "string"
-          },
-          "source_type": {
-            "$ref": "#/components/schemas/RuleSourceType",
-            "default": "filter"
-          },
           "summary_format": {
             "anyOf": [
               {
@@ -5014,15 +4579,12 @@
           }
         },
         "required": [
-          "source_type",
-          "source_identifier",
-          "filters",
-          "builders",
-          "smart_filter",
-          "managed_label",
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
+          "auto_match_art",
+          "auto_match_theme",
+          "delete_when_inactive",
           "collection_mode",
           "order_type",
           "collection_filtering",
@@ -5033,9 +4595,9 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "delete_when_inactive",
-          "auto_match_art",
-          "auto_match_theme",
+          "builders",
+          "smart_filter",
+          "managed_label",
           "sync_interval_hours",
           "enabled",
           "last_synced_at",
@@ -5144,9 +4706,6 @@
             "title": "Enabled",
             "type": "boolean"
           },
-          "filters": {
-            "$ref": "#/components/schemas/CollectionFilter-Input"
-          },
           "managed_label": {
             "anyOf": [
               {
@@ -5202,16 +4761,6 @@
                 "type": "null"
               }
             ]
-          },
-          "source_identifier": {
-            "default": "",
-            "maxLength": 500,
-            "title": "Source Identifier",
-            "type": "string"
-          },
-          "source_type": {
-            "$ref": "#/components/schemas/RuleSourceType",
-            "default": "filter"
           },
           "summary_format": {
             "anyOf": [
@@ -8156,16 +7705,6 @@
           "error"
         ],
         "title": "RenameStatus",
-        "type": "string"
-      },
-      "RuleSourceType": {
-        "description": "Supported dynamic collection sources.",
-        "enum": [
-          "mdblist",
-          "tmdb",
-          "filter"
-        ],
-        "title": "RuleSourceType",
         "type": "string"
       },
       "SaveArtRequest": {
@@ -11811,134 +11350,6 @@
           }
         },
         "summary": "Bulk Operate Collections",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/generator/apply": {
-      "post": {
-        "description": "Create selected preset collections and their dynamic rules.",
-        "operationId": "generate_collections",
-        "parameters": [
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionGenerateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionGenerateResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Generate Collections",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/generator/preview": {
-      "post": {
-        "description": "Preview library filters before generating collections.",
-        "operationId": "preview_collection_generator",
-        "parameters": [
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionGenerateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CollectionPresetRead"
-                  },
-                  "title": "Response Preview Collection Generator",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Preview Collection Generator",
         "tags": [
           "collections"
         ]

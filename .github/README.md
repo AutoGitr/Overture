@@ -99,9 +99,7 @@ newest release. The supplied Compose file uses `1`, which gets every update
 without a breaking change.
 
 1. Download [`compose.yaml`](https://github.com/AutoGitr/Overture/blob/main/compose.yaml).
-2. Configure your environment (see [Configuration](#configuration)) in either of two ways:
-   - **With an `.env` file:** download [`.env.example`](https://github.com/AutoGitr/Overture/blob/main/.env.example), rename it to `.env`, and set your values in `.env`.
-   - **Directly in `compose.yaml`:** remove `env_file: ".env"` and set your values under `environment:` in `compose.yaml`.
+2. Download [`.env.example`](https://github.com/AutoGitr/Overture/blob/main/.env.example), save it as `.env`, and configure your environment (see [Configuration](#configuration)).
 3. In `compose.yaml`, map your paths under `volumes`. Each container path must
    match the path your media server reports: if Plex sees
    `/media/Movies/Inception (2010)`, mount the folder that holds `Movies` at
@@ -218,7 +216,7 @@ domain.
 ### Configuration
 
 These variables set up the connection, sign-in and runtime; everything else is
-set in the web interface. Docker reads them from `.env`, `compose.yaml` or
+set in the web interface. Docker reads them from `.env` or
 [Docker secrets](#docker-secrets), and the [Linux service](#linux-service) from
 its [settings file](#native-service-settings). Empty values count as unset.
 
@@ -231,9 +229,15 @@ its [settings file](#native-service-settings). Empty values count as unset.
 | `MEDIA_SERVER_URL`        | Yes                |                           | Server address with protocol, port and any base path.                                                                      |
 | `MEDIA_SERVER_API_KEY`    | Yes                |                           | Server token or API key                                                                                                    |
 | `MEDIA_SERVER_VERIFY_TLS` | No                 | `true`                    | Set to `false` only for a self-signed certificate; keep it on for Plex                                                     |
-| `JELLYFIN_COLLECTIONS_PATH` | No | | Local mount of Jellyfin's collections directory, used to write BoxSet themes |
-| `MDBLIST_API_KEY` | No | | Enables dynamic collection membership from MDBList JSON lists; kept on the backend |
+| `JELLYFIN_COLLECTIONS_PATH` | No                |                           | Local mount of Jellyfin's collections directory, used to write BoxSet themes                                               |
+| `MDBLIST_API_KEY`         | No                 |                           | Enables dynamic collection membership from MDBList JSON lists; kept on the backend                                         |
 | `TMDB_API_KEY`            | No                 |                           | Enables TMDB artwork and title/collection search directly in the sidebar; recommended for Plex                             |
+| `RADARR_URL`              | No                 |                           | Radarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:7878`); enables Radarr tag collection builders |
+| `RADARR_API_KEY`          | If using Radarr    |                           | Radarr API key; kept on the backend                                                                                        |
+| `RADARR_VERIFY_TLS`       | No                 | `true`                    | Set to `false` only for self-signed certificates                                                                           |
+| `SONARR_URL`              | No                 |                           | Sonarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:8989`); enables Sonarr tag collection builders |
+| `SONARR_API_KEY`          | If using Sonarr    |                           | Sonarr API key; kept on the backend                                                                                        |
+| `SONARR_VERIFY_TLS`       | No                 | `true`                    | Set to `false` only for self-signed certificates                                                                           |
 | `AUTH_MODE`               | No                 | `password`                | Authentication mode: `password`, `oidc`, `both`, or `none`                                                                 |
 | `APP_PASSWORD_HASH`       | `password`, `both` |                           | [Password](#password) hash; required for `password` and `both` modes                                                       |
 | `OIDC_ISSUER_URL`         | `oidc`, `both`     |                           | Exact [OIDC](#sso-with-openid-connect) issuer, with any path and trailing slash (Authentik: `.../application/o/overture/`) |
@@ -257,7 +261,7 @@ its [settings file](#native-service-settings). Empty values count as unset.
 
 Any setting can come from a
 [Compose secret](https://docs.docker.com/compose/how-tos/use-secrets/) named after
-it in lowercase. Leave the setting empty in `.env` and `compose.yaml`.
+it in lowercase. Leave the setting empty in `.env`.
 Overture validates required settings after loading the mounted secrets.
 
 ```yaml
@@ -309,9 +313,7 @@ When `AUTH_MODE` is `password` or `both`, a password hash is required.
 
 `overture password hash` asks for a password twice and prints a line such as
 `APP_PASSWORD_HASH='$argon2id$...'`. In `.env` or `overture.env`, paste the
-whole line, quotes included, in place of the old one. If setting
-`APP_PASSWORD_HASH` directly under `environment:` in `compose.yaml`, double each
-`$` (`$$argon2id$$...`) so Compose keeps it literal. Any
+whole line, quotes included, in place of the old one. Any
 non-empty password up to 1,024 bytes works; use 15 characters or more. Hashes
 from other Argon2id tools also work.
 

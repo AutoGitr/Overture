@@ -1,7 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
-import CollectionGenerator from "../../../lib/components/CollectionGenerator.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import {
   goToCollectionView,
@@ -249,65 +248,6 @@ describe("collection management", () => {
     ).toMatchObject({ title: "Saga", library_id: "movies", member_ids: [1] });
   });
 
-  it("previews presets before generating only selected collections", async () => {
-    const { calls } = mockFetchRoutes({
-      "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
-      "/api/collections/generator/preview": [
-        { title: "1990s", count: 2, filters: { decade: 1990, studio: null, genre: null } },
-      ],
-      "/api/collections/generator/apply": { created: [12], errors: {} },
-    });
-    const view = renderWithQueryClient(CollectionGenerator, {
-      libraries: [{ id: "movies", title: "Movies", count: 2 }],
-      mediaType: "movie",
-      libraryId: "movies",
-    });
-    await fireEvent.click(view.container.querySelector("summary") ?? document.body);
-    await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Generator library"), {
-      target: { value: "movies" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
-    await fireEvent.click(await screen.findByRole("checkbox", { name: "1990s (2 members)" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Generate selected collections" }));
-    await waitFor(() => expect(calls.some((call) => call.url.endsWith("/apply"))).toBe(true));
-    expect(
-      JSON.parse(String(calls.find((call) => call.url.endsWith("/apply"))?.init.body)),
-    ).toMatchObject({ titles: ["1990s"], preset: "decades" });
-  });
-
-  it("previews and submits the TMDB franchise preset", async () => {
-    const { calls } = mockFetchRoutes({
-      "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
-      "/api/collections/generator/preview": [
-        { title: "Saga", count: 2, filters: {}, tmdb_collection_id: 10 },
-      ],
-      "/api/collections/generator/apply": { created: [12], errors: {} },
-    });
-    const view = renderWithQueryClient(CollectionGenerator, {
-      libraries: [{ id: "movies", title: "Movies", count: 2 }],
-      mediaType: "movie",
-      libraryId: "movies",
-    });
-    await fireEvent.click(view.container.querySelector("summary") ?? document.body);
-    await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Generator library"), {
-      target: { value: "movies" },
-    });
-    await fireEvent.change(screen.getByLabelText("Group by"), {
-      target: { value: "tmdb_collections" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
-    await fireEvent.click(await screen.findByRole("checkbox", { name: "Saga (2 members)" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Generate selected collections" }));
-    await waitFor(() => expect(calls.some((call) => call.url.endsWith("/apply"))).toBe(true));
-    expect(
-      JSON.parse(String(calls.find((call) => call.url.endsWith("/apply"))?.init.body)),
-    ).toMatchObject({ preset: "tmdb_collections", titles: ["Saga"] });
-  });
-
   it.each([
     { button: "Move First down", expected: [2, 1] },
     { button: "Move Second up", expected: [2, 1] },
@@ -431,6 +371,8 @@ describe("collection management", () => {
   it("shows a saved rule immediately and removes it without needing a live event", async () => {
     mockFetchRoutes({
       "/api/collections/groups": [],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
       "/api/collections/12/rule": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "DELETE" ? { status: "deleted" } : rule),
@@ -438,8 +380,9 @@ describe("collection management", () => {
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
     await fireEvent.change(await screen.findByLabelText("Source"), {
-      target: { value: "mdblist" },
+      target: { value: "builders" },
     });
+    await fireEvent.click(screen.getByRole("button", { name: "MDBList" }));
     await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
       target: { value: "user/list" },
     });
@@ -529,6 +472,8 @@ describe("collection management", () => {
   it("keeps metadata and rule drafts when monitoring changes from the header", async () => {
     mockFetchRoutes({
       "/api/collections/groups": [],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
       "/api/collections/12/monitored": { monitored: true },
     });
@@ -540,7 +485,8 @@ describe("collection management", () => {
     await fireEvent.input(screen.getByLabelText("Summary"), {
       target: { value: "Unsaved summary" },
     });
-    await fireEvent.change(screen.getByLabelText("Source"), { target: { value: "mdblist" } });
+    await fireEvent.change(screen.getByLabelText("Source"), { target: { value: "builders" } });
+    await fireEvent.click(screen.getByRole("button", { name: "MDBList" }));
     await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
       target: { value: "draft/list" },
     });
@@ -551,7 +497,7 @@ describe("collection management", () => {
     expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
     expect(screen.getByLabelText("Summary")).toHaveValue("Unsaved summary");
   });
-  it("keeps generation inside General and offers only the header delete action", async () => {
+  it("offers only the header delete action and no separate danger zone", async () => {
     mockFetchRoutes({
       "/api/collections/12": detail,
       "/api/collections/groups": [],
@@ -559,11 +505,9 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
     });
     renderWithQueryClient(CollectionPage);
-    const general = await screen.findByRole("region", { name: "General & Server Display" });
-    expect(within(general).getByText("Generate collections")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "General & Server Display" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Danger Zone" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Delete collection" })).toHaveLength(1);
-    expect(screen.queryByLabelText("Generator library")).not.toBeInTheDocument();
   });
 
   it("loads and saves group defaults without submitting the collection", async () => {

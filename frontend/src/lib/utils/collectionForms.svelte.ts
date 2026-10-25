@@ -4,8 +4,6 @@ import {
   createCollectionMutation,
   deleteCollectionMutation,
   deleteCollectionRuleMutation,
-  generateCollectionsMutation,
-  previewCollectionGeneratorMutation,
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
   syncCollectionRuleMutation,
@@ -16,11 +14,9 @@ import type {
   CollectionFiltering,
   CollectionKind,
   CollectionOrder,
-  CollectionPreset,
   CollectionRuleWrite,
   MediaType,
   MediaItemRead,
-  RuleSourceType,
   CollectionMode,
   CollectionOptions,
   LibrarySectionRead,
@@ -32,7 +28,7 @@ import { settingsState } from "../stores/settingsState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
-export type RuleEditorSource = RuleSourceType | "manual" | "smart" | "composite";
+export type RuleEditorSource = "manual" | "builders" | "smart";
 
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
@@ -82,33 +78,8 @@ export class CollectionEditor {
   get orderType() {
     return this.collection.order_type;
   }
-  private savedRule = $derived.by(() => this.current().rule);
-
-  private savedSourceType = $derived.by<RuleEditorSource>(() => {
-    const rule = this.savedRule;
-    if (!rule) return "manual";
-    if (rule.smart_filter) return "smart";
-    if (rule.builders && rule.builders.length > 1) return "composite";
-    return rule.source_type;
-  });
-  sourceType: RuleEditorSource = $derived(this.savedSourceType);
-
-  rule: CollectionRuleWrite = $derived.by(() => {
-    const rule = this.savedRule;
-    const { last_error: _error, last_synced_at: _synced, ...saved } = rule ?? {};
-    const draft = $state<CollectionRuleWrite>(
-      rule
-        ? {
-            ...saved,
-            source_type: rule.source_type,
-            builders: rule.builders ? JSON.parse(JSON.stringify(rule.builders)) : [],
-            smart_filter: rule.smart_filter ? JSON.parse(JSON.stringify(rule.smart_filter)) : null,
-            filters: { ...rule.filters },
-          }
-        : defaultCollectionRule(),
-    );
-    return draft;
-  });
+  sourceType = $state<RuleEditorSource>("manual");
+  rule = $state<CollectionRuleWrite>(defaultCollectionRule());
 
   memberSearch = $state("");
   draggingMemberId = $state<number | null>(null);
@@ -140,7 +111,18 @@ export class CollectionEditor {
   private readonly deleteRequest = createMutation(() => deleteCollectionMutation());
   private readonly feedback = createNotifier();
 
-  constructor(private readonly current: () => CollectionDetail) {}
+  constructor(private readonly current: () => CollectionDetail) {
+    const saved = this.current().rule;
+    if (saved) {
+      this.sourceType = saved.smart_filter ? "smart" : "builders";
+      const { last_error: _error, last_synced_at: _synced, ...rest } = saved;
+      this.rule = {
+        ...rest,
+        builders: saved.builders ? JSON.parse(JSON.stringify(saved.builders)) : [],
+        smart_filter: saved.smart_filter ? JSON.parse(JSON.stringify(saved.smart_filter)) : null,
+      };
+    }
+  }
 
   get collection() {
     return this.current();
@@ -233,11 +215,9 @@ export class CollectionEditor {
       }
       return null;
     }
-    const legacySource: RuleSourceType =
-      source === "smart" || source === "composite" ? "filter" : source;
     const savedRule = await this.ruleRequest.mutateAsync({
       ...target,
-      body: { ...draft, source_type: legacySource },
+      body: draft,
     });
     return savedRule;
   }
@@ -273,96 +253,11 @@ export class CollectionEditor {
   }
 }
 
-/** Creation and generator drafts; network results stay in mutation observers. */
-export class CollectionGenerator {
-  libraryId = $derived.by(() => this.defaultLibrary());
-  collectionGroup = $state("");
-  sync_mode = $state<CollectionRuleWrite["sync_mode"]>(null);
-  minimum_items = $state<number | null>(null);
-  delete_below_minimum = $state<boolean | null>(null);
-  auto_match_art = $state<boolean | null>(null);
-  auto_match_theme = $state<boolean | null>(null);
-  collection_mode = $state<CollectionMode | null>(null);
-  collection_filtering = $state<CollectionFiltering | null>(null);
-  delete_when_inactive = $state<boolean | null>(null);
-  visible_shared = $state<boolean | null>(null);
-  visible_library = $state<boolean | null>(null);
-  sort_title_format = $state("");
-  preset: CollectionPreset = $state("decades");
-  readonly titles = new SvelteSet<string>();
-
-  readonly preview = createMutation(() => previewCollectionGeneratorMutation());
-  readonly generateRequest = createMutation(() => generateCollectionsMutation());
-  private readonly feedback = createNotifier();
-
-  constructor(
-    readonly mediaType: MediaType,
-    private readonly defaultLibrary: () => string = () => "",
-  ) {}
-
-  get body() {
-    return {
-      media_type: this.mediaType,
-      library_id: this.libraryId,
-      preset: this.preset,
-      collection_group: this.collectionGroup || null,
-      sync_mode: this.sync_mode,
-      minimum_items: this.minimum_items,
-      delete_below_minimum: this.delete_below_minimum,
-      auto_match_art: this.auto_match_art,
-      auto_match_theme: this.auto_match_theme,
-      collection_mode: this.collection_mode,
-      collection_filtering: this.collection_filtering,
-      delete_when_inactive: this.delete_when_inactive,
-      visible_shared: this.visible_shared,
-      visible_library: this.visible_library,
-      sort_title_format: this.sort_title_format || null,
-      titles: Array.from(this.titles),
-    };
-  }
-
-  resetPreview() {
-    this.preview.reset();
-    this.titles.clear();
-  }
-
-  toggleTitle(title: string) {
-    if (!this.titles.delete(title)) {
-      this.titles.add(title);
-    }
-  }
-
-  async previewCollections() {
-    this.titles.clear();
-    try {
-      await this.preview.mutateAsync({ body: this.body });
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Preview failed"));
-    }
-  }
-
-  async generate(): Promise<boolean> {
-    try {
-      const result = await this.generateRequest.mutateAsync({ body: this.body });
-      this.feedback.success(`${result.created.length} collections created.`);
-      for (const [title, error] of Object.entries(result.errors))
-        this.feedback.error(`${title}: ${error}`);
-      return Object.keys(result.errors).length === 0;
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Generation failed"));
-      return false;
-    }
-  }
-}
-
 function defaultCollectionRule(identifier = ""): CollectionRuleWrite {
   return {
-    source_type: "mdblist",
-    source_identifier: identifier,
     builders: identifier ? [{ type: "tmdb_collection", collection_id: Number(identifier) }] : [],
     smart_filter: null,
     managed_label: null,
-    filters: {},
     sync_mode: null,
     minimum_items: null,
     delete_below_minimum: null,
@@ -429,7 +324,7 @@ export class CollectionDraft {
     this.libraries().length === 1 ? (this.libraries()[0]?.id ?? "") : "",
   );
   libraryId = $derived(this.onlyLibrary);
-  sourceType: RuleEditorSource = $derived.by(() => (this.seed() ? "tmdb" : "manual"));
+  sourceType: RuleEditorSource = $derived.by(() => (this.seed() ? "builders" : "manual"));
   rule = $derived.by(() => {
     const seed = this.seed();
     const draft = $state(defaultCollectionRule(seed ? String(seed.tmdb_id) : ""));
@@ -499,13 +394,7 @@ export class CollectionDraft {
           rule:
             this.sourceType === "manual"
               ? null
-              : {
-                  ...$state.snapshot(this.rule),
-                  source_type:
-                    this.sourceType === "smart" || this.sourceType === "composite"
-                      ? "filter"
-                      : this.sourceType,
-                },
+              : $state.snapshot(this.rule),
         },
       });
       storeCollectionDetail(collection);

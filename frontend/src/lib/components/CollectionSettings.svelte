@@ -1,5 +1,4 @@
 <script lang="ts">
-  import CollectionGenerator from "./CollectionGenerator.svelte";
   import CollectionGroupSettings from "./CollectionGroupSettings.svelte";
   import DetailForm from "./DetailForm.svelte";
   import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
@@ -173,8 +172,6 @@
       </label>
     </div>
   {/if}
-
-  <CollectionGenerator {libraries} mediaType={editor.mediaType} libraryId={editor.libraryId} />
 
   {#if editor.collectionGroup.trim()}
     <CollectionGroupSettings

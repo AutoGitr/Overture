@@ -87,6 +87,36 @@
   };
 </script>
 
+{#snippet tagPicker(title: string, tags: { id: number; label: string }[] | undefined)}
+  <div class="form-label">
+    <span>{title}</span>
+    {#if tags && tags.length > 0}
+      <div class="tag-chips">
+        {#each tags as tag (tag.id)}
+          <button
+            type="button"
+            class="tag-chip"
+            class:active={(builder.tags ?? []).includes(tag.label)}
+            onclick={() => toggleTag(tag.label)}
+          >
+            {tag.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+    <input
+      type="text"
+      placeholder="Tag names separated by comma"
+      value={(builder.tags ?? []).join(", ")}
+      oninput={(e) => {
+        if (builder.type === "radarr_tag" || builder.type === "sonarr_tag") {
+          builder.tags = splitList(e.currentTarget.value);
+        }
+      }}
+    />
+  </div>
+{/snippet}
+
 <div class="builder-card">
   <div class="builder-header">
     <span class="builder-title">{builderLabels[builder.type]}</span>
@@ -141,8 +171,8 @@
             }
           }}
         />
-        <span class="hint">The numeric ID from themoviedb.org collection URL.</span>
       </label>
+      <span class="hint">The numeric ID from themoviedb.org collection URL.</span>
     {:else if builder.type === "tmdb_item"}
       <label class="form-label">
         TMDB {mediaType === "movie" ? "movie" : "show"} IDs
@@ -155,8 +185,8 @@
               builder.tmdb_ids = splitIds(e.currentTarget.value);
             }
           }}></textarea>
-        <span class="hint">Comma-separated or newline-separated TMDB IDs.</span>
       </label>
+      <span class="hint">Comma-separated or newline-separated TMDB IDs.</span>
     {:else if builder.type === "tmdb_person"}
       <div class="form-grid">
         <label class="form-label">
@@ -229,64 +259,12 @@
           }}
           placeholder="https://mdblist.com/lists/user/slug or user/slug"
         />
-        <span class="hint">Paste list URLs or slugs separated by commas.</span>
       </label>
+      <span class="hint">Paste list URLs or slugs separated by commas.</span>
     {:else if builder.type === "radarr_tag"}
-      <div class="form-label">
-        <span>Radarr tags</span>
-        {#if radarrTags.data && radarrTags.data.length > 0}
-          <div class="tag-chips">
-            {#each radarrTags.data as tag (tag.id)}
-              <button
-                type="button"
-                class="tag-chip"
-                class:active={(builder.tags ?? []).includes(tag.label)}
-                onclick={() => toggleTag(tag.label)}
-              >
-                {tag.label}
-              </button>
-            {/each}
-          </div>
-        {/if}
-        <input
-          type="text"
-          placeholder="Tag names separated by comma"
-          value={(builder.tags ?? []).join(", ")}
-          oninput={(e) => {
-            if (builder.type === "radarr_tag") {
-              builder.tags = splitList(e.currentTarget.value);
-            }
-          }}
-        />
-      </div>
+      {@render tagPicker("Radarr tags", radarrTags.data)}
     {:else if builder.type === "sonarr_tag"}
-      <div class="form-label">
-        <span>Sonarr tags</span>
-        {#if sonarrTags.data && sonarrTags.data.length > 0}
-          <div class="tag-chips">
-            {#each sonarrTags.data as tag (tag.id)}
-              <button
-                type="button"
-                class="tag-chip"
-                class:active={(builder.tags ?? []).includes(tag.label)}
-                onclick={() => toggleTag(tag.label)}
-              >
-                {tag.label}
-              </button>
-            {/each}
-          </div>
-        {/if}
-        <input
-          type="text"
-          placeholder="Tag names separated by comma"
-          value={(builder.tags ?? []).join(", ")}
-          oninput={(e) => {
-            if (builder.type === "sonarr_tag") {
-              builder.tags = splitList(e.currentTarget.value);
-            }
-          }}
-        />
-      </div>
+      {@render tagPicker("Sonarr tags", sonarrTags.data)}
     {:else if builder.type === "library_filter"}
       {#if !builder.filter_group}
         {((builder.filter_group = emptyFilterGroup()), "")}

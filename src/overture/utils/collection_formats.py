@@ -103,3 +103,13 @@ def is_within_active_window(
     if start <= end:
         return start <= current <= end
     return current >= start or current <= end
+
+
+def strip_affixes(title: str, *, prefix: str, suffix: str) -> str:
+    """Strip configured prefix and suffix from a TMDB collection title."""
+    cleaned = title.strip()
+    if prefix and cleaned.casefold().startswith(prefix.casefold()):
+        cleaned = cleaned[len(prefix) :].strip()
+    if suffix and cleaned.casefold().endswith(suffix.casefold()):
+        cleaned = cleaned[: -len(suffix)].strip()
+    return cleaned or title.strip()

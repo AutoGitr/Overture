@@ -1523,140 +1523,11 @@ export type CollectionDetail = {
 };
 
 /**
- * CollectionFilter
- *
- * An intersection of filters over the current server library.
- */
-export type CollectionFilterInput = {
-    /**
-     * Decade
-     */
-    decade?: number | null;
-    /**
-     * Genre
-     */
-    genre?: string | null;
-    /**
-     * Studio
-     */
-    studio?: string | null;
-};
-
-/**
- * CollectionFilter
- *
- * An intersection of filters over the current server library.
- */
-export type CollectionFilterOutput = {
-    /**
-     * Decade
-     */
-    decade: number | null;
-    /**
-     * Genre
-     */
-    genre: string | null;
-    /**
-     * Studio
-     */
-    studio: string | null;
-};
-
-/**
  * CollectionFiltering
  *
  * User-context filtering mode for Plex smart collections.
  */
 export type CollectionFiltering = 'admin' | 'user';
-
-/**
- * CollectionGenerateRequest
- *
- * Preview or generate collections from metadata already in the library.
- */
-export type CollectionGenerateRequest = {
-    active_end_mmdd?: SeasonalDate | null;
-    active_start_mmdd?: SeasonalDate | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art?: boolean | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme?: boolean | null;
-    collection_filtering?: CollectionFiltering | null;
-    /**
-     * Collection Group
-     */
-    collection_group?: string | null;
-    collection_mode?: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum?: boolean | null;
-    /**
-     * Delete When Inactive
-     */
-    delete_when_inactive?: boolean | null;
-    dynamic_tmdb?: DynamicTmdbGroupConfigInput | null;
-    /**
-     * Library Id
-     */
-    library_id: string;
-    media_type: MediaType;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
-    order_type?: CollectionOrder | null;
-    preset: CollectionPreset;
-    sort_title_format?: SortTitleFormat | null;
-    summary_format?: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled?: boolean | null;
-    /**
-     * Sync Interval Hours
-     */
-    sync_interval_hours?: number | null;
-    sync_mode?: SyncMode | null;
-    /**
-     * Titles
-     */
-    titles?: Array<string>;
-    /**
-     * Visible Home
-     */
-    visible_home?: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library?: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared?: boolean | null;
-};
-
-/**
- * CollectionGenerateResponse
- *
- * Per-collection generator results; one failure leaves others intact.
- */
-export type CollectionGenerateResponse = {
-    /**
-     * Created
-     */
-    created: Array<number>;
-    /**
-     * Errors
-     */
-    errors: {
-        [key: string]: string;
-    };
-};
 
 /**
  * CollectionGroupPolicy
@@ -1859,34 +1730,6 @@ export type CollectionOptions = {
 export type CollectionOrder = 'release' | 'alpha' | 'custom';
 
 /**
- * CollectionPreset
- *
- * Library metadata used to generate collections.
- */
-export type CollectionPreset = 'tmdb_collections' | 'decades' | 'studios' | 'genres';
-
-/**
- * CollectionPresetRead
- *
- * A generator candidate with its matching library count.
- */
-export type CollectionPresetRead = {
-    /**
-     * Count
-     */
-    count: number;
-    filters: CollectionFilterOutput;
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Tmdb Collection Id
-     */
-    tmdb_collection_id: number | null;
-};
-
-/**
  * CollectionRead
  *
  * Media-server collection response.
@@ -2066,7 +1909,6 @@ export type CollectionRuleRead = {
      * Enabled
      */
     enabled: boolean;
-    filters: CollectionFilterOutput;
     /**
      * Last Error
      */
@@ -2086,11 +1928,6 @@ export type CollectionRuleRead = {
     order_type: CollectionOrder | null;
     smart_filter: SmartCollectionConfigOutput | null;
     sort_title_format: SortTitleFormat | null;
-    /**
-     * Source Identifier
-     */
-    source_identifier: string;
-    source_type: RuleSourceType;
     summary_format: SummaryFormat | null;
     /**
      * Sync Interval Hours
@@ -2145,7 +1982,6 @@ export type CollectionRuleWrite = {
      * Enabled
      */
     enabled?: boolean;
-    filters?: CollectionFilterInput;
     /**
      * Managed Label
      */
@@ -2157,11 +1993,6 @@ export type CollectionRuleWrite = {
     order_type?: CollectionOrder | null;
     smart_filter?: SmartCollectionConfigInput | null;
     sort_title_format?: SortTitleFormat | null;
-    /**
-     * Source Identifier
-     */
-    source_identifier?: string;
-    source_type?: RuleSourceType;
     summary_format?: SummaryFormat | null;
     /**
      * Sync Interval Hours
@@ -3714,13 +3545,6 @@ export type RenameRequest = {
  * What happened to one file an asset rename was asked to move.
  */
 export type RenameStatus = 'renamed' | 'conflict' | 'error';
-
-/**
- * RuleSourceType
- *
- * Supported dynamic collection sources.
- */
-export type RuleSourceType = 'mdblist' | 'tmdb' | 'filter';
 
 /**
  * SaveArtRequest
@@ -5662,58 +5486,6 @@ export type BulkOperateCollectionsResponses = {
 };
 
 export type BulkOperateCollectionsResponse = BulkOperateCollectionsResponses[keyof BulkOperateCollectionsResponses];
-
-export type GenerateCollectionsData = {
-    body: CollectionGenerateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/collections/generator/apply';
-};
-
-export type GenerateCollectionsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GenerateCollectionsError = GenerateCollectionsErrors[keyof GenerateCollectionsErrors];
-
-export type GenerateCollectionsResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionGenerateResponse;
-};
-
-export type GenerateCollectionsResponse = GenerateCollectionsResponses[keyof GenerateCollectionsResponses];
-
-export type PreviewCollectionGeneratorData = {
-    body: CollectionGenerateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/collections/generator/preview';
-};
-
-export type PreviewCollectionGeneratorErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PreviewCollectionGeneratorError = PreviewCollectionGeneratorErrors[keyof PreviewCollectionGeneratorErrors];
-
-export type PreviewCollectionGeneratorResponses = {
-    /**
-     * Response Preview Collection Generator
-     *
-     * Successful Response
-     */
-    200: Array<CollectionPresetRead>;
-};
-
-export type PreviewCollectionGeneratorResponse = PreviewCollectionGeneratorResponses[keyof PreviewCollectionGeneratorResponses];
 
 export type GetCollectionGroupPolicyData = {
     body?: never;

@@ -26,7 +26,7 @@ const detail = collectionDetail({
   members,
   child_count: 1,
 });
-const rule = collectionRule({ source_type: "mdblist", source_identifier: "top10" });
+const rule = collectionRule({ builders: [{ type: "mdblist", identifiers: ["top10"] }] });
 
 describe("Collection Builders UI", () => {
   beforeEach(async () => {

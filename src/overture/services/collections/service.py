@@ -1,6 +1,7 @@
 """Collection service operations."""
 
 lazy import logging
+lazy from dataclasses import dataclass, field
 lazy from datetime import datetime, timedelta
 lazy from pathlib import Path
 lazy from typing import Any
@@ -26,10 +27,8 @@ lazy from ...domain import (
     CollectionKind,
     CollectionMode,
     CollectionOrder,
-    CollectionPreset,
     ImageSize,
     MediaType,
-    RuleSourceType,
     ServerType,
     SyncMode,
 )
@@ -50,13 +49,9 @@ lazy from ...schemas.collections import (
     CollectionBuilder,
     CollectionCreate,
     CollectionDetail,
-    CollectionFilter,
-    CollectionGenerateRequest,
-    CollectionGenerateResponse,
     CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
-    CollectionPresetRead,
     CollectionRead,
     CollectionRuleRead,
     CollectionRuleWrite,
@@ -74,7 +69,6 @@ lazy from ...schemas.collections import (
     TmdbItemBuilder,
     TmdbPersonBuilder,
     builders_adapter,
-    builders_from_legacy,
     collection_read,
     collection_theme_status_response,
 )
@@ -90,6 +84,7 @@ lazy from ...utils.collection_formats import (
     format_sort_title,
     format_summary,
     is_within_active_window,
+    strip_affixes,
 )
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.security import sanitise_error
@@ -127,14 +122,12 @@ async def catalog_collections(
     return await PublicDatasetRepository(session).collections_by_tmdb_id(tmdb_ids)
 
 
-def _strip_affixes(title: str, *, prefix: str, suffix: str) -> str:
-    """Strip configured prefix and suffix from a TMDB collection title."""
-    cleaned = title.strip()
-    if prefix and cleaned.casefold().startswith(prefix.casefold()):
-        cleaned = cleaned[len(prefix) :].strip()
-    if suffix and cleaned.casefold().endswith(suffix.casefold()):
-        cleaned = cleaned[: -len(suffix)].strip()
-    return cleaned or title.strip()
+@dataclass(slots=True)
+class GroupSyncResult:
+    """Outcomes from syncing one collection group."""
+
+    created: list[int] = field(default_factory=list[int])
+    errors: dict[str, str] = field(default_factory=dict[str, str])
 
 
 class CollectionsService:
@@ -264,8 +257,7 @@ class CollectionsService:
     def _rule_builders(rule: CollectionRule) -> list[CollectionBuilder]:
         if rule.builders_json:
             return builders_adapter.validate_json(rule.builders_json)
-        filters = CollectionFilter.model_validate_json(rule.filter_json or "{}")
-        return builders_from_legacy(rule.source_type, rule.source_identifier, filters)
+        return []
 
     @staticmethod
     def _rule_smart_filter(rule: CollectionRule) -> SmartCollectionConfig | None:
@@ -285,9 +277,10 @@ class CollectionsService:
                     "filter_json",
                     "builders_json",
                     "smart_filter_json",
+                    "source_type",
+                    "source_identifier",
                 }
             ),
-            filters=CollectionFilter.model_validate_json(rule.filter_json or "{}"),
             builders=cls._rule_builders(rule),
             smart_filter=cls._rule_smart_filter(rule),
         )
@@ -304,28 +297,6 @@ class CollectionsService:
             items,
             key=lambda item: (item.year or 0, item.title.casefold(), item.id or 0),
         )
-
-    @staticmethod
-    def _filter_items(
-        items: list[MediaItem], filters: CollectionFilter
-    ) -> list[MediaItem]:
-        return [
-            item
-            for item in items
-            if (
-                filters.decade is None
-                or (item.year is not None and item.year // 10 * 10 == filters.decade)
-            )
-            and (
-                filters.studio is None
-                or (item.studio or "").casefold() == filters.studio.casefold()
-            )
-            and (
-                filters.genre is None
-                or filters.genre.casefold()
-                in {genre.casefold() for genre in item.genres}
-            )
-        ]
 
     def _validate_options(
         self, options: CollectionOptions | CollectionMembersUpdate
@@ -497,8 +468,6 @@ class CollectionsService:
     def _validate_rule_media_type(
         self, media_type: MediaType, body: CollectionRuleWrite
     ) -> None:
-        if body.source_type is RuleSourceType.TMDB:
-            self._require_movie_collections(media_type)
         for builder in body.builders:
             if isinstance(builder, TmdbCollectionBuilder | RadarrTagBuilder):
                 self._require_movie_collections(media_type)
@@ -706,11 +675,6 @@ class CollectionsService:
 
     @staticmethod
     def _primary_tmdb_collection_id(body: CollectionRuleWrite) -> int | None:
-        if (
-            body.source_type is RuleSourceType.TMDB
-            and body.source_identifier.isdecimal()
-        ):
-            return int(body.source_identifier)
         for builder in body.builders:
             if isinstance(builder, TmdbCollectionBuilder):
                 return builder.collection_id
@@ -886,10 +850,9 @@ class CollectionsService:
 
     @staticmethod
     def _rule_row(collection_id: int, body: CollectionRuleWrite) -> CollectionRule:
-        fields = body.model_dump(exclude={"filters", "builders", "smart_filter"})
+        fields = body.model_dump(exclude={"builders", "smart_filter"})
         return CollectionRule(
             collection_id=collection_id,
-            filter_json=body.filters.model_dump_json(),
             builders_json=(
                 builders_adapter.dump_json(body.builders).decode()
                 if body.builders
@@ -918,7 +881,7 @@ class CollectionsService:
             use_source_order = (
                 existing is None
                 and body.order_type is None
-                and body.source_type is RuleSourceType.MDBLIST
+                and any(isinstance(b, MdblistBuilder) for b in body.builders)
                 and row.server_type is ServerType.PLEX
             )
             if use_source_order:
@@ -1416,14 +1379,6 @@ class CollectionsService:
                 ),
             )
 
-    @staticmethod
-    def _generator_group(body: CollectionGenerateRequest) -> str | None:
-        return (
-            (body.collection_group.strip() or None)
-            if body.collection_group is not None
-            else body.preset.collection_group
-        )
-
     async def _policy(
         self,
         session: AsyncSession,
@@ -1499,16 +1454,14 @@ class CollectionsService:
         await self._publisher.broadcast("collections.changed")
         return body
 
-    async def sync_group(
-        self, media_type: MediaType, name: str
-    ) -> CollectionGenerateResponse:
+    async def sync_group(self, media_type: MediaType, name: str) -> GroupSyncResult:
         """Run dynamic TMDB discovery (if enabled) and sync rules in *name*."""
         name = name.strip()
         async with self._database.read_session() as session:
             group = await CollectionRepository(session).group_policy(
                 self._provider().server_type, media_type, name
             )
-        response = CollectionGenerateResponse()
+        response = GroupSyncResult()
         if group is not None and group.dynamic_tmdb_json:
             config = DynamicTmdbGroupConfig.model_validate_json(group.dynamic_tmdb_json)
             if config.enabled:
@@ -1573,7 +1526,7 @@ class CollectionsService:
         self,
         group: CollectionGroup,
         config: DynamicTmdbGroupConfig,
-    ) -> CollectionGenerateResponse:
+    ) -> GroupSyncResult:
         """Auto-discover and sync TMDB franchise collections for *group*."""
         items = await self._library_items(config.library_id, MediaType.MOVIE)
         async with self._database.read_session() as session:
@@ -1598,7 +1551,7 @@ class CollectionsService:
                     counts.get(item.tmdb_collection_id, 0) + 1
                 )
 
-        response = CollectionGenerateResponse()
+        response = GroupSyncResult()
         for tmdb_id, count in sorted(counts.items()):
             if (
                 tmdb_id in excluded_ids
@@ -1613,7 +1566,7 @@ class CollectionsService:
             matched_count = sum(item.tmdb_id in source_ids for item in items)
             if matched_count < policy.minimum_items:
                 continue
-            title = _strip_affixes(
+            title = strip_affixes(
                 franchise.title,
                 prefix=config.strip_prefix,
                 suffix=config.strip_suffix,
@@ -1629,8 +1582,6 @@ class CollectionsService:
                         library_id=config.library_id,
                         media_type=MediaType.MOVIE,
                         rule=CollectionRuleWrite(
-                            source_type=RuleSourceType.TMDB,
-                            source_identifier=str(tmdb_id),
                             builders=[TmdbCollectionBuilder(collection_id=tmdb_id)],
                         ),
                     )
@@ -1713,137 +1664,6 @@ class CollectionsService:
                 result.errors[collection_id] = sanitise_error(str(exc))
         return result
 
-    async def presets(
-        self, body: CollectionGenerateRequest
-    ) -> list[CollectionPresetRead]:
-        """Preview reusable filters, excluding undersized or existing collections."""
-        items = await self._library_items(body.library_id, body.media_type)
-        async with self._database.read_session() as session:
-            policy = await self._policy(
-                session, body.media_type, self._generator_group(body), body
-            )
-            existing = await CollectionRepository(session).list_listed(body.media_type)
-        used = {
-            row.title.casefold()
-            for row in existing
-            if row.library_id == body.library_id
-            and row.server_type is self._provider().server_type
-        }
-        if body.preset is CollectionPreset.TMDB_COLLECTIONS:
-            self._require_movie_collections(body.media_type)
-            used_ids = {
-                row.tmdb_collection_id
-                for row in existing
-                if row.library_id == body.library_id
-                and row.server_type is self._provider().server_type
-            }
-            counts: dict[int, int] = {}
-            for item in items:
-                if item.tmdb_collection_id is not None:
-                    identity = item.tmdb_collection_id
-                    counts[identity] = counts.get(identity, 0) + 1
-            previews: list[CollectionPresetRead] = []
-            for identity, count in sorted(counts.items()):
-                if identity in used_ids or count < policy.minimum_items:
-                    continue
-                franchise = await self._tmdb.get_collection(identity)
-                if franchise is None or franchise.title.casefold() in used:
-                    continue
-                source_ids = {part.tmdb_id for part in franchise.parts}
-                matched_count = sum(item.tmdb_id in source_ids for item in items)
-                if matched_count >= policy.minimum_items:
-                    previews.append(
-                        CollectionPresetRead(
-                            title=franchise.title,
-                            count=matched_count,
-                            filters=CollectionFilter(),
-                            tmdb_collection_id=identity,
-                        )
-                    )
-            return sorted(previews, key=lambda preview: preview.title)
-        filters: dict[str, CollectionFilter] = {}
-        for item in items:
-            if body.preset is CollectionPreset.DECADES and item.year:
-                decade = item.year // 10 * 10
-                filters[f"{decade}s"] = CollectionFilter(decade=decade)
-            elif body.preset is CollectionPreset.STUDIOS and item.studio:
-                filters[item.studio] = CollectionFilter(studio=item.studio)
-            elif body.preset is CollectionPreset.GENRES:
-                filters.update(
-                    {genre: CollectionFilter(genre=genre) for genre in item.genres}
-                )
-        return [
-            CollectionPresetRead(
-                title=title,
-                count=len(self._filter_items(items, filters[title])),
-                filters=filters[title],
-            )
-            for title in sorted(filters)
-            if title.casefold() not in used
-            and len(self._filter_items(items, filters[title])) >= policy.minimum_items
-        ]
-
-    async def generate(
-        self, body: CollectionGenerateRequest
-    ) -> CollectionGenerateResponse:
-        """Create selected previews independently and attach their filter rules."""
-        previews = {preset.title: preset for preset in await self.presets(body)}
-        if (
-            not body.titles
-            or len(set(body.titles)) != len(body.titles)
-            or any(title not in previews for title in body.titles)
-        ):
-            raise PublicServiceError(
-                422, "Select distinct collections from the current preview"
-            )
-        response = CollectionGenerateResponse()
-        for title in body.titles:
-            preset = previews[title]
-            filters = preset.filters
-            tmdb_id = preset.tmdb_collection_id
-            try:
-                rule = CollectionRuleWrite(
-                    source_type=RuleSourceType.TMDB
-                    if tmdb_id is not None
-                    else RuleSourceType.FILTER,
-                    source_identifier=str(tmdb_id) if tmdb_id is not None else "",
-                    filters=filters,
-                    **body.model_dump(
-                        include={
-                            "sync_mode",
-                            "minimum_items",
-                            "delete_below_minimum",
-                            "auto_match_art",
-                            "auto_match_theme",
-                        }
-                    ),
-                )
-                detail = await self.create(
-                    CollectionCreate(
-                        title=title,
-                        collection_group=self._generator_group(body),
-                        collection_mode=body.collection_mode,
-                        sort_title=(
-                            format_sort_title(
-                                body.sort_title_format,
-                                title=title,
-                                group=self._generator_group(body),
-                            )
-                            if body.sort_title_format is not None
-                            else None
-                        ),
-                        tmdb_collection_id=tmdb_id,
-                        library_id=body.library_id,
-                        media_type=body.media_type,
-                        rule=rule,
-                    )
-                )
-                response.created.append(detail.id)
-                await self._auto_assets(detail.id, body.media_type)
-            except Exception as exc:
-                response.errors[title] = sanitise_error(str(exc))
-        return response
-
     def _provider(self) -> CollectionProvider:
         """Return the media server's provider when it supports collections.
 
@@ -1920,8 +1740,7 @@ class CollectionsService:
                 provider.server_type, media_type
             )
         return sorted(
-            {preset.collection_group for preset in CollectionPreset}
-            | {group.name for group in policies}
+            {group.name for group in policies}
             | {
                 row.collection_group
                 for row in rows

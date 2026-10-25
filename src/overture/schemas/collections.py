@@ -19,11 +19,9 @@ lazy from ..domain import (
     CollectionKind,
     CollectionMode,
     CollectionOrder,
-    CollectionPreset,
     FilterField,
     FilterOperator,
     MediaType,
-    RuleSourceType,
     ServerType,
     SmartSortOrder,
     SyncMode,
@@ -400,6 +398,37 @@ class CollectionThemeSources(StrictBaseModel):
     youtube_id_themerrdb: str | None = None
 
 
+class CollectionPolicyBase(StrictBaseModel):
+    """Shared policy and media server display configuration."""
+
+    sync_mode: SyncMode | None = None
+    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
+    delete_below_minimum: bool | None = None
+    auto_match_art: bool | None = None
+    auto_match_theme: bool | None = None
+    delete_when_inactive: bool | None = None
+    collection_mode: CollectionMode | None = None
+    order_type: CollectionOrder | None = None
+    collection_filtering: CollectionFiltering | None = None
+    visible_home: bool | None = None
+    visible_shared: bool | None = None
+    visible_library: bool | None = None
+    sort_title_format: SortTitleFormat | None = None
+    summary_format: SummaryFormat | None = None
+    active_start_mmdd: SeasonalDate | None = None
+    active_end_mmdd: SeasonalDate | None = None
+
+    @model_validator(mode="after")
+    def validate_seasonal_window(self) -> Self:
+        """Require both start and end dates when a seasonal window is set."""
+        if bool(self.active_start_mmdd) != bool(self.active_end_mmdd):
+            raise ValueError(
+                "Set both active_start_mmdd and active_end_mmdd "
+                "for seasonal collections"
+            )
+        return self
+
+
 class CollectionOptions(StrictBaseModel):
     """Editable collection metadata and server display options."""
 
@@ -464,99 +493,12 @@ class CollectionMembersUpdate(StrictBaseModel):
     order_type: CollectionOrder
 
 
-class CollectionFilter(StrictBaseModel):
-    """An intersection of filters over the current server library."""
-
-    decade: Annotated[int, Field(ge=1800, le=3000, multiple_of=10)] | None = None
-    studio: Annotated[str, Field(min_length=1, max_length=200)] | None = None
-    genre: Annotated[str, Field(min_length=1, max_length=200)] | None = None
-
-
-def filter_group_from_legacy(filters: CollectionFilter) -> FilterGroup:
-    """Convert a legacy CollectionFilter into a structured FilterGroup."""
-    conditions: list[FilterCondition] = []
-    if filters.decade is not None:
-        conditions.append(
-            FilterCondition(
-                field=FilterField.DECADE,
-                operator=FilterOperator.IS,
-                value=filters.decade,
-            )
-        )
-    if filters.studio is not None:
-        conditions.append(
-            FilterCondition(
-                field=FilterField.STUDIO,
-                operator=FilterOperator.IS,
-                value=filters.studio,
-            )
-        )
-    if filters.genre is not None:
-        conditions.append(
-            FilterCondition(
-                field=FilterField.GENRE,
-                operator=FilterOperator.IS,
-                value=filters.genre,
-            )
-        )
-    return FilterGroup(mode="all", conditions=conditions)
-
-
-def legacy_filter_from_group(group: FilterGroup) -> CollectionFilter:
-    """Project simple decade/studio/genre conditions back to CollectionFilter."""
-    decade: int | None = None
-    studio: str | None = None
-    genre: str | None = None
-    for condition in group.conditions:
-        if condition.operator is not FilterOperator.IS:
-            continue
-        if condition.field is FilterField.DECADE and isinstance(condition.value, int):
-            decade = condition.value
-        elif condition.field is FilterField.STUDIO and isinstance(condition.value, str):
-            studio = condition.value
-        elif condition.field is FilterField.GENRE and isinstance(condition.value, str):
-            genre = condition.value
-    return CollectionFilter(decade=decade, studio=studio, genre=genre)
-
-
-def builders_from_legacy(
-    source_type: RuleSourceType,
-    source_identifier: str,
-    filters: CollectionFilter,
-) -> list[CollectionBuilder]:
-    """Convert legacy single-source rule fields into a builder list."""
-    if source_type is RuleSourceType.TMDB:
-        return [TmdbCollectionBuilder(collection_id=int(source_identifier))]
-    if source_type is RuleSourceType.MDBLIST:
-        return [MdblistBuilder(identifiers=[source_identifier])]
-    return [LibraryFilterBuilder(filter_group=filter_group_from_legacy(filters))]
-
-
-class CollectionRuleWrite(StrictBaseModel):
+class CollectionRuleWrite(CollectionPolicyBase):
     """Composable dynamic builders or smart filter with nullable policy overrides."""
 
-    source_type: RuleSourceType = RuleSourceType.FILTER
-    source_identifier: Annotated[str, Field(max_length=500)] = ""
-    filters: CollectionFilter = Field(default_factory=CollectionFilter)
     builders: list[CollectionBuilder] = Field(default_factory=list[CollectionBuilder])
     smart_filter: SmartCollectionConfig | None = None
     managed_label: Annotated[str, Field(min_length=1, max_length=100)] | None = None
-    sync_mode: SyncMode | None = None
-    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
-    delete_below_minimum: bool | None = None
-    collection_mode: CollectionMode | None = None
-    order_type: CollectionOrder | None = None
-    collection_filtering: CollectionFiltering | None = None
-    visible_home: bool | None = None
-    visible_shared: bool | None = None
-    visible_library: bool | None = None
-    sort_title_format: SortTitleFormat | None = None
-    summary_format: SummaryFormat | None = None
-    active_start_mmdd: SeasonalDate | None = None
-    active_end_mmdd: SeasonalDate | None = None
-    delete_when_inactive: bool | None = None
-    auto_match_art: bool | None = None
-    auto_match_theme: bool | None = None
     sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
     enabled: bool = True
 
@@ -568,28 +510,7 @@ class CollectionRuleWrite(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_source(self) -> Self:
-        """Accept structured builders, smart filters, or legacy single-source rules."""
-        if bool(self.active_start_mmdd) != bool(self.active_end_mmdd):
-            raise ValueError(
-                "Set both active_start_mmdd and active_end_mmdd "
-                "for seasonal collections"
-            )
-        if self.builders:
-            first = self.builders[0]
-            if isinstance(first, TmdbCollectionBuilder):
-                self.source_type = RuleSourceType.TMDB
-                self.source_identifier = str(first.collection_id)
-            elif isinstance(first, MdblistBuilder):
-                self.source_type = RuleSourceType.MDBLIST
-                self.source_identifier = first.identifiers[0]
-            elif isinstance(first, LibraryFilterBuilder):
-                self.source_type = RuleSourceType.FILTER
-                self.source_identifier = ""
-                self.filters = legacy_filter_from_group(first.filter_group)
-            else:
-                self.source_type = RuleSourceType.FILTER
-                self.source_identifier = ""
-            return self
+        """Require either composable builders or a valid Plex smart filter."""
         if self.smart_filter is not None:
             if self.smart_filter.filter_group.is_empty() and not self.managed_label:
                 raise ValueError(
@@ -597,19 +518,8 @@ class CollectionRuleWrite(StrictBaseModel):
                     "or managed label"
                 )
             return self
-        if self.source_type is RuleSourceType.TMDB:
-            if (
-                not self.source_identifier.isdecimal()
-                or int(self.source_identifier) <= 0
-            ):
-                raise ValueError("A TMDB rule needs a positive collection ID")
-        elif self.source_type is RuleSourceType.MDBLIST:
-            self.source_identifier = mdblist_identifier(self.source_identifier)
-        elif not self.filters.model_dump(exclude_none=True):
-            raise ValueError("Choose at least one library filter")
-        self.builders = builders_from_legacy(
-            self.source_type, self.source_identifier, self.filters
-        )
+        if not self.builders:
+            raise ValueError("Dynamic collections require at least one builder")
         return self
 
 
@@ -629,63 +539,12 @@ class CollectionSyncResponse(StrictBaseModel):
     deleted: bool = False
 
 
-class CollectionGroupPolicy(StrictBaseModel):
+class CollectionGroupPolicy(CollectionPolicyBase):
     """Nullable group defaults; null inherits the application setting."""
 
-    sync_mode: SyncMode | None = None
-    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
-    delete_below_minimum: bool | None = None
-    collection_mode: CollectionMode | None = None
-    order_type: CollectionOrder | None = None
-    collection_filtering: CollectionFiltering | None = None
-    visible_home: bool | None = None
-    visible_shared: bool | None = None
-    visible_library: bool | None = None
-    sort_title_format: SortTitleFormat | None = None
-    summary_format: SummaryFormat | None = None
-    active_start_mmdd: SeasonalDate | None = None
-    active_end_mmdd: SeasonalDate | None = None
-    delete_when_inactive: bool | None = None
-    auto_match_art: bool | None = None
-    auto_match_theme: bool | None = None
     sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] | None = None
     sync_enabled: bool | None = None
     dynamic_tmdb: DynamicTmdbGroupConfig | None = None
-
-    @model_validator(mode="after")
-    def validate_seasonal_window(self) -> Self:
-        """Require both start and end dates when a seasonal window is set."""
-        if bool(self.active_start_mmdd) != bool(self.active_end_mmdd):
-            raise ValueError(
-                "Set both active_start_mmdd and active_end_mmdd for seasonal groups"
-            )
-        return self
-
-
-class CollectionGenerateRequest(CollectionGroupPolicy):
-    """Preview or generate collections from metadata already in the library."""
-
-    media_type: MediaType
-    library_id: Annotated[str, Field(min_length=1)]
-    preset: CollectionPreset
-    collection_group: Annotated[str, Field(max_length=200)] | None = None
-    titles: Annotated[list[str], Field(max_length=100)] = Field(default_factory=list)
-
-
-class CollectionPresetRead(StrictBaseModel):
-    """A generator candidate with its matching library count."""
-
-    title: str
-    count: int
-    filters: CollectionFilter
-    tmdb_collection_id: int | None = None
-
-
-class CollectionGenerateResponse(StrictBaseModel):
-    """Per-collection generator results; one failure leaves others intact."""
-
-    created: list[int] = Field(default_factory=list[int])
-    errors: dict[str, str] = Field(default_factory=dict)
 
 
 class BulkCollectionOperation(StrictBaseModel):

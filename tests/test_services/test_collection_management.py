@@ -1,7 +1,8 @@
 """Collection lifecycle and rule runs against the real database."""
 
+lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass, field
-lazy from typing import override
+lazy from typing import ClassVar, override
 
 lazy import pytest
 
@@ -10,7 +11,7 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
-lazy from overture.db.models.settings import AppSettings, get_app_settings
+lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
@@ -18,15 +19,15 @@ lazy from overture.domain import (
     CollectionKind,
     CollectionMode,
     CollectionOrder,
-    CollectionPreset,
     FilterField,
     FilterOperator,
     MediaType,
-    RuleSourceType,
+    ServerType,
     SmartSortOrder,
     SyncMode,
     TmdbPersonRole,
 )
+lazy from overture.integrations.arr import ArrClient, ArrTag, ArrTagMatches
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import (
@@ -43,8 +44,6 @@ lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtR
 lazy from overture.schemas.collections import (
     BulkCollectionOperation,
     CollectionCreate,
-    CollectionFilter,
-    CollectionGenerateRequest,
     CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
@@ -53,7 +52,11 @@ lazy from overture.schemas.collections import (
     FilterCondition,
     FilterGroup,
     LibraryFilterBuilder,
+    MdblistBuilder,
+    RadarrTagBuilder,
     SmartCollectionConfig,
+    SonarrTagBuilder,
+    TmdbCollectionBuilder,
     TmdbItemBuilder,
     TmdbPersonBuilder,
 )
@@ -85,7 +88,10 @@ class Provider(PlexProvider):
 
     @override
     async def _list_sections(self) -> list[ServerSection]:
-        return [ServerSection("movies", "Movies", MediaType.MOVIE)]
+        return [
+            ServerSection("movies", "Movies", MediaType.MOVIE),
+            ServerSection("shows", "Shows", MediaType.SHOW),
+        ]
 
     @override
     async def create_collection(
@@ -113,6 +119,7 @@ class Provider(PlexProvider):
             raise MediaServerError("Smart create failed")
         self.created.append(title)
         identity = str(len(self.created))
+        self.members[identity] = []
         self.smart_filters[identity] = filter_query
         return ServerCollection(
             identity,
@@ -198,6 +205,10 @@ class Provider(PlexProvider):
         self.deleted.append(server_collection_id)
 
 
+class JellyfinProvider(Provider):
+    server_type: ClassVar[ServerType] = ServerType.JELLYFIN
+
+
 class Lists(MDBListClient):
     def __init__(self) -> None:
         self.ids = [12, 11, 900]
@@ -218,9 +229,12 @@ class Lists(MDBListClient):
 class Tmdb(TMDBClient):
     def __init__(self) -> None:
         self.found = True
+        self.error: Exception | None = None
 
     @override
     async def get_collection(self, collection_id: int) -> TmdbCollection | None:
+        if self.error is not None:
+            raise self.error
         if not self.found:
             return None
         return TmdbCollection(
@@ -280,6 +294,28 @@ class Art(ArtService):
         return StatusResponse(status=Status.OK)
 
 
+class FakeArrClient(ArrClient):
+    def __init__(self, tag_id: int, label: str) -> None:
+        self._tag = ArrTag(id=tag_id, label=label)
+        self.closed = False
+
+    @override
+    async def list_tags(self) -> list[ArrTag]:
+        return [self._tag]
+
+    @override
+    async def external_ids_for_tags(self, tag_names: Sequence[str]) -> ArrTagMatches:
+        return ArrTagMatches(
+            tmdb_ids=(11, 12),
+            tvdb_ids=(201,),
+            imdb_ids=("tt9999999",),
+        )
+
+    @override
+    async def close(self) -> None:
+        self.closed = True
+
+
 @dataclass(slots=True)
 class Manager:
     service: CollectionsService
@@ -318,6 +354,18 @@ async def manager(database: Database, app_config: Settings) -> Manager:
             )
         ]
         session.add_all(items)
+        session.add(
+            MediaItem(
+                media_type=MediaType.SHOW,
+                title="Anime Series",
+                year=2020,
+                tmdb_id=11,
+                server_item_id="s1",
+                library_id="shows",
+                studio="Studio",
+                genres=["Animation"],
+            )
+        )
         await session.flush()
         ids = [item.id or 0 for item in items]
     service = CollectionsService(
@@ -331,6 +379,8 @@ async def manager(database: Database, app_config: Settings) -> Manager:
         mdblist=lists,
         scheduler=SchedulerService(app_config=app_config),
         art=art,
+        radarr=FakeArrClient(1, "4k"),
+        sonarr=FakeArrClient(2, "anime"),
     )
     return Manager(service, provider, lists, tmdb, publisher, art, downloads, ids)
 
@@ -345,6 +395,26 @@ async def create(manager: Manager, ids: list[int] | None = None) -> int:
         )
     )
     return result.id
+
+
+def make_jellyfin_service(
+    manager: Manager, app_config: Settings, database: Database
+) -> CollectionsService:
+    provider = JellyfinProvider(app_config)
+    return CollectionsService(
+        database=database,
+        provider_registry=NoopProviderRegistry(provider),
+        publisher=manager.publisher,
+        downloads=manager.downloads,
+        proxy_clients=unused(ProxyClientManager),
+        app_config=app_config,
+        tmdb=manager.tmdb,
+        mdblist=manager.lists,
+        scheduler=SchedulerService(app_config=app_config),
+        art=manager.art,
+        radarr=FakeArrClient(1, "4k"),
+        sonarr=FakeArrClient(2, "anime"),
+    )
 
 
 async def test_create_edit_order_and_delete_preserve_media(
@@ -379,7 +449,7 @@ async def test_create_edit_order_and_delete_preserve_media(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.TMDB, source_identifier="10"),
+        CollectionRuleWrite(builders=[TmdbCollectionBuilder(collection_id=10)]),
     )
     async with database.write_session() as session:
         row = await session.get(MediaCollection, identity)
@@ -474,8 +544,7 @@ async def test_rule_sync_uses_global_defaults_and_nullable_overrides(
         identity,
         MediaType.MOVIE,
         CollectionRuleWrite(
-            source_type=RuleSourceType.MDBLIST,
-            source_identifier="person/list",
+            builders=[MdblistBuilder(identifiers=["person/list"])],
             sync_mode=override,
         ),
     )
@@ -504,7 +573,7 @@ async def test_below_minimum_keeps_or_deletes_collection(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.MDBLIST, source_identifier="42"),
+        CollectionRuleWrite(builders=[MdblistBuilder(identifiers=["42"])]),
     )
     result = await manager.service.sync_rule(identity, MediaType.MOVIE)
     assert result.deleted is delete
@@ -527,7 +596,7 @@ async def test_failed_source_preserves_members_and_records_safe_error(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.MDBLIST, source_identifier="42"),
+        CollectionRuleWrite(builders=[MdblistBuilder(identifiers=["42"])]),
     )
     manager.lists.failure = True
     with pytest.raises(PublicServiceError, match="Source unavailable"):
@@ -545,7 +614,7 @@ async def test_tmdb_and_intersected_filters_resolve_only_library_members(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.TMDB, source_identifier="10"),
+        CollectionRuleWrite(builders=[TmdbCollectionBuilder(collection_id=10)]),
     )
     await manager.service.sync_rule(identity, MediaType.MOVIE)
     assert manager.provider.members["1"] == ["m0", "m1"]
@@ -556,8 +625,30 @@ async def test_tmdb_and_intersected_filters_resolve_only_library_members(
         identity,
         MediaType.MOVIE,
         CollectionRuleWrite(
-            source_type=RuleSourceType.FILTER,
-            filters=CollectionFilter(decade=2000, studio="studio", genre="action"),
+            builders=[
+                LibraryFilterBuilder(
+                    filter_group=FilterGroup(
+                        mode="all",
+                        conditions=[
+                            FilterCondition(
+                                field=FilterField.DECADE,
+                                operator=FilterOperator.IS,
+                                value=2000,
+                            ),
+                            FilterCondition(
+                                field=FilterField.STUDIO,
+                                operator=FilterOperator.IS,
+                                value="studio",
+                            ),
+                            FilterCondition(
+                                field=FilterField.GENRE,
+                                operator=FilterOperator.IS,
+                                value="action",
+                            ),
+                        ],
+                    )
+                )
+            ]
         ),
     )
     await manager.service.sync_rule(identity, MediaType.MOVIE)
@@ -570,61 +661,6 @@ async def test_tmdb_and_intersected_filters_resolve_only_library_members(
         await manager.service.sync_rule(identity, MediaType.MOVIE)
 
 
-@pytest.mark.parametrize(
-    ("preset", "titles"),
-    [
-        (CollectionPreset.DECADES, ["1990s", "2000s"]),
-        (CollectionPreset.GENRES, ["Action"]),
-        (CollectionPreset.STUDIOS, ["Studio"]),
-        (CollectionPreset.TMDB_COLLECTIONS, ["Saga"]),
-    ],
-)
-async def test_presets_preview_and_generate_persistent_rules(
-    manager: Manager, preset: CollectionPreset, titles: list[str]
-) -> None:
-    body = CollectionGenerateRequest(
-        media_type=MediaType.MOVIE, library_id="movies", preset=preset
-    )
-    preview = await manager.service.presets(body)
-    assert [option.title for option in preview] == titles
-    body.titles = titles
-    result = await manager.service.generate(body)
-    assert len(result.created) == len(titles)
-    assert not result.errors
-    assert await manager.service.presets(body) == []
-    for identity in result.created:
-        detail = await manager.service.get_collection(identity, MediaType.MOVIE)
-        assert detail.rule
-        assert detail.collection_group == preset.collection_group
-        assert detail.rule.source_type is (
-            RuleSourceType.TMDB
-            if preset is CollectionPreset.TMDB_COLLECTIONS
-            else RuleSourceType.FILTER
-        )
-        if preset is CollectionPreset.TMDB_COLLECTIONS:
-            assert detail.rule.source_identifier == "10"
-            assert len(detail.members) == preview[0].count == 2
-            assert detail.tmdb_collection_id == 10
-
-
-async def test_generator_counts_failures_and_does_not_accept_stale_selection(
-    manager: Manager,
-) -> None:
-    body = CollectionGenerateRequest(
-        media_type=MediaType.MOVIE,
-        library_id="movies",
-        preset=CollectionPreset.DECADES,
-        titles=["missing"],
-    )
-    with pytest.raises(PublicServiceError, match="current preview"):
-        await manager.service.generate(body)
-    body.titles = ["1990s", "2000s"]
-    manager.provider.fail = True
-    result = await manager.service.generate(body)
-    assert result.created == []
-    assert set(result.errors) == set(body.titles)
-
-
 async def test_scheduler_honors_due_times_and_stops_its_client(
     manager: Manager,
 ) -> None:
@@ -632,7 +668,7 @@ async def test_scheduler_honors_due_times_and_stops_its_client(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.MDBLIST, source_identifier="42"),
+        CollectionRuleWrite(builders=[MdblistBuilder(identifiers=["42"])]),
     )
     await manager.service.start()
     await manager.service.sync_due()
@@ -663,7 +699,7 @@ async def test_rule_sync_uses_shared_automatic_art_and_theme_pipelines(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.TMDB, source_identifier="10"),
+        CollectionRuleWrite(builders=[TmdbCollectionBuilder(collection_id=10)]),
     )
     await manager.service.sync_rule(identity, MediaType.MOVIE)
     assert manager.art.selections == [ArtType.POSTER, ArtType.BACKGROUND]
@@ -679,7 +715,7 @@ async def test_auto_asset_failure_keeps_synced_members_and_records_the_failure(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.TMDB, source_identifier="10"),
+        CollectionRuleWrite(builders=[TmdbCollectionBuilder(collection_id=10)]),
     )
     manager.art.fail = True
     with pytest.raises(
@@ -708,8 +744,7 @@ async def test_append_keeps_new_server_members_and_counts_them_for_minimum(
         identity,
         MediaType.MOVIE,
         CollectionRuleWrite(
-            source_type=RuleSourceType.MDBLIST,
-            source_identifier="42",
+            builders=[MdblistBuilder(identifiers=["42"])],
             sync_mode=SyncMode.APPEND,
         ),
     )
@@ -731,8 +766,7 @@ async def test_append_does_not_restore_a_manual_member_removed_on_the_server(
         identity,
         MediaType.MOVIE,
         CollectionRuleWrite(
-            source_type=RuleSourceType.MDBLIST,
-            source_identifier="42",
+            builders=[MdblistBuilder(identifiers=["42"])],
             sync_mode=SyncMode.APPEND,
         ),
     )
@@ -754,9 +788,7 @@ async def test_custom_group_round_trips_and_joins_group_choices(
     )
     assert detail.collection_group == "Weekend"
     groups = await manager.service.groups(MediaType.MOVIE)
-    assert set(groups) == {preset.collection_group for preset in CollectionPreset} | {
-        "Weekend"
-    }
+    assert set(groups) == {"Weekend"}
     listed = await manager.service.list_collections(MediaType.MOVIE)
     assert listed[0].collection_group == "Weekend"
     detail = await manager.service.update(
@@ -765,44 +797,6 @@ async def test_custom_group_round_trips_and_joins_group_choices(
         CollectionOptions(title="Saga", collection_group=" "),
     )
     assert detail.collection_group is None
-
-
-async def test_franchise_generator_excludes_existing_matches_with_other_titles(
-    manager: Manager,
-) -> None:
-    identity = await create(manager)
-    await manager.service.update(
-        identity,
-        MediaType.MOVIE,
-        CollectionOptions(title="My franchise", tmdb_collection_id=10),
-    )
-    body = CollectionGenerateRequest(
-        media_type=MediaType.MOVIE,
-        library_id="movies",
-        preset=CollectionPreset.TMDB_COLLECTIONS,
-    )
-    assert await manager.service.presets(body) == []
-
-
-async def test_franchise_generator_respects_minimum_and_missing_tmdb(
-    manager: Manager, database: Database
-) -> None:
-    body = CollectionGenerateRequest(
-        media_type=MediaType.MOVIE,
-        library_id="movies",
-        preset=CollectionPreset.TMDB_COLLECTIONS,
-    )
-    async with database.write_session() as session:
-        settings = await get_app_settings(session)
-        settings.collection_minimum_items = 4
-        session.add(settings)
-    assert await manager.service.presets(body) == []
-    async with database.write_session() as session:
-        settings = await get_app_settings(session)
-        settings.collection_minimum_items = 1
-        session.add(settings)
-    manager.tmdb.found = False
-    assert await manager.service.presets(body) == []
 
 
 async def test_explicit_identity_survives_membership_changes(manager: Manager) -> None:
@@ -843,14 +837,14 @@ async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
             library_id="movies",
             media_type=MediaType.MOVIE,
             rule=CollectionRuleWrite(
-                source_type=RuleSourceType.TMDB, source_identifier="10"
+                builders=[TmdbCollectionBuilder(collection_id=10)]
             ),
         )
     )
     assert detail.tmdb_collection_id == 10
     assert [member.tmdb_id for member in detail.members] == [11, 12]
     assert detail.rule is not None
-    assert detail.rule.source_identifier == "10"
+    assert detail.rule.builders == [TmdbCollectionBuilder(collection_id=10)]
 
 
 async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
@@ -889,7 +883,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
     await manager.service.save_rule(
         identity,
         MediaType.MOVIE,
-        CollectionRuleWrite(source_type=RuleSourceType.MDBLIST, source_identifier="42"),
+        CollectionRuleWrite(builders=[MdblistBuilder(identifiers=["42"])]),
     )
     await manager.service.sync_rule(identity, MediaType.MOVIE)
     detail = await manager.service.get_collection(identity, MediaType.MOVIE)
@@ -900,8 +894,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
         identity,
         MediaType.MOVIE,
         CollectionRuleWrite(
-            source_type=RuleSourceType.MDBLIST,
-            source_identifier="42",
+            builders=[MdblistBuilder(identifiers=["42"])],
             minimum_items=3,
             delete_below_minimum=False,
         ),
@@ -915,8 +908,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
         identity,
         MediaType.MOVIE,
         CollectionRuleWrite(
-            source_type=RuleSourceType.MDBLIST,
-            source_identifier="42",
+            builders=[MdblistBuilder(identifiers=["42"])],
             minimum_items=1,
             sync_mode=SyncMode.APPEND,
         ),
@@ -924,37 +916,6 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
     assert (
         await manager.service.get_collection(identity, MediaType.MOVIE)
     ).effective_sync_mode is SyncMode.APPEND
-
-
-async def test_generator_overrides_group_threshold_and_persists_rule_choices(
-    manager: Manager,
-) -> None:
-    await manager.service.save_group_policy(
-        MediaType.MOVIE, "Weekend", CollectionGroupPolicy(minimum_items=3)
-    )
-    body = CollectionGenerateRequest(
-        media_type=MediaType.MOVIE,
-        library_id="movies",
-        preset=CollectionPreset.DECADES,
-        collection_group="Weekend",
-        minimum_items=2,
-        sync_mode=SyncMode.APPEND,
-        auto_match_art=False,
-        titles=["2000s"],
-        sort_title_format="!{title}",
-    )
-    preview = await manager.service.presets(body)
-    assert [(row.title, row.count) for row in preview] == [("2000s", 2)]
-    result = await manager.service.generate(body)
-    assert not result.errors
-    detail = await manager.service.get_collection(result.created[0], MediaType.MOVIE)
-    assert detail.rule is not None
-    assert detail.rule.minimum_items == 2
-    assert detail.rule.sync_mode is SyncMode.APPEND
-    assert detail.rule.auto_match_art is False
-    assert detail.collection_group == "Weekend"
-    assert detail.sort_title == "!2000s"
-    assert manager.provider.sort_titles["1"] == "!2000s"
 
 
 async def test_bulk_operations_commit_successes_and_report_invalid_targets(
@@ -1103,6 +1064,10 @@ async def test_smart_collection_with_managed_label_and_filters(
         == "sort=addedAt:desc&push=1&label==request&unwatched=1&pop=1"
     )
 
+    # Syncing an existing smart collection updates its filter query and counts
+    sync_res = await manager.service.sync_rule(detail.id, MediaType.MOVIE)
+    assert sync_res.added == 0
+
 
 async def test_seasonal_inactive_withholds_and_deletes_server_collection(
     manager: Manager,
@@ -1122,6 +1087,37 @@ async def test_seasonal_inactive_withholds_and_deletes_server_collection(
     )
     assert detail.withheld
     assert manager.provider.created == []
+
+    # Active collection transitions to inactive and deletes server copy
+    active = await manager.service.create(
+        CollectionCreate(
+            title="Active Seasonal",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11, 12])],
+                delete_when_inactive=True,
+            ),
+        )
+    )
+    assert not active.withheld
+    assert active.title in manager.provider.created
+
+    await manager.service.update(
+        active.id,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Active Seasonal",
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+        ),
+    )
+    await manager.service.sync_rule(active.id, MediaType.MOVIE)
+    refreshed = await manager.service.get_collection(active.id, MediaType.MOVIE)
+    assert refreshed.withheld is True
+    assert refreshed.child_count == 0
 
 
 async def test_dynamic_tmdb_group_discovers_and_creates_franchises(
@@ -1145,3 +1141,667 @@ async def test_dynamic_tmdb_group_discovers_and_creates_franchises(
     assert listed[0].title == "Saga"
     assert listed[0].collection_group == "Franchises"
     assert listed[0].sort_title == "+1_Saga"
+
+
+async def test_non_plex_option_validation(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    identity = await create(manager)
+    jellyfin_service = make_jellyfin_service(manager, app_config, database)
+
+    with pytest.raises(PublicServiceError, match="Custom member order"):
+        await jellyfin_service.set_members(
+            identity,
+            MediaType.MOVIE,
+            CollectionMembersUpdate(member_ids=[1], order_type=CollectionOrder.CUSTOM),
+        )
+
+    with pytest.raises(PublicServiceError, match="Smart collections"):
+        await jellyfin_service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Smart", kind=CollectionKind.SMART),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Home", visible_home=True),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Shared", visible_shared=True),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Lib", visible_library=True),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Mode", collection_mode=CollectionMode.HIDE),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="Filter", collection_filtering=CollectionFiltering.ADMIN
+            ),
+        )
+
+
+async def test_rule_media_type_and_provider_validation(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    identity = await create(manager)
+
+    # RadarrTagBuilder on SHOW collections
+    with pytest.raises(PublicServiceError, match="only available for movies"):
+        await manager.service.save_rule(
+            identity,
+            MediaType.SHOW,
+            CollectionRuleWrite(builders=[RadarrTagBuilder(tags=["4k"])]),
+        )
+
+    # TmdbCollectionBuilder on SHOW collections
+    with pytest.raises(PublicServiceError, match="only available for movies"):
+        await manager.service.save_rule(
+            identity,
+            MediaType.SHOW,
+            CollectionRuleWrite(builders=[TmdbCollectionBuilder(collection_id=10)]),
+        )
+
+    # SonarrTagBuilder on MOVIE collections
+    with pytest.raises(PublicServiceError, match="only available for TV shows"):
+        await manager.service.save_rule(
+            identity,
+            MediaType.MOVIE,
+            CollectionRuleWrite(builders=[SonarrTagBuilder(tags=["anime"])]),
+        )
+
+    # Smart filter on non-Plex
+    jellyfin_service = make_jellyfin_service(manager, app_config, database)
+    with pytest.raises(
+        PublicServiceError, match="Smart collections are only supported by Plex"
+    ):
+        await jellyfin_service.save_rule(
+            identity,
+            MediaType.MOVIE,
+            CollectionRuleWrite(
+                builders=[],
+                smart_filter=SmartCollectionConfig(
+                    filter_group=FilterGroup(
+                        conditions=[
+                            FilterCondition(
+                                field=FilterField.GENRE,
+                                operator=FilterOperator.IS,
+                                value="Action",
+                            )
+                        ]
+                    )
+                ),
+            ),
+        )
+
+
+async def test_list_arr_tags(manager: Manager) -> None:
+    radarr_tags = await manager.service.list_radarr_tags()
+    assert len(radarr_tags) == 1
+    assert radarr_tags[0].id == 1
+    assert radarr_tags[0].label == "4k"
+
+    sonarr_tags = await manager.service.list_sonarr_tags()
+    assert len(sonarr_tags) == 1
+    assert sonarr_tags[0].id == 2
+    assert sonarr_tags[0].label == "anime"
+
+
+async def test_formatted_options(manager: Manager) -> None:
+    identity = await create(manager)
+
+    # Valid sort_title_format
+    updated = await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Star Wars",
+            collection_group="Sci-Fi",
+            sort_title_format="+1_{title}",
+        ),
+    )
+    assert updated.sort_title == "+1_Star Wars"
+
+    # Too long sort_title_format raises PublicServiceError(422)
+    with pytest.raises(PublicServiceError):
+        await manager.service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="A" * 150,
+                collection_group="B" * 60,
+                sort_title_format="{title}_{group}",
+            ),
+        )
+
+    # Valid summary_format
+    updated_summary = await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Star Wars",
+            summary_format="{title} complete saga",
+        ),
+    )
+    assert updated_summary.summary == "Star Wars complete saga"
+
+    # Too long summary_format raises PublicServiceError(422)
+    with pytest.raises(PublicServiceError):
+        await manager.service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="A" * 200,
+                summary_format="X" * 1900 + "{title}",
+            ),
+        )
+
+
+async def test_sync_due_runs_due_rules_and_dynamic_tmdb(manager: Manager) -> None:
+    # Save a group with dynamic tmdb config
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Franchises",
+        CollectionGroupPolicy(
+            minimum_items=2,
+            dynamic_tmdb=DynamicTmdbGroupConfig(
+                enabled=True,
+                library_id="movies",
+            ),
+        ),
+    )
+    # Create a collection with a rule
+    created = await manager.service.create(
+        CollectionCreate(
+            title="Due Collection",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11, 12])],
+                sync_interval_hours=1,
+            ),
+        )
+    )
+    # Run sync_due
+    await manager.service.sync_due()
+    detail = await manager.service.get_collection(created.id, MediaType.MOVIE)
+    assert detail.rule is not None
+    assert detail.rule.last_synced_at is not None
+
+    # Running sync_due again immediately skips rule because it's not due yet
+    await manager.service.sync_due()
+
+
+async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
+    # RadarrTagBuilder sync
+    radarr_col = await manager.service.create(
+        CollectionCreate(
+            title="4K Movies",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                builders=[RadarrTagBuilder(tags=["4k"])],
+            ),
+        )
+    )
+    assert radarr_col.child_count == 2
+    res = await manager.service.sync_rule(radarr_col.id, MediaType.MOVIE)
+    assert res.added == 0
+
+    # SonarrTagBuilder sync
+    sonarr_col = await manager.service.create(
+        CollectionCreate(
+            title="Anime Shows",
+            library_id="shows",
+            media_type=MediaType.SHOW,
+            rule=CollectionRuleWrite(
+                builders=[SonarrTagBuilder(tags=["anime"])],
+                minimum_items=1,
+            ),
+        )
+    )
+    assert sonarr_col.child_count == 1
+    show_res = await manager.service.sync_rule(sonarr_col.id, MediaType.SHOW)
+    assert show_res.added == 0
+
+
+async def test_create_collection_custom_order(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Custom Order",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.CUSTOM,
+            member_ids=manager.ids,
+        )
+    )
+    assert col.order_type is CollectionOrder.CUSTOM
+
+
+async def test_delete_rule_preserves_collection(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Rule To Delete",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11, 12])],
+            ),
+        )
+    )
+    assert (
+        await manager.service.delete_rule(col.id, MediaType.MOVIE)
+    ).status == Status.DELETED
+    detail = await manager.service.get_collection(col.id, MediaType.MOVIE)
+    assert detail.rule is None
+
+
+async def test_seasonal_smart_collection_sync_creates_server_copy(
+    manager: Manager,
+) -> None:
+    # Inactive smart collection starts withheld with no server_item_id
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Seasonal Smart",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+            rule=CollectionRuleWrite(
+                builders=[],
+                delete_when_inactive=True,
+                smart_filter=SmartCollectionConfig(
+                    filter_group=FilterGroup(
+                        conditions=[
+                            FilterCondition(
+                                field=FilterField.GENRE,
+                                operator=FilterOperator.IS,
+                                value="Action",
+                            )
+                        ]
+                    )
+                ),
+            ),
+        )
+    )
+    assert detail.withheld
+
+    # Make it active and sync, which invokes create_smart_collection
+    await manager.service.update(
+        detail.id,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Seasonal Smart",
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+        ),
+    )
+    res = await manager.service.sync_rule(detail.id, MediaType.MOVIE)
+    assert res.skipped is False
+    refreshed = await manager.service.get_collection(detail.id, MediaType.MOVIE)
+    assert not refreshed.withheld
+
+
+async def test_inherited_format_overflow_raises_422(manager: Manager) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "LongGroup",
+        CollectionGroupPolicy(
+            sort_title_format="Prefix_" + ("A" * 60) + "_{title}",
+            summary_format="SummaryPrefix_" + ("B" * 50) + "_{summary}",
+        ),
+    )
+    with pytest.raises(PublicServiceError, match="at most 200 characters"):
+        await manager.service.create(
+            CollectionCreate(
+                title="T" * 150,
+                collection_group="LongGroup",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+            )
+        )
+    with pytest.raises(PublicServiceError, match="at most 2000 characters"):
+        await manager.service.create(
+            CollectionCreate(
+                title="Normal",
+                summary="S" * 1960,
+                collection_group="LongGroup",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+            )
+        )
+
+
+async def test_smart_collection_requires_filter(manager: Manager) -> None:
+    with pytest.raises(
+        PublicServiceError, match="Smart collections require a smart filter"
+    ):
+        await manager.service.create(
+            CollectionCreate(
+                title="Smart No Filter",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                kind=CollectionKind.SMART,
+            )
+        )
+
+
+async def test_set_members_on_smart_collection_raises_422(manager: Manager) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Smart Collection",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            kind=CollectionKind.SMART,
+            rule=CollectionRuleWrite(
+                builders=[],
+                smart_filter=SmartCollectionConfig(
+                    filter_group=FilterGroup(
+                        conditions=[
+                            FilterCondition(
+                                field=FilterField.GENRE,
+                                operator=FilterOperator.IS,
+                                value="Comedy",
+                            )
+                        ]
+                    )
+                ),
+            ),
+        )
+    )
+    with pytest.raises(PublicServiceError, match="controlled by their filter"):
+        await manager.service.set_members(
+            detail.id,
+            MediaType.MOVIE,
+            CollectionMembersUpdate(
+                member_ids=[1],
+                order_type=CollectionOrder.RELEASE,
+            ),
+        )
+
+
+async def test_group_policy_validation_errors(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    with pytest.raises(PublicServiceError, match="A group needs a name"):
+        await manager.service.save_group_policy(
+            MediaType.MOVIE, "   ", CollectionGroupPolicy()
+        )
+    with pytest.raises(PublicServiceError, match="only available for movies"):
+        await manager.service.save_group_policy(
+            MediaType.SHOW,
+            "ShowFranchises",
+            CollectionGroupPolicy(
+                dynamic_tmdb=DynamicTmdbGroupConfig(enabled=True, library_id="shows")
+            ),
+        )
+    jellyfin_service = make_jellyfin_service(manager, app_config, database)
+    with pytest.raises(PublicServiceError, match="Collection visibility requires Plex"):
+        await jellyfin_service.save_group_policy(
+            MediaType.MOVIE,
+            "NonPlexGroup",
+            CollectionGroupPolicy(visible_home=True),
+        )
+
+
+async def test_sync_due_dynamic_tmdb_discovery_failure(manager: Manager) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "FaultyFranchises",
+        CollectionGroupPolicy(
+            dynamic_tmdb=DynamicTmdbGroupConfig(enabled=True, library_id="movies"),
+        ),
+    )
+    manager.tmdb.error = RuntimeError("TMDB upstream connection reset")
+    # sync_due handles discovery exceptions per-group and logs warnings
+    await manager.service.sync_due()
+
+
+async def test_dynamic_tmdb_exclusions_from_existing_collections(
+    manager: Manager,
+) -> None:
+    other = await manager.service.create(
+        CollectionCreate(
+            title="External Franchise",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="OtherGroup",
+            tmdb_collection_id=1,
+            rule=CollectionRuleWrite(
+                builders=[TmdbCollectionBuilder(collection_id=1)],
+            ),
+        )
+    )
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "AutoExcludedGroup",
+        CollectionGroupPolicy(
+            minimum_items=1,
+            dynamic_tmdb=DynamicTmdbGroupConfig(
+                enabled=True,
+                library_id="movies",
+                auto_exclude_from_other_collections=True,
+                exclude_tmdb_ids=[999],
+            ),
+        ),
+    )
+    res = await manager.service.sync_group(MediaType.MOVIE, "AutoExcludedGroup")
+    assert other.id not in res.created
+
+
+async def test_bulk_operation_trigger_sync(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Bulk Target",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(builders=[TmdbItemBuilder(tmdb_ids=[11])]),
+        )
+    )
+    res = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            operation="trigger_sync",
+            collection_ids=[col.id],
+            media_type=MediaType.MOVIE,
+        )
+    )
+    assert res.collection_ids == [col.id]
+    assert res.errors == {}
+    refreshed = await manager.service.get_collection(col.id, MediaType.MOVIE)
+    assert refreshed.rule is not None
+    assert refreshed.rule.last_synced_at is not None
+
+
+async def test_get_collection_theme_status(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Theme Target",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            member_ids=manager.ids,
+        )
+    )
+    theme = await manager.service.get_collection_theme(col.id, MediaType.MOVIE)
+    assert theme.has_theme is False
+
+
+async def test_sync_group_records_rule_errors(manager: Manager) -> None:
+    await manager.service.create(
+        CollectionCreate(
+            title="Will Fail",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="ErrorGroup",
+            member_ids=manager.ids,
+            rule=CollectionRuleWrite(builders=[MdblistBuilder(identifiers=["1234"])]),
+        )
+    )
+    manager.lists.failure = True
+    res = await manager.service.sync_group(MediaType.MOVIE, "ErrorGroup")
+    assert "Will Fail" in res.errors
+
+
+async def test_create_collection_below_minimum_raises_422(manager: Manager) -> None:
+    with pytest.raises(
+        PublicServiceError, match="fewer members than the effective minimum"
+    ):
+        await manager.service.create(
+            CollectionCreate(
+                title="Empty",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                member_ids=[],
+            )
+        )
+
+
+async def test_save_rule_converts_collection_to_smart_kind(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Convert To Smart",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            member_ids=manager.ids,
+        )
+    )
+    assert col.kind is CollectionKind.REGULAR
+
+    await manager.service.save_rule(
+        col.id,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            builders=[],
+            smart_filter=SmartCollectionConfig(
+                filter_group=FilterGroup(
+                    conditions=[
+                        FilterCondition(
+                            field=FilterField.GENRE,
+                            operator=FilterOperator.IS,
+                            value="Drama",
+                        )
+                    ]
+                )
+            ),
+        ),
+    )
+    refreshed = await manager.service.get_collection(col.id, MediaType.MOVIE)
+    assert refreshed.kind is CollectionKind.SMART
+
+
+async def test_standard_collection_sync_with_managed_label(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Labeled Standard",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            member_ids=manager.ids,
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11])],
+                managed_label="classic",
+            ),
+        )
+    )
+    res = await manager.service.sync_rule(col.id, MediaType.MOVIE)
+    assert res.skipped is False
+    assert any(label == "classic" for label, _, _ in manager.provider.synced_labels)
+
+
+async def test_scheduled_sync_rule_skips_when_not_due(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Scheduled Skip",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            member_ids=manager.ids,
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11])],
+            ),
+        )
+    )
+    # First sync runs
+    first = await manager.service.sync_rule(col.id, MediaType.MOVIE, scheduled=False)
+    assert first.skipped is False
+
+    # Second scheduled sync skips because not enough time elapsed
+    second = await manager.service.sync_rule(col.id, MediaType.MOVIE, scheduled=True)
+    assert second.skipped is True
+
+
+async def test_inactive_rule_without_delete_skips_sync(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Inactive Seasonal",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            member_ids=manager.ids,
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[11])],
+                delete_when_inactive=False,
+            ),
+        )
+    )
+    res = await manager.service.sync_rule(col.id, MediaType.MOVIE)
+    assert res.skipped is True
+
+
+async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
+    col = await manager.service.create(
+        CollectionCreate(
+            title="Bulk Config",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            member_ids=manager.ids,
+        )
+    )
+    # set_order
+    res_order = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            operation="set_order",
+            collection_ids=[col.id],
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.RELEASE,
+        )
+    )
+    assert res_order.collection_ids == [col.id]
+
+    # set_visibility
+    res_vis = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            operation="set_visibility",
+            collection_ids=[col.id],
+            media_type=MediaType.MOVIE,
+            collection_mode=CollectionMode.HIDE,
+            visible_home=True,
+            visible_shared=True,
+            visible_library=True,
+        )
+    )
+    assert res_vis.collection_ids == [col.id]
+    refreshed = await manager.service.get_collection(col.id, MediaType.MOVIE)
+    assert refreshed.order_type is CollectionOrder.RELEASE
+    assert refreshed.collection_mode is CollectionMode.HIDE
+    assert refreshed.visible_home is True
+    assert refreshed.visible_shared is True
+    assert refreshed.visible_library is True
