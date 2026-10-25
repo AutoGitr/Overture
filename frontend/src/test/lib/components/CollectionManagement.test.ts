@@ -139,7 +139,7 @@ describe("collection management", () => {
     renderWithQueryClient(CollectionPage);
     await screen.findByRole("heading", { name: "Saga" });
     expect(screen.queryByLabelText("Add item")).toBeNull();
-    expect(screen.getByLabelText("Sort members")).toBeInTheDocument();
+    expect(screen.getByLabelText("Member order")).toBeInTheDocument();
   });
 
   it("supports keyboard mode navigation while keeping both header boxes", async () => {
@@ -383,7 +383,7 @@ describe("collection management", () => {
       target: { value: "builders" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "MDBList" }));
-    await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
+    await fireEvent.change(await screen.findByLabelText("MDBList list URL or ID"), {
       target: { value: "user/list" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
@@ -487,7 +487,7 @@ describe("collection management", () => {
     });
     await fireEvent.change(screen.getByLabelText("Source"), { target: { value: "builders" } });
     await fireEvent.click(screen.getByRole("button", { name: "MDBList" }));
-    await fireEvent.input(await screen.findByLabelText("MDBList list URL or ID"), {
+    await fireEvent.change(await screen.findByLabelText("MDBList list URL or ID"), {
       target: { value: "draft/list" },
     });
     await fireEvent.click(screen.getByTitle("Unmonitored - click to monitor"));

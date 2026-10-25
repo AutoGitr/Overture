@@ -25,6 +25,7 @@
     libraryItems?: MediaItemRead[];
   } = $props();
 
+  let smart = $derived(editor?.collection.kind === "smart");
   let available = $derived(editor?.availableMembers(libraryItems) ?? []);
 
   function open(member: MediaItemRead | TmdbItemResult) {
@@ -48,9 +49,11 @@
     {@const currentMembers = editor.collection.members}
     <DetailSection
       title="Resolved Members"
-      description={editor.collection.server_type === "plex"
-        ? "Add library items, choose an order, or drag members into place."
-        : "Add or remove library items and choose their display order."}
+      description={smart
+        ? "Plex determines membership and ordering from the saved smart filter."
+        : editor.collection.server_type === "plex"
+          ? "Add library items, choose an order, or drag members into place."
+          : "Add or remove library items and choose their display order."}
     >
       <span class="badge" aria-label="Resolved member count"
         >{editor.collection.child_count} members</span
@@ -65,27 +68,6 @@
               disabled={editor.busy}
             />
           </label>{/if}
-        <label class="form-label">
-          Sort members
-          <select
-            value={editor.collection.order_type}
-            disabled={editor.busy}
-            onchange={(event) => {
-              const order = event.currentTarget.value;
-              if (order === "release" || order === "alpha" || order === "custom")
-                void editor.setMembers(
-                  currentMembers.map((member) => member.id),
-                  order,
-                );
-            }}
-          >
-            <option value="release">Release date</option>
-            <option value="alpha">Alphabetical</option>
-            {#if editor.collection.server_type === "plex"}
-              <option value="custom">Custom</option>
-            {/if}
-          </select>
-        </label>
       </div>
       {#if editor.manualMembersAllowed && editor.memberSearch.trim()}
         {#each available.slice(0, 20) as item (item.id)}
@@ -108,10 +90,10 @@
             <li
               class="member-row"
               ondragover={(event) => {
-                if (editor.collection.server_type === "plex") event.preventDefault();
+                if (!smart && editor.collection.server_type === "plex") event.preventDefault();
               }}
               ondrop={(event) => {
-                if (editor.collection.server_type !== "plex") return;
+                if (smart || editor.collection.server_type !== "plex") return;
                 event.preventDefault();
                 if (editor.draggingMemberId !== null && editor.draggingMemberId !== member.id) {
                   void editor.moveMember(editor.draggingMemberId, index);
@@ -119,7 +101,7 @@
                 editor.draggingMemberId = null;
               }}
             >
-              {#if editor.collection.server_type === "plex"}
+              {#if !smart && editor.collection.server_type === "plex"}
                 <button
                   type="button"
                   class="btn btn-ghost btn-icon drag-handle"
@@ -151,7 +133,7 @@
                 </span>
               </button>
               <div class="member-actions">
-                {#if editor.collection.server_type === "plex"}
+                {#if !smart && editor.collection.server_type === "plex"}
                   <button
                     type="button"
                     class="btn btn-ghost btn-icon"
@@ -169,18 +151,24 @@
                     ><ArrowDown size={16} /></button
                   >
                 {/if}
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-icon"
-                  disabled={editor.busy}
-                  aria-label={`Remove ${member.title} from collection`}
-                  onclick={() => void editor.removeMember(member.id)}><X size={16} /></button
-                >
+                {#if editor.manualMembersAllowed}<button
+                    type="button"
+                    class="btn btn-ghost btn-icon"
+                    disabled={editor.busy}
+                    aria-label={`Remove ${member.title} from collection`}
+                    onclick={() => void editor.removeMember(member.id)}><X size={16} /></button
+                  >{/if}
               </div>
             </li>
           {/each}
         </ol>
-      {:else}<p class="text-muted">No members yet. Search your library to add an item.</p>{/if}
+      {:else}<p class="text-muted">
+          {smart
+            ? "No items currently match the smart filter."
+            : editor.manualMembersAllowed
+              ? "No members yet. Search your library to add an item."
+              : "No members yet. Sync the saved sources to populate this collection."}
+        </p>{/if}
     </DetailSection>
   {:else}
     <ImageGrid title="Members" count={members.length}>

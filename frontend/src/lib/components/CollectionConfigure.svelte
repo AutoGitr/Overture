@@ -10,12 +10,16 @@
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
   import CollectionDisplaySettings from "./CollectionDisplaySettings.svelte";
   import CollectionFranchiseDiscovery from "./CollectionFranchiseDiscovery.svelte";
+  import CollectionSchedule from "./CollectionSchedule.svelte";
+  import CollectionGroupSettings from "./CollectionGroupSettings.svelte";
   import CollectionMembers from "./CollectionMembers.svelte";
   import DetailSection from "./DetailSection.svelte";
+  import DetailForm from "./DetailForm.svelte";
+  import PendingButton from "./PendingButton.svelte";
 
   let {
     collection,
-    editor = $bindable(),
+    editor,
     libraryItems,
     groups,
     formId,
@@ -31,62 +35,44 @@
     libraries: LibrarySectionRead[];
   } = $props();
 
-  let creationScope = $state<"single" | "multiple">("single");
+  let discovering = $derived(editor instanceof CollectionDraft && editor.discovering);
 </script>
 
-{#if editor.creating && editor.mediaType === "movie"}
-  <div class="scope-selector">
-    <button
-      type="button"
-      class="btn btn-sm"
-      class:btn-secondary={creationScope === "single"}
-      class:btn-ghost={creationScope !== "single"}
-      onclick={() => (creationScope = "single")}
-    >
-      Single Collection
-    </button>
-    <button
-      type="button"
-      class="btn btn-sm"
-      class:btn-secondary={creationScope === "multiple"}
-      class:btn-ghost={creationScope !== "multiple"}
-      onclick={() => (creationScope = "multiple")}
-    >
-      Auto-discover All Franchises (Multiple)
-    </button>
-  </div>
-{/if}
+<form
+  id={formId}
+  aria-label="Configure collection"
+  onsubmit={(event) => {
+    event.preventDefault();
+    void editor.save();
+  }}
+>
+  <section id={`${formId}-setup`} aria-label="Setup" tabindex="-1">
+    <CollectionDefinition {editor} {groups} {libraries} />
+  </section>
 
-{#if creationScope === "multiple" && editor.creating}
-  <CollectionFranchiseDiscovery {libraries} />
-{:else}
-  <form
-    id={formId}
-    aria-label="Configure collection"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void editor.save();
-    }}
-  >
-    <section id={`${formId}-general`} aria-label="General" tabindex="-1">
-      <CollectionDefinition bind:editor {groups} {libraries} />
+  {#if discovering && editor instanceof CollectionDraft}
+    <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
+      <CollectionFranchiseDiscovery {editor} />
     </section>
-
+  {:else}
     {#if editor.sourceType !== "manual"}
-      <section id={`${formId}-builder`} aria-label="Builder" tabindex="-1">
-        <CollectionRulePanel bind:editor />
+      <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
+        <CollectionRulePanel {editor} />
       </section>
     {/if}
 
-    {#if editor instanceof CollectionDraft}
+    {#if editor instanceof CollectionDraft && editor.manualMembersAllowed}
       {@const draft = editor}
       <section id={`${formId}-members`} aria-label="Initial members" tabindex="-1">
-        <DetailSection
+        <DetailForm
           title="Members"
-          description="Choose library items for a manual collection, or let the builder resolve its source when saving."
+          busy={draft.busy}
+          description={draft.sourceType === "manual"
+            ? "Select items from this library to include in the collection."
+            : "These items are kept alongside source results when using Append."}
         >
-          <span class="badge">{draft.memberIds.size} selected</span>
-          {#if draft.manualMembersAllowed}
+          <div class="options-col form-wide">
+            <span class="badge">{draft.memberIds.size} selected</span>
             <label class="form-label">
               Search members
               <input type="search" disabled={!draft.libraryId} bind:value={draft.memberSearch} />
@@ -96,47 +82,67 @@
                 <input
                   type="checkbox"
                   checked={draft.memberIds.has(item.id)}
-                  disabled={draft.busy}
                   onchange={() => draft.toggle(item.id)}
                 />
                 {item.title}
               </label>
+            {:else}
+              <p class="text-muted">
+                {draft.libraryId
+                  ? "No matching library items."
+                  : "Select a library in Collection Setup to choose members."}
+              </p>
             {/each}
-          {/if}
-        </DetailSection>
+          </div>
+        </DetailForm>
+      </section>
+    {:else if collection && editor instanceof CollectionEditor}
+      <section id={`${formId}-members`} aria-label="Resolved members" tabindex="-1">
+        <CollectionMembers members={collection.members} {editor} {libraryItems} />
+        {#if sourceRoster.length}
+          <DetailSection
+            title="Source roster"
+            description="Movies in the TMDB franchise, including titles missing from your library."
+          >
+            <CollectionMembers members={sourceRoster} />
+          </DetailSection>
+        {/if}
       </section>
     {/if}
 
-    <section id={`${formId}-display`} aria-label="Display" tabindex="-1">
-      <CollectionDisplaySettings bind:editor {libraries} />
-    </section>
-  </form>
-
-  {#if collection && editor instanceof CollectionEditor}
-    <section id={`${formId}-members`} aria-label="Resolved members" tabindex="-1">
-      <CollectionMembers members={collection.members} {editor} {libraryItems} />
-      {#if sourceRoster.length}
-        <DetailSection
-          title="Source roster"
-          description="Movies in the TMDB franchise, including titles missing from your library."
-        >
-          <CollectionMembers members={sourceRoster} />
-        </DetailSection>
-      {/if}
+    <section id={`${formId}-display`} aria-label="Collection display" tabindex="-1">
+      <CollectionDisplaySettings {editor} />
     </section>
   {/if}
+
+  <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
+    <CollectionSchedule {editor} />
+  </section>
+  <div class="form-row" role="group" aria-label="Collection form actions">
+    <PendingButton
+      type="submit"
+      class="btn btn-primary"
+      pending={editor.busy}
+      pendingLabel={discovering ? "Discovering..." : editor.creating ? "Creating..." : "Saving..."}
+      disabled={editor instanceof CollectionDraft && !editor.canSubmit}
+    >
+      {discovering ? "Discover & Create" : editor.creating ? "Create" : "Save"}
+    </PendingButton>
+  </div>
+</form>
+
+{#if !discovering && editor.collectionGroup.trim()}
+  <section id={`${formId}-group`} aria-label="Group defaults" tabindex="-1">
+    <CollectionGroupSettings
+      group={editor.collectionGroup.trim()}
+      mediaType={editor.mediaType}
+      serverType={editor.serverType}
+      {libraries}
+    />
+  </section>
 {/if}
 
 <style>
-  .scope-selector {
-    display: flex;
-    gap: var(--space-2);
-    padding: var(--space-2);
-    background: var(--surface-2);
-    border-radius: var(--radius-md);
-    width: fit-content;
-    margin-bottom: var(--space-2);
-  }
   form {
     display: flex;
     flex-direction: column;

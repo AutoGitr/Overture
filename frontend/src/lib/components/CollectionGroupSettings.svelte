@@ -15,7 +15,7 @@
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import DataStatus from "./DataStatus.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { splitIds } from "../utils/collectionBuilders";
+  import CollectionDiscoveryFields from "./CollectionDiscoveryFields.svelte";
   import { errorMessage } from "../utils/errors";
 
   let {
@@ -115,7 +115,7 @@
   {#if draft}
     <fieldset class="options-col" disabled={request.isPending || syncGroupRequest.isPending}>
       <legend>Group defaults</legend>
-      <CollectionPolicyFields bind:policy={draft} prefix="Group " plex={serverType === "plex"} />
+      <CollectionPolicyFields policy={draft} prefix="Group " plex={serverType === "plex"} />
 
       <label class="form-row">
         <input
@@ -208,44 +208,7 @@
                   </select>
                 </label>
               {/if}
-              <div class="affix-grid">
-                <label class="form-label">
-                  Strip prefix
-                  <input
-                    placeholder="e.g. The "
-                    maxlength="50"
-                    bind:value={draft.dynamic_tmdb.strip_prefix}
-                  />
-                </label>
-                <label class="form-label">
-                  Strip suffix
-                  <input
-                    placeholder="e.g.  Collection"
-                    maxlength="50"
-                    bind:value={draft.dynamic_tmdb.strip_suffix}
-                  />
-                </label>
-              </div>
-              <label class="form-row">
-                <input
-                  type="checkbox"
-                  bind:checked={draft.dynamic_tmdb.auto_exclude_from_other_collections}
-                />
-                Auto-exclude franchise movies from other collections
-              </label>
-              <label class="form-label">
-                Exclude TMDB franchise IDs
-                <input
-                  placeholder="e.g. 10, 86311"
-                  value={draft.dynamic_tmdb.exclude_tmdb_ids.join(", ")}
-                  oninput={(e) => {
-                    if (draft?.dynamic_tmdb) {
-                      draft.dynamic_tmdb.exclude_tmdb_ids = splitIds(e.currentTarget.value);
-                    }
-                  }}
-                />
-                <span class="hint">Comma-separated TMDB collection IDs to skip.</span>
-              </label>
+              <CollectionDiscoveryFields config={draft.dynamic_tmdb} />
             </div>
           {/if}
         </div>
@@ -261,7 +224,7 @@
           disabled={syncGroupRequest.isPending}
           onclick={() => void syncGroup()}
         >
-          <RefreshCw size={14} class={syncGroupRequest.isPending ? "spin" : ""} />
+          <RefreshCw size={14} class={syncGroupRequest.isPending ? "animate-spin" : ""} />
           Sync Group Now
         </button>
       </div>
@@ -273,46 +236,30 @@
   .seasonal-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-3);
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
   }
 
   .dynamic-discovery-section {
-    border-top: 1px solid var(--border-color, #333);
-    padding-top: var(--space-3, 0.75rem);
+    border-top: var(--border-subtle);
+    padding-top: var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: var(--space-2, 0.5rem);
+    gap: var(--space-2);
   }
 
   .nested-options {
-    padding-left: var(--space-4, 1rem);
-    border-left: 2px solid var(--border-color, #444);
-    margin-top: var(--space-2, 0.5rem);
-  }
-
-  .affix-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3, 0.75rem);
+    padding-left: var(--space-4);
+    border-left: var(--border-subtle);
+    margin-top: var(--space-2);
   }
 
   .action-row {
     display: flex;
     align-items: center;
-    gap: var(--space-3, 0.75rem);
-    padding-top: var(--space-2, 0.5rem);
-  }
-
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
+    gap: var(--space-3);
+    padding-top: var(--space-2);
   }
 </style>

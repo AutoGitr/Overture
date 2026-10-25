@@ -10,7 +10,7 @@
   import FilterGroupEditor from "./FilterGroupEditor.svelte";
 
   let {
-    group = $bindable(),
+    group,
     label,
     depth = 0,
     onremove = null,
@@ -56,6 +56,10 @@
     gte: "at least",
     lte: "at most",
   };
+
+  function isFilterField(value: string): value is FilterField {
+    return Object.hasOwn(FIELDS, value);
+  }
 
   function operators(field: FilterField): FilterOperator[] {
     const kind = FIELDS[field].kind;
@@ -107,7 +111,10 @@
       <select
         aria-label={`${label} field ${index + 1}`}
         value={condition.field}
-        onchange={(event) => changeField(condition, event.currentTarget.value as FilterField)}
+        onchange={(event) => {
+          const field = event.currentTarget.value;
+          if (isFilterField(field)) changeField(condition, field);
+        }}
       >
         {#each Object.entries(FIELDS) as [field, info] (field)}
           <option value={field}>{info.label}</option>
@@ -167,12 +174,12 @@
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-3);
-    border: 1px solid var(--border);
+    border: var(--border-subtle);
     border-radius: var(--radius-md);
     min-width: 0;
   }
   .nested {
-    background: var(--surface-2, transparent);
+    background: var(--bg-tertiary);
   }
   .head,
   .actions {
@@ -194,9 +201,7 @@
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
     gap: var(--space-2);
     align-items: center;
-  }
-  @media (max-width: 640px) {
-    .condition {
+    @media (max-width: 640px) {
       grid-template-columns: 1fr 1fr;
     }
   }

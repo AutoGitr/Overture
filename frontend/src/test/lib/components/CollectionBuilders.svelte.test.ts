@@ -45,7 +45,7 @@ describe("Collection Builders UI", () => {
         mediaType: "movie",
       });
 
-      expect(screen.getByText("TMDB Franchise")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "TMDB franchise" })).toBeInTheDocument();
       const input = screen.getByLabelText(/TMDB franchise ID/i);
       expect(input).toHaveValue(10);
       await fireEvent.input(input, { target: { value: "86311" } });
@@ -58,10 +58,10 @@ describe("Collection Builders UI", () => {
         mediaType: "movie",
       });
 
-      expect(screen.getByText("TMDB Titles")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "TMDB titles" })).toBeInTheDocument();
       const textarea = screen.getByLabelText(/TMDB movie IDs/i);
       expect(textarea).toHaveValue("101, 102");
-      await fireEvent.input(textarea, { target: { value: "550, 680" } });
+      await fireEvent.change(textarea, { target: { value: "550, 680" } });
     });
 
     it("renders and edits a TMDB person credits builder with roles and biography toggle", async () => {
@@ -77,7 +77,7 @@ describe("Collection Builders UI", () => {
         mediaType: "movie",
       });
 
-      expect(screen.getByText("TMDB Person Credits")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "TMDB person" })).toBeInTheDocument();
       expect(screen.getByDisplayValue("Quentin Tarantino")).toBeInTheDocument();
       expect(screen.getByDisplayValue("138")).toBeInTheDocument();
       const bioCheckbox = screen.getByLabelText(/Use person biography as collection summary/i);
@@ -98,7 +98,7 @@ describe("Collection Builders UI", () => {
         mediaType: "movie",
       });
 
-      expect(screen.getByText("MDBList")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "MDBList" })).toBeInTheDocument();
       const input = screen.getByLabelText(/MDBList list URL or ID/i);
       expect(input).toHaveValue("https://mdblist.com/lists/top10");
     });
@@ -153,13 +153,13 @@ describe("Collection Builders UI", () => {
         mediaType: "movie",
       });
 
-      expect(screen.getByText("Radarr Tags")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Radarr tags" })).toBeInTheDocument();
       const chip = await screen.findByRole("button", { name: "favorite" });
       await fireEvent.click(chip);
       expect(builder.tags).toContain("favorite");
 
       const input = screen.getByPlaceholderText(/Tag names separated by comma/i);
-      await fireEvent.input(input, { target: { value: "anime, action" } });
+      await fireEvent.change(input, { target: { value: "anime, action" } });
       expect(builder.tags).toEqual(["anime", "action"]);
     });
 
@@ -188,13 +188,13 @@ describe("Collection Builders UI", () => {
         mediaType: "show",
       });
 
-      expect(screen.getByText("Sonarr Tags")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Sonarr tags" })).toBeInTheDocument();
       const chip = await screen.findByRole("button", { name: "anime" });
       await fireEvent.click(chip);
       expect(builder.tags).toContain("anime");
 
       const input = screen.getByPlaceholderText(/Tag names separated by comma/i);
-      await fireEvent.input(input, { target: { value: "scifi, comedy" } });
+      await fireEvent.change(input, { target: { value: "scifi, comedy" } });
       expect(builder.tags).toEqual(["scifi", "comedy"]);
     });
 
@@ -213,7 +213,7 @@ describe("Collection Builders UI", () => {
         mediaType: "movie",
       });
 
-      expect(screen.getByText("Library Filter")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Library filter" })).toBeInTheDocument();
       expect(screen.getByDisplayValue("Drama")).toBeInTheDocument();
     });
   });
@@ -431,7 +431,7 @@ describe("Collection Builders UI", () => {
       await fireEvent.input(prefixInput, { target: { value: "MCU " } });
 
       const excludeInput = screen.getByLabelText(/Exclude TMDB franchise IDs/i);
-      await fireEvent.input(excludeInput, { target: { value: "10, 20" } });
+      await fireEvent.change(excludeInput, { target: { value: "10, 20" } });
 
       // Save
       await fireEvent.click(screen.getByRole("button", { name: /Save group defaults/i }));
@@ -519,16 +519,17 @@ describe("Collection Builders UI", () => {
       goToCollectionView(detail, "configure");
       renderWithQueryClient(CollectionPage);
 
-      const displaySection = await screen.findByRole("region", { name: "Display" });
+      const displaySection = await screen.findByRole("region", { name: "Collection display" });
       const display = within(displaySection);
 
       const summaryFormatInput = display.getByLabelText(/^Summary template/i);
       await fireEvent.input(summaryFormatInput, { target: { value: "{title} - {group}" } });
 
-      const startInput = display.getByLabelText(/^Active start/i);
+      const schedule = within(screen.getByRole("region", { name: "Collection schedule" }));
+      const startInput = schedule.getByLabelText(/^Active start/i);
       await fireEvent.input(startInput, { target: { value: "12-15" } });
 
-      const endInput = display.getByLabelText(/^Active end/i);
+      const endInput = schedule.getByLabelText(/^Active end/i);
       await fireEvent.input(endInput, { target: { value: "01-05" } });
 
       const visibleShared = display.getByLabelText(/Visible to shared users/i);

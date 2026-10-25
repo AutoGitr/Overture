@@ -1,18 +1,14 @@
 <script lang="ts">
   import Plus from "@lucide/svelte/icons/plus";
   import type { CollectionBuilderInput, SmartSortOrder } from "../../generated/rest/types.gen";
-  import {
-    BUILDER_KINDS,
-    emptyFilterGroup,
-    emptySmartFilter,
-    newBuilder,
-  } from "../utils/collectionBuilders";
-  import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
+  import { BUILDER_KINDS, newBuilder } from "../utils/collectionBuilders";
+  import { CollectionEditor, type CollectionDraft } from "../utils/collectionForms.svelte";
   import CollectionBuilderItem from "./CollectionBuilderItem.svelte";
   import DetailForm from "./DetailForm.svelte";
+  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import FilterGroupEditor from "./FilterGroupEditor.svelte";
 
-  let { editor = $bindable() }: { editor: CollectionEditor | CollectionDraft } = $props();
+  let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
 
   const sortOrders: readonly { id: SmartSortOrder; label: string }[] = [
     { id: "release.desc", label: "Release date (newest first)" },
@@ -53,18 +49,27 @@
 
 {#if editor.sourceType !== "manual"}
   <DetailForm
-    title="Content & Sync Rules"
+    title="Content"
     description={editor.sourceType === "smart"
       ? "Plex smart collections automatically evaluate filter rules directly on your Plex media server."
-      : "Compose multiple source builders to dynamically populate this collection."}
+      : "Combine sources in order. Results are merged without duplicates; library filters add matching items rather than narrowing other sources."}
     busy={editor.busy}
   >
     {#if editor.sourceType === "smart"}
-      {#if !editor.rule.smart_filter}
-        {((editor.rule.smart_filter = emptySmartFilter()), "")}
+      {#if editor instanceof CollectionEditor && editor.collection.kind === "smart" && !editor.existingRule}
+        <div class="form-wide">
+          <p class="hint">
+            This collection's smart filter is managed in Plex. Enable editing to replace it with
+            rules defined here. Display changes keep the existing filter.
+          </p>
+          <label class="form-row">
+            <input type="checkbox" bind:checked={editor.manageSmartFilter} />
+            Manage smart filter in Overture
+          </label>
+        </div>
       {/if}
-      {#if editor.rule.smart_filter}
-        <div class="smart-section">
+      {#if editor.smartFilterEditable && editor.rule.smart_filter}
+        <div class="smart-section form-wide">
           <div class="form-grid">
             <label class="form-label">
               Smart sort order
@@ -99,30 +104,29 @@
               placeholder="e.g. Marvel Cinematic Universe"
               maxlength="100"
               value={editor.rule.managed_label ?? ""}
-              oninput={(e) => (editor.rule.managed_label = e.currentTarget.value.trim() || null)}
+              oninput={(e) => (editor.rule.managed_label = e.currentTarget.value || null)}
             />
             <span class="hint">
-              Optional label synced to matching items on Plex and included in smart filter criteria.
+              With sources below, Overture labels their results and Plex filters those items.
+              Without sources, enter an existing library label or leave this blank.
             </span>
           </label>
 
-          {#if !editor.rule.smart_filter.filter_group}
-            {((editor.rule.smart_filter.filter_group = emptyFilterGroup()), "")}
-          {/if}
           {#if editor.rule.smart_filter.filter_group}
             <FilterGroupEditor
-              bind:group={editor.rule.smart_filter.filter_group}
+              group={editor.rule.smart_filter.filter_group}
               label="Smart collection criteria"
             />
           {/if}
         </div>
       {/if}
-    {:else}
-      <div class="builders-stack">
+    {/if}
+    {#if editor.smartFilterEditable && (editor.sourceType === "builders" || editor.rule.managed_label || editor.rule.builders?.length)}
+      <div class="builders-stack form-wide">
         {#each editor.rule.builders ?? [] as _builder, i (i)}
           {#if editor.rule.builders && editor.rule.builders[i]}
             <CollectionBuilderItem
-              bind:builder={editor.rule.builders[i]}
+              builder={editor.rule.builders[i]}
               index={i}
               total={editor.rule.builders.length}
               mediaType={editor.mediaType}
@@ -134,7 +138,11 @@
         {/each}
 
         <div class="add-builder-row">
-          <span class="hint">Add a source builder:</span>
+          <span class="hint"
+            >{editor.sourceType === "smart"
+              ? "Optional sources for the managed Plex label:"
+              : "Add a source:"}</span
+          >
           <div class="builder-buttons">
             {#each BUILDER_KINDS as kind (kind.type)}
               {#if !kind.media || kind.media === editor.mediaType}
@@ -151,75 +159,16 @@
           </div>
         </div>
       </div>
-
-      <div class="builder-policy-grid">
-        <label class="form-label">
-          Sync strategy
-          <select bind:value={editor.rule.sync_mode}>
-            <option value={null}>Inherit default</option>
-            <option value="sync">Strict sync (replaces members)</option>
-            <option value="append">Append (keeps manual members)</option>
-          </select>
-        </label>
-
-        <label class="form-label">
-          Minimum members (blank inherits)
-          <input
-            type="number"
-            min="1"
-            max="100"
-            value={editor.rule.minimum_items ?? ""}
-            oninput={(event) =>
-              (editor.rule.minimum_items = event.currentTarget.value
-                ? event.currentTarget.valueAsNumber
-                : null)}
-          />
-        </label>
-
-        <label class="form-label">
-          Below minimum
-          <select bind:value={editor.rule.delete_below_minimum}>
-            <option value={null}>Inherit default</option>
-            <option value={true}>Delete collection</option>
-            <option value={false}>Keep collection</option>
-          </select>
-        </label>
-
-        <label class="form-label">
-          Automatic artwork
-          <select bind:value={editor.rule.auto_match_art}>
-            <option value={null}>Inherit default</option>
-            <option value={true}>Enabled</option>
-            <option value={false}>Disabled</option>
-          </select>
-        </label>
-
-        <label class="form-label">
-          Automatic themes
-          <select bind:value={editor.rule.auto_match_theme}>
-            <option value={null}>Inherit default</option>
-            <option value={true}>Enabled</option>
-            <option value={false}>Disabled</option>
-          </select>
-        </label>
-      </div>
     {/if}
-
-    <div class="sync-row form-wide">
-      <label class="form-label">
-        Sync interval (hours)
-        <input type="number" min="1" max="720" bind:value={editor.rule.sync_interval_hours} />
-      </label>
-      <label class="form-row">
-        <input type="checkbox" bind:checked={editor.rule.enabled} />
-        Enable scheduled sync
-      </label>
-    </div>
+    {#if editor.sourceType === "builders"}
+      <CollectionPolicyFields policy={editor.rule} section="sync" />
+    {/if}
   </DetailForm>
 {/if}
 
 <style>
-  .smart-section {
+  .smart-section,
+  .builders-stack {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
@@ -228,44 +177,21 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-4);
-  }
-  .builders-stack {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
   }
   .add-builder-row {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-3);
-    background: var(--surface-2);
+    background: var(--bg-tertiary);
     border-radius: var(--radius-md);
   }
   .builder-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
-  }
-  .builder-policy-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-    margin-top: var(--space-3);
-  }
-  .sync-row {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--space-6);
-    margin-top: var(--space-3);
-  }
-  @media (max-width: 640px) {
-    .form-grid,
-    .builder-policy-grid,
-    .sync-row {
-      grid-template-columns: 1fr;
-      flex-direction: column;
-      align-items: stretch;
-    }
   }
 </style>

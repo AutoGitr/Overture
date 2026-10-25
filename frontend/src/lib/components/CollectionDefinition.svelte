@@ -1,15 +1,15 @@
 <script lang="ts">
   import DetailForm from "./DetailForm.svelte";
-  import type {
-    CollectionEditor,
+  import SegmentedControl from "./SegmentedControl.svelte";
+  import {
     CollectionDraft,
-    RuleEditorSource,
+    selectCollectionSource,
+    type CollectionEditor,
   } from "../utils/collectionForms.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
-  import { emptySmartFilter } from "../utils/collectionBuilders";
 
   let {
-    editor = $bindable(),
+    editor,
     groups,
     libraries,
   }: {
@@ -19,39 +19,31 @@
   } = $props();
 
   const groupListId = $props.id();
-  let plex = $derived(editor.serverType === "plex");
-
-  function onSourceChange(value: string) {
-    if (value === "manual" || value === "builders" || value === "smart") {
-      editor.sourceType = value as RuleEditorSource;
-      if (value === "smart") {
-        editor.kind = "smart";
-        if (!editor.rule.smart_filter) {
-          editor.rule.smart_filter = emptySmartFilter();
-        }
-      } else {
-        if (editor.kind === "smart") {
-          editor.kind = "regular";
-        }
-        if (value === "builders") {
-          if (!editor.rule.builders) {
-            editor.rule.builders = [];
-          }
-        }
-      }
-    }
-  }
+  let discovering = $derived(editor instanceof CollectionDraft && editor.discovering);
 </script>
 
 <DetailForm
   title="Collection Setup"
-  description="Select the library, collection type, and core identity."
+  description="Choose where the collection lives and how its members are selected, then give it a name and optional group."
   busy={editor.busy}
 >
-  <div class="form-label">
-    <label for={`${groupListId}-library`}>Library</label>
+  {#if editor instanceof CollectionDraft && editor.mediaType === "movie"}
+    <div class="form-wide">
+      <SegmentedControl
+        label="Collection scope"
+        options={[
+          ["single", "One collection"],
+          ["multiple", "Discover franchises"],
+        ]}
+        bind:value={editor.creationScope}
+        --segmented-margin="0"
+      />
+    </div>
+  {/if}
+
+  <label class="form-label">
+    Library
     <select
-      id={`${groupListId}-library`}
       required
       value={editor.libraryId}
       disabled={!editor.creating}
@@ -67,49 +59,66 @@
         <option value={library.id}>{library.title}</option>
       {/each}
     </select>
+  </label>
+
+  <div class="form-label">
+    <label for={`${groupListId}-source`}>Source</label>
+    {#if discovering}
+      <select id={`${groupListId}-source`} disabled><option>TMDB franchises</option></select>
+      <span class="hint">Create a collection for each matching franchise in this library.</span>
+    {:else}
+      <select
+        id={`${groupListId}-source`}
+        value={editor.sourceType}
+        onchange={(event) => {
+          const source = event.currentTarget.value;
+          if (source === "manual" || source === "builders" || source === "smart") {
+            selectCollectionSource(editor, source);
+          }
+        }}
+      >
+        <option value="manual">Manual selection</option>
+        <option value="builders">Dynamic sources</option>
+        {#if editor.serverType === "plex"}
+          <option value="smart">Plex smart filter</option>
+        {/if}
+      </select>
+      <span class="hint">
+        {editor.sourceType === "manual"
+          ? "Pick items from your library."
+          : editor.sourceType === "smart"
+            ? "Plex updates members as they match your filters."
+            : "Combine TMDB, MDBList, tags, and library filters."}
+      </span>
+    {/if}
   </div>
 
   <label class="form-label">
-    Source
-    <select value={editor.sourceType} onchange={(e) => onSourceChange(e.currentTarget.value)}>
-      <option value="builders">Dynamic builders (MDBList, TMDB, tags, filters)</option>
-      {#if plex}
-        <option value="smart">Plex smart collection (live filter)</option>
-      {/if}
-      <option value="manual">Manual (hand-picked items)</option>
-    </select>
-  </label>
-
-  <label class="form-label">
     Title
-    <input required maxlength="200" bind:value={editor.title} placeholder="Collection title" />
+    {#if discovering}
+      <input disabled value="" placeholder="From TMDB franchise names" />
+    {:else}
+      <input required maxlength="200" bind:value={editor.title} placeholder="Collection title" />
+    {/if}
   </label>
 
-  <label class="form-label">
-    Collection Group
+  <div class="form-label">
+    <label for={`${groupListId}-group`}>Collection Group</label>
     <input
+      id={`${groupListId}-group`}
       list={groupListId}
       maxlength="200"
+      required={discovering}
       bind:value={editor.collectionGroup}
-      placeholder="Ungrouped"
+      placeholder={discovering ? "e.g. Franchises" : "Ungrouped"}
     />
+    <span class="hint"
+      >{discovering
+        ? "All discovered collections share this group and its defaults."
+        : "Choose an existing group or type a new name."}</span
+    >
     <datalist id={groupListId}>
-      {#each groups as group (group)}
-        <option value={group}></option>
-      {/each}
+      {#each groups as group (group)}<option value={group}></option>{/each}
     </datalist>
-  </label>
-
-  {#if editor.mediaType === "movie"}
-    <label class="form-label">
-      TMDB collection ID
-      <input
-        type="number"
-        min="1"
-        step="1"
-        bind:value={editor.tmdbCollectionId}
-        placeholder="e.g. 86311"
-      />
-    </label>
-  {/if}
+  </div>
 </DetailForm>

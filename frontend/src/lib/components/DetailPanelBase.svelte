@@ -22,6 +22,7 @@
     emptyMessage: string;
     emptyIcon: Snippet;
     posterUrl: string | null;
+    showPoster?: boolean;
     /** Stands in for the poster when there is none to show. */
     posterIcon: Snippet;
     title: string;
@@ -52,6 +53,7 @@
     emptyMessage,
     emptyIcon,
     posterUrl,
+    showPoster = true,
     posterIcon,
     title,
     meta,
@@ -109,28 +111,28 @@
     <!-- The whole panel scrolls, so the header gives its height back to the
          content (art grids, theme results) as soon as you scroll. -->
     <div class="detail-header">
-      <svelte:element
-        this={posterHref ? "a" : "div"}
-        class={["detail-poster", { "is-link": !!posterHref }]}
-        href={posterHref ?? null}
-        target={posterHref ? "_blank" : null}
-        rel={posterHref ? "noopener noreferrer" : null}
-        title={posterLinkTitle ?? null}
-        aria-label={posterLinkTitle ?? null}
-      >
-        <!-- An image that fails to load (a file gone from disk) shows the
+      {#if showPoster}<svelte:element
+          this={posterHref ? "a" : "div"}
+          class={["detail-poster", { "is-link": !!posterHref }]}
+          href={posterHref ?? null}
+          target={posterHref ? "_blank" : null}
+          rel={posterHref ? "noopener noreferrer" : null}
+          title={posterLinkTitle ?? null}
+          aria-label={posterLinkTitle ?? null}
+        >
+          <!-- An image that fails to load (a file gone from disk) shows the
              placeholder. The title is the heading beside it, so the image has
              no alt text for a browser to draw in its place while it loads. -->
-        {#key subjectKey}
-          <FallbackImage
-            src={posterUrl}
-            alt=""
-            loading="eager"
-            fetchpriority="high"
-            placeholder={posterPlaceholder}
-          />
-        {/key}
-      </svelte:element>
+          {#key subjectKey}
+            <FallbackImage
+              src={posterUrl}
+              alt=""
+              loading="eager"
+              fetchpriority="high"
+              placeholder={posterPlaceholder}
+            />
+          {/key}
+        </svelte:element>{/if}
 
       <div class="detail-header-main">
         <div class="detail-heading">

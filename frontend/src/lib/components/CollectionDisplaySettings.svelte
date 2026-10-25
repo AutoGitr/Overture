@@ -1,25 +1,48 @@
 <script lang="ts">
-  import CollectionGroupSettings from "./CollectionGroupSettings.svelte";
   import DetailForm from "./DetailForm.svelte";
   import type { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
-  import type { LibrarySectionRead } from "../../generated/rest/types.gen";
 
   let {
-    editor = $bindable(),
-    libraries = [],
+    editor,
   }: {
     editor: CollectionEditor | CollectionDraft;
-    libraries?: LibrarySectionRead[];
   } = $props();
 
+  const identityId = $props.id();
   let plex = $derived(editor.serverType === "plex");
 </script>
 
 <DetailForm
-  title="Server Display & Scheduling"
-  description="Configure sort titles, summaries, seasonal visibility windows, and media server promotion."
+  title="Display"
+  description="Set the summary, library ordering, and media server visibility."
   busy={editor.busy}
 >
+  {#if editor.sourceType !== "smart"}
+    <label class="form-label">
+      Member order
+      <select bind:value={editor.orderType}>
+        <option value="release">Release date</option>
+        <option value="alpha">Alphabetical</option>
+        {#if plex}<option value="custom">Source / custom order</option>{/if}
+      </select>
+    </label>
+  {/if}
+  {#if editor.mediaType === "movie"}
+    <div class="form-label">
+      <label for={identityId}>TMDB collection ID</label>
+      <input
+        id={identityId}
+        type="number"
+        min="1"
+        step="1"
+        bind:value={editor.tmdbCollectionId}
+        placeholder="e.g. 86311"
+      />
+      <span class="hint"
+        >Optional franchise identity for artwork and themes. Membership is configured above.</span
+      >
+    </div>
+  {/if}
   <div class="options-col">
     <label class="form-label">
       Sort title
@@ -63,28 +86,6 @@
     </span>
   </label>
 
-  <div class="seasonal-row">
-    <label class="form-label">
-      Active start (MM-DD)
-      <input placeholder="12-15" maxlength="5" bind:value={editor.activeStartMmdd} />
-    </label>
-    <label class="form-label">
-      Active end (MM-DD)
-      <input placeholder="01-05" maxlength="5" bind:value={editor.activeEndMmdd} />
-    </label>
-  </div>
-
-  {#if editor.activeStartMmdd && editor.activeEndMmdd}
-    <label class="form-label">
-      Seasonal inactivity behavior
-      <select bind:value={editor.deleteWhenInactive}>
-        <option value={null}>Inherit default</option>
-        <option value={true}>Delete from media server when inactive</option>
-        <option value={false}>Keep collection on media server</option>
-      </select>
-    </label>
-  {/if}
-
   {#if plex}
     <label class="form-label">
       Visibility
@@ -122,26 +123,4 @@
       </label>
     </div>
   {/if}
-
-  {#if editor.collectionGroup.trim()}
-    <CollectionGroupSettings
-      group={editor.collectionGroup.trim()}
-      mediaType={editor.mediaType}
-      serverType={editor.serverType}
-      {libraries}
-    />
-  {/if}
 </DetailForm>
-
-<style>
-  .seasonal-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-  }
-  @media (max-width: 640px) {
-    .seasonal-row {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>

@@ -14,11 +14,11 @@
     TmdbPersonRole,
   } from "../../generated/rest/types.gen";
   import { settingsState } from "../stores/settingsState.svelte";
-  import { emptyFilterGroup, splitIds, splitList } from "../utils/collectionBuilders";
+  import { BUILDER_KINDS, splitIds, splitList } from "../utils/collectionBuilders";
   import FilterGroupEditor from "./FilterGroupEditor.svelte";
 
   let {
-    builder = $bindable(),
+    builder,
     index = 0,
     total = 1,
     mediaType,
@@ -46,6 +46,8 @@
     ...listSonarrTagsOptions(),
     enabled: builder.type === "sonarr_tag" && settingsState.current.sonarr_configured,
   }));
+
+  const tagsId = $props.id();
 
   const roles: readonly { id: TmdbPersonRole; label: string }[] = [
     { id: "actor", label: "Actor / Cast" },
@@ -76,29 +78,21 @@
     builder.tags = Array.from(current);
   }
 
-  const builderLabels: Record<CollectionBuilderInput["type"], string> = {
-    tmdb_collection: "TMDB Franchise",
-    tmdb_item: "TMDB Titles",
-    tmdb_person: "TMDB Person Credits",
-    mdblist: "MDBList",
-    radarr_tag: "Radarr Tags",
-    sonarr_tag: "Sonarr Tags",
-    library_filter: "Library Filter",
-  };
+  let builderLabel = $derived(BUILDER_KINDS.find((kind) => kind.type === builder.type)?.label);
 </script>
 
 {#snippet tagPicker(title: string, tags: { id: number; label: string }[] | undefined)}
   {@const builderTags =
     builder.type === "radarr_tag" || builder.type === "sonarr_tag" ? (builder.tags ?? []) : []}
   <div class="form-label">
-    <span>{title}</span>
+    <label for={tagsId}>{title}</label>
     {#if tags && tags.length > 0}
       <div class="tag-chips">
         {#each tags as tag (tag.id)}
           <button
             type="button"
-            class="tag-chip"
-            class:active={builderTags.includes(tag.label)}
+            class={["btn btn-sm", builderTags.includes(tag.label) ? "btn-secondary" : "btn-ghost"]}
+            aria-pressed={builderTags.includes(tag.label)}
             onclick={() => toggleTag(tag.label)}
           >
             {tag.label}
@@ -107,10 +101,11 @@
       </div>
     {/if}
     <input
+      id={tagsId}
       type="text"
       placeholder="Tag names separated by comma"
       value={builderTags.join(", ")}
-      oninput={(e) => {
+      onchange={(e) => {
         if (builder.type === "radarr_tag" || builder.type === "sonarr_tag") {
           builder.tags = splitList(e.currentTarget.value);
         }
@@ -121,7 +116,7 @@
 
 <div class="builder-card">
   <div class="builder-header">
-    <span class="builder-title">{builderLabels[builder.type]}</span>
+    <h4 class="builder-title">{builderLabel}</h4>
     <div class="builder-actions">
       {#if onmoveup}
         <button
@@ -182,7 +177,7 @@
           rows={3}
           placeholder="e.g. 550, 680, 157336"
           value={builder.tmdb_ids.join(", ")}
-          oninput={(e) => {
+          onchange={(e) => {
             if (builder.type === "tmdb_item") {
               builder.tmdb_ids = splitIds(e.currentTarget.value);
             }
@@ -213,7 +208,7 @@
             value={builder.person_name ?? ""}
             oninput={(e) => {
               if (builder.type === "tmdb_person") {
-                builder.person_name = e.currentTarget.value.trim() || null;
+                builder.person_name = e.currentTarget.value || null;
               }
             }}
           />
@@ -253,8 +248,8 @@
         MDBList list URL or ID
         <input
           required
-          value={builder.identifiers[0] ?? ""}
-          oninput={(e) => {
+          value={builder.identifiers.join(", ")}
+          onchange={(e) => {
             if (builder.type === "mdblist") {
               builder.identifiers = splitList(e.currentTarget.value);
             }
@@ -268,91 +263,75 @@
     {:else if builder.type === "sonarr_tag"}
       {@render tagPicker("Sonarr tags", sonarrTags.data)}
     {:else if builder.type === "library_filter"}
-      {#if !builder.filter_group}
-        {((builder.filter_group = emptyFilterGroup()), "")}
-      {/if}
-      <FilterGroupEditor bind:group={builder.filter_group} label="Library filter group" />
+      <FilterGroupEditor group={builder.filter_group} label="Library filter group" />
     {/if}
   </div>
 </div>
 
 <style>
   .builder-card {
-    border: 1px solid var(--border-color, #333);
-    border-radius: var(--radius-md, 6px);
-    padding: var(--space-3, 0.75rem);
-    background: var(--bg-surface-secondary, rgba(255, 255, 255, 0.03));
+    border: var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    background: var(--bg-tertiary);
     display: flex;
     flex-direction: column;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-3);
   }
 
   .builder-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: var(--space-2, 0.5rem);
-    border-bottom: 1px solid var(--border-color, #333);
+    padding-bottom: var(--space-2);
+    border-bottom: var(--border-subtle);
   }
 
   .builder-title {
-    font-weight: var(--font-semibold, 600);
-    font-size: var(--text-sm, 0.875rem);
+    margin: 0;
+    font-weight: 600;
+    font-size: var(--text-sm);
   }
 
   .builder-actions {
     display: flex;
-    gap: var(--space-1, 0.25rem);
+    gap: var(--space-1);
   }
 
   .builder-body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-3);
   }
 
   .form-grid {
     display: grid;
     grid-template-columns: 1fr 2fr;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-3);
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
   }
 
   .checkbox-row {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-3, 0.75rem);
-    padding-top: var(--space-1, 0.25rem);
+    gap: var(--space-3);
+    padding-top: var(--space-1);
   }
 
   .checkbox-label {
     display: flex;
     align-items: center;
-    gap: var(--space-2, 0.5rem);
-    font-size: var(--text-sm, 0.875rem);
+    gap: var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
   }
 
   .tag-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1, 0.25rem);
-    margin-bottom: var(--space-2, 0.5rem);
-  }
-
-  .tag-chip {
-    background: var(--bg-surface-tertiary, rgba(255, 255, 255, 0.08));
-    border: 1px solid var(--border-color, #444);
-    border-radius: var(--radius-full, 9999px);
-    padding: 0.15rem 0.6rem;
-    font-size: var(--text-xs, 0.75rem);
-    cursor: pointer;
-    color: var(--text-muted, #aaa);
-    transition: all 0.15s ease;
-  }
-
-  .tag-chip.active {
-    background: var(--color-primary, #6366f1);
-    border-color: var(--color-primary, #6366f1);
-    color: #fff;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
   }
 </style>

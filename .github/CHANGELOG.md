@@ -26,8 +26,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Collection creation and editing share Collection Setup for library, source, title and group, with franchise discovery inside Setup and content, members, display and schedule sections adapted to your choices. New collections open directly at Setup without an empty poster.
+
 - Example Docker Compose configuration delegates all environment variables directly to `.env`.
-- Collection creation uses the existing collection page with empty/default values. Generate collections is embedded in General & Server Display; delete collections through the header icon.
 
 - Collection groups hide their contents until opened, and share sidebar browsing with TMDB franchises. Art/theme badges and detail controls now share status and clear behavior; Emby collections hide unsupported theme badges.
 - Creating a collection opens a fresh Configure page with library selection instead of a popup. Collection TMDB IDs are explicit and survive membership changes; existing IDs are preserved on upgrade, and automatic voting/matching controls are removed.
@@ -45,6 +46,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
 
 ### Fixed
+
+- Switching collection sources no longer submits hidden smart filters or stale manual members. Plex smart collections show server-controlled members without manual editing, and smart filters can use source builders through managed labels.
 
 - Collection member ordering supports row-wide drag-and-drop and Up/Down controls, collection artwork links follow the selected slot, and create/generate selections stay consistent when changing libraries.
 

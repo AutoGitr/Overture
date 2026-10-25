@@ -82,6 +82,7 @@
   title={collection?.title ?? "New collection"}
   summary={collection?.summary}
   posterUrl={collectionImageUrl(collection?.thumb_url ?? null)}
+  showPoster={!editor.creating}
   backgroundUrl={collectionImageUrl(collection?.art_url ?? null)}
   posterHref={collection?.server_link}
   posterLinkTitle={collection?.server_link
@@ -187,7 +188,7 @@
   {/snippet}
   {#snippet subtabs()}
     {#if managing}
-      <ConfigureNavigation {formId} />
+      <ConfigureNavigation {formId} {editor} />
     {:else if collection && view === "themes"}
       <ThemeStatus
         status={collection.theme_status}
@@ -220,7 +221,13 @@
         type="submit"
         form={formId}
         disabled={editor.busy || (editor instanceof CollectionDraft && !editor.canSubmit)}
-        >{editor.creating ? "Create collection" : "Save Changes"}</button
+        >{editor instanceof CollectionDraft && editor.discovering
+          ? editor.busy
+            ? "Discovering franchises..."
+            : "Discover & Create Collections"
+          : editor.creating
+            ? "Create collection"
+            : "Save Changes"}</button
       >
       {#if collection && editor instanceof CollectionEditor}<button
           class="tab-item"
