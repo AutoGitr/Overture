@@ -67,6 +67,7 @@ lazy from ...schemas.collections import (
     SonarrTagBuilder,
     TmdbCollectionBuilder,
     TmdbItemBuilder,
+    TmdbListBuilder,
     TmdbPersonBuilder,
     builders_adapter,
     collection_read,
@@ -84,6 +85,7 @@ lazy from ...utils.collection_formats import (
     format_sort_title,
     format_summary,
     is_within_active_window,
+    literal_template,
     strip_affixes,
 )
 lazy from ...utils.errors import PublicServiceError
@@ -128,6 +130,18 @@ class GroupSyncResult:
 
     created: list[int] = field(default_factory=list[int])
     errors: dict[str, str] = field(default_factory=dict[str, str])
+
+
+_DISPLAY_OVERRIDES = frozenset(
+    {
+        "collection_mode",
+        "order_type",
+        "collection_filtering",
+        "visible_home",
+        "visible_shared",
+        "visible_library",
+    }
+)
 
 
 class CollectionsService:
@@ -354,9 +368,7 @@ class CollectionsService:
         row: MediaCollection,
         options: CollectionOptions,
         rule: RuleOrPolicy = None,
-    ) -> None:
-        if row.server_item_id is None:
-            return
+    ) -> CollectionOptions:
         async with self._database.read_session() as session:
             if rule is None and row.id is not None:
                 rule = await CollectionRepository(session).rule(row.id)
@@ -364,7 +376,15 @@ class CollectionsService:
                 session, row.media_type, options.collection_group, rule
             )
         sort_title = self._inherited_sort_title(options, policy)
-        summary = self._inherited_summary(options, policy)
+        template = (
+            options.summary_format
+            if options.summary_format is not None
+            else policy.summary_format
+        )
+        summary_options = options
+        if options.summary is None and (not template or "{summary}" in template):
+            summary_options = options.model_copy(update={"summary": row.summary_source})
+        summary = self._inherited_summary(summary_options, policy)
         order = (
             options.order_type
             if "order_type" in options.model_fields_set
@@ -391,6 +411,20 @@ class CollectionsService:
             or policy.collection_filtering is not CollectionFiltering.ADMIN
             else None
         )
+        effective = options.model_copy(
+            update={
+                "sort_title": sort_title,
+                "summary": summary,
+                "order_type": order,
+                "visible_home": visible_home,
+                "visible_shared": visible_shared,
+                "visible_library": visible_library,
+                "collection_mode": options.collection_mode or policy.collection_mode,
+                "collection_filtering": filtering,
+            }
+        )
+        if row.server_item_id is None:
+            return effective
         await self._provider().update_collection_details(
             row.server_item_id,
             title=options.title,
@@ -403,16 +437,24 @@ class CollectionsService:
             visible_library=visible_library,
             filtering=filtering,
         )
+        return effective
 
     @staticmethod
     def _inherited_sort_title(
         options: CollectionOptions, policy: CollectionPolicy
     ) -> str | None:
-        if options.sort_title is not None or not policy.sort_title_format:
+        template = (
+            options.sort_title_format
+            if options.sort_title_format is not None
+            else policy.sort_title_format
+        )
+        if options.sort_title_format is None and options.sort_title is not None:
+            return options.sort_title
+        if not template:
             return options.sort_title
         try:
             return format_sort_title(
-                policy.sort_title_format,
+                template,
                 title=options.title,
                 group=options.collection_group,
             )
@@ -423,10 +465,18 @@ class CollectionsService:
     def _inherited_summary(
         options: CollectionOptions, policy: CollectionPolicy
     ) -> str | None:
-        template = options.summary_format or policy.summary_format
+        template = (
+            options.summary_format
+            if options.summary_format is not None
+            else policy.summary_format
+        )
         if not template:
             return options.summary
-        if options.summary is not None and "{summary}" not in template:
+        if (
+            options.summary_format is None
+            and options.summary is not None
+            and "{summary}" not in template
+        ):
             return options.summary
         try:
             return format_summary(
@@ -439,31 +489,6 @@ class CollectionsService:
             )
         except ValueError as exc:
             raise PublicServiceError(422, str(exc)) from exc
-
-    @staticmethod
-    def _formatted_options[T: CollectionOptions](body: T) -> T:
-        updates: dict[str, object] = {}
-        if body.sort_title_format is not None:
-            try:
-                updates["sort_title"] = format_sort_title(
-                    body.sort_title_format,
-                    title=body.title,
-                    group=body.collection_group,
-                )
-            except ValueError as exc:
-                raise PublicServiceError(422, str(exc)) from exc
-        if body.summary_format is not None and body.summary is None:
-            try:
-                updates["summary"] = format_summary(
-                    body.summary_format,
-                    title=body.title,
-                    group=body.collection_group,
-                    start_date=body.active_start_mmdd,
-                    end_date=body.active_end_mmdd,
-                )
-            except ValueError as exc:
-                raise PublicServiceError(422, str(exc)) from exc
-        return body.model_copy(update=updates) if updates else body
 
     def _validate_rule_media_type(
         self, media_type: MediaType, body: CollectionRuleWrite
@@ -580,9 +605,15 @@ class CollectionsService:
 
     async def create(self, body: CollectionCreate) -> CollectionDetail:
         """Create on the server, then record its complete local membership."""
+        if body.rule is not None:
+            overrides = body.model_dump(
+                include=body.model_fields_set & _DISPLAY_OVERRIDES
+            )
+            body = body.model_copy(
+                update={"rule": body.rule.model_copy(update=overrides)}
+            )
         if body.rule is not None and body.rule.smart_filter is not None:
             body = body.model_copy(update={"kind": CollectionKind.SMART})
-        body = self._formatted_options(body)
         self._validate_options(body)
         if body.tmdb_collection_id is not None:
             self._require_movie_collections(body.media_type)
@@ -595,6 +626,8 @@ class CollectionsService:
             policy = await self._policy(
                 session, body.media_type, body.collection_group, body.rule
             )
+        if "order_type" not in body.model_fields_set:
+            body = body.model_copy(update={"order_type": policy.order_type})
         body, temp_rule, items = await self._prepare_create_rule(body, policy, items)
         effective_sort_title = self._inherited_sort_title(body, policy)
         effective_summary = self._inherited_summary(body, policy)
@@ -630,7 +663,11 @@ class CollectionsService:
             fields: dict[str, Any] = body.model_dump(
                 exclude={"media_type", "library_id", "member_ids", "rule"}
             )
-            fields.update(sort_title=effective_sort_title, summary=effective_summary)
+            fields.update(
+                sort_title=effective_sort_title,
+                summary=effective_summary,
+                summary_source=body.summary,
+            )
             row = MediaCollection(
                 server_item_id=server.id if server is not None else None,
                 server_type=self._provider().server_type,
@@ -648,7 +685,8 @@ class CollectionsService:
                 updated_at=now,
                 **fields,
             )
-            await self._push_options(row, body, body.rule)
+            effective = await self._push_options(row, body, body.rule)
+            row.sqlmodel_update(effective.model_dump())
             if (
                 body.kind is CollectionKind.REGULAR
                 and body.order_type is CollectionOrder.CUSTOM
@@ -684,7 +722,6 @@ class CollectionsService:
         self, collection_id: int, media_type: MediaType, body: CollectionOptions
     ) -> CollectionDetail:
         """Edit collection metadata without touching movie or show metadata."""
-        body = self._formatted_options(body)
         self._validate_options(body)
         if body.tmdb_collection_id is not None:
             self._require_movie_collections(media_type)
@@ -704,11 +741,26 @@ class CollectionsService:
         self, row: MediaCollection, body: CollectionOptions
     ) -> None:
         """Persist display choices after the caller acquires the collection locks."""
+        overrides: dict[str, object] = {}
+        if body.sort_title is not None and body.sort_title_format is None:
+            overrides["sort_title_format"] = literal_template(body.sort_title)
+        if body.summary is not None and body.summary_format is None:
+            overrides["summary_format"] = literal_template(body.summary)
+        body = body.model_copy(update=overrides)
         self._validate_options(body)
-        await self._push_options(row, body)
+        if body.summary is not None:
+            row.summary_source = body.summary
+        display = body.model_dump(include=body.model_fields_set & _DISPLAY_OVERRIDES)
+        async with self._database.read_session() as session:
+            rule = await CollectionRepository(session).rule(row.id or 0)
+        if rule is not None:
+            rule.sqlmodel_update(display)
+        effective = await self._push_options(row, body, rule)
+        summary_source = row.summary_source
         async with self._database.write_session() as session:
             row = await self._require(session, row.id or 0, row.media_type)
-            fields = body.model_dump()
+            fields = effective.model_dump()
+            fields["summary_source"] = summary_source
             if "tmdb_collection_id" not in body.model_fields_set:
                 fields.pop("tmdb_collection_id")
             if "kind" not in body.model_fields_set:
@@ -716,6 +768,11 @@ class CollectionsService:
             row.sqlmodel_update(fields)
             row.updated_at = utc_now()
             session.add(row)
+            if rule is not None and display:
+                saved_rule = await CollectionRepository(session).rule(row.id or 0)
+                if saved_rule is not None:
+                    saved_rule.sqlmodel_update(display)
+                    session.add(saved_rule)
 
     async def _delete_locked(self, row: MediaCollection) -> None:
         collection_id = row.id or 0
@@ -835,7 +892,13 @@ class CollectionsService:
                     kind=row.kind,
                     title=row.title,
                     summary=row.summary,
+                    summary_format=literal_template(row.summary)
+                    if row.summary is not None
+                    else "",
                     sort_title=row.sort_title,
+                    sort_title_format=literal_template(row.sort_title)
+                    if row.sort_title is not None
+                    else "",
                     collection_group=row.collection_group,
                     collection_mode=row.collection_mode,
                     order_type=body.order_type,
@@ -885,13 +948,20 @@ class CollectionsService:
                 and row.server_type is ServerType.PLEX
             )
             if use_source_order:
+                body = body.model_copy(update={"order_type": CollectionOrder.CUSTOM})
                 await self._push_options(
                     row,
                     CollectionOptions(
                         kind=row.kind,
                         title=row.title,
                         summary=row.summary,
+                        summary_format=literal_template(row.summary)
+                        if row.summary is not None
+                        else "",
                         sort_title=row.sort_title,
+                        sort_title_format=literal_template(row.sort_title)
+                        if row.sort_title is not None
+                        else "",
                         collection_group=row.collection_group,
                         collection_mode=row.collection_mode,
                         order_type=CollectionOrder.CUSTOM,
@@ -988,6 +1058,10 @@ class CollectionsService:
             ids: list[int] = []
             for identifier in builder.identifiers:
                 ids.extend(await self._mdblist.tmdb_ids(identifier, row.media_type))
+        elif isinstance(builder, TmdbListBuilder):
+            ids = []
+            for list_id in builder.list_ids:
+                ids.extend(await self._tmdb.get_list_ids(list_id, row.media_type))
         elif isinstance(builder, TmdbItemBuilder):
             ids = list(builder.tmdb_ids)
         elif isinstance(builder, TmdbPersonBuilder):
@@ -1123,22 +1197,20 @@ class CollectionsService:
                 media_type,
                 filter_query,
             )
-        await self._push_options(
+        await self._update_locked(
             row,
             CollectionOptions(
                 kind=CollectionKind.SMART,
                 title=row.title,
-                summary=row.summary,
-                sort_title=row.sort_title,
+                summary=None,
+                summary_format=row.summary_format,
+                sort_title=None,
+                sort_title_format=row.sort_title_format,
                 collection_group=row.collection_group,
-                collection_mode=row.collection_mode,
-                order_type=row.order_type,
-                collection_filtering=row.collection_filtering,
-                visible_home=row.visible_home,
-                visible_shared=row.visible_shared,
-                visible_library=row.visible_library,
+                active_start_mmdd=row.active_start_mmdd,
+                active_end_mmdd=row.active_end_mmdd,
+                delete_when_inactive=row.delete_when_inactive,
             ),
-            rule,
         )
         remote_ids = await self._provider().get_collection_member_ids(
             row.server_item_id
@@ -1200,31 +1272,27 @@ class CollectionsService:
             return CollectionSyncResponse(skipped=True)
         old = {item.id for item in current}
         new = {item.id for item in wanted}
-        effective_order = (
-            rule.order_type if rule.order_type is not None else row.order_type
-        )
+        effective_order = policy.order_type
         await self._set_members_locked(
             row,
             wanted,
             effective_order,
             append=mode is SyncMode.APPEND,
         )
-        await self._push_options(
+        await self._update_locked(
             row,
             CollectionOptions(
                 kind=row.kind,
                 title=row.title,
-                summary=row.summary,
-                sort_title=row.sort_title,
+                summary=None,
+                summary_format=row.summary_format,
+                sort_title=None,
+                sort_title_format=row.sort_title_format,
                 collection_group=row.collection_group,
-                collection_mode=row.collection_mode,
-                order_type=effective_order,
-                collection_filtering=row.collection_filtering,
-                visible_home=row.visible_home,
-                visible_shared=row.visible_shared,
-                visible_library=row.visible_library,
+                active_start_mmdd=row.active_start_mmdd,
+                active_end_mmdd=row.active_end_mmdd,
+                delete_when_inactive=row.delete_when_inactive,
             ),
-            rule,
         )
         return CollectionSyncResponse(
             added=len(new - old),
@@ -1454,6 +1522,39 @@ class CollectionsService:
         await self._publisher.broadcast("collections.changed")
         return body
 
+    async def apply_group_policy(
+        self, media_type: MediaType, name: str
+    ) -> BulkCollectionOperationResult:
+        """Apply display defaults while preserving sources and rule overrides."""
+        async with self._database.read_session() as session:
+            ids = [
+                row.id
+                for row in await CollectionRepository(session).list_listed(media_type)
+                if row.collection_group == name
+                and row.server_type is self._provider().server_type
+                and row.id is not None
+            ]
+        result = BulkCollectionOperationResult()
+        for collection_id in ids:
+            try:
+                async with (
+                    self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
+                    self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
+                ):
+                    async with self._database.read_session() as session:
+                        row = await self._require(session, collection_id, media_type)
+                        rule = await CollectionRepository(session).rule(collection_id)
+                    if row.collection_group != name:
+                        continue
+                    await self._update_locked(row, self._saved_options(row, rule))
+                result.collection_ids.append(collection_id)
+                await self._publisher.broadcast(
+                    "collection.updated", {"collection_id": collection_id}
+                )
+            except Exception as exc:
+                result.errors[collection_id] = sanitise_error(str(exc))
+        return result
+
     async def sync_group(self, media_type: MediaType, name: str) -> GroupSyncResult:
         """Run dynamic TMDB discovery (if enabled) and sync rules in *name*."""
         name = name.strip()
@@ -1599,10 +1700,40 @@ class CollectionsService:
         return response
 
     @staticmethod
-    def _apply_bulk_option(
-        row: MediaCollection, body: BulkCollectionOperation
+    def _saved_options(
+        row: MediaCollection, rule: CollectionRule | None
     ) -> CollectionOptions:
-        options = CollectionOptions.model_validate(row, from_attributes=True)
+        options = CollectionOptions(
+            kind=row.kind,
+            title=row.title,
+            collection_group=row.collection_group,
+            tmdb_collection_id=row.tmdb_collection_id,
+            sort_title_format=row.sort_title_format,
+            summary_format=row.summary_format,
+            active_start_mmdd=row.active_start_mmdd,
+            active_end_mmdd=row.active_end_mmdd,
+            delete_when_inactive=row.delete_when_inactive,
+        )
+        if rule is None:
+            # Imported server display choices remain explicit.
+            options = options.model_copy(
+                update={
+                    **row.model_dump(include=set(_DISPLAY_OVERRIDES)),
+                    "summary": row.summary if row.summary_format is None else None,
+                    "sort_title": row.sort_title
+                    if row.sort_title_format is None
+                    else None,
+                }
+            )
+        return options
+
+    @staticmethod
+    def _apply_bulk_option(
+        row: MediaCollection,
+        body: BulkCollectionOperation,
+        rule: CollectionRule | None,
+    ) -> CollectionOptions:
+        options = CollectionsService._saved_options(row, rule)
         if body.operation == "set_group":
             options.collection_group = (
                 body.collection_group.strip() or None if body.collection_group else None
@@ -1619,11 +1750,8 @@ class CollectionsService:
             if body.visible_library is not None:
                 options.visible_library = body.visible_library
         elif body.sort_title_format is not None:
-            options.sort_title = format_sort_title(
-                body.sort_title_format,
-                title=row.title,
-                group=row.collection_group,
-            )
+            options.sort_title = None
+            options.sort_title_format = body.sort_title_format
         return options
 
     async def bulk_operation(
@@ -1653,8 +1781,11 @@ class CollectionsService:
                             row = await self._require(
                                 session, collection_id, body.media_type
                             )
+                            rule = await CollectionRepository(session).rule(
+                                collection_id
+                            )
                         await self._update_locked(
-                            row, self._apply_bulk_option(row, body)
+                            row, self._apply_bulk_option(row, body, rule)
                         )
                     await self._publisher.broadcast(
                         "collection.updated", {"collection_id": collection_id}

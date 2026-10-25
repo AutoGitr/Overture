@@ -10,7 +10,7 @@
   let discovering = $derived(editor instanceof CollectionDraft && editor.discovering);
   let sections = $derived([
     { key: "setup", label: "Setup", icon: Settings },
-    ...(discovering || editor.sourceType !== "manual"
+    ...(discovering || editor.sourceType !== "unmanaged"
       ? [{ key: "content", label: discovering ? "Discovery" : "Content", icon: WandSparkles }]
       : []),
     ...(!discovering && (!editor.creating || editor.manualMembersAllowed)

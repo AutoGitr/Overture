@@ -7,8 +7,15 @@ lazy from typing import Annotated
 
 lazy from pydantic import AfterValidator, Field
 
+MAX_COLLECTION_SUMMARY_LENGTH = 10_000
+
 _SUMMARY_FIELDS = frozenset({"title", "group", "start_date", "end_date", "summary"})
 _DAYS_IN_MONTH = (0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
+
+def literal_template(value: str) -> str:
+    """Quote literal metadata so braces are not interpreted as template fields."""
+    return value.replace("{", "{{").replace("}", "}}")
 
 
 def validate_sort_title_format(value: str) -> str:
@@ -19,8 +26,9 @@ def validate_sort_title_format(value: str) -> str:
     return value
 
 
+# Escaped literal braces can double expression length without growing the output.
 type SortTitleFormat = Annotated[
-    str, Field(max_length=200), AfterValidator(validate_sort_title_format)
+    str, Field(max_length=400), AfterValidator(validate_sort_title_format)
 ]
 
 
@@ -44,7 +52,9 @@ def validate_summary_format(value: str) -> str:
 
 
 type SummaryFormat = Annotated[
-    str, Field(max_length=2000), AfterValidator(validate_summary_format)
+    str,
+    Field(max_length=MAX_COLLECTION_SUMMARY_LENGTH * 2),
+    AfterValidator(validate_summary_format),
 ]
 
 
@@ -65,8 +75,11 @@ def format_summary(
         end_date=end_date or "",
         summary=summary or "",
     )
-    if len(result) > 2000:
-        raise ValueError("The formatted summary must be at most 2000 characters")
+    if len(result) > MAX_COLLECTION_SUMMARY_LENGTH:
+        raise ValueError(
+            "The formatted summary must be at most "
+            f"{MAX_COLLECTION_SUMMARY_LENGTH} characters"
+        )
     return result
 
 

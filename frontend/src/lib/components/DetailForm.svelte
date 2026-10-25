@@ -34,7 +34,7 @@
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
     align-items: start;
     gap: var(--space-4);
-    padding: var(--space-4);
+    padding: var(--form-padding, var(--space-4));
   }
   .fields :global(.form-label) {
     display: flex;

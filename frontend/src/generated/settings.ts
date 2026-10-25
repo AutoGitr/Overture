@@ -13,6 +13,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_delete_below_minimum: false,
   collection_delete_when_inactive: false,
   collection_filtering_default: "admin",
+  collection_import_unmanaged: true,
   collection_minimum_items: 1,
   collection_mode_default: "default",
   collection_order_default: "release",

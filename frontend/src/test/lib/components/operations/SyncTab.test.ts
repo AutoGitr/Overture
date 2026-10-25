@@ -59,6 +59,7 @@ const SAVED_POLL = {
   waiting_for: null,
   config: {
     mode: "incremental" as const,
+    include_collections: true,
     library_ids: ["2"],
     download_overturedb_art: true,
     download_themes: "themerrdb_overturedb" as const,
@@ -109,7 +110,23 @@ describe("Sync tab", () => {
     expect(screen.getByRole("checkbox", { name: "Shows" })).not.toBeChecked();
     await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
     await waitFor(() =>
-      expect(run).toHaveBeenCalledWith({ body: { library_ids: ["1"] } }, expect.anything()),
+      expect(run).toHaveBeenCalledWith(
+        { body: { include_collections: true, library_ids: ["1"] } },
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("can exclude collections independently of the selected libraries", async () => {
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    await renderSync();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Collections", exact: true }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await waitFor(() =>
+      expect(run).toHaveBeenCalledWith(
+        { body: { library_ids: ["1", "2"], include_collections: false } },
+        expect.anything(),
+      ),
     );
   });
 
@@ -129,7 +146,10 @@ describe("Sync tab", () => {
     expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
     await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
     await waitFor(() =>
-      expect(run).toHaveBeenCalledWith({ body: { library_ids: [] } }, expect.anything()),
+      expect(run).toHaveBeenCalledWith(
+        { body: { include_collections: true, library_ids: [] } },
+        expect.anything(),
+      ),
     );
   });
 
@@ -172,6 +192,7 @@ describe("Sync tab", () => {
             cron_expression: "0 3 * * *",
             config: {
               mode: "full",
+              include_collections: true,
               library_ids: ["1", "2"],
               download_overturedb_art: false,
               download_themes: "off",
@@ -217,6 +238,7 @@ describe("Sync tab", () => {
             cron_expression: "*/15 * * * *",
             config: {
               mode: "incremental",
+              include_collections: true,
               library_ids: ["1", "2"],
               download_overturedb_art: true,
               download_themes: "overturedb_themerrdb",
@@ -270,6 +292,7 @@ describe("Sync tab", () => {
             cron_expression: "*/15 * * * *",
             config: {
               mode: "incremental",
+              include_collections: true,
               library_ids: ["2"],
               download_overturedb_art: false,
               download_themes: "off",

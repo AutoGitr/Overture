@@ -57,6 +57,11 @@
             "$ref": "#/components/schemas/CollectionFiltering",
             "default": "admin"
           },
+          "collection_import_unmanaged": {
+            "default": true,
+            "title": "Collection Import Unmanaged",
+            "type": "boolean"
+          },
           "collection_minimum_items": {
             "default": 1,
             "maximum": 100.0,
@@ -240,6 +245,7 @@
           "collection_delete_when_inactive",
           "collection_sync_interval_hours",
           "collection_sync_enabled",
+          "collection_import_unmanaged",
           "auto_match_art",
           "workflow",
           "theme_search_format",
@@ -377,6 +383,17 @@
                 "type": "null"
               }
             ]
+          },
+          "collection_import_unmanaged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Import Unmanaged"
           },
           "collection_minimum_items": {
             "anyOf": [
@@ -2555,6 +2572,7 @@
             "sonarr_tag": "#/components/schemas/SonarrTagBuilder-Input",
             "tmdb_collection": "#/components/schemas/TmdbCollectionBuilder-Input",
             "tmdb_item": "#/components/schemas/TmdbItemBuilder-Input",
+            "tmdb_list": "#/components/schemas/TmdbListBuilder-Input",
             "tmdb_person": "#/components/schemas/TmdbPersonBuilder-Input"
           },
           "propertyName": "type"
@@ -2565,6 +2583,9 @@
           },
           {
             "$ref": "#/components/schemas/TmdbItemBuilder-Input"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbListBuilder-Input"
           },
           {
             "$ref": "#/components/schemas/TmdbPersonBuilder-Input"
@@ -2592,6 +2613,7 @@
             "sonarr_tag": "#/components/schemas/SonarrTagBuilder-Output",
             "tmdb_collection": "#/components/schemas/TmdbCollectionBuilder-Output",
             "tmdb_item": "#/components/schemas/TmdbItemBuilder-Output",
+            "tmdb_list": "#/components/schemas/TmdbListBuilder-Output",
             "tmdb_person": "#/components/schemas/TmdbPersonBuilder-Output"
           },
           "propertyName": "type"
@@ -2602,6 +2624,9 @@
           },
           {
             "$ref": "#/components/schemas/TmdbItemBuilder-Output"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbListBuilder-Output"
           },
           {
             "$ref": "#/components/schemas/TmdbPersonBuilder-Output"
@@ -8302,7 +8327,7 @@
         "type": "object"
       },
       "SortTitleFormat": {
-        "maxLength": 200,
+        "maxLength": 400,
         "type": "string"
       },
       "SourceOrder_ArtBulkSource_": {
@@ -8426,7 +8451,7 @@
         "type": "object"
       },
       "SummaryFormat": {
-        "maxLength": 2000,
+        "maxLength": 20000,
         "type": "string"
       },
       "SyncMode": {
@@ -8442,6 +8467,11 @@
         "additionalProperties": false,
         "description": "Validate the sync run request payload.",
         "properties": {
+          "include_collections": {
+            "default": true,
+            "title": "Include Collections",
+            "type": "boolean"
+          },
           "library_ids": {
             "anyOf": [
               {
@@ -8471,6 +8501,11 @@
             "default": "off",
             "description": "Incremental only: queue themes for new items."
           },
+          "include_collections": {
+            "default": true,
+            "title": "Include Collections",
+            "type": "boolean"
+          },
           "library_ids": {
             "$ref": "#/components/schemas/LibraryIds",
             "description": "Libraries to sync; empty means every library."
@@ -8498,6 +8533,11 @@
             "default": "off",
             "description": "Incremental only: queue themes for new items."
           },
+          "include_collections": {
+            "default": true,
+            "title": "Include Collections",
+            "type": "boolean"
+          },
           "library_ids": {
             "$ref": "#/components/schemas/LibraryIds",
             "description": "Libraries to sync; empty means every library."
@@ -8509,6 +8549,7 @@
         },
         "required": [
           "mode",
+          "include_collections",
           "library_ids",
           "download_overturedb_art",
           "download_themes"
@@ -9207,6 +9248,61 @@
         ],
         "title": "TmdbLanguageFilter",
         "type": "string"
+      },
+      "TmdbListBuilder-Input": {
+        "additionalProperties": false,
+        "description": "Resolve public TMDB lists in their saved order.",
+        "properties": {
+          "list_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "List Ids",
+            "type": "array"
+          },
+          "type": {
+            "const": "tmdb_list",
+            "default": "tmdb_list",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_ids"
+        ],
+        "title": "TmdbListBuilder",
+        "type": "object"
+      },
+      "TmdbListBuilder-Output": {
+        "additionalProperties": false,
+        "description": "Resolve public TMDB lists in their saved order.",
+        "properties": {
+          "list_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "List Ids",
+            "type": "array"
+          },
+          "type": {
+            "const": "tmdb_list",
+            "default": "tmdb_list",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "list_ids"
+        ],
+        "title": "TmdbListBuilder",
+        "type": "object"
       },
       "TmdbPersonBuilder-Input": {
         "additionalProperties": false,
@@ -11504,6 +11600,79 @@
           }
         },
         "summary": "Save Collection Group Policy",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/group-policy/apply": {
+      "post": {
+        "description": "Apply group defaults while preserving each collection's explicit overrides.",
+        "operationId": "apply_collection_group_policy",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCollectionOperationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Collection Group Policy",
         "tags": [
           "collections"
         ]

@@ -231,7 +231,9 @@ async def test_queued_and_waiting_schedules_report_why_and_announce_changes(
     )
     ran: list[str] = []
 
-    def full_sync(library_ids: list[str] | None) -> Callable[[JobContext], Any]:
+    def full_sync(
+        library_ids: list[str] | None, *, include_collections: bool = True
+    ) -> Callable[[JobContext], Any]:
         async def body(_context: JobContext) -> None:
             ran.append(",".join(library_ids or []))
 

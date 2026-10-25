@@ -20,6 +20,7 @@ async def run_sync(
     context: JobContext,
     *,
     library_ids: list[str] | None = None,
+    include_collections: bool = True,
     provider_registry: ProviderRegistry,
     reconciler: LibraryReconciler,
     config_dir: Path,
@@ -49,7 +50,8 @@ async def run_sync(
                 tmdb_count=len(tmdb_items),
             )
             await tmdb_seasons.run(tmdb_items, job)
-            await collections.run(job, library_ids=library_ids)
+            if include_collections:
+                await collections.run(job, library_ids=library_ids)
 
         # A stop must interrupt provider calls and rate-limit waits as well
         # as the loops between them. Each writer rolls back on cancellation.

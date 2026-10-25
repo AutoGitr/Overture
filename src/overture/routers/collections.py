@@ -85,6 +85,16 @@ async def save_collection_group_policy(
     return await collections.save_group_policy(media_type, name, body)
 
 
+@router.post("/group-policy/apply")
+async def apply_collection_group_policy(
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+) -> BulkCollectionOperationResult:
+    """Apply group defaults while preserving each collection's explicit overrides."""
+    return await collections.apply_group_policy(media_type, name)
+
+
 @router.post("/group-policy/sync")
 async def sync_collection_group(
     collections: CollectionsDep,

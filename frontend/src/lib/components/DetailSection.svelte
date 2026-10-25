@@ -14,14 +14,15 @@
 
 <style>
   .detail-section {
-    border: var(--border-subtle);
-    border-radius: var(--radius-lg);
-    background: var(--bg-secondary);
+    border: var(--section-border, var(--border-subtle));
+    border-bottom: var(--section-divider, var(--border-subtle));
+    border-radius: var(--section-radius, var(--radius-lg));
+    background: var(--section-background, var(--bg-secondary));
     overflow: hidden;
   }
   header {
-    padding: var(--space-4);
-    border-bottom: var(--border-subtle);
+    padding: var(--section-header-padding, var(--space-4));
+    border-bottom: var(--section-header-border, var(--border-subtle));
   }
   h3 {
     margin: 0 0 var(--space-2);

@@ -81,6 +81,7 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_delete_when_inactive: bool | None = None
     collection_sync_interval_hours: int | None = None
     collection_sync_enabled: bool | None = None
+    collection_import_unmanaged: bool | None = None
     auto_match_art: bool | None = None
     workflow: Workflow | None = None
     theme_search_format: str | None = None

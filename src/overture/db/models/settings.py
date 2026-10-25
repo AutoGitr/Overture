@@ -68,6 +68,7 @@ class AppSettingsBase(SQLModel):
     collection_delete_when_inactive: bool = False
     collection_sync_interval_hours: int = Field(default=24, ge=0, le=8760)
     collection_sync_enabled: bool = True
+    collection_import_unmanaged: bool = True
     auto_match_art: bool = False
     workflow: Workflow = Field(default=Workflow.ART, sa_type=enum_type(Workflow))
     theme_search_format: str = Field(

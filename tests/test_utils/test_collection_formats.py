@@ -56,9 +56,9 @@ def test_summary_formatting() -> None:
     with pytest.raises(ValueError, match="summary templates"):
         validate_summary_format("{title:03d}")
 
-    # Exceeding 2000 characters raises
-    with pytest.raises(ValueError, match="at most 2000 characters"):
-        format_summary("{title}", title="X" * 2001)
+    # Exceeding 10000 characters raises
+    with pytest.raises(ValueError, match="at most 10000 characters"):
+        format_summary("{title}", title="X" * 10001)
 
 
 def test_seasonal_dates_and_windows() -> None:

@@ -397,12 +397,6 @@ describe("Collection Builders UI", () => {
         libraries: [{ id: "movies", title: "Movies", count: 10 }],
       });
 
-      const summary = screen.getByText(/Defaults for group: Marvel/i);
-      expect(summary).toBeInTheDocument();
-
-      // Open details
-      await fireEvent.click(summary);
-
       // Wait for group defaults to load
       expect(
         await screen.findByRole("button", { name: "Save group defaults" }),
@@ -482,7 +476,7 @@ describe("Collection Builders UI", () => {
       const endInput = screen.getByLabelText(/^Active end \(MM-DD\)/i);
       await fireEvent.input(endInput, { target: { value: "01-05" } });
 
-      const templateInput = screen.getByLabelText(/^Summary template/i);
+      const templateInput = screen.getByLabelText(/^Summary$/i);
       await fireEvent.input(templateInput, { target: { value: "{title} seasonal" } });
     });
 
@@ -505,6 +499,7 @@ describe("Collection Builders UI", () => {
     it("saves collection options with seasonal dates, summary format, and Plex visibility", async () => {
       let putBody: unknown = null;
       mockFetchRoutes({
+        "/api/collections/12/rule": rule,
         "/api/collections/groups": [],
         "/api/library/libraries": [{ id: "movies", title: "Movies", count: 1 }],
         "/api/library/items": { items: members, total: 1 },
@@ -522,7 +517,7 @@ describe("Collection Builders UI", () => {
       const displaySection = await screen.findByRole("region", { name: "Collection display" });
       const display = within(displaySection);
 
-      const summaryFormatInput = display.getByLabelText(/^Summary template/i);
+      const summaryFormatInput = display.getByLabelText(/^Summary$/i);
       await fireEvent.input(summaryFormatInput, { target: { value: "{title} - {group}" } });
 
       const schedule = within(screen.getByRole("region", { name: "Collection schedule" }));
@@ -533,10 +528,10 @@ describe("Collection Builders UI", () => {
       await fireEvent.input(endInput, { target: { value: "01-05" } });
 
       const visibleShared = display.getByLabelText(/Visible to shared users/i);
-      await fireEvent.click(visibleShared);
+      await fireEvent.change(visibleShared, { target: { value: "true" } });
 
       const visibleLibrary = display.getByLabelText(/Visible in library recommended/i);
-      await fireEvent.click(visibleLibrary);
+      await fireEvent.change(visibleLibrary, { target: { value: "true" } });
 
       const filterSelect = display.getByLabelText(/Collection filtering/i);
       await fireEvent.change(filterSelect, { target: { value: "admin" } });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { THEME_SOURCE_LABELS } from "../../generated/settings";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { sidebarState } from "../stores/sidebarState.svelte";
   import type { AssetsForm } from "../utils/assetsForm.svelte";
   import ArtWorkflowCard from "./ArtWorkflowCard.svelte";
@@ -38,6 +39,13 @@
       emptyMessage="No synced libraries found. Run Sync first."
       ontoggle={(id) => form.toggleLibrary(id)}
       ontoggleall={(checked) => form.toggleAll(checked)}
+      collections={settingsState.current.collections_supported && config.enableThemes
+        ? config.includeCollections
+        : undefined}
+      oncollectionschange={(checked) => {
+        config.includeCollections = checked;
+        config.useSidebarItems = false;
+      }}
     />
   </div>
   <SidebarItemsOption
@@ -89,15 +97,10 @@
 {#if !form.collectionScope}<ArtWorkflowCard {form} />{/if}
 
 <WorkflowCard title="Themes" kind="theme" bind:enabled={config.enableThemes}>
-  {#if !config.useSidebarItems}
-    <label class="checkbox-group">
-      <input type="checkbox" bind:checked={config.includeCollections} />
-      <span>Include collection themes</span>
-    </label>
-  {/if}
   {#if form.collectionScope || config.includeCollections}
     <p class="hint">
-      Collection themes use OvertureDB and ThemerrDB. YouTube search applies to movies and shows.
+      Collections in the selected libraries are included for themes. Collection themes use
+      OvertureDB and ThemerrDB; collection artwork is managed on each collection.
     </p>
   {/if}
   <WorkflowSection label="Sources" note="First match wins, top to bottom.">

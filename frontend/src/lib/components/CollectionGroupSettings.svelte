@@ -5,6 +5,7 @@
     getCollectionGroupPolicyOptions,
     saveCollectionGroupPolicyMutation,
     syncCollectionGroupMutation,
+    applyCollectionGroupPolicyMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
     CollectionGroupPolicyOutput,
@@ -12,6 +13,7 @@
     MediaType,
     ServerType,
   } from "../../generated/rest/types.gen";
+  import DetailForm from "./DetailForm.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import DataStatus from "./DataStatus.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
@@ -31,14 +33,14 @@
   } = $props();
 
   const client = useQueryClient();
-  let open = $state(false);
   const query = createQuery(() => ({
     ...getCollectionGroupPolicyOptions({ query: { name: group, media_type: mediaType } }),
-    enabled: open,
+    enabled: !!group.trim(),
   }));
   const request = createMutation(() => saveCollectionGroupPolicyMutation());
   const syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
   const feedback = createNotifier();
+  const applyRequest = createMutation(() => applyCollectionGroupPolicyMutation());
 
   let draft = $derived.by(() => {
     if (!query.data) return null;
@@ -54,7 +56,7 @@
     return value;
   });
 
-  async function save() {
+  async function save(apply = false) {
     if (!draft || request.isPending) return;
     const variables = {
       query: { name: group, media_type: mediaType },
@@ -66,7 +68,21 @@
         getCollectionGroupPolicyOptions({ query: variables.query }).queryKey,
         saved,
       );
-      feedback.success("Group defaults saved. Collections use them on their next save or sync.");
+      if (apply) {
+        const result = await applyRequest.mutateAsync({ query: variables.query });
+        const errors = Object.values(result.errors);
+        if (errors.length) {
+          feedback.error(
+            `Applied to ${result.collection_ids.length} collections. ${errors.length} failed: ${errors.join("; ")}`,
+          );
+          return;
+        }
+        feedback.success(
+          `Group defaults applied to ${result.collection_ids.length} collection${result.collection_ids.length === 1 ? "" : "s"}. Explicit overrides were kept.`,
+        );
+      } else {
+        feedback.success("Group defaults saved. Collections use them on their next save or sync.");
+      }
     } catch (error) {
       feedback.error(errorMessage(error, "Could not save group defaults"));
     }
@@ -99,12 +115,11 @@
   }
 </script>
 
-<details class="form-wide" ontoggle={(event) => (open = event.currentTarget.open)}>
-  <summary>Defaults for group: {group}</summary>
-  <p class="hint">
-    Blank values inherit global defaults. Collection overrides take precedence. Changes apply on the
-    next save or sync.
-  </p>
+<DetailForm
+  title="Group settings"
+  description="Shared defaults for this group. Blank values inherit the global fallback; a collection's explicit overrides take precedence. Save & Apply updates display settings without changing membership."
+  busy={request.isPending || syncGroupRequest.isPending || applyRequest.isPending}
+>
   <DataStatus
     label="group defaults"
     error={query.error}
@@ -113,124 +128,124 @@
     onretry={() => query.refetch()}
   />
   {#if draft}
-    <fieldset class="options-col" disabled={request.isPending || syncGroupRequest.isPending}>
-      <legend>Group defaults</legend>
-      <CollectionPolicyFields policy={draft} prefix="Group " plex={serverType === "plex"} />
+    <CollectionPolicyFields policy={draft} prefix="Group " plex={serverType === "plex"} />
 
-      <label class="form-row">
+    <label class="form-row">
+      <input
+        type="checkbox"
+        checked={draft.sort_title_format === null}
+        onchange={(event) => {
+          if (draft) draft.sort_title_format = event.currentTarget.checked ? null : "";
+        }}
+      />
+      Inherit global sort title template
+    </label>
+
+    {#if draft.sort_title_format !== null}
+      <label class="form-label">
+        Group sort title template
+        <input maxlength="200" bind:value={draft.sort_title_format} />
+        <span class="hint">
+          Use &#123;title&#125; and &#123;group&#125;. Empty disables formatting for this group.
+        </span>
+      </label>
+    {/if}
+
+    <label class="form-row">
+      <input
+        type="checkbox"
+        checked={draft.summary_format === null}
+        onchange={(event) => {
+          if (draft) draft.summary_format = event.currentTarget.checked ? null : "";
+        }}
+      />
+      Inherit global summary template
+    </label>
+
+    {#if draft.summary_format !== null}
+      <label class="form-label">
+        Group summary template
+        <input maxlength="500" bind:value={draft.summary_format} />
+        <span class="hint">
+          Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
+          &#123;end_date&#125;, &#123;summary&#125;.
+        </span>
+      </label>
+    {/if}
+
+    <div class="seasonal-row form-wide">
+      <label class="form-label">
+        Active start (MM-DD)
         <input
-          type="checkbox"
-          checked={draft.sort_title_format === null}
-          onchange={(event) => {
-            if (draft) draft.sort_title_format = event.currentTarget.checked ? null : "";
+          placeholder="12-15"
+          maxlength="5"
+          value={draft.active_start_mmdd ?? ""}
+          oninput={(e) => {
+            if (draft) draft.active_start_mmdd = e.currentTarget.value.trim() || null;
           }}
         />
-        Inherit global sort title template
       </label>
-
-      {#if draft.sort_title_format !== null}
-        <label class="form-label">
-          Group sort title template
-          <input maxlength="200" bind:value={draft.sort_title_format} />
-          <span class="hint">
-            Use &#123;title&#125; and &#123;group&#125;. Empty disables formatting for this group.
-          </span>
-        </label>
-      {/if}
-
-      <label class="form-row">
+      <label class="form-label">
+        Active end (MM-DD)
         <input
-          type="checkbox"
-          checked={draft.summary_format === null}
-          onchange={(event) => {
-            if (draft) draft.summary_format = event.currentTarget.checked ? null : "";
+          placeholder="01-05"
+          maxlength="5"
+          value={draft.active_end_mmdd ?? ""}
+          oninput={(e) => {
+            if (draft) draft.active_end_mmdd = e.currentTarget.value.trim() || null;
           }}
         />
-        Inherit global summary template
       </label>
+    </div>
 
-      {#if draft.summary_format !== null}
-        <label class="form-label">
-          Group summary template
-          <input maxlength="500" bind:value={draft.summary_format} />
-          <span class="hint">
-            Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
-            &#123;end_date&#125;, &#123;summary&#125;.
-          </span>
-        </label>
-      {/if}
-
-      <div class="seasonal-row">
-        <label class="form-label">
-          Active start (MM-DD)
+    {#if mediaType === "movie"}
+      <div class="dynamic-discovery-section form-wide">
+        <label class="form-row">
           <input
-            placeholder="12-15"
-            maxlength="5"
-            value={draft.active_start_mmdd ?? ""}
-            oninput={(e) => {
-              if (draft) draft.active_start_mmdd = e.currentTarget.value.trim() || null;
-            }}
+            type="checkbox"
+            checked={draft.dynamic_tmdb !== null && (draft.dynamic_tmdb.enabled ?? false)}
+            onchange={(e) => toggleDynamicTmdb(e.currentTarget.checked)}
           />
+          Auto-discover TMDB franchise collections from library movies
         </label>
-        <label class="form-label">
-          Active end (MM-DD)
-          <input
-            placeholder="01-05"
-            maxlength="5"
-            value={draft.active_end_mmdd ?? ""}
-            oninput={(e) => {
-              if (draft) draft.active_end_mmdd = e.currentTarget.value.trim() || null;
-            }}
-          />
-        </label>
+
+        {#if draft.dynamic_tmdb}
+          <div class="options-col nested-options">
+            {#if libraries.length > 0}
+              <label class="form-label">
+                Library
+                <select bind:value={draft.dynamic_tmdb.library_id}>
+                  {#each libraries as library (library.id)}
+                    <option value={library.id}>{library.title}</option>
+                  {/each}
+                </select>
+              </label>
+            {/if}
+            <CollectionDiscoveryFields config={draft.dynamic_tmdb} />
+          </div>
+        {/if}
       </div>
+    {/if}
 
-      {#if mediaType === "movie"}
-        <div class="dynamic-discovery-section">
-          <label class="form-row">
-            <input
-              type="checkbox"
-              checked={draft.dynamic_tmdb !== null && (draft.dynamic_tmdb.enabled ?? false)}
-              onchange={(e) => toggleDynamicTmdb(e.currentTarget.checked)}
-            />
-            Auto-discover TMDB franchise collections from library movies
-          </label>
-
-          {#if draft.dynamic_tmdb}
-            <div class="options-col nested-options">
-              {#if libraries.length > 0}
-                <label class="form-label">
-                  Library
-                  <select bind:value={draft.dynamic_tmdb.library_id}>
-                    {#each libraries as library (library.id)}
-                      <option value={library.id}>{library.title}</option>
-                    {/each}
-                  </select>
-                </label>
-              {/if}
-              <CollectionDiscoveryFields config={draft.dynamic_tmdb} />
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      <div class="form-row action-row">
-        <button type="button" class="btn btn-secondary" onclick={() => void save()}>
-          Save group defaults
-        </button>
-        <button
-          type="button"
-          class="btn btn-ghost"
-          disabled={syncGroupRequest.isPending}
-          onclick={() => void syncGroup()}
-        >
-          <RefreshCw size={14} class={syncGroupRequest.isPending ? "animate-spin" : ""} />
-          Sync Group Now
-        </button>
-      </div>
-    </fieldset>
+    <div class="form-row action-row form-wide">
+      <button type="button" class="btn btn-secondary" onclick={() => void save()}>
+        Save group defaults
+      </button>
+      <button type="button" class="btn btn-primary" onclick={() => void save(true)}
+        >Save &amp; Apply to group</button
+      >
+      <button
+        type="button"
+        class="btn btn-ghost"
+        disabled={syncGroupRequest.isPending}
+        onclick={() => void syncGroup()}
+      >
+        <RefreshCw size={14} class={syncGroupRequest.isPending ? "animate-spin" : ""} />
+        Sync Group Now
+      </button>
+    </div>
   {/if}
-</details>
+</DetailForm>
 
 <style>
   .seasonal-row {
@@ -251,6 +266,8 @@
   }
 
   .nested-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
     padding-left: var(--space-4);
     border-left: var(--border-subtle);
     margin-top: var(--space-2);

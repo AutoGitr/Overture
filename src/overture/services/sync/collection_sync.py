@@ -8,6 +8,7 @@ lazy from datetime import datetime
 lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.models.media_collection import MediaCollection
+lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, theme_file_facts
 lazy from ...domain import (
@@ -26,6 +27,7 @@ lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.media_items import MediaItemRepository, ServerItemFacts
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...schemas.sync import SyncScheduleConfig
+lazy from ...utils.collection_formats import literal_template
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
@@ -84,6 +86,9 @@ class CollectionSync:
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
             listed = await provider.list_collections()
             async with self._database.read_session() as session:
+                import_unmanaged = (
+                    await get_app_settings(session)
+                ).collection_import_unmanaged
                 items = await MediaItemRepository(session).facts_by_server_id()
                 existing = {
                     row.server_item_id: row
@@ -97,6 +102,8 @@ class CollectionSync:
                 if job.stop_requested():
                     return
                 previous = existing.get(collection.id)
+                if previous is None and not import_unmanaged:
+                    continue
                 members = [items[i] for i in collection.member_ids if i in items]
                 media_type = (
                     collection.media_type
@@ -287,6 +294,25 @@ class CollectionSync:
             if media_type is MediaType.MOVIE
             else None,
         )
+        if row.id is None or collection.summary != row.summary:
+            row.summary_source = collection.summary
+        if row.id is None or (
+            row.summary is not None
+            and row.summary_format == literal_template(row.summary)
+        ):
+            row.summary_format = (
+                literal_template(collection.summary)
+                if collection.summary is not None
+                else None
+            )
+        sort_title = collection.sort_title or row.sort_title
+        if row.id is None or (
+            row.sort_title is not None
+            and row.sort_title_format == literal_template(row.sort_title)
+        ):
+            row.sort_title_format = (
+                literal_template(sort_title) if sort_title is not None else None
+            )
         row.sqlmodel_update(
             {
                 "media_type": media_type,
@@ -295,7 +321,7 @@ class CollectionSync:
                 ),
                 "title": collection.title,
                 "summary": collection.summary,
-                "sort_title": collection.sort_title or row.sort_title,
+                "sort_title": sort_title,
                 "library_id": library_id,
                 "child_count": len(collection.member_ids),
                 "thumb_url": collection.thumb_url,

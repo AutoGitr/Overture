@@ -376,6 +376,26 @@ class TMDBClient:
             parts=tuple(_title(part) for part in _records(data, "parts")),
         )
 
+    async def get_list_ids(
+        self, list_id: int, media_type: MediaType
+    ) -> tuple[int, ...]:
+        """Read every public-list page, keeping the selected media type in order."""
+        ids: dict[int, None] = {}
+        page = 1
+        while True:
+            data = await self._cache.get_or_compute(
+                ("list", list_id, page),
+                self._get,
+                f"https://api.themoviedb.org/4/list/{list_id}",
+                params={"page": page},
+            )
+            for item in _records(data, "results"):
+                if item.get("media_type") == _TMDB_KIND[media_type]:
+                    ids.setdefault(int(item["id"]), None)
+            if page >= int(data["total_pages"]):
+                return tuple(ids)
+            page += 1
+
     async def get_person(self, person_id: int) -> TmdbPerson | None:
         """Return a TMDB person by ID, or ``None``."""
         data = await self._cache.get_or_compute(

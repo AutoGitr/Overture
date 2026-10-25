@@ -9,6 +9,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Public TMDB lists as dynamic collection sources, with ordered merging, pagination and movie/show filtering.
+- Separate collection group management with shared defaults, explicit overrides and Save & Apply; Assets and full Sync share a Collections target, and unmanaged collection import can be disabled.
+
 - Composable multi-source collection builders supporting TMDB franchises, item IDs, person credits (with actor, director, writer, producer, and biography roles), MDBList, Radarr and Sonarr tags, recursive filter trees, Plex smart collections with boolean condition groups and managed labels, seasonal calendar windows, dynamic TMDB franchise group discovery, and summary format templates.
 
 - Collection group defaults for sync, minimum membership, automatic assets, Plex visibility and sort-title templates, with individual rule overrides. Filtered bulk actions and empty-collection maintenance keep media files intact.
@@ -25,6 +28,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly identified collections can receive catalog themes automatically from an enabled incremental sync policy.
 
 ### Changed
+
+- Collection forms use full-width sections, Source controls the workflow, boolean conditions use true/false, and Sort title and Summary each accept text or templates in one field. Manual selection is no longer a creation source; existing collection metadata is preserved on upgrade.
 
 - Collection creation and editing share Collection Setup for library, source, title and group, with franchise discovery inside Setup and content, members, display and schedule sections adapted to your choices. New collections open directly at Setup without an empty poster.
 

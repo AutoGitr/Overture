@@ -208,3 +208,55 @@ async def test_collection_art_uses_collection_images_and_caches_by_language(
     assert [poster.url for poster in posters] == [f"{IMAGE}/collection.jpg"]
     assert [background.url for background in backgrounds] == [f"{IMAGE}/background.jpg"]
     assert transport.call_count == 1
+
+
+async def test_public_lists_read_all_pages_filter_media_and_preserve_order(
+    app_config: Settings,
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        assert request.url.host == "api.themoviedb.org"
+        assert request.url.path == "/4/list/123"
+        assert request.url.params["api_key"] == "test-key"
+        page = request.url.params["page"]
+        return httpx2.Response(
+            200,
+            json={
+                "total_pages": 2,
+                "results": [
+                    {"id": 11, "media_type": "movie"},
+                    {"id": 11, "media_type": "tv"},
+                ]
+                if page == "1"
+                else [
+                    {"id": 11, "media_type": "movie"},
+                    {"id": 13, "media_type": "movie"},
+                    {"id": 99, "media_type": "person"},
+                    {"id": 14, "media_type": "tv"},
+                ],
+            },
+        )
+
+    factory, transport = mock_client_factory(handler)
+    app_config.TMDB_API_KEY = SecretStr("test-key")
+    client = TMDBClient(
+        app_config=app_config,
+        client_factory=factory,
+        limiter=RequestLimiter(min_interval=0),
+    )
+    try:
+        assert await client.get_list_ids(123, MediaType.MOVIE) == (11, 13)
+        assert await client.get_list_ids(123, MediaType.SHOW) == (11, 14)
+        assert transport.call_count == 2
+    finally:
+        await client.close()
+
+
+async def test_missing_list_is_an_error_not_an_empty_membership(
+    app_config: Settings,
+) -> None:
+    client, _transport = _client(app_config, {})
+    try:
+        with pytest.raises(httpx2.HTTPStatusError):
+            await client.get_list_ids(123, MediaType.MOVIE)
+    finally:
+        await client.close()

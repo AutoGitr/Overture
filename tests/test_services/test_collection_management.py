@@ -58,6 +58,7 @@ lazy from overture.schemas.collections import (
     SonarrTagBuilder,
     TmdbCollectionBuilder,
     TmdbItemBuilder,
+    TmdbListBuilder,
     TmdbPersonBuilder,
 )
 lazy from overture.schemas.common import Status, StatusResponse
@@ -85,6 +86,7 @@ class Provider(PlexProvider):
         self.smart_filters: dict[str, str] = {}
         self.synced_labels: list[tuple[str, list[str], list[str]]] = []
         self.fail = False
+        self.rejected_updates: set[str] = set()
 
     @override
     async def _list_sections(self) -> list[ServerSection]:
@@ -168,6 +170,8 @@ class Provider(PlexProvider):
         visible_library: bool = False,
         filtering: CollectionFiltering | None = None,
     ) -> None:
+        if server_collection_id in self.rejected_updates:
+            raise ValueError("Server refused this update")
         self.options[server_collection_id] = title, mode, order, visible_home
         self.sort_titles[server_collection_id] = sort_title
         self.summaries[server_collection_id] = summary
@@ -246,6 +250,14 @@ class Tmdb(TMDBClient):
                 TmdbTitle(11, "First", 1995, "1995-01-01", None),
             ),
         )
+
+    @override
+    async def get_list_ids(
+        self, list_id: int, media_type: MediaType
+    ) -> tuple[int, ...]:
+        if self.error is not None:
+            raise self.error
+        return (13, 11) if list_id == 1 else (11, 12)
 
     @override
     async def get_person(self, person_id: int) -> TmdbPerson | None:
@@ -1312,7 +1324,7 @@ async def test_formatted_options(manager: Manager) -> None:
             MediaType.MOVIE,
             CollectionOptions(
                 title="A" * 200,
-                summary_format="X" * 1900 + "{title}",
+                summary_format="X" * 9900 + "{title}",
             ),
         )
 
@@ -1480,11 +1492,11 @@ async def test_inherited_format_overflow_raises_422(manager: Manager) -> None:
                 media_type=MediaType.MOVIE,
             )
         )
-    with pytest.raises(PublicServiceError, match="at most 2000 characters"):
+    with pytest.raises(PublicServiceError, match="at most 10000 characters"):
         await manager.service.create(
             CollectionCreate(
                 title="Normal",
-                summary="S" * 1960,
+                summary="S" * 9960,
                 collection_group="LongGroup",
                 library_id="movies",
                 media_type=MediaType.MOVIE,
@@ -1805,3 +1817,205 @@ async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
     assert refreshed.visible_home is True
     assert refreshed.visible_shared is True
     assert refreshed.visible_library is True
+
+
+async def test_tmdb_lists_merge_in_order_and_failures_keep_members(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Lists",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.CUSTOM,
+            rule=CollectionRuleWrite(builders=[TmdbListBuilder(list_ids=[1, 2])]),
+        )
+    )
+    assert [item.tmdb_id for item in detail.members] == [13, 11, 12]
+    manager.tmdb.error = ValueError("List temporarily unavailable")
+    with pytest.raises(ValueError, match="temporarily unavailable"):
+        await manager.service.sync_rule(detail.id, MediaType.MOVIE)
+    refreshed = await manager.service.get_collection(detail.id, MediaType.MOVIE)
+    assert [item.tmdb_id for item in refreshed.members] == [13, 11, 12]
+
+
+async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
+    manager: Manager,
+) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Charts",
+        CollectionGroupPolicy(
+            sort_title_format="01_{title}",
+            summary_format="About {title}",
+            visible_home=True,
+        ),
+    )
+    inherited = await manager.service.create(
+        CollectionCreate(
+            title="Inherited",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Charts",
+            rule=CollectionRuleWrite(builders=[TmdbItemBuilder(tmdb_ids=[11])]),
+        )
+    )
+    explicit = await manager.service.create(
+        CollectionCreate(
+            title="Override",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Charts",
+            sort_title_format="Custom sort",
+            summary_format="Custom summary",
+            rule=CollectionRuleWrite(
+                builders=[TmdbItemBuilder(tmdb_ids=[12])], visible_home=False
+            ),
+        )
+    )
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Charts",
+        CollectionGroupPolicy(
+            sort_title_format="02_{title}",
+            summary_format="Updated {title}",
+            visible_home=True,
+        ),
+    )
+    for _ in range(2):
+        result = await manager.service.apply_group_policy(MediaType.MOVIE, "Charts")
+        assert not result.errors
+        assert set(result.collection_ids) == {inherited.id, explicit.id}
+        refreshed = await manager.service.get_collection(inherited.id, MediaType.MOVIE)
+        assert refreshed.sort_title == "02_Inherited"
+        assert refreshed.summary == "Updated Inherited"
+        assert refreshed.visible_home is True
+        override = await manager.service.get_collection(explicit.id, MediaType.MOVIE)
+        assert override.sort_title == "Custom sort"
+        assert override.summary == "Custom summary"
+        assert override.visible_home is False
+        assert [item.id for item in refreshed.members] == [manager.ids[0]]
+
+
+async def test_summary_source_is_not_replaced_by_its_rendered_template(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", summary="Original overview"),
+    )
+    for _ in range(2):
+        result = await manager.service.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="Saga",
+                summary_format="{title}: {summary}",
+            ),
+        )
+        assert result.summary == "Saga: Original overview"
+
+
+async def test_rule_sync_resolves_changed_group_defaults_without_freezing_them(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="Inherited",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Shared",
+            rule=CollectionRuleWrite(builders=[TmdbItemBuilder(tmdb_ids=[11])]),
+        )
+    )
+    assert detail.visible_home is False
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Shared",
+        CollectionGroupPolicy(visible_home=True, order_type=CollectionOrder.ALPHA),
+    )
+    await manager.service.sync_rule(detail.id, MediaType.MOVIE)
+    refreshed = await manager.service.get_collection(detail.id, MediaType.MOVIE)
+    assert refreshed.visible_home is True
+    assert refreshed.order_type is CollectionOrder.ALPHA
+    assert refreshed.rule is not None
+    assert refreshed.rule.visible_home is None
+    await manager.service.save_group_policy(
+        MediaType.MOVIE, "Shared", CollectionGroupPolicy(visible_home=False)
+    )
+    await manager.service.sync_rule(detail.id, MediaType.MOVIE)
+    refreshed = await manager.service.get_collection(detail.id, MediaType.MOVIE)
+    assert refreshed.visible_home is False
+
+
+async def test_group_apply_commits_successful_collections_and_reports_failures(
+    manager: Manager,
+) -> None:
+    created = [
+        await manager.service.create(
+            CollectionCreate(
+                title=title,
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                collection_group="Shared",
+                rule=CollectionRuleWrite(builders=[TmdbItemBuilder(tmdb_ids=[11])]),
+            )
+        )
+        for title in ("First", "Second")
+    ]
+    manager.provider.rejected_updates.add("1")
+    await manager.service.save_group_policy(
+        MediaType.MOVIE, "Shared", CollectionGroupPolicy(sort_title_format="01_{title}")
+    )
+    result = await manager.service.apply_group_policy(MediaType.MOVIE, "Shared")
+    assert result.collection_ids == [created[1].id]
+    assert result.errors == {created[0].id: "Server refused this update"}
+    first = await manager.service.get_collection(created[0].id, MediaType.MOVIE)
+    second = await manager.service.get_collection(created[1].id, MediaType.MOVIE)
+    assert first.sort_title is None
+    assert second.sort_title == "01_Second"
+
+
+async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.create(
+        CollectionCreate(
+            title="First",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            summary="Original",
+            summary_format="{title}: {summary}",
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+            rule=CollectionRuleWrite(builders=[TmdbItemBuilder(tmdb_ids=[11])]),
+        )
+    )
+    for operation in (
+        BulkCollectionOperation(
+            operation="set_visibility",
+            collection_ids=[detail.id],
+            media_type=MediaType.MOVIE,
+            visible_shared=True,
+        ),
+        BulkCollectionOperation(
+            operation="apply_sort_title_format",
+            collection_ids=[detail.id],
+            media_type=MediaType.MOVIE,
+            sort_title_format="01_{title}",
+        ),
+    ):
+        result = await manager.service.bulk_operation(operation)
+        assert not result.errors
+    refreshed = await manager.service.get_collection(detail.id, MediaType.MOVIE)
+    assert refreshed.summary == "First: Original"
+    assert refreshed.summary_format == "{title}: {summary}"
+    assert refreshed.sort_title == "01_First"
+    assert refreshed.sort_title_format == "01_{title}"
+    assert refreshed.active_start_mmdd == "01-01"
+    assert refreshed.rule is not None
+    assert refreshed.rule.visible_home is None
+    assert refreshed.rule.visible_shared is True
+    assert refreshed.rule.order_type is None

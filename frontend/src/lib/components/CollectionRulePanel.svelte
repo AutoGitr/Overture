@@ -47,7 +47,7 @@
   }
 </script>
 
-{#if editor.sourceType !== "manual"}
+{#if editor.sourceType !== "unmanaged"}
   <DetailForm
     title="Content"
     description={editor.sourceType === "smart"

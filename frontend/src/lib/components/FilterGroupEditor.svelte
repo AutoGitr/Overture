@@ -127,8 +127,8 @@
       </select>
       {#if meta.kind === "flag"}
         <select aria-label={`${label} value ${index + 1}`} bind:value={condition.value}>
-          <option value={true}>yes</option>
-          <option value={false}>no</option>
+          <option value={true}>true</option>
+          <option value={false}>false</option>
         </select>
       {:else if meta.kind === "number"}
         <input

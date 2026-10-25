@@ -19,7 +19,15 @@ import { readJson, writeJson } from "../utils/storage";
 export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
 
 export type PopupType =
-  null | "filters" | "operations" | "settings" | "database" | "overturedb" | "backup" | "stats";
+  | null
+  | "collection-groups"
+  | "filters"
+  | "operations"
+  | "settings"
+  | "database"
+  | "overturedb"
+  | "backup"
+  | "stats";
 
 export type Completeness = "all" | "complete" | "incomplete";
 
@@ -162,6 +170,12 @@ class UiState {
   catalogFilters = $state<CatalogFilters>(defaultCatalogFilters());
 
   operationsTab = $state<OperationsTab>("assets");
+  collectionGroupToEdit = $state("");
+
+  openCollectionGroups(group = "") {
+    this.collectionGroupToEdit = group;
+    this.#openPopup = "collection-groups";
+  }
 
   /**
    * Which popup overlay is open.

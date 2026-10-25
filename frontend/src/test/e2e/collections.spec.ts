@@ -103,7 +103,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   );
 });
 
-test("collection creation uses the selected library and members", async ({ page }) => {
+test("collection creation uses the selected library and TMDB list sources", async ({ page }) => {
   const detail = collectionDetail({
     id: 12,
     title: "New collection",
@@ -126,7 +126,8 @@ test("collection creation uses the selected library and members", async ({ page 
       expect(route.request().postDataJSON()).toMatchObject({
         title: "New collection",
         library_id: "movies",
-        member_ids: [1],
+        member_ids: [],
+        rule: { builders: [{ type: "tmdb_list", list_ids: [123] }] },
       });
       await route.fulfill({ json: detail });
     } else if (path === "/api/collections" || path === "/api/collections/groups")
@@ -141,7 +142,8 @@ test("collection creation uses the selected library and members", async ({ page 
   await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("movies");
   await expect(page.getByRole("combobox", { name: "Source", exact: true })).toBeInViewport();
   await page.getByLabel("Title", { exact: true }).fill("New collection");
-  await page.getByRole("checkbox", { name: "First", exact: true }).check();
+  await page.getByRole("button", { name: "TMDB lists", exact: true }).click();
+  await page.getByLabel("TMDB list IDs", { exact: true }).fill("123");
   await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page).toHaveURL(/collections\/12-new-collection$/);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
@@ -328,18 +330,19 @@ test("franchise discovery shares Setup and submits its selected library and grou
   const setup = page.getByRole("region", { name: "Collection Setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
   await setup.getByRole("combobox", { name: "Library", exact: true }).selectOption("other");
-  await setup.getByRole("radio", { name: "Discover franchises", exact: true }).press("Space");
+  await setup.getByLabel("Source", { exact: true }).selectOption("discovery");
   await expect(setup.getByLabel("Title", { exact: true })).toBeDisabled();
   await expect(page.getByRole("link", { name: "Display", exact: true })).toHaveCount(0);
   const submit = page.getByRole("button", { name: "Discover & Create Collections", exact: true });
   await expect(submit).toBeDisabled();
-  await setup.getByLabel("Collection Group", { exact: true }).fill("Franchises");
+  await setup.getByLabel("Collection Group", { exact: true }).selectOption("__new__");
+  await setup.getByLabel("New group name", { exact: true }).fill("Franchises");
   await page.getByLabel(/Exclude TMDB franchise IDs/).fill("10, 20");
   await page.getByLabel("Sync interval (hours)", { exact: true }).fill("168");
   await page.getByRole("link", { name: "Setup", exact: true }).click();
-  await setup.getByRole("radio", { name: "One collection", exact: true }).press("Space");
+  await setup.getByLabel("Source", { exact: true }).selectOption("builders");
   await expect(setup.getByLabel("Title", { exact: true })).toHaveValue("Unsaved single collection");
-  await setup.getByRole("radio", { name: "Discover franchises", exact: true }).press("Space");
+  await setup.getByLabel("Source", { exact: true }).selectOption("discovery");
   await expect(page.getByLabel("Sync interval (hours)", { exact: true })).toHaveValue("168");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
@@ -424,4 +427,48 @@ test("smart collections combine list sources and live criteria from top to botto
   await submit.click();
   await expect(page).toHaveURL(/collections\/12-unwatched-favorites$/);
   expect(created).toBe(true);
+});
+
+test("group management saves and applies defaults separately from an unsaved collection", async ({
+  page,
+}) => {
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+  );
+  await page.route("**/api/collections/groups?*", (route) => route.fulfill({ json: ["Weekend"] }));
+  await page.route("**/api/collections/group-policy?*", (route) =>
+    route.fulfill({
+      json:
+        route.request().method() === "PUT"
+          ? route.request().postDataJSON()
+          : { sort_title_format: "01_{title}", summary_format: null },
+    }),
+  );
+  let applied = false;
+  await page.route("**/api/collections/group-policy/apply?*", (route) => {
+    applied = true;
+    return route.fulfill({ json: { collection_ids: [12], errors: {} } });
+  });
+  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  await logIn(page, "/movies/collections/new");
+  await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
+  await page.getByLabel("Collection Group", { exact: true }).selectOption("Weekend");
+  await page
+    .getByRole("region", { name: "Collection Setup", exact: true })
+    .getByRole("button", { name: "Manage groups", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Collection groups" });
+  await expect(dialog.getByRole("combobox", { name: "Group", exact: true })).toHaveValue("Weekend");
+  await dialog.getByRole("textbox", { name: /^Group sort title template/ }).fill("02_{title}");
+  await expect(page.locator("body")).toHaveJSProperty(
+    "scrollWidth",
+    await page.locator("body").evaluate((element) => element.clientWidth),
+  );
+  await dialog.getByRole("button", { name: "Save & Apply to group", exact: true }).click();
+  await expect(
+    page.getByText("Group defaults applied to 1 collection. Explicit overrides were kept."),
+  ).toBeVisible();
+  expect(applied).toBe(true);
+  await dialog.getByRole("button", { name: "Close popup", exact: true }).click();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved collection");
 });

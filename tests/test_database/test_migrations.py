@@ -648,3 +648,95 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
             )
     finally:
         engine.dispose()
+
+
+def test_collection_template_sources_preserve_metadata_and_sync_schedules() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "9a1b2c3d4e5f")
+            old = MetaData()
+            settings = Table("app_settings", old, autoload_with=conn)
+            collections = Table("media_collections", old, autoload_with=conn)
+            conn.execute(
+                settings.insert().values(
+                    **AppSettings().model_dump(
+                        include={column.name for column in settings.columns}
+                    )
+                )
+            )
+            conn.execute(
+                collections.insert().values(
+                    **MediaCollection(
+                        id=1,
+                        title="Saga",
+                        media_type=MediaType.MOVIE,
+                        server_type=ServerType.PLEX,
+                        summary="Literal {overview}",
+                        sort_title="01_{literal}",
+                    ).model_dump(
+                        include={column.name for column in collections.columns}
+                    )
+                )
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO saved_schedules "
+                "(kind, name, enabled, cron_expression, payload_json, state_json, "
+                "created_at, updated_at) "
+                "VALUES ('sync', 'Nightly', 1, '0 2 * * *', ?, '{}', "
+                "'2026-10-25', '2026-10-25')",
+                (json.dumps({"mode": "full", "library_ids": ["1"]}),),
+            )
+            conn.execute(
+                collections.insert().values(
+                    **MediaCollection(
+                        id=2,
+                        title="Other",
+                        media_type=MediaType.MOVIE,
+                        server_type=ServerType.PLEX,
+                        summary="About Other: Original summary",
+                        summary_format="About {title}: {summary}",
+                    ).model_dump(
+                        include={column.name for column in collections.columns}
+                    )
+                )
+            )
+            command.upgrade(config, "head")
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT collection_import_unmanaged FROM app_settings"
+                ).scalar_one()
+                == 1
+            )
+            assert conn.exec_driver_sql(
+                "SELECT summary, summary_source, summary_format, sort_title_format "
+                "FROM media_collections WHERE id=1"
+            ).one() == (
+                "Literal {overview}",
+                "Literal {overview}",
+                "Literal {{overview}}",
+                "01_{{literal}}",
+            )
+            assert conn.exec_driver_sql(
+                "SELECT summary_source, summary_format "
+                "FROM media_collections WHERE id=2"
+            ).one() == ("Original summary", "About {title}: {summary}")
+            payload = json.loads(
+                conn.exec_driver_sql(
+                    "SELECT payload_json FROM saved_schedules"
+                ).scalar_one()
+            )
+            assert payload["include_collections"] is True
+            assert payload["library_ids"] == ["1"]
+            command.downgrade(config, "9a1b2c3d4e5f")
+            command.upgrade(config, "head")
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT summary_format FROM media_collections WHERE id=1"
+                ).scalar_one()
+                == "Literal {{overview}}"
+            )
+    finally:
+        engine.dispose()

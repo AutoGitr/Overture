@@ -463,7 +463,9 @@ async def test_sync_schedule_waits_for_a_busy_slot(
     async def run_scheduled(_context: JobContext) -> None:
         order.append(mode)
 
-    def full_sync(_library_ids: list[str] | None) -> Callable[..., Any]:
+    def full_sync(
+        _library_ids: list[str] | None, *, include_collections: bool = True
+    ) -> Callable[..., Any]:
         return run_scheduled
 
     async def poll(*_args: object) -> None:
@@ -1080,3 +1082,33 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
             )
     finally:
         phash.shutdown()
+
+
+@pytest.mark.parametrize("include_collections", [True, False])
+async def test_full_sync_collection_phase_respects_target(
+    tmp_path: Path, *, include_collections: bool
+) -> None:
+    class CollectionsProbe(NoCollections):
+        def __init__(self) -> None:
+            self.called = False
+
+        @override
+        async def run(self, *_args: object, **_kwargs: object) -> None:
+            self.called = True
+
+    collections = CollectionsProbe()
+    provider = FakeProvider()
+    probe = JobProbe()
+    await sync_runner_module.run_sync(
+        probe.context,
+        library_ids=["1"],
+        include_collections=include_collections,
+        provider_registry=NoopProviderRegistry(provider),
+        reconciler=FakeReconciler(),
+        config_dir=tmp_path,
+        tmdb_seasons=NoTmdbShows(),
+        collections=collections,
+    )
+    assert provider.calls == [{"library_ids": ["1"]}]
+    assert collections.called is include_collections
+    assert probe.names()[-1] == "sync.completed"

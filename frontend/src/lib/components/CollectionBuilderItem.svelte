@@ -170,6 +170,22 @@
         />
       </label>
       <span class="hint">The numeric ID from themoviedb.org collection URL.</span>
+    {:else if builder.type === "tmdb_list"}
+      <label class="form-label">
+        TMDB list IDs
+        <textarea
+          rows={3}
+          placeholder="e.g. 123, 456"
+          value={builder.list_ids.join(", ")}
+          onchange={(event) => {
+            if (builder.type === "tmdb_list")
+              builder.list_ids = splitIds(event.currentTarget.value);
+          }}></textarea>
+      </label>
+      <span class="hint"
+        >Public list IDs from themoviedb.org/list URLs. All pages are read in list order; only this
+        library's media type is included.</span
+      >
     {:else if builder.type === "tmdb_item"}
       <label class="form-label">
         TMDB {mediaType === "movie" ? "movie" : "show"} IDs

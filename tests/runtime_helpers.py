@@ -306,7 +306,9 @@ class NoopSync(SyncEngine):
         return running
 
     @override
-    def start_background_sync(self, *, library_ids: list[str] | None = None) -> bool:
+    def start_background_sync(
+        self, *, library_ids: list[str] | None = None, include_collections: bool = True
+    ) -> bool:
         if self.running:
             return False
         self._running = True

@@ -21,6 +21,7 @@
     <label class="form-label">
       Member order
       <select bind:value={editor.orderType}>
+        <option value={null}>Inherit group or global default</option>
         <option value="release">Release date</option>
         <option value="alpha">Alphabetical</option>
         {#if plex}<option value="custom">Source / custom order</option>{/if}
@@ -43,49 +44,32 @@
       >
     </div>
   {/if}
-  <div class="options-col">
-    <label class="form-label">
-      Sort title
-      <input maxlength="200" bind:value={editor.sortTitle} placeholder="Sort title override" />
-    </label>
-    <div class="form-row">
-      {#each ["!", "+", "01_"] as prefix (prefix)}
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm"
-          onclick={() => (editor.sortTitle = prefix + (editor.sortTitle || editor.title))}
-        >
-          {prefix}
-        </button>
-      {/each}
-    </div>
-  </div>
-
   <label class="form-label">
-    Apply sort title template
-    <input maxlength="200" bind:value={editor.sortTitleFormat} placeholder="+&#123;title&#125;" />
-    <span class="hint">Use &#123;title&#125; and &#123;group&#125;. Applied when saving.</span>
+    Sort title
+    <input
+      aria-label="Sort title"
+      maxlength="400"
+      bind:value={editor.sortTitleFormat}
+      placeholder="Inherit group or global default"
+    />
+    <span class="hint"
+      >Plain text or a template: &#123;title&#125;, &#123;group&#125;. Blank inherits the group or
+      global default.</span
+    >
   </label>
-
   <label class="form-label form-wide">
     Summary
-    <textarea maxlength="10000" bind:value={editor.summary} placeholder="Collection overview"
-    ></textarea>
-  </label>
-
-  <label class="form-label">
-    Summary template
-    <input
-      maxlength="500"
+    <textarea
+      aria-label="Summary"
+      maxlength="20000"
+      rows="4"
       bind:value={editor.summaryFormat}
-      placeholder="&#123;title&#125; - &#123;summary&#125;"
-    />
-    <span class="hint">
-      Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;, &#123;end_date&#125;,
-      &#123;summary&#125;.
-    </span>
+      placeholder="Inherit group or global default"></textarea>
+    <span class="hint"
+      >Plain text or a template: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
+      &#123;end_date&#125;, &#123;summary&#125; (the original summary).</span
+    >
   </label>
-
   {#if plex}
     <label class="form-label">
       Visibility
@@ -109,17 +93,29 @@
 
     <div class="options-col form-wide">
       <span class="hint">Media server home and promotion</span>
-      <label class="form-row">
-        <input type="checkbox" bind:checked={editor.visibleHome} />
+      <label class="form-label">
         Visible on home
+        <select bind:value={editor.visibleHome}>
+          <option value={null}>Inherit group or global default</option>
+          <option value={true}>true</option>
+          <option value={false}>false</option>
+        </select>
       </label>
-      <label class="form-row">
-        <input type="checkbox" bind:checked={editor.visibleShared} />
+      <label class="form-label">
         Visible to shared users
+        <select bind:value={editor.visibleShared}>
+          <option value={null}>Inherit group or global default</option>
+          <option value={true}>true</option>
+          <option value={false}>false</option>
+        </select>
       </label>
-      <label class="form-row">
-        <input type="checkbox" bind:checked={editor.visibleLibrary} />
+      <label class="form-label">
         Visible in library recommended
+        <select bind:value={editor.visibleLibrary}>
+          <option value={null}>Inherit group or global default</option>
+          <option value={true}>true</option>
+          <option value={false}>false</option>
+        </select>
       </label>
     </div>
   {/if}

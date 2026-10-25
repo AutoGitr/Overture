@@ -15,6 +15,7 @@ export const BUILDER_KINDS: readonly {
   needs: "tmdb" | "mdblist" | "radarr" | "sonarr" | null;
 }[] = [
   { type: "tmdb_collection", label: "TMDB franchise", media: "movie", needs: "tmdb" },
+  { type: "tmdb_list", label: "TMDB lists", media: null, needs: "tmdb" },
   { type: "tmdb_item", label: "TMDB titles", media: null, needs: "tmdb" },
   { type: "tmdb_person", label: "TMDB person", media: null, needs: "tmdb" },
   { type: "mdblist", label: "MDBList", media: null, needs: "mdblist" },
@@ -35,6 +36,8 @@ export function newBuilder(type: BuilderType): CollectionBuilderInput {
   switch (type) {
     case "tmdb_collection":
       return { type, collection_id: 0 };
+    case "tmdb_list":
+      return { type, list_ids: [] };
     case "tmdb_item":
       return { type, tmdb_ids: [] };
     case "tmdb_person":

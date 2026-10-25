@@ -71,10 +71,15 @@ class FakeSyncEngine(SyncEngine):
         self.started_with: dict[str, Any] | None = None
 
     @override
-    def start_background_sync(self, *, library_ids: list[str] | None = None) -> bool:
+    def start_background_sync(
+        self, *, library_ids: list[str] | None = None, include_collections: bool = True
+    ) -> bool:
         if not self.can_start:
             return False
-        self.started_with = {"library_ids": library_ids}
+        self.started_with = {
+            "library_ids": library_ids,
+            "include_collections": include_collections,
+        }
         return True
 
 
@@ -86,7 +91,7 @@ def test_run_sync_returns_started_when_engine_accepts(
     result = engine.run_sync(SyncRunRequest(library_ids=["1"]))
 
     assert result == StatusResponse(status=Status.STARTED)
-    assert engine.started_with == {"library_ids": ["1"]}
+    assert engine.started_with == {"library_ids": ["1"], "include_collections": True}
 
 
 def test_run_sync_returns_already_running_when_engine_declines(
@@ -148,3 +153,11 @@ def test_full_sync_schedules_reject_new_media_downloads() -> None:
         SyncScheduleConfig(
             mode="full", download_themes=IncrementalThemeOrder.THEMERRDB_OVERTUREDB
         )
+
+
+def test_full_sync_can_exclude_collections(
+    *, app_config: Settings, database: Database
+) -> None:
+    engine = FakeSyncEngine(app_config=app_config, database=database)
+    engine.run_sync(SyncRunRequest(library_ids=["1"], include_collections=False))
+    assert engine.started_with == {"library_ids": ["1"], "include_collections": False}

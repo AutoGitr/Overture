@@ -88,6 +88,7 @@ class BuilderType(StrEnum):
 
     TMDB_COLLECTION = "tmdb_collection"
     TMDB_ITEM = "tmdb_item"
+    TMDB_LIST = "tmdb_list"
     TMDB_PERSON = "tmdb_person"
     MDBLIST = "mdblist"
     RADARR_TAG = "radarr_tag"

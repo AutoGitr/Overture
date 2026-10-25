@@ -29,6 +29,7 @@ lazy from ..domain import (
 )
 lazy from ..integrations.mdblist import mdblist_identifier
 lazy from ..utils.collection_formats import (
+    MAX_COLLECTION_SUMMARY_LENGTH,
     SeasonalDate,
     SortTitleFormat,
     SummaryFormat,
@@ -79,6 +80,15 @@ class TmdbItemBuilder(StrictBaseModel):
     type: Literal[BuilderType.TMDB_ITEM] = BuilderType.TMDB_ITEM
     tmdb_ids: Annotated[
         list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
+    ]
+
+
+class TmdbListBuilder(StrictBaseModel):
+    """Resolve public TMDB lists in their saved order."""
+
+    type: Literal[BuilderType.TMDB_LIST] = BuilderType.TMDB_LIST
+    list_ids: Annotated[
+        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=50)
     ]
 
 
@@ -147,6 +157,7 @@ class LibraryFilterBuilder(StrictBaseModel):
 type CollectionBuilder = Annotated[
     TmdbCollectionBuilder
     | TmdbItemBuilder
+    | TmdbListBuilder
     | TmdbPersonBuilder
     | MdblistBuilder
     | RadarrTagBuilder
@@ -434,7 +445,9 @@ class CollectionOptions(StrictBaseModel):
 
     kind: CollectionKind = CollectionKind.REGULAR
     title: Annotated[str, Field(min_length=1, max_length=200)]
-    summary: Annotated[str, Field(max_length=10000)] | None = None
+    summary: Annotated[str, Field(max_length=MAX_COLLECTION_SUMMARY_LENGTH)] | None = (
+        None
+    )
     summary_format: SummaryFormat | None = None
     sort_title: Annotated[str, Field(max_length=200)] | None = None
     sort_title_format: SortTitleFormat | None = None

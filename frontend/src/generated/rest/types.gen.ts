@@ -49,6 +49,10 @@ export type AppSettingsRead = {
     collection_delete_when_inactive: boolean;
     collection_filtering_default: CollectionFiltering;
     /**
+     * Collection Import Unmanaged
+     */
+    collection_import_unmanaged: boolean;
+    /**
      * Collection Minimum Items
      */
     collection_minimum_items: number;
@@ -187,6 +191,10 @@ export type AppSettingsUpdate = {
      */
     collection_delete_when_inactive?: boolean | null;
     collection_filtering_default?: CollectionFiltering | null;
+    /**
+     * Collection Import Unmanaged
+     */
+    collection_import_unmanaged?: boolean | null;
     /**
      * Collection Minimum Items
      */
@@ -1253,6 +1261,8 @@ export type CollectionBuilderInput = ({
 } & TmdbCollectionBuilderInput) | ({
     type: 'tmdb_item';
 } & TmdbItemBuilderInput) | ({
+    type: 'tmdb_list';
+} & TmdbListBuilderInput) | ({
     type: 'tmdb_person';
 } & TmdbPersonBuilderInput) | ({
     type: 'mdblist';
@@ -1269,6 +1279,8 @@ export type CollectionBuilderOutput = ({
 } & TmdbCollectionBuilderOutput) | ({
     type: 'tmdb_item';
 } & TmdbItemBuilderOutput) | ({
+    type: 'tmdb_list';
+} & TmdbListBuilderOutput) | ({
     type: 'tmdb_person';
 } & TmdbPersonBuilderOutput) | ({
     type: 'mdblist';
@@ -3945,6 +3957,10 @@ export type SyncMode = 'sync' | 'append';
  * Validate the sync run request payload.
  */
 export type SyncRunRequest = {
+    /**
+     * Include Collections
+     */
+    include_collections?: boolean;
     library_ids?: LibraryIds | null;
 };
 
@@ -3964,6 +3980,10 @@ export type SyncScheduleConfigInput = {
      * Incremental only: queue themes for new items.
      */
     download_themes?: IncrementalThemeOrder;
+    /**
+     * Include Collections
+     */
+    include_collections?: boolean;
     /**
      * Libraries to sync; empty means every library.
      */
@@ -3987,6 +4007,10 @@ export type SyncScheduleConfigOutput = {
      * Incremental only: queue themes for new items.
      */
     download_themes: IncrementalThemeOrder;
+    /**
+     * Include Collections
+     */
+    include_collections: boolean;
     /**
      * Libraries to sync; empty means every library.
      */
@@ -4366,6 +4390,38 @@ export type TmdbItemResult = {
  * Which TMDB image languages are offered as candidates.
  */
 export type TmdbLanguageFilter = 'en_null' | 'all';
+
+/**
+ * TmdbListBuilder
+ *
+ * Resolve public TMDB lists in their saved order.
+ */
+export type TmdbListBuilderInput = {
+    /**
+     * List Ids
+     */
+    list_ids: Array<number>;
+    /**
+     * Type
+     */
+    type?: 'tmdb_list';
+};
+
+/**
+ * TmdbListBuilder
+ *
+ * Resolve public TMDB lists in their saved order.
+ */
+export type TmdbListBuilderOutput = {
+    /**
+     * List Ids
+     */
+    list_ids: Array<number>;
+    /**
+     * Type
+     */
+    type: 'tmdb_list';
+};
 
 /**
  * TmdbPersonBuilder
@@ -5554,6 +5610,40 @@ export type SaveCollectionGroupPolicyResponses = {
 };
 
 export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
+
+export type ApplyCollectionGroupPolicyData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/collections/group-policy/apply';
+};
+
+export type ApplyCollectionGroupPolicyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ApplyCollectionGroupPolicyError = ApplyCollectionGroupPolicyErrors[keyof ApplyCollectionGroupPolicyErrors];
+
+export type ApplyCollectionGroupPolicyResponses = {
+    /**
+     * Successful Response
+     */
+    200: BulkCollectionOperationResult;
+};
+
+export type ApplyCollectionGroupPolicyResponse = ApplyCollectionGroupPolicyResponses[keyof ApplyCollectionGroupPolicyResponses];
 
 export type SyncCollectionGroupData = {
     body?: never;

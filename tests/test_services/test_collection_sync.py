@@ -1,5 +1,6 @@
 """Mirroring media-server collections, their members and their TMDB match."""
 
+lazy from dataclasses import replace
 lazy from pathlib import Path
 lazy from typing import override
 
@@ -15,6 +16,7 @@ lazy from overture.db.models.media_collection import (
 )
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
+lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     IncrementalThemeOrder,
@@ -516,3 +518,47 @@ async def test_a_new_explicit_identity_queues_incremental_catalog_themes(
         (job,) = (await session.exec(select(DownloadJob))).all()
         assert job.collection_id == (await _rows(database))["saga"].id
         assert job.target_url == "o" * 11
+
+
+async def test_disabling_unmanaged_import_skips_new_collections_and_refreshes_existing(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed_movies(database)
+    await _run(Server(_collection("existing", "m0")), database, app_config)
+    async with database.write_session() as session:
+        settings = await get_app_settings(session)
+        settings.collection_import_unmanaged = False
+        session.add(settings)
+    await _run(
+        Server(_collection("existing", "m0", "m1"), _collection("new", "m2")),
+        database,
+        app_config,
+    )
+    rows = await _rows(database)
+    assert set(rows) == {"existing"}
+    assert rows["existing"].child_count == 2
+
+
+async def test_imported_literal_expressions_follow_server_metadata(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed_movies(database)
+    server = Server(
+        ServerCollection(
+            id="literal",
+            title="Literal",
+            member_ids=("m0",),
+            summary="An {overview}",
+            sort_title="01_{literal}",
+        )
+    )
+    await _run(server, database, app_config)
+    imported = (await _rows(database))["literal"]
+    assert imported.summary_format == "An {{overview}}"
+    assert imported.sort_title_format == "01_{{literal}}"
+    server.listed = [replace(server.listed[0], summary="Changed {overview}")]
+    await _run(server, database, app_config)
+    refreshed = (await _rows(database))["literal"]
+    assert refreshed.summary == "Changed {overview}"
+    assert refreshed.summary_source == "Changed {overview}"
+    assert refreshed.summary_format == "Changed {{overview}}"

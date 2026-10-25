@@ -104,6 +104,8 @@
       : "",
   );
 
+  let includeCollections = $state(readJson<boolean>("syncPopup_includeCollections", true));
+
   let scheduleMode = $state<SyncScheduleMode>("full");
   let scheduleCronExpression = $state("0 * * * *");
   let downloadOvertureDbArt = $state(false);
@@ -160,6 +162,7 @@
 
   function saveSelection() {
     writeJson("syncPopup_selectedLibraries", selectedLibraryIds);
+    writeJson("syncPopup_includeCollections", includeCollections);
   }
 
   function toggleAll(checked: boolean) {
@@ -174,6 +177,7 @@
     const incremental = scheduleMode === "incremental" && publicDatasetEnabled;
     return {
       mode: scheduleMode,
+      include_collections: includeCollections,
       library_ids: selectedLibraryIds,
       download_overturedb_art: incremental && downloadOvertureDbArt,
       download_themes: incremental ? downloadThemes : "off",
@@ -190,6 +194,7 @@
     scheduleController.beginEdit(schedule);
     const saved = schedule.config;
     scheduleMode = saved.mode;
+    includeCollections = saved.include_collections;
     scheduleCronExpression = schedule.cron_expression;
     downloadOvertureDbArt = saved.download_overturedb_art;
     downloadThemes = saved.download_themes;
@@ -202,7 +207,9 @@
     saveSelection();
     feedback.clear();
     try {
-      await runSyncRequest.mutateAsync({ body: { library_ids: selectedLibraryIds } });
+      await runSyncRequest.mutateAsync({
+        body: { library_ids: selectedLibraryIds, include_collections: includeCollections },
+      });
       syncState.markStartAccepted();
     } catch (err) {
       feedback.error(errorMessage(err, "Sync failed"));
@@ -237,6 +244,10 @@
         onretry={() => librariesQuery.refetch()}
         ontoggle={toggleLibrary}
         ontoggleall={toggleAll}
+        collections={settingsState.current.collections_supported && scheduleMode === "full"
+          ? includeCollections
+          : undefined}
+        oncollectionschange={(checked) => (includeCollections = checked)}
       />
     </div>
 

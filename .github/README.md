@@ -402,7 +402,7 @@ services:
 ## Using Overture
 
 1. Run a full **Sync** to import movies, shows and your Plex, Jellyfin or Emby collections.
-   Collections and their members refresh on full syncs.
+   Collections and their members refresh when Collections is selected for a full sync.
 2. Enable [OvertureDB](#overturedb) if you want community picks, then open an
    item to compare artwork and preview themes. Saving a choice downloads it.
 3. Work through items manually, run **Assets** in bulk, or save schedules for
@@ -425,22 +425,22 @@ collections from top to bottom:
 
 1. **Collection Setup** always holds Library, Source, Title and Collection Group.
    The only library is selected automatically; with multiple libraries, choose
-   one. Choose Manual selection, Dynamic sources, or Plex smart filter. Choose
-   an existing group or type a new name; leaving it empty keeps the collection
-   ungrouped. Movie creation also offers **One collection / Discover franchises**
-   inside Setup. Discovery uses the same library and group and derives titles
-   from TMDB franchise names.
+   one. Source controls the rest of the form: **Dynamic sources**, **Plex smart
+   filter**, or, for movies, **Discover TMDB franchises**. Join an existing group,
+   choose **Create new group**, or leave the collection ungrouped. Discovery uses
+   the same library and group and derives titles from TMDB franchise names.
 2. **Content** appears for dynamic sources and Plex smart filters. Combine TMDB
-   franchises, explicit movie/show IDs, person credits, MDBList lists, Radarr or
+   franchises, public TMDB lists, explicit movie/show IDs, person credits, MDBList lists, Radarr or
    Sonarr tags, and nested library filters. Sources merge their results in order
    without duplicates. A library filter adds matching items; it does not narrow
-   other sources. Manual collections show a member picker instead. Append rules
-   also allow initial manual members.
+   other sources. Boolean conditions use **true** and **false**. Creation uses
+   these sources rather than a manual member picker.
 3. **Members** shows a saved collection's current members and any available TMDB
    source roster. Plex smart collections keep member selection and order under
    Plex's control. Regular Plex collections support dragging and Up/Down buttons.
    Manual and Append collections allow additions and removals.
-4. **Display** holds member order, summary, sort title and templates, optional
+4. **Display** holds member order, a single **Sort title** field and a single
+   **Summary** field accepting either text or templates, optional
    movie franchise identity, and supported Plex visibility and promotion options.
 5. **Schedule** holds automatic source sync and recurring seasonal dates. Leave
    both dates blank for year-round activity. A date range can cross New Year.
@@ -460,7 +460,9 @@ full Sync and `TMDB_API_KEY`; subsequent scheduled group runs discover new franc
 
 Dynamic sources use items already in the selected library. Strict Sync mirrors
 source results; Append keeps manual members. Failed source lookups preserve
-existing membership. Choosing Manual removes the saved rule and keeps its members.
+existing membership. Existing unmanaged server collections can still be edited.
+Public TMDB list IDs use `TMDB_API_KEY`; all pages are read, with movies and shows
+filtered for the selected library type.
 Set `MDBLIST_API_KEY` for MDBList and use a list ID, `user/list`, or HTTPS list URL.
 
 For a source-backed Plex smart collection, enter a **Managed Plex label**, add
@@ -474,15 +476,32 @@ collections preserve their Plex filters when saving display changes; enable
 collections apply seasonal dates on save; automatic seasonal updates need an
 enabled source rule.
 
-**Settings > Collection defaults** controls sync, minimum members, deletion,
-automatic assets and Plex display defaults. **Defaults for group** appears below
-the collection form when a group is assigned and has its own save action. A rule's
-explicit overrides take precedence over group defaults, then global defaults;
-blank values inherit. Group changes apply on the next collection save or rule sync.
+**Manage groups**, available in Setup and the collection sidebar, opens a separate
+manager. **Save group defaults** takes effect on the next collection save or rule
+sync. **Save & Apply to group** immediately updates display settings and preserves
+memberships and explicit collection overrides. **Sync Group Now** also refreshes
+sources and runs configured discovery. A sort title such as `01_{title}` places a
+group together while each collection keeps a distinct sort title.
+
+Settings resolve from an explicit collection override, to group defaults, to
+**Settings > Collection defaults**. Blank collection values inherit. Global
+settings control membership sync, minimum members, deletion, automatic assets and
+Plex display defaults. The optional global sort-title fallback only formats
+collections that have no collection or group expression; leave it blank if a
+common format is unnecessary. It does not manage unmanaged collection imports.
+
+**Import new unmanaged collections during Sync** controls whether new collections
+created outside Overture are imported. Turning it off preserves existing imports
+and continues refreshing them; it never deletes server collections. **Membership
+sync** is separate: Strict sync replaces the membership of a managed collection
+with source results, while Append retains members already present.
+
 Sort-title templates accept `{title}` and `{group}`; summary templates also accept
-`{start_date}`, `{end_date}` and `{summary}`. Explicit sort titles take precedence
-over inherited templates. Templates reject attribute access, conversions and
-formatting directives. Below-minimum collections keep their membership unless
+`{start_date}`, `{end_date}` and `{summary}`. The original summary is retained for
+`{summary}`, so repeated saves and syncs do not nest generated text. Double braces
+represent literal braces. Templates reject attribute access, conversions and
+formatting directives. Existing literal text and saved display choices are
+preserved during upgrade. Below-minimum collections keep their membership unless
 deletion is enabled. Deleting collections always keeps the underlying media.
 
 Collections in a group appear only after opening it in the sidebar. Library groups
@@ -507,7 +526,7 @@ resolved members, including library matches and missing franchise titles.
 A movie collection's optional **TMDB collection ID** is its explicit identity.
 Existing IDs are preserved during upgrade; changing members never guesses or
 replaces an ID. A TMDB builder sets the ID from its franchise source. Other
-collections can use manual membership, lists, or library filters with an optional group.
+collections can use lists, explicit TMDB titles, person credits or library filters with an optional group.
 Collections without an ID offer custom artwork paste and skip candidate lookup.
 Art, Themes, Poster and Background controls share status and clear actions;
 clearing artwork forgets its selection and keeps the server image.
@@ -546,8 +565,11 @@ your existing library.
 
 Assets can use OvertureDB and local-image matching for artwork; theme sources
 are OvertureDB, ThemerrDB and YouTube search. Local-image matching finds a source
-for artwork already on disk. Select **Include collection themes** to fill matched
-collections in the selected libraries, or use **Current sidebar items** from the
+for artwork already on disk. The library checklist in **Assets** and full **Sync**
+includes a single **Collections** checkbox below Movies and Shows. In Sync it
+refreshes collection metadata and memberships for the selected libraries. In
+Assets it fills collection themes in those libraries; collection artwork remains
+available on each collection page. Use **Current sidebar items** from the
 collection list to target its filtered rows. Collections use OvertureDB and
 ThemerrDB in the configured order; YouTube search applies to movies and shows.
 New collection IDs imported by a full Sync also use the catalog theme order of

@@ -16,6 +16,7 @@ type Schedule = SyncScheduleResponse;
 
 const config: Config = {
   mode: "full",
+  include_collections: true,
   library_ids: ["1"],
   download_overturedb_art: false,
   download_themes: "off",

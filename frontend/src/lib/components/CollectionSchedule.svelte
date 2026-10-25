@@ -11,7 +11,7 @@
   title="Schedule"
   description={discovery
     ? "Choose how often Overture discovers and updates franchise collections."
-    : editor.sourceType === "manual"
+    : editor.sourceType === "unmanaged"
       ? "Seasonal dates apply when you save this collection. Choose a dynamic source in Setup for automatic seasonal updates."
       : "Choose when Overture syncs sources and when this collection is active. Seasonal dates repeat every year, including across New Year."}
   busy={editor.busy}
@@ -25,7 +25,7 @@
       <input type="checkbox" bind:checked={discovery.policy.sync_enabled} /> Enable scheduled sync
     </label>
   {:else}
-    {#if editor.sourceType !== "manual" && editor.smartFilterEditable}
+    {#if editor.sourceType !== "unmanaged" && editor.smartFilterEditable}
       <label class="form-label">
         Sync interval (hours)
         <input type="number" min="1" max="8760" bind:value={editor.rule.sync_interval_hours} />

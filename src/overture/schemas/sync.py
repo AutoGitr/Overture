@@ -19,12 +19,14 @@ class SyncRunRequest(StrictBaseModel):
     """Validate the sync run request payload."""
 
     library_ids: LibraryIds | None = None
+    include_collections: bool = True
 
 
 class SyncScheduleConfig(StrictBaseModel):
     """What one saved sync schedule runs."""
 
     mode: SyncScheduleMode = "full"
+    include_collections: bool = True
     library_ids: LibraryIds = Field(
         default_factory=list[str],
         description="Libraries to sync; empty means every library.",

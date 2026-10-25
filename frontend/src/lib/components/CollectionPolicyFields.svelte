@@ -2,6 +2,7 @@
   import type {
     CollectionFiltering,
     CollectionMode,
+    CollectionOrder,
     SyncMode,
   } from "../../generated/rest/types.gen";
 
@@ -14,6 +15,8 @@
     delete_when_inactive?: boolean | null;
     collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
+    order_type?: CollectionOrder | null;
+    visible_home?: boolean | null;
     visible_shared?: boolean | null;
     visible_library?: boolean | null;
   };
@@ -81,6 +84,15 @@
 
 {#if section === "all"}
   <label class="form-label">
+    {prefix}Member order
+    <select bind:value={policy.order_type}>
+      <option value={null}>Inherit global default</option>
+      <option value="release">Release date</option>
+      <option value="alpha">Alphabetical</option>
+      {#if plex}<option value="custom">Source / custom order</option>{/if}
+    </select>
+  </label>
+  <label class="form-label">
     {prefix}When inactive (seasonal)
     <select bind:value={policy.delete_when_inactive}>
       <option value={null}>Inherit default</option>
@@ -112,6 +124,14 @@
 
     <div class="options-col">
       <span class="hint">{prefix}Media server promotion</span>
+      <label class="form-label">
+        {prefix}Home
+        <select bind:value={policy.visible_home}>
+          <option value={null}>Inherit default</option>
+          <option value={true}>Promote on home</option>
+          <option value={false}>Hide from home</option>
+        </select>
+      </label>
       <label class="form-label">
         {prefix}Shared users
         <select bind:value={policy.visible_shared}>

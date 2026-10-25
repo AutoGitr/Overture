@@ -38,4 +38,40 @@ describe("selection lists", () => {
     await rerender({ selectedIds: ["movies", "shows"] });
     expect(screen.getByRole("checkbox", { name: "Deselect All" })).toBeChecked();
   });
+  it("keeps collection targeting separate from library IDs and includes it in select-all", async () => {
+    const ontoggle = vi.fn();
+    const ontoggleall = vi.fn();
+    const oncollectionschange = vi.fn();
+    const { rerender } = render(LibraryChecklist, {
+      movieLibraries: [{ id: "movies", title: "Films" }],
+      showLibraries: [{ id: "shows", title: "Series" }],
+      selectedIds: ["movies", "shows"],
+      collections: false,
+      ontoggle,
+      ontoggleall,
+      oncollectionschange,
+    });
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Collections" }));
+    expect(oncollectionschange).toHaveBeenCalledWith(true);
+    expect(ontoggle).not.toHaveBeenCalled();
+    await rerender({ collections: true });
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect All" }));
+    expect(ontoggleall).toHaveBeenCalledWith(false);
+    expect(oncollectionschange).toHaveBeenLastCalledWith(false);
+    expect(ontoggle).not.toHaveBeenCalled();
+  });
+  it("does not change a hidden collection target when selecting libraries", async () => {
+    const oncollectionschange = vi.fn();
+    const ontoggleall = vi.fn();
+    render(LibraryChecklist, {
+      movieLibraries: [{ id: "movies", title: "Films" }],
+      selectedIds: [],
+      ontoggle: vi.fn(),
+      ontoggleall,
+      oncollectionschange,
+    });
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select All" }));
+    expect(ontoggleall).toHaveBeenCalledWith(true);
+    expect(oncollectionschange).not.toHaveBeenCalled();
+  });
 });

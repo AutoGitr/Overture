@@ -33,7 +33,7 @@ import { settingsState } from "../stores/settingsState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
-export type RuleEditorSource = "manual" | "builders" | "smart";
+export type RuleEditorSource = "unmanaged" | "builders" | "smart" | "discovery";
 
 export function selectCollectionSource(
   editor: CollectionEditor | CollectionDraft,
@@ -43,9 +43,21 @@ export function selectCollectionSource(
   if (source === "smart") editor.rule.smart_filter ??= emptySmartFilter();
 }
 
-function ruleOptions(source: RuleEditorSource, rule: CollectionRuleWrite): CollectionRuleWrite {
+function ruleOptions(
+  source: RuleEditorSource,
+  rule: CollectionRuleWrite,
+  form: CollectionEditor | CollectionDraft,
+): CollectionRuleWrite {
   return {
     ...$state.snapshot(rule),
+    sort_title_format: null,
+    summary_format: null,
+    collection_mode: form.collectionMode,
+    collection_filtering: form.collectionFiltering,
+    order_type: form.orderType,
+    visible_home: form.visibleHome,
+    visible_shared: form.visibleShared,
+    visible_library: form.visibleLibrary,
     smart_filter: source === "smart" ? $state.snapshot(rule.smart_filter) : null,
     managed_label: source === "smart" ? rule.managed_label : null,
   };
@@ -56,31 +68,58 @@ export class CollectionEditor {
   // Drafts reset when saved fields change, not when unrelated collection data changes.
   private savedTitle = $derived.by(() => this.current().title);
   title = $derived(this.savedTitle);
-  sortTitleFormat = $state("");
-  private savedSummary = $derived.by(() => this.current().summary);
-  summary = $derived(this.savedSummary);
-  private savedSortTitle = $derived.by(() => this.current().sort_title);
-  sortTitle = $derived(this.savedSortTitle);
+  private savedSortExpression = $derived.by(
+    () =>
+      this.current().sort_title_format ??
+      (this.current().rule
+        ? (this.current().rule?.sort_title_format ?? "")
+        : (this.current().sort_title ?? "")),
+  );
+  sortTitleFormat = $derived(this.savedSortExpression);
   private savedGroup = $derived.by(() => this.current().collection_group);
   collectionGroup = $derived(this.savedGroup ?? "");
-  private savedCollectionMode = $derived.by(() => this.current().collection_mode);
+  private savedCollectionMode = $derived.by(() =>
+    this.current().rule
+      ? (this.current().rule?.collection_mode ?? null)
+      : this.current().collection_mode,
+  );
   collectionMode = $derived(this.savedCollectionMode);
-  private savedVisibleHome = $derived.by(() => this.current().visible_home);
-  visibleHome = $derived(this.savedVisibleHome);
-  private savedSummaryFormat = $derived.by(() => this.current().summary_format);
-  summaryFormat = $derived(this.savedSummaryFormat ?? "");
+  private savedVisibleHome = $derived.by(() =>
+    this.current().rule ? (this.current().rule?.visible_home ?? null) : this.current().visible_home,
+  );
+  visibleHome = $derived<boolean | null>(this.savedVisibleHome);
+  private savedSummaryExpression = $derived.by(
+    () =>
+      this.current().summary_format ??
+      (this.current().rule
+        ? (this.current().rule?.summary_format ?? "")
+        : (this.current().summary ?? "")),
+  );
+  summaryFormat = $derived(this.savedSummaryExpression);
   private savedActiveStart = $derived.by(() => this.current().active_start_mmdd);
   activeStartMmdd = $derived(this.savedActiveStart ?? "");
   private savedActiveEnd = $derived.by(() => this.current().active_end_mmdd);
   activeEndMmdd = $derived(this.savedActiveEnd ?? "");
   private savedDeleteWhenInactive = $derived.by(() => this.current().delete_when_inactive);
   deleteWhenInactive = $derived(this.savedDeleteWhenInactive);
-  private savedCollectionFiltering = $derived.by(() => this.current().collection_filtering);
+  private savedCollectionFiltering = $derived.by(() =>
+    this.current().rule
+      ? (this.current().rule?.collection_filtering ?? null)
+      : this.current().collection_filtering,
+  );
   collectionFiltering = $derived(this.savedCollectionFiltering);
-  private savedVisibleShared = $derived.by(() => this.current().visible_shared);
-  visibleShared = $derived(this.savedVisibleShared);
-  private savedVisibleLibrary = $derived.by(() => this.current().visible_library);
-  visibleLibrary = $derived(this.savedVisibleLibrary);
+  private savedVisibleShared = $derived.by(() =>
+    this.current().rule
+      ? (this.current().rule?.visible_shared ?? null)
+      : this.current().visible_shared,
+  );
+  visibleShared = $derived<boolean | null>(this.savedVisibleShared);
+  private savedVisibleLibrary = $derived.by(() =>
+    this.current().rule
+      ? (this.current().rule?.visible_library ?? null)
+      : this.current().visible_library,
+  );
+  visibleLibrary = $derived<boolean | null>(this.savedVisibleLibrary);
   libraryId = $derived.by(() => this.current().library_id ?? "");
   private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
   tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
@@ -94,8 +133,10 @@ export class CollectionEditor {
   get existingRule() {
     return this.collection.rule;
   }
-  private savedOrder = $derived.by(() => this.current().order_type);
-  orderType = $derived(this.savedOrder);
+  private savedOrder = $derived.by(() =>
+    this.current().rule ? (this.current().rule?.order_type ?? null) : this.current().order_type,
+  );
+  orderType = $derived<CollectionOrder | null>(this.savedOrder);
   manageSmartFilter = $state(false);
   get smartFilterEditable() {
     return (
@@ -105,7 +146,7 @@ export class CollectionEditor {
       this.manageSmartFilter
     );
   }
-  sourceType = $state<RuleEditorSource>("manual");
+  sourceType = $state<RuleEditorSource>("unmanaged");
   rule = $state<CollectionRuleWrite>(defaultCollectionRule());
 
   memberSearch = $state("");
@@ -193,14 +234,11 @@ export class CollectionEditor {
     return this.perform(async () => {
       const source = this.sourceType;
       const keepServerFilter = source === "smart" && !this.smartFilterEditable;
-      const draft = ruleOptions(source, this.rule);
-      const saved = await this.updateRequest.mutateAsync({
-        ...this.target,
-        body: collectionOptions(this),
-      });
-      storeCollectionDetail(saved);
-      this.sortTitleFormat = "";
+      const draft = ruleOptions(source, this.rule, this);
+      const body = collectionOptions(this);
       const rule = keepServerFilter ? null : await this.persistRule(source, draft);
+      const saved = await this.updateRequest.mutateAsync({ ...this.target, body });
+      storeCollectionDetail(saved);
       patchCollectionRule(saved.id, rule);
       this.feedback.success("Collection changes saved.");
     });
@@ -244,7 +282,7 @@ export class CollectionEditor {
 
   private async persistRule(source: RuleEditorSource, draft: CollectionRuleWrite) {
     const target = this.target;
-    if (source === "manual") {
+    if (source === "unmanaged") {
       if (this.collection.rule) {
         await this.removeRuleRequest.mutateAsync(target);
       }
@@ -317,8 +355,8 @@ function defaultCollectionRule(identifier = ""): CollectionRuleWrite {
 function collectionOptions(form: CollectionEditor | CollectionDraft): CollectionOptions {
   return {
     title: form.title.trim(),
-    summary: form.summary,
-    sort_title: form.sortTitle,
+    summary: null,
+    sort_title: null,
     sort_title_format: form.sortTitleFormat || null,
     summary_format: form.summaryFormat || null,
     active_start_mmdd: form.activeStartMmdd || null,
@@ -329,52 +367,47 @@ function collectionOptions(form: CollectionEditor | CollectionDraft): Collection
     collection_group: form.collectionGroup || null,
     tmdb_collection_id: form.tmdbCollectionId ?? null,
     collection_mode: form.collectionMode,
-    order_type: form.orderType,
-    visible_home: form.visibleHome,
-    visible_shared: form.visibleShared,
-    visible_library: form.visibleLibrary,
+    ...(form.orderType === null ? {} : { order_type: form.orderType }),
+    ...(form.visibleHome === null ? {} : { visible_home: form.visibleHome }),
+    ...(form.visibleShared === null ? {} : { visible_shared: form.visibleShared }),
+    ...(form.visibleLibrary === null ? {} : { visible_library: form.visibleLibrary }),
   };
 }
 
 /** An unsaved collection, created only after its Configure form is submitted. */
 export class CollectionDraft {
   readonly creating = true;
-  creationScope = $state<"single" | "multiple">("single");
   readonly discovery = new FranchiseDiscovery(
     () => this.libraryId,
     () => this.collectionGroup,
   );
   get discovering() {
-    return this.mediaType === "movie" && this.creationScope === "multiple";
+    return this.mediaType === "movie" && this.sourceType === "discovery";
   }
   sortTitleFormat = $state("");
   title = $derived.by(() => this.seed()?.title ?? "");
-  summary = $state<string | null>(null);
-  sortTitle = $state<string | null>(null);
   collectionGroup = $state("");
   tmdbCollectionId = $derived.by(() => this.seed()?.tmdb_id);
   collectionMode = $state<CollectionMode | null>(null);
-  visibleHome = $state(false);
+  visibleHome = $state<boolean | null>(null);
   summaryFormat = $state("");
   activeStartMmdd = $state("");
   activeEndMmdd = $state("");
   deleteWhenInactive = $state<boolean | null>(null);
   collectionFiltering = $state<CollectionFiltering | null>(null);
-  visibleShared = $state(false);
-  visibleLibrary = $state(false);
+  visibleShared = $state<boolean | null>(null);
+  visibleLibrary = $state<boolean | null>(null);
   private onlyLibrary = $derived.by(() =>
     this.libraries().length === 1 ? (this.libraries()[0]?.id ?? "") : "",
   );
   libraryId = $derived(this.onlyLibrary);
-  sourceType: RuleEditorSource = $derived.by(() => (this.seed() ? "builders" : "manual"));
+  sourceType = $state<RuleEditorSource>("builders");
   rule = $derived.by(() => {
     const seed = this.seed();
     const draft = $state(defaultCollectionRule(seed ? String(seed.tmdb_id) : ""));
     return draft;
   });
-  orderType = $state<CollectionOrder>("release");
-  readonly memberIds = new SvelteSet<number>();
-  memberSearch = $state("");
+  orderType = $state<CollectionOrder | null>(null);
   readonly request = createMutation(() => createCollectionMutation());
   private readonly feedback = createNotifier();
 
@@ -397,36 +430,14 @@ export class CollectionDraft {
   }
   get canSubmit() {
     if (this.discovering) return !!this.libraryId && !!this.collectionGroup.trim();
-    return (
-      !!this.libraryId &&
-      !!this.title.trim() &&
-      (this.sourceType !== "manual" || this.memberIds.size > 0)
-    );
+    return !!this.libraryId && !!this.title.trim() && this.sourceType !== "unmanaged";
   }
   get manualMembersAllowed() {
-    return (
-      this.sourceType !== "smart" &&
-      (this.sourceType === "manual" ||
-        (this.rule.sync_mode ?? settingsState.current.collection_sync_mode) === "append")
-    );
+    return false;
   }
 
   selectLibrary(id: string) {
     this.libraryId = id;
-    this.memberIds.clear();
-  }
-  availableMembers(items: MediaItemRead[]) {
-    const query = this.memberSearch.trim().toLowerCase();
-    return items.filter(
-      (item) =>
-        item.library_id === this.libraryId &&
-        item.server_item_id &&
-        !item.server_removed_at &&
-        item.title.toLowerCase().includes(query),
-    );
-  }
-  toggle(id: number) {
-    if (!this.memberIds.delete(id)) this.memberIds.add(id);
   }
 
   async save() {
@@ -438,8 +449,9 @@ export class CollectionDraft {
           ...collectionOptions(this),
           media_type: this.mediaType,
           library_id: this.libraryId,
-          member_ids: this.manualMembersAllowed ? [...this.memberIds] : [],
-          rule: this.sourceType === "manual" ? null : ruleOptions(this.sourceType, this.rule),
+          member_ids: [],
+          rule:
+            this.sourceType === "unmanaged" ? null : ruleOptions(this.sourceType, this.rule, this),
         },
       });
       storeCollectionDetail(collection);

@@ -18,6 +18,8 @@
     emptyMessage = "No libraries found on media server.",
     ontoggle,
     ontoggleall,
+    collections,
+    oncollectionschange,
   }: {
     movieLibraries?: ChecklistLibrary[];
     showLibraries?: ChecklistLibrary[];
@@ -28,25 +30,48 @@
     emptyMessage?: string;
     ontoggle: (id: string) => void;
     ontoggleall: (checked: boolean) => void;
+    collections?: boolean;
+    oncollectionschange?: (checked: boolean) => void;
   } = $props();
 
   let selectedSet = $derived<ReadonlySet<string>>(new Set(selectedIds));
   let libraryIds = $derived([...movieLibraries, ...showLibraries].map((library) => library.id));
-  let allSelected = $derived(allValuesSelected(selectedIds, libraryIds));
+  let allSelected = $derived(
+    allValuesSelected(selectedIds, libraryIds) && (collections === undefined || collections),
+  );
   let groups = $derived<ChecklistGroup[]>(
     [
       { key: "movie", label: "Movies", libraries: movieLibraries },
       { key: "show", label: "Shows", libraries: showLibraries },
-    ].map(({ key, label, libraries }) => ({
-      key,
-      label,
-      options: libraries.map((library) => ({
-        id: library.id,
-        label: library.title,
-        count: library.count,
-        checked: selectedSet.has(library.id),
-      })),
-    })),
+    ]
+      .map(({ key, label, libraries }) => ({
+        key,
+        label,
+        options: libraries.map((library) => ({
+          id: library.id,
+          label: library.title,
+          count: library.count,
+          checked: selectedSet.has(library.id),
+        })),
+      }))
+      .concat(
+        collections === undefined
+          ? []
+          : [
+              {
+                key: "collections",
+                label: "Collections",
+                options: [
+                  {
+                    id: "collections",
+                    label: "Collections",
+                    count: undefined,
+                    checked: collections,
+                  },
+                ],
+              },
+            ],
+      ),
   );
 </script>
 
@@ -69,6 +94,10 @@
   {allSelected}
   selectAllDisabled={loading || !!error || libraryIds.length === 0}
   notice={loading || error || libraryIds.length === 0 ? status : undefined}
-  ontoggle={(_group, id) => ontoggle(id)}
-  {ontoggleall}
+  ontoggle={(group, id) =>
+    group === "collections" ? oncollectionschange?.(!collections) : ontoggle(id)}
+  ontoggleall={(checked) => {
+    ontoggleall(checked);
+    if (collections !== undefined) oncollectionschange?.(checked);
+  }}
 />

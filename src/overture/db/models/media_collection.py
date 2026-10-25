@@ -35,6 +35,7 @@ class MediaCollectionBase(SQLModel):
     )
     title: str = Field(default="", nullable=False)
     summary: str | None = None
+    summary_source: str | None = None
     sort_title: str | None = None
     sort_title_format: str | None = None
     summary_format: str | None = None

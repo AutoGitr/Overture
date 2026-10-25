@@ -159,7 +159,12 @@ class SyncEngine:
         library_ids = config.library_ids or None
         if config.mode == "full":
             await self._library_gate.run(
-                "sync", self.job, self._full_sync(library_ids), report=report
+                "sync",
+                self.job,
+                self._full_sync(
+                    library_ids, include_collections=config.include_collections
+                ),
+                report=report,
             )
             return None
 
@@ -260,21 +265,27 @@ class SyncEngine:
         self,
         *,
         library_ids: list[str] | None = None,
+        include_collections: bool = True,
     ) -> bool:
         """Start a full sync now, returning False if the slot is busy.
 
         Raises:
             PublicServiceError: While Assets, Renamer or Audit is running.
         """
-        return self._library_gate.start("sync", self.job, self._full_sync(library_ids))
+        return self._library_gate.start(
+            "sync",
+            self.job,
+            self._full_sync(library_ids, include_collections=include_collections),
+        )
 
     def _full_sync(
-        self, library_ids: list[str] | None
+        self, library_ids: list[str] | None, *, include_collections: bool = True
     ) -> Callable[[JobContext], Coroutine[Any, Any, None]]:
         """Return the job body for one full sync of *library_ids*."""
         return lambda context: _run_sync(
             context,
             library_ids=library_ids,
+            include_collections=include_collections,
             provider_registry=self.provider_registry,
             reconciler=self.reconciler,
             config_dir=self._config_dir,
@@ -285,5 +296,8 @@ class SyncEngine:
     def run_sync(self, body: SyncRunRequest) -> StatusResponse:
         """Trigger a sync run."""
         return StatusResponse.start(
-            self.start_background_sync(library_ids=body.library_ids or None)
+            self.start_background_sync(
+                library_ids=body.library_ids or None,
+                include_collections=body.include_collections,
+            )
         )

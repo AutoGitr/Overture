@@ -256,9 +256,18 @@
       </div>
       <div class="option-card">
         <span class="form-label">Collection defaults</span>
+        <label class="form-row"
+          ><input type="checkbox" bind:checked={draft.collection_import_unmanaged} />Import new
+          unmanaged collections during Sync</label
+        >
+        <p class="hint">
+          Turn off to leave new server collections outside Overture. Existing imports are kept.
+          Membership sync controls only collections with source rules; it does not delete unmanaged
+          collections.
+        </p>
         <div class="options-col">
           <label class="form-label"
-            >Sync strategy<select bind:value={draft.collection_sync_mode}
+            >Membership sync<select bind:value={draft.collection_sync_mode}
               ><option value="sync">Strict sync</option><option value="append">Append</option
               ></select
             ></label
@@ -285,14 +294,15 @@
             collections below minimum</label
           >
           <label class="form-label"
-            >Default collection sort title template
+            >Fallback sort title for managed collections
             <input
               maxlength="200"
               bind:value={draft.collection_sort_title_format}
               placeholder="+&#123;title&#125;"
             />
             <span class="hint"
-              >Use &#123;title&#125; and &#123;group&#125;. Blank keeps the collection's sort title.</span
+              >Used when a managed collection and its group have no override. Use &#123;title&#125;
+              and &#123;group&#125;; blank preserves the server sort title.</span
             >
           </label>
           <label class="form-row"
