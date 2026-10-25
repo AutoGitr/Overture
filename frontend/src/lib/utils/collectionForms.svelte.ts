@@ -13,6 +13,8 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
+  CollectionFiltering,
+  CollectionKind,
   CollectionOrder,
   CollectionPreset,
   CollectionRuleWrite,
@@ -30,6 +32,8 @@ import { settingsState } from "../stores/settingsState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
+export type RuleEditorSource = RuleSourceType | "manual" | "smart" | "composite";
+
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
   // Drafts reset when saved fields change, not when unrelated collection data changes.
@@ -46,6 +50,22 @@ export class CollectionEditor {
   collectionMode = $derived(this.savedCollectionMode);
   private savedVisibleHome = $derived.by(() => this.current().visible_home);
   visibleHome = $derived(this.savedVisibleHome);
+  private savedKind = $derived.by(() => this.current().kind);
+  kind = $derived(this.savedKind);
+  private savedSummaryFormat = $derived.by(() => this.current().summary_format);
+  summaryFormat = $derived(this.savedSummaryFormat ?? "");
+  private savedActiveStart = $derived.by(() => this.current().active_start_mmdd);
+  activeStartMmdd = $derived(this.savedActiveStart ?? "");
+  private savedActiveEnd = $derived.by(() => this.current().active_end_mmdd);
+  activeEndMmdd = $derived(this.savedActiveEnd ?? "");
+  private savedDeleteWhenInactive = $derived.by(() => this.current().delete_when_inactive);
+  deleteWhenInactive = $derived(this.savedDeleteWhenInactive);
+  private savedCollectionFiltering = $derived.by(() => this.current().collection_filtering);
+  collectionFiltering = $derived(this.savedCollectionFiltering);
+  private savedVisibleShared = $derived.by(() => this.current().visible_shared);
+  visibleShared = $derived(this.savedVisibleShared);
+  private savedVisibleLibrary = $derived.by(() => this.current().visible_library);
+  visibleLibrary = $derived(this.savedVisibleLibrary);
   libraryId = $derived.by(() => this.current().library_id ?? "");
   private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
   tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
@@ -64,14 +84,27 @@ export class CollectionEditor {
   }
   private savedRule = $derived.by(() => this.current().rule);
 
-  sourceType: RuleSourceType | "manual" = $derived(this.savedRule?.source_type ?? "manual");
+  private savedSourceType = $derived.by<RuleEditorSource>(() => {
+    const rule = this.savedRule;
+    if (!rule) return "manual";
+    if (rule.smart_filter) return "smart";
+    if (rule.builders && rule.builders.length > 1) return "composite";
+    return rule.source_type;
+  });
+  sourceType: RuleEditorSource = $derived(this.savedSourceType);
 
   rule: CollectionRuleWrite = $derived.by(() => {
     const rule = this.savedRule;
     const { last_error: _error, last_synced_at: _synced, ...saved } = rule ?? {};
     const draft = $state<CollectionRuleWrite>(
       rule
-        ? { ...saved, source_type: rule.source_type, filters: { ...rule.filters } }
+        ? {
+            ...saved,
+            source_type: rule.source_type,
+            builders: rule.builders ? JSON.parse(JSON.stringify(rule.builders)) : [],
+            smart_filter: rule.smart_filter ? JSON.parse(JSON.stringify(rule.smart_filter)) : null,
+            filters: { ...rule.filters },
+          }
         : defaultCollectionRule(),
     );
     return draft;
@@ -192,7 +225,7 @@ export class CollectionEditor {
     return this.setMembers(ids, "custom");
   }
 
-  private async persistRule(source: RuleSourceType | "manual", draft: CollectionRuleWrite) {
+  private async persistRule(source: RuleEditorSource, draft: CollectionRuleWrite) {
     const target = this.target;
     if (source === "manual") {
       if (this.collection.rule) {
@@ -200,9 +233,11 @@ export class CollectionEditor {
       }
       return null;
     }
+    const legacySource: RuleSourceType =
+      source === "smart" || source === "composite" ? "filter" : source;
     const savedRule = await this.ruleRequest.mutateAsync({
       ...target,
-      body: { ...draft, source_type: source },
+      body: { ...draft, source_type: legacySource },
     });
     return savedRule;
   }
@@ -248,6 +283,10 @@ export class CollectionGenerator {
   auto_match_art = $state<boolean | null>(null);
   auto_match_theme = $state<boolean | null>(null);
   collection_mode = $state<CollectionMode | null>(null);
+  collection_filtering = $state<CollectionFiltering | null>(null);
+  delete_when_inactive = $state<boolean | null>(null);
+  visible_shared = $state<boolean | null>(null);
+  visible_library = $state<boolean | null>(null);
   sort_title_format = $state("");
   preset: CollectionPreset = $state("decades");
   readonly titles = new SvelteSet<string>();
@@ -273,6 +312,10 @@ export class CollectionGenerator {
       auto_match_art: this.auto_match_art,
       auto_match_theme: this.auto_match_theme,
       collection_mode: this.collection_mode,
+      collection_filtering: this.collection_filtering,
+      delete_when_inactive: this.delete_when_inactive,
+      visible_shared: this.visible_shared,
+      visible_library: this.visible_library,
       sort_title_format: this.sort_title_format || null,
       titles: Array.from(this.titles),
     };
@@ -316,12 +359,26 @@ function defaultCollectionRule(identifier = ""): CollectionRuleWrite {
   return {
     source_type: "mdblist",
     source_identifier: identifier,
+    builders: identifier ? [{ type: "tmdb_collection", collection_id: Number(identifier) }] : [],
+    smart_filter: null,
+    managed_label: null,
     filters: {},
     sync_mode: null,
     minimum_items: null,
     delete_below_minimum: null,
     auto_match_art: null,
     auto_match_theme: null,
+    collection_mode: null,
+    collection_filtering: null,
+    visible_home: null,
+    visible_shared: null,
+    visible_library: null,
+    order_type: null,
+    sort_title_format: null,
+    summary_format: null,
+    active_start_mmdd: null,
+    active_end_mmdd: null,
+    delete_when_inactive: null,
     enabled: true,
     sync_interval_hours: 24,
   };
@@ -333,11 +390,19 @@ function collectionOptions(form: CollectionEditor | CollectionDraft): Collection
     summary: form.summary,
     sort_title: form.sortTitle,
     sort_title_format: form.sortTitleFormat || null,
+    summary_format: form.summaryFormat || null,
+    active_start_mmdd: form.activeStartMmdd || null,
+    active_end_mmdd: form.activeEndMmdd || null,
+    delete_when_inactive: form.deleteWhenInactive,
+    collection_filtering: form.collectionFiltering,
+    kind: form.sourceType === "smart" ? "smart" : form.kind,
     collection_group: form.collectionGroup || null,
     tmdb_collection_id: form.tmdbCollectionId ?? null,
     collection_mode: form.collectionMode,
     order_type: form.orderType,
     visible_home: form.visibleHome,
+    visible_shared: form.visibleShared,
+    visible_library: form.visibleLibrary,
   };
 }
 
@@ -352,11 +417,19 @@ export class CollectionDraft {
   tmdbCollectionId = $derived.by(() => this.seed()?.tmdb_id);
   collectionMode = $state<CollectionMode | null>(null);
   visibleHome = $state(false);
+  kind = $state<CollectionKind>("regular");
+  summaryFormat = $state("");
+  activeStartMmdd = $state("");
+  activeEndMmdd = $state("");
+  deleteWhenInactive = $state<boolean | null>(null);
+  collectionFiltering = $state<CollectionFiltering | null>(null);
+  visibleShared = $state(false);
+  visibleLibrary = $state(false);
   private onlyLibrary = $derived.by(() =>
     this.libraries().length === 1 ? (this.libraries()[0]?.id ?? "") : "",
   );
   libraryId = $derived(this.onlyLibrary);
-  sourceType: RuleSourceType | "manual" = $derived.by(() => (this.seed() ? "tmdb" : "manual"));
+  sourceType: RuleEditorSource = $derived.by(() => (this.seed() ? "tmdb" : "manual"));
   rule = $derived.by(() => {
     const seed = this.seed();
     const draft = $state(defaultCollectionRule(seed ? String(seed.tmdb_id) : ""));
@@ -426,7 +499,13 @@ export class CollectionDraft {
           rule:
             this.sourceType === "manual"
               ? null
-              : { ...$state.snapshot(this.rule), source_type: this.sourceType },
+              : {
+                  ...$state.snapshot(this.rule),
+                  source_type:
+                    this.sourceType === "smart" || this.sourceType === "composite"
+                      ? "filter"
+                      : this.sourceType,
+                },
         },
       });
       storeCollectionDetail(collection);

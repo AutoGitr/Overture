@@ -10,7 +10,7 @@
   import FilterGroupEditor from "./FilterGroupEditor.svelte";
 
   let {
-    group,
+    group = $bindable(),
     label,
     depth = 0,
     onremove = null,
@@ -201,4 +201,3 @@
     }
   }
 </style>
-

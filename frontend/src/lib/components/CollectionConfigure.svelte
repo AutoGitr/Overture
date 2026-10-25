@@ -13,7 +13,7 @@
 
   let {
     collection,
-    editor,
+    editor = $bindable(),
     libraryItems,
     groups,
     formId,
@@ -39,33 +39,34 @@
   }}
 >
   <section id={`${formId}-general`} aria-label="General" tabindex="-1">
-    <CollectionSettings {editor} {groups} {libraries} />
+    <CollectionSettings bind:editor {groups} {libraries} />
   </section>
   <section id={`${formId}-builder`} aria-label="Builder" tabindex="-1">
-    <CollectionRulePanel {editor} />
+    <CollectionRulePanel bind:editor />
   </section>
   {#if editor instanceof CollectionDraft}
+    {@const draft = editor}
     <section id={`${formId}-members`} aria-label="Initial members" tabindex="-1">
       <DetailSection
         title="Members"
         description="Choose library items for a manual collection, or let the builder resolve its source when saving."
       >
-        <span class="badge">{editor.memberIds.size} selected</span>
-        {#if editor.manualMembersAllowed}
+        <span class="badge">{draft.memberIds.size} selected</span>
+        {#if draft.manualMembersAllowed}
           <label class="form-label"
             >Search members<input
               type="search"
-              disabled={!editor.libraryId}
-              bind:value={editor.memberSearch}
+              disabled={!draft.libraryId}
+              bind:value={draft.memberSearch}
             /></label
           >
-          {#each editor.availableMembers(libraryItems) as item (item.id)}
+          {#each draft.availableMembers(libraryItems) as item (item.id)}
             <label class="form-row"
               ><input
                 type="checkbox"
-                checked={editor.memberIds.has(item.id)}
-                disabled={editor.busy}
-                onchange={() => editor.toggle(item.id)}
+                checked={draft.memberIds.has(item.id)}
+                disabled={draft.busy}
+                onchange={() => draft.toggle(item.id)}
               />{item.title}</label
             >
           {/each}

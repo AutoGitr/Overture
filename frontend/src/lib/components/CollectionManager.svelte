@@ -96,7 +96,17 @@
 >
   {#snippet emptyIcon()}<Layers size={64} />{/snippet}
   {#snippet posterIcon()}<Layers size={48} />{/snippet}
-  {#snippet meta()}{#if collection}<span>{collection.child_count} items</span>{/if}{/snippet}
+  {#snippet meta()}
+    {#if collection}
+      <span>{collection.child_count} items</span>
+      {#if collection.kind === "smart"}
+        <span class="badge">Smart</span>
+      {/if}
+      {#if collection.withheld}
+        <span class="badge" title="Outside active seasonal window">Inactive</span>
+      {/if}
+    {/if}
+  {/snippet}
   {#snippet badges()}
     {#if collection && actions}
       <ExternalLinkBadges

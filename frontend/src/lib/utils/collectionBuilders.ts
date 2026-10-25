@@ -62,4 +62,3 @@ export function splitIds(text: string): number[] {
     .map(Number)
     .filter((id) => Number.isInteger(id) && id > 0);
 }
-

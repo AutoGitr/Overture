@@ -54,6 +54,9 @@ class SettingsState {
     const {
       media_server: _server,
       tmdb_configured: _tmdb,
+      mdblist_configured: _mdblist,
+      radarr_configured: _radarr,
+      sonarr_configured: _sonarr,
       collections_supported: _collections,
       collection_themes_unavailable: _collectionThemes,
       art_download_workers: _artWorkers,

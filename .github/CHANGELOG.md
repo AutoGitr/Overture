@@ -9,6 +9,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Composable multi-source collection builders supporting TMDB franchises, item IDs, person credits (with actor, director, writer, producer, and biography roles), MDBList, Radarr and Sonarr tags, recursive filter trees, Plex smart collections with boolean condition groups and managed labels, seasonal calendar windows, dynamic TMDB franchise group discovery, and summary format templates.
+
 - Collection group defaults for sync, minimum membership, automatic assets, Plex visibility and sort-title templates, with individual rule overrides. Filtered bulk actions and empty-collection maintenance keep media files intact.
 - Collection Configure shows TMDB source rosters, including missing franchise movies.
 
