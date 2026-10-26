@@ -3,6 +3,7 @@
 lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass, field
 lazy from typing import ClassVar, override
+lazy from unittest.mock import AsyncMock
 
 lazy import pytest
 
@@ -44,9 +45,13 @@ lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtR
 lazy from overture.schemas.collections import (
     BulkCollectionOperation,
     CollectionCreate,
+    CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
+    CollectionPolicyBase,
+    CollectionPresetCreate,
+    CollectionPresetPreview,
     CollectionRuleWrite,
     DynamicTmdbGroupConfig,
     FilterCondition,
@@ -407,6 +412,202 @@ async def create(manager: Manager, ids: list[int] | None = None) -> int:
         )
     )
     return result.id
+
+
+@pytest.mark.parametrize("status", [404, 403, 500])
+async def test_delete_handles_only_an_already_absent_server_collection(
+    manager: Manager, database: Database, monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    identity = await create(manager)
+    request = AsyncMock(
+        side_effect=MediaServerError("Unavailable", upstream_status_code=status)
+    )
+    monkeypatch.setattr(manager.provider, "delete_collection", request)
+    if status == 404:
+        await manager.service.delete(identity, MediaType.MOVIE)
+    else:
+        with pytest.raises(MediaServerError):
+            await manager.service.delete(identity, MediaType.MOVIE)
+    async with database.read_session() as session:
+        assert (await CollectionRepository(session).get(identity) is None) is (
+            status == 404
+        )
+        assert (
+            len(
+                await CollectionRepository(session).library_items(
+                    MediaType.MOVIE, "movies"
+                )
+            )
+            == 3
+        )
+
+
+@pytest.mark.parametrize("target", ["keep", "overture", "server", "both"])
+async def test_group_deletion_targets(
+    manager: Manager, database: Database, target: str
+) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    await manager.service.save_group_policy(
+        MediaType.MOVIE, "Weekend", CollectionGroupPolicy(minimum_items=1)
+    )
+    await manager.service.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(builders=[TmdbItemBuilder(tmdb_ids=[11, 12])]),
+    )
+    result = await manager.service.delete_group(
+        MediaType.MOVIE,
+        "Weekend",
+        CollectionGroupDelete.model_validate({"collections": target}),
+    )
+    assert not result.errors
+    assert manager.provider.deleted == (["1"] if target in {"server", "both"} else [])
+    assert await manager.service.groups(MediaType.MOVIE) == []
+    async with database.read_session() as session:
+        repo = CollectionRepository(session)
+        row = await repo.get(identity)
+        if target in {"both", "overture"}:
+            assert row is None
+            assert await repo.rule(identity) is None
+        else:
+            assert row is not None
+            assert row.collection_group is None
+            if target == "server":
+                assert row.server_item_id is None
+                rule = await repo.rule(identity)
+                assert rule is not None
+                assert not rule.enabled
+
+
+async def test_group_delete_failure_preserves_group_for_retry(
+    manager: Manager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    monkeypatch.setattr(
+        manager.provider,
+        "delete_collection",
+        AsyncMock(side_effect=MediaServerError("Offline")),
+    )
+    result = await manager.service.delete_group(
+        MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="both")
+    )
+    assert identity in result.errors
+    assert await manager.service.groups(MediaType.MOVIE) == ["Weekend"]
+
+
+async def test_group_rename_preserves_defaults_and_rejects_collisions(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Weekend",
+        CollectionGroupPolicy(sort_title_format="01_{title}"),
+    )
+    await manager.service.rename_group(MediaType.MOVIE, "Weekend", "Evenings")
+    assert (
+        await manager.service.get_collection(identity, MediaType.MOVIE)
+    ).collection_group == "Evenings"
+    assert (
+        await manager.service.group_policy(MediaType.MOVIE, "Evenings")
+    ).sort_title_format == "01_{title}"
+    await manager.service.save_group_policy(
+        MediaType.MOVIE, "Other", CollectionGroupPolicy()
+    )
+    with pytest.raises(PublicServiceError, match="already exists"):
+        await manager.service.rename_group(MediaType.MOVIE, "Evenings", "Other")
+    with pytest.raises(PublicServiceError, match="not found"):
+        await manager.service.rename_group(MediaType.SHOW, "Evenings", "Shows")
+
+
+async def test_presets_preview_and_create_regular_rules(manager: Manager) -> None:
+    preview = await manager.service.preview_preset(
+        CollectionPresetPreview(
+            preset="decades", library_id="movies", media_type=MediaType.MOVIE
+        )
+    )
+    assert [(entry.title, entry.member_count) for entry in preview] == [
+        ("1990s", 1),
+        ("2000s", 2),
+    ]
+    years = await manager.service.preview_preset(
+        CollectionPresetPreview(
+            preset="years", library_id="movies", media_type=MediaType.MOVIE
+        )
+    )
+    assert [(entry.title, entry.member_count) for entry in years] == [
+        ("1995", 1),
+        ("2005", 1),
+        ("2006", 1),
+    ]
+    request = CollectionPresetCreate(
+        preset="decades",
+        library_id="movies",
+        media_type=MediaType.MOVIE,
+        keys=["1990", "2000"],
+        collection_group="Decades",
+        policy=CollectionPolicyBase(
+            minimum_items=1,
+            sort_title_format="01_{title}",
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+        ),
+    )
+    result = await manager.service.create_preset(request)
+    assert not result.errors
+    assert len(result.collection_ids) == 2
+    detail = await manager.service.get_collection(
+        result.collection_ids[0], MediaType.MOVIE
+    )
+    assert detail.title == "1990s"
+    assert detail.sort_title == "01_1990s"
+    assert detail.active_start_mmdd == "01-01"
+    assert detail.active_end_mmdd == "12-31"
+    assert detail.rule is not None
+    assert detail.rule.builders == [preview[0].builder]
+    assert detail.rule.active_start_mmdd is None
+    assert detail.rule.active_end_mmdd is None
+    repeated = await manager.service.create_preset(request)
+    assert not repeated.collection_ids
+    assert set(repeated.errors) == {"1990", "2000"}
+    genres = await manager.service.preview_preset(
+        CollectionPresetPreview(
+            preset="genres", library_id="shows", media_type=MediaType.SHOW
+        )
+    )
+    assert [(entry.title, entry.member_count) for entry in genres] == [("Animation", 1)]
+    with pytest.raises(PublicServiceError, match="no longer available"):
+        await manager.service.create_preset(
+            request.model_copy(update={"keys": ["1800"]})
+        )
+
+
+async def test_inherited_placeholders_resolve_group_before_global(
+    manager: Manager,
+) -> None:
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Weekend",
+        CollectionGroupPolicy(sort_title_format="", minimum_items=4),
+    )
+    defaults = await manager.service.inherited_policy(MediaType.MOVIE, "Weekend")
+    assert defaults.sort_title_format == ""
+    assert defaults.minimum_items == 4
 
 
 def make_jellyfin_service(

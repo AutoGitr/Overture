@@ -48,6 +48,7 @@
   {#if editor}
     {@const currentMembers = editor.collection.members}
     <DetailSection
+      collapsible
       title="Resolved Members"
       description={smart
         ? "Plex determines membership and ordering from the saved smart filter."

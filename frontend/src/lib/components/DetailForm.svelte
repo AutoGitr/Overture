@@ -7,15 +7,19 @@
     description,
     busy,
     children,
+    collapsible = false,
+    expanded = false,
   }: {
     title: string;
     description: string;
     busy: boolean;
     children: Snippet;
+    collapsible?: boolean;
+    expanded?: boolean;
   } = $props();
 </script>
 
-<DetailSection {title} {description} --section-padding="0">
+<DetailSection {title} {description} {collapsible} {expanded} --section-padding="0">
   <fieldset disabled={busy}>
     <legend class="sr-only">{title}</legend>
     <div class="fields">{@render children()}</div>

@@ -423,10 +423,11 @@ Plex, Jellyfin and Emby collections appear under **Collections** in the library
 sidebar. **+ Create collection** opens a compact Configure page directly at Setup. Create and edit
 collections from top to bottom:
 
-1. **Collection Setup** always holds Library, Source, Title and Collection Group.
+1. **Collection Setup** holds Library, Type, Title and Collection Group.
    The only library is selected automatically; with multiple libraries, choose
-   one. Source controls the rest of the form: **Dynamic sources**, **Plex smart
-   filter**, or, for movies, **Discover TMDB franchises**. Join an existing group,
+   one. Choose **Custom** for **Dynamic sources** or **Plex smart filter**, or
+   **Preset** for **Decades**, **Years**, **Genres**, and movie **TMDB franchises**.
+   Join an existing group,
    choose **Create new group**, or leave the collection ungrouped. Discovery uses
    the same library and group and derives titles from TMDB franchise names.
 2. **Content** appears for dynamic sources and Plex smart filters. Combine TMDB
@@ -452,6 +453,18 @@ The Configure shortcuts follow the sections currently available. **Save Changes*
 saves a collection's metadata and source rules; **Sync Now** runs its saved rule.
 The form also ends with **Create** or **Save**, so you can finish without returning
 to the header.
+Every collection section can be collapsed. Only **Collection Setup** and
+**Content** start expanded; a section shortcut expands its destination.
+Choose **Default** to inherit a setting. Empty text fields show the inherited
+value as a placeholder and accept an explicit override when you type.
+
+For decades, years and genres, **Preview collections** lists the values found
+in the selected library with member counts. Select the collections you want,
+adjust shared display, sync and schedule options, then **Create selected collections**.
+Each becomes a regular editable collection with a library filter, so future
+syncs update its members. Preview again after changing libraries or presets.
+Creation reports failures per entry and keeps successful creations; matching
+titles are left intact, and retries submit only failed entries.
 For franchise discovery, **Discover & Create Collections** saves the group's
 configuration and runs discovery. It requires a library and group, keeps unrelated
 group defaults, and uses the selected minimum membership, title cleanup, exclusions,
@@ -482,6 +495,14 @@ sync. **Save & Apply to group** immediately updates display settings and preserv
 memberships and explicit collection overrides. **Sync Group Now** also refreshes
 sources and runs configured discovery. A sort title such as `01_{title}` places a
 group together while each collection keeps a distinct sort title.
+Expand **Manage group** to rename a group or delete it. Deleting only the group
+keeps its collections ungrouped. You can instead remove its collections from
+Overture, the media server, or both. Server-only removal keeps Overture's
+configuration and disables scheduled rule sync to prevent immediate recreation.
+Collections kept only in Overture show a **Not on server** badge.
+Overture-only removal leaves server collections available for reimport on a
+future library sync. Media files are always kept. A collection can also be
+deleted from Overture after it has already been removed from the media server.
 
 Settings resolve from an explicit collection override, to group defaults, to
 **Settings > Collection defaults**. Blank collection values inherit. Global

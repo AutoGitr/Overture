@@ -104,7 +104,9 @@
         <span class="badge">Smart</span>
       {/if}
       {#if collection.withheld}
-        <span class="badge" title="Outside active seasonal window">Inactive</span>
+        <span class="badge" title="Collection kept in Overture and absent from the media server"
+          >Not on server</span
+        >
       {/if}
     {/if}
   {/snippet}
@@ -225,9 +227,11 @@
           ? editor.busy
             ? "Discovering franchises..."
             : "Discover & Create Collections"
-          : editor.creating
-            ? "Create collection"
-            : "Save Changes"}</button
+          : editor instanceof CollectionDraft && editor.generating
+            ? "Create selected collections"
+            : editor.creating
+              ? "Create collection"
+              : "Save Changes"}</button
       >
       {#if collection && editor instanceof CollectionEditor}<button
           class="tab-item"

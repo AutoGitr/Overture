@@ -3325,6 +3325,25 @@
         "title": "CollectionFiltering",
         "type": "string"
       },
+      "CollectionGroupDelete": {
+        "additionalProperties": false,
+        "description": "Choose whether to keep collections or remove either copy.",
+        "properties": {
+          "collections": {
+            "default": "keep",
+            "enum": [
+              "keep",
+              "overture",
+              "server",
+              "both"
+            ],
+            "title": "Collections",
+            "type": "string"
+          }
+        },
+        "title": "CollectionGroupDelete",
+        "type": "object"
+      },
       "CollectionGroupPolicy-Input": {
         "additionalProperties": false,
         "description": "Nullable group defaults; null inherits the application setting.",
@@ -3770,6 +3789,23 @@
         "title": "CollectionGroupPolicy",
         "type": "object"
       },
+      "CollectionGroupRename": {
+        "additionalProperties": false,
+        "description": "A replacement group name, scoped by the request.",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CollectionGroupRename",
+        "type": "object"
+      },
       "CollectionKind": {
         "description": "How a collection's membership is maintained on the media server.",
         "enum": [
@@ -3982,6 +4018,530 @@
         ],
         "title": "CollectionOrder",
         "type": "string"
+      },
+      "CollectionPolicyBase-Input": {
+        "additionalProperties": false,
+        "description": "Shared policy and media server display configuration.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "title": "CollectionPolicyBase",
+        "type": "object"
+      },
+      "CollectionPolicyBase-Output": {
+        "additionalProperties": false,
+        "description": "Shared policy and media server display configuration.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "required": [
+          "sync_mode",
+          "minimum_items",
+          "delete_below_minimum",
+          "auto_match_art",
+          "auto_match_theme",
+          "delete_when_inactive",
+          "collection_mode",
+          "order_type",
+          "collection_filtering",
+          "visible_home",
+          "visible_shared",
+          "visible_library",
+          "sort_title_format",
+          "summary_format",
+          "active_start_mmdd",
+          "active_end_mmdd"
+        ],
+        "title": "CollectionPolicyBase",
+        "type": "object"
+      },
+      "CollectionPreset": {
+        "enum": [
+          "decades",
+          "years",
+          "genres"
+        ],
+        "type": "string"
+      },
+      "CollectionPresetCreate": {
+        "additionalProperties": false,
+        "description": "Create only the selected preview entries with shared initial defaults.",
+        "properties": {
+          "collection_group": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Group"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          },
+          "library_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/CollectionPolicyBase-Input"
+          },
+          "preset": {
+            "$ref": "#/components/schemas/CollectionPreset"
+          },
+          "sync_interval_hours": {
+            "default": 24,
+            "maximum": 8760.0,
+            "minimum": 1.0,
+            "title": "Sync Interval Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "preset",
+          "media_type",
+          "library_id",
+          "keys"
+        ],
+        "title": "CollectionPresetCreate",
+        "type": "object"
+      },
+      "CollectionPresetEntry": {
+        "additionalProperties": false,
+        "description": "One generated collection, editable through its regular rule afterwards.",
+        "properties": {
+          "builder": {
+            "$ref": "#/components/schemas/LibraryFilterBuilder-Output"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "member_count": {
+            "title": "Member Count",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "member_count",
+          "builder"
+        ],
+        "title": "CollectionPresetEntry",
+        "type": "object"
+      },
+      "CollectionPresetPreview": {
+        "additionalProperties": false,
+        "description": "Preview a preset using the selected library's metadata.",
+        "properties": {
+          "library_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "preset": {
+            "$ref": "#/components/schemas/CollectionPreset"
+          }
+        },
+        "required": [
+          "preset",
+          "media_type",
+          "library_id"
+        ],
+        "title": "CollectionPresetPreview",
+        "type": "object"
+      },
+      "CollectionPresetResult": {
+        "additionalProperties": false,
+        "description": "Independently committed preset creations and sanitised errors.",
+        "properties": {
+          "collection_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Collection Ids",
+            "type": "array"
+          },
+          "errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection_ids",
+          "errors"
+        ],
+        "title": "CollectionPresetResult",
+        "type": "object"
       },
       "CollectionRead": {
         "additionalProperties": false,
@@ -11451,6 +12011,85 @@
         ]
       }
     },
+    "/api/collections/defaults": {
+      "get": {
+        "description": "Resolve inherited values for collection form placeholders.",
+        "operationId": "get_collection_defaults",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPolicyBase-Output"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection Defaults",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/group-policy": {
       "get": {
         "description": "Read a group's nullable overrides for the active media server.",
@@ -11752,6 +12391,87 @@
       }
     },
     "/api/collections/groups": {
+      "delete": {
+        "description": "Delete a group, optionally deleting its collections in either application.",
+        "operationId": "delete_collection_group",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGroupDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCollectionOperationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Collection Group",
+        "tags": [
+          "collections"
+        ]
+      },
       "get": {
         "description": "Return default and custom collection groups for this media type.",
         "operationId": "list_collection_groups",
@@ -11812,6 +12532,215 @@
           }
         },
         "summary": "List Collection Groups",
+        "tags": [
+          "collections"
+        ]
+      },
+      "patch": {
+        "description": "Rename a group and all its collection assignments.",
+        "operationId": "rename_collection_group",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGroupRename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Collection Group",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/presets": {
+      "post": {
+        "description": "Create selected entries as regular managed collections.",
+        "operationId": "create_collection_preset",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPresetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPresetResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Collection Preset",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/presets/preview": {
+      "post": {
+        "description": "Preview a library-driven collection preset.",
+        "operationId": "preview_collection_preset",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPresetPreview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionPresetEntry"
+                  },
+                  "title": "Response Preview Collection Preset",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Collection Preset",
         "tags": [
           "collections"
         ]

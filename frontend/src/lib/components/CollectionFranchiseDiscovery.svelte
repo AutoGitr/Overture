@@ -7,7 +7,9 @@
 </script>
 
 <DetailForm
-  title="Franchise Discovery"
+  collapsible
+  expanded
+  title="Content"
   description="Scan the selected library and create one collection per TMDB franchise. Existing collections in this group are updated on future runs."
   busy={editor.busy}
 >
@@ -25,5 +27,9 @@
       >Use &#123;title&#125; and &#123;group&#125; for every discovered collection.</span
     >
   </label>
-  <CollectionPolicyFields policy={editor.discovery.policy} section="sync" />
+  <CollectionPolicyFields
+    policy={editor.discovery.policy}
+    defaults={editor.defaults.data}
+    section="sync"
+  />
 </DetailForm>

@@ -1,4 +1,4 @@
-import { createMutation } from "@tanstack/svelte-query";
+import { createMutation, createQuery } from "@tanstack/svelte-query";
 import { SvelteSet } from "svelte/reactivity";
 import {
   createCollectionMutation,
@@ -11,6 +11,9 @@ import {
   getCollectionGroupPolicyOptions,
   saveCollectionGroupPolicyMutation,
   syncCollectionGroupMutation,
+  getCollectionDefaultsOptions,
+  previewCollectionPresetMutation,
+  createCollectionPresetMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
@@ -24,16 +27,17 @@ import type {
   LibrarySectionRead,
   TmdbCollectionResponse,
   CollectionGroupPolicyInput,
+  CollectionPreset,
 } from "../../generated/rest/types.gen";
 import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
-import { goToCollection, goToCollectionsList, openSidebarGroup } from "../router/routes";
+import { goToCollection, goToCollectionsList } from "../router/routes";
 import { queryClient } from "../rest/queryClient";
 import { emptySmartFilter } from "./collectionBuilders";
 import { settingsState } from "../stores/settingsState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
-export type RuleEditorSource = "unmanaged" | "builders" | "smart" | "discovery";
+export type RuleEditorSource = "unmanaged" | "builders" | "smart" | "discovery" | "preset";
 
 export function selectCollectionSource(
   editor: CollectionEditor | CollectionDraft,
@@ -65,6 +69,7 @@ function ruleOptions(
 
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
+  readonly defaults;
   // Drafts reset when saved fields change, not when unrelated collection data changes.
   private savedTitle = $derived.by(() => this.current().title);
   title = $derived(this.savedTitle);
@@ -183,6 +188,11 @@ export class CollectionEditor {
   private readonly feedback = createNotifier();
 
   constructor(private readonly current: () => CollectionDetail) {
+    this.defaults = createQuery(() =>
+      getCollectionDefaultsOptions({
+        query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
+      }),
+    );
     const saved = this.current().rule;
     if (this.current().kind === "smart") {
       this.sourceType = "smart";
@@ -376,6 +386,94 @@ function collectionOptions(form: CollectionEditor | CollectionDraft): Collection
 
 /** An unsaved collection, created only after its Configure form is submitted. */
 export class CollectionDraft {
+  readonly defaults;
+  preset = $state<CollectionPreset>("decades");
+  private readonly previewRequest = createMutation(() => previewCollectionPresetMutation());
+  private readonly presetRequest = createMutation(() => createCollectionPresetMutation());
+  selectedKeys = $state<string[]>([]);
+  presetErrors = $state<Record<string, string>>({});
+  get hasPresetPreview() {
+    const request = this.previewRequest;
+    return (
+      request.isSuccess &&
+      request.variables?.body.library_id === this.libraryId &&
+      request.variables.body.preset === this.preset
+    );
+  }
+  get presetEntries() {
+    return this.hasPresetPreview ? (this.previewRequest.data ?? []) : [];
+  }
+  get generating() {
+    return this.sourceType === "preset";
+  }
+  get presetLoading() {
+    return this.previewRequest.isPending;
+  }
+  async previewPreset() {
+    const library = this.libraryId;
+    const preset = this.preset;
+    if (!library || this.busy) return;
+    try {
+      const entries = await this.previewRequest.mutateAsync({
+        body: {
+          preset,
+          library_id: library,
+          media_type: this.mediaType,
+        },
+      });
+      this.selectedKeys = entries.map((entry) => entry.key);
+      this.presetErrors = {};
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Could not preview preset"));
+    }
+  }
+  private async savePreset() {
+    try {
+      const {
+        builders: _builders,
+        smart_filter: _filter,
+        managed_label: _label,
+        enabled: _enabled,
+        sync_interval_hours: _interval,
+        ...policy
+      } = ruleOptions("builders", this.rule, this);
+      const result = await this.presetRequest.mutateAsync({
+        body: {
+          preset: this.preset,
+          media_type: this.mediaType,
+          library_id: this.libraryId,
+          keys: this.presetEntries
+            .filter((entry) => this.selectedKeys.includes(entry.key))
+            .map((entry) => entry.key),
+          collection_group: this.collectionGroup || null,
+          policy: {
+            ...policy,
+            sort_title_format: this.sortTitleFormat || null,
+            summary_format: this.summaryFormat || null,
+            active_start_mmdd: this.activeStartMmdd || null,
+            active_end_mmdd: this.activeEndMmdd || null,
+            delete_when_inactive: this.deleteWhenInactive,
+          },
+          sync_interval_hours: this.rule.sync_interval_hours,
+          enabled: this.rule.enabled,
+        },
+      });
+      this.presetErrors = result.errors;
+      this.selectedKeys = Object.keys(result.errors);
+      if (this.selectedKeys.length) {
+        this.feedback.error(
+          `Created ${result.collection_ids.length} collections. Review the failed entries before retrying.`,
+        );
+        return false;
+      }
+      this.feedback.success(`Created ${result.collection_ids.length} collections.`);
+      goToCollectionsList(this.mediaType, this.collectionGroup.trim());
+      return true;
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Could not create preset collections"));
+      return false;
+    }
+  }
   readonly creating = true;
   readonly discovery = new FranchiseDiscovery(
     () => this.libraryId,
@@ -415,7 +513,13 @@ export class CollectionDraft {
     readonly mediaType: MediaType,
     private readonly libraries: () => LibrarySectionRead[],
     private readonly seed: () => TmdbCollectionResponse | null,
-  ) {}
+  ) {
+    this.defaults = createQuery(() =>
+      getCollectionDefaultsOptions({
+        query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
+      }),
+    );
+  }
   get serverType() {
     return settingsState.current.media_server;
   }
@@ -426,9 +530,16 @@ export class CollectionDraft {
     return true;
   }
   get busy() {
-    return this.request.isPending || this.discovery.busy;
+    return (
+      this.request.isPending ||
+      this.discovery.busy ||
+      this.previewRequest.isPending ||
+      this.presetRequest.isPending
+    );
   }
   get canSubmit() {
+    if (this.generating)
+      return this.presetEntries.some((entry) => this.selectedKeys.includes(entry.key));
     if (this.discovering) return !!this.libraryId && !!this.collectionGroup.trim();
     return !!this.libraryId && !!this.title.trim() && this.sourceType !== "unmanaged";
   }
@@ -443,6 +554,7 @@ export class CollectionDraft {
   async save() {
     if (this.busy) return false;
     if (this.discovering) return this.discovery.save();
+    if (this.generating) return this.savePreset();
     try {
       const collection = await this.request.mutateAsync({
         body: {
@@ -515,8 +627,7 @@ class FranchiseDiscovery {
       queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
       await this.syncRequest.mutateAsync({ query });
       this.feedback.success(`Franchise discovery complete for group "${name}".`);
-      openSidebarGroup(name);
-      goToCollectionsList("movie");
+      goToCollectionsList("movie", name);
       return true;
     } catch (error) {
       this.feedback.error(errorMessage(error, "Franchise discovery failed"));

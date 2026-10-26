@@ -120,7 +120,7 @@ describe("Sync tab", () => {
   it("can exclude collections independently of the selected libraries", async () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     await renderSync();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Collections", exact: true }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Collections" }));
     await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(

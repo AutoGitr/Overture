@@ -169,7 +169,8 @@ class MediaServerHttpClient(ABC):
                 )
             if status not in RETRYABLE_STATUS:
                 return MediaServerError(
-                    "Media server returned an unsuccessful response"
+                    "Media server returned an unsuccessful response",
+                    upstream_status_code=status,
                 )
         return MediaServerError("Media server is unavailable", status_code=503)
 

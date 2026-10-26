@@ -28,6 +28,11 @@
   <a
     class={["tab-item", { active: active === section.key }]}
     href={`#${formId}-${section.key}`}
+    onclick={() =>
+      document
+        .getElementById(`${formId}-${section.key}`)
+        ?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')
+        ?.click()}
     aria-current={active === section.key ? "location" : undefined}
   >
     <section.icon size={16} /><span>{section.label}</span>

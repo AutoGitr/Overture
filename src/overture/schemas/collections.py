@@ -560,6 +560,55 @@ class CollectionGroupPolicy(CollectionPolicyBase):
     dynamic_tmdb: DynamicTmdbGroupConfig | None = None
 
 
+class CollectionGroupRename(StrictBaseModel):
+    """A replacement group name, scoped by the request."""
+
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class CollectionGroupDelete(StrictBaseModel):
+    """Choose whether to keep collections or remove either copy."""
+
+    collections: Literal["keep", "overture", "server", "both"] = "keep"
+
+
+type CollectionPreset = Literal["decades", "years", "genres"]
+
+
+class CollectionPresetPreview(StrictBaseModel):
+    """Preview a preset using the selected library's metadata."""
+
+    preset: CollectionPreset
+    media_type: MediaType
+    library_id: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class CollectionPresetEntry(StrictBaseModel):
+    """One generated collection, editable through its regular rule afterwards."""
+
+    key: str
+    title: str
+    member_count: int
+    builder: LibraryFilterBuilder
+
+
+class CollectionPresetCreate(CollectionPresetPreview):
+    """Create only the selected preview entries with shared initial defaults."""
+
+    keys: Annotated[list[str], Field(min_length=1, max_length=500)]
+    collection_group: Annotated[str, Field(max_length=200)] | None = None
+    policy: CollectionPolicyBase = Field(default_factory=CollectionPolicyBase)
+    sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
+    enabled: bool = True
+
+
+class CollectionPresetResult(StrictBaseModel):
+    """Independently committed preset creations and sanitised errors."""
+
+    collection_ids: list[int] = Field(default_factory=list[int])
+    errors: dict[str, str] = Field(default_factory=dict[str, str])
+
+
 class BulkCollectionOperation(StrictBaseModel):
     """One bounded operation over an explicit collection selection."""
 

@@ -9,6 +9,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Collection presets for decades, years and genres with library previews, selective creation and editable rules; TMDB franchises are available under the same Preset type.
+- Rename and delete collection groups, optionally removing their collections from Overture, the media server or both while preserving media files.
 - Public TMDB lists as dynamic collection sources, with ordered merging, pagination and movie/show filtering.
 - Separate collection group management with shared defaults, explicit overrides and Save & Apply; Assets and full Sync share a Collections target, and unmanaged collection import can be disabled.
 
@@ -29,6 +31,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Collection sections collapse independently, with Setup and Content expanded initially; inherited choices use Default and text fields show inherited placeholders.
 - Collection forms use full-width sections, Source controls the workflow, boolean conditions use true/false, and Sort title and Summary each accept text or templates in one field. Manual selection is no longer a creation source; existing collection metadata is preserved on upgrade.
 
 - Collection creation and editing share Collection Setup for library, source, title and group, with franchise discovery inside Setup and content, members, display and schedule sections adapted to your choices. New collections open directly at Setup without an empty poster.
@@ -52,6 +55,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Collections can be deleted from Overture when they have already been removed from the media server.
 - Switching collection sources no longer submits hidden smart filters or stale manual members. Plex smart collections show server-controlled members without manual editing, and smart filters can use source builders through managed labels.
 
 - Collection member ordering supports row-wide drag-and-drop and Up/Down controls, collection artwork links follow the selected slot, and create/generate selections stay consistent when changing libraries.

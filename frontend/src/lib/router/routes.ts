@@ -300,9 +300,10 @@ export function goToLibrary(tab: SidebarTab): void {
 }
 
 /** Navigate to the collections list for a tab. */
-export function goToCollectionsList(tab: SidebarTab): void {
-  if (tab === "show") void navigate("/shows/collections");
-  else void navigate("/movies/collections");
+export function goToCollectionsList(tab: SidebarTab, group?: string): void {
+  const search: Record<string, string> = group ? { collection_group: `group:${group}` } : {};
+  if (tab === "show") void navigate("/shows/collections", { search });
+  else void navigate("/movies/collections", { search });
 }
 
 export function goToNewCollection(tab: SidebarTab, tmdbId?: number): void {

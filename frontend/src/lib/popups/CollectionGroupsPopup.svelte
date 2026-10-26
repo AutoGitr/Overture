@@ -10,6 +10,8 @@
   import CollectionGroupSettings from "../components/CollectionGroupSettings.svelte";
   import WorkflowSections from "../components/WorkflowSections.svelte";
   import DataStatus from "../components/DataStatus.svelte";
+  import CollectionGroupActions from "../components/CollectionGroupActions.svelte";
+  import { openSidebarGroup, sidebarGroup } from "../router/routes";
   let name = $state(uiState.collectionGroupToEdit);
   let newName = $state(uiState.collectionGroupToEdit);
   const groups = createQuery(() =>
@@ -64,6 +66,24 @@
   {/if}
   {#if name.trim()}
     <WorkflowSections>
+      {#if groups.data?.includes(name)}
+        <CollectionGroupActions
+          group={name}
+          mediaType={uiState.sidebarTab}
+          onrename={(replacement) => {
+            uiState.collectionGroupChanged(name, replacement);
+            if (sidebarGroup() === name) openSidebarGroup(replacement);
+            name = replacement;
+            newName = replacement;
+          }}
+          ondelete={() => {
+            uiState.collectionGroupChanged(name, "");
+            if (sidebarGroup() === name) openSidebarGroup(null);
+            name = "";
+            newName = "";
+          }}
+        />
+      {/if}
       {#key `${uiState.sidebarTab}:${name.trim()}`}<CollectionGroupSettings
           group={name.trim()}
           mediaType={uiState.sidebarTab}

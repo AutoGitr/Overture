@@ -6,6 +6,7 @@
     saveCollectionGroupPolicyMutation,
     syncCollectionGroupMutation,
     applyCollectionGroupPolicyMutation,
+    getCollectionDefaultsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
     CollectionGroupPolicyOutput,
@@ -41,6 +42,9 @@
   const syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
   const feedback = createNotifier();
   const applyRequest = createMutation(() => applyCollectionGroupPolicyMutation());
+  const defaults = createQuery(() =>
+    getCollectionDefaultsOptions({ query: { media_type: mediaType } }),
+  );
 
   let draft = $derived.by(() => {
     if (!query.data) return null;
@@ -116,6 +120,7 @@
 </script>
 
 <DetailForm
+  collapsible
   title="Group settings"
   description="Shared defaults for this group. Blank values inherit the global fallback; a collection's explicit overrides take precedence. Save & Apply updates display settings without changing membership."
   busy={request.isPending || syncGroupRequest.isPending || applyRequest.isPending}
@@ -127,8 +132,20 @@
     hasData={query.data !== undefined}
     onretry={() => query.refetch()}
   />
+  <DataStatus
+    label="global collection defaults"
+    error={defaults.error}
+    loading={defaults.isFetching}
+    hasData={defaults.data !== undefined}
+    onretry={() => defaults.refetch()}
+  />
   {#if draft}
-    <CollectionPolicyFields policy={draft} prefix="Group " plex={serverType === "plex"} />
+    <CollectionPolicyFields
+      policy={draft}
+      defaults={defaults.data}
+      prefix="Group "
+      plex={serverType === "plex"}
+    />
 
     <label class="form-row">
       <input
@@ -138,18 +155,23 @@
           if (draft) draft.sort_title_format = event.currentTarget.checked ? null : "";
         }}
       />
-      Inherit global sort title template
+      Default sort title template
     </label>
 
-    {#if draft.sort_title_format !== null}
-      <label class="form-label">
-        Group sort title template
-        <input maxlength="200" bind:value={draft.sort_title_format} />
-        <span class="hint">
-          Use &#123;title&#125; and &#123;group&#125;. Empty disables formatting for this group.
-        </span>
-      </label>
-    {/if}
+    <label class="form-label">
+      Group sort title template
+      <input
+        maxlength="200"
+        value={draft.sort_title_format ?? ""}
+        placeholder={defaults.data?.sort_title_format ?? ""}
+        oninput={(event) => {
+          if (draft) draft.sort_title_format = event.currentTarget.value;
+        }}
+      />
+      <span class="hint">
+        Use &#123;title&#125; and &#123;group&#125;. Empty disables formatting for this group.
+      </span>
+    </label>
 
     <label class="form-row">
       <input
@@ -159,25 +181,30 @@
           if (draft) draft.summary_format = event.currentTarget.checked ? null : "";
         }}
       />
-      Inherit global summary template
+      Default summary template
     </label>
 
-    {#if draft.summary_format !== null}
-      <label class="form-label">
-        Group summary template
-        <input maxlength="500" bind:value={draft.summary_format} />
-        <span class="hint">
-          Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
-          &#123;end_date&#125;, &#123;summary&#125;.
-        </span>
-      </label>
-    {/if}
+    <label class="form-label">
+      Group summary template
+      <input
+        maxlength="500"
+        value={draft.summary_format ?? ""}
+        placeholder={defaults.data?.summary_format ?? ""}
+        oninput={(event) => {
+          if (draft) draft.summary_format = event.currentTarget.value;
+        }}
+      />
+      <span class="hint">
+        Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;, &#123;end_date&#125;,
+        &#123;summary&#125;.
+      </span>
+    </label>
 
     <div class="seasonal-row form-wide">
       <label class="form-label">
         Active start (MM-DD)
         <input
-          placeholder="12-15"
+          placeholder={defaults.data?.active_start_mmdd ?? ""}
           maxlength="5"
           value={draft.active_start_mmdd ?? ""}
           oninput={(e) => {
@@ -188,7 +215,7 @@
       <label class="form-label">
         Active end (MM-DD)
         <input
-          placeholder="01-05"
+          placeholder={defaults.data?.active_end_mmdd ?? ""}
           maxlength="5"
           value={draft.active_end_mmdd ?? ""}
           oninput={(e) => {

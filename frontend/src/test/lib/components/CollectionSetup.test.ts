@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
-import { goToCollectionView, navigate, route } from "../../../lib/router/routes";
+import { goToCollectionView, navigate, route, sidebarGroup } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import { appSettings, collectionDetail, collectionRule, mediaItem } from "../../helpers/fixtures";
@@ -20,6 +20,11 @@ function mockPage(overrides: Record<string, unknown> = {}) {
     "/api/library/libraries": libraries,
     "/api/library/items": { items: [member], total: 1 },
     "/api/collections/groups": ["Franchises"],
+    "/api/collections/defaults": {
+      minimum_items: 1,
+      sort_title_format: "01_{title}",
+      summary_format: "From {group}",
+    },
     "/api/collections/12": detail,
     "/api/collections": detail,
     "/api/collections/12/rule": collectionRule(),
@@ -34,7 +39,14 @@ async function createPage() {
 }
 
 async function chooseSource(source: string) {
-  await fireEvent.change(screen.getByLabelText("Source"), { target: { value: source } });
+  if (source === "discovery") {
+    await fireEvent.change(screen.getByLabelText("Type"), { target: { value: "preset" } });
+    await fireEvent.change(screen.getByLabelText("Preset"), { target: { value: "discovery" } });
+  } else {
+    if (!screen.queryByLabelText("Source"))
+      await fireEvent.change(screen.getByLabelText("Type"), { target: { value: "custom" } });
+    await fireEvent.change(screen.getByLabelText("Source"), { target: { value: source } });
+  }
 }
 
 describe("collection setup flow", () => {
@@ -62,6 +74,73 @@ describe("collection setup flow", () => {
     }
   });
 
+  it("starts with only Setup and Content expanded and opens sections through navigation", async () => {
+    mockPage();
+    await createPage();
+    for (const name of ["Collection Setup", "Content"])
+      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-expanded", "true");
+    for (const name of ["Display", "Schedule"])
+      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
+    await fireEvent.click(screen.getByRole("link", { name: "Display" }));
+    expect(screen.getByRole("button", { name: "Display" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Sort title")).toHaveAttribute("placeholder", "01_{title}"),
+    );
+    await fireEvent.input(screen.getByLabelText("Sort title"), { target: { value: "02_{title}" } });
+    expect(screen.getByLabelText("Sort title")).toHaveValue("02_{title}");
+  });
+
+  it("previews library presets and creates only the selected entries as editable rules", async () => {
+    const { calls } = mockPage({
+      "/api/collections/presets/preview": [
+        { key: "1990", title: "1990s", member_count: 3 },
+        { key: "2000", title: "2000s", member_count: 4 },
+      ],
+      "/api/collections/presets": { collection_ids: [13], errors: {} },
+    });
+    await createPage();
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.change(screen.getByLabelText("Type"), { target: { value: "preset" } });
+    expect(screen.queryByLabelText("Source")).toBeNull();
+    expect(screen.getByLabelText("Preset")).toHaveDisplayValue("Decades");
+    await fireEvent.change(screen.getByLabelText("Collection Group"), {
+      target: { value: "Franchises" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "1990s (3 members)" }));
+    await fireEvent.click(
+      within(screen.getByRole("group", { name: "Collection form actions" })).getByRole("button", {
+        name: "Create selected collections",
+      }),
+    );
+    await waitFor(() => expect(route.pathname).toBe("/movies/collections"));
+    const request = calls.find((call) => call.url === "/api/collections/presets");
+    const body = JSON.parse(String(request?.init.body));
+    expect(body).toMatchObject({ preset: "decades", library_id: "movies", keys: ["2000"] });
+    expect(body.policy).not.toHaveProperty("builders");
+    expect(body.policy).not.toHaveProperty("smart_filter");
+    expect(sidebarGroup()).toBe("Franchises");
+  });
+
+  it("requires a fresh preview when changing the preset or library", async () => {
+    mockPage({
+      "/api/collections/presets/preview": [{ key: "1990", title: "1990s", member_count: 1 }],
+    });
+    await createPage();
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.change(screen.getByLabelText("Type"), { target: { value: "preset" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
+    await screen.findByRole("checkbox", { name: "1990s (1 member)" });
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "other" } });
+    expect(screen.queryByRole("checkbox", { name: /1990s/ })).toBeNull();
+    expect(
+      within(screen.getByRole("group", { name: "Collection form actions" })).getByRole("button"),
+    ).toBeDisabled();
+  });
+
   it("uses Setup's library and group for discovery and restores the single collection draft", async () => {
     mockPage();
     await createPage();
@@ -70,7 +149,7 @@ describe("collection setup flow", () => {
     await chooseSource("discovery");
     expect(screen.getByRole("region", { name: "Collection Setup" })).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toBeDisabled();
-    expect(screen.getByLabelText("Source")).toHaveDisplayValue("Discover TMDB franchises");
+    expect(screen.getByLabelText("Preset")).toHaveDisplayValue("TMDB franchises");
     expect(screen.getAllByLabelText("Library")).toHaveLength(1);
     expect(screen.queryByRole("link", { name: "Members" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Display" })).toBeNull();

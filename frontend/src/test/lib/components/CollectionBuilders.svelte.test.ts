@@ -377,6 +377,7 @@ describe("Collection Builders UI", () => {
       };
 
       mockFetchRoutes({
+        "/api/collections/defaults": {},
         "/api/collections/group-policy": ({ init }: { init: RequestInit }) => {
           if (init.method === "PUT") {
             putBody = JSON.parse(init.body as string);
@@ -397,19 +398,19 @@ describe("Collection Builders UI", () => {
         libraries: [{ id: "movies", title: "Movies", count: 10 }],
       });
 
-      // Wait for group defaults to load
+      await fireEvent.click(screen.getByRole("button", { name: "Group settings" }));
       expect(
         await screen.findByRole("button", { name: "Save group defaults" }),
       ).toBeInTheDocument();
 
       // Toggle sort title inherit off and provide template
-      const sortInherit = screen.getByLabelText(/Inherit global sort title template/i);
+      const sortInherit = screen.getByLabelText("Default sort title template");
       await fireEvent.click(sortInherit);
       const sortInput = await screen.findByLabelText(/Group sort title template/i);
       await fireEvent.input(sortInput, { target: { value: "Marvel - {title}" } });
 
       // Toggle summary inherit off and provide template
-      const summaryInherit = screen.getByLabelText(/Inherit global summary template/i);
+      const summaryInherit = screen.getByLabelText("Default summary template");
       await fireEvent.click(summaryInherit);
       const summaryInput = await screen.findByLabelText(/Group summary template/i);
       await fireEvent.input(summaryInput, { target: { value: "{group}: {title}" } });

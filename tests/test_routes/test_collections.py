@@ -25,9 +25,15 @@ lazy from overture.schemas.collections import (
     CollectionArtwork,
     CollectionCreate,
     CollectionDetail,
+    CollectionGroupDelete,
     CollectionGroupPolicy,
+    CollectionGroupRename,
     CollectionMembersUpdate,
     CollectionOptions,
+    CollectionPolicyBase,
+    CollectionPresetCreate,
+    CollectionPresetPreview,
+    CollectionPresetResult,
     CollectionRead,
     CollectionRuleRead,
     CollectionRuleWrite,
@@ -130,6 +136,38 @@ async def test_collection_routes_delegate_to_service() -> None:
     assert await collections_router.list_collection_groups(
         service, MediaType.MOVIE
     ) == ["Franchises"]
+
+    service.inherited_policy = AsyncMock(return_value=CollectionPolicyBase())
+    assert (
+        await collections_router.get_collection_defaults(
+            service, MediaType.MOVIE, "Franchises"
+        )
+        == CollectionPolicyBase()
+    )
+    service.rename_group = AsyncMock(return_value=StatusResponse(status=Status.OK))
+    await collections_router.rename_collection_group(
+        CollectionGroupRename(name="Saga"), service, MediaType.MOVIE, "Franchises"
+    )
+    service.rename_group.assert_awaited_once_with(MediaType.MOVIE, "Franchises", "Saga")
+    service.delete_group = AsyncMock(return_value=BulkCollectionOperationResult())
+    removal = CollectionGroupDelete(collections="server")
+    await collections_router.delete_collection_group(
+        removal, service, MediaType.MOVIE, "Saga"
+    )
+    service.delete_group.assert_awaited_once_with(MediaType.MOVIE, "Saga", removal)
+    service.preview_preset = AsyncMock(return_value=[])
+    preview = CollectionPresetPreview(
+        preset="decades", media_type=MediaType.MOVIE, library_id="movies"
+    )
+    assert await collections_router.preview_collection_preset(preview, service) == []
+    service.preview_preset.assert_awaited_once_with(preview)
+    service.create_preset = AsyncMock(return_value=CollectionPresetResult())
+    preset = CollectionPresetCreate(**preview.model_dump(), keys=["1990"])
+    assert (
+        await collections_router.create_collection_preset(preset, service)
+        == CollectionPresetResult()
+    )
+    service.create_preset.assert_awaited_once_with(preset)
 
     # Group policy
     policy = CollectionGroupPolicy(minimum_items=3)

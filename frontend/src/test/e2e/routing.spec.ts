@@ -330,6 +330,7 @@ test("collection member rows show posters, link to items and omit show matching 
   );
   await logIn(page, "/movies/collections/1-alien-collection");
   await expect(page.getByRole("tab", { name: "Configure", selected: true })).toBeVisible();
+  await page.getByRole("link", { name: "Display", exact: true }).click();
   await expect(page.getByLabel("TMDB collection ID", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Members", exact: true }).click();
   const first = page.getByRole("button", { name: "Alien (1979)", exact: true });

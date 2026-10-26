@@ -49,6 +49,8 @@
 
 {#if editor.sourceType !== "unmanaged"}
   <DetailForm
+    collapsible
+    expanded
     title="Content"
     description={editor.sourceType === "smart"
       ? "Plex smart collections automatically evaluate filter rules directly on your Plex media server."
@@ -161,7 +163,7 @@
       </div>
     {/if}
     {#if editor.sourceType === "builders"}
-      <CollectionPolicyFields policy={editor.rule} section="sync" />
+      <CollectionPolicyFields policy={editor.rule} defaults={editor.defaults.data} section="sync" />
     {/if}
   </DetailForm>
 {/if}

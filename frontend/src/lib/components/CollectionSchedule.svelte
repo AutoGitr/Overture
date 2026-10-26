@@ -8,6 +8,7 @@
 </script>
 
 <DetailForm
+  collapsible
   title="Schedule"
   description={discovery
     ? "Choose how often Overture discovers and updates franchise collections."
@@ -36,18 +37,26 @@
     {/if}
     <label class="form-label">
       Active start (MM-DD)
-      <input placeholder="12-15" maxlength="5" bind:value={editor.activeStartMmdd} />
+      <input
+        placeholder={editor.defaults.data?.active_start_mmdd ?? ""}
+        maxlength="5"
+        bind:value={editor.activeStartMmdd}
+      />
       <span class="hint">Leave both dates blank for a year-round collection.</span>
     </label>
     <label class="form-label">
       Active end (MM-DD)
-      <input placeholder="01-05" maxlength="5" bind:value={editor.activeEndMmdd} />
+      <input
+        placeholder={editor.defaults.data?.active_end_mmdd ?? ""}
+        maxlength="5"
+        bind:value={editor.activeEndMmdd}
+      />
     </label>
     {#if editor.activeStartMmdd || editor.activeEndMmdd}
       <label class="form-label">
         Seasonal inactivity behavior
         <select bind:value={editor.deleteWhenInactive}>
-          <option value={null}>Inherit default</option>
+          <option value={null}>Default</option>
           <option value={true}>Delete from media server when inactive</option>
           <option value={false}>Keep collection on media server</option>
         </select>

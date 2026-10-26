@@ -547,6 +547,7 @@ async def test_imported_literal_expressions_follow_server_metadata(
         ServerCollection(
             id="literal",
             title="Literal",
+            server_link="https://server.test/collections/literal",
             member_ids=("m0",),
             summary="An {overview}",
             sort_title="01_{literal}",

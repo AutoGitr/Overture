@@ -1542,6 +1542,18 @@ export type CollectionDetail = {
 export type CollectionFiltering = 'admin' | 'user';
 
 /**
+ * CollectionGroupDelete
+ *
+ * Choose whether to keep collections or remove either copy.
+ */
+export type CollectionGroupDelete = {
+    /**
+     * Collections
+     */
+    collections?: 'keep' | 'overture' | 'server' | 'both';
+};
+
+/**
  * CollectionGroupPolicy
  *
  * Nullable group defaults; null inherits the application setting.
@@ -1656,6 +1668,18 @@ export type CollectionGroupPolicyOutput = {
 };
 
 /**
+ * CollectionGroupRename
+ *
+ * A replacement group name, scoped by the request.
+ */
+export type CollectionGroupRename = {
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
  * CollectionKind
  *
  * How a collection's membership is maintained on the media server.
@@ -1740,6 +1764,188 @@ export type CollectionOptions = {
  * The order in which collection members appear.
  */
 export type CollectionOrder = 'release' | 'alpha' | 'custom';
+
+/**
+ * CollectionPolicyBase
+ *
+ * Shared policy and media server display configuration.
+ */
+export type CollectionPolicyBaseInput = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
+    /**
+     * Auto Match Art
+     */
+    auto_match_art?: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme?: boolean | null;
+    collection_filtering?: CollectionFiltering | null;
+    collection_mode?: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum?: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
+    order_type?: CollectionOrder | null;
+    sort_title_format?: SortTitleFormat | null;
+    summary_format?: SummaryFormat | null;
+    sync_mode?: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
+};
+
+/**
+ * CollectionPolicyBase
+ *
+ * Shared policy and media server display configuration.
+ */
+export type CollectionPolicyBaseOutput = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
+    /**
+     * Auto Match Art
+     */
+    auto_match_art: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme: boolean | null;
+    collection_filtering: CollectionFiltering | null;
+    collection_mode: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    order_type: CollectionOrder | null;
+    sort_title_format: SortTitleFormat | null;
+    summary_format: SummaryFormat | null;
+    sync_mode: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean | null;
+};
+
+export type CollectionPreset = 'decades' | 'years' | 'genres';
+
+/**
+ * CollectionPresetCreate
+ *
+ * Create only the selected preview entries with shared initial defaults.
+ */
+export type CollectionPresetCreate = {
+    /**
+     * Collection Group
+     */
+    collection_group?: string | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Keys
+     */
+    keys: Array<string>;
+    /**
+     * Library Id
+     */
+    library_id: string;
+    media_type: MediaType;
+    policy?: CollectionPolicyBaseInput;
+    preset: CollectionPreset;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours?: number;
+};
+
+/**
+ * CollectionPresetEntry
+ *
+ * One generated collection, editable through its regular rule afterwards.
+ */
+export type CollectionPresetEntry = {
+    builder: LibraryFilterBuilderOutput;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Member Count
+     */
+    member_count: number;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * CollectionPresetPreview
+ *
+ * Preview a preset using the selected library's metadata.
+ */
+export type CollectionPresetPreview = {
+    /**
+     * Library Id
+     */
+    library_id: string;
+    media_type: MediaType;
+    preset: CollectionPreset;
+};
+
+/**
+ * CollectionPresetResult
+ *
+ * Independently committed preset creations and sanitised errors.
+ */
+export type CollectionPresetResult = {
+    /**
+     * Collection Ids
+     */
+    collection_ids: Array<number>;
+    /**
+     * Errors
+     */
+    errors: {
+        [key: string]: string;
+    };
+};
 
 /**
  * CollectionRead
@@ -5543,6 +5749,40 @@ export type BulkOperateCollectionsResponses = {
 
 export type BulkOperateCollectionsResponse = BulkOperateCollectionsResponses[keyof BulkOperateCollectionsResponses];
 
+export type GetCollectionDefaultsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name?: string | null;
+    };
+    url: '/api/collections/defaults';
+};
+
+export type GetCollectionDefaultsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionDefaultsError = GetCollectionDefaultsErrors[keyof GetCollectionDefaultsErrors];
+
+export type GetCollectionDefaultsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionPolicyBaseOutput;
+};
+
+export type GetCollectionDefaultsResponse = GetCollectionDefaultsResponses[keyof GetCollectionDefaultsResponses];
+
 export type GetCollectionGroupPolicyData = {
     body?: never;
     path?: never;
@@ -5679,6 +5919,40 @@ export type SyncCollectionGroupResponses = {
 
 export type SyncCollectionGroupResponse = SyncCollectionGroupResponses[keyof SyncCollectionGroupResponses];
 
+export type DeleteCollectionGroupData = {
+    body: CollectionGroupDelete;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/collections/groups';
+};
+
+export type DeleteCollectionGroupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteCollectionGroupError = DeleteCollectionGroupErrors[keyof DeleteCollectionGroupErrors];
+
+export type DeleteCollectionGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: BulkCollectionOperationResult;
+};
+
+export type DeleteCollectionGroupResponse = DeleteCollectionGroupResponses[keyof DeleteCollectionGroupResponses];
+
 export type ListCollectionGroupsData = {
     body?: never;
     path?: never;
@@ -5710,6 +5984,92 @@ export type ListCollectionGroupsResponses = {
 };
 
 export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
+
+export type RenameCollectionGroupData = {
+    body: CollectionGroupRename;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/collections/groups';
+};
+
+export type RenameCollectionGroupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RenameCollectionGroupError = RenameCollectionGroupErrors[keyof RenameCollectionGroupErrors];
+
+export type RenameCollectionGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
+
+export type CreateCollectionPresetData = {
+    body: CollectionPresetCreate;
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets';
+};
+
+export type CreateCollectionPresetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateCollectionPresetError = CreateCollectionPresetErrors[keyof CreateCollectionPresetErrors];
+
+export type CreateCollectionPresetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionPresetResult;
+};
+
+export type CreateCollectionPresetResponse = CreateCollectionPresetResponses[keyof CreateCollectionPresetResponses];
+
+export type PreviewCollectionPresetData = {
+    body: CollectionPresetPreview;
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/preview';
+};
+
+export type PreviewCollectionPresetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewCollectionPresetError = PreviewCollectionPresetErrors[keyof PreviewCollectionPresetErrors];
+
+export type PreviewCollectionPresetResponses = {
+    /**
+     * Response Preview Collection Preset
+     *
+     * Successful Response
+     */
+    200: Array<CollectionPresetEntry>;
+};
+
+export type PreviewCollectionPresetResponse = PreviewCollectionPresetResponses[keyof PreviewCollectionPresetResponses];
 
 export type ListRadarrTagsData = {
     body?: never;

@@ -64,6 +64,21 @@ async def listing(client: PlexClient | JellyfinClient) -> object:
     return [item async for page in pages for item in page]
 
 
+async def test_missing_resource_preserves_upstream_status_for_idempotent_deletion(
+    provider_factory: Callable[
+        [Callable[[httpx2.Request], httpx2.Response]], PlexClient | JellyfinClient
+    ],
+) -> None:
+    client = provider_factory(lambda request: httpx2.Response(404))
+    try:
+        with pytest.raises(MediaServerError) as exc:
+            await listing(client)
+        assert exc.value.upstream_status_code == 404
+        assert exc.value.status_code == 502
+    finally:
+        await client.close()
+
+
 @pytest.mark.parametrize(
     ("status", "expected"), [(401, 502), (403, 502), (302, 502), (503, 503)]
 )

@@ -26,30 +26,33 @@
     prefix = "",
     plex = false,
     section = "all",
+    defaults,
   }: {
     policy: PolicyData;
     prefix?: string;
     plex?: boolean;
     section?: "all" | "sync";
+    defaults?: PolicyData;
   } = $props();
 </script>
 
 <label class="form-label">
   {prefix}Sync strategy
   <select bind:value={policy.sync_mode}>
-    <option value={null}>Inherit default</option>
+    <option value={null}>Default</option>
     <option value="sync">Strict sync</option>
     <option value="append">Append, keep manual members</option>
   </select>
 </label>
 
 <label class="form-label">
-  {prefix}Minimum members (blank inherits)
+  {prefix}Minimum members
   <input
     type="number"
     min="1"
     max="100"
     value={policy.minimum_items ?? ""}
+    placeholder={String(defaults?.minimum_items ?? "")}
     oninput={(event) =>
       (policy.minimum_items = event.currentTarget.value ? event.currentTarget.valueAsNumber : null)}
   />
@@ -58,7 +61,7 @@
 <label class="form-label">
   {prefix}Below minimum
   <select bind:value={policy.delete_below_minimum}>
-    <option value={null}>Inherit default</option>
+    <option value={null}>Default</option>
     <option value={true}>Delete collection</option>
     <option value={false}>Keep collection</option>
   </select>
@@ -67,7 +70,7 @@
 <label class="form-label">
   {prefix}Automatic artwork
   <select bind:value={policy.auto_match_art}>
-    <option value={null}>Inherit default</option>
+    <option value={null}>Default</option>
     <option value={true}>Enabled</option>
     <option value={false}>Disabled</option>
   </select>
@@ -76,7 +79,7 @@
 <label class="form-label">
   {prefix}Automatic themes
   <select bind:value={policy.auto_match_theme}>
-    <option value={null}>Inherit default</option>
+    <option value={null}>Default</option>
     <option value={true}>Enabled</option>
     <option value={false}>Disabled</option>
   </select>
@@ -86,7 +89,7 @@
   <label class="form-label">
     {prefix}Member order
     <select bind:value={policy.order_type}>
-      <option value={null}>Inherit global default</option>
+      <option value={null}>Default</option>
       <option value="release">Release date</option>
       <option value="alpha">Alphabetical</option>
       {#if plex}<option value="custom">Source / custom order</option>{/if}
@@ -95,7 +98,7 @@
   <label class="form-label">
     {prefix}When inactive (seasonal)
     <select bind:value={policy.delete_when_inactive}>
-      <option value={null}>Inherit default</option>
+      <option value={null}>Default</option>
       <option value={true}>Delete from media server</option>
       <option value={false}>Keep on media server</option>
     </select>
@@ -105,7 +108,7 @@
     <label class="form-label">
       {prefix}Visibility mode
       <select bind:value={policy.collection_mode}>
-        <option value={null}>Inherit global default</option>
+        <option value={null}>Default</option>
         <option value="default">Library default</option>
         <option value="hide_items">Hide items</option>
         <option value="show_items">Show collection and items</option>
@@ -116,7 +119,7 @@
     <label class="form-label">
       {prefix}Collection filtering
       <select bind:value={policy.collection_filtering}>
-        <option value={null}>Inherit global default</option>
+        <option value={null}>Default</option>
         <option value="admin">All users (admin-managed)</option>
         <option value="user">User library</option>
       </select>
@@ -127,7 +130,7 @@
       <label class="form-label">
         {prefix}Home
         <select bind:value={policy.visible_home}>
-          <option value={null}>Inherit default</option>
+          <option value={null}>Default</option>
           <option value={true}>Promote on home</option>
           <option value={false}>Hide from home</option>
         </select>
@@ -135,7 +138,7 @@
       <label class="form-label">
         {prefix}Shared users
         <select bind:value={policy.visible_shared}>
-          <option value={null}>Inherit default</option>
+          <option value={null}>Default</option>
           <option value={true}>Promote to shared users</option>
           <option value={false}>Hide from shared users</option>
         </select>
@@ -143,7 +146,7 @@
       <label class="form-label">
         {prefix}Library recommendations
         <select bind:value={policy.visible_library}>
-          <option value={null}>Inherit default</option>
+          <option value={null}>Default</option>
           <option value={true}>Promote in library recommended</option>
           <option value={false}>Hide from recommended</option>
         </select>

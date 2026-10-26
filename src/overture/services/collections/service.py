@@ -38,6 +38,7 @@ lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...jobs.gate import LibraryGate
 lazy from ...media_servers.adapters import ServerCollection, UploadThemes
+lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
@@ -49,9 +50,15 @@ lazy from ...schemas.collections import (
     CollectionBuilder,
     CollectionCreate,
     CollectionDetail,
+    CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionMembersUpdate,
     CollectionOptions,
+    CollectionPolicyBase,
+    CollectionPresetCreate,
+    CollectionPresetEntry,
+    CollectionPresetPreview,
+    CollectionPresetResult,
     CollectionRead,
     CollectionRuleRead,
     CollectionRuleWrite,
@@ -108,6 +115,7 @@ lazy from ..themes.youtube_resolver import DownloadError
 lazy from . import COLLECTIONS_LOCK
 lazy from .filters import compile_plex_smart_filter, evaluate_filter_group
 lazy from .policy import CollectionPolicy, RuleOrPolicy, resolve_policy
+lazy from .presets import preview_preset
 
 logger = logging.getLogger(__name__)
 
@@ -774,10 +782,21 @@ class CollectionsService:
                     saved_rule.sqlmodel_update(display)
                     session.add(saved_rule)
 
-    async def _delete_locked(self, row: MediaCollection) -> None:
-        collection_id = row.id or 0
+    async def _delete_server_collection(self, row: MediaCollection) -> None:
+        """A server-side deletion is complete when the collection is already absent."""
         if row.server_item_id is not None:
-            await self._provider().delete_collection(row.server_item_id)
+            try:
+                await self._provider().delete_collection(row.server_item_id)
+            except MediaServerError as exc:
+                if exc.upstream_status_code != 404:
+                    raise
+
+    async def _delete_locked(
+        self, row: MediaCollection, *, server: bool = True
+    ) -> None:
+        collection_id = row.id or 0
+        if server:
+            await self._delete_server_collection(row)
         async with self._database.write_session() as session:
             await self._downloads.cancel_assets(
                 session, AssetScope(collection_id=collection_id)
@@ -789,8 +808,7 @@ class CollectionsService:
     async def _withhold_locked(self, row: MediaCollection) -> None:
         """Remove a collection from the server while keeping its Overture rule."""
         collection_id = row.id or 0
-        if row.server_item_id is not None:
-            await self._provider().delete_collection(row.server_item_id)
+        await self._delete_server_collection(row)
         async with self._database.write_session() as session:
             current = await CollectionRepository(session).get(collection_id)
             if current is not None:
@@ -1461,6 +1479,144 @@ class CollectionsService:
             ),
             rule,
         )
+
+    async def inherited_policy(
+        self, media_type: MediaType, name: str | None = None
+    ) -> CollectionPolicyBase:
+        """Expose resolved defaults for form placeholders without duplicating rules."""
+        async with self._database.read_session() as session:
+            policy = await self._policy(session, media_type, name)
+        return CollectionPolicyBase.model_validate(
+            {key: getattr(policy, key) for key in CollectionPolicyBase.model_fields}
+        )
+
+    async def preview_preset(
+        self, body: CollectionPresetPreview
+    ) -> list[CollectionPresetEntry]:
+        """Preview collections using only the selected library's active items."""
+        return preview_preset(
+            body.preset, await self._library_items(body.library_id, body.media_type)
+        )
+
+    async def create_preset(
+        self, body: CollectionPresetCreate
+    ) -> CollectionPresetResult:
+        """Commit each preset entry independently through the regular workflow."""
+        entries = {entry.key: entry for entry in await self.preview_preset(body)}
+        if not set(body.keys) <= entries.keys():
+            raise PublicServiceError(
+                422,
+                "Preview the library again; a selected value is no longer available",
+            )
+        metadata = set(CollectionOptions.model_fields)
+        options = body.policy.model_dump(include=metadata, exclude_none=True)
+        rule_defaults = body.policy.model_dump(exclude=metadata)
+        result = CollectionPresetResult()
+        for key in dict.fromkeys(body.keys):
+            entry = entries[key]
+            try:
+                created = await self.create(
+                    CollectionCreate(
+                        title=entry.title,
+                        media_type=body.media_type,
+                        library_id=body.library_id,
+                        collection_group=body.collection_group,
+                        **options,
+                        rule=CollectionRuleWrite(
+                            **rule_defaults,
+                            builders=[entry.builder],
+                            enabled=body.enabled,
+                            sync_interval_hours=body.sync_interval_hours,
+                        ),
+                    )
+                )
+                result.collection_ids.append(created.id)
+            except Exception as exc:
+                result.errors[key] = sanitise_error(str(exc))
+        return result
+
+    async def rename_group(
+        self, media_type: MediaType, name: str, replacement: str
+    ) -> StatusResponse:
+        """Rename defaults and every member atomically, including unlisted rows."""
+        name, replacement = name.strip(), replacement.strip()
+        if not replacement:
+            raise PublicServiceError(422, "A group needs a name")
+        server = self._provider().server_type
+        async with (
+            self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
+            self._database.write_session() as session,
+        ):
+            repo = CollectionRepository(session)
+            group = await repo.group_policy(server, media_type, name)
+            rows = await repo.group_members(server, media_type, name)
+            if group is None and not rows:
+                raise PublicServiceError(404, "Collection group not found")
+            if replacement != name and (
+                await repo.group_policy(server, media_type, replacement) is not None
+                or await repo.group_members(server, media_type, replacement)
+            ):
+                raise PublicServiceError(
+                    409, "A collection group with this name already exists"
+                )
+            if group is not None:
+                group.name = replacement
+                session.add(group)
+            for row in rows:
+                row.collection_group = replacement
+                row.updated_at = utc_now()
+                session.add(row)
+        await self._publisher.broadcast("collections.changed")
+        return StatusResponse(status=Status.OK)
+
+    async def delete_group(
+        self, media_type: MediaType, name: str, body: CollectionGroupDelete
+    ) -> BulkCollectionOperationResult:
+        """Remove a group only after each selected collection operation succeeds."""
+        name = name.strip()
+        server = self._provider().server_type
+        result = BulkCollectionOperationResult()
+        async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
+            async with self._database.read_session() as session:
+                repo = CollectionRepository(session)
+                rows = await repo.group_members(server, media_type, name)
+                group = await repo.group_policy(server, media_type, name)
+            if group is None and not rows:
+                raise PublicServiceError(404, "Collection group not found")
+            for row in rows:
+                identity = row.id or 0
+                try:
+                    async with self._downloads.asset_locks.acquire(
+                        f"collection:{identity}"
+                    ):
+                        if body.collections in {"overture", "both"}:
+                            await self._delete_locked(
+                                row, server=body.collections == "both"
+                            )
+                        elif body.collections == "server":
+                            await self._withhold_locked(row)
+                            async with self._database.write_session() as session:
+                                rule = await CollectionRepository(session).rule(
+                                    identity
+                                )
+                                if rule is not None:
+                                    rule.enabled = False
+                                    session.add(rule)
+                    result.collection_ids.append(identity)
+                except Exception as exc:
+                    result.errors[identity] = sanitise_error(str(exc))
+            if not result.errors:
+                async with self._database.write_session() as session:
+                    repo = CollectionRepository(session)
+                    for row in await repo.group_members(server, media_type, name):
+                        row.collection_group = None
+                        row.updated_at = utc_now()
+                        session.add(row)
+                    group = await repo.group_policy(server, media_type, name)
+                    if group is not None:
+                        await session.delete(group)
+        await self._publisher.broadcast("collections.changed")
+        return result
 
     async def group_policy(
         self, media_type: MediaType, name: str

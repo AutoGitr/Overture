@@ -15,6 +15,8 @@
   import DetailSection from "./DetailSection.svelte";
   import WorkflowSections from "./WorkflowSections.svelte";
   import PendingButton from "./PendingButton.svelte";
+  import CollectionPresetContent from "./CollectionPresetContent.svelte";
+  import DataStatus from "./DataStatus.svelte";
 
   let {
     collection,
@@ -38,6 +40,13 @@
 </script>
 
 <WorkflowSections>
+  <DataStatus
+    label="collection defaults"
+    error={editor.defaults.error}
+    loading={editor.defaults.isFetching}
+    hasData={editor.defaults.data !== undefined}
+    onretry={() => editor.defaults.refetch()}
+  />
   <form
     id={formId}
     aria-label="Configure collection"
@@ -55,7 +64,11 @@
         <CollectionFranchiseDiscovery {editor} />
       </section>
     {:else}
-      {#if editor.sourceType !== "unmanaged"}
+      {#if editor instanceof CollectionDraft && editor.generating}
+        <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
+          <CollectionPresetContent {editor} />
+        </section>
+      {:else if editor.sourceType !== "unmanaged"}
         <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
           <CollectionRulePanel {editor} />
         </section>
@@ -66,6 +79,7 @@
           <CollectionMembers members={collection.members} {editor} {libraryItems} />
           {#if sourceRoster.length}
             <DetailSection
+              collapsible
               title="Source roster"
               description="Movies in the TMDB franchise, including titles missing from your library."
             >
@@ -95,7 +109,13 @@
             : "Saving..."}
         disabled={editor instanceof CollectionDraft && !editor.canSubmit}
       >
-        {discovering ? "Discover & Create" : editor.creating ? "Create" : "Save"}
+        {discovering
+          ? "Discover & Create"
+          : editor instanceof CollectionDraft && editor.generating
+            ? "Create selected collections"
+            : editor.creating
+              ? "Create"
+              : "Save"}
       </PendingButton>
     </div>
   </form>

@@ -61,6 +61,24 @@ class CollectionRepository:
             stmt = stmt.where(col(MediaCollection.media_type) == media_type)
         return (await self.session.exec(stmt)).first()
 
+    async def group_members(
+        self, server_type: ServerType, media_type: MediaType, name: str
+    ) -> list[MediaCollection]:
+        """Include unlisted collections so group operations leave no orphaned data."""
+        return list(
+            (
+                await self.session.exec(
+                    select(MediaCollection)
+                    .where(
+                        col(MediaCollection.server_type) == server_type,
+                        col(MediaCollection.media_type) == media_type,
+                        col(MediaCollection.collection_group) == name,
+                    )
+                    .order_by(col(MediaCollection.id))
+                )
+            ).all()
+        )
+
     async def find_server(
         self, server_type: ServerType, server_item_id: str
     ) -> MediaCollection | None:

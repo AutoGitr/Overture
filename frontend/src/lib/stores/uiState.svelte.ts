@@ -171,10 +171,16 @@ class UiState {
 
   operationsTab = $state<OperationsTab>("assets");
   collectionGroupToEdit = $state("");
+  private collectionGroupChange: ((name: string, replacement: string) => void) | null = null;
 
-  openCollectionGroups(group = "") {
+  openCollectionGroups(group = "", onchange?: (name: string, replacement: string) => void) {
     this.collectionGroupToEdit = group;
+    this.collectionGroupChange = onchange ?? null;
     this.#openPopup = "collection-groups";
+  }
+
+  collectionGroupChanged(name: string, replacement: string) {
+    this.collectionGroupChange?.(name, replacement);
   }
 
   /**
@@ -202,6 +208,7 @@ class UiState {
 
   closePopup() {
     this.#openPopup = null;
+    this.collectionGroupChange = null;
   }
 
   /** Which top-level tab (movies/shows) is active, derived from the URL. */

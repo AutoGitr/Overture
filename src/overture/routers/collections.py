@@ -16,9 +16,16 @@ lazy from ..schemas.collections import (
     CollectionArtwork,
     CollectionCreate,
     CollectionDetail,
+    CollectionGroupDelete,
     CollectionGroupPolicy,
+    CollectionGroupRename,
     CollectionMembersUpdate,
     CollectionOptions,
+    CollectionPolicyBase,
+    CollectionPresetCreate,
+    CollectionPresetEntry,
+    CollectionPresetPreview,
+    CollectionPresetResult,
     CollectionRead,
     CollectionRuleRead,
     CollectionRuleWrite,
@@ -62,6 +69,54 @@ async def list_collection_groups(
 ) -> list[str]:
     """Return default and custom collection groups for this media type."""
     return await collections.groups(media_type)
+
+
+@router.get("/defaults")
+async def get_collection_defaults(
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str | None, Query(max_length=200)] = None,
+) -> CollectionPolicyBase:
+    """Resolve inherited values for collection form placeholders."""
+    return await collections.inherited_policy(media_type, name)
+
+
+@router.post("/presets/preview")
+async def preview_collection_preset(
+    body: CollectionPresetPreview, collections: CollectionsDep
+) -> list[CollectionPresetEntry]:
+    """Preview a library-driven collection preset."""
+    return await collections.preview_preset(body)
+
+
+@router.post("/presets")
+async def create_collection_preset(
+    body: CollectionPresetCreate, collections: CollectionsDep
+) -> CollectionPresetResult:
+    """Create selected entries as regular managed collections."""
+    return await collections.create_preset(body)
+
+
+@router.patch("/groups")
+async def rename_collection_group(
+    body: CollectionGroupRename,
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+) -> StatusResponse:
+    """Rename a group and all its collection assignments."""
+    return await collections.rename_group(media_type, name, body.name)
+
+
+@router.delete("/groups")
+async def delete_collection_group(
+    body: CollectionGroupDelete,
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    name: Annotated[str, Query(min_length=1, max_length=200)],
+) -> BulkCollectionOperationResult:
+    """Delete a group, optionally deleting its collections in either application."""
+    return await collections.delete_group(media_type, name, body)
 
 
 @router.get("/group-policy")
