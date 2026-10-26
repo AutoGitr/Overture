@@ -1,11 +1,8 @@
 <script lang="ts">
   import { uiState } from "../stores/uiState.svelte";
   import DetailForm from "./DetailForm.svelte";
-  import {
-    CollectionDraft,
-    selectCollectionSource,
-    type CollectionEditor,
-  } from "../utils/collectionForms.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
+  import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
 
   let {
@@ -18,18 +15,23 @@
     libraries: LibrarySectionRead[];
   } = $props();
 
-  const groupListId = $props.id();
-  let discovering = $derived(editor instanceof CollectionDraft && editor.discovering);
-  let preset = $derived(
-    editor instanceof CollectionDraft && (editor.generating || editor.discovering),
-  );
+  const id = $props.id();
+  const KINDS = [
+    ["collection", "Collection"],
+    ["set", "Collection set"],
+  ] as const;
+  let draft = $derived(editor instanceof CollectionDraft ? editor : null);
+  let creatingSet = $derived(draft?.kind === "set");
+  let preset = $derived(draft?.kindPresets.find((entry) => entry.key === draft?.presetKey));
 </script>
 
 <DetailForm
   collapsible
   expanded
-  title="Collection Setup"
-  description="Choose where the collection lives and how its members are selected, then give it a name and optional group."
+  title="Setup"
+  description={creatingSet
+    ? "A collection set creates one collection per value in the library, such as each decade, and keeps them up to date."
+    : "Choose where the collection lives, then give it a name and an optional group."}
   busy={editor.busy}
 >
   <label class="form-label">
@@ -37,13 +39,11 @@
     <select
       required
       value={editor.libraryId}
-      disabled={!editor.creating}
-      onchange={(event) => {
-        if (editor.creating) editor.selectLibrary(event.currentTarget.value);
-      }}
+      disabled={!draft}
+      onchange={(event) => draft?.selectLibrary(event.currentTarget.value)}
     >
       <option value="">Select a library</option>
-      {#if !editor.creating && editor.libraryId && !libraries.some((library) => library.id === editor.libraryId)}
+      {#if !draft && editor.libraryId && !libraries.some((library) => library.id === editor.libraryId)}
         <option value={editor.libraryId}>{editor.libraryId}</option>
       {/if}
       {#each libraries as library (library.id)}
@@ -52,123 +52,110 @@
     </select>
   </label>
 
-  {#if editor instanceof CollectionDraft}
+  {#if draft}
+    {@const form = draft}
     <div class="form-label">
-      <label for={`${groupListId}-type`}>Type</label>
+      <span>Create</span>
+      <SegmentedControl
+        --segmented-margin="0"
+        label="Create"
+        options={KINDS}
+        bind:value={() => form.kind, (kind) => form.selectKind(kind)}
+      />
+    </div>
+    <label class="form-label">
+      Start from
       <select
-        id={`${groupListId}-type`}
-        value={preset ? "preset" : "custom"}
+        value={form.presetKey}
         onchange={(event) =>
-          selectCollectionSource(
-            editor,
-            event.currentTarget.value === "preset" ? "preset" : "builders",
+          form.applyPreset(
+            form.kindPresets.find((entry) => entry.key === event.currentTarget.value),
           )}
       >
-        <option value="custom">Custom</option>
-        <option value="preset">Preset</option>
-      </select>
-    </div>
-  {/if}
-
-  {#if preset && editor instanceof CollectionDraft}
-    <div class="form-label">
-      <label for={`${groupListId}-preset`}>Preset</label>
-      <select
-        id={`${groupListId}-preset`}
-        value={discovering ? "discovery" : editor.preset}
-        onchange={(event) => {
-          const value = event.currentTarget.value;
-          if (value === "discovery") selectCollectionSource(editor, "discovery");
-          else if (value === "decades" || value === "years" || value === "genres") {
-            editor.preset = value;
-            selectCollectionSource(editor, "preset");
-          }
-        }}
-      >
-        <option value="decades">Decades</option>
-        <option value="years">Years</option>
-        <option value="genres">Genres</option>
-        {#if editor.mediaType === "movie"}<option value="discovery">TMDB franchises</option>{/if}
+        <option value="">{creatingSet ? "Choose a set" : "Blank collection"}</option>
+        {#each form.kindPresets as entry (entry.key)}
+          <option value={entry.key}>{entry.label}</option>
+        {/each}
       </select>
       <span class="hint"
-        >Create a set of collections, each with editable sources and its own schedule.</span
+        >{preset?.description ??
+          (creatingSet
+            ? "Presets fill in the set below; everything stays editable."
+            : "Presets fill in the criteria below; everything stays editable.")}</span
       >
-    </div>
-  {:else}
-    <div class="form-label">
-      <label for={`${groupListId}-source`}>Source</label>
-      <select
-        id={`${groupListId}-source`}
-        value={editor.sourceType}
-        onchange={(event) => {
-          const source = event.currentTarget.value;
-          if (source === "builders" || source === "smart") selectCollectionSource(editor, source);
-        }}
-      >
-        {#if !editor.creating && editor.sourceType === "unmanaged"}
-          <option value="unmanaged" disabled>Unmanaged server collection</option>
-        {/if}
-        <option value="builders">Dynamic sources</option>
-        {#if editor.serverType === "plex"}<option value="smart">Plex smart filter</option>{/if}
-      </select>
-      <span class="hint"
-        >{discovering
-          ? "Create a collection for each matching franchise in this library."
-          : editor.sourceType === "smart"
-            ? "Plex updates members as they match your filters."
-            : "Combine lists, TMDB IDs, people, tags, and library filters."}</span
-      >
-    </div>
+    </label>
   {/if}
 
-  <label class="form-label">
-    Title
-    {#if preset}
+  {#if creatingSet}
+    <label class="form-label">
+      Group
       <input
-        disabled
-        value=""
-        placeholder={discovering ? "From TMDB franchise names" : "From selected preset values"}
-      />
-    {:else}
-      <input required maxlength="200" bind:value={editor.title} placeholder="Collection title" />
-    {/if}
-  </label>
-
-  <div class="form-label">
-    <label for={`${groupListId}-group`}>Collection Group</label>
-    <select
-      id={`${groupListId}-group`}
-      value={groups.includes(editor.collectionGroup)
-        ? editor.collectionGroup
-        : editor.collectionGroup
-          ? "__new__"
-          : ""}
-      onchange={(event) => {
-        editor.collectionGroup =
-          event.currentTarget.value === "__new__" ? "New group" : event.currentTarget.value;
-      }}
-    >
-      <option value="" disabled={discovering}>No group</option>
-      {#each groups as group (group)}<option value={group}>{group}</option>{/each}
-      <option value="__new__">Create new group...</option>
-    </select>
-    {#if editor.collectionGroup && !groups.includes(editor.collectionGroup)}
-      <label for={`${groupListId}-new-group`}>New group name</label>
-      <input
-        id={`${groupListId}-new-group`}
         required
         maxlength="200"
         bind:value={editor.collectionGroup}
+        placeholder="e.g. Decades"
+        list={`${id}-groups`}
       />
-    {/if}
-    <span class="hint">Group defaults apply unless this collection has an explicit override.</span>
-    <button
-      type="button"
-      class="btn btn-ghost btn-sm"
-      onclick={() =>
-        uiState.openCollectionGroups(editor.collectionGroup, (name, replacement) => {
-          if (editor.collectionGroup === name) editor.collectionGroup = replacement;
-        })}>Manage groups</button
-    >
-  </div>
+      <datalist id={`${id}-groups`}>
+        {#each groups as group (group)}<option value={group}></option>{/each}
+      </datalist>
+      <span class="hint"
+        >The set's collections share this group and its defaults, such as sort titles and
+        visibility.</span
+      >
+    </label>
+  {:else}
+    <label class="form-label">
+      Title
+      <input
+        required
+        maxlength="200"
+        bind:value={editor.title}
+        disabled={editor.generated}
+        placeholder="Collection title"
+      />
+      {#if editor.generated}<span class="hint"
+          >The collection set of its group titles this collection.</span
+        >{/if}
+    </label>
+
+    <div class="form-label">
+      <label for={`${id}-group`}>Group</label>
+      <select
+        id={`${id}-group`}
+        disabled={editor.generated}
+        value={groups.includes(editor.collectionGroup)
+          ? editor.collectionGroup
+          : editor.collectionGroup
+            ? "__new__"
+            : ""}
+        onchange={(event) => {
+          editor.collectionGroup =
+            event.currentTarget.value === "__new__" ? "New group" : event.currentTarget.value;
+        }}
+      >
+        <option value="">No group</option>
+        {#each groups as group (group)}<option value={group}>{group}</option>{/each}
+        <option value="__new__">Create new group...</option>
+      </select>
+      {#if editor.collectionGroup && !groups.includes(editor.collectionGroup)}
+        <label for={`${id}-new-group`}>New group name</label>
+        <input
+          id={`${id}-new-group`}
+          required
+          maxlength="200"
+          bind:value={editor.collectionGroup}
+        />
+      {/if}
+      <span class="hint">Group defaults apply unless this collection overrides them.</span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        onclick={() =>
+          uiState.openCollectionGroups(editor.collectionGroup, (name, replacement) => {
+            if (editor.collectionGroup === name) editor.collectionGroup = replacement;
+          })}>{editor.generated ? "Edit the set" : "Manage groups"}</button
+      >
+    </div>
+  {/if}
 </DetailForm>

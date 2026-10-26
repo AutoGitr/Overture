@@ -1,199 +1,135 @@
 <script lang="ts">
-  import Plus from "@lucide/svelte/icons/plus";
-  import type { CollectionBuilderInput, SmartSortOrder } from "../../generated/rest/types.gen";
-  import { BUILDER_KINDS, newBuilder } from "../utils/collectionBuilders";
   import { CollectionEditor, type CollectionDraft } from "../utils/collectionForms.svelte";
-  import CollectionBuilderItem from "./CollectionBuilderItem.svelte";
+  import { ORDER_LABELS } from "../utils/collectionCriteria";
   import DetailForm from "./DetailForm.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
-  import FilterGroupEditor from "./FilterGroupEditor.svelte";
+  import CriteriaEditor from "./CriteriaEditor.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
 
   let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
 
-  const sortOrders: readonly { id: SmartSortOrder; label: string }[] = [
-    { id: "release.desc", label: "Release date (newest first)" },
-    { id: "release.asc", label: "Release date (oldest first)" },
-    { id: "title.asc", label: "Title (A to Z)" },
-    { id: "title.desc", label: "Title (Z to A)" },
-    { id: "added.desc", label: "Date added (newest first)" },
-    { id: "added.asc", label: "Date added (oldest first)" },
-    { id: "critic_rating.desc", label: "Critic rating (highest first)" },
-    { id: "audience_rating.desc", label: "Audience rating (highest first)" },
-    { id: "rating.desc", label: "Rating (highest first)" },
-    { id: "plays.desc", label: "Play count (most played)" },
-    { id: "duration.desc", label: "Duration (longest first)" },
-    { id: "duration.asc", label: "Duration (shortest first)" },
-    { id: "random", label: "Random" },
-  ];
-
-  function addBuilder(type: CollectionBuilderInput["type"]) {
-    editor.rule.builders = [...(editor.rule.builders ?? []), newBuilder(type)];
-  }
-
-  function removeBuilder(index: number) {
-    if (!editor.rule.builders) return;
-    editor.rule.builders = editor.rule.builders.filter((_, i) => i !== index);
-  }
-
-  function moveBuilder(fromIndex: number, toIndex: number) {
-    if (!editor.rule.builders) return;
-    if (toIndex < 0 || toIndex >= editor.rule.builders.length) return;
-    const next = [...editor.rule.builders];
-    const [item] = next.splice(fromIndex, 1);
-    if (item) {
-      next.splice(toIndex, 0, item);
-      editor.rule.builders = next;
-    }
-  }
+  const CONTENT = [
+    ["manual", "Chosen by hand"],
+    ["criteria", "Matching criteria"],
+  ] as const;
+  const EVALUATION = [
+    ["overture", "Synced by Overture"],
+    ["smart", "Plex smart collection"],
+  ] as const;
+  let capabilities = $derived(editor.capabilities.data);
+  let editable = $derived(!editor.generated && editor.criteriaEditable);
 </script>
 
-{#if editor.sourceType !== "unmanaged"}
-  <DetailForm
-    collapsible
-    expanded
-    title="Content"
-    description={editor.sourceType === "smart"
-      ? "Plex smart collections automatically evaluate filter rules directly on your Plex media server."
-      : "Combine sources in order. Results are merged without duplicates; library filters add matching items rather than narrowing other sources."}
-    busy={editor.busy}
-  >
-    {#if editor.sourceType === "smart"}
-      {#if editor instanceof CollectionEditor && editor.collection.kind === "smart" && !editor.existingRule}
-        <div class="form-wide">
-          <p class="hint">
-            This collection's smart filter is managed in Plex. Enable editing to replace it with
-            rules defined here. Display changes keep the existing filter.
-          </p>
-          <label class="form-row">
-            <input type="checkbox" bind:checked={editor.manageSmartFilter} />
-            Manage smart filter in Overture
-          </label>
-        </div>
-      {/if}
-      {#if editor.smartFilterEditable && editor.rule.smart_filter}
-        <div class="smart-section form-wide">
-          <div class="form-grid">
-            <label class="form-label">
-              Smart sort order
-              <select bind:value={editor.rule.smart_filter.sort_by}>
-                {#each sortOrders as order (order.id)}
-                  <option value={order.id}>{order.label}</option>
-                {/each}
-              </select>
-            </label>
-
-            <label class="form-label">
-              Item limit
-              <input
-                type="number"
-                min="1"
-                placeholder="Unlimited"
-                value={editor.rule.smart_filter.limit ?? ""}
-                oninput={(e) => {
-                  if (editor.rule.smart_filter) {
-                    editor.rule.smart_filter.limit = e.currentTarget.value
-                      ? e.currentTarget.valueAsNumber
-                      : null;
-                  }
-                }}
-              />
-            </label>
-          </div>
-
-          <label class="form-label">
-            Managed Plex label
-            <input
-              placeholder="e.g. Marvel Cinematic Universe"
-              maxlength="100"
-              value={editor.rule.managed_label ?? ""}
-              oninput={(e) => (editor.rule.managed_label = e.currentTarget.value || null)}
-            />
-            <span class="hint">
-              With sources below, Overture labels their results and Plex filters those items.
-              Without sources, enter an existing library label or leave this blank.
-            </span>
-          </label>
-
-          {#if editor.rule.smart_filter.filter_group}
-            <FilterGroupEditor
-              group={editor.rule.smart_filter.filter_group}
-              label="Smart collection criteria"
-            />
-          {/if}
-        </div>
-      {/if}
-    {/if}
-    {#if editor.smartFilterEditable && (editor.sourceType === "builders" || editor.rule.managed_label || editor.rule.builders?.length)}
-      <div class="builders-stack form-wide">
-        {#each editor.rule.builders ?? [] as _builder, i (i)}
-          {#if editor.rule.builders && editor.rule.builders[i]}
-            <CollectionBuilderItem
-              builder={editor.rule.builders[i]}
-              index={i}
-              total={editor.rule.builders.length}
-              mediaType={editor.mediaType}
-              onremove={() => removeBuilder(i)}
-              onmoveup={() => moveBuilder(i, i - 1)}
-              onmovedown={() => moveBuilder(i, i + 1)}
-            />
-          {/if}
-        {/each}
-
-        <div class="add-builder-row">
-          <span class="hint"
-            >{editor.sourceType === "smart"
-              ? "Optional sources for the managed Plex label:"
-              : "Add a source:"}</span
-          >
-          <div class="builder-buttons">
-            {#each BUILDER_KINDS as kind (kind.type)}
-              {#if !kind.media || kind.media === editor.mediaType}
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-sm"
-                  onclick={() => addBuilder(kind.type)}
-                >
-                  <Plus size={14} />
-                  {kind.label}
-                </button>
-              {/if}
-            {/each}
-          </div>
-        </div>
+<DetailForm
+  collapsible
+  expanded
+  title="Content"
+  description={editor.generated
+    ? "The collection set of this collection's group decides its criteria. Edit the set to change them."
+    : editor.content === "manual"
+      ? "Members are added and ordered by hand in Members."
+      : editor.smart
+        ? "Plex keeps the members current and evaluates play state for each user."
+        : "Overture adds the items matching the criteria and removes the rest on each sync."}
+  busy={editor.busy}
+>
+  {#if editor instanceof CollectionEditor && !editor.generated}
+    {@const form = editor}
+    <div class="form-label">
+      <span>Members</span>
+      <SegmentedControl
+        --segmented-margin="0"
+        label="Members"
+        options={CONTENT}
+        bind:value={form.content}
+      />
+    </div>
+  {/if}
+  {#if editor.content === "criteria"}
+    {#if capabilities?.smart}
+      <div class="form-label">
+        <span>Evaluation</span>
+        <SegmentedControl
+          --segmented-margin="0"
+          label="Evaluation"
+          options={EVALUATION}
+          bind:value={
+            () => (editor.rule.smart ? "smart" : "overture"),
+            (value) => (editor.rule.smart = value === "smart")
+          }
+        />
+        <span class="hint"
+          >{editor.rule.smart
+            ? "Live and per user, with every Plex filter. Lists and tags become Plex labels Overture keeps up to date."
+            : "Uses synced metadata, so play state follows the last library sync."}</span
+        >
       </div>
     {/if}
-    {#if editor.sourceType === "builders"}
+    {#if editor instanceof CollectionEditor && !editor.criteriaEditable}
+      {@const form = editor}
+      <div class="form-wide">
+        <p class="hint">
+          Plex manages this smart collection's filter. Display changes keep it; take it over to
+          replace it with criteria defined here.
+        </p>
+        <label class="form-row">
+          <input type="checkbox" bind:checked={form.manageServerFilter} />
+          Replace the Plex filter with these criteria
+        </label>
+      </div>
+    {/if}
+    <fieldset class="criteria form-wide" disabled={!editable}>
+      <legend class="sr-only">Criteria</legend>
+      <CriteriaEditor
+        group={editor.rule.criteria}
+        fields={editor.fields}
+        sources={capabilities?.sources ?? []}
+        mediaType={editor.mediaType}
+        libraryId={editor.libraryId}
+        label="Criteria"
+      />
+    </fieldset>
+    <label class="form-label">
+      Sort
+      <select bind:value={editor.orderType}>
+        <option value={null}>Default</option>
+        {#each editor.orders as order (order)}
+          <option value={order}>{ORDER_LABELS[order]}</option>
+        {/each}
+      </select>
+      <span class="hint"
+        >{editor.smart
+          ? "Plex sorts smart collections itself."
+          : "Custom keeps the order of the first list the criteria use."}</span
+      >
+    </label>
+    <label class="form-label">
+      Limit
+      <input
+        type="number"
+        min="1"
+        max="10000"
+        placeholder="All matching items"
+        disabled={!editable}
+        value={editor.rule.limit ?? ""}
+        oninput={(event) =>
+          (editor.rule.limit = event.currentTarget.value
+            ? event.currentTarget.valueAsNumber
+            : null)}
+      />
+      <span class="hint">Keep only the first items in the chosen sort.</span>
+    </label>
+    {#if !editor.smart}
       <CollectionPolicyFields policy={editor.rule} defaults={editor.defaults.data} section="sync" />
     {/if}
-  </DetailForm>
-{/if}
+  {/if}
+</DetailForm>
 
 <style>
-  .smart-section,
-  .builders-stack {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-  .form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-    @media (max-width: 640px) {
-      grid-template-columns: 1fr;
-    }
-  }
-  .add-builder-row {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
-  }
-  .builder-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+  .criteria {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 </style>

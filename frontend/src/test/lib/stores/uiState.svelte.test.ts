@@ -55,6 +55,9 @@ describe("uiState persisted filters", () => {
     expect(uiState.movieFilters).toEqual({
       monitored: "monitored",
       collectionSize: "all",
+      collectionKind: "all",
+      collectionMembers: "all",
+      collectionSync: "all",
       art: "complete",
       theme: "all",
       overtureDb: "complete",

@@ -7,18 +7,22 @@
   import { route } from "../router/routes";
   import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
   let { formId, editor }: { formId: string; editor: CollectionEditor | CollectionDraft } = $props();
-  let discovering = $derived(editor instanceof CollectionDraft && editor.discovering);
-  let sections = $derived([
-    { key: "setup", label: "Setup", icon: Settings },
-    ...(discovering || editor.sourceType !== "unmanaged"
-      ? [{ key: "content", label: discovering ? "Discovery" : "Content", icon: WandSparkles }]
-      : []),
-    ...(!discovering && (!editor.creating || editor.manualMembersAllowed)
-      ? [{ key: "members", label: "Members", icon: Users }]
-      : []),
-    ...(!discovering ? [{ key: "display", label: "Display", icon: Eye }] : []),
-    { key: "schedule", label: "Schedule", icon: Calendar },
-  ]);
+  let set = $derived(editor instanceof CollectionDraft && editor.kind === "set");
+  let sections = $derived(
+    set
+      ? [
+          { key: "setup", label: "Setup", icon: Settings },
+          { key: "content", label: "Collections", icon: WandSparkles },
+          { key: "display", label: "Defaults", icon: Eye },
+        ]
+      : [
+          { key: "setup", label: "Setup", icon: Settings },
+          { key: "content", label: "Content", icon: WandSparkles },
+          ...(editor.creating ? [] : [{ key: "members", label: "Members", icon: Users }]),
+          { key: "display", label: "Display", icon: Eye },
+          { key: "schedule", label: "Schedule", icon: Calendar },
+        ],
+  );
   let active = $derived(
     sections.find((section) => route.hash === `#${formId}-${section.key}`)?.key ?? "setup",
   );

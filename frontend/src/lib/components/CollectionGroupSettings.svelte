@@ -2,34 +2,33 @@
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import { createQuery, createMutation, useQueryClient } from "@tanstack/svelte-query";
   import {
+    applyCollectionGroupPolicyMutation,
+    getCollectionCapabilitiesOptions,
+    getCollectionDefaultsOptions,
     getCollectionGroupPolicyOptions,
     saveCollectionGroupPolicyMutation,
     syncCollectionGroupMutation,
-    applyCollectionGroupPolicyMutation,
-    getCollectionDefaultsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
-    CollectionGroupPolicyOutput,
+    CollectionGroupPolicyInput,
     LibrarySectionRead,
     MediaType,
-    ServerType,
   } from "../../generated/rest/types.gen";
-  import DetailForm from "./DetailForm.svelte";
-  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
-  import DataStatus from "./DataStatus.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import CollectionDiscoveryFields from "./CollectionDiscoveryFields.svelte";
+  import { defaultGenerator, type SetGenerator } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
+  import CollectionGroupDefaults from "./CollectionGroupDefaults.svelte";
+  import CollectionSetEditor from "./CollectionSetEditor.svelte";
+  import DataStatus from "./DataStatus.svelte";
+  import DetailForm from "./DetailForm.svelte";
 
   let {
     group,
     mediaType,
-    serverType,
     libraries = [],
   }: {
     group: string;
     mediaType: MediaType;
-    serverType: ServerType | null;
     libraries?: LibrarySectionRead[];
   } = $props();
 
@@ -38,30 +37,29 @@
     ...getCollectionGroupPolicyOptions({ query: { name: group, media_type: mediaType } }),
     enabled: !!group.trim(),
   }));
-  const request = createMutation(() => saveCollectionGroupPolicyMutation());
-  const syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
-  const feedback = createNotifier();
-  const applyRequest = createMutation(() => applyCollectionGroupPolicyMutation());
   const defaults = createQuery(() =>
     getCollectionDefaultsOptions({ query: { media_type: mediaType } }),
   );
+  const capabilities = createQuery(() =>
+    getCollectionCapabilitiesOptions({ query: { media_type: mediaType } }),
+  );
+  const request = createMutation(() => saveCollectionGroupPolicyMutation());
+  const syncRequest = createMutation(() => syncCollectionGroupMutation());
+  const applyRequest = createMutation(() => applyCollectionGroupPolicyMutation());
+  const feedback = createNotifier();
 
+  type GroupDraft = Omit<CollectionGroupPolicyInput, "generator"> & {
+    generator: SetGenerator | null;
+  };
   let draft = $derived.by(() => {
     if (!query.data) return null;
-    const value = $state<CollectionGroupPolicyOutput>({
-      ...query.data,
-      dynamic_tmdb: query.data.dynamic_tmdb
-        ? {
-            ...query.data.dynamic_tmdb,
-            exclude_tmdb_ids: [...query.data.dynamic_tmdb.exclude_tmdb_ids],
-          }
-        : null,
-    });
+    const value = $state<GroupDraft>(structuredClone(query.data));
     return value;
   });
+  let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
 
   async function save(apply = false) {
-    if (!draft || request.isPending) return;
+    if (!draft || busy) return;
     const variables = {
       query: { name: group, media_type: mediaType },
       body: $state.snapshot(draft),
@@ -72,238 +70,133 @@
         getCollectionGroupPolicyOptions({ query: variables.query }).queryKey,
         saved,
       );
-      if (apply) {
-        const result = await applyRequest.mutateAsync({ query: variables.query });
-        const errors = Object.values(result.errors);
-        if (errors.length) {
-          feedback.error(
-            `Applied to ${result.collection_ids.length} collections. ${errors.length} failed: ${errors.join("; ")}`,
-          );
-          return;
-        }
-        feedback.success(
-          `Group defaults applied to ${result.collection_ids.length} collection${result.collection_ids.length === 1 ? "" : "s"}. Explicit overrides were kept.`,
+      if (!apply) {
+        feedback.success("Group saved. Its collections use it on their next save or sync.");
+        return;
+      }
+      const result = await applyRequest.mutateAsync({ query: variables.query });
+      const errors = Object.values(result.errors);
+      if (errors.length) {
+        feedback.error(
+          `Applied to ${result.collection_ids.length} collections. ${errors.length} failed: ${errors.join("; ")}`,
+        );
+        return;
+      }
+      feedback.success(
+        `Group defaults applied to ${result.collection_ids.length} collection${result.collection_ids.length === 1 ? "" : "s"}. Explicit overrides were kept.`,
+      );
+    } catch (error) {
+      feedback.error(errorMessage(error, "Could not save the group"));
+    }
+  }
+
+  async function sync() {
+    if (busy) return;
+    try {
+      const result = await syncRequest.mutateAsync({
+        query: { name: group, media_type: mediaType },
+      });
+      const errors = Object.entries(result.errors);
+      const summary = `${result.created.length} created, ${result.removed.length} removed, ${result.synced} synced`;
+      if (errors.length) {
+        feedback.error(
+          `${summary}. ${errors.length} failed: ${errors.map(([title, error]) => `${title}: ${error}`).join("; ")}`,
         );
       } else {
-        feedback.success("Group defaults saved. Collections use them on their next save or sync.");
+        feedback.success(`Group "${group}" synced: ${summary}.`);
       }
     } catch (error) {
-      feedback.error(errorMessage(error, "Could not save group defaults"));
-    }
-  }
-
-  async function syncGroup() {
-    if (syncGroupRequest.isPending) return;
-    try {
-      await syncGroupRequest.mutateAsync({ query: { name: group, media_type: mediaType } });
-      feedback.success(`Group "${group}" collections synced.`);
-    } catch (error) {
-      feedback.error(errorMessage(error, "Failed to sync collection group"));
-    }
-  }
-
-  function toggleDynamicTmdb(enabled: boolean) {
-    if (!draft) return;
-    if (enabled) {
-      draft.dynamic_tmdb = {
-        enabled: true,
-        library_id: libraries[0]?.id ?? "",
-        strip_prefix: "The ",
-        strip_suffix: " Collection",
-        auto_exclude_from_other_collections: true,
-        exclude_tmdb_ids: [],
-      };
-    } else {
-      draft.dynamic_tmdb = null;
+      feedback.error(errorMessage(error, "Failed to sync the group"));
     }
   }
 </script>
 
-<DetailForm
-  collapsible
-  title="Group settings"
-  description="Shared defaults for this group. Blank values inherit the global fallback; a collection's explicit overrides take precedence. Save & Apply updates display settings without changing membership."
-  busy={request.isPending || syncGroupRequest.isPending || applyRequest.isPending}
->
-  <DataStatus
-    label="group defaults"
-    error={query.error}
-    loading={query.isFetching}
-    hasData={query.data !== undefined}
-    onretry={() => query.refetch()}
-  />
-  <DataStatus
-    label="global collection defaults"
-    error={defaults.error}
-    loading={defaults.isFetching}
-    hasData={defaults.data !== undefined}
-    onretry={() => defaults.refetch()}
-  />
-  {#if draft}
-    <CollectionPolicyFields
-      policy={draft}
-      defaults={defaults.data}
-      prefix="Group "
-      plex={serverType === "plex"}
-    />
-
-    <label class="form-row">
+<DataStatus
+  label="group"
+  error={query.error}
+  loading={query.isFetching}
+  hasData={query.data !== undefined}
+  onretry={() => query.refetch()}
+/>
+<DataStatus
+  label="collection options"
+  error={capabilities.error}
+  loading={capabilities.isFetching}
+  hasData={capabilities.data !== undefined}
+  onretry={() => capabilities.refetch()}
+/>
+{#if draft}
+  {@const form = draft}
+  <DetailForm
+    collapsible
+    expanded={!!form.generator}
+    title="Collection set"
+    description="A set creates one collection in this group per value in a library, such as each decade, and keeps them current on its schedule."
+    {busy}
+  >
+    <label class="form-row form-wide">
       <input
         type="checkbox"
-        checked={draft.sort_title_format === null}
-        onchange={(event) => {
-          if (draft) draft.sort_title_format = event.currentTarget.checked ? null : "";
-        }}
+        checked={!!form.generator}
+        onchange={(event) =>
+          (form.generator = event.currentTarget.checked
+            ? defaultGenerator(libraries[0]?.id ?? "")
+            : null)}
       />
-      Default sort title template
+      Create this group's collections automatically
     </label>
-
-    <label class="form-label">
-      Group sort title template
-      <input
-        maxlength="200"
-        value={draft.sort_title_format ?? ""}
-        placeholder={defaults.data?.sort_title_format ?? ""}
-        oninput={(event) => {
-          if (draft) draft.sort_title_format = event.currentTarget.value;
-        }}
-      />
-      <span class="hint">
-        Use &#123;title&#125; and &#123;group&#125;. Empty disables formatting for this group.
-      </span>
-    </label>
-
-    <label class="form-row">
-      <input
-        type="checkbox"
-        checked={draft.summary_format === null}
-        onchange={(event) => {
-          if (draft) draft.summary_format = event.currentTarget.checked ? null : "";
-        }}
-      />
-      Default summary template
-    </label>
-
-    <label class="form-label">
-      Group summary template
-      <input
-        maxlength="500"
-        value={draft.summary_format ?? ""}
-        placeholder={defaults.data?.summary_format ?? ""}
-        oninput={(event) => {
-          if (draft) draft.summary_format = event.currentTarget.value;
-        }}
-      />
-      <span class="hint">
-        Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;, &#123;end_date&#125;,
-        &#123;summary&#125;.
-      </span>
-    </label>
-
-    <div class="seasonal-row form-wide">
+    {#if form.generator}
+      {@const generator = form.generator}
       <label class="form-label">
-        Active start (MM-DD)
-        <input
-          placeholder={defaults.data?.active_start_mmdd ?? ""}
-          maxlength="5"
-          value={draft.active_start_mmdd ?? ""}
-          oninput={(e) => {
-            if (draft) draft.active_start_mmdd = e.currentTarget.value.trim() || null;
-          }}
-        />
+        Library
+        <select required bind:value={generator.library_id}>
+          {#each libraries as library (library.id)}
+            <option value={library.id}>{library.title}</option>
+          {/each}
+        </select>
       </label>
-      <label class="form-label">
-        Active end (MM-DD)
-        <input
-          placeholder={defaults.data?.active_end_mmdd ?? ""}
-          maxlength="5"
-          value={draft.active_end_mmdd ?? ""}
-          oninput={(e) => {
-            if (draft) draft.active_end_mmdd = e.currentTarget.value.trim() || null;
-          }}
-        />
-      </label>
-    </div>
-
-    {#if mediaType === "movie"}
-      <div class="dynamic-discovery-section form-wide">
-        <label class="form-row">
-          <input
-            type="checkbox"
-            checked={draft.dynamic_tmdb !== null && (draft.dynamic_tmdb.enabled ?? false)}
-            onchange={(e) => toggleDynamicTmdb(e.currentTarget.checked)}
-          />
-          Auto-discover TMDB franchise collections from library movies
-        </label>
-
-        {#if draft.dynamic_tmdb}
-          <div class="options-col nested-options">
-            {#if libraries.length > 0}
-              <label class="form-label">
-                Library
-                <select bind:value={draft.dynamic_tmdb.library_id}>
-                  {#each libraries as library (library.id)}
-                    <option value={library.id}>{library.title}</option>
-                  {/each}
-                </select>
-              </label>
-            {/if}
-            <CollectionDiscoveryFields config={draft.dynamic_tmdb} />
-          </div>
-        {/if}
-      </div>
+      <CollectionSetEditor
+        {generator}
+        libraryId={generator.library_id}
+        {mediaType}
+        capabilities={capabilities.data}
+        {group}
+        minimum={form.minimum_items ?? null}
+      />
     {/if}
-
-    <div class="form-row action-row form-wide">
-      <button type="button" class="btn btn-secondary" onclick={() => void save()}>
-        Save group defaults
-      </button>
-      <button type="button" class="btn btn-primary" onclick={() => void save(true)}
-        >Save &amp; Apply to group</button
-      >
-      <button
-        type="button"
-        class="btn btn-ghost"
-        disabled={syncGroupRequest.isPending}
-        onclick={() => void syncGroup()}
-      >
-        <RefreshCw size={14} class={syncGroupRequest.isPending ? "animate-spin" : ""} />
-        Sync Group Now
-      </button>
-    </div>
-  {/if}
-</DetailForm>
+  </DetailForm>
+  <DetailForm
+    collapsible
+    title="Group defaults"
+    description="Collections in the group inherit these unless they override them. Blank values inherit the global defaults; Save & Apply updates display settings without changing members."
+    {busy}
+  >
+    <CollectionGroupDefaults
+      policy={form}
+      defaults={defaults.data}
+      capabilities={capabilities.data}
+      smart={!!form.generator?.smart}
+    />
+  </DetailForm>
+  <div class="actions" role="group" aria-label="Group actions">
+    <button type="button" class="btn btn-secondary" disabled={busy} onclick={() => void save()}
+      >Save group</button
+    >
+    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save(true)}
+      >Save &amp; Apply</button
+    >
+    <button type="button" class="btn btn-ghost" disabled={busy} onclick={() => void sync()}>
+      <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />
+      {form.generator ? "Run set & sync" : "Sync group"}
+    </button>
+  </div>
+{/if}
 
 <style>
-  .seasonal-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-    @media (max-width: 640px) {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .dynamic-discovery-section {
-    border-top: var(--border-subtle);
-    padding-top: var(--space-3);
+  .actions {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .nested-options {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-    padding-left: var(--space-4);
-    border-left: var(--border-subtle);
-    margin-top: var(--space-2);
-  }
-
-  .action-row {
-    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-3);
-    padding-top: var(--space-2);
   }
 </style>

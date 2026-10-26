@@ -1,4 +1,4 @@
-"""Configuration for one dynamic collection builder or smart filter."""
+"""The criteria that maintain one collection's members."""
 
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
@@ -9,14 +9,13 @@ lazy from ...domain import (
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
-    RuleSourceType,
     SyncMode,
 )
 lazy from ..columns import enum_columns, enum_type
 
 
 class CollectionRule(SQLModel, table=True):
-    """A source stack or smart filter and nullable overrides of global defaults."""
+    """Criteria, evaluated by Overture or by Plex, and nullable policy overrides."""
 
     __tablename__: ClassVar[Any] = "collection_rules"
 
@@ -24,14 +23,10 @@ class CollectionRule(SQLModel, table=True):
     collection_id: int = Field(
         foreign_key="media_collections.id", ondelete="CASCADE", unique=True, index=True
     )
-    source_type: RuleSourceType = Field(
-        default=RuleSourceType.FILTER, sa_type=enum_type(RuleSourceType)
-    )
-    source_identifier: str = ""
-    filter_json: str | None = None
-    builders_json: str | None = None
-    smart_filter_json: str | None = None
-    managed_label: str | None = None
+    #: A ``FilterGroup`` of field and source conditions.
+    criteria_json: str
+    smart: bool = False
+    item_limit: int | None = None
     sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
     minimum_items: int | None = None
     delete_below_minimum: bool | None = None

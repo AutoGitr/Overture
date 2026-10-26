@@ -290,11 +290,13 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
                 )
             if include_types == "Movie":
                 assert params.get("fields") == (
-                    "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,Etag"
+                    "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
+                    "Tags,ProductionLocations,Width,Etag"
                 )
             else:
                 assert params.get("fields") == (
-                    "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded"
+                    "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
+                    "Tags,ProductionLocations,Width"
                 )
             assert params.get("enableUserData") == "false"
             if params.get("parentId") == "lib2":

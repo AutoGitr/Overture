@@ -2,8 +2,24 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "svelte";
 import SidebarControls from "../../../lib/components/SidebarControls.svelte";
+import {
+  searchFieldGroups,
+  searchPlaceholder,
+  sortMenu,
+  type SidebarMode,
+  type SidebarTab,
+} from "../../../lib/utils/sidebarDomain";
 
-function renderControls(props: Partial<ComponentProps<typeof SidebarControls>> = {}) {
+interface ListOptions {
+  mode?: SidebarMode;
+  tab?: SidebarTab;
+  tmdbConfigured?: boolean;
+}
+
+/** Renders the controls with the fields the sidebar passes for a list. */
+function renderControls(props: Partial<ComponentProps<typeof SidebarControls>> & ListOptions = {}) {
+  const { mode = "items", tab = "movie", tmdbConfigured = false, ...rest } = props;
+  const searchField = rest.searchField ?? "title";
   const handlers = {
     onOpenFilters: vi.fn(),
     onSearchQueryChange: vi.fn(),
@@ -12,18 +28,19 @@ function renderControls(props: Partial<ComponentProps<typeof SidebarControls>> =
   };
   render(SidebarControls, {
     props: {
-      sidebarMode: "items",
-      sidebarTab: "movie",
-      tmdbConfigured: false,
+      section: `library:${tab}:${mode}`,
+      searchGroups: searchFieldGroups("library", mode, tab, tmdbConfigured),
+      placeholder: searchPlaceholder(mode, tab, searchField, 3),
+      sortFields:
+        searchField === "tmdb" ? [] : sortMenu(mode === "collections" ? "collections" : "library"),
       filtersOpen: false,
       hasActiveFilters: false,
-      filteredCount: 3,
       searchQuery: "",
-      searchField: "title",
+      searchField,
       sortField: "title",
       sortDir: "asc",
       ...handlers,
-      ...props,
+      ...rest,
     },
   });
   return handlers;
@@ -89,7 +106,7 @@ describe("SidebarControls menus", () => {
   });
 
   it("offers ID and YouTube search on both tabs and director search on movies only", async () => {
-    renderControls({ sidebarTab: "show", searchField: "youtube" });
+    renderControls({ tab: "show", searchField: "youtube" });
 
     expect(screen.getByRole("textbox", { name: "Search sidebar" })).toHaveAttribute(
       "placeholder",
@@ -148,6 +165,23 @@ describe("SidebarControls menus", () => {
       "placeholder",
       "Search studios...",
     );
+  });
+
+  it("searches and sorts collections by their own fields", async () => {
+    const { onSetSort } = renderControls({ mode: "collections" });
+
+    expect(screen.getByRole("textbox", { name: "Search sidebar" })).toHaveAttribute(
+      "placeholder",
+      "Search 3 collections...",
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Choose search field" }));
+    expect(
+      screen.getAllByRole("menuitemradio").map((option) => option.textContent?.trim()),
+    ).toEqual(["Title", "Group", "TMDB collection ID", "YouTube link, ID or title"]);
+    await fireEvent.keyDown(screen.getByRole("menu", { name: "Search by" }), { key: "Escape" });
+    await fireEvent.click(screen.getByRole("button", { name: "Choose sort order" }));
+    await fireEvent.click(screen.getByRole("menuitemradio", { name: "Number of items" }));
+    expect(onSetSort).toHaveBeenCalledWith("child_count", "desc");
   });
 
   it("focuses the search input on / or Ctrl+K shortcut", async () => {

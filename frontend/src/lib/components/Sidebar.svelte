@@ -32,7 +32,7 @@
   import { collectionImageUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import type {
     SidebarSortPreference,
-    SidebarSource,
+    SortScope,
     SidebarTab,
     SidebarSortDir as SortDir,
     SidebarSortField as SortField,
@@ -99,28 +99,42 @@
         : catalogMovies,
   );
 
-  function sortStorageKey(source: SidebarSource, tab: SidebarTab) {
-    return source === "library" ? `overture_sidebar_sort_${tab}` : `overture_catalog_sort_${tab}`;
-  }
+  const SORT_KEYS: Record<SortScope, string> = {
+    library: "overture_sidebar_sort",
+    collections: "overture_collection_sort",
+    overturedb: "overture_catalog_sort",
+  };
 
-  function loadSortPreference(source: SidebarSource, tab: SidebarTab) {
+  function loadSortPreference(scope: SortScope, tab: SidebarTab) {
     return sidebarDomain.normalizeSortPreference(
-      readJson<unknown>(sortStorageKey(source, tab), null),
+      readJson<unknown>(`${SORT_KEYS[scope]}_${tab}`, null),
+      scope,
     );
   }
 
-  /** Each source and tab remembers its own sort. */
-  let sortBySource = $state<Record<SidebarSource, Record<SidebarTab, SidebarSortPreference>>>({
+  /** Items, collections and the catalog each remember their sort per tab. */
+  let sortByScope = $state<Record<SortScope, Record<SidebarTab, SidebarSortPreference>>>({
     library: {
       movie: loadSortPreference("library", "movie"),
       show: loadSortPreference("library", "show"),
+    },
+    collections: {
+      movie: loadSortPreference("collections", "movie"),
+      show: loadSortPreference("collections", "show"),
     },
     overturedb: {
       movie: loadSortPreference("overturedb", "movie"),
       show: loadSortPreference("overturedb", "show"),
     },
   });
-  let sort = $derived(sortBySource[uiState.sidebarSource][uiState.sidebarTab]);
+  let sortScope = $derived<SortScope>(
+    uiState.sidebarSource === "overturedb"
+      ? "overturedb"
+      : uiState.sidebarMode === "collections"
+        ? "collections"
+        : "library",
+  );
+  let sort = $derived(sortByScope[sortScope][uiState.sidebarTab]);
   let catalogRows = $derived(
     sidebarDomain.filterCatalogEntries({
       entries: catalogQuery.data ?? [],
@@ -133,8 +147,8 @@
   );
 
   function setSort(field: SortField, dir: SortDir) {
-    sortBySource[uiState.sidebarSource][uiState.sidebarTab] = { field, dir };
-    writeJson(sortStorageKey(uiState.sidebarSource, uiState.sidebarTab), { field, dir });
+    sortByScope[sortScope][uiState.sidebarTab] = { field, dir };
+    writeJson(`${SORT_KEYS[sortScope]}_${uiState.sidebarTab}`, { field, dir });
   }
 
   // Whichever tab/mode combination is active is entirely driven by the URL
@@ -206,7 +220,11 @@
     sidebarDomain.filterSidebarCollections({
       collections,
       filters: uiState.currentFilters,
+      publicDatasetEnabled: datasetEnabled,
       searchQuery: uiState.searchQuery,
+      searchField: uiState.searchField,
+      sortField: sort.field,
+      sortDir: sort.dir,
     }),
   );
 
@@ -324,10 +342,24 @@
   />
 
   <SidebarControls
-    source={uiState.sidebarSource}
-    sidebarMode={uiState.sidebarMode}
-    sidebarTab={uiState.sidebarTab}
-    tmdbConfigured={settingsState.current.tmdb_configured}
+    {section}
+    searchGroups={sidebarDomain.searchFieldGroups(
+      uiState.sidebarSource,
+      uiState.sidebarMode,
+      uiState.sidebarTab,
+      settingsState.current.tmdb_configured,
+    )}
+    placeholder={sidebarDomain.searchPlaceholder(
+      uiState.sidebarMode,
+      uiState.sidebarTab,
+      uiState.searchField,
+      uiState.sidebarSource === "overturedb"
+        ? catalogRows.length
+        : uiState.sidebarMode === "collections"
+          ? filteredCollections.length
+          : filteredItems.length,
+    )}
+    sortFields={searchingTmdb ? [] : sidebarDomain.sortMenu(sortScope)}
     filtersOpen={uiState.openPopup === "filters"}
     hasActiveFilters={uiState.sidebarSource === "overturedb"
       ? sidebarDomain.CATALOG_FILTER_KEYS.some(
@@ -340,11 +372,6 @@
           datasetEnabled,
           uiState.sidebarMode,
         )}
-    filteredCount={uiState.sidebarSource === "overturedb"
-      ? catalogRows.length
-      : uiState.sidebarMode === "collections"
-        ? filteredCollections.length
-        : filteredItems.length}
     searchQuery={uiState.searchQuery}
     searchField={uiState.searchField}
     sortField={sort.field}

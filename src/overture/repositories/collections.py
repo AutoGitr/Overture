@@ -270,6 +270,27 @@ class CollectionRepository:
             ).all()
         )
 
+    async def titles_by_item(
+        self, media_type: MediaType, library_id: str
+    ) -> dict[int, list[str]]:
+        """The titles of the listed collections each item of a library belongs to."""
+        stmt = (
+            select(col(MediaCollectionMember.media_item_id), col(MediaCollection.title))
+            .join(
+                MediaCollection,
+                col(MediaCollection.id) == col(MediaCollectionMember.collection_id),
+            )
+            .where(
+                col(MediaCollection.media_type) == media_type,
+                col(MediaCollection.library_id) == library_id,
+                col(MediaCollection.last_synced_at).is_not(None),
+            )
+        )
+        titles: dict[int, list[str]] = {}
+        for item_id, title in await self.session.exec(stmt):
+            titles.setdefault(item_id, []).append(title)
+        return titles
+
     async def rule(self, collection_id: int) -> CollectionRule | None:
         """Return the collection's sole rule."""
         return (

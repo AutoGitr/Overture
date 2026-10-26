@@ -103,6 +103,11 @@
       {#if collection.kind === "smart"}
         <span class="badge">Smart</span>
       {/if}
+      {#if collection.generated_value !== null}
+        <span class="badge" title="Created and kept current by its group's collection set"
+          >Set: {collection.collection_group}</span
+        >
+      {/if}
       {#if collection.withheld}
         <span class="badge" title="Collection kept in Overture and absent from the media server"
           >Not on server</span
@@ -223,15 +228,11 @@
         type="submit"
         form={formId}
         disabled={editor.busy || (editor instanceof CollectionDraft && !editor.canSubmit)}
-        >{editor instanceof CollectionDraft && editor.discovering
-          ? editor.busy
-            ? "Discovering franchises..."
-            : "Discover & Create Collections"
-          : editor instanceof CollectionDraft && editor.generating
-            ? "Create selected collections"
-            : editor.creating
-              ? "Create collection"
-              : "Save Changes"}</button
+        >{editor instanceof CollectionDraft && editor.kind === "set"
+          ? "Create set"
+          : editor.creating
+            ? "Create collection"
+            : "Save Changes"}</button
       >
       {#if collection && editor instanceof CollectionEditor}<button
           class="tab-item"

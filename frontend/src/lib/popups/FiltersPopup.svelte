@@ -3,6 +3,7 @@
   import {
     bulkOperateCollectionsMutation,
     bulkOperateItemsMutation,
+    getCollectionCapabilitiesOptions,
     getLibrariesOptions,
     getPublicDatasetStatusOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -51,10 +52,35 @@
     ["poster", "Poster"],
     ["background", "Background"],
   ] as const;
+  const MEMBERS_OPTIONS = [
+    ["all", "All"],
+    ["criteria", "Criteria"],
+    ["manual", "Manual"],
+  ] as const;
+  const KIND_OPTIONS = [
+    ["all", "All"],
+    ["regular", "Regular"],
+    ["smart", "Smart"],
+  ] as const;
+  const SYNC_OPTIONS = [
+    ["all", "All"],
+    ["synced", "Synced"],
+    ["failed", "Failed"],
+  ] as const;
+  const SIZE_OPTIONS = [
+    ["all", "All"],
+    ["empty", "Empty"],
+    ["below_minimum", "Below minimum"],
+  ] as const;
   const MATCH_MODE_OPTIONS = [
     ["any", "Any selected"],
     ["all", "All selected"],
   ] as const;
+
+  const capabilities = createQuery(() => ({
+    ...getCollectionCapabilitiesOptions({ query: { media_type: uiState.sidebarTab } }),
+    enabled: uiState.sidebarMode === "collections",
+  }));
 
   const librariesQuery = createQuery(() => ({
     ...getLibrariesOptions({ query: { media_type: uiState.sidebarTab } }),
@@ -159,31 +185,17 @@
             bind:value={draft.monitored}
           />
 
-          {#if uiState.sidebarMode === "collections"}
-            <label class="form-label"
-              >Collection size
-              <select bind:value={draft.collectionSize}>
-                <option value="all">All collections</option>
-                <option value="empty">Empty collections</option>
-                <option value="below_minimum">Below minimum</option>
-              </select>
-            </label>
-          {/if}
+          <span class="form-label">Media server</span>
+          <SegmentedControl
+            label="Media Server"
+            options={MEDIA_SERVER_OPTIONS}
+            bind:value={draft.mediaServer}
+          />
+
+          <span class="form-label">Art</span>
+          <SegmentedControl label="Art Status" options={COMPLETE_OPTIONS} bind:value={draft.art} />
+
           {#if uiState.sidebarMode === "items"}
-            <span class="form-label">Media server</span>
-            <SegmentedControl
-              label="Media Server"
-              options={MEDIA_SERVER_OPTIONS}
-              bind:value={draft.mediaServer}
-            />
-
-            <span class="form-label">Art</span>
-            <SegmentedControl
-              label="Art Status"
-              options={COMPLETE_OPTIONS}
-              bind:value={draft.art}
-            />
-
             <span class="form-label">Aspect ratio</span>
             <SegmentedControl
               label="Aspect Ratio"
@@ -199,7 +211,7 @@
             bind:value={draft.theme}
           />
 
-          {#if uiState.sidebarMode === "items" && datasetEnabled}
+          {#if datasetEnabled}
             <span class="form-label">OvertureDB</span>
             <SegmentedControl
               label="OvertureDB Status"
@@ -216,6 +228,40 @@
           {/if}
         </div>
       </div>
+
+      {#if uiState.sidebarMode === "collections"}
+        <section class="option-card filter-grid" aria-label="Collections">
+          <span class="form-label">Members</span>
+          <SegmentedControl
+            label="Collection Members"
+            options={MEMBERS_OPTIONS}
+            bind:value={draft.collectionMembers}
+          />
+
+          {#if capabilities.data?.smart}
+            <span class="form-label">Kind</span>
+            <SegmentedControl
+              label="Collection Kind"
+              options={KIND_OPTIONS}
+              bind:value={draft.collectionKind}
+            />
+          {/if}
+
+          <span class="form-label">Last sync</span>
+          <SegmentedControl
+            label="Collection Sync"
+            options={SYNC_OPTIONS}
+            bind:value={draft.collectionSync}
+          />
+
+          <span class="form-label">Size</span>
+          <SegmentedControl
+            label="Collection Size"
+            options={SIZE_OPTIONS}
+            bind:value={draft.collectionSize}
+          />
+        </section>
+      {/if}
 
       {#if uiState.sidebarMode === "items"}
         <section class="option-card filter-section art" aria-label="Art">

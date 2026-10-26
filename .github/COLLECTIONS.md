@@ -1,76 +1,101 @@
 # Collections and Kometa equivalents
 
-Overture configures collections through **Collections > + Create collection**.
-The [Kometa defaults guide](https://kometa.wiki/en/latest/defaults/guide/)
-inspired the preset workflow: choose a set, select its entries, and customize
-shared settings. Overture uses its own collection rules; it does not import
-Kometa YAML or execute Kometa defaults files.
+Overture configures collections through **Collections > + Create collection**
+and **Manage groups**. It covers most of what a Kometa configuration does with
+its own forms; it does not import Kometa YAML or run Kometa defaults files.
 
-## Choose a starting point
-
-| Collection goal | Overture configuration |
+| Kometa | Overture |
 | --- | --- |
-| One collection per decade, year or genre | **Type: Preset**, then **Decades**, **Years** or **Genres** |
-| Discover movie franchises from the library | **Type: Preset > TMDB franchises** |
-| Combine TMDB franchises, lists, titles or person credits | **Type: Custom > Dynamic sources**, then add sources in Content |
-| Build from MDBList or Radarr/Sonarr tags | **Type: Custom > Dynamic sources**, then choose the corresponding source |
-| Match nested metadata conditions | Add a **Library filter** source |
-| Let Plex evaluate live membership and user state | **Type: Custom > Plex smart filter** |
-| Share display, sync and asset defaults | Assign a **Collection Group** and use **Manage groups** |
-| Keep a collection only during part of the year | Set recurring dates in **Schedule** |
+| `smart_filter` with `all` / `any` | Criteria evaluated as a **Plex smart collection** |
+| `plex_search`, `filters` | Criteria **Synced by Overture** |
+| `smart_label` | Lists in Plex smart criteria; Overture keeps their labels |
+| `tmdb_collection`, `tmdb_list`, `tmdb_movie`, `tmdb_show` | TMDB franchise, list and title conditions |
+| `tmdb_actor`, `tmdb_director`, `tmdb_writer`, `tmdb_producer`, `tmdb_biography` | TMDB person condition with roles and **Biography as summary** |
+| `mdb_list` | MDBList condition |
+| `radarr_taglist`, `sonarr_taglist` | Radarr and Sonarr tag conditions |
+| `.not` modifiers, exclusions | **is not** and **not in** conditions |
+| `sort_by`, `collection_order` | **Sort** (custom keeps the first list's order) |
+| `limit` | **Limit** |
+| `minimum_items`, `delete_below_minimum`, `sync_mode` | Content and group defaults |
+| `collection_mode`, `collection_filtering`, `visible_*` | **Display** (Plex) |
+| `sort_title`, `summary` with template variables | **Sort title** and **Summary** templates |
+| `schedule: range(...)`, `delete_not_scheduled` | Seasonal dates and **When inactive** |
+| `dynamic_collections` | A **Collection set** on a group |
+| `templates`, defaults files | Presets and group defaults |
 
-## Example: collections for each decade
+Overture's lists are TMDB, MDBList, Radarr and Sonarr; it does not read IMDb,
+Letterboxd or Trakt lists. To use one, mirror it in MDBList. Collections do not
+add missing titles to Radarr or Sonarr.
 
-1. Select a library and choose **Type: Preset > Decades**.
-2. Click **Preview collections**. Overture lists decades represented in the
-   library, with their current member counts.
-3. Select the decades to create. Optionally assign a group such as `Decades`.
-4. Adjust the minimum membership and sync policy in **Content**. A decade with
-   fewer members than the effective minimum cannot be created.
-5. Expand **Display** to set shared display choices. For example, a sort title
-   of `01_{title}` keeps these collections together.
-6. Expand **Schedule** to adjust automatic sync, then click
-   **Create selected collections**.
+## Smart collections from your Kometa smart filters
 
-Each result is a regular collection with an editable library filter. Its members
-update on subsequent rule syncs. Years and genres use the same workflow.
-Preview again when you want to create newly available values, such as a new
-decade. Existing matching titles are kept and reported, so select only the
-entries you want to add. Successful creations remain if another entry fails;
-the form selects failed entries for review and retry.
+Kometa:
 
-TMDB franchise discovery instead saves a group's discovery configuration and
-can discover new franchises on later runs. It requires a movie library, a group,
-imported TMDB franchise memberships, and a configured TMDB API key.
+```yaml
+Foreign:
+  smart_filter:
+    all:
+      audio_language.not: English
+      country.not: [Canada, United States of America]
+    sort_by: title.asc
+```
 
-## Customize the results
+Overture: create a collection, choose **Plex smart collection**, set **Match all
+of the following**, and add **Audio language is not English**, **Country is not
+Canada** and **Country is not United States of America**. Set **Sort** to Title
+(A to Z). Each condition lists the values Plex knows for the library.
 
-An explicit collection choice overrides its group; the group overrides global
-collection defaults. Choose **Default** to inherit. Text fields show inherited
-values as placeholders. Group **Save & Apply** updates display settings while
-preserving explicit overrides and membership.
+The **Unplayed**, **Recently played** and **Continue watching** presets set
+**Collection filtering** to User library, so each user sees their own.
 
-Dynamic sources merge matching items already in the selected library. A library
-filter adds its own matches rather than filtering the results of other sources.
-Strict sync replaces membership with source results; Append keeps manual members.
-For a source-backed Plex smart collection, set a managed label, add sources, then
-add live smart criteria. Without sources, Plex evaluates the criteria directly.
+## Lists combined with live filters
 
-Overture does not implement every Kometa builder or default. In particular, the
-preset selector lists only the supported presets; it is not the Kometa catalog.
-Collections do not add missing titles to Radarr or Sonarr.
+Kometa's `smart_label` labels the results of its builders and filters the label
+in a smart collection. In Overture, put the list in the smart collection's
+criteria:
 
-## Manage groups and deletion
+```text
+Match all of the following
+  Radarr tags   in  request
+  Unplayed      is  true
+Sort: Date added (newest first)
+```
 
-**Manage groups > Manage group** can rename a group or delete it. Deleting just
-the group leaves its collections ungrouped. You can also remove its collections
-from Overture, the media server, or both. Server-only removal retains the local
-configuration with scheduled rule sync disabled. Overture-only removal allows
-the server collections to be imported again during a future library sync.
+Overture labels the tagged movies `overture:radarr_tag:...` on each sync, and
+Plex shows each user the requests they have not watched. Lists can sit in any
+group, with **in** or **not in**, like any other condition.
 
-Collection deletion also succeeds when the server collection has already been
-removed. These operations always preserve media files. Failed collection
-operations are reported individually, and the group remains available for retry.
+## One collection per decade, genre or franchise
 
-See the [collection guide](README.md#collections) for templates, seasonal windows,
-artwork, themes, and bulk operations.
+1. **+ Create collection**, choose the library, then **Collection set**.
+2. **Start from** Decades (or Genres, Directors, TMDB franchises and so on), and
+   name the group, such as `Decades`.
+3. Adjust the set: the title template, the most common values only, values to
+   include or skip, text to remove from names, conditions every collection
+   needs, and whether to create Plex smart collections.
+4. **Preview collections** lists each collection and its size; values below the
+   group's minimum are left out.
+5. Set the group's defaults under **Defaults**, such as a `01_{title}` sort title
+   and the sync interval, then **Create set**.
+
+On its schedule the set creates collections for new values, renames and updates
+its collections when you change the set, and removes the collections of values
+it no longer produces when **Below minimum** deletes. Kometa's
+`dynamic_collections` with `type: tmdb_collection`, `remove_prefix`,
+`remove_suffix` and `exclude` is a TMDB franchises set with those options.
+TMDB franchise sets need `TMDB_API_KEY` and the franchise memberships a full Sync
+imports, and skip franchises held by collections outside the group.
+
+## Groups, overrides and deletion
+
+A collection's explicit choice overrides its group, and the group overrides
+**Settings > Collection defaults**. **Default** inherits. **Save & Apply**
+updates the group's display settings at once, keeping members and explicit
+overrides.
+
+**Manage groups > Manage group** renames or deletes a group. Deleting just the
+group leaves its collections ungrouped; you can also remove its collections from
+Overture, the media server, or both. Server-only removal keeps the configuration
+with scheduled sync disabled. Media files are always kept.
+
+See the [collection guide](README.md#collections) for every option.

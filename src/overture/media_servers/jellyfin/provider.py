@@ -25,6 +25,7 @@ lazy from ..adapters import (
     ServerSeason,
     ServerSection,
     server_path,
+    video_resolution,
 )
 lazy from ..base import BaseMediaServerProvider
 lazy from ..errors import MediaServerError
@@ -145,7 +146,8 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         movie = media_type is MediaType.MOVIE
         if movie and not etag:
             raise MediaServerError("Media server returned a movie without an Etag")
-        raw_rating = metadata.get("CommunityRating")
+        community_rating = metadata.get("CommunityRating")
+        critic_rating = metadata.get("CriticRating")
         runtime_ticks = metadata.get("RunTimeTicks")
         return ServerItem(
             id=item_id,
@@ -186,9 +188,16 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                 if person.get("Type") == "Producer" and (name := person.get("Name"))
             ),
             countries=tuple(metadata.get("ProductionLocations") or []),
-            tags=tuple(metadata.get("Tags") or []),
+            labels=tuple(metadata.get("Tags") or []),
             content_rating=metadata.get("OfficialRating") or None,
-            rating=float(raw_rating) if isinstance(raw_rating, int | float) else None,
+            resolution=video_resolution(metadata.get("Width")) if movie else None,
+            # Critic ratings are percentages; Overture rates out of ten like Plex.
+            critic_rating=float(critic_rating) / 10
+            if isinstance(critic_rating, int | float)
+            else None,
+            audience_rating=float(community_rating)
+            if isinstance(community_rating, int | float)
+            else None,
             duration_minutes=int(runtime_ticks // 600_000_000)
             if isinstance(runtime_ticks, int) and runtime_ticks > 0
             else None,

@@ -6,6 +6,7 @@ import type {
   ArtMatchResponse,
   BulkAssetsScheduleResponse,
   CollectionRead,
+  CollectionCapabilities,
   CollectionRuleRead,
   CollectionDetail,
   CatalogEntry,
@@ -125,7 +126,11 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
   return {
     active_end_mmdd: null,
     active_start_mmdd: null,
-    auto_generated_tmdb_id: null,
+    generated_value: null,
+    managed: false,
+    sync_failed: false,
+    last_rule_sync: null,
+    theme_duration: null,
     collection_filtering: null,
     delete_when_inactive: null,
     kind: "regular",
@@ -144,7 +149,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     background_status: "missing",
     art_status: "missing",
     collection_mode: null,
-    order_type: "release",
+    order_type: "release.asc",
     visible_home: false,
     child_count: 0,
     has_theme: false,
@@ -175,7 +180,17 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     active_start_mmdd: null,
     auto_match_art: null,
     auto_match_theme: null,
-    builders: [{ type: "mdblist", identifiers: ["user/list"] }],
+    criteria: {
+      mode: "all",
+      conditions: [
+        {
+          kind: "source",
+          operator: "is",
+          source: { type: "mdblist", identifiers: ["user/list"] },
+        },
+      ],
+      groups: [],
+    },
     collection_filtering: null,
     collection_mode: null,
     delete_below_minimum: null,
@@ -183,10 +198,10 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     enabled: true,
     last_error: null,
     last_synced_at: null,
-    managed_label: null,
+    limit: null,
     minimum_items: null,
     order_type: null,
-    smart_filter: null,
+    smart: false,
     sort_title_format: null,
     summary_format: null,
     sync_interval_hours: 24,
@@ -194,6 +209,97 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     visible_home: null,
     visible_library: null,
     visible_shared: null,
+    ...overrides,
+  };
+}
+
+/** What Plex offers movie collections, as the backend describes it. */
+export function collectionCapabilities(
+  overrides: Partial<CollectionCapabilities> = {},
+): CollectionCapabilities {
+  const text = [
+    "is",
+    "is_not",
+    "contains",
+    "does_not_contain",
+    "starts_with",
+    "ends_with",
+  ] as const;
+  const numbers = ["is", "is_not", "gt", "gte", "lt", "lte"] as const;
+  return {
+    server_type: "plex",
+    smart: true,
+    visibility: true,
+    orders: ["custom", "release.asc", "release.desc", "title.asc", "critic_rating.desc"],
+    smart_orders: ["release.asc", "release.desc", "title.asc", "critic_rating.desc"],
+    fields: [
+      {
+        field: "title",
+        label: "Title",
+        kind: "text",
+        operators: [...text],
+        local: true,
+        smart: true,
+      },
+      {
+        field: "genre",
+        label: "Genre",
+        kind: "tag",
+        operators: ["is", "is_not"],
+        local: true,
+        smart: true,
+      },
+      {
+        field: "year",
+        label: "Year",
+        kind: "number",
+        operators: [...numbers],
+        local: true,
+        smart: true,
+      },
+      {
+        field: "added",
+        label: "Date added",
+        kind: "date",
+        operators: ["in_last", "not_in_last", "before", "after"],
+        local: true,
+        smart: true,
+      },
+      {
+        field: "unplayed",
+        label: "Unplayed",
+        kind: "boolean",
+        operators: ["is", "is_not"],
+        local: true,
+        smart: true,
+      },
+      {
+        field: "hdr",
+        label: "HDR",
+        kind: "boolean",
+        operators: ["is", "is_not"],
+        local: false,
+        smart: true,
+      },
+    ],
+    sources: [
+      { type: "tmdb_collection", label: "TMDB franchise", unavailable: null },
+      { type: "tmdb_list", label: "TMDB list", unavailable: null },
+      { type: "tmdb_item", label: "TMDB titles", unavailable: null },
+      { type: "tmdb_person", label: "TMDB person", unavailable: null },
+      { type: "mdblist", label: "MDBList", unavailable: null },
+      { type: "radarr_tag", label: "Radarr tags", unavailable: null },
+      {
+        type: "sonarr_tag",
+        label: "Sonarr tags",
+        unavailable: "Sonarr tags select shows only",
+      },
+    ],
+    dimensions: [
+      { dimension: "decade", label: "Decades", title_format: "{value}s" },
+      { dimension: "genre", label: "Genres", title_format: "{value}" },
+      { dimension: "franchise", label: "TMDB franchises", title_format: "{value}" },
+    ],
     ...overrides,
   };
 }

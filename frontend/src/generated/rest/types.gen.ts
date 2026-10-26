@@ -1256,41 +1256,42 @@ export type CollectionArtwork = {
     poster_url: string | null;
 };
 
-export type CollectionBuilderInput = ({
-    type: 'tmdb_collection';
-} & TmdbCollectionBuilderInput) | ({
-    type: 'tmdb_item';
-} & TmdbItemBuilderInput) | ({
-    type: 'tmdb_list';
-} & TmdbListBuilderInput) | ({
-    type: 'tmdb_person';
-} & TmdbPersonBuilderInput) | ({
-    type: 'mdblist';
-} & MdblistBuilderInput) | ({
-    type: 'radarr_tag';
-} & RadarrTagBuilderInput) | ({
-    type: 'sonarr_tag';
-} & SonarrTagBuilderInput) | ({
-    type: 'library_filter';
-} & LibraryFilterBuilderInput);
-
-export type CollectionBuilderOutput = ({
-    type: 'tmdb_collection';
-} & TmdbCollectionBuilderOutput) | ({
-    type: 'tmdb_item';
-} & TmdbItemBuilderOutput) | ({
-    type: 'tmdb_list';
-} & TmdbListBuilderOutput) | ({
-    type: 'tmdb_person';
-} & TmdbPersonBuilderOutput) | ({
-    type: 'mdblist';
-} & MdblistBuilderOutput) | ({
-    type: 'radarr_tag';
-} & RadarrTagBuilderOutput) | ({
-    type: 'sonarr_tag';
-} & SonarrTagBuilderOutput) | ({
-    type: 'library_filter';
-} & LibraryFilterBuilderOutput);
+/**
+ * CollectionCapabilities
+ *
+ * What the active media server lets collections do, for one media type.
+ */
+export type CollectionCapabilities = {
+    /**
+     * Dimensions
+     */
+    dimensions: Array<CollectionDimensionRead>;
+    /**
+     * Fields
+     */
+    fields: Array<CollectionFieldRead>;
+    /**
+     * Orders
+     */
+    orders: Array<CollectionOrder>;
+    server_type: ServerType;
+    /**
+     * Smart
+     */
+    smart: boolean;
+    /**
+     * Smart Orders
+     */
+    smart_orders: Array<CollectionOrder>;
+    /**
+     * Sources
+     */
+    sources: Array<CollectionSourceRead>;
+    /**
+     * Visibility
+     */
+    visibility: boolean;
+};
 
 /**
  * CollectionCreate
@@ -1310,7 +1311,6 @@ export type CollectionCreate = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    kind?: CollectionKind;
     /**
      * Library Id
      */
@@ -1321,7 +1321,7 @@ export type CollectionCreate = {
      */
     member_ids?: Array<number>;
     order_type?: CollectionOrder;
-    rule?: CollectionRuleWrite | null;
+    rule?: CollectionRuleWriteInput | null;
     /**
      * Sort Title
      */
@@ -1373,10 +1373,6 @@ export type CollectionDetail = {
      * Art Url
      */
     art_url: string | null;
-    /**
-     * Auto Generated Tmdb Id
-     */
-    auto_generated_tmdb_id: number | null;
     background_status: AssetStatus;
     /**
      * Background Url
@@ -1410,6 +1406,10 @@ export type CollectionDetail = {
     delete_when_inactive: boolean | null;
     effective_sync_mode: SyncMode;
     /**
+     * Generated Value
+     */
+    generated_value: string | null;
+    /**
      * Has Theme
      */
     has_theme: boolean;
@@ -1419,9 +1419,17 @@ export type CollectionDetail = {
     id: number;
     kind: CollectionKind;
     /**
+     * Last Rule Sync
+     */
+    last_rule_sync: string | null;
+    /**
      * Library Id
      */
     library_id: string | null;
+    /**
+     * Managed
+     */
+    managed: boolean;
     media_type: MediaType;
     /**
      * Members
@@ -1471,6 +1479,10 @@ export type CollectionDetail = {
      * Summary Format
      */
     summary_format: string | null;
+    /**
+     * Sync Failed
+     */
+    sync_failed: boolean;
     /**
      * Theme Duration
      */
@@ -1535,11 +1547,195 @@ export type CollectionDetail = {
 };
 
 /**
+ * CollectionDimensionRead
+ *
+ * A metadata dimension a collection set can enumerate.
+ */
+export type CollectionDimensionRead = {
+    dimension: SetDimension;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Title Format
+     */
+    title_format: string;
+};
+
+/**
+ * CollectionFieldRead
+ *
+ * A criteria field as the active server offers it.
+ */
+export type CollectionFieldRead = {
+    field: FilterField;
+    kind: FieldKind;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Local
+     */
+    local: boolean;
+    /**
+     * Operators
+     */
+    operators: Array<FilterOperator>;
+    /**
+     * Smart
+     */
+    smart: boolean;
+};
+
+/**
+ * CollectionFieldValue
+ *
+ * A value of a field in a library, with the number of items holding it.
+ */
+export type CollectionFieldValue = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
  * CollectionFiltering
  *
  * User-context filtering mode for Plex smart collections.
  */
 export type CollectionFiltering = 'admin' | 'user';
+
+/**
+ * CollectionGenerator
+ *
+ * A collection set: one collection per value in a library.
+ */
+export type CollectionGeneratorInput = {
+    criteria?: FilterGroupInput;
+    dimension: SetDimension;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Exclude
+     */
+    exclude?: Array<string>;
+    /**
+     * Include
+     */
+    include?: Array<string>;
+    /**
+     * Library Id
+     */
+    library_id: string;
+    /**
+     * Smart
+     */
+    smart?: boolean;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix?: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix?: string;
+    title_format?: SetTitleFormat;
+    /**
+     * Top
+     */
+    top?: number | null;
+};
+
+/**
+ * CollectionGenerator
+ *
+ * A collection set: one collection per value in a library.
+ */
+export type CollectionGeneratorOutput = {
+    criteria: FilterGroupOutput;
+    dimension: SetDimension;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Exclude
+     */
+    exclude: Array<string>;
+    /**
+     * Include
+     */
+    include: Array<string>;
+    /**
+     * Library Id
+     */
+    library_id: string;
+    /**
+     * Smart
+     */
+    smart: boolean;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix: string;
+    title_format: SetTitleFormat;
+    /**
+     * Top
+     */
+    top: number | null;
+};
+
+/**
+ * CollectionGeneratorBase
+ *
+ * What a collection set creates one collection for, before a library is chosen.
+ */
+export type CollectionGeneratorBase = {
+    criteria: FilterGroupOutput;
+    dimension: SetDimension;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Exclude
+     */
+    exclude: Array<string>;
+    /**
+     * Include
+     */
+    include: Array<string>;
+    /**
+     * Smart
+     */
+    smart: boolean;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix: string;
+    title_format: SetTitleFormat;
+    /**
+     * Top
+     */
+    top: number | null;
+};
 
 /**
  * CollectionGroupDelete
@@ -1579,7 +1775,7 @@ export type CollectionGroupPolicyInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    dynamic_tmdb?: DynamicTmdbGroupConfigInput | null;
+    generator?: CollectionGeneratorInput | null;
     /**
      * Minimum Items
      */
@@ -1636,7 +1832,7 @@ export type CollectionGroupPolicyOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    dynamic_tmdb: DynamicTmdbGroupConfigOutput | null;
+    generator: CollectionGeneratorOutput | null;
     /**
      * Minimum Items
      */
@@ -1677,6 +1873,32 @@ export type CollectionGroupRename = {
      * Name
      */
     name: string;
+};
+
+/**
+ * CollectionGroupSyncResult
+ *
+ * What syncing a group created, removed and failed to sync.
+ */
+export type CollectionGroupSyncResult = {
+    /**
+     * Created
+     */
+    created: Array<number>;
+    /**
+     * Errors
+     */
+    errors: {
+        [key: string]: string;
+    };
+    /**
+     * Removed
+     */
+    removed: Array<number>;
+    /**
+     * Synced
+     */
+    synced: number;
 };
 
 /**
@@ -1724,7 +1946,6 @@ export type CollectionOptions = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    kind?: CollectionKind;
     order_type?: CollectionOrder;
     /**
      * Sort Title
@@ -1761,64 +1982,20 @@ export type CollectionOptions = {
 /**
  * CollectionOrder
  *
- * The order in which collection members appear.
+ * How a collection orders its members: a field and direction, or ``custom``.
+ *
+ * ``custom`` keeps the manual order, or the order of the collection's first
+ * ordered source. Plex sorts smart collections itself; Overture orders the
+ * members of other collections and stores the result as a custom order.
  */
-export type CollectionOrder = 'release' | 'alpha' | 'custom';
+export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'critic_rating.desc' | 'critic_rating.asc' | 'audience_rating.desc' | 'audience_rating.asc' | 'user_rating.desc' | 'user_rating.asc' | 'duration.desc' | 'duration.asc' | 'plays.desc' | 'plays.asc' | 'last_played.desc' | 'last_played.asc' | 'random';
 
 /**
  * CollectionPolicyBase
  *
  * Shared policy and media server display configuration.
  */
-export type CollectionPolicyBaseInput = {
-    active_end_mmdd?: SeasonalDate | null;
-    active_start_mmdd?: SeasonalDate | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art?: boolean | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme?: boolean | null;
-    collection_filtering?: CollectionFiltering | null;
-    collection_mode?: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum?: boolean | null;
-    /**
-     * Delete When Inactive
-     */
-    delete_when_inactive?: boolean | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
-    order_type?: CollectionOrder | null;
-    sort_title_format?: SortTitleFormat | null;
-    summary_format?: SummaryFormat | null;
-    sync_mode?: SyncMode | null;
-    /**
-     * Visible Home
-     */
-    visible_home?: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library?: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared?: boolean | null;
-};
-
-/**
- * CollectionPolicyBase
- *
- * Shared policy and media server display configuration.
- */
-export type CollectionPolicyBaseOutput = {
+export type CollectionPolicyBase = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     /**
@@ -1861,54 +2038,14 @@ export type CollectionPolicyBaseOutput = {
     visible_shared: boolean | null;
 };
 
-export type CollectionPreset = 'decades' | 'years' | 'genres';
-
 /**
- * CollectionPresetCreate
+ * CollectionPresetCollection
  *
- * Create only the selected preview entries with shared initial defaults.
+ * A single collection a preset starts from.
  */
-export type CollectionPresetCreate = {
-    /**
-     * Collection Group
-     */
-    collection_group?: string | null;
-    /**
-     * Enabled
-     */
-    enabled?: boolean;
-    /**
-     * Keys
-     */
-    keys: Array<string>;
-    /**
-     * Library Id
-     */
-    library_id: string;
-    media_type: MediaType;
-    policy?: CollectionPolicyBaseInput;
-    preset: CollectionPreset;
-    /**
-     * Sync Interval Hours
-     */
-    sync_interval_hours?: number;
-};
-
-/**
- * CollectionPresetEntry
- *
- * One generated collection, editable through its regular rule afterwards.
- */
-export type CollectionPresetEntry = {
-    builder: LibraryFilterBuilderOutput;
-    /**
-     * Key
-     */
-    key: string;
-    /**
-     * Member Count
-     */
-    member_count: number;
+export type CollectionPresetCollection = {
+    collection_filtering: CollectionFiltering | null;
+    rule: CollectionRuleWriteOutput;
     /**
      * Title
      */
@@ -1916,35 +2053,39 @@ export type CollectionPresetEntry = {
 };
 
 /**
- * CollectionPresetPreview
+ * CollectionPresetRead
  *
- * Preview a preset using the selected library's metadata.
+ * A starting point for a collection or a set, like Kometa's defaults.
  */
-export type CollectionPresetPreview = {
+export type CollectionPresetRead = {
+    collection: CollectionPresetCollection | null;
     /**
-     * Library Id
+     * Description
      */
-    library_id: string;
-    media_type: MediaType;
-    preset: CollectionPreset;
+    description: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    set: CollectionPresetSet | null;
 };
 
 /**
- * CollectionPresetResult
+ * CollectionPresetSet
  *
- * Independently committed preset creations and sanitised errors.
+ * A collection set a preset starts from.
  */
-export type CollectionPresetResult = {
+export type CollectionPresetSet = {
+    generator: CollectionGeneratorBase;
     /**
-     * Collection Ids
+     * Group
      */
-    collection_ids: Array<number>;
-    /**
-     * Errors
-     */
-    errors: {
-        [key: string]: string;
-    };
+    group: string;
+    policy: CollectionPolicyBase;
 };
 
 /**
@@ -1966,10 +2107,6 @@ export type CollectionRead = {
      * Art Url
      */
     art_url: string | null;
-    /**
-     * Auto Generated Tmdb Id
-     */
-    auto_generated_tmdb_id: number | null;
     background_status: AssetStatus;
     /**
      * Background Url
@@ -1994,6 +2131,10 @@ export type CollectionRead = {
      */
     delete_when_inactive: boolean | null;
     /**
+     * Generated Value
+     */
+    generated_value: string | null;
+    /**
      * Has Theme
      */
     has_theme: boolean;
@@ -2003,9 +2144,17 @@ export type CollectionRead = {
     id: number;
     kind: CollectionKind;
     /**
+     * Last Rule Sync
+     */
+    last_rule_sync: string | null;
+    /**
      * Library Id
      */
     library_id: string | null;
+    /**
+     * Managed
+     */
+    managed: boolean;
     media_type: MediaType;
     /**
      * Monitored
@@ -2050,6 +2199,14 @@ export type CollectionRead = {
      * Summary Format
      */
     summary_format: string | null;
+    /**
+     * Sync Failed
+     */
+    sync_failed: boolean;
+    /**
+     * Theme Duration
+     */
+    theme_duration: number | null;
     theme_status: AssetStatus;
     /**
      * Thumb Url
@@ -2109,12 +2266,9 @@ export type CollectionRuleRead = {
      * Auto Match Theme
      */
     auto_match_theme: boolean | null;
-    /**
-     * Builders
-     */
-    builders: Array<CollectionBuilderOutput>;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
+    criteria: FilterGroupOutput;
     /**
      * Delete Below Minimum
      */
@@ -2136,15 +2290,18 @@ export type CollectionRuleRead = {
      */
     last_synced_at: string | null;
     /**
-     * Managed Label
+     * Limit
      */
-    managed_label: string | null;
+    limit: number | null;
     /**
      * Minimum Items
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    smart_filter: SmartCollectionConfigOutput | null;
+    /**
+     * Smart
+     */
+    smart: boolean;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
     /**
@@ -2169,9 +2326,9 @@ export type CollectionRuleRead = {
 /**
  * CollectionRuleWrite
  *
- * Composable dynamic builders or smart filter with nullable policy overrides.
+ * Criteria that decide membership, with nullable policy overrides.
  */
-export type CollectionRuleWrite = {
+export type CollectionRuleWriteInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     /**
@@ -2182,12 +2339,9 @@ export type CollectionRuleWrite = {
      * Auto Match Theme
      */
     auto_match_theme?: boolean | null;
-    /**
-     * Builders
-     */
-    builders?: Array<CollectionBuilderInput>;
     collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
+    criteria: FilterGroupInput;
     /**
      * Delete Below Minimum
      */
@@ -2201,15 +2355,18 @@ export type CollectionRuleWrite = {
      */
     enabled?: boolean;
     /**
-     * Managed Label
+     * Limit
      */
-    managed_label?: string | null;
+    limit?: number | null;
     /**
      * Minimum Items
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
-    smart_filter?: SmartCollectionConfigInput | null;
+    /**
+     * Smart
+     */
+    smart?: boolean;
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
     /**
@@ -2229,6 +2386,166 @@ export type CollectionRuleWrite = {
      * Visible Shared
      */
     visible_shared?: boolean | null;
+};
+
+/**
+ * CollectionRuleWrite
+ *
+ * Criteria that decide membership, with nullable policy overrides.
+ */
+export type CollectionRuleWriteOutput = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
+    /**
+     * Auto Match Art
+     */
+    auto_match_art: boolean | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme: boolean | null;
+    collection_filtering: CollectionFiltering | null;
+    collection_mode: CollectionMode | null;
+    criteria: FilterGroupOutput;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Limit
+     */
+    limit: number | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    order_type: CollectionOrder | null;
+    /**
+     * Smart
+     */
+    smart: boolean;
+    sort_title_format: SortTitleFormat | null;
+    summary_format: SummaryFormat | null;
+    /**
+     * Sync Interval Hours
+     */
+    sync_interval_hours: number;
+    sync_mode: SyncMode | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean | null;
+};
+
+/**
+ * CollectionSetEntry
+ *
+ * One collection a set creates, keeps or skips.
+ */
+export type CollectionSetEntry = {
+    /**
+     * Below Minimum
+     */
+    below_minimum: boolean;
+    /**
+     * Collection Id
+     */
+    collection_id: number | null;
+    /**
+     * Member Count
+     */
+    member_count: number;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
+ * CollectionSetPreview
+ *
+ * Preview a set's collections in its library before saving it.
+ */
+export type CollectionSetPreview = {
+    generator: CollectionGeneratorInput;
+    /**
+     * Group
+     */
+    group?: string | null;
+    media_type: MediaType;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
+};
+
+export type CollectionSourceInput = ({
+    type: 'tmdb_collection';
+} & TmdbCollectionSourceInput) | ({
+    type: 'tmdb_item';
+} & TmdbItemSourceInput) | ({
+    type: 'tmdb_list';
+} & TmdbListSourceInput) | ({
+    type: 'tmdb_person';
+} & TmdbPersonSourceInput) | ({
+    type: 'mdblist';
+} & MdblistSourceInput) | ({
+    type: 'radarr_tag';
+} & RadarrTagSourceInput) | ({
+    type: 'sonarr_tag';
+} & SonarrTagSourceInput);
+
+export type CollectionSourceOutput = ({
+    type: 'tmdb_collection';
+} & TmdbCollectionSourceOutput) | ({
+    type: 'tmdb_item';
+} & TmdbItemSourceOutput) | ({
+    type: 'tmdb_list';
+} & TmdbListSourceOutput) | ({
+    type: 'tmdb_person';
+} & TmdbPersonSourceOutput) | ({
+    type: 'mdblist';
+} & MdblistSourceOutput) | ({
+    type: 'radarr_tag';
+} & RadarrTagSourceOutput) | ({
+    type: 'sonarr_tag';
+} & SonarrTagSourceOutput);
+
+/**
+ * CollectionSourceRead
+ *
+ * A source condition type, and why it is unavailable if it is.
+ */
+export type CollectionSourceRead = {
+    /**
+     * Label
+     */
+    label: string;
+    type: SourceType;
+    /**
+     * Unavailable
+     */
+    unavailable: string | null;
 };
 
 /**
@@ -2314,6 +2631,18 @@ export type CollectionThemeStatusResponse = {
      */
     youtube_title: string | null;
 };
+
+export type ConditionInput = ({
+    kind: 'field';
+} & FieldConditionInput) | ({
+    kind: 'source';
+} & SourceConditionInput);
+
+export type ConditionOutput = ({
+    kind: 'field';
+} & FieldConditionOutput) | ({
+    kind: 'source';
+} & SourceConditionOutput);
 
 /**
  * ConnectivityStatusResponse
@@ -2512,70 +2841,6 @@ export type DownloadJobMetadata = {
 export type DownloadStatus = 'pending' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * DynamicTmdbGroupConfig
- *
- * Automatic TMDB franchise collection discovery for a collection group.
- */
-export type DynamicTmdbGroupConfigInput = {
-    /**
-     * Auto Exclude From Other Collections
-     */
-    auto_exclude_from_other_collections?: boolean;
-    /**
-     * Enabled
-     */
-    enabled?: boolean;
-    /**
-     * Exclude Tmdb Ids
-     */
-    exclude_tmdb_ids?: Array<number>;
-    /**
-     * Library Id
-     */
-    library_id: string;
-    /**
-     * Strip Prefix
-     */
-    strip_prefix?: string;
-    /**
-     * Strip Suffix
-     */
-    strip_suffix?: string;
-};
-
-/**
- * DynamicTmdbGroupConfig
- *
- * Automatic TMDB franchise collection discovery for a collection group.
- */
-export type DynamicTmdbGroupConfigOutput = {
-    /**
-     * Auto Exclude From Other Collections
-     */
-    auto_exclude_from_other_collections: boolean;
-    /**
-     * Enabled
-     */
-    enabled: boolean;
-    /**
-     * Exclude Tmdb Ids
-     */
-    exclude_tmdb_ids: Array<number>;
-    /**
-     * Library Id
-     */
-    library_id: string;
-    /**
-     * Strip Prefix
-     */
-    strip_prefix: string;
-    /**
-     * Strip Suffix
-     */
-    strip_suffix: string;
-};
-
-/**
  * EnqueuedJobResponse
  *
  * A download job that was queued.
@@ -2592,12 +2857,16 @@ export type EnqueuedJobResponse = {
 };
 
 /**
- * FilterCondition
+ * FieldCondition
  *
- * One atomic library or smart-collection filter condition.
+ * Test one metadata field of an item.
  */
-export type FilterConditionInput = {
+export type FieldConditionInput = {
     field: FilterField;
+    /**
+     * Kind
+     */
+    kind?: 'field';
     operator?: FilterOperator;
     /**
      * Value
@@ -2606,12 +2875,16 @@ export type FilterConditionInput = {
 };
 
 /**
- * FilterCondition
+ * FieldCondition
  *
- * One atomic library or smart-collection filter condition.
+ * Test one metadata field of an item.
  */
-export type FilterConditionOutput = {
+export type FieldConditionOutput = {
     field: FilterField;
+    /**
+     * Kind
+     */
+    kind: 'field';
     operator: FilterOperator;
     /**
      * Value
@@ -2620,22 +2893,29 @@ export type FilterConditionOutput = {
 };
 
 /**
+ * FieldKind
+ *
+ * The value type of a filter field, which decides its operators.
+ */
+export type FieldKind = 'text' | 'tag' | 'number' | 'date' | 'boolean';
+
+/**
  * FilterField
  *
- * Library metadata field evaluated by a filter condition.
+ * Item metadata a collection condition tests.
  */
-export type FilterField = 'title' | 'genre' | 'studio' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'tag' | 'content_rating' | 'resolution' | 'audio_language' | 'year' | 'decade' | 'rating' | 'duration_minutes' | 'unplayed' | 'in_progress' | 'added_within_days' | 'released_within_days';
+export type FilterField = 'title' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress';
 
 /**
  * FilterGroup
  *
- * Boolean group of conditions and nested filter groups.
+ * Conditions and nested groups, matched together or individually.
  */
 export type FilterGroupInput = {
     /**
      * Conditions
      */
-    conditions?: Array<FilterConditionInput>;
+    conditions?: Array<ConditionInput>;
     /**
      * Groups
      */
@@ -2649,13 +2929,13 @@ export type FilterGroupInput = {
 /**
  * FilterGroup
  *
- * Boolean group of conditions and nested filter groups.
+ * Conditions and nested groups, matched together or individually.
  */
 export type FilterGroupOutput = {
     /**
      * Conditions
      */
-    conditions: Array<FilterConditionOutput>;
+    conditions: Array<ConditionOutput>;
     /**
      * Groups
      */
@@ -2671,7 +2951,7 @@ export type FilterGroupOutput = {
  *
  * Comparison operator for a filter condition.
  */
-export type FilterOperator = 'is' | 'is_not' | 'contains' | 'does_not_contain' | 'starts_with' | 'gte' | 'lte';
+export type FilterOperator = 'is' | 'is_not' | 'contains' | 'does_not_contain' | 'starts_with' | 'ends_with' | 'gt' | 'gte' | 'lt' | 'lte' | 'in_last' | 'not_in_last' | 'before' | 'after';
 
 /**
  * FixAuditRequest
@@ -2925,32 +3205,6 @@ export type JsonValue = string | number | number | boolean | Array<JsonValue> | 
     [key: string]: JsonValue;
 } | null;
 
-/**
- * LibraryFilterBuilder
- *
- * Resolve library items matching a structured filter tree.
- */
-export type LibraryFilterBuilderInput = {
-    filter_group: FilterGroupInput;
-    /**
-     * Type
-     */
-    type?: 'library_filter';
-};
-
-/**
- * LibraryFilterBuilder
- *
- * Resolve library items matching a structured filter tree.
- */
-export type LibraryFilterBuilderOutput = {
-    filter_group: FilterGroupOutput;
-    /**
-     * Type
-     */
-    type: 'library_filter';
-};
-
 export type LibraryIds = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
 
 /**
@@ -3066,11 +3320,11 @@ export type LogoutResponse = {
 export type MatchReference = 'local_file' | 'media_server' | 'saved_url';
 
 /**
- * MdblistBuilder
+ * MdblistSource
  *
- * Resolve one or more MDBList lists in source order.
+ * One or more MDBList lists, in source order.
  */
-export type MdblistBuilderInput = {
+export type MdblistSourceInput = {
     /**
      * Identifiers
      */
@@ -3082,11 +3336,11 @@ export type MdblistBuilderInput = {
 };
 
 /**
- * MdblistBuilder
+ * MdblistSource
  *
- * Resolve one or more MDBList lists in source order.
+ * One or more MDBList lists, in source order.
  */
-export type MdblistBuilderOutput = {
+export type MdblistSourceOutput = {
     /**
      * Identifiers
      */
@@ -3622,11 +3876,11 @@ export type PublicError = {
 };
 
 /**
- * RadarrTagBuilder
+ * RadarrTagSource
  *
- * Resolve movies carrying one or more Radarr tags.
+ * Movies carrying any of the Radarr tags.
  */
-export type RadarrTagBuilderInput = {
+export type RadarrTagSourceInput = {
     /**
      * Tags
      */
@@ -3638,11 +3892,11 @@ export type RadarrTagBuilderInput = {
 };
 
 /**
- * RadarrTagBuilder
+ * RadarrTagSource
  *
- * Resolve movies carrying one or more Radarr tags.
+ * Movies carrying any of the Radarr tags.
  */
-export type RadarrTagBuilderOutput = {
+export type RadarrTagSourceOutput = {
     /**
      * Tags
      */
@@ -4014,46 +4268,20 @@ export type SetCollectionThemeRequest = {
 };
 
 /**
- * SmartCollectionConfig
+ * SetDimension
  *
- * Server-side smart collection filter, sort order and item limit.
+ * The metadata a collection set creates one collection per value of.
  */
-export type SmartCollectionConfigInput = {
-    filter_group?: FilterGroupInput;
-    /**
-     * Limit
-     */
-    limit?: number | null;
-    sort_by?: SmartSortOrder;
-};
+export type SetDimension = 'decade' | 'year' | 'genre' | 'studio' | 'country' | 'content_rating' | 'resolution' | 'label' | 'actor' | 'director' | 'writer' | 'producer' | 'franchise';
+
+export type SetTitleFormat = string;
 
 /**
- * SmartCollectionConfig
+ * SonarrTagSource
  *
- * Server-side smart collection filter, sort order and item limit.
+ * Shows carrying any of the Sonarr tags.
  */
-export type SmartCollectionConfigOutput = {
-    filter_group: FilterGroupOutput;
-    /**
-     * Limit
-     */
-    limit: number | null;
-    sort_by: SmartSortOrder;
-};
-
-/**
- * SmartSortOrder
- *
- * Sort order applied to a smart collection.
- */
-export type SmartSortOrder = 'release.desc' | 'release.asc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'rating.desc' | 'critic_rating.desc' | 'audience_rating.desc' | 'plays.desc' | 'duration.desc' | 'duration.asc' | 'random';
-
-/**
- * SonarrTagBuilder
- *
- * Resolve shows carrying one or more Sonarr tags.
- */
-export type SonarrTagBuilderInput = {
+export type SonarrTagSourceInput = {
     /**
      * Tags
      */
@@ -4065,11 +4293,11 @@ export type SonarrTagBuilderInput = {
 };
 
 /**
- * SonarrTagBuilder
+ * SonarrTagSource
  *
- * Resolve shows carrying one or more Sonarr tags.
+ * Shows carrying any of the Sonarr tags.
  */
-export type SonarrTagBuilderOutput = {
+export type SonarrTagSourceOutput = {
     /**
      * Tags
      */
@@ -4082,9 +4310,50 @@ export type SonarrTagBuilderOutput = {
 
 export type SortTitleFormat = string;
 
+/**
+ * SourceCondition
+ *
+ * Test whether an external list holds the item.
+ */
+export type SourceConditionInput = {
+    /**
+     * Kind
+     */
+    kind?: 'source';
+    /**
+     * Operator
+     */
+    operator?: 'is' | 'is_not';
+    source: CollectionSourceInput;
+};
+
+/**
+ * SourceCondition
+ *
+ * Test whether an external list holds the item.
+ */
+export type SourceConditionOutput = {
+    /**
+     * Kind
+     */
+    kind: 'source';
+    /**
+     * Operator
+     */
+    operator: 'is' | 'is_not';
+    source: CollectionSourceOutput;
+};
+
 export type SourceOrderArtBulkSource = UniqueListArtBulkSourceMinLenMinLength1;
 
 export type SourceOrderThemeBulkSource = UniqueListThemeBulkSourceMinLenMinLength1;
+
+/**
+ * SourceType
+ *
+ * External lists a collection condition can test membership of.
+ */
+export type SourceType = 'tmdb_collection' | 'tmdb_item' | 'tmdb_list' | 'tmdb_person' | 'mdblist' | 'radarr_tag' | 'sonarr_tag';
 
 /**
  * StatsResponse
@@ -4387,38 +4656,6 @@ export type ThemeStats = {
 };
 
 /**
- * TmdbCollectionBuilder
- *
- * Resolve movies belonging to one TMDB franchise collection.
- */
-export type TmdbCollectionBuilderInput = {
-    /**
-     * Collection Id
-     */
-    collection_id: number;
-    /**
-     * Type
-     */
-    type?: 'tmdb_collection';
-};
-
-/**
- * TmdbCollectionBuilder
- *
- * Resolve movies belonging to one TMDB franchise collection.
- */
-export type TmdbCollectionBuilderOutput = {
-    /**
-     * Collection Id
-     */
-    collection_id: number;
-    /**
-     * Type
-     */
-    type: 'tmdb_collection';
-};
-
-/**
  * TmdbCollectionResponse
  *
  * A TMDB collection with its movies.
@@ -4467,35 +4704,35 @@ export type TmdbCollectionResult = {
 };
 
 /**
- * TmdbItemBuilder
+ * TmdbCollectionSource
  *
- * Resolve explicit TMDB movie or show IDs in order.
+ * Movies in one TMDB franchise collection, in release order.
  */
-export type TmdbItemBuilderInput = {
+export type TmdbCollectionSourceInput = {
     /**
-     * Tmdb Ids
+     * Collection Id
      */
-    tmdb_ids: Array<number>;
+    collection_id: number;
     /**
      * Type
      */
-    type?: 'tmdb_item';
+    type?: 'tmdb_collection';
 };
 
 /**
- * TmdbItemBuilder
+ * TmdbCollectionSource
  *
- * Resolve explicit TMDB movie or show IDs in order.
+ * Movies in one TMDB franchise collection, in release order.
  */
-export type TmdbItemBuilderOutput = {
+export type TmdbCollectionSourceOutput = {
     /**
-     * Tmdb Ids
+     * Collection Id
      */
-    tmdb_ids: Array<number>;
+    collection_id: number;
     /**
      * Type
      */
-    type: 'tmdb_item';
+    type: 'tmdb_collection';
 };
 
 /**
@@ -4591,6 +4828,38 @@ export type TmdbItemResult = {
 };
 
 /**
+ * TmdbItemSource
+ *
+ * Explicit TMDB movie or show IDs, in the order given.
+ */
+export type TmdbItemSourceInput = {
+    /**
+     * Tmdb Ids
+     */
+    tmdb_ids: Array<number>;
+    /**
+     * Type
+     */
+    type?: 'tmdb_item';
+};
+
+/**
+ * TmdbItemSource
+ *
+ * Explicit TMDB movie or show IDs, in the order given.
+ */
+export type TmdbItemSourceOutput = {
+    /**
+     * Tmdb Ids
+     */
+    tmdb_ids: Array<number>;
+    /**
+     * Type
+     */
+    type: 'tmdb_item';
+};
+
+/**
  * TmdbLanguageFilter
  *
  * Which TMDB image languages are offered as candidates.
@@ -4598,11 +4867,11 @@ export type TmdbItemResult = {
 export type TmdbLanguageFilter = 'en_null' | 'all';
 
 /**
- * TmdbListBuilder
+ * TmdbListSource
  *
- * Resolve public TMDB lists in their saved order.
+ * Public TMDB lists, in their saved order.
  */
-export type TmdbListBuilderInput = {
+export type TmdbListSourceInput = {
     /**
      * List Ids
      */
@@ -4614,11 +4883,11 @@ export type TmdbListBuilderInput = {
 };
 
 /**
- * TmdbListBuilder
+ * TmdbListSource
  *
- * Resolve public TMDB lists in their saved order.
+ * Public TMDB lists, in their saved order.
  */
-export type TmdbListBuilderOutput = {
+export type TmdbListSourceOutput = {
     /**
      * List Ids
      */
@@ -4630,65 +4899,9 @@ export type TmdbListBuilderOutput = {
 };
 
 /**
- * TmdbPersonBuilder
- *
- * Resolve movies or shows credited to a TMDB person in selected roles.
- */
-export type TmdbPersonBuilderInput = {
-    /**
-     * Person Id
-     */
-    person_id: number;
-    /**
-     * Person Name
-     */
-    person_name?: string | null;
-    /**
-     * Roles
-     */
-    roles?: Array<TmdbPersonRole>;
-    /**
-     * Type
-     */
-    type?: 'tmdb_person';
-    /**
-     * Use Biography
-     */
-    use_biography?: boolean;
-};
-
-/**
- * TmdbPersonBuilder
- *
- * Resolve movies or shows credited to a TMDB person in selected roles.
- */
-export type TmdbPersonBuilderOutput = {
-    /**
-     * Person Id
-     */
-    person_id: number;
-    /**
-     * Person Name
-     */
-    person_name: string | null;
-    /**
-     * Roles
-     */
-    roles: Array<TmdbPersonRole>;
-    /**
-     * Type
-     */
-    type: 'tmdb_person';
-    /**
-     * Use Biography
-     */
-    use_biography: boolean;
-};
-
-/**
  * TmdbPersonResult
  *
- * A person TMDB found for a person collection builder.
+ * A person TMDB found for a TMDB person condition.
  */
 export type TmdbPersonResult = {
     /**
@@ -4716,7 +4929,7 @@ export type TmdbPersonResult = {
 /**
  * TmdbPersonRole
  *
- * Credit roles included by a TMDB person builder.
+ * Credit roles included by a TMDB person condition.
  */
 export type TmdbPersonRole = 'actor' | 'director' | 'writer' | 'producer' | 'biography';
 
@@ -4730,6 +4943,62 @@ export type TmdbPersonSearchResponse = {
      * Results
      */
     results: Array<TmdbPersonResult>;
+};
+
+/**
+ * TmdbPersonSource
+ *
+ * Movies or shows credited to a TMDB person in selected roles.
+ */
+export type TmdbPersonSourceInput = {
+    /**
+     * Person Id
+     */
+    person_id: number;
+    /**
+     * Person Name
+     */
+    person_name?: string | null;
+    /**
+     * Roles
+     */
+    roles?: Array<TmdbPersonRole>;
+    /**
+     * Type
+     */
+    type?: 'tmdb_person';
+    /**
+     * Use Biography
+     */
+    use_biography?: boolean;
+};
+
+/**
+ * TmdbPersonSource
+ *
+ * Movies or shows credited to a TMDB person in selected roles.
+ */
+export type TmdbPersonSourceOutput = {
+    /**
+     * Person Id
+     */
+    person_id: number;
+    /**
+     * Person Name
+     */
+    person_name: string | null;
+    /**
+     * Roles
+     */
+    roles: Array<TmdbPersonRole>;
+    /**
+     * Type
+     */
+    type: 'tmdb_person';
+    /**
+     * Use Biography
+     */
+    use_biography: boolean;
 };
 
 /**
@@ -5749,6 +6018,36 @@ export type BulkOperateCollectionsResponses = {
 
 export type BulkOperateCollectionsResponse = BulkOperateCollectionsResponses[keyof BulkOperateCollectionsResponses];
 
+export type GetCollectionCapabilitiesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/capabilities';
+};
+
+export type GetCollectionCapabilitiesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionCapabilitiesError = GetCollectionCapabilitiesErrors[keyof GetCollectionCapabilitiesErrors];
+
+export type GetCollectionCapabilitiesResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionCapabilities;
+};
+
+export type GetCollectionCapabilitiesResponse = GetCollectionCapabilitiesResponses[keyof GetCollectionCapabilitiesResponses];
+
 export type GetCollectionDefaultsData = {
     body?: never;
     path?: never;
@@ -5778,10 +6077,47 @@ export type GetCollectionDefaultsResponses = {
     /**
      * Successful Response
      */
-    200: CollectionPolicyBaseOutput;
+    200: CollectionPolicyBase;
 };
 
 export type GetCollectionDefaultsResponse = GetCollectionDefaultsResponses[keyof GetCollectionDefaultsResponses];
+
+export type ListCollectionFieldValuesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+        /**
+         * Library Id
+         */
+        library_id: string;
+        field: FilterField;
+    };
+    url: '/api/collections/field-values';
+};
+
+export type ListCollectionFieldValuesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListCollectionFieldValuesError = ListCollectionFieldValuesErrors[keyof ListCollectionFieldValuesErrors];
+
+export type ListCollectionFieldValuesResponses = {
+    /**
+     * Response List Collection Field Values
+     *
+     * Successful Response
+     */
+    200: Array<CollectionFieldValue>;
+};
+
+export type ListCollectionFieldValuesResponse = ListCollectionFieldValuesResponses[keyof ListCollectionFieldValuesResponses];
 
 export type GetCollectionGroupPolicyData = {
     body?: never;
@@ -5914,7 +6250,7 @@ export type SyncCollectionGroupResponses = {
     /**
      * Successful Response
      */
-    200: StatusResponse;
+    200: CollectionGroupSyncResult;
 };
 
 export type SyncCollectionGroupResponse = SyncCollectionGroupResponses[keyof SyncCollectionGroupResponses];
@@ -6019,57 +6355,64 @@ export type RenameCollectionGroupResponses = {
 
 export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
 
-export type CreateCollectionPresetData = {
-    body: CollectionPresetCreate;
+export type ListCollectionPresetsData = {
+    body?: never;
     path?: never;
-    query?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
     url: '/api/collections/presets';
 };
 
-export type CreateCollectionPresetErrors = {
+export type ListCollectionPresetsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CreateCollectionPresetError = CreateCollectionPresetErrors[keyof CreateCollectionPresetErrors];
+export type ListCollectionPresetsError = ListCollectionPresetsErrors[keyof ListCollectionPresetsErrors];
 
-export type CreateCollectionPresetResponses = {
+export type ListCollectionPresetsResponses = {
     /**
-     * Successful Response
-     */
-    200: CollectionPresetResult;
-};
-
-export type CreateCollectionPresetResponse = CreateCollectionPresetResponses[keyof CreateCollectionPresetResponses];
-
-export type PreviewCollectionPresetData = {
-    body: CollectionPresetPreview;
-    path?: never;
-    query?: never;
-    url: '/api/collections/presets/preview';
-};
-
-export type PreviewCollectionPresetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PreviewCollectionPresetError = PreviewCollectionPresetErrors[keyof PreviewCollectionPresetErrors];
-
-export type PreviewCollectionPresetResponses = {
-    /**
-     * Response Preview Collection Preset
+     * Response List Collection Presets
      *
      * Successful Response
      */
-    200: Array<CollectionPresetEntry>;
+    200: Array<CollectionPresetRead>;
 };
 
-export type PreviewCollectionPresetResponse = PreviewCollectionPresetResponses[keyof PreviewCollectionPresetResponses];
+export type ListCollectionPresetsResponse = ListCollectionPresetsResponses[keyof ListCollectionPresetsResponses];
+
+export type PreviewCollectionSetData = {
+    body: CollectionSetPreview;
+    path?: never;
+    query?: never;
+    url: '/api/collections/sets/preview';
+};
+
+export type PreviewCollectionSetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewCollectionSetError = PreviewCollectionSetErrors[keyof PreviewCollectionSetErrors];
+
+export type PreviewCollectionSetResponses = {
+    /**
+     * Response Preview Collection Set
+     *
+     * Successful Response
+     */
+    200: Array<CollectionSetEntry>;
+};
+
+export type PreviewCollectionSetResponse = PreviewCollectionSetResponses[keyof PreviewCollectionSetResponses];
 
 export type ListRadarrTagsData = {
     body?: never;
@@ -6594,7 +6937,7 @@ export type DeleteCollectionRuleResponses = {
 export type DeleteCollectionRuleResponse = DeleteCollectionRuleResponses[keyof DeleteCollectionRuleResponses];
 
 export type SaveCollectionRuleData = {
-    body: CollectionRuleWrite;
+    body: CollectionRuleWriteInput;
     path: {
         /**
          * Collection Id

@@ -39,6 +39,16 @@ def server_path(path: str) -> PurePath:
     return PureWindowsPath(path) if "\\" in path else PurePosixPath(path)
 
 
+def video_resolution(width: int | None) -> str | None:
+    """Name a frame width as Plex names resolutions, so criteria match alike."""
+    if not width:
+        return None
+    for minimum, name in ((3200, "4k"), (1700, "1080"), (1100, "720"), (700, "480")):
+        if width >= minimum:
+            return name
+    return "sd"
+
+
 @dataclass(slots=True, frozen=True)
 class ServerSection:
     """One movie or show library on the media server."""
@@ -99,12 +109,15 @@ class ServerItem:
     producers: tuple[str, ...] = ()
     countries: tuple[str, ...] = ()
     labels: tuple[str, ...] = ()
-    tags: tuple[str, ...] = ()
     content_rating: str | None = None
+    edition: str | None = None
     resolution: str | None = None
-    audio_language: str | None = None
-    rating: float | None = None
+    critic_rating: float | None = None
+    audience_rating: float | None = None
+    user_rating: float | None = None
     duration_minutes: int | None = None
+    plays: int | None = None
+    last_played_at: datetime | None = None
     unplayed: bool | None = None
     in_progress: bool | None = None
     release_date: str | None = None

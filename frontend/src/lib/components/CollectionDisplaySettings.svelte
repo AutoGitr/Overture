@@ -1,6 +1,7 @@
 <script lang="ts">
   import DetailForm from "./DetailForm.svelte";
-  import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
+  import type { CollectionDraft, CollectionEditor } from "../utils/collectionForms.svelte";
+  import { ORDER_LABELS } from "../utils/collectionCriteria";
 
   let {
     editor,
@@ -9,7 +10,7 @@
   } = $props();
 
   const identityId = $props.id();
-  let plex = $derived(editor.serverType === "plex");
+  let plex = $derived(editor.capabilities.data?.visibility ?? false);
 </script>
 
 <DetailForm
@@ -18,18 +19,18 @@
   description="Set the summary, library ordering, and media server visibility."
   busy={editor.busy}
 >
-  {#if editor.sourceType !== "smart"}
+  {#if editor.content === "manual"}
     <label class="form-label">
-      Member order
+      Sort
       <select bind:value={editor.orderType}>
         <option value={null}>Default</option>
-        <option value="release">Release date</option>
-        <option value="alpha">Alphabetical</option>
-        {#if plex}<option value="custom">Source / custom order</option>{/if}
+        {#each editor.orders as order (order)}
+          <option value={order}>{ORDER_LABELS[order]}</option>
+        {/each}
       </select>
     </label>
   {/if}
-  {#if editor.mediaType === "movie" && !(editor instanceof CollectionDraft && editor.generating)}
+  {#if editor.mediaType === "movie"}
     <div class="form-label">
       <label for={identityId}>TMDB collection ID</label>
       <input

@@ -49,7 +49,7 @@ class TmdbSearchResponse(StrictBaseModel):
 
 
 class TmdbPersonResult(StrictBaseModel):
-    """A person TMDB found for a person collection builder."""
+    """A person TMDB found for a TMDB person condition."""
 
     tmdb_id: int
     name: str

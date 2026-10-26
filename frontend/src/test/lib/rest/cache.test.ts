@@ -88,7 +88,7 @@ describe("REST cache helpers", () => {
     }).queryKey;
     queryClient.setQueryData(firstKey, first);
     queryClient.setQueryData(otherKey, other);
-    const rule = collectionRule({ builders: [{ type: "tmdb_collection", collection_id: 10 }] });
+    const rule = collectionRule({ smart: true, limit: 10 });
     patchCollectionRule(1, rule);
     expect(queryClient.getQueryData(firstKey)).toEqual({ ...first, rule });
     expect(queryClient.getQueryData(otherKey)).toBe(other);

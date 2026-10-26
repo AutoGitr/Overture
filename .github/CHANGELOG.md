@@ -9,20 +9,23 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
-- Collection presets for decades, years and genres with library previews, selective creation and editable rules; TMDB franchises are available under the same Preset type.
+- Collection criteria: groups that match all or any of their conditions, nested freely, where a condition tests item metadata or whether a TMDB franchise, TMDB list, TMDB titles, a TMDB person's credits, an MDBList list or Radarr and Sonarr tags hold the item. Values such as genres are suggested from the library, and people and franchises can be found by searching TMDB.
+- On Plex, the same criteria can make a Plex smart collection with every Plex filter, including audio and subtitle language, HDR, edition and per-user play state; lists in its criteria become labels Overture keeps current.
+- Collection sets create and maintain one collection per decade, year, genre, studio, country, content rating, resolution, label, actor, director, writer, producer or TMDB franchise in a library, with title templates, top values, include and exclude lists, shared conditions and a preview.
+- Presets for collection sets and for collections such as Recently added, Top rated, 4K, Short films, Unplayed and Continue watching, offered only where the media server can evaluate them.
+- Collections sort by release date, title, date added, critic, audience or user rating, duration, plays, last played, randomly or by custom order, and can keep only the first items in that order.
+- The collection sidebar searches by title, group, TMDB collection ID or YouTube link, sorts by title, sort title, item count, date added, last sync or theme length, and filters by art, media server, catalog themes, members, kind, sync status and size like items.
 - Rename and delete collection groups, optionally removing their collections from Overture, the media server or both while preserving media files.
 - Public TMDB lists as dynamic collection sources, with ordered merging, pagination and movie/show filtering.
 - Separate collection group management with shared defaults, explicit overrides and Save & Apply; Assets and full Sync share a Collections target, and unmanaged collection import can be disabled.
 
-- Composable multi-source collection builders supporting TMDB franchises, item IDs, person credits (with actor, director, writer, producer, and biography roles), MDBList, Radarr and Sonarr tags, recursive filter trees, Plex smart collections with boolean condition groups and managed labels, seasonal calendar windows, dynamic TMDB franchise group discovery, and summary format templates.
+- Seasonal calendar windows and summary format templates for collections.
 
 - Collection group defaults for sync, minimum membership, automatic assets, Plex visibility and sort-title templates, with individual rule overrides. Filtered bulk actions and empty-collection maintenance keep media files intact.
 - Collection Configure shows TMDB source rosters, including missing franchise movies.
 
-- Generate TMDB franchise collections from a synced movie library, and organize collections with preset or custom groups.
-
 - Create, edit and delete Plex, Jellyfin and Emby collections, manage library members, and select collection posters and backgrounds. Plex supports custom member order, collection visibility and home promotion.
-- Build dynamic collections from MDBList lists, TMDB franchises or library filters, with scheduled sync, inherited defaults and minimum member thresholds. Set `MDBLIST_API_KEY` for MDBList; the generator previews decade, genre and studio collections before creation.
+- Scheduled collection sync with inherited defaults and minimum member thresholds. Set `MDBLIST_API_KEY` for MDBList lists.
 
 - Browse the full OvertureDB catalog from the sidebar, filter movies, shows and collections, and save local artwork and theme drafts to contribute through GitHub or the ZIP export.
 - Collection pages show their members, explicit TMDB identity and OvertureDB/ThemerrDB theme candidates. Jellyfin 12 collection themes write into a mounted collections directory configured with `JELLYFIN_COLLECTIONS_PATH`.
@@ -32,9 +35,11 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 - Collection sections collapse independently, with Setup and Content expanded initially; inherited choices use Default and text fields show inherited placeholders.
-- Collection forms use full-width sections, Source controls the workflow, boolean conditions use true/false, and Sort title and Summary each accept text or templates in one field. Manual selection is no longer a creation source; existing collection metadata is preserved on upgrade.
+- Collection forms use full-width sections, and Sort title and Summary each accept text or templates in one field. Existing collection metadata is preserved on upgrade.
 
-- Collection creation and editing share Collection Setup for library, source, title and group, with franchise discovery inside Setup and content, members, display and schedule sections adapted to your choices. New collections open directly at Setup without an empty poster.
+- Collection creation and editing share Setup for the library, a collection or a set, a preset, the title and the group, with content, members, display and schedule sections adapted to your choices. New collections open directly at Setup without an empty poster.
+- Collection rules, Plex smart filters and TMDB franchise discovery groups are converted on upgrade to criteria and collection sets; orders become their nearest sort. Run a full Sync afterwards so ratings, plays, editions and Jellyfin and Emby tags are available to criteria. Jellyfin and Emby tags are now labels.
+- Configure, filters and bulk operations offer only the fields, sources, sorts and options the media server supports, and say why a source is unavailable.
 
 - Example Docker Compose configuration delegates all environment variables directly to `.env`.
 
@@ -49,14 +54,16 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 
-- Legacy collection preset generator and single-source rule endpoints in favor of composable builders and group dynamic discovery.
+- Legacy collection preset generator, single-source rules, separate builders, managed Plex labels and group TMDB discovery, in favor of criteria and collection sets.
 - Collection matching endpoints and automatic member voting. Set `tmdb_collection_id` through collection creation or update instead.
 - The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
 
 ### Fixed
 
 - Collections can be deleted from Overture when they have already been removed from the media server.
-- Switching collection sources no longer submits hidden smart filters or stale manual members. Plex smart collections show server-controlled members without manual editing, and smart filters can use source builders through managed labels.
+- Plex smart collections work: filters use the keys Plex lists for tags such as genres, labels and languages, the operators Plex documents, exact number bounds and explicit and/or groups. Plex smart collections show server-controlled members without manual editing.
+- Plex collection filtering (admin or user) is saved to the preference Plex reads, and imported Plex collections keep their visibility, sort and filtering.
+- Unwatched Plex movies count as unplayed, and Jellyfin and Emby countries and tags are read during sync, so collection criteria on them match.
 
 - Collection member ordering supports row-wide drag-and-drop and Up/Down controls, collection artwork links follow the selected slot, and create/generate selections stay consistent when changing libraries.
 

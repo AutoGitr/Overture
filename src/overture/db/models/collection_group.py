@@ -1,5 +1,6 @@
 """Nullable defaults for collections in one group on one media server."""
 
+lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
 lazy from sqlmodel import Field, SQLModel, UniqueConstraint
@@ -49,7 +50,10 @@ class CollectionGroup(SQLModel, table=True):
     auto_match_theme: bool | None = None
     sync_interval_hours: int | None = None
     sync_enabled: bool | None = None
-    dynamic_tmdb_json: str | None = None
+    #: A ``CollectionGenerator`` that makes the group a collection set.
+    generator_json: str | None = None
+    #: When the set last created and updated its collections.
+    generated_at: datetime | None = None
 
 
 enum_columns(CollectionGroup)

@@ -7,7 +7,13 @@ lazy import httpx2
 lazy import pytest
 
 lazy from overture.config import Settings
-lazy from overture.domain import ArtType, CollectionMode, CollectionOrder, MediaType
+lazy from overture.domain import (
+    ArtType,
+    CollectionFiltering,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+)
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient
@@ -52,7 +58,7 @@ async def test_boxsets_create_diff_edit_art_and_delete(
         assert await client.create_collection("New", ["keep"]) == "box"
         await client.set_collection_members("box", ["keep", "add"])
         await client.update_collection_details(
-            "box", "After", "Summary", "!After", CollectionOrder.ALPHA
+            "box", "After", "Summary", "!After", CollectionOrder.TITLE_ASC
         )
         await client.upload_collection_art("box", ArtType.POSTER, b"image", "image/png")
         await client.delete_item("box")
@@ -118,7 +124,7 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
             "ratingKey"
         ] == "box"
         await client.set_collection_members(
-            "box", ["add", "keep"], CollectionOrder.CUSTOM
+            "box", ["add", "keep"], CollectionOrder.CRITIC_RATING_DESC
         )
         await client.update_collection_details(
             "box",
@@ -126,8 +132,9 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
             summary=None,
             sort_title="!Saga",
             mode=CollectionMode.HIDE_ITEMS,
-            order=CollectionOrder.CUSTOM,
+            order=CollectionOrder.CRITIC_RATING_DESC,
             visible_home=True,
+            filtering=CollectionFiltering.USER,
         )
         await client.upload_collection_art(
             "box", ArtType.BACKGROUND, b"image", "image/jpeg"
@@ -147,7 +154,12 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         ("PUT", "/library/collections/box/items/keep/move", {"after": "add"}),
     ]
     prefs = next(entry for entry in mutations if entry[1].endswith("/prefs"))
-    assert prefs[2] == {"collectionMode": "1", "collectionSort": "2"}
+    # Plex keeps an order it cannot sort by as its custom order.
+    assert prefs[2] == {
+        "collectionMode": "1",
+        "collectionSort": "2",
+        "collectionFilterBasedOnUser": "1",
+    }
     upload = next(r for r in requests if r.url.path == "/library/metadata/box/art")
     assert upload.content == b"image"
     assert mutations[-1] == ("DELETE", "/library/metadata/box", {})

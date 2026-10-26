@@ -68,7 +68,8 @@ class JellyfinClient(MediaServerHttpClient):
     #: the server, so listings carry only the movie Etag (its DateLastSaved) and
     #: get_people fetches on change.
     _ITEM_FIELDS: ClassVar[str] = (
-        "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded"
+        "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
+        "Tags,ProductionLocations,Width"
     )
 
     @property
@@ -421,7 +422,7 @@ class JellyfinClient(MediaServerHttpClient):
             Overview=summary or "",
             ForcedSortName=sort_title or "",
             DisplayOrder="PremiereDate"
-            if order is CollectionOrder.RELEASE
+            if order is CollectionOrder.RELEASE_ASC
             else "SortName",
         )
         await self._request("POST", f"/Items/{collection_id}", json=details)

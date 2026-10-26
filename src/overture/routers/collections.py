@@ -6,7 +6,7 @@ lazy from fastapi import APIRouter, Depends, Path, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import ArtDep, CollectionsDep
-lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
+lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX, FilterField
 lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
     ArrTagRead,
@@ -14,21 +14,23 @@ lazy from ..schemas.collections import (
     BulkCollectionOperation,
     BulkCollectionOperationResult,
     CollectionArtwork,
+    CollectionCapabilities,
     CollectionCreate,
     CollectionDetail,
+    CollectionFieldValue,
     CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionGroupRename,
+    CollectionGroupSyncResult,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionPolicyBase,
-    CollectionPresetCreate,
-    CollectionPresetEntry,
-    CollectionPresetPreview,
-    CollectionPresetResult,
+    CollectionPresetRead,
     CollectionRead,
     CollectionRuleRead,
     CollectionRuleWrite,
+    CollectionSetEntry,
+    CollectionSetPreview,
     CollectionSyncResponse,
     CollectionThemeSources,
     CollectionThemeStatusResponse,
@@ -40,7 +42,6 @@ lazy from ..schemas.common import (
     EnqueuedJobResponse,
     MonitoredResponse,
     MonitorUpdate,
-    Status,
     StatusResponse,
 )
 lazy from .auth import require_auth
@@ -81,20 +82,39 @@ async def get_collection_defaults(
     return await collections.inherited_policy(media_type, name)
 
 
-@router.post("/presets/preview")
-async def preview_collection_preset(
-    body: CollectionPresetPreview, collections: CollectionsDep
-) -> list[CollectionPresetEntry]:
-    """Preview a library-driven collection preset."""
-    return await collections.preview_preset(body)
+@router.get("/capabilities")
+async def get_collection_capabilities(
+    collections: CollectionsDep, media_type: MediaTypeQuery
+) -> CollectionCapabilities:
+    """Describe the fields, sources, orders and sets the media server supports."""
+    return collections.capabilities(media_type)
 
 
-@router.post("/presets")
-async def create_collection_preset(
-    body: CollectionPresetCreate, collections: CollectionsDep
-) -> CollectionPresetResult:
-    """Create selected entries as regular managed collections."""
-    return await collections.create_preset(body)
+@router.get("/presets")
+async def list_collection_presets(
+    collections: CollectionsDep, media_type: MediaTypeQuery
+) -> list[CollectionPresetRead]:
+    """Return the collection and set presets the media server can evaluate."""
+    return collections.presets(media_type)
+
+
+@router.get("/field-values")
+async def list_collection_field_values(
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+    library_id: Annotated[str, Query(min_length=1, max_length=200)],
+    field: FilterField,
+) -> list[CollectionFieldValue]:
+    """List a criteria field's values in a library, most common first."""
+    return await collections.field_values(media_type, library_id, field)
+
+
+@router.post("/sets/preview")
+async def preview_collection_set(
+    body: CollectionSetPreview, collections: CollectionsDep
+) -> list[CollectionSetEntry]:
+    """Preview the collections a set makes in its library."""
+    return await collections.preview_set(body)
 
 
 @router.patch("/groups")
@@ -155,10 +175,9 @@ async def sync_collection_group(
     collections: CollectionsDep,
     media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
-) -> StatusResponse:
-    """Run dynamic discovery and sync rules for a collection group."""
-    await collections.sync_group(media_type, name)
-    return StatusResponse(status=Status.OK)
+) -> CollectionGroupSyncResult:
+    """Run the group's collection set, then sync its collections' criteria."""
+    return await collections.sync_group(media_type, name)
 
 
 @router.get("/tags/radarr")
@@ -317,7 +336,7 @@ async def save_collection_rule(
     body: CollectionRuleWrite,
     collections: CollectionsDep,
 ) -> CollectionRuleRead:
-    """Save a collection's dynamic source and inheritance overrides."""
+    """Save a collection's criteria and inheritance overrides."""
     return await collections.save_rule(collection_id, media_type, body)
 
 
@@ -337,7 +356,7 @@ async def sync_collection_rule(
     media_type: MediaTypeQuery,
     collections: CollectionsDep,
 ) -> CollectionSyncResponse:
-    """Run the collection's rule immediately."""
+    """Apply the collection's criteria immediately."""
     return await collections.sync_rule(collection_id, media_type)
 
 

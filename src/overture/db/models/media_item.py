@@ -52,13 +52,18 @@ class MediaItemBase(SQLModel):
     writers: list[str] = Field(default_factory=list, sa_type=JSON)
     producers: list[str] = Field(default_factory=list, sa_type=JSON)
     countries: list[str] = Field(default_factory=list, sa_type=JSON)
+    #: Plex labels or Jellyfin and Emby tags.
     labels: list[str] = Field(default_factory=list, sa_type=JSON)
-    tags: list[str] = Field(default_factory=list, sa_type=JSON)
     content_rating: str | None = None
+    edition: str | None = None
     resolution: str | None = None
-    audio_language: str | None = None
-    rating: float | None = None
+    critic_rating: float | None = None
+    audience_rating: float | None = None
+    user_rating: float | None = None
     duration_minutes: int | None = None
+    #: Play state of the account Overture uses on the media server.
+    plays: int | None = None
+    last_played_at: datetime | None = None
     unplayed: bool | None = None
     in_progress: bool | None = None
     release_date: str | None = None

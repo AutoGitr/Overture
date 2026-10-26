@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MediaItemRead } from "../../../generated/rest/types.gen";
+import type { CollectionRead, MediaItemRead } from "../../../generated/rest/types.gen";
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
   CATALOG_FILTER_KEYS,
@@ -14,7 +14,7 @@ import {
   normalizeSortPreference,
   preloadRowIndexes,
   searchFieldsFor,
-  SIDEBAR_SORT_FIELDS,
+  sortMenu,
   statusTone,
 } from "../../../lib/utils/sidebarDomain";
 import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
@@ -179,15 +179,14 @@ describe("sidebar item filters", () => {
     ).toEqual(["Short"]);
     expect(filterItems(items)).toEqual(["Long", "Short", "Unknown"]);
     expect(
-      filterSidebarCollections({
-        collections: [
-          collection({ id: 1, title: "Short Set", youtube_duration: 30 }),
-          collection({ id: 2, title: "Long Set", youtube_duration: 300 }),
+      filterCollections(
+        [
+          collection({ id: 1, title: "Short Set", theme_duration: 30 }),
+          collection({ id: 2, title: "Long Set", theme_duration: 300 }),
           collection({ id: 3, title: "No Theme" }),
         ],
-        filters: withFilters({ themeLength: { min: 120, max: 300 } }),
-        searchQuery: "",
-      }).map((entry) => entry.title),
+        { filters: withFilters({ themeLength: { min: 120, max: 300 } }) },
+      ),
     ).toEqual(["Long Set"]);
   });
 
@@ -440,13 +439,27 @@ describe("sidebar sorting", () => {
   });
 });
 
+function filterCollections(
+  collections: CollectionRead[],
+  options: Partial<Parameters<typeof filterSidebarCollections>[0]> = {},
+): string[] {
+  return filterSidebarCollections({
+    collections,
+    filters: withFilters({}),
+    publicDatasetEnabled: false,
+    searchQuery: "",
+    searchField: "title",
+    sortField: "title",
+    sortDir: "asc",
+    ...options,
+  }).map((entry) => entry.title);
+}
+
 describe("sidebar collections", () => {
   it("returns an empty collection list when selected libraries do not match", () => {
     expect(
-      filterSidebarCollections({
-        collections: [collection({ id: 1, library_id: "library-1" })],
+      filterCollections([collection({ id: 1, library_id: "library-1" })], {
         filters: withFilters({ libraryIds: ["library-2"] }),
-        searchQuery: "",
       }),
     ).toEqual([]);
   });
@@ -458,30 +471,91 @@ describe("sidebar collections", () => {
     ];
 
     expect(
-      filterSidebarCollections({
-        collections,
-        filters: withFilters({ theme: "incomplete" }),
-        searchQuery: "",
-      }).map((entry) => entry.title),
+      filterCollections(collections, { filters: withFilters({ theme: "incomplete" }) }),
     ).toEqual(["Server Only"]);
   });
 
-  it("sorts by title and ignores item-only filters", () => {
+  it("applies the filters collections share with items and ignores item-only ones", () => {
+    const collections = [
+      collection({ id: 1, title: "Saga 10", art_status: "complete" }),
+      collection({ id: 2, title: "Saga 2", art_status: "partial", withheld: true }),
+    ];
     expect(
-      filterSidebarCollections({
-        collections: [
-          collection({ id: 1, title: "Saga 10" }),
-          collection({ id: 2, title: "Saga 2" }),
-        ],
+      filterCollections(collections, {
         filters: withFilters({ art: "complete", aspectRatio: "incorrect" }),
-        searchQuery: "",
-      }).map((entry) => entry.title),
-    ).toEqual(["Saga 2", "Saga 10"]);
+      }),
+    ).toEqual(["Saga 10"]);
+    expect(
+      filterCollections(collections, { filters: withFilters({ mediaServer: "missing" }) }),
+    ).toEqual(["Saga 2"]);
+    expect(filterCollections(collections)).toEqual(["Saga 2", "Saga 10"]);
+  });
+
+  it("filters by members, kind, sync status and catalog themes", () => {
+    const collections = [
+      collection({ id: 1, title: "Manual" }),
+      collection({ id: 2, title: "Smart", kind: "smart", managed: true }),
+      collection({
+        id: 3,
+        title: "Failing",
+        managed: true,
+        sync_failed: true,
+        public_dataset_complete: true,
+      }),
+    ];
+    const titles = (filters: Partial<FilterState>, publicDatasetEnabled = false) =>
+      filterCollections(collections, { filters: withFilters(filters), publicDatasetEnabled });
+
+    expect(titles({ collectionMembers: "manual" })).toEqual(["Manual"]);
+    expect(titles({ collectionMembers: "criteria" })).toEqual(["Failing", "Smart"]);
+    expect(titles({ collectionKind: "smart" })).toEqual(["Smart"]);
+    expect(titles({ collectionSync: "failed" })).toEqual(["Failing"]);
+    expect(titles({ collectionSync: "synced" })).toEqual(["Smart"]);
+    expect(titles({ overtureDb: "complete" }, true)).toEqual(["Failing"]);
+    expect(titles({ overtureDb: "complete" })).toHaveLength(3);
+  });
+
+  it("searches by the chosen field and sorts by the chosen key", () => {
+    const collections = [
+      collection({
+        id: 1,
+        title: "Alien",
+        collection_group: "Franchises",
+        tmdb_collection_id: 8091,
+        child_count: 4,
+        sort_title: "02_Alien",
+      }),
+      collection({ id: 2, title: "Batman", child_count: 9, sort_title: "01_Batman" }),
+      collection({ id: 3, title: "Cars", youtube_id: "abcdefghijk", child_count: 3 }),
+    ];
+
+    expect(filterCollections(collections, { searchField: "group", searchQuery: "franch" })).toEqual(
+      ["Alien"],
+    );
+    expect(
+      filterCollections(collections, { searchField: "external_id", searchQuery: "8091" }),
+    ).toEqual(["Alien"]);
+    expect(
+      filterCollections(collections, {
+        searchField: "youtube",
+        searchQuery: "https://youtu.be/abcdefghijk",
+      }),
+    ).toEqual(["Cars"]);
+    expect(filterCollections(collections, { sortField: "child_count", sortDir: "desc" })).toEqual([
+      "Batman",
+      "Alien",
+      "Cars",
+    ]);
+    expect(filterCollections(collections, { sortField: "sort_title" })).toEqual([
+      "Batman",
+      "Alien",
+      "Cars",
+    ]);
   });
 
   it("reports only the filters the current mode applies as active", () => {
     const itemOnly = withFilters({
-      art: "complete",
+      aspectRatio: "incorrect",
       resolution: { artType: "poster", min: 1, max: null },
     });
     const shared = withFilters({ themeLength: { min: 60, max: null } });
@@ -496,6 +570,12 @@ describe("sidebar collections", () => {
       ),
     ).toBe(true);
     expect(hasVisibleActiveFilters(shared, false, "collections")).toBe(true);
+    expect(
+      hasVisibleActiveFilters(withFilters({ collectionKind: "smart" }), false, "collections"),
+    ).toBe(true);
+    expect(hasVisibleActiveFilters(withFilters({ collectionKind: "smart" }), false, "items")).toBe(
+      false,
+    );
     expect(hasVisibleActiveFilters(withFilters({ overtureDb: "complete" }), false, "items")).toBe(
       false,
     );
@@ -503,16 +583,33 @@ describe("sidebar collections", () => {
 });
 
 describe("sidebar sort preferences", () => {
-  it.each(SIDEBAR_SORT_FIELDS)("preserves the supported %s sort", (field) => {
-    expect(normalizeSortPreference({ field, dir: "desc" })).toEqual({ field, dir: "desc" });
-  });
+  it.each(["library", "collections", "overturedb"] as const)(
+    "preserves every %s sort and rejects the others",
+    (scope) => {
+      for (const { id } of sortMenu(scope)) {
+        expect(normalizeSortPreference({ field: id, dir: "desc" }, scope)).toEqual({
+          field: id,
+          dir: "desc",
+        });
+      }
+      expect(normalizeSortPreference({ field: "child_count", dir: "desc" }, "library").field).toBe(
+        "title",
+      );
+    },
+  );
 
   it.each([null, [], "invalid", {}, { field: 42, dir: "sideways" }])(
     "defaults malformed preferences",
     (value) => {
-      expect(normalizeSortPreference(value)).toEqual({ field: "title", dir: "asc" });
+      expect(normalizeSortPreference(value, "library")).toEqual({ field: "title", dir: "asc" });
     },
   );
+
+  it("offers each list its own sort fields", () => {
+    expect(sortMenu("overturedb").map((entry) => entry.id)).toEqual(["title", "year"]);
+    expect(sortMenu("collections").map((entry) => entry.id)).toContain("child_count");
+    expect(sortMenu("library").map((entry) => entry.id)).not.toContain("child_count");
+  });
 });
 
 describe("sidebar thumbnail preloading", () => {

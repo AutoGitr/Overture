@@ -70,6 +70,12 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """Update the server filter query of an existing smart collection."""
         raise NotImplementedError
 
+    async def filter_choices(
+        self, section_key: str, media_type: MediaType, field: str
+    ) -> list[tuple[str, str]]:
+        """List the keys and names a smart filter field accepts in a section."""
+        raise NotImplementedError
+
     async def sync_item_labels(
         self,
         section_key: str,

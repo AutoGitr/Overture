@@ -9,13 +9,14 @@
   import CollectionDefinition from "./CollectionDefinition.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
   import CollectionDisplaySettings from "./CollectionDisplaySettings.svelte";
-  import CollectionFranchiseDiscovery from "./CollectionFranchiseDiscovery.svelte";
+  import CollectionGroupDefaults from "./CollectionGroupDefaults.svelte";
   import CollectionSchedule from "./CollectionSchedule.svelte";
+  import CollectionSetEditor from "./CollectionSetEditor.svelte";
   import CollectionMembers from "./CollectionMembers.svelte";
+  import DetailForm from "./DetailForm.svelte";
   import DetailSection from "./DetailSection.svelte";
   import WorkflowSections from "./WorkflowSections.svelte";
   import PendingButton from "./PendingButton.svelte";
-  import CollectionPresetContent from "./CollectionPresetContent.svelte";
   import DataStatus from "./DataStatus.svelte";
 
   let {
@@ -36,7 +37,7 @@
     libraries: LibrarySectionRead[];
   } = $props();
 
-  let discovering = $derived(editor instanceof CollectionDraft && editor.discovering);
+  let set = $derived(editor instanceof CollectionDraft && editor.kind === "set" ? editor : null);
 </script>
 
 <WorkflowSections>
@@ -47,6 +48,13 @@
     hasData={editor.defaults.data !== undefined}
     onretry={() => editor.defaults.refetch()}
   />
+  <DataStatus
+    label="collection options"
+    error={editor.capabilities.error}
+    loading={editor.capabilities.isFetching}
+    hasData={editor.capabilities.data !== undefined}
+    onretry={() => editor.capabilities.refetch()}
+  />
   <form
     id={formId}
     aria-label="Configure collection"
@@ -55,24 +63,48 @@
       void editor.save();
     }}
   >
-    <section id={`${formId}-setup`} aria-label="Setup" tabindex="-1">
+    <section id={`${formId}-setup`} aria-label="Collection setup" tabindex="-1">
       <CollectionDefinition {editor} {groups} {libraries} />
     </section>
 
-    {#if discovering && editor instanceof CollectionDraft}
-      <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
-        <CollectionFranchiseDiscovery {editor} />
+    {#if set}
+      <section id={`${formId}-content`} aria-label="Set collections" tabindex="-1">
+        <DetailForm
+          collapsible
+          expanded
+          title="Collections"
+          description="Choose what the set creates a collection for. Preview to see the collections before creating them."
+          busy={set.busy}
+        >
+          <CollectionSetEditor
+            generator={set.generator}
+            libraryId={set.libraryId}
+            mediaType={set.mediaType}
+            capabilities={set.capabilities.data}
+            group={set.collectionGroup}
+            minimum={set.setPolicy.minimum_items ?? null}
+          />
+        </DetailForm>
+      </section>
+      <section id={`${formId}-display`} aria-label="Set defaults" tabindex="-1">
+        <DetailForm
+          collapsible
+          title="Defaults"
+          description="The group's defaults, which every collection in the set inherits."
+          busy={set.busy}
+        >
+          <CollectionGroupDefaults
+            policy={set.setPolicy}
+            defaults={set.defaults.data}
+            capabilities={set.capabilities.data}
+            smart={!!set.generator.smart}
+          />
+        </DetailForm>
       </section>
     {:else}
-      {#if editor instanceof CollectionDraft && editor.generating}
-        <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
-          <CollectionPresetContent {editor} />
-        </section>
-      {:else if editor.sourceType !== "unmanaged"}
-        <section id={`${formId}-content`} aria-label="Content" tabindex="-1">
-          <CollectionRulePanel {editor} />
-        </section>
-      {/if}
+      <section id={`${formId}-content`} aria-label="Collection content" tabindex="-1">
+        <CollectionRulePanel {editor} />
+      </section>
 
       {#if collection && editor instanceof CollectionEditor}
         <section id={`${formId}-members`} aria-label="Resolved members" tabindex="-1">
@@ -92,30 +124,20 @@
       <section id={`${formId}-display`} aria-label="Collection display" tabindex="-1">
         <CollectionDisplaySettings {editor} />
       </section>
-    {/if}
 
-    <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
-      <CollectionSchedule {editor} />
-    </section>
+      <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
+        <CollectionSchedule {editor} />
+      </section>
+    {/if}
     <div class="form-row" role="group" aria-label="Collection form actions">
       <PendingButton
         type="submit"
         class="btn btn-primary"
         pending={editor.busy}
-        pendingLabel={discovering
-          ? "Discovering..."
-          : editor.creating
-            ? "Creating..."
-            : "Saving..."}
+        pendingLabel={editor.creating ? "Creating..." : "Saving..."}
         disabled={editor instanceof CollectionDraft && !editor.canSubmit}
       >
-        {discovering
-          ? "Discover & Create"
-          : editor instanceof CollectionDraft && editor.generating
-            ? "Create selected collections"
-            : editor.creating
-              ? "Create"
-              : "Save"}
+        {editor.creating ? "Create" : "Save"}
       </PendingButton>
     </div>
   </form>

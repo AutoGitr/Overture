@@ -12,7 +12,13 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { navigate, openSidebarGroup } from "../../../lib/router/routes";
 import { defaultFilters, uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetch, mockFetchRoutes, mockFetchSequence } from "../../helpers/fetch";
-import { publicDatasetStatus, mediaItem, collection, appSettings } from "../../helpers/fixtures";
+import {
+  appSettings,
+  collection,
+  collectionCapabilities,
+  mediaItem,
+  publicDatasetStatus,
+} from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -363,7 +369,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   });
   it.each([
     ["set_group", { collection_group: "Weekend" }],
-    ["set_order", { order_type: "alpha" }],
+    ["set_order", { order_type: "title.asc" }],
     ["apply_sort_title_format", { sort_title_format: "+{title}" }],
     ["set_visibility", { collection_mode: "hide", visible_home: true }],
     ["trigger_sync", {}],
@@ -397,15 +403,22 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     ]);
     const { calls } = mockFetchRoutes({
       "/api/library/libraries": [],
+      "/api/collections/capabilities": collectionCapabilities(),
       "/api/collections/bulk-operation": { collection_ids: [1], errors: {} },
     });
     const view = renderWithQueryClient(FiltersPopup);
-    await fireEvent.change(view.getByLabelText("Collection size"), { target: { value: "empty" } });
+    // Plex offers smart collections, so the server's options have loaded.
+    await view.findByRole("radiogroup", { name: "Collection Kind" });
+    await fireEvent.click(
+      within(view.getByRole("radiogroup", { name: "Collection Size" })).getByLabelText("Empty"),
+    );
     await fireEvent.change(view.getByLabelText("Operation"), { target: { value: operation } });
     if (operation === "set_group")
       await fireEvent.input(view.getByLabelText("Target group"), { target: { value: "Weekend" } });
     if (operation === "set_order")
-      await fireEvent.change(view.getByLabelText("Member order"), { target: { value: "alpha" } });
+      await fireEvent.change(await view.findByLabelText(/^Sort/), {
+        target: { value: "title.asc" },
+      });
     if (operation === "apply_sort_title_format")
       await fireEvent.input(view.getByRole("textbox", { name: /^Sort title template/ }), {
         target: { value: "+{title}" },

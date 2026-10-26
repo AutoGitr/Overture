@@ -8,28 +8,22 @@
   import X from "@lucide/svelte/icons/x";
   import {
     defaultSortDir,
-    searchFieldGroups,
-    SIDEBAR_SEARCH_FIELDS,
-    SIDEBAR_SORT_FIELDS,
-    SIDEBAR_SORT_OPTIONS,
-    type SidebarMode,
-    type SidebarSource,
+    type MenuEntry,
+    type SearchFieldGroup,
     type SidebarSearchField,
     type SidebarSortDir,
     type SidebarSortField,
-    type SidebarTab,
   } from "../utils/sidebarDomain";
   import MenuButton from "./MenuButton.svelte";
   import MenuOption from "./MenuOption.svelte";
 
   let {
-    source = "library",
-    sidebarMode,
-    sidebarTab,
-    tmdbConfigured,
+    section,
+    searchGroups,
+    placeholder,
+    sortFields,
     filtersOpen,
     hasActiveFilters,
-    filteredCount,
     searchQuery,
     searchField,
     sortField,
@@ -39,13 +33,15 @@
     onSearchFieldChange,
     onSetSort,
   }: {
-    source?: SidebarSource;
-    sidebarMode: SidebarMode;
-    sidebarTab: SidebarTab;
-    tmdbConfigured: boolean;
+    /** Names the list shown, so menus close when it changes. */
+    section: string;
+    /** Search fields to choose from; a single field needs no menu. */
+    searchGroups: SearchFieldGroup[];
+    placeholder: string;
+    /** Sort fields to choose from; none hides the sort menu and the filters. */
+    sortFields: MenuEntry<SidebarSortField>[];
     filtersOpen: boolean;
     hasActiveFilters: boolean;
-    filteredCount: number;
     searchQuery: string;
     searchField: SidebarSearchField;
     sortField: SidebarSortField;
@@ -58,23 +54,11 @@
 
   let searchInput: HTMLInputElement;
 
-  let section = $derived(`${source}:${sidebarTab}:${sidebarMode}`);
-  let fieldGroups = $derived(
-    source === "overturedb"
-      ? [{ label: "OvertureDB", fields: ["title", "year", "external_id", "youtube"] as const }]
-      : searchFieldGroups(sidebarTab, tmdbConfigured),
-  );
-  // TMDB results are not the library: its filters and sort do not apply to them.
-  let searchingTmdb = $derived(source === "library" && searchField === "tmdb");
   let isDefaultSort = $derived(sortField === "title" && sortDir === "asc");
-  let placeholder = $derived.by(() => {
-    const fieldPlaceholder = SIDEBAR_SEARCH_FIELDS[searchField].placeholder;
-    if (fieldPlaceholder) return fieldPlaceholder;
-    if (sidebarMode === "collections") {
-      return `Search ${filteredCount} collection${filteredCount === 1 ? "" : "s"}...`;
-    }
-    return `Search ${filteredCount} ${sidebarTab === "movie" ? "movies" : "shows"}...`;
-  });
+  let sortLabel = $derived(sortFields.find((entry) => entry.id === sortField)?.shortLabel);
+  let searchOptions = $derived(
+    searchGroups.reduce((count, group) => count + group.fields.length, 0),
+  );
 
   function chooseSort(field: SidebarSortField) {
     onSetSort(
@@ -107,7 +91,7 @@
 <svelte:window onkeydown={focusSearchShortcut} />
 
 <div class="sidebar-controls">
-  {#if !searchingTmdb}
+  {#if sortFields.length}
     <button
       type="button"
       class={["btn btn-ghost btn-icon filter-btn", { "has-filter": hasActiveFilters }]}
@@ -123,7 +107,7 @@
   {/if}
 
   <div class="search-wrapper">
-    {#if sidebarMode === "items"}
+    {#if searchOptions > 1}
       <MenuButton
         label="Choose search field"
         title="Search by field"
@@ -137,25 +121,25 @@
           <ChevronDown size={11} />
         {/snippet}
         {#snippet menu(close)}
-          {#each fieldGroups as group, index (group.label)}
+          {#each searchGroups as group, index (group.label)}
             {#if index > 0}
               <div class="separator" role="separator"></div>
             {/if}
             <div role="group" aria-label={group.label}>
               <!-- Headings only matter once there is more than one group. -->
-              {#if fieldGroups.length > 1}
+              {#if searchGroups.length > 1}
                 <div class="group-label" aria-hidden="true">{group.label}</div>
               {/if}
-              {#each group.fields as field (field)}
+              {#each group.fields as field (field.id)}
                 <MenuOption
-                  checked={searchField === field}
+                  checked={searchField === field.id}
                   onselect={() => {
-                    onSearchFieldChange(field);
+                    onSearchFieldChange(field.id);
                     close(false);
                     searchInput.focus({ preventScroll: true });
                   }}
                 >
-                  {SIDEBAR_SEARCH_FIELDS[field].label}
+                  {field.label}
                 </MenuOption>
               {/each}
             </div>
@@ -192,7 +176,7 @@
     {/if}
   </div>
 
-  {#if sidebarMode !== "collections" && !searchingTmdb}
+  {#if sortFields.length}
     <MenuButton
       label="Choose sort order"
       title="Sort order"
@@ -210,20 +194,20 @@
           <ArrowDownWideNarrow size={13} />
         {/if}
         {#if !isDefaultSort}
-          <span class="sort-field-label">{SIDEBAR_SORT_OPTIONS[sortField].shortLabel}</span>
+          <span class="sort-field-label">{sortLabel}</span>
         {/if}
       {/snippet}
       {#snippet menu(close)}
-        {#each SIDEBAR_SORT_FIELDS.filter((field) => source === "library" || field === "title" || field === "year") as field (field)}
+        {#each sortFields as field (field.id)}
           <MenuOption
-            checked={sortField === field}
+            checked={sortField === field.id}
             onselect={() => {
-              chooseSort(field);
+              chooseSort(field.id);
               close(true);
             }}
           >
-            <span>{SIDEBAR_SORT_OPTIONS[field].label}</span>
-            {#if sortField === field}
+            <span>{field.label}</span>
+            {#if sortField === field.id}
               <span class="sort-dir">{sortDir === "asc" ? "Asc" : "Desc"}</span>
             {/if}
           </MenuOption>

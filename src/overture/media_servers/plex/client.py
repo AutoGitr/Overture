@@ -62,6 +62,34 @@ _ARTWORK_LISTING = frozendict(
     }
 )
 
+#: Plex's metadata type number of each media type.
+_PLEX_TYPES = frozendict(
+    {MediaType.MOVIE: 1, MediaType.SHOW: 2}  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+)
+#: The member orders Plex keeps itself; others are stored as a custom order.
+PLEX_COLLECTION_SORTS: frozendict[CollectionOrder, int] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        CollectionOrder.RELEASE_ASC: 0,
+        CollectionOrder.TITLE_ASC: 1,
+    }
+)
+PLEX_CUSTOM_SORT = 2
+#: The collection preferences Plex stores as numbers, as plexapi names them.
+PLEX_COLLECTION_MODES: frozendict[CollectionMode, int] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        CollectionMode.DEFAULT: -1,
+        CollectionMode.HIDE: 0,
+        CollectionMode.HIDE_ITEMS: 1,
+        CollectionMode.SHOW_ITEMS: 2,
+    }
+)
+PLEX_COLLECTION_FILTERING: frozendict[CollectionFiltering, int] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        CollectionFiltering.ADMIN: 0,
+        CollectionFiltering.USER: 1,
+    }
+)
+
 
 def plex_web_link(
     kind: Literal["metadata", "collections"],
@@ -615,7 +643,7 @@ class PlexClient(MediaServerHttpClient):
         machine_id = await self.get_machine_identifier()
         if not machine_id:
             raise MediaServerError("Plex returned no server identity")
-        type_num = 1 if media_type is MediaType.MOVIE else 2
+        type_num = _PLEX_TYPES[media_type]
         suffix = f"&{filter_query}" if filter_query else ""
         return (
             f"server://{machine_id}/com.plexapp.plugins.library"
@@ -633,7 +661,7 @@ class PlexClient(MediaServerHttpClient):
                 "sectionId": section_key,
                 "title": title,
                 "smart": "0",
-                "type": 1 if media_type is MediaType.MOVIE else 2,
+                "type": _PLEX_TYPES[media_type],
                 "uri": await self._collection_uri(member_ids),
             },
         )
@@ -657,7 +685,7 @@ class PlexClient(MediaServerHttpClient):
                 "sectionId": section_key,
                 "title": title,
                 "smart": "1",
-                "type": 1 if media_type is MediaType.MOVIE else 2,
+                "type": _PLEX_TYPES[media_type],
                 "uri": await self._smart_collection_uri(
                     section_key, media_type, filter_query
                 ),
@@ -696,7 +724,7 @@ class PlexClient(MediaServerHttpClient):
         remove_ids: list[str],
     ) -> None:
         """Apply batched label additions and removals in a Plex section."""
-        type_num = 1 if media_type is MediaType.MOVIE else 2
+        type_num = _PLEX_TYPES[media_type]
         if add_ids:
             await self._request(
                 "PUT",
@@ -720,6 +748,21 @@ class PlexClient(MediaServerHttpClient):
                     "label[].tag.tag-": label,
                 },
             )
+
+    async def get_filter_choices(
+        self, section_key: str, media_type: MediaType, field: str
+    ) -> list[tuple[str, str]]:
+        """List the keys and names of a field's values in a section."""
+        data = await self._get(
+            f"/library/sections/{section_key}/{field}",
+            params={"type": _PLEX_TYPES[media_type]},
+        )
+        entries: list[object] = data["MediaContainer"].get("Directory") or []
+        return [
+            (str(entry["key"]), str(entry.get("title") or entry["key"]))
+            for entry in map(wire_object, entries)
+            if entry.get("key") is not None
+        ]
 
     async def delete_collection(self, collection_id: str) -> None:
         """Delete only the collection metadata."""
@@ -755,7 +798,7 @@ class PlexClient(MediaServerHttpClient):
                 "DELETE", f"/library/collections/{collection_id}/items/{item}"
             )
         server_order = [item for item in current_ids if item in wanted] + additions
-        if order is CollectionOrder.CUSTOM and server_order != member_ids:
+        if order not in PLEX_COLLECTION_SORTS and server_order != member_ids:
             for position, item in enumerate(member_ids):
                 await self._request(
                     "PUT",
@@ -793,18 +836,11 @@ class PlexClient(MediaServerHttpClient):
             },
         )
         prefs: dict[str, int] = {
-            "collectionMode": {
-                CollectionMode.DEFAULT: -1,
-                CollectionMode.HIDE: 0,
-                CollectionMode.HIDE_ITEMS: 1,
-                CollectionMode.SHOW_ITEMS: 2,
-            }[mode],
-            "collectionSort": list(CollectionOrder).index(order),
+            "collectionMode": PLEX_COLLECTION_MODES[mode],
+            "collectionSort": PLEX_COLLECTION_SORTS.get(order, PLEX_CUSTOM_SORT),
         }
         if filtering is not None:
-            prefs["collectionFiltering"] = (
-                1 if filtering is CollectionFiltering.ADMIN else 0
-            )
+            prefs["collectionFilterBasedOnUser"] = PLEX_COLLECTION_FILTERING[filtering]
         await self._request(
             "PUT",
             f"/library/metadata/{collection_id}/prefs",

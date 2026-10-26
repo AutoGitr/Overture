@@ -16,7 +16,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_import_unmanaged: true,
   collection_minimum_items: 1,
   collection_mode_default: "default",
-  collection_order_default: "release",
+  collection_order_default: "release.asc",
   collection_sort_title_format: "",
   collection_summary_format: "",
   collection_sync_enabled: true,

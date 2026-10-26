@@ -4,56 +4,102 @@ import {
   createCollectionMutation,
   deleteCollectionMutation,
   deleteCollectionRuleMutation,
+  getCollectionCapabilitiesOptions,
+  getCollectionDefaultsOptions,
+  getCollectionGroupPolicyOptions,
+  listCollectionPresetsOptions,
+  saveCollectionGroupPolicyMutation,
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
+  syncCollectionGroupMutation,
   syncCollectionRuleMutation,
   updateCollectionMutation,
-  getCollectionGroupPolicyOptions,
-  saveCollectionGroupPolicyMutation,
-  syncCollectionGroupMutation,
-  getCollectionDefaultsOptions,
-  previewCollectionPresetMutation,
-  createCollectionPresetMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
   CollectionFiltering,
-  CollectionOrder,
-  CollectionRuleWrite,
-  MediaType,
-  MediaItemRead,
+  CollectionGeneratorInput,
   CollectionMode,
   CollectionOptions,
-  LibrarySectionRead,
-  TmdbCollectionResponse,
   CollectionGroupPolicyInput,
-  CollectionPreset,
+  CollectionOrder,
+  CollectionPresetRead,
+  CollectionRuleWriteInput,
+  FilterGroupInput,
+  LibrarySectionRead,
+  MediaItemRead,
+  MediaType,
+  TmdbCollectionResponse,
 } from "../../generated/rest/types.gen";
 import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
-import { goToCollection, goToCollectionsList } from "../router/routes";
 import { queryClient } from "../rest/queryClient";
-import { emptySmartFilter } from "./collectionBuilders";
-import { settingsState } from "../stores/settingsState.svelte";
+import { goToCollection, goToCollectionsList } from "../router/routes";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+import { settingsState } from "../stores/settingsState.svelte";
+import {
+  availableFields,
+  availableOrders,
+  emptyGroup,
+  franchiseCriteria,
+} from "./collectionCriteria";
 import { errorMessage } from "./errors";
 
-export type RuleEditorSource = "unmanaged" | "builders" | "smart" | "discovery" | "preset";
+/** Whether a collection's members are chosen by hand or by criteria. */
+export type CollectionContent = "manual" | "criteria";
+/** What a new collection form creates. */
+export type DraftKind = "collection" | "set";
 
-export function selectCollectionSource(
-  editor: CollectionEditor | CollectionDraft,
-  source: RuleEditorSource,
-) {
-  editor.sourceType = source;
-  if (source === "smart") editor.rule.smart_filter ??= emptySmartFilter();
+export function defaultRule(): CollectionRuleWriteInput {
+  return {
+    criteria: emptyGroup(),
+    smart: false,
+    limit: null,
+    sync_mode: null,
+    minimum_items: null,
+    delete_below_minimum: null,
+    auto_match_art: null,
+    auto_match_theme: null,
+    collection_mode: null,
+    collection_filtering: null,
+    visible_home: null,
+    visible_shared: null,
+    visible_library: null,
+    order_type: null,
+    sort_title_format: null,
+    summary_format: null,
+    active_start_mmdd: null,
+    active_end_mmdd: null,
+    delete_when_inactive: null,
+    enabled: true,
+    sync_interval_hours: 24,
+  };
 }
 
-function ruleOptions(
-  source: RuleEditorSource,
-  rule: CollectionRuleWrite,
-  form: CollectionEditor | CollectionDraft,
-): CollectionRuleWrite {
+/** A set's generator, whose criteria the form always edits in place. */
+export type SetGenerator = CollectionGeneratorInput & { criteria: FilterGroupInput };
+
+export function defaultGenerator(libraryId = ""): SetGenerator {
   return {
-    ...$state.snapshot(rule),
+    dimension: "decade",
+    library_id: libraryId,
+    include: [],
+    exclude: [],
+    top: null,
+    title_format: "{value}s",
+    strip_prefix: "",
+    strip_suffix: "",
+    criteria: emptyGroup(),
+    smart: false,
+    enabled: true,
+  };
+}
+
+type CollectionForm = CollectionEditor | CollectionDraft;
+
+/** The rule a form saves; display choices are the rule's overrides. */
+function ruleBody(form: CollectionForm): CollectionRuleWriteInput {
+  return {
+    ...$state.snapshot(form.rule),
     sort_title_format: null,
     summary_format: null,
     collection_mode: form.collectionMode,
@@ -62,14 +108,42 @@ function ruleOptions(
     visible_home: form.visibleHome,
     visible_shared: form.visibleShared,
     visible_library: form.visibleLibrary,
-    smart_filter: source === "smart" ? $state.snapshot(rule.smart_filter) : null,
-    managed_label: source === "smart" ? rule.managed_label : null,
   };
+}
+
+function optionsBody(form: CollectionForm): CollectionOptions {
+  return {
+    title: form.title.trim(),
+    summary: null,
+    sort_title: null,
+    sort_title_format: form.sortTitleFormat || null,
+    summary_format: form.summaryFormat || null,
+    active_start_mmdd: form.activeStartMmdd || null,
+    active_end_mmdd: form.activeEndMmdd || null,
+    delete_when_inactive: form.deleteWhenInactive,
+    collection_filtering: form.collectionFiltering,
+    collection_group: form.collectionGroup || null,
+    tmdb_collection_id: form.tmdbCollectionId ?? null,
+    collection_mode: form.collectionMode,
+    ...(form.orderType === null ? {} : { order_type: form.orderType }),
+    ...(form.visibleHome === null ? {} : { visible_home: form.visibleHome }),
+    ...(form.visibleShared === null ? {} : { visible_shared: form.visibleShared }),
+    ...(form.visibleLibrary === null ? {} : { visible_library: form.visibleLibrary }),
+  };
+}
+
+function capabilitiesQuery(mediaType: () => MediaType) {
+  return createQuery(() => ({
+    ...getCollectionCapabilitiesOptions({ query: { media_type: mediaType() } }),
+    enabled: settingsState.current.collections_supported,
+  }));
 }
 
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
   readonly defaults;
+  readonly capabilities;
+  readonly creating = false;
   // Drafts reset when saved fields change, not when unrelated collection data changes.
   private savedTitle = $derived.by(() => this.current().title);
   title = $derived(this.savedTitle);
@@ -128,35 +202,75 @@ export class CollectionEditor {
   libraryId = $derived.by(() => this.current().library_id ?? "");
   private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
   tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
-  readonly creating = false;
+  private savedOrder = $derived.by(() =>
+    this.current().rule ? (this.current().rule?.order_type ?? null) : this.current().order_type,
+  );
+  orderType = $derived<CollectionOrder | null>(this.savedOrder);
+  /** A smart collection made in Plex keeps its filter until Overture takes it over. */
+  manageServerFilter = $state(false);
+  content = $state<CollectionContent>("manual");
+  rule = $state<CollectionRuleWriteInput>(defaultRule());
+
+  memberSearch = $state("");
+  draggingMemberId = $state<number | null>(null);
+
+  private readonly updateRequest = createMutation(() => updateCollectionMutation());
+  private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
+  private readonly ruleRequest = createMutation(() => saveCollectionRuleMutation());
+  private readonly removeRuleRequest = createMutation(() => deleteCollectionRuleMutation());
+  private readonly syncRequest = createMutation(() => syncCollectionRuleMutation());
+  private readonly deleteRequest = createMutation(() => deleteCollectionMutation());
+  private readonly feedback = createNotifier();
+
+  constructor(private readonly current: () => CollectionDetail) {
+    this.defaults = createQuery(() =>
+      getCollectionDefaultsOptions({
+        query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
+      }),
+    );
+    this.capabilities = capabilitiesQuery(() => this.mediaType);
+    const saved = this.current().rule;
+    if (saved) {
+      const { last_error: _error, last_synced_at: _synced, ...rest } = saved;
+      this.content = "criteria";
+      this.rule = structuredClone(rest);
+    } else if (this.current().kind === "smart") {
+      this.content = "criteria";
+      this.rule.smart = true;
+    }
+  }
+
+  get collection() {
+    return this.current();
+  }
   get serverType() {
     return this.collection.server_type;
   }
   get mediaType() {
     return this.collection.media_type;
   }
-  get existingRule() {
-    return this.collection.rule;
+  /** Its collection set decides the criteria and title of a generated collection. */
+  get generated() {
+    return this.collection.generated_value !== null;
   }
-  private savedOrder = $derived.by(() =>
-    this.current().rule ? (this.current().rule?.order_type ?? null) : this.current().order_type,
-  );
-  orderType = $derived<CollectionOrder | null>(this.savedOrder);
-  manageSmartFilter = $state(false);
-  get smartFilterEditable() {
+  get smart() {
+    return this.content === "criteria" && !!this.rule.smart;
+  }
+  get fields() {
+    return availableFields(this.capabilities.data, this.smart);
+  }
+  get orders() {
+    return availableOrders(this.capabilities.data, this.smart);
+  }
+  /** Saving rewrites the criteria unless Plex keeps a filter Overture never saw. */
+  get criteriaEditable() {
     return (
-      this.sourceType !== "smart" ||
-      this.collection.kind !== "smart" ||
+      this.content !== "criteria" ||
       this.collection.rule !== null ||
-      this.manageSmartFilter
+      this.collection.kind !== "smart" ||
+      this.manageServerFilter
     );
   }
-  sourceType = $state<RuleEditorSource>("unmanaged");
-  rule = $state<CollectionRuleWrite>(defaultCollectionRule());
-
-  memberSearch = $state("");
-  draggingMemberId = $state<number | null>(null);
-
   get manualMembersAllowed() {
     const rule = this.collection.rule;
     return (
@@ -177,40 +291,6 @@ export class CollectionEditor {
         !memberIds.has(item.id) &&
         item.title.toLowerCase().includes(query),
     );
-  }
-
-  private readonly updateRequest = createMutation(() => updateCollectionMutation());
-  private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
-  private readonly ruleRequest = createMutation(() => saveCollectionRuleMutation());
-  private readonly removeRuleRequest = createMutation(() => deleteCollectionRuleMutation());
-  private readonly syncRequest = createMutation(() => syncCollectionRuleMutation());
-  private readonly deleteRequest = createMutation(() => deleteCollectionMutation());
-  private readonly feedback = createNotifier();
-
-  constructor(private readonly current: () => CollectionDetail) {
-    this.defaults = createQuery(() =>
-      getCollectionDefaultsOptions({
-        query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
-      }),
-    );
-    const saved = this.current().rule;
-    if (this.current().kind === "smart") {
-      this.sourceType = "smart";
-      this.rule.smart_filter = emptySmartFilter();
-    }
-    if (saved) {
-      this.sourceType = saved.smart_filter ? "smart" : "builders";
-      const { last_error: _error, last_synced_at: _synced, ...rest } = saved;
-      this.rule = {
-        ...rest,
-        builders: saved.builders ? JSON.parse(JSON.stringify(saved.builders)) : [],
-        smart_filter: saved.smart_filter ? JSON.parse(JSON.stringify(saved.smart_filter)) : null,
-      };
-    }
-  }
-
-  get collection() {
-    return this.current();
   }
 
   get busy() {
@@ -242,16 +322,26 @@ export class CollectionEditor {
 
   save() {
     return this.perform(async () => {
-      const source = this.sourceType;
-      const keepServerFilter = source === "smart" && !this.smartFilterEditable;
-      const draft = ruleOptions(source, this.rule, this);
-      const body = collectionOptions(this);
-      const rule = keepServerFilter ? null : await this.persistRule(source, draft);
-      const saved = await this.updateRequest.mutateAsync({ ...this.target, body });
+      const rule = await this.persistRule();
+      const saved = await this.updateRequest.mutateAsync({
+        ...this.target,
+        body: optionsBody(this),
+      });
       storeCollectionDetail(saved);
-      patchCollectionRule(saved.id, rule);
+      if (rule !== undefined) patchCollectionRule(saved.id, rule);
       this.feedback.success("Collection changes saved.");
     });
+  }
+
+  /** Save, remove or keep the rule; `undefined` when nothing changed. */
+  private async persistRule() {
+    if (this.generated || !this.criteriaEditable) return undefined;
+    if (this.content === "manual") {
+      if (!this.collection.rule) return undefined;
+      await this.removeRuleRequest.mutateAsync(this.target);
+      return null;
+    }
+    return this.ruleRequest.mutateAsync({ ...this.target, body: ruleBody(this) });
   }
 
   setMembers(memberIds: number[], order: CollectionOrder = this.collection.order_type) {
@@ -290,21 +380,6 @@ export class CollectionEditor {
     return this.setMembers(ids, "custom");
   }
 
-  private async persistRule(source: RuleEditorSource, draft: CollectionRuleWrite) {
-    const target = this.target;
-    if (source === "unmanaged") {
-      if (this.collection.rule) {
-        await this.removeRuleRequest.mutateAsync(target);
-      }
-      return null;
-    }
-    const savedRule = await this.ruleRequest.mutateAsync({
-      ...target,
-      body: draft,
-    });
-    return savedRule;
-  }
-
   sync() {
     return this.perform(async () => {
       const result = await this.syncRequest.mutateAsync(this.target);
@@ -313,7 +388,7 @@ export class CollectionEditor {
       }
       this.feedback.success(
         result.skipped
-          ? "Below minimum; membership kept."
+          ? "Below minimum or out of season; membership kept."
           : `Synced: ${result.added} added, ${result.removed} removed.`,
       );
     });
@@ -336,154 +411,19 @@ export class CollectionEditor {
   }
 }
 
-function defaultCollectionRule(identifier = ""): CollectionRuleWrite {
-  return {
-    builders: identifier ? [{ type: "tmdb_collection", collection_id: Number(identifier) }] : [],
-    smart_filter: null,
-    managed_label: null,
-    sync_mode: null,
-    minimum_items: null,
-    delete_below_minimum: null,
-    auto_match_art: null,
-    auto_match_theme: null,
-    collection_mode: null,
-    collection_filtering: null,
-    visible_home: null,
-    visible_shared: null,
-    visible_library: null,
-    order_type: null,
-    sort_title_format: null,
-    summary_format: null,
-    active_start_mmdd: null,
-    active_end_mmdd: null,
-    delete_when_inactive: null,
-    enabled: true,
-    sync_interval_hours: 24,
-  };
-}
-
-function collectionOptions(form: CollectionEditor | CollectionDraft): CollectionOptions {
-  return {
-    title: form.title.trim(),
-    summary: null,
-    sort_title: null,
-    sort_title_format: form.sortTitleFormat || null,
-    summary_format: form.summaryFormat || null,
-    active_start_mmdd: form.activeStartMmdd || null,
-    active_end_mmdd: form.activeEndMmdd || null,
-    delete_when_inactive: form.deleteWhenInactive,
-    collection_filtering: form.collectionFiltering,
-    kind: form.sourceType === "smart" ? "smart" : "regular",
-    collection_group: form.collectionGroup || null,
-    tmdb_collection_id: form.tmdbCollectionId ?? null,
-    collection_mode: form.collectionMode,
-    ...(form.orderType === null ? {} : { order_type: form.orderType }),
-    ...(form.visibleHome === null ? {} : { visible_home: form.visibleHome }),
-    ...(form.visibleShared === null ? {} : { visible_shared: form.visibleShared }),
-    ...(form.visibleLibrary === null ? {} : { visible_library: form.visibleLibrary }),
-  };
-}
-
-/** An unsaved collection, created only after its Configure form is submitted. */
+/** An unsaved collection or collection set, created when its form is submitted. */
 export class CollectionDraft {
   readonly defaults;
-  preset = $state<CollectionPreset>("decades");
-  private readonly previewRequest = createMutation(() => previewCollectionPresetMutation());
-  private readonly presetRequest = createMutation(() => createCollectionPresetMutation());
-  selectedKeys = $state<string[]>([]);
-  presetErrors = $state<Record<string, string>>({});
-  get hasPresetPreview() {
-    const request = this.previewRequest;
-    return (
-      request.isSuccess &&
-      request.variables?.body.library_id === this.libraryId &&
-      request.variables.body.preset === this.preset
-    );
-  }
-  get presetEntries() {
-    return this.hasPresetPreview ? (this.previewRequest.data ?? []) : [];
-  }
-  get generating() {
-    return this.sourceType === "preset";
-  }
-  get presetLoading() {
-    return this.previewRequest.isPending;
-  }
-  async previewPreset() {
-    const library = this.libraryId;
-    const preset = this.preset;
-    if (!library || this.busy) return;
-    try {
-      const entries = await this.previewRequest.mutateAsync({
-        body: {
-          preset,
-          library_id: library,
-          media_type: this.mediaType,
-        },
-      });
-      this.selectedKeys = entries.map((entry) => entry.key);
-      this.presetErrors = {};
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Could not preview preset"));
-    }
-  }
-  private async savePreset() {
-    try {
-      const {
-        builders: _builders,
-        smart_filter: _filter,
-        managed_label: _label,
-        enabled: _enabled,
-        sync_interval_hours: _interval,
-        ...policy
-      } = ruleOptions("builders", this.rule, this);
-      const result = await this.presetRequest.mutateAsync({
-        body: {
-          preset: this.preset,
-          media_type: this.mediaType,
-          library_id: this.libraryId,
-          keys: this.presetEntries
-            .filter((entry) => this.selectedKeys.includes(entry.key))
-            .map((entry) => entry.key),
-          collection_group: this.collectionGroup || null,
-          policy: {
-            ...policy,
-            sort_title_format: this.sortTitleFormat || null,
-            summary_format: this.summaryFormat || null,
-            active_start_mmdd: this.activeStartMmdd || null,
-            active_end_mmdd: this.activeEndMmdd || null,
-            delete_when_inactive: this.deleteWhenInactive,
-          },
-          sync_interval_hours: this.rule.sync_interval_hours,
-          enabled: this.rule.enabled,
-        },
-      });
-      this.presetErrors = result.errors;
-      this.selectedKeys = Object.keys(result.errors);
-      if (this.selectedKeys.length) {
-        this.feedback.error(
-          `Created ${result.collection_ids.length} collections. Review the failed entries before retrying.`,
-        );
-        return false;
-      }
-      this.feedback.success(`Created ${result.collection_ids.length} collections.`);
-      goToCollectionsList(this.mediaType, this.collectionGroup.trim());
-      return true;
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Could not create preset collections"));
-      return false;
-    }
-  }
+  readonly capabilities;
+  readonly presets;
   readonly creating = true;
-  readonly discovery = new FranchiseDiscovery(
-    () => this.libraryId,
-    () => this.collectionGroup,
-  );
-  get discovering() {
-    return this.mediaType === "movie" && this.sourceType === "discovery";
-  }
-  sortTitleFormat = $state("");
+  readonly manualMembersAllowed = false;
+  readonly generated = false;
+  readonly criteriaEditable = true;
+  kind = $state<DraftKind>("collection");
+  presetKey = $state("");
   title = $derived.by(() => this.seed()?.title ?? "");
+  sortTitleFormat = $state("");
   collectionGroup = $state("");
   tmdbCollectionId = $derived.by(() => this.seed()?.tmdb_id);
   collectionMode = $state<CollectionMode | null>(null);
@@ -495,18 +435,26 @@ export class CollectionDraft {
   collectionFiltering = $state<CollectionFiltering | null>(null);
   visibleShared = $state<boolean | null>(null);
   visibleLibrary = $state<boolean | null>(null);
+  orderType = $state<CollectionOrder | null>(null);
+  content = $state<CollectionContent>("criteria");
+  rule = $derived.by(() => {
+    const seed = this.seed();
+    const rule = $state({
+      ...defaultRule(),
+      ...(seed ? { criteria: franchiseCriteria(seed.tmdb_id) } : {}),
+    });
+    return rule;
+  });
+  /** The group policy and generator a new set saves. */
+  setPolicy = $state<Omit<CollectionGroupPolicyInput, "generator">>({});
+  generator = $state<SetGenerator>(defaultGenerator());
   private onlyLibrary = $derived.by(() =>
     this.libraries().length === 1 ? (this.libraries()[0]?.id ?? "") : "",
   );
   libraryId = $derived(this.onlyLibrary);
-  sourceType = $state<RuleEditorSource>("builders");
-  rule = $derived.by(() => {
-    const seed = this.seed();
-    const draft = $state(defaultCollectionRule(seed ? String(seed.tmdb_id) : ""));
-    return draft;
-  });
-  orderType = $state<CollectionOrder | null>(null);
   readonly request = createMutation(() => createCollectionMutation());
+  private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
+  private readonly syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
   private readonly feedback = createNotifier();
 
   constructor(
@@ -519,51 +467,83 @@ export class CollectionDraft {
         query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
       }),
     );
+    this.capabilities = capabilitiesQuery(() => this.mediaType);
+    this.presets = createQuery(() =>
+      listCollectionPresetsOptions({ query: { media_type: this.mediaType } }),
+    );
   }
+
   get serverType() {
     return settingsState.current.media_server;
   }
-  get existingRule() {
-    return null;
+  get smart() {
+    return !!this.rule.smart;
   }
-  get smartFilterEditable() {
-    return true;
+  get fields() {
+    return availableFields(this.capabilities.data, this.smart);
   }
-  get busy() {
-    return (
-      this.request.isPending ||
-      this.discovery.busy ||
-      this.previewRequest.isPending ||
-      this.presetRequest.isPending
+  get orders() {
+    return availableOrders(this.capabilities.data, this.smart);
+  }
+  /** Presets of the kind being created. */
+  get kindPresets() {
+    return (this.presets.data ?? []).filter((preset) =>
+      this.kind === "set" ? preset.set : preset.collection,
     );
   }
-  get canSubmit() {
-    if (this.generating)
-      return this.presetEntries.some((entry) => this.selectedKeys.includes(entry.key));
-    if (this.discovering) return !!this.libraryId && !!this.collectionGroup.trim();
-    return !!this.libraryId && !!this.title.trim() && this.sourceType !== "unmanaged";
+  get busy() {
+    return this.request.isPending || this.groupRequest.isPending || this.syncGroupRequest.isPending;
   }
-  get manualMembersAllowed() {
-    return false;
+  get canSubmit() {
+    if (!this.libraryId) return false;
+    if (this.kind === "set") return !!this.collectionGroup.trim();
+    return !!this.title.trim();
   }
 
   selectLibrary(id: string) {
     this.libraryId = id;
+    this.generator.library_id = id;
+  }
+
+  selectKind(kind: DraftKind) {
+    this.kind = kind;
+    this.presetKey = "";
+  }
+
+  /** Start from a preset: it fills the form, which stays editable. */
+  applyPreset(preset: CollectionPresetRead | undefined) {
+    this.presetKey = preset?.key ?? "";
+    if (preset?.collection) {
+      this.title = preset.collection.title;
+      this.collectionFiltering = preset.collection.collection_filtering;
+      this.orderType = preset.collection.rule.order_type;
+      // A writable derived holds what it is given, so the copy is made deeply reactive.
+      const rule = $state({ ...defaultRule(), ...structuredClone(preset.collection.rule) });
+      this.rule = rule;
+    } else if (preset?.set) {
+      this.collectionGroup = preset.set.group;
+      this.setPolicy = structuredClone(preset.set.policy);
+      this.generator = {
+        ...defaultGenerator(this.libraryId),
+        ...structuredClone(preset.set.generator),
+      };
+    }
   }
 
   async save() {
     if (this.busy) return false;
-    if (this.discovering) return this.discovery.save();
-    if (this.generating) return this.savePreset();
+    return this.kind === "set" ? this.saveSet() : this.saveCollection();
+  }
+
+  private async saveCollection() {
     try {
       const collection = await this.request.mutateAsync({
         body: {
-          ...collectionOptions(this),
+          ...optionsBody(this),
           media_type: this.mediaType,
           library_id: this.libraryId,
           member_ids: [],
-          rule:
-            this.sourceType === "unmanaged" ? null : ruleOptions(this.sourceType, this.rule, this),
+          rule: ruleBody(this),
         },
       });
       storeCollectionDetail(collection);
@@ -574,66 +554,42 @@ export class CollectionDraft {
       return false;
     }
   }
-}
 
-/** Settings for a franchise group, saved before its first discovery run. */
-class FranchiseDiscovery {
-  policy = $state<CollectionGroupPolicyInput>({
-    minimum_items: 2,
-    sort_title_format: "+1_{title}",
-    dynamic_tmdb: {
-      enabled: true,
-      library_id: "",
-      strip_prefix: "The ",
-      strip_suffix: " Collection",
-      auto_exclude_from_other_collections: true,
-      exclude_tmdb_ids: [],
-    },
-    sync_enabled: true,
-    sync_interval_hours: 24,
-  });
-  private readonly saveRequest = createMutation(() => saveCollectionGroupPolicyMutation());
-  private readonly syncRequest = createMutation(() => syncCollectionGroupMutation());
-  private readonly feedback = createNotifier();
-  private saving = $state(false);
-
-  constructor(
-    private readonly library: () => string,
-    private readonly group: () => string,
-  ) {}
-
-  get busy() {
-    return this.saving;
-  }
-
-  async save() {
-    const name = this.group().trim();
-    const libraryId = this.library();
-    if (this.busy || !name || !libraryId) return false;
-    const query = { name, media_type: "movie" as const };
-    this.saving = true;
+  /** Save the set into its group, keeping the group's other defaults, then run it. */
+  private async saveSet() {
+    const name = this.collectionGroup.trim();
+    const query = { name, media_type: this.mediaType };
     try {
       const existing = await queryClient.fetchQuery(getCollectionGroupPolicyOptions({ query }));
-      const saved = await this.saveRequest.mutateAsync({
+      // A choice left at Default keeps what an existing group already has.
+      const chosen = Object.fromEntries(
+        Object.entries($state.snapshot(this.setPolicy)).filter(([, value]) => value !== null),
+      );
+      const saved = await this.groupRequest.mutateAsync({
         query,
         body: {
           ...existing,
-          ...$state.snapshot(this.policy),
-          dynamic_tmdb: this.policy.dynamic_tmdb
-            ? { ...$state.snapshot(this.policy.dynamic_tmdb), library_id: libraryId }
-            : null,
+          ...chosen,
+          generator: { ...$state.snapshot(this.generator), library_id: this.libraryId },
         },
       });
       queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
-      await this.syncRequest.mutateAsync({ query });
-      this.feedback.success(`Franchise discovery complete for group "${name}".`);
-      goToCollectionsList("movie", name);
+      const result = await this.syncGroupRequest.mutateAsync({ query });
+      const errors = Object.entries(result.errors);
+      if (errors.length) {
+        this.feedback.error(
+          `Created ${result.created.length} collections. ${errors.length} failed: ${errors
+            .map(([title, error]) => `${title}: ${error}`)
+            .join("; ")}`,
+        );
+      } else {
+        this.feedback.success(`Created ${result.created.length} collections in "${name}".`);
+      }
+      goToCollectionsList(this.mediaType, name);
       return true;
     } catch (error) {
-      this.feedback.error(errorMessage(error, "Franchise discovery failed"));
+      this.feedback.error(errorMessage(error, "Collection set creation failed"));
       return false;
-    } finally {
-      this.saving = false;
     }
   }
 }

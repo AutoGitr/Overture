@@ -20,12 +20,11 @@ lazy from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 lazy from overture.db import metadata
 lazy from overture.db import session as session_module
-lazy from overture.db.models.collection_rule import CollectionRule
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database, alembic_config, run_migrations
-lazy from overture.domain import MediaType, RuleSourceType, ServerType
+lazy from overture.domain import MediaType, ServerType
 lazy from overture.migrations import versions_at_head
 
 
@@ -458,7 +457,7 @@ def test_revision_5_preserves_collection_members_art_and_settings() -> None:
             ).one() == ("sync", 1, 1)
             assert conn.exec_driver_sql(
                 "SELECT order_type, visible_home FROM media_collections"
-            ).one() == ("release", 0)
+            ).one() == ("release.asc", 0)
             assert (
                 conn.exec_driver_sql(
                     "SELECT position FROM media_collection_members"
@@ -587,26 +586,23 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
             )
             conn.execute(
                 collections.insert().values(
-                    **MediaCollection(
+                    **_previous_collection(
+                        collections,
                         id=1,
                         server_item_id="c1",
-                        media_type=MediaType.MOVIE,
-                        server_type=ServerType.PLEX,
                         title="Saga",
                         collection_group="Weekend",
-                    ).model_dump(
-                        include={column.name for column in collections.columns}
                     )
                 )
             )
             conn.execute(
                 rules.insert().values(
-                    **CollectionRule(
-                        collection_id=1,
-                        source_type=RuleSourceType.MDBLIST,
-                        source_identifier="42",
-                        minimum_items=2,
-                    ).model_dump(include={column.name for column in rules.columns})
+                    collection_id=1,
+                    source_type="mdblist",
+                    source_identifier="42",
+                    minimum_items=2,
+                    sync_interval_hours=24,
+                    enabled=True,
                 )
             )
             command.upgrade(config, "8bfb249cdcbd")
@@ -630,13 +626,14 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
                 ).scalar_one()
                 == 0
             )
-            command.upgrade(config, "head")
+            command.upgrade(config, "9a1b2c3d4e5f")
             assert (
                 conn.exec_driver_sql(
                     "SELECT builders_json FROM collection_rules"
                 ).scalar_one()
                 == '[{"type": "mdblist", "identifiers": ["42"]}]'
             )
+            command.upgrade(config, "head")
             command.downgrade(config, "8bfb249cdcbd")
             command.downgrade(config, "de75601826ea")
             assert "collection_groups" not in inspect(conn).get_table_names()
@@ -662,22 +659,22 @@ def test_collection_template_sources_preserve_metadata_and_sync_schedules() -> N
             collections = Table("media_collections", old, autoload_with=conn)
             conn.execute(
                 settings.insert().values(
-                    **AppSettings().model_dump(
-                        include={column.name for column in settings.columns}
-                    )
+                    **{
+                        **AppSettings().model_dump(
+                            include={column.name for column in settings.columns}
+                        ),
+                        "collection_order_default": "release",
+                    }
                 )
             )
             conn.execute(
                 collections.insert().values(
-                    **MediaCollection(
+                    **_previous_collection(
+                        collections,
                         id=1,
                         title="Saga",
-                        media_type=MediaType.MOVIE,
-                        server_type=ServerType.PLEX,
                         summary="Literal {overview}",
                         sort_title="01_{literal}",
-                    ).model_dump(
-                        include={column.name for column in collections.columns}
                     )
                 )
             )
@@ -691,15 +688,12 @@ def test_collection_template_sources_preserve_metadata_and_sync_schedules() -> N
             )
             conn.execute(
                 collections.insert().values(
-                    **MediaCollection(
+                    **_previous_collection(
+                        collections,
                         id=2,
                         title="Other",
-                        media_type=MediaType.MOVIE,
-                        server_type=ServerType.PLEX,
                         summary="About Other: Original summary",
                         summary_format="About {title}: {summary}",
-                    ).model_dump(
-                        include={column.name for column in collections.columns}
                     )
                 )
             )
@@ -738,5 +732,251 @@ def test_collection_template_sources_preserve_metadata_and_sync_schedules() -> N
                 ).scalar_one()
                 == "Literal {{overview}}"
             )
+    finally:
+        engine.dispose()
+
+
+def _previous_collection(table: Table, **values: object) -> dict[str, object]:
+    """A movie collection row for revisions before orders named their direction."""
+    row = MediaCollection.model_validate(
+        {"media_type": MediaType.MOVIE, "server_type": ServerType.PLEX, **values}
+    ).model_dump(include={column.name for column in table.columns})
+    return {**row, "order_type": "release"}
+
+
+def test_collection_criteria_migration_converts_rules_sets_orders_and_items() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "5cff4899af03")
+            old = MetaData()
+            collections = Table("media_collections", old, autoload_with=conn)
+            rules = Table("collection_rules", old, autoload_with=conn)
+            groups = Table("collection_groups", old, autoload_with=conn)
+            for identity in (1, 2, 3, 4):
+                conn.execute(
+                    collections.insert().values(
+                        **_previous_collection(
+                            collections,
+                            id=identity,
+                            server_item_id=f"c{identity}",
+                            title=f"Collection {identity}",
+                        )
+                    )
+                )
+            conn.execute(
+                collections.update()
+                .where(collections.c.id == 1)
+                .values(order_type="alpha", auto_generated_tmdb_id=10)
+            )
+            library_filter = {
+                "type": "library_filter",
+                "filter_group": {
+                    "mode": "all",
+                    "conditions": [
+                        {"field": "tag", "operator": "contains", "value": "kids"},
+                        {"field": "added_within_days", "operator": "is", "value": 7},
+                        {"field": "genre", "operator": "is", "value": ""},
+                    ],
+                    "groups": [],
+                },
+            }
+            mdblist = {"type": "mdblist", "identifiers": ["user/list"]}
+            seeded: tuple[
+                tuple[int, list[object] | None, dict[str, object] | None, str | None],
+                ...,
+            ] = (
+                (1, [mdblist, library_filter], None, None),
+                (
+                    2,
+                    [mdblist],
+                    {
+                        "filter_group": {
+                            "mode": "all",
+                            "conditions": [
+                                {"field": "unplayed", "operator": "is", "value": "1"}
+                            ],
+                            "groups": [],
+                        },
+                        "sort_by": "rating.desc",
+                        "limit": 20,
+                    },
+                    "request",
+                ),
+                (3, None, None, None),
+                (
+                    4,
+                    None,
+                    {
+                        "filter_group": {"mode": "all", "conditions": [], "groups": []},
+                        "sort_by": "added.desc",
+                        "limit": None,
+                    },
+                    "classic",
+                ),
+            )
+            for collection_id, builders, smart, label in seeded:
+                conn.execute(
+                    rules.insert().values(
+                        collection_id=collection_id,
+                        source_type="filter",
+                        source_identifier="",
+                        builders_json=json.dumps(builders) if builders else None,
+                        smart_filter_json=json.dumps(smart) if smart else None,
+                        managed_label=label,
+                        sync_interval_hours=24,
+                        enabled=True,
+                        order_type="custom",
+                    )
+                )
+            conn.execute(
+                groups.insert().values(
+                    server_type="plex",
+                    media_type="movie",
+                    name="Franchises",
+                    dynamic_tmdb_json=json.dumps(
+                        {
+                            "enabled": True,
+                            "library_id": "movies",
+                            "strip_prefix": "The ",
+                            "strip_suffix": " Collection",
+                            "exclude_tmdb_ids": [86311],
+                            "auto_exclude_from_other_collections": True,
+                        }
+                    ),
+                )
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "theme_provenance_cleared, genres, actors, writers, producers, "
+                "countries, labels, tags, rating) VALUES (1, 'movie', 'Movie', 1, 0, "
+                "'[]', '[]', '[]', '[]', '[]', '[\"Kids\"]', '[\"Kids\", \"4K\"]', 7.5)"
+            )
+
+            command.upgrade(config, "head")
+
+            criteria = {
+                row[0]: (json.loads(row[1]), row[2], row[3], row[4])
+                for row in conn.exec_driver_sql(
+                    "SELECT collection_id, criteria_json, smart, item_limit, "
+                    "order_type FROM collection_rules"
+                )
+            }
+            source = {"kind": "source", "operator": "is", "source": mdblist}
+            assert criteria[1] == (
+                {
+                    "mode": "any",
+                    "conditions": [source],
+                    "groups": [
+                        {
+                            "mode": "all",
+                            "conditions": [
+                                {
+                                    "kind": "field",
+                                    "field": "label",
+                                    "operator": "is",
+                                    "value": "kids",
+                                },
+                                {
+                                    "kind": "field",
+                                    "field": "added",
+                                    "operator": "in_last",
+                                    "value": 7,
+                                },
+                            ],
+                            "groups": [],
+                        }
+                    ],
+                },
+                0,
+                None,
+                "custom",
+            )
+            unplayed = {
+                "kind": "field",
+                "field": "unplayed",
+                "operator": "is",
+                "value": True,
+            }
+            assert criteria[2] == (
+                {
+                    "mode": "all",
+                    "conditions": [],
+                    "groups": [
+                        {"mode": "all", "conditions": [unplayed], "groups": []},
+                        {"mode": "all", "conditions": [source], "groups": []},
+                    ],
+                },
+                1,
+                20,
+                "critic_rating.desc",
+            )
+            assert 3 not in criteria
+            assert criteria[4][0]["conditions"] == [
+                {
+                    "kind": "field",
+                    "field": "label",
+                    "operator": "is",
+                    "value": "classic",
+                }
+            ]
+            assert conn.exec_driver_sql(
+                "SELECT order_type, generated_value FROM media_collections WHERE id=1"
+            ).one() == ("title.asc", "10")
+            generator = json.loads(
+                conn.exec_driver_sql(
+                    "SELECT generator_json FROM collection_groups"
+                ).scalar_one()
+            )
+            assert generator["dimension"] == "franchise"
+            assert generator["exclude"] == ["86311"]
+            assert generator["strip_prefix"] == "The "
+            assert conn.exec_driver_sql(
+                "SELECT labels, critic_rating FROM media_items"
+            ).one() == ('["Kids", "4K"]', None)
+
+            command.downgrade(config, "5cff4899af03")
+            assert conn.exec_driver_sql(
+                "SELECT collection_id, builders_json, smart_filter_json "
+                "FROM collection_rules ORDER BY collection_id"
+            ).all()[0][0:2] == (
+                1,
+                json.dumps(
+                    [
+                        mdblist,
+                        {
+                            "type": "library_filter",
+                            "filter_group": {
+                                "mode": "all",
+                                "conditions": [
+                                    {
+                                        "field": "label",
+                                        "operator": "is",
+                                        "value": "kids",
+                                    },
+                                    {
+                                        "field": "added_within_days",
+                                        "operator": "lte",
+                                        "value": 7,
+                                    },
+                                ],
+                                "groups": [],
+                            },
+                        },
+                    ]
+                ),
+            )
+            assert conn.exec_driver_sql(
+                "SELECT order_type, auto_generated_tmdb_id FROM media_collections "
+                "WHERE id=1"
+            ).one() == ("alpha", 10)
+            assert json.loads(
+                conn.exec_driver_sql(
+                    "SELECT dynamic_tmdb_json FROM collection_groups"
+                ).scalar_one()
+            )["exclude_tmdb_ids"] == [86311]
+            command.upgrade(config, "head")
     finally:
         engine.dispose()

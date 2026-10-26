@@ -65,7 +65,7 @@ class PlexMetadata(TypedDict, total=False):
     smart: bool | str | int | None
     collectionMode: int | str | None
     collectionSort: int | str | None
-    collectionFiltering: int | str | None
+    collectionFilterBasedOnUser: int | str | None
     year: int | None
     index: int
     thumb: str | None
@@ -75,12 +75,16 @@ class PlexMetadata(TypedDict, total=False):
     contentRating: str | None
     rating: float | int | None
     audienceRating: float | int | None
+    userRating: float | int | None
+    editionTitle: str | None
     duration: int | None
     viewCount: int | None
     viewOffset: int | None
+    lastViewedAt: int | None
     originallyAvailableAt: str | None
     childCount: int | None
     leafCount: int | None
+    viewedLeafCount: int | None
     studio: str | None
     Genre: list[PlexDirector] | None
     Role: list[PlexDirector] | None
@@ -128,6 +132,8 @@ class MediaBrowserItem(TypedDict, total=False):
     ProductionLocations: list[str] | None
     OfficialRating: str | None
     CommunityRating: float | int | None
+    CriticRating: float | int | None
+    Width: int | None
     PremiereDate: str | None
     DateCreated: str | None
     DateLastMediaAdded: str | None

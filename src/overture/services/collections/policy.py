@@ -11,19 +11,9 @@ lazy from ...domain import (
     CollectionOrder,
     SyncMode,
 )
-lazy from ...schemas.collections import (
-    CollectionGroupPolicy,
-    CollectionRuleRead,
-    CollectionRuleWrite,
-)
+lazy from ...schemas.collections import CollectionGroupPolicy, CollectionRuleWrite
 
-type RuleOrPolicy = (
-    CollectionRule
-    | CollectionRuleWrite
-    | CollectionRuleRead
-    | CollectionGroupPolicy
-    | None
-)
+type RuleOrPolicy = CollectionRule | CollectionRuleWrite | None
 
 
 def inherit[T](*values: T | None) -> T:
@@ -152,12 +142,12 @@ def resolve_policy(
             defaults.collection_delete_when_inactive,
         ),
         sync_interval_hours=inherit(
-            getattr(rule, "sync_interval_hours", None) if rule else None,
+            rule.sync_interval_hours if rule else None,
             group.sync_interval_hours if group else None,
             defaults.collection_sync_interval_hours,
         ),
         sync_enabled=inherit(
-            getattr(rule, "enabled", None) if rule else None,
+            rule.enabled if rule else None,
             group.sync_enabled if group else None,
             defaults.collection_sync_enabled,
         ),

@@ -51,7 +51,7 @@ class AppSettingsBase(SQLModel):
         default=CollectionMode.DEFAULT, sa_type=enum_type(CollectionMode)
     )
     collection_order_default: CollectionOrder = Field(
-        default=CollectionOrder.RELEASE, sa_type=enum_type(CollectionOrder)
+        default=CollectionOrder.RELEASE_ASC, sa_type=enum_type(CollectionOrder)
     )
     collection_filtering_default: CollectionFiltering = Field(
         default=CollectionFiltering.ADMIN, sa_type=enum_type(CollectionFiltering)

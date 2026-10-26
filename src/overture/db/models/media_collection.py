@@ -44,7 +44,7 @@ class MediaCollectionBase(SQLModel):
         default=None, sa_type=enum_type(CollectionMode)
     )
     order_type: CollectionOrder = Field(
-        default=CollectionOrder.RELEASE, sa_type=enum_type(CollectionOrder)
+        default=CollectionOrder.RELEASE_ASC, sa_type=enum_type(CollectionOrder)
     )
     collection_filtering: CollectionFiltering | None = Field(
         default=None, sa_type=enum_type(CollectionFiltering)
@@ -68,7 +68,8 @@ class MediaCollectionBase(SQLModel):
     # TMDB collection ID the server itself names, such as a BoxSet's.
     provider_tmdb_id: int | None = None
     tmdb_collection_id: int | None = Field(default=None, index=True)
-    auto_generated_tmdb_id: int | None = Field(default=None, index=True)
+    #: The value its group's collection set created it for.
+    generated_value: str | None = None
 
     # Source metadata for the theme installed through Overture.
     youtube_id: str | None = None

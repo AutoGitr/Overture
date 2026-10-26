@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ORDER_LABELS } from "../utils/collectionCriteria";
   import type {
     CollectionFiltering,
     CollectionMode,
@@ -25,12 +26,15 @@
     policy,
     prefix = "",
     plex = false,
+    orders = [],
     section = "all",
     defaults,
   }: {
     policy: PolicyData;
     prefix?: string;
     plex?: boolean;
+    /** The orders the server offers collections of this media type. */
+    orders?: CollectionOrder[];
     section?: "all" | "sync";
     defaults?: PolicyData;
   } = $props();
@@ -87,12 +91,12 @@
 
 {#if section === "all"}
   <label class="form-label">
-    {prefix}Member order
+    {prefix}Sort
     <select bind:value={policy.order_type}>
       <option value={null}>Default</option>
-      <option value="release">Release date</option>
-      <option value="alpha">Alphabetical</option>
-      {#if plex}<option value="custom">Source / custom order</option>{/if}
+      {#each orders as order (order)}
+        <option value={order}>{ORDER_LABELS[order]}</option>
+      {/each}
     </select>
   </label>
   <label class="form-label">

@@ -4,7 +4,7 @@ import { appSettings, collectionDetail, mediaItem } from "../helpers/fixtures";
 const first = mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" });
 const second = mediaItem({ id: 2, title: "Second", library_id: "movies", server_item_id: "m2" });
 
-test("collection presets preview and create a selected set without horizontal overflow", async ({
+test("a collection set previews and creates its collections without horizontal overflow", async ({
   page,
 }) => {
   await page.route("**/api/settings", (route) =>
@@ -14,26 +14,36 @@ test("collection presets preview and create a selected set without horizontal ov
     route.fulfill({ json: [{ id: "movies", title: "Movies", count: 7 }] }),
   );
   await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/collections/presets/preview", (route) =>
+  await page.route("**/api/collections/sets/preview", (route) =>
     route.fulfill({
       json: [
-        { key: "1990", title: "1990s", member_count: 3 },
-        { key: "2000", title: "2000s", member_count: 4 },
+        {
+          value: "1990",
+          title: "1990s",
+          member_count: 3,
+          below_minimum: false,
+          collection_id: null,
+        },
+        {
+          value: "2000",
+          title: "2000s",
+          member_count: 1,
+          below_minimum: true,
+          collection_id: null,
+        },
       ],
     }),
   );
-  let created = false;
-  await page.route("**/api/collections/presets", (route) => {
-    expect(route.request().postDataJSON()).toMatchObject({
-      preset: "decades",
-      library_id: "movies",
-      keys: ["2000"],
-    });
-    created = true;
-    return route.fulfill({ json: { collection_ids: [13], errors: {} } });
+  let saved: unknown = null;
+  await page.route("**/api/collections/group-policy?*", (route) => {
+    if (route.request().method() === "PUT") saved = route.request().postDataJSON();
+    return route.fulfill({ json: saved ?? {} });
   });
+  await page.route("**/api/collections/group-policy/sync?*", (route) =>
+    route.fulfill({ json: { created: [13], removed: [], synced: 0, errors: {} } }),
+  );
   await logIn(page, "/movies/collections/new");
-  await expect(page.getByRole("button", { name: "Collection Setup", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Setup", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
@@ -41,20 +51,20 @@ test("collection presets preview and create a selected set without horizontal ov
     "aria-expanded",
     "false",
   );
-  await page.getByLabel("Type", { exact: true }).selectOption("preset");
-  await expect(page.getByLabel("Preset", { exact: true })).toHaveValue("decades");
+  await page.getByText("Collection set", { exact: true }).click();
+  await page.getByLabel("Group", { exact: true }).fill("Decades");
   await page.getByRole("button", { name: "Preview collections", exact: true }).click();
-  await page.getByRole("checkbox", { name: "1990s (3 members)" }).uncheck();
+  await expect(page.getByText("1 collection, 1 below the minimum.")).toBeVisible();
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   await page
     .getByRole("group", { name: "Collection form actions" })
-    .getByRole("button", { name: "Create selected collections" })
+    .getByRole("button", { name: "Create", exact: true })
     .click();
-  await expect(page).toHaveURL(/movies\/collections$/);
-  expect(created).toBe(true);
+  await expect(page).toHaveURL(/movies\/collections/);
+  expect(saved).toMatchObject({ generator: { dimension: "decade", library_id: "movies" } });
 });
 
 test("collection members, metadata and rule views work on desktop and mobile", async ({ page }) => {
@@ -97,7 +107,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await page.goto("/movies/collections/12-saga");
   const title = page.getByLabel("Title", { exact: true });
   await title.fill("");
-  await page.getByRole("button", { name: "Collection Setup", exact: true }).click();
+  await page.getByRole("button", { name: "Setup", exact: true }).click();
   await page.getByRole("button", { name: "Save Changes", exact: true }).click();
   await expect(title).toBeFocused();
   await title.fill("Saga");
@@ -120,13 +130,12 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     .getByRole("button", { name: "Save", exact: true })
     .click();
   await expect(page.getByRole("heading", { name: "Curated saga", exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Source", exact: true }).selectOption("builders");
   await views.getByRole("link", { name: "Content", exact: true }).click();
+  await page.getByText("Matching criteria", { exact: true }).click();
   await expect(page.getByLabel("Sync strategy")).toHaveValue("");
-  await page.getByRole("button", { name: "Library filter", exact: true }).click();
   await page.getByRole("button", { name: "Condition", exact: true }).click();
-  await page.getByLabel("Library filter group field 1", { exact: true }).selectOption("decade");
-  await page.getByLabel("Library filter group value 1", { exact: true }).fill("1990");
+  await page.getByLabel("Criteria condition 1 field", { exact: true }).selectOption("field:year");
+  await page.getByLabel("Criteria condition 1 value", { exact: true }).fill("1990");
   await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeEnabled();
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
   const actions = page.getByRole("group", { name: "Record actions", exact: true });
@@ -154,9 +163,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(actions.getByRole("button")).toHaveCount(3);
   await modes.getByRole("tab", { name: "Configure", exact: true }).click();
   await views.getByRole("link", { name: "Content", exact: true }).click();
-  await expect(page.getByLabel("Library filter group value 1", { exact: true })).toHaveValue(
-    "1990",
-  );
+  await expect(page.getByLabel("Criteria condition 1 value", { exact: true })).toHaveValue("1990");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
@@ -187,11 +194,19 @@ test("collection creation uses the selected library and TMDB list sources", asyn
         title: "New collection",
         library_id: "movies",
         member_ids: [],
-        rule: { builders: [{ type: "tmdb_list", list_ids: [123] }] },
+        rule: {
+          criteria: {
+            conditions: [
+              { kind: "source", operator: "is", source: { type: "tmdb_list", list_ids: [123] } },
+            ],
+          },
+        },
       });
       await route.fulfill({ json: detail });
     } else if (path === "/api/collections" || path === "/api/collections/groups")
       await route.fulfill({ json: [] });
+    else if (path === "/api/collections/capabilities" || path === "/api/collections/presets")
+      await route.fallback();
     else await route.fulfill({ json: detail });
   });
   await logIn(page);
@@ -200,10 +215,13 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("movies");
-  await expect(page.getByRole("combobox", { name: "Source", exact: true })).toBeInViewport();
+  await expect(page.getByLabel(/^Start from/)).toBeInViewport();
   await page.getByLabel("Title", { exact: true }).fill("New collection");
-  await page.getByRole("button", { name: "TMDB lists", exact: true }).click();
-  await page.getByLabel("TMDB list IDs", { exact: true }).fill("123");
+  await page.getByRole("button", { name: "Condition", exact: true }).click();
+  await page
+    .getByLabel("Criteria condition 1 field", { exact: true })
+    .selectOption("source:tmdb_list");
+  await page.getByLabel("Criteria condition 1 TMDB list IDs", { exact: true }).fill("123");
   await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page).toHaveURL(/collections\/12-new-collection$/);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
@@ -345,9 +363,7 @@ test("creating again opens a fresh draft and multiple libraries require a choice
   await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("");
 });
 
-test("franchise discovery shares Setup and submits its selected library and group", async ({
-  page,
-}) => {
+test("a franchise set shares Setup and saves its library, group and schedule", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
@@ -355,10 +371,11 @@ test("franchise discovery shares Setup and submits its selected library and grou
     route.fulfill({
       json: [
         { id: "movies", title: "Movies", count: 2 },
-        { id: "other", title: "Other movies", count: 1 },
+        { id: "other", title: "Other movies", count: 3 },
       ],
     }),
   );
+  await page.route("**/api/collections/groups?*", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
   let saves = 0;
   let syncs = 0;
@@ -366,14 +383,13 @@ test("franchise discovery shares Setup and submits its selected library and grou
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
       expect(body).toMatchObject({
-        minimum_items: 2,
         sync_interval_hours: 168,
         visible_home: true,
-        dynamic_tmdb: {
-          enabled: true,
+        generator: {
+          dimension: "franchise",
           library_id: "other",
           strip_suffix: " Collection",
-          exclude_tmdb_ids: [10, 20],
+          exclude: ["10", "20"],
         },
       });
       expect(new URL(route.request().url()).searchParams.get("name")).toBe("Franchises");
@@ -384,34 +400,31 @@ test("franchise discovery shares Setup and submits its selected library and grou
   });
   await page.route("**/api/collections/group-policy/sync?*", (route) => {
     syncs++;
-    return route.fulfill({ json: { status: "ok" } });
+    return route.fulfill({ json: { created: [12], removed: [], synced: 0, errors: {} } });
   });
   await logIn(page, "/movies/collections/new");
-  const setup = page.getByRole("region", { name: "Collection Setup", exact: true });
+  const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
   await setup.getByRole("combobox", { name: "Library", exact: true }).selectOption("other");
-  await setup.getByLabel("Type", { exact: true }).selectOption("preset");
-  await setup.getByLabel("Preset", { exact: true }).selectOption("discovery");
-  await expect(setup.getByLabel("Title", { exact: true })).toBeDisabled();
+  await setup.getByText("Collection set", { exact: true }).click();
   await expect(page.getByRole("link", { name: "Display", exact: true })).toHaveCount(0);
-  const submit = page.getByRole("button", { name: "Discover & Create Collections", exact: true });
+  const submit = page.getByRole("button", { name: "Create set", exact: true });
   await expect(submit).toBeDisabled();
-  await setup.getByLabel("Collection Group", { exact: true }).selectOption("__new__");
-  await setup.getByLabel("New group name", { exact: true }).fill("Franchises");
-  await page.getByLabel(/Exclude TMDB franchise IDs/).fill("10, 20");
-  await page.getByRole("link", { name: "Schedule", exact: true }).click();
+  await setup.getByLabel(/^Group/).fill("Franchises");
+  await page.getByLabel("One collection per", { exact: true }).selectOption("franchise");
+  await page.getByLabel("Trailing text to remove", { exact: true }).fill(" Collection");
+  await page.getByLabel(/^Skip these values/).fill("10, 20");
+  await page.getByRole("link", { name: "Defaults", exact: true }).click();
   await page.getByLabel("Sync interval (hours)", { exact: true }).fill("168");
   await page.getByRole("link", { name: "Setup", exact: true }).click();
-  await setup.getByLabel("Type", { exact: true }).selectOption("custom");
+  await setup.getByText("Collection", { exact: true }).click();
   await expect(setup.getByLabel("Title", { exact: true })).toHaveValue("Unsaved single collection");
-  await setup.getByLabel("Type", { exact: true }).selectOption("preset");
-  await setup.getByLabel("Preset", { exact: true }).selectOption("discovery");
+  await setup.getByText("Collection set", { exact: true }).click();
   await expect(page.getByLabel("Sync interval (hours)", { exact: true })).toHaveValue("168");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
-  await submit.scrollIntoViewIfNeeded();
   await submit.click();
   await expect.poll(() => new URL(page.url()).pathname).toBe("/movies/collections");
   await expect
@@ -421,9 +434,7 @@ test("franchise discovery shares Setup and submits its selected library and grou
   expect(syncs).toBe(1);
 });
 
-test("smart collections combine list sources and live criteria from top to bottom", async ({
-  page,
-}) => {
+test("smart collections combine list sources and live criteria", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
@@ -437,21 +448,27 @@ test("smart collections combine list sources and live criteria from top to botto
     kind: "smart",
   });
   let created = false;
-  await page.route("**/api/collections*", (route) => {
-    if (route.request().method() !== "POST") return route.fulfill({ json: [] });
+  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections", (route) => {
     expect(route.request().postDataJSON()).toMatchObject({
       title: "Unwatched favorites",
-      kind: "smart",
       library_id: "movies",
       member_ids: [],
       collection_filtering: "user",
       active_start_mmdd: "12-01",
       active_end_mmdd: "01-05",
       rule: {
-        managed_label: "Favorites To Watch",
-        builders: [{ type: "mdblist", identifiers: ["first/list", "second/list"] }],
-        smart_filter: {
-          filter_group: { conditions: [{ field: "unplayed", operator: "is", value: true }] },
+        smart: true,
+        criteria: {
+          mode: "all",
+          conditions: [
+            {
+              kind: "source",
+              operator: "is",
+              source: { type: "mdblist", identifiers: ["first/list", "second/list"] },
+            },
+            { kind: "field", field: "unplayed", operator: "is", value: true },
+          ],
         },
       },
     });
@@ -461,20 +478,18 @@ test("smart collections combine list sources and live criteria from top to botto
   await page.route("**/api/collections/12?*", (route) => route.fulfill({ json: detail }));
   await logIn(page, "/movies/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unwatched favorites");
-  await page.getByLabel("Source", { exact: true }).selectOption("builders");
-  await page.getByRole("button", { name: "MDBList", exact: true }).click();
-  const lists = page.getByLabel("MDBList list URL or ID", { exact: true });
-  await lists.pressSequentially("first/list, second/list");
-  await expect(lists).toHaveValue("first/list, second/list");
-  await page.getByLabel("Source", { exact: true }).selectOption("smart");
-  await expect(lists).toHaveValue("first/list, second/list");
-  const managedLabel = page.getByLabel(/Managed Plex label/);
-  await managedLabel.pressSequentially("Favorites To Watch");
-  await expect(managedLabel).toHaveValue("Favorites To Watch");
+  await page.getByText("Plex smart collection", { exact: true }).click();
   await page.getByRole("button", { name: "Condition", exact: true }).click();
   await page
-    .getByLabel("Smart collection criteria field 1", { exact: true })
-    .selectOption("unplayed");
+    .getByLabel("Criteria condition 1 field", { exact: true })
+    .selectOption("source:mdblist");
+  const lists = page.getByLabel("Criteria condition 1 MDBList lists", { exact: true });
+  await lists.pressSequentially("first/list, second/list");
+  await expect(lists).toHaveValue("first/list, second/list");
+  await page.getByRole("button", { name: "Condition", exact: true }).click();
+  await page
+    .getByLabel("Criteria condition 2 field", { exact: true })
+    .selectOption("field:unplayed");
   await page.getByRole("link", { name: "Display", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Collection filtering", exact: true })
@@ -483,7 +498,6 @@ test("smart collections combine list sources and live criteria from top to botto
   await page.getByLabel(/^Active start/).fill("12-01");
   await page.getByLabel(/^Active end/).fill("01-05");
   await expect(page.getByLabel("Search members", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Member order", { exact: true })).toHaveCount(0);
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
@@ -520,20 +534,20 @@ test("group management saves and applies defaults separately from an unsaved col
   await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
   await logIn(page, "/movies/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
-  await page.getByLabel("Collection Group", { exact: true }).selectOption("Weekend");
+  await page.getByLabel("Group", { exact: true }).selectOption("Weekend");
   await page
-    .getByRole("region", { name: "Collection Setup", exact: true })
+    .getByRole("region", { name: "Collection setup", exact: true })
     .getByRole("button", { name: "Manage groups", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Collection groups" });
   await expect(dialog.getByRole("combobox", { name: "Group", exact: true })).toHaveValue("Weekend");
-  await dialog.getByRole("button", { name: "Group settings", exact: true }).click();
-  await dialog.getByRole("textbox", { name: /^Group sort title template/ }).fill("02_{title}");
+  await dialog.getByRole("button", { name: "Group defaults", exact: true }).click();
+  await dialog.getByRole("textbox", { name: "Sort title", exact: true }).fill("02_{title}");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
-  await dialog.getByRole("button", { name: "Save & Apply to group", exact: true }).click();
+  await dialog.getByRole("button", { name: "Save & Apply", exact: true }).click();
   await expect(
     page.getByText("Group defaults applied to 1 collection. Explicit overrides were kept."),
   ).toBeVisible();

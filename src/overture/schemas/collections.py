@@ -1,7 +1,7 @@
 """Collection REST and WebSocket schemas."""
 
 lazy import hashlib
-lazy from datetime import datetime
+lazy from datetime import date, datetime
 lazy from typing import Annotated, Literal, Self
 
 lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
@@ -9,28 +9,32 @@ lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
 lazy from ..config import API_PREFIX
 lazy from ..db.art_slots import read_art_slot
 lazy from ..db.completion import collection_art_completion, collection_theme_status
+lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.public_dataset import PublicDatasetCollection
 lazy from ..domain import (
     ArtType,
     AssetStatus,
-    BuilderType,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
     CollectionOrder,
+    FieldKind,
     FilterField,
     FilterOperator,
     MediaType,
     ServerType,
-    SmartSortOrder,
+    SetDimension,
+    SourceType,
     SyncMode,
     TmdbPersonRole,
 )
 lazy from ..integrations.mdblist import mdblist_identifier
+lazy from ..services.collections.fields import FIELDS, OPERATORS
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
     SeasonalDate,
+    SetTitleFormat,
     SortTitleFormat,
     SummaryFormat,
 )
@@ -47,55 +51,90 @@ class ArrTagRead(StrictBaseModel):
     label: str
 
 
-class FilterCondition(StrictBaseModel):
-    """One atomic library or smart-collection filter condition."""
+class FieldCondition(StrictBaseModel):
+    """Test one metadata field of an item."""
 
+    kind: Literal["field"] = "field"
     field: FilterField
     operator: FilterOperator = FilterOperator.IS
+    #: Days for ``in_last`` and ``not_in_last``; an ISO date for ``before`` and
+    #: ``after``.
     value: str | int | float | bool
 
+    @model_validator(mode="after")
+    def validate_value(self) -> Self:
+        """Accept only the field's operators and normalise the value to its kind."""
+        kind = FIELDS[self.field].kind
+        if self.operator not in OPERATORS[kind]:
+            raise ValueError(
+                f"{FIELDS[self.field].label} cannot use the {self.operator} operator"
+            )
+        self.value = _condition_value(kind, self.operator, self.value)
+        return self
 
-class FilterGroup(StrictBaseModel):
-    """Boolean group of conditions and nested filter groups."""
 
-    mode: Literal["all", "any"] = "all"
-    conditions: list[FilterCondition] = Field(default_factory=list[FilterCondition])
-    groups: list[FilterGroup] = Field(default_factory=list["FilterGroup"])
+def _condition_value(
+    kind: FieldKind, operator: FilterOperator, value: str | int | float | bool
+) -> str | int | float | bool:
+    if kind is FieldKind.BOOLEAN:
+        if isinstance(value, bool):
+            return value
+        raise ValueError("Choose true or false")
+    if kind is FieldKind.NUMBER or operator in {
+        FilterOperator.IN_LAST,
+        FilterOperator.NOT_IN_LAST,
+    }:
+        if isinstance(value, bool):
+            raise ValueError("Enter a number")
+        try:
+            number = float(value)
+        except ValueError:
+            raise ValueError("Enter a number") from None
+        if kind is FieldKind.DATE:
+            if number < 1 or not number.is_integer():
+                raise ValueError("Enter a whole number of days")
+            return int(number)
+        return int(number) if number.is_integer() else number
+    text = str(value).strip()
+    if kind is FieldKind.DATE:
+        try:
+            return date.fromisoformat(text).isoformat()
+        except ValueError:
+            raise ValueError("Enter a date as YYYY-MM-DD") from None
+    if not text:
+        raise ValueError("Enter a value")
+    return text
 
-    def is_empty(self) -> bool:
-        """Return whether this group and all nested groups have no conditions."""
-        return not self.conditions and all(group.is_empty() for group in self.groups)
 
+class TmdbCollectionSource(StrictBaseModel):
+    """Movies in one TMDB franchise collection, in release order."""
 
-class TmdbCollectionBuilder(StrictBaseModel):
-    """Resolve movies belonging to one TMDB franchise collection."""
-
-    type: Literal[BuilderType.TMDB_COLLECTION] = BuilderType.TMDB_COLLECTION
+    type: Literal[SourceType.TMDB_COLLECTION] = SourceType.TMDB_COLLECTION
     collection_id: Annotated[int, Field(gt=0)]
 
 
-class TmdbItemBuilder(StrictBaseModel):
-    """Resolve explicit TMDB movie or show IDs in order."""
+class TmdbItemSource(StrictBaseModel):
+    """Explicit TMDB movie or show IDs, in the order given."""
 
-    type: Literal[BuilderType.TMDB_ITEM] = BuilderType.TMDB_ITEM
+    type: Literal[SourceType.TMDB_ITEM] = SourceType.TMDB_ITEM
     tmdb_ids: Annotated[
         list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
     ]
 
 
-class TmdbListBuilder(StrictBaseModel):
-    """Resolve public TMDB lists in their saved order."""
+class TmdbListSource(StrictBaseModel):
+    """Public TMDB lists, in their saved order."""
 
-    type: Literal[BuilderType.TMDB_LIST] = BuilderType.TMDB_LIST
+    type: Literal[SourceType.TMDB_LIST] = SourceType.TMDB_LIST
     list_ids: Annotated[
         list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=50)
     ]
 
 
-class TmdbPersonBuilder(StrictBaseModel):
-    """Resolve movies or shows credited to a TMDB person in selected roles."""
+class TmdbPersonSource(StrictBaseModel):
+    """Movies or shows credited to a TMDB person in selected roles."""
 
-    type: Literal[BuilderType.TMDB_PERSON] = BuilderType.TMDB_PERSON
+    type: Literal[SourceType.TMDB_PERSON] = SourceType.TMDB_PERSON
     person_id: Annotated[int, Field(gt=0)]
     person_name: Annotated[str, Field(max_length=200)] | None = None
     roles: Annotated[list[TmdbPersonRole], Field(min_length=1)] = Field(
@@ -104,10 +143,10 @@ class TmdbPersonBuilder(StrictBaseModel):
     use_biography: bool = False
 
 
-class MdblistBuilder(StrictBaseModel):
-    """Resolve one or more MDBList lists in source order."""
+class MdblistSource(StrictBaseModel):
+    """One or more MDBList lists, in source order."""
 
-    type: Literal[BuilderType.MDBLIST] = BuilderType.MDBLIST
+    type: Literal[SourceType.MDBLIST] = SourceType.MDBLIST
     identifiers: Annotated[
         list[Annotated[str, Field(min_length=1, max_length=500)]],
         Field(min_length=1, max_length=50),
@@ -120,76 +159,102 @@ class MdblistBuilder(StrictBaseModel):
         return [mdblist_identifier(value) for value in values]
 
 
-class RadarrTagBuilder(StrictBaseModel):
-    """Resolve movies carrying one or more Radarr tags."""
+class RadarrTagSource(StrictBaseModel):
+    """Movies carrying any of the Radarr tags."""
 
-    type: Literal[BuilderType.RADARR_TAG] = BuilderType.RADARR_TAG
+    type: Literal[SourceType.RADARR_TAG] = SourceType.RADARR_TAG
     tags: Annotated[
         list[Annotated[str, Field(min_length=1, max_length=200)]],
         Field(min_length=1, max_length=100),
     ]
 
 
-class SonarrTagBuilder(StrictBaseModel):
-    """Resolve shows carrying one or more Sonarr tags."""
+class SonarrTagSource(StrictBaseModel):
+    """Shows carrying any of the Sonarr tags."""
 
-    type: Literal[BuilderType.SONARR_TAG] = BuilderType.SONARR_TAG
+    type: Literal[SourceType.SONARR_TAG] = SourceType.SONARR_TAG
     tags: Annotated[
         list[Annotated[str, Field(min_length=1, max_length=200)]],
         Field(min_length=1, max_length=100),
     ]
 
 
-class LibraryFilterBuilder(StrictBaseModel):
-    """Resolve library items matching a structured filter tree."""
-
-    type: Literal[BuilderType.LIBRARY_FILTER] = BuilderType.LIBRARY_FILTER
-    filter_group: FilterGroup
-
-    @model_validator(mode="after")
-    def validate_non_empty(self) -> Self:
-        """Require at least one filter condition."""
-        if self.filter_group.is_empty():
-            raise ValueError("Choose at least one library filter condition")
-        return self
-
-
-type CollectionBuilder = Annotated[
-    TmdbCollectionBuilder
-    | TmdbItemBuilder
-    | TmdbListBuilder
-    | TmdbPersonBuilder
-    | MdblistBuilder
-    | RadarrTagBuilder
-    | SonarrTagBuilder
-    | LibraryFilterBuilder,
+type CollectionSource = Annotated[
+    TmdbCollectionSource
+    | TmdbItemSource
+    | TmdbListSource
+    | TmdbPersonSource
+    | MdblistSource
+    | RadarrTagSource
+    | SonarrTagSource,
     Field(discriminator="type"),
 ]
 
-builders_adapter: TypeAdapter[list[CollectionBuilder]] = TypeAdapter(
-    list[CollectionBuilder]
-)
+
+class SourceCondition(StrictBaseModel):
+    """Test whether an external list holds the item."""
+
+    kind: Literal["source"] = "source"
+    operator: Literal[FilterOperator.IS, FilterOperator.IS_NOT] = FilterOperator.IS
+    source: CollectionSource
+
+    @property
+    def key(self) -> str:
+        """Identify the source, so identical sources resolve once."""
+        return _source_key.dump_json(self.source).decode()
 
 
-class SmartCollectionConfig(StrictBaseModel):
-    """Server-side smart collection filter, sort order and item limit."""
+_source_key: TypeAdapter[CollectionSource] = TypeAdapter(CollectionSource)
 
-    filter_group: FilterGroup = Field(default_factory=FilterGroup)
-    sort_by: SmartSortOrder = SmartSortOrder.RELEASE_DESC
-    limit: Annotated[int, Field(ge=1, le=10000)] | None = None
+type Condition = Annotated[
+    FieldCondition | SourceCondition, Field(discriminator="kind")
+]
 
 
-class DynamicTmdbGroupConfig(StrictBaseModel):
-    """Automatic TMDB franchise collection discovery for a collection group."""
+class FilterGroup(StrictBaseModel):
+    """Conditions and nested groups, matched together or individually."""
 
-    enabled: bool = False
-    library_id: Annotated[str, Field(min_length=1, max_length=200)]
-    strip_prefix: Annotated[str, Field(max_length=100)] = "The "
-    strip_suffix: Annotated[str, Field(max_length=100)] = " Collection"
-    exclude_tmdb_ids: list[Annotated[int, Field(gt=0)]] = Field(
-        default_factory=list[int]
+    mode: Literal["all", "any"] = "all"
+    conditions: Annotated[list[Condition], Field(max_length=100)] = Field(
+        default_factory=list[Condition]
     )
-    auto_exclude_from_other_collections: bool = True
+    groups: Annotated[list[FilterGroup], Field(max_length=20)] = Field(
+        default_factory=list["FilterGroup"]
+    )
+
+    def is_empty(self) -> bool:
+        """Return whether this group and all nested groups have no conditions."""
+        return not self.conditions and all(group.is_empty() for group in self.groups)
+
+    def source_conditions(self) -> list[SourceCondition]:
+        """Every source condition, depth first, in the order sources rank items."""
+        return [
+            *(
+                condition
+                for condition in self.conditions
+                if isinstance(condition, SourceCondition)
+            ),
+            *(
+                condition
+                for group in self.groups
+                for condition in group.source_conditions()
+            ),
+        ]
+
+    def field_conditions(self) -> list[FieldCondition]:
+        """Every field condition in the tree."""
+        return [
+            *(
+                condition
+                for condition in self.conditions
+                if isinstance(condition, FieldCondition)
+            ),
+            *(
+                condition
+                for group in self.groups
+                for condition in group.field_conditions()
+            ),
+        ]
 
 
 class CollectionArtwork(StrictBaseModel):
@@ -226,7 +291,7 @@ class CollectionRead(CollectionArtwork):
     summary_format: str | None = None
     collection_group: str | None = None
     collection_mode: CollectionMode | None = None
-    order_type: CollectionOrder = CollectionOrder.RELEASE
+    order_type: CollectionOrder = CollectionOrder.RELEASE_ASC
     collection_filtering: CollectionFiltering | None = None
     visible_home: bool = False
     visible_shared: bool = False
@@ -235,6 +300,13 @@ class CollectionRead(CollectionArtwork):
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
     withheld: bool = False
+    #: Overture maintains the members from criteria.
+    managed: bool = False
+    #: The last sync of the criteria failed.
+    sync_failed: bool = False
+    last_rule_sync: datetime | None = None
+    #: The collection set value the collection was created for.
+    generated_value: str | None = None
     thumb_url: str | None = None
     art_url: str | None = None
     child_count: int = 0
@@ -249,10 +321,10 @@ class CollectionRead(CollectionArtwork):
     youtube_id: str | None = None
     youtube_title: str | None = None
     youtube_duration: int | None = None
+    theme_duration: int | None = None
     theme_status: AssetStatus = AssetStatus.MISSING
     monitored: bool = True
     tmdb_collection_id: int | None = None
-    auto_generated_tmdb_id: int | None = None
     #: The catalog has an OvertureDB theme for the collection's TMDB collection.
     public_dataset_complete: bool = False
     #: The catalog has a ThemerrDB theme for it.
@@ -263,7 +335,6 @@ class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
     effective_sync_mode: SyncMode = SyncMode.SYNC
-    theme_duration: int | None = None
     members: list[MediaItemRead]
     rule: CollectionRuleRead | None = None
     #: Why a theme cannot be stored on this collection, if it cannot.
@@ -327,9 +398,11 @@ def _collection_image_url(
 
 
 def collection_read(
-    row: MediaCollection, catalog: PublicDatasetCollection | None
+    row: MediaCollection,
+    catalog: PublicDatasetCollection | None,
+    rule: CollectionRule | None = None,
 ) -> CollectionRead:
-    """Map a stored collection and its catalog entry to public output."""
+    """Map a stored collection, its catalog entry and its rule to public output."""
     has_theme = row.server_theme_id is not None or row.theme_file_hash is not None
     return CollectionRead(
         **collection_artwork(row).model_dump(),
@@ -351,6 +424,10 @@ def collection_read(
         active_end_mmdd=row.active_end_mmdd,
         delete_when_inactive=row.delete_when_inactive,
         withheld=row.server_item_id is None,
+        managed=rule is not None,
+        sync_failed=bool(rule and rule.last_error),
+        last_rule_sync=rule.last_synced_at if rule else None,
+        generated_value=row.generated_value,
         thumb_url=_collection_image_url(row.id or 0, "poster", row.thumb_url),
         art_url=_collection_image_url(row.id or 0, "background", row.art_url),
         child_count=row.child_count,
@@ -365,12 +442,12 @@ def collection_read(
         youtube_id=row.youtube_id,
         youtube_title=row.youtube_title,
         youtube_duration=row.youtube_duration,
+        theme_duration=row.theme_file_duration or row.youtube_duration,
         theme_status=collection_theme_status(
             server_has_theme=has_theme, youtube_id=row.youtube_id
         ),
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
-        auto_generated_tmdb_id=row.auto_generated_tmdb_id,
         public_dataset_complete=bool(catalog and catalog.youtube_id_overturedb),
         public_dataset_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
@@ -443,7 +520,6 @@ class CollectionPolicyBase(StrictBaseModel):
 class CollectionOptions(StrictBaseModel):
     """Editable collection metadata and server display options."""
 
-    kind: CollectionKind = CollectionKind.REGULAR
     title: Annotated[str, Field(min_length=1, max_length=200)]
     summary: Annotated[str, Field(max_length=MAX_COLLECTION_SUMMARY_LENGTH)] | None = (
         None
@@ -454,7 +530,7 @@ class CollectionOptions(StrictBaseModel):
     collection_group: Annotated[str, Field(max_length=200)] | None = None
     tmdb_collection_id: Annotated[int, Field(gt=0)] | None = None
     collection_mode: CollectionMode | None = None
-    order_type: CollectionOrder = CollectionOrder.RELEASE
+    order_type: CollectionOrder = CollectionOrder.RELEASE_ASC
     collection_filtering: CollectionFiltering | None = None
     visible_home: bool = False
     visible_shared: bool = False
@@ -507,32 +583,22 @@ class CollectionMembersUpdate(StrictBaseModel):
 
 
 class CollectionRuleWrite(CollectionPolicyBase):
-    """Composable dynamic builders or smart filter with nullable policy overrides."""
+    """Criteria that decide membership, with nullable policy overrides."""
 
-    builders: list[CollectionBuilder] = Field(default_factory=list[CollectionBuilder])
-    smart_filter: SmartCollectionConfig | None = None
-    managed_label: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    criteria: FilterGroup
+    #: Plex evaluates the criteria live instead of Overture on each sync.
+    smart: bool = False
+    limit: Annotated[int, Field(ge=1, le=10000)] | None = None
     sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
     enabled: bool = True
 
-    @field_validator("managed_label")
-    @classmethod
-    def strip_managed_label(cls, value: str | None) -> str | None:
-        """Keep managed Plex labels trimmed."""
-        return value.strip() or None if value is not None else None
-
     @model_validator(mode="after")
-    def validate_source(self) -> Self:
-        """Require either composable builders or a valid Plex smart filter."""
-        if self.smart_filter is not None:
-            if self.smart_filter.filter_group.is_empty() and not self.managed_label:
-                raise ValueError(
-                    "Smart collections require at least one filter condition "
-                    "or managed label"
-                )
-            return self
-        if not self.builders:
-            raise ValueError("Dynamic collections require at least one builder")
+    def validate_rule(self) -> Self:
+        """Require a condition, and leave smart collections to Plex's order."""
+        if self.criteria.is_empty():
+            raise ValueError("Add at least one condition")
+        if self.smart and self.order_type is CollectionOrder.CUSTOM:
+            raise ValueError("Smart collections are ordered by Plex; choose a sort")
         return self
 
 
@@ -552,12 +618,41 @@ class CollectionSyncResponse(StrictBaseModel):
     deleted: bool = False
 
 
+class CollectionGeneratorBase(StrictBaseModel):
+    """What a collection set creates one collection for, before a library is chosen."""
+
+    dimension: SetDimension
+    include: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200)]],
+        Field(max_length=500),
+    ] = Field(default_factory=list[str])
+    exclude: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200)]],
+        Field(max_length=500),
+    ] = Field(default_factory=list[str])
+    #: Only the values with the most items.
+    top: Annotated[int, Field(ge=1, le=500)] | None = None
+    title_format: SetTitleFormat = "{value}"
+    strip_prefix: Annotated[str, Field(max_length=100)] = ""
+    strip_suffix: Annotated[str, Field(max_length=100)] = ""
+    #: Conditions every collection in the set adds to its value's condition.
+    criteria: FilterGroup = Field(default_factory=FilterGroup)
+    smart: bool = False
+    enabled: bool = True
+
+
+class CollectionGenerator(CollectionGeneratorBase):
+    """A collection set: one collection per value in a library."""
+
+    library_id: Annotated[str, Field(min_length=1, max_length=200)]
+
+
 class CollectionGroupPolicy(CollectionPolicyBase):
     """Nullable group defaults; null inherits the application setting."""
 
     sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] | None = None
     sync_enabled: bool | None = None
-    dynamic_tmdb: DynamicTmdbGroupConfig | None = None
+    generator: CollectionGenerator | None = None
 
 
 class CollectionGroupRename(StrictBaseModel):
@@ -572,41 +667,109 @@ class CollectionGroupDelete(StrictBaseModel):
     collections: Literal["keep", "overture", "server", "both"] = "keep"
 
 
-type CollectionPreset = Literal["decades", "years", "genres"]
+class CollectionSetPreview(StrictBaseModel):
+    """Preview a set's collections in its library before saving it."""
 
-
-class CollectionPresetPreview(StrictBaseModel):
-    """Preview a preset using the selected library's metadata."""
-
-    preset: CollectionPreset
     media_type: MediaType
-    library_id: Annotated[str, Field(min_length=1, max_length=200)]
+    generator: CollectionGenerator
+    #: The group the set saves into, whose existing collections are matched.
+    group: Annotated[str, Field(max_length=200)] | None = None
+    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
 
 
-class CollectionPresetEntry(StrictBaseModel):
-    """One generated collection, editable through its regular rule afterwards."""
+class CollectionSetEntry(StrictBaseModel):
+    """One collection a set creates, keeps or skips."""
 
-    key: str
+    value: str
     title: str
     member_count: int
-    builder: LibraryFilterBuilder
+    below_minimum: bool
+    #: The set's existing collection for the value.
+    collection_id: int | None = None
 
 
-class CollectionPresetCreate(CollectionPresetPreview):
-    """Create only the selected preview entries with shared initial defaults."""
+class CollectionGroupSyncResult(StrictBaseModel):
+    """What syncing a group created, removed and failed to sync."""
 
-    keys: Annotated[list[str], Field(min_length=1, max_length=500)]
-    collection_group: Annotated[str, Field(max_length=200)] | None = None
-    policy: CollectionPolicyBase = Field(default_factory=CollectionPolicyBase)
-    sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
-    enabled: bool = True
-
-
-class CollectionPresetResult(StrictBaseModel):
-    """Independently committed preset creations and sanitised errors."""
-
-    collection_ids: list[int] = Field(default_factory=list[int])
+    created: list[int] = Field(default_factory=list[int])
+    removed: list[int] = Field(default_factory=list[int])
+    synced: int = 0
     errors: dict[str, str] = Field(default_factory=dict[str, str])
+
+
+class CollectionPresetCollection(StrictBaseModel):
+    """A single collection a preset starts from."""
+
+    title: str
+    collection_filtering: CollectionFiltering | None = None
+    rule: CollectionRuleWrite
+
+
+class CollectionPresetSet(StrictBaseModel):
+    """A collection set a preset starts from."""
+
+    group: str
+    policy: CollectionPolicyBase
+    generator: CollectionGeneratorBase
+
+
+class CollectionPresetRead(StrictBaseModel):
+    """A starting point for a collection or a set, like Kometa's defaults."""
+
+    key: str
+    label: str
+    description: str
+    collection: CollectionPresetCollection | None = None
+    set: CollectionPresetSet | None = None
+
+
+class CollectionFieldRead(StrictBaseModel):
+    """A criteria field as the active server offers it."""
+
+    field: FilterField
+    label: str
+    kind: FieldKind
+    operators: list[FilterOperator]
+    #: Overture can evaluate it from synced metadata.
+    local: bool
+    #: Plex smart collections can test it.
+    smart: bool
+
+
+class CollectionSourceRead(StrictBaseModel):
+    """A source condition type, and why it is unavailable if it is."""
+
+    type: SourceType
+    label: str
+    unavailable: str | None = None
+
+
+class CollectionDimensionRead(StrictBaseModel):
+    """A metadata dimension a collection set can enumerate."""
+
+    dimension: SetDimension
+    label: str
+    title_format: str
+
+
+class CollectionCapabilities(StrictBaseModel):
+    """What the active media server lets collections do, for one media type."""
+
+    server_type: ServerType
+    smart: bool
+    visibility: bool
+    orders: list[CollectionOrder]
+    smart_orders: list[CollectionOrder]
+    fields: list[CollectionFieldRead]
+    sources: list[CollectionSourceRead]
+    dimensions: list[CollectionDimensionRead]
+
+
+class CollectionFieldValue(StrictBaseModel):
+    """A value of a field in a library, with the number of items holding it."""
+
+    value: str
+    count: int
 
 
 class BulkCollectionOperation(StrictBaseModel):

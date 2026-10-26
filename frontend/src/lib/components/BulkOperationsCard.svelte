@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
   import {
+    getCollectionCapabilitiesOptions,
     listCollectionsOptions,
     listItemsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -18,8 +19,8 @@
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { uiState, type FilterState } from "../stores/uiState.svelte";
   import { sidebarGroup } from "../router/routes";
-  import { settingsState } from "../stores/settingsState.svelte";
   import { runBulkCollections } from "../utils/bulkCollections";
+  import { ORDER_LABELS } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import {
     filterSidebarCollections,
@@ -56,6 +57,10 @@
     ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
     enabled: uiState.sidebarMode === "collections",
   }));
+  const capabilities = createQuery(() => ({
+    ...getCollectionCapabilitiesOptions({ query: { media_type: uiState.sidebarTab } }),
+    enabled: uiState.sidebarMode === "collections",
+  }));
 
   let items: MediaItemRead[] = $derived(
     uiState.sidebarMode === "items"
@@ -75,7 +80,11 @@
       ? filterSidebarCollections({
           collections: collectionsQuery.data ?? [],
           filters,
+          publicDatasetEnabled,
           searchQuery: uiState.searchQuery,
+          searchField: uiState.searchField,
+          sortField: "title",
+          sortDir: "asc",
         }).filter(
           (collection) => sidebarGroup() === null || collection.collection_group === sidebarGroup(),
         )
@@ -219,7 +228,7 @@
   let template = $state("{title}");
   let visibility = $state<CollectionMode | null>(null);
   let home = $state(false);
-  let order = $state<CollectionOrder>("release");
+  let order = $state<CollectionOrder>("release.asc");
 
   async function runCollectionOperation() {
     if (busy || !resultsReady || !collections.length) return;
@@ -330,12 +339,11 @@
       <label class="form-label"
         >Operation
         <select bind:value={collectionOperation}>
-          <option value="trigger_sync">Sync dynamic collections</option>
+          <option value="trigger_sync">Sync criteria collections</option>
           <option value="set_group">Assign group</option>
-          <option value="set_order">Set member order</option>
+          <option value="set_order">Set sort</option>
           <option value="apply_sort_title_format">Format sort titles</option>
-          {#if settingsState.current.media_server === "plex"}<option value="set_visibility"
-              >Set visibility</option
+          {#if capabilities.data?.visibility}<option value="set_visibility">Set visibility</option
             >{/if}
           <option value="delete">Delete collections</option>
         </select>
@@ -353,12 +361,11 @@
           ></label
         >
       {:else if collectionOperation === "set_order"}<label class="form-label"
-          >Member order<select bind:value={order}
-            ><option value="release">Release date</option><option value="alpha">Alphabetical</option
-            >{#if settingsState.current.media_server === "plex"}<option value="custom"
-                >Custom</option
-              >{/if}</select
-          ></label
+          >Sort<select bind:value={order}
+            >{#each capabilities.data?.orders ?? [] as entry (entry)}<option value={entry}
+                >{ORDER_LABELS[entry]}</option
+              >{/each}</select
+          ><span class="hint">Smart collections cannot use a custom order.</span></label
         >
       {:else if collectionOperation === "set_visibility"}
         <label class="form-label"

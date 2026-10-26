@@ -5,7 +5,6 @@
     listCollectionGroupsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { uiState } from "../stores/uiState.svelte";
-  import { settingsState } from "../stores/settingsState.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import CollectionGroupSettings from "../components/CollectionGroupSettings.svelte";
   import WorkflowSections from "../components/WorkflowSections.svelte";
@@ -24,8 +23,8 @@
 
 <PopupShell title="Collection groups" size="wide" onclose={() => uiState.closePopup()}>
   <p class="hint">
-    Groups share defaults. Collections keep explicit overrides. A sort title such as
-    01_&#123;title&#125; groups collections together without giving them the same sort title.
+    Groups share defaults, and a group can be a collection set that creates its collections.
+    Collections keep their explicit overrides.
   </p>
   <DataStatus
     label="collection groups"
@@ -87,7 +86,6 @@
       {#key `${uiState.sidebarTab}:${name.trim()}`}<CollectionGroupSettings
           group={name.trim()}
           mediaType={uiState.sidebarTab}
-          serverType={settingsState.current.media_server}
           libraries={libraries.data ?? []}
         />{/key}
     </WorkflowSections>

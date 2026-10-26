@@ -197,26 +197,10 @@ class ItemReconciler:
                 if server_item.media_type == MediaType.MOVIE
                 else None
             ),
-            studio=server_item.studio,
-            genres=list(server_item.genres),
-            actors=list(server_item.actors),
-            writers=list(server_item.writers),
-            producers=list(server_item.producers),
-            countries=list(server_item.countries),
-            labels=list(server_item.labels),
-            tags=list(server_item.tags),
-            content_rating=server_item.content_rating,
-            resolution=server_item.resolution,
-            audio_language=server_item.audio_language,
-            rating=server_item.rating,
-            duration_minutes=server_item.duration_minutes,
-            unplayed=server_item.unplayed,
-            in_progress=server_item.in_progress,
-            release_date=server_item.release_date,
             monitored=True,
-            server_added_at=server_item.server_added_at,
             created_at=utc_now(),
         )
+        apply_server_metadata(item, server_item)
         apply_provider_collection(item, server_item)
         session.add(item)
         await session.flush()
@@ -287,29 +271,13 @@ class ItemReconciler:
         item.library_id = server_item.library_id or None
         if server_item.year is not None and (item.year is None or server_changed):
             item.year = server_item.year
-        item.server_added_at = server_item.server_added_at
         if server_item.media_type == MediaType.MOVIE:
             item.director = server_item.director
             item.director_etag = server_item.director_etag
         else:
             item.director = None
             item.director_etag = None
-        item.studio = server_item.studio
-        item.genres = list(server_item.genres)
-        item.actors = list(server_item.actors)
-        item.writers = list(server_item.writers)
-        item.producers = list(server_item.producers)
-        item.countries = list(server_item.countries)
-        item.labels = list(server_item.labels)
-        item.tags = list(server_item.tags)
-        item.content_rating = server_item.content_rating
-        item.resolution = server_item.resolution
-        item.audio_language = server_item.audio_language
-        item.rating = server_item.rating
-        item.duration_minutes = server_item.duration_minutes
-        item.unplayed = server_item.unplayed
-        item.in_progress = server_item.in_progress
-        item.release_date = server_item.release_date
+        apply_server_metadata(item, server_item)
 
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
         item.tvdb_id = item.tvdb_id or guid_int(server_item.guids, "tvdb")
@@ -332,6 +300,30 @@ class ItemReconciler:
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
         session.add(item)
         return art_pulled
+
+
+def apply_server_metadata(item: MediaItem, server_item: ServerItem) -> None:
+    """Copy the metadata the server owns, which collection criteria evaluate."""
+    item.server_added_at = server_item.server_added_at
+    item.studio = server_item.studio
+    item.genres = list(server_item.genres)
+    item.actors = list(server_item.actors)
+    item.writers = list(server_item.writers)
+    item.producers = list(server_item.producers)
+    item.countries = list(server_item.countries)
+    item.labels = list(server_item.labels)
+    item.content_rating = server_item.content_rating
+    item.edition = server_item.edition
+    item.resolution = server_item.resolution
+    item.critic_rating = server_item.critic_rating
+    item.audience_rating = server_item.audience_rating
+    item.user_rating = server_item.user_rating
+    item.duration_minutes = server_item.duration_minutes
+    item.plays = server_item.plays
+    item.last_played_at = server_item.last_played_at
+    item.unplayed = server_item.unplayed
+    item.in_progress = server_item.in_progress
+    item.release_date = server_item.release_date
 
 
 def apply_provider_collection(item: MediaItem, server_item: ServerItem) -> None:

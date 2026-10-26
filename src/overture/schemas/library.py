@@ -191,31 +191,8 @@ def media_item_read_from_model(
     background = read_art_slot(item, ArtType.BACKGROUND)
     return MediaItemRead.model_validate(
         {
-            **item.model_dump(
-                exclude={
-                    "actors",
-                    "audio_language",
-                    "content_rating",
-                    "countries",
-                    "director_etag",
-                    "duration_minutes",
-                    "genres",
-                    "in_progress",
-                    "labels",
-                    "producers",
-                    "rating",
-                    "release_date",
-                    "resolution",
-                    "tags",
-                    "theme_file_mtime_ns",
-                    "theme_file_size",
-                    "theme_file_duration",
-                    "theme_provenance_cleared",
-                    "tmdb_collection_checked_id",
-                    "unplayed",
-                    "writers",
-                }
-            ),
+            # Item metadata stays internal: it serves collection criteria only.
+            **item.model_dump(include=set(MediaItemRead.model_fields)),
             **_art_slot_fields(poster, "poster"),
             **_art_slot_fields(background, "background"),
             # Only a remote poster is shown in place of a file, at preview size.

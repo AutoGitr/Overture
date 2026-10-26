@@ -13,6 +13,7 @@ lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, theme_file_facts
 lazy from ...domain import (
     CollectionKind,
+    CollectionOrder,
     IncrementalThemeOrder,
     MediaType,
     ScheduleKind,
@@ -334,6 +335,19 @@ class CollectionSync:
                 "updated_at": now,
             }
         )
+        if collection.collection_mode is not None:
+            row.collection_mode = collection.collection_mode
+        if collection.collection_filtering is not None:
+            row.collection_filtering = collection.collection_filtering
+        # Overture keeps orders the server cannot sort by as a custom order.
+        computed = row.order_type not in {
+            CollectionOrder.RELEASE_ASC,
+            CollectionOrder.TITLE_ASC,
+        }
+        if collection.order_type is not None and not (
+            collection.order_type is CollectionOrder.CUSTOM and computed
+        ):
+            row.order_type = collection.order_type
         if theme_checked:
             replaced = (
                 (

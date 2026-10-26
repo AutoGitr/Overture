@@ -44,11 +44,33 @@ class CollectionMode(StrEnum):
 
 
 class CollectionOrder(StrEnum):
-    """The order in which collection members appear."""
+    """How a collection orders its members: a field and direction, or ``custom``.
 
-    RELEASE = "release"
-    ALPHA = "alpha"
+    ``custom`` keeps the manual order, or the order of the collection's first
+    ordered source. Plex sorts smart collections itself; Overture orders the
+    members of other collections and stores the result as a custom order.
+    """
+
     CUSTOM = "custom"
+    RELEASE_ASC = "release.asc"
+    RELEASE_DESC = "release.desc"
+    TITLE_ASC = "title.asc"
+    TITLE_DESC = "title.desc"
+    ADDED_DESC = "added.desc"
+    ADDED_ASC = "added.asc"
+    CRITIC_RATING_DESC = "critic_rating.desc"
+    CRITIC_RATING_ASC = "critic_rating.asc"
+    AUDIENCE_RATING_DESC = "audience_rating.desc"
+    AUDIENCE_RATING_ASC = "audience_rating.asc"
+    USER_RATING_DESC = "user_rating.desc"
+    USER_RATING_ASC = "user_rating.asc"
+    DURATION_DESC = "duration.desc"
+    DURATION_ASC = "duration.asc"
+    PLAYS_DESC = "plays.desc"
+    PLAYS_ASC = "plays.asc"
+    LAST_PLAYED_DESC = "last_played.desc"
+    LAST_PLAYED_ASC = "last_played.asc"
+    RANDOM = "random"
 
 
 class CollectionKind(StrEnum):
@@ -65,26 +87,8 @@ class CollectionFiltering(StrEnum):
     USER = "user"
 
 
-class SmartSortOrder(StrEnum):
-    """Sort order applied to a smart collection."""
-
-    RELEASE_DESC = "release.desc"
-    RELEASE_ASC = "release.asc"
-    TITLE_ASC = "title.asc"
-    TITLE_DESC = "title.desc"
-    ADDED_DESC = "added.desc"
-    ADDED_ASC = "added.asc"
-    RATING_DESC = "rating.desc"
-    CRITIC_RATING_DESC = "critic_rating.desc"
-    AUDIENCE_RATING_DESC = "audience_rating.desc"
-    PLAYS_DESC = "plays.desc"
-    DURATION_DESC = "duration.desc"
-    DURATION_ASC = "duration.asc"
-    RANDOM = "random"
-
-
-class BuilderType(StrEnum):
-    """Supported collection builder source types."""
+class SourceType(StrEnum):
+    """External lists a collection condition can test membership of."""
 
     TMDB_COLLECTION = "tmdb_collection"
     TMDB_ITEM = "tmdb_item"
@@ -93,11 +97,10 @@ class BuilderType(StrEnum):
     MDBLIST = "mdblist"
     RADARR_TAG = "radarr_tag"
     SONARR_TAG = "sonarr_tag"
-    LIBRARY_FILTER = "library_filter"
 
 
 class TmdbPersonRole(StrEnum):
-    """Credit roles included by a TMDB person builder."""
+    """Credit roles included by a TMDB person condition."""
 
     ACTOR = "actor"
     DIRECTOR = "director"
@@ -107,29 +110,47 @@ class TmdbPersonRole(StrEnum):
 
 
 class FilterField(StrEnum):
-    """Library metadata field evaluated by a filter condition."""
+    """Item metadata a collection condition tests."""
 
     TITLE = "title"
-    GENRE = "genre"
     STUDIO = "studio"
+    EDITION = "edition"
+    GENRE = "genre"
     ACTOR = "actor"
     DIRECTOR = "director"
     WRITER = "writer"
     PRODUCER = "producer"
     COUNTRY = "country"
     LABEL = "label"
-    TAG = "tag"
+    COLLECTION = "collection"
     CONTENT_RATING = "content_rating"
+    NETWORK = "network"
     RESOLUTION = "resolution"
     AUDIO_LANGUAGE = "audio_language"
+    SUBTITLE_LANGUAGE = "subtitle_language"
+    HDR = "hdr"
     YEAR = "year"
     DECADE = "decade"
-    RATING = "rating"
-    DURATION_MINUTES = "duration_minutes"
+    CRITIC_RATING = "critic_rating"
+    AUDIENCE_RATING = "audience_rating"
+    USER_RATING = "user_rating"
+    DURATION = "duration"
+    PLAYS = "plays"
+    ADDED = "added"
+    RELEASED = "released"
+    LAST_PLAYED = "last_played"
     UNPLAYED = "unplayed"
     IN_PROGRESS = "in_progress"
-    ADDED_WITHIN_DAYS = "added_within_days"
-    RELEASED_WITHIN_DAYS = "released_within_days"
+
+
+class FieldKind(StrEnum):
+    """The value type of a filter field, which decides its operators."""
+
+    TEXT = "text"
+    TAG = "tag"
+    NUMBER = "number"
+    DATE = "date"
+    BOOLEAN = "boolean"
 
 
 class FilterOperator(StrEnum):
@@ -140,16 +161,33 @@ class FilterOperator(StrEnum):
     CONTAINS = "contains"
     DOES_NOT_CONTAIN = "does_not_contain"
     STARTS_WITH = "starts_with"
+    ENDS_WITH = "ends_with"
+    GT = "gt"
     GTE = "gte"
+    LT = "lt"
     LTE = "lte"
+    IN_LAST = "in_last"
+    NOT_IN_LAST = "not_in_last"
+    BEFORE = "before"
+    AFTER = "after"
 
 
-class RuleSourceType(StrEnum):
-    """Supported dynamic collection sources."""
+class SetDimension(StrEnum):
+    """The metadata a collection set creates one collection per value of."""
 
-    MDBLIST = "mdblist"
-    TMDB = "tmdb"
-    FILTER = "filter"
+    DECADE = "decade"
+    YEAR = "year"
+    GENRE = "genre"
+    STUDIO = "studio"
+    COUNTRY = "country"
+    CONTENT_RATING = "content_rating"
+    RESOLUTION = "resolution"
+    LABEL = "label"
+    ACTOR = "actor"
+    DIRECTOR = "director"
+    WRITER = "writer"
+    PRODUCER = "producer"
+    FRANCHISE = "franchise"
 
 
 class ThemeIdSource(StrEnum):

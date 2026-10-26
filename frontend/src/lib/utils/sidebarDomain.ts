@@ -122,7 +122,7 @@ function timestamp(value: string | null): number | null {
   return value ? Date.parse(value) : null;
 }
 
-export type SidebarSortField =
+type ItemSortField =
   | "title"
   | "year"
   | "server_added_at"
@@ -131,17 +131,25 @@ export type SidebarSortField =
   | "poster_resolution"
   | "background_resolution"
   | "theme_length";
+type CollectionSortField =
+  "title" | "sort_title" | "child_count" | "server_added_at" | "last_rule_sync" | "theme_length";
+export type SidebarSortField = ItemSortField | CollectionSortField;
 
-interface SortOption {
+/** Which list a sort applies to; each remembers its own. */
+export type SortScope = "library" | "collections" | "overturedb";
+
+type SortKey = number | string | null;
+
+interface SortOption<T> {
   label: string;
   shortLabel: string;
-  /** Numeric sort key; title sorts by collation instead. */
-  value: (item: MediaItemRead) => number | null;
+  /** Sort key; titles sort by collation. Rows without one stay last. */
+  value: (row: T) => SortKey;
 }
 
 /** Sort fields in menu order. */
-export const SIDEBAR_SORT_OPTIONS: Record<SidebarSortField, SortOption> = {
-  title: { label: "Title", shortLabel: "Title", value: () => null },
+export const SIDEBAR_SORT_OPTIONS: Record<ItemSortField, SortOption<MediaItemRead>> = {
+  title: { label: "Title", shortLabel: "Title", value: (item) => item.title },
   year: { label: "Year", shortLabel: "Year", value: (item) => item.year },
   server_added_at: {
     label: "Date added",
@@ -174,47 +182,141 @@ export const SIDEBAR_SORT_OPTIONS: Record<SidebarSortField, SortOption> = {
     value: (item) => item.theme_duration,
   },
 };
-export const SIDEBAR_SORT_FIELDS = keysOf(SIDEBAR_SORT_OPTIONS);
+
+export const COLLECTION_SORT_OPTIONS: Record<CollectionSortField, SortOption<CollectionRead>> = {
+  title: { label: "Title", shortLabel: "Title", value: (collection) => collection.title },
+  sort_title: {
+    label: "Sort title (media server order)",
+    shortLabel: "Sort title",
+    value: (collection) => collection.sort_title || collection.title,
+  },
+  child_count: {
+    label: "Number of items",
+    shortLabel: "Items",
+    value: (collection) => collection.child_count,
+  },
+  server_added_at: {
+    label: "Date added",
+    shortLabel: "Added",
+    value: (collection) => timestamp(collection.server_added_at),
+  },
+  last_rule_sync: {
+    label: "Last synced",
+    shortLabel: "Synced",
+    value: (collection) => timestamp(collection.last_rule_sync),
+  },
+  theme_length: {
+    label: "Theme length",
+    shortLabel: "Theme",
+    value: (collection) => collection.theme_duration,
+  },
+};
+
+const CATALOG_SORT_FIELDS: readonly ItemSortField[] = ["title", "year"];
+
+export interface MenuEntry<F extends string> {
+  id: F;
+  label: string;
+  shortLabel: string;
+}
+
+function menu<F extends SidebarSortField, T>(
+  options: Record<F, SortOption<T>>,
+  fields: readonly F[],
+): MenuEntry<SidebarSortField>[] {
+  return fields.map((id) => ({ id, label: options[id].label, shortLabel: options[id].shortLabel }));
+}
+
+/** The sort fields a list offers, in menu order. */
+export function sortMenu(scope: SortScope): MenuEntry<SidebarSortField>[] {
+  if (scope === "collections")
+    return menu(COLLECTION_SORT_OPTIONS, keysOf(COLLECTION_SORT_OPTIONS));
+  return menu(
+    SIDEBAR_SORT_OPTIONS,
+    scope === "overturedb" ? CATALOG_SORT_FIELDS : keysOf(SIDEBAR_SORT_OPTIONS),
+  );
+}
 
 export type SidebarSortPreference = { field: SidebarSortField; dir: SidebarSortDir };
 
 export function defaultSortDir(field: SidebarSortField): SidebarSortDir {
-  return field === "title" ? "asc" : "desc";
+  return field === "title" || field === "sort_title" ? "asc" : "desc";
 }
 
-export function normalizeSortPreference(value: unknown): SidebarSortPreference {
+export function normalizeSortPreference(value: unknown, scope: SortScope): SidebarSortPreference {
   const stored = value && typeof value === "object" ? value : {};
   const field = "field" in stored ? stored.field : undefined;
   const dir = "dir" in stored ? stored.dir : undefined;
   return {
-    field: SIDEBAR_SORT_FIELDS.find((candidate) => candidate === field) ?? "title",
+    field: sortMenu(scope).find((entry) => entry.id === field)?.id ?? "title",
     dir: dir === "desc" ? "desc" : "asc",
   };
 }
 
-export type SidebarSearchField =
-  "title" | "director" | "studio" | "year" | "external_id" | "youtube" | "tmdb";
+/**
+ * Sorts by the key in place. Rows without a value stay last in either
+ * direction, and ties fall back to ascending title.
+ */
+function sortRows<T extends { title: string }>(
+  rows: T[],
+  key: (row: T) => SortKey,
+  dir: SidebarSortDir,
+): T[] {
+  const direction = dir === "asc" ? 1 : -1;
+  return rows
+    .map((row) => ({ row, key: key(row) }))
+    .sort((a, b) => {
+      if (a.key !== b.key) {
+        if (a.key === null) return 1;
+        if (b.key === null) return -1;
+        const order =
+          typeof a.key === "string" || typeof b.key === "string"
+            ? titleCollator.compare(String(a.key), String(b.key))
+            : a.key - b.key;
+        if (order) return order * direction;
+      }
+      return titleCollator.compare(a.row.title, b.row.title);
+    })
+    .map(({ row }) => row);
+}
 
-interface SearchFieldOption {
+type ItemSearchField =
+  "title" | "director" | "studio" | "year" | "external_id" | "youtube" | "tmdb";
+type CollectionSearchField = "title" | "group" | "external_id" | "youtube";
+export type SidebarSearchField = ItemSearchField | CollectionSearchField;
+
+interface SearchFieldOption<T> {
   label: string;
   placeholder?: string;
   movieOnly?: boolean;
   /**
-   * Builds the item predicate for one trimmed, non-empty query. A field
+   * Builds the row predicate for one trimmed, non-empty query. A field
    * without one searches TMDB on the server instead of filtering the library.
    */
-  matcher?: (query: string) => (item: MediaItemRead) => boolean;
+  matcher?: (query: string) => (row: T) => boolean;
 }
 
-function textMatcher(text: (item: MediaItemRead) => string | null) {
+function textMatcher<T>(text: (row: T) => string | null) {
   return (query: string) => {
     const needle = query.toLowerCase();
-    return (item: MediaItemRead) => text(item)?.toLowerCase().includes(needle) ?? false;
+    return (row: T) => text(row)?.toLowerCase().includes(needle) ?? false;
+  };
+}
+
+function youtubeMatcher<T>(ids: (row: T) => (string | null)[], title: (row: T) => string | null) {
+  return (query: string) => {
+    const linkedId = extractYouTubeId(query);
+    const needle = query.toLowerCase();
+    return (row: T) =>
+      linkedId
+        ? ids(row).includes(linkedId)
+        : ids(row).some((id) => id?.toLowerCase() === needle) ||
+          (title(row)?.toLowerCase().includes(needle) ?? false);
   };
 }
 
 /** Search fields in menu order. */
-export const SIDEBAR_SEARCH_FIELDS: Record<SidebarSearchField, SearchFieldOption> = {
+export const SIDEBAR_SEARCH_FIELDS: Record<ItemSearchField, SearchFieldOption<MediaItemRead>> = {
   title: {
     label: "Title",
     matcher: textMatcher((item) => item.title),
@@ -250,14 +352,10 @@ export const SIDEBAR_SEARCH_FIELDS: Record<SidebarSearchField, SearchFieldOption
   youtube: {
     label: "YouTube link, ID or title",
     placeholder: "Search YouTube...",
-    matcher: (query) => {
-      const linkedId = extractYouTubeId(query);
-      if (linkedId) return (item) => item.youtube_id === linkedId;
-      const needle = query.toLowerCase();
-      return (item) =>
-        item.youtube_id?.toLowerCase() === needle ||
-        (item.youtube_title?.toLowerCase().includes(needle) ?? false);
-    },
+    matcher: youtubeMatcher(
+      (item) => [item.youtube_id],
+      (item) => item.youtube_title,
+    ),
   },
   tmdb: {
     // Listed under a "TMDB" heading, apart from the library fields.
@@ -266,28 +364,118 @@ export const SIDEBAR_SEARCH_FIELDS: Record<SidebarSearchField, SearchFieldOption
   },
 };
 
+export const COLLECTION_SEARCH_FIELDS: Record<
+  CollectionSearchField,
+  SearchFieldOption<CollectionRead>
+> = {
+  title: {
+    label: "Title",
+    matcher: textMatcher((collection) => collection.title),
+  },
+  group: {
+    label: "Group",
+    placeholder: "Search groups...",
+    matcher: textMatcher((collection) => collection.collection_group),
+  },
+  external_id: {
+    label: "TMDB collection ID",
+    placeholder: "Search TMDB IDs...",
+    matcher: (query) => (collection) => String(collection.tmdb_collection_id ?? "") === query,
+  },
+  youtube: {
+    label: "YouTube link, ID or title",
+    placeholder: "Search YouTube...",
+    matcher: youtubeMatcher(
+      (collection) => [collection.youtube_id],
+      (collection) => collection.youtube_title,
+    ),
+  },
+};
+
 export interface SearchFieldGroup {
-  label: "Library" | "TMDB";
-  fields: SidebarSearchField[];
+  label: "Library" | "TMDB" | "OvertureDB" | "Collections";
+  fields: MenuEntry<SidebarSearchField>[];
 }
 
-/** The search fields a tab offers, library fields first, then TMDB's. */
-export function searchFieldGroups(tab: SidebarTab, tmdbConfigured: boolean): SearchFieldGroup[] {
+function entries<F extends SidebarSearchField>(
+  options: Partial<Record<F, SearchFieldOption<never>>>,
+  fields: readonly F[],
+): MenuEntry<SidebarSearchField>[] {
+  return fields.flatMap((id) => {
+    const option = options[id];
+    return option ? [{ id, label: option.label, shortLabel: option.label }] : [];
+  });
+}
+
+/** The search fields a list offers; library fields first, then TMDB's. */
+export function searchFieldGroups(
+  source: SidebarSource,
+  mode: SidebarMode,
+  tab: SidebarTab,
+  tmdbConfigured: boolean,
+): SearchFieldGroup[] {
+  if (source === "overturedb") {
+    return [
+      {
+        label: "OvertureDB",
+        fields: entries(SIDEBAR_SEARCH_FIELDS, ["title", "year", "external_id", "youtube"]),
+      },
+    ];
+  }
+  if (mode === "collections") {
+    return [
+      {
+        label: "Collections",
+        fields: entries(COLLECTION_SEARCH_FIELDS, keysOf(COLLECTION_SEARCH_FIELDS)),
+      },
+    ];
+  }
   const fields = searchFieldsFor(tab, tmdbConfigured);
   const groups: SearchFieldGroup[] = [
-    { label: "Library", fields: fields.filter((field) => SIDEBAR_SEARCH_FIELDS[field].matcher) },
-    { label: "TMDB", fields: fields.filter((field) => !SIDEBAR_SEARCH_FIELDS[field].matcher) },
+    {
+      label: "Library",
+      fields: entries(
+        SIDEBAR_SEARCH_FIELDS,
+        fields.filter((field) => SIDEBAR_SEARCH_FIELDS[field].matcher),
+      ),
+    },
+    {
+      label: "TMDB",
+      fields: entries(
+        SIDEBAR_SEARCH_FIELDS,
+        fields.filter((field) => !SIDEBAR_SEARCH_FIELDS[field].matcher),
+      ),
+    },
   ];
   return groups.filter((group) => group.fields.length > 0);
 }
 
 /** The search fields a tab offers; TMDB only while an API key is set. */
-export function searchFieldsFor(tab: SidebarTab, tmdbConfigured: boolean): SidebarSearchField[] {
+export function searchFieldsFor(tab: SidebarTab, tmdbConfigured: boolean): ItemSearchField[] {
   return keysOf(SIDEBAR_SEARCH_FIELDS).filter(
     (field) =>
       (tab === "movie" || !SIDEBAR_SEARCH_FIELDS[field].movieOnly) &&
       (field !== "tmdb" || tmdbConfigured),
   );
+}
+
+/** What the search box says, naming the field or what it searches. */
+export function searchPlaceholder(
+  mode: SidebarMode,
+  tab: SidebarTab,
+  field: SidebarSearchField,
+  count: number,
+): string {
+  const options: Partial<Record<SidebarSearchField, SearchFieldOption<never>>> =
+    mode === "collections" ? COLLECTION_SEARCH_FIELDS : SIDEBAR_SEARCH_FIELDS;
+  const placeholder = options[field]?.placeholder;
+  if (placeholder) return placeholder;
+  if (mode === "collections") return `Search ${count} collection${count === 1 ? "" : "s"}...`;
+  return `Search ${count} ${tab === "movie" ? "movies" : "shows"}...`;
+}
+
+function hasKey<K extends string>(record: Record<K, unknown>, key: string): key is K {
+  return Object.hasOwn(record, key);
 }
 
 /** Where an item's theme ID came from; the file sources are read from its tags. */
@@ -404,13 +592,7 @@ function sharedPredicates(filters: FilterState): Predicate<MediaItemRead | Colle
     );
   }
   if (isRangeActive(filters.themeLength)) {
-    // A collection's theme lives on the media server, so only its video has a length.
-    predicates.push((entry) =>
-      inRange(
-        "theme_duration" in entry ? entry.theme_duration : entry.youtube_duration,
-        filters.themeLength,
-      ),
-    );
+    predicates.push((entry) => inRange(entry.theme_duration, filters.themeLength));
   }
   return predicates;
 }
@@ -425,7 +607,17 @@ export function hasVisibleActiveFilters(
     filters.theme !== "all" ||
     filters.libraryIds.length > 0 ||
     isRangeActive(filters.themeLength);
-  if (mode === "collections") return shared || filters.collectionSize !== "all";
+  if (mode === "collections")
+    return (
+      shared ||
+      filters.collectionSize !== "all" ||
+      filters.collectionKind !== "all" ||
+      filters.collectionMembers !== "all" ||
+      filters.collectionSync !== "all" ||
+      filters.art !== "all" ||
+      filters.mediaServer !== "all" ||
+      (publicDatasetEnabled && (filters.overtureDb !== "all" || filters.themerrDb !== "all"))
+    );
   return (
     shared ||
     filters.art !== "all" ||
@@ -508,55 +700,74 @@ export function filterSidebarItems(options: {
 }): MediaItemRead[] {
   const predicates = itemPredicates(options.filters, options.publicDatasetEnabled);
   const query = options.searchQuery.trim();
-  const matcher = SIDEBAR_SEARCH_FIELDS[options.searchField].matcher;
+  const matcher = hasKey(SIDEBAR_SEARCH_FIELDS, options.searchField)
+    ? SIDEBAR_SEARCH_FIELDS[options.searchField].matcher
+    : undefined;
   if (query && matcher) predicates.push(matcher(query));
   const items = options.items.filter((item) => predicates.every((matches) => matches(item)));
-  return sortItems(items, options.sortField, options.sortDir);
+  const sort = hasKey(SIDEBAR_SORT_OPTIONS, options.sortField)
+    ? SIDEBAR_SORT_OPTIONS[options.sortField]
+    : SIDEBAR_SORT_OPTIONS.title;
+  return sortRows(items, sort.value, options.sortDir);
 }
 
-/**
- * Sorts in place by the field. Items without a value stay last in either
- * direction, and ties fall back to ascending title.
- */
-function sortItems(items: MediaItemRead[], field: SidebarSortField, dir: SidebarSortDir) {
-  const direction = dir === "asc" ? 1 : -1;
-  if (field === "title") {
-    return items.sort((a, b) => titleCollator.compare(a.title, b.title) * direction);
+function collectionPredicates(
+  filters: FilterState,
+  publicDatasetEnabled: boolean,
+): Predicate<CollectionRead>[] {
+  const predicates: Predicate<CollectionRead>[] = sharedPredicates(filters);
+  const triState = (
+    filter: string,
+    whenTrue: string,
+    value: (collection: CollectionRead) => boolean,
+  ) => {
+    if (filter !== "all") predicates.push((row) => matchesTriState(value(row), filter, whenTrue));
+  };
+  triState(filters.art, "complete", (collection) => collection.art_status === "complete");
+  triState(filters.mediaServer, "missing", (collection) => collection.withheld);
+  triState(filters.collectionKind, "smart", (collection) => collection.kind === "smart");
+  triState(filters.collectionMembers, "criteria", (collection) => collection.managed);
+  if (publicDatasetEnabled) {
+    triState(filters.overtureDb, "complete", (collection) => collection.public_dataset_complete);
+    triState(filters.themerrDb, "complete", (collection) => collection.public_dataset_themerrdb);
   }
-  const value = SIDEBAR_SORT_OPTIONS[field].value;
-  return items
-    .map((item) => ({ item, key: value(item) }))
-    .sort((a, b) => {
-      if (a.key !== b.key) {
-        if (a.key === null) return 1;
-        if (b.key === null) return -1;
-        return (a.key - b.key) * direction;
-      }
-      return titleCollator.compare(a.item.title, b.item.title);
-    })
-    .map(({ item }) => item);
+  if (filters.collectionSync !== "all") {
+    // Only collections with criteria sync.
+    predicates.push(
+      (collection) =>
+        collection.managed &&
+        matchesTriState(collection.sync_failed, filters.collectionSync, "failed"),
+    );
+  }
+  if (filters.collectionSize === "empty")
+    predicates.push((collection) => collection.child_count === 0);
+  if (filters.collectionSize === "below_minimum")
+    predicates.push((collection) => collection.below_minimum);
+  return predicates;
 }
 
 export function filterSidebarCollections(options: {
   collections: CollectionRead[];
   filters: FilterState;
+  publicDatasetEnabled: boolean;
   searchQuery: string;
+  searchField: SidebarSearchField;
+  sortField: SidebarSortField;
+  sortDir: SidebarSortDir;
 }): CollectionRead[] {
-  const predicates: Predicate<CollectionRead>[] = sharedPredicates(options.filters);
-  if (options.filters.collectionSize === "empty")
-    predicates.push((collection) => collection.child_count === 0);
-  if (options.filters.collectionSize === "below_minimum")
-    predicates.push((collection) => collection.below_minimum);
-  const query = options.searchQuery.trim().toLowerCase();
-  if (query)
-    predicates.push(
-      (collection) =>
-        collection.title.toLowerCase().includes(query) ||
-        (collection.collection_group?.toLowerCase().includes(query) ?? false),
-    );
-  return options.collections
-    .filter((collection) => predicates.every((matches) => matches(collection)))
-    .sort((a, b) => titleCollator.compare(a.title, b.title));
+  const predicates = collectionPredicates(options.filters, options.publicDatasetEnabled);
+  const query = options.searchQuery.trim();
+  const matcher = hasKey(COLLECTION_SEARCH_FIELDS, options.searchField)
+    ? COLLECTION_SEARCH_FIELDS[options.searchField].matcher
+    : undefined;
+  if (query && matcher) predicates.push(matcher(query));
+  const collections = options.collections.filter((collection) =>
+    predicates.every((matches) => matches(collection)),
+  );
+  const sort = hasKey(COLLECTION_SORT_OPTIONS, options.sortField)
+    ? COLLECTION_SORT_OPTIONS[options.sortField]
+    : COLLECTION_SORT_OPTIONS.title;
+  return sortRows(collections, sort.value, options.sortDir);
 }
 
 const STATUS_TONES: Record<AssetStatus, StatusTone> = {

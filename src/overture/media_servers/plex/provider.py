@@ -30,7 +30,14 @@ lazy from ..adapters import (
 lazy from ..base import BaseMediaServerProvider
 lazy from ..errors import MediaServerError
 lazy from ..wire import PlexMetadata
-lazy from .client import PlexClient, plex_web_link
+lazy from .client import (
+    PLEX_COLLECTION_FILTERING,
+    PLEX_COLLECTION_MODES,
+    PLEX_COLLECTION_SORTS,
+    PLEX_CUSTOM_SORT,
+    PlexClient,
+    plex_web_link,
+)
 
 #: The Plex field that holds each asset, as named by its ``<field>.locked`` flag.
 _PLEX_ASSET_FIELD: frozendict[ServerAsset, Literal["thumb", "art", "theme"]] = (
@@ -49,9 +56,28 @@ _PLEX_MEDIA_TYPES = frozendict(
 )
 
 
+#: Plex lists a collection's preferences as the numbers it stores.
+_PLEX_COLLECTION_MODES = frozendict(
+    {str(n): mode for mode, n in PLEX_COLLECTION_MODES.items()}  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+)
+_PLEX_COLLECTION_ORDERS = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        **{str(n): order for order, n in PLEX_COLLECTION_SORTS.items()},
+        str(PLEX_CUSTOM_SORT): CollectionOrder.CUSTOM,
+    }
+)
+_PLEX_COLLECTION_FILTERING = frozendict(
+    {str(n): mode for mode, n in PLEX_COLLECTION_FILTERING.items()}  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+)
+
+
 def _art_field(art_type: ArtType) -> Literal["thumb", "art"]:
     """Return the Plex field that holds *art_type*."""
     return "art" if art_type is ArtType.BACKGROUND else "thumb"
+
+
+def _rating(value: float | None) -> float | None:
+    return float(value) if isinstance(value, int | float) else None
 
 
 def _first_mapping[T](value: list[T] | None) -> T | None:
@@ -185,10 +211,10 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         directors = metadata.get("Director") or []
         media_list = metadata.get("Media") or []
         first_media = media_list[0] if media_list else None
-        raw_rating = metadata.get("rating") or metadata.get("audienceRating")
         duration_ms = metadata.get("duration")
-        view_count = metadata.get("viewCount")
-        view_offset = metadata.get("viewOffset")
+        # Plex leaves out zero counts and offsets.
+        plays = metadata.get("viewCount") or 0
+        leaves = metadata.get("leafCount") or 0
         return ServerItem(
             id=rating_key,
             title=metadata.get("title", ""),
@@ -227,16 +253,24 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                 tag for lbl in metadata.get("Label") or [] if (tag := lbl.get("tag"))
             ),
             content_rating=metadata.get("contentRating") or None,
+            edition=(metadata.get("editionTitle") or None) if movie else None,
             resolution=(first_media.get("videoResolution") if first_media else None)
             or None,
-            rating=float(raw_rating) if isinstance(raw_rating, int | float) else None,
+            critic_rating=_rating(metadata.get("rating")),
+            audience_rating=_rating(metadata.get("audienceRating")),
+            user_rating=_rating(metadata.get("userRating")),
             duration_minutes=int(duration_ms // 60000)
             if isinstance(duration_ms, int) and duration_ms > 0
             else None,
-            unplayed=(view_count == 0) if isinstance(view_count, int) else None,
-            in_progress=bool(view_offset and view_offset > 0)
-            if view_offset is not None or view_count is not None
-            else None,
+            plays=plays,
+            last_played_at=parse_utc_datetime(metadata.get("lastViewedAt")),
+            # Plex's unwatched filter matches shows with any unwatched episode.
+            unplayed=plays == 0
+            if movie
+            else (metadata.get("viewedLeafCount") or 0) < leaves,
+            in_progress=(metadata.get("viewOffset") or 0) > 0
+            if movie
+            else 0 < (metadata.get("viewedLeafCount") or 0) < leaves,
             release_date=metadata.get("originallyAvailableAt") or None,
             server_added_at=parse_utc_datetime(metadata.get("addedAt")),
             server_updated_at=parse_utc_datetime(metadata.get("updatedAt")),
@@ -357,6 +391,15 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             summary=item.get("summary") or None,
             sort_title=item.get("titleSort") or None,
             smart=is_smart,
+            collection_mode=_PLEX_COLLECTION_MODES.get(
+                str(item.get("collectionMode", "-1"))
+            ),
+            order_type=_PLEX_COLLECTION_ORDERS.get(
+                str(item.get("collectionSort", "0"))
+            ),
+            collection_filtering=_PLEX_COLLECTION_FILTERING.get(
+                str(item.get("collectionFilterBasedOnUser", "0"))
+            ),
             thumb_url=await self.client.asset_url(thumb) if thumb else None,
             art_url=await self.client.asset_url(art) if art else None,
             theme_id=str(theme) if theme else None,
@@ -414,6 +457,12 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         await self.client.update_smart_collection_filter(
             server_collection_id, section_key, media_type, filter_query
         )
+
+    @override
+    async def filter_choices(
+        self, section_key: str, media_type: MediaType, field: str
+    ) -> list[tuple[str, str]]:
+        return await self.client.get_filter_choices(section_key, media_type, field)
 
     @override
     async def sync_item_labels(

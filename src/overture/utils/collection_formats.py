@@ -40,6 +40,28 @@ def format_sort_title(template: str, *, title: str, group: str | None) -> str:
     return result
 
 
+def validate_set_title_format(value: str) -> str:
+    """Require the set's value, which keeps each collection's title distinct."""
+    names = {
+        (name, spec, conversion)
+        for _, name, spec, conversion in Formatter().parse(value)
+        if name is not None
+    }
+    if names != {("value", "", None)}:
+        raise ValueError("Use {value} once or more, and no other fields")
+    return value
+
+
+type SetTitleFormat = Annotated[
+    str, Field(max_length=200), AfterValidator(validate_set_title_format)
+]
+
+
+def format_set_title(template: str, value: str) -> str:
+    """Render a validated set title template."""
+    return validate_set_title_format(template).format(value=value).strip()
+
+
 def validate_summary_format(value: str) -> str:
     """Allow literal text and summary fields without attribute access or formats."""
     for _, name, spec, conversion in Formatter().parse(value):

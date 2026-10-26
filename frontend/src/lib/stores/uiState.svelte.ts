@@ -40,6 +40,9 @@ export interface NumberRange {
 export interface FilterState {
   monitored: "all" | "monitored" | "unmonitored";
   collectionSize: "all" | "empty" | "below_minimum";
+  collectionKind: "all" | "regular" | "smart";
+  collectionMembers: "all" | "criteria" | "manual";
+  collectionSync: "all" | "synced" | "failed";
   art: Completeness;
   theme: Completeness;
   overtureDb: Completeness;
@@ -57,6 +60,9 @@ export interface FilterState {
 const DEFAULT_FILTERS: FilterState = {
   monitored: "all",
   collectionSize: "all",
+  collectionKind: "all",
+  collectionMembers: "all",
+  collectionSync: "all",
   art: "all",
   theme: "all",
   overtureDb: "all",
@@ -130,6 +136,21 @@ function normalizeFilters(value: unknown): FilterState {
       source.collectionSize,
       ["all", "empty", "below_minimum"] as const,
       defaults.collectionSize,
+    ),
+    collectionKind: stringOption(
+      source.collectionKind,
+      ["all", "regular", "smart"] as const,
+      defaults.collectionKind,
+    ),
+    collectionMembers: stringOption(
+      source.collectionMembers,
+      ["all", "criteria", "manual"] as const,
+      defaults.collectionMembers,
+    ),
+    collectionSync: stringOption(
+      source.collectionSync,
+      ["all", "synced", "failed"] as const,
+      defaults.collectionSync,
     ),
     art: stringOption(source.art, COMPLETENESS_FILTERS, defaults.art),
     theme: stringOption(source.theme, COMPLETENESS_FILTERS, defaults.theme),
