@@ -24,8 +24,10 @@ class EmbyClient(JellyfinClient):
 
     _PAGE_PARAMETERS: ClassVar[tuple[str, str]] = ("StartIndex", "Limit")
     _ITEM_FIELDS: ClassVar[str] = (
-        "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear"
+        "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags"
     )
+    #: Emby ignores ForcedSortName in an update and takes SortName instead.
+    _SORT_NAME_FIELD: ClassVar[str] = "SortName"
 
     @property
     @override

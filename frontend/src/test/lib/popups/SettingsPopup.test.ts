@@ -1,5 +1,5 @@
 import { appSettings } from "../../helpers/fixtures";
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getSettingsOptions,
@@ -192,9 +192,10 @@ describe("SettingsPopup", () => {
   it("persists and applies appearance only when settings are saved", async () => {
     updateSettings.mockResolvedValue({ data: { workflow: "art" } });
     renderWithQueryClient(SettingsPopup);
-    await fireEvent.change(screen.getByRole("combobox", { name: "Theme Mode" }), {
-      target: { value: "light" },
-    });
+    const theme = within(screen.getByRole("radiogroup", { name: "Theme" }));
+    expect(theme.getByLabelText("System")).toBeChecked();
+    await fireEvent.click(theme.getByLabelText("Light"));
+    await fireEvent.click(screen.getByLabelText("Increase contrast"));
     expect(localStorage.getItem("theme")).toBeNull();
 
     await fireEvent.click(screen.getByText("Save"));
@@ -202,31 +203,24 @@ describe("SettingsPopup", () => {
     await waitFor(() => {
       expect(localStorage.getItem("theme")).toBe(JSON.stringify("light"));
       expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(document.documentElement).toHaveAttribute("data-contrast", "more");
     });
   });
 
-  it("persists and applies custom hex colors when edited and saved", async () => {
+  it("persists and applies a custom accent when edited and saved", async () => {
     updateSettings.mockResolvedValue({ data: { workflow: "art" } });
     renderWithQueryClient(SettingsPopup);
 
     const accentInput = screen.getByLabelText("Accent Color hex value");
-    const bgInput = screen.getByLabelText("Background Color hex value");
-
     await fireEvent.focus(accentInput);
     await fireEvent.input(accentInput, { target: { value: "ff0055" } });
     await fireEvent.blur(accentInput);
-
-    await fireEvent.focus(bgInput);
-    await fireEvent.input(bgInput, { target: { value: "#112233" } });
-    await fireEvent.blur(bgInput);
 
     await fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => {
       expect(localStorage.getItem("accentColor")).toBe(JSON.stringify("#ff0055"));
-      expect(localStorage.getItem("bgColor")).toBe(JSON.stringify("#112233"));
       expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("#ff0055");
-      expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("#112233");
     });
   });
 

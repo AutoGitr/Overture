@@ -1,6 +1,6 @@
 """Collection lifecycle and rule runs against the real database."""
 
-lazy from collections.abc import Sequence
+lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass, field
 lazy from typing import ClassVar, override
 lazy from unittest.mock import AsyncMock
@@ -163,10 +163,10 @@ class Provider(PlexProvider):
         media_type: MediaType,
         label: str,
         *,
-        add_ids: list[str],
+        add: Mapping[str, Sequence[str]],
         remove_ids: list[str],
     ) -> None:
-        self.synced_labels.append((label, add_ids, remove_ids))
+        self.synced_labels.append((label, sorted(add), remove_ids))
 
     @override
     async def update_collection_details(
@@ -178,6 +178,7 @@ class Provider(PlexProvider):
         sort_title: str | None,
         mode: CollectionMode,
         order: CollectionOrder,
+        smart: bool,
         visible_home: bool,
         visible_shared: bool = False,
         visible_library: bool = False,
@@ -1339,7 +1340,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
     assert detail.kind is CollectionKind.SMART
     assert manager.provider.synced_labels == [(label, ["m0", "m1"], [])]
     assert manager.provider.smart_filters["1"] == (
-        "sort=addedAt:desc&year>>=1999&and=1&label=5&and=1&unwatched=1"
+        "sort=addedAt%3Adesc&year%3E=2000&and=1&label=5&and=1&unwatched=1"
     )
     async with database.read_session() as session:
         labelled = await CollectionRepository(session).library_items(
@@ -1806,6 +1807,39 @@ async def test_create_collection_custom_order(manager: Manager) -> None:
         )
     )
     assert col.order_type is CollectionOrder.CUSTOM
+
+
+async def test_create_removes_the_server_copy_when_setup_fails(
+    manager: Manager,
+) -> None:
+    manager.provider.rejected_updates.add("1")
+    with pytest.raises(ValueError, match="refused"):
+        await manager.service.create(
+            CollectionCreate(
+                title="Half made",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                member_ids=manager.ids,
+            )
+        )
+    assert manager.provider.deleted == ["1"]
+    assert await manager.service.list_collections(MediaType.MOVIE) == []
+
+
+def test_source_labels_name_stable_identifiers() -> None:
+    def label(source: CollectionSource) -> str:
+        return source_label(SourceCondition(source=source))
+
+    assert (
+        label(TmdbPersonSource(person_id=5292, roles=[TmdbPersonRole.DIRECTOR]))
+        == "overture:tmdb_person:5292:director"
+    )
+    assert label(MdblistSource(identifiers=["user/list"])) == (
+        "overture:mdblist:user/list"
+    )
+    many = label(TmdbItemSource(tmdb_ids=[1, 2]))
+    assert many.startswith("overture:tmdb_item:")
+    assert many == label(TmdbItemSource(tmdb_ids=[1, 2]))
 
 
 async def test_delete_rule_preserves_collection(manager: Manager) -> None:

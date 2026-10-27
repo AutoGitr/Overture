@@ -51,8 +51,8 @@ test("a collection set previews and creates its collections without horizontal o
     "aria-expanded",
     "false",
   );
-  await page.getByText("Collection set", { exact: true }).click();
-  await page.getByLabel("Group", { exact: true }).fill("Decades");
+  await page.getByText("One per value", { exact: true }).click();
+  await page.getByLabel(/^Group/).fill("Decades");
   await page.getByRole("button", { name: "Preview collections", exact: true }).click();
   await expect(page.getByText("1 collection, 1 below the minimum.")).toBeVisible();
   await expect(page.locator("body")).toHaveJSProperty(
@@ -63,8 +63,10 @@ test("a collection set previews and creates its collections without horizontal o
     .getByRole("group", { name: "Collection form actions" })
     .getByRole("button", { name: "Create", exact: true })
     .click();
-  await expect(page).toHaveURL(/movies\/collections/);
-  expect(saved).toMatchObject({ generator: { dimension: "decade", library_id: "movies" } });
+  await expect
+    .poll(() => saved)
+    .toMatchObject({ generator: { dimension: "decade", library_id: "movies" } });
+  await expect(page).toHaveURL(/movies\/collections(\?|$)/);
 });
 
 test("collection members, metadata and rule views work on desktop and mobile", async ({ page }) => {
@@ -406,20 +408,21 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
   await setup.getByRole("combobox", { name: "Library", exact: true }).selectOption("other");
-  await setup.getByText("Collection set", { exact: true }).click();
+  await setup.getByText("One per value", { exact: true }).click();
   await expect(page.getByRole("link", { name: "Display", exact: true })).toHaveCount(0);
   const submit = page.getByRole("button", { name: "Create set", exact: true });
-  await expect(submit).toBeDisabled();
+  await page.getByLabel(/^One collection per/).selectOption("franchise");
+  // A blank group is named after what the set splits by.
+  await expect(setup.getByLabel(/^Group/)).toHaveAttribute("placeholder", "TMDB franchises");
   await setup.getByLabel(/^Group/).fill("Franchises");
-  await page.getByLabel("One collection per", { exact: true }).selectOption("franchise");
   await page.getByLabel("Trailing text to remove", { exact: true }).fill(" Collection");
   await page.getByLabel(/^Skip these values/).fill("10, 20");
   await page.getByRole("link", { name: "Defaults", exact: true }).click();
   await page.getByLabel("Sync interval (hours)", { exact: true }).fill("168");
   await page.getByRole("link", { name: "Setup", exact: true }).click();
-  await setup.getByText("Collection", { exact: true }).click();
+  await setup.getByText("One collection", { exact: true }).click();
   await expect(setup.getByLabel("Title", { exact: true })).toHaveValue("Unsaved single collection");
-  await setup.getByText("Collection set", { exact: true }).click();
+  await setup.getByText("One per value", { exact: true }).click();
   await expect(page.getByLabel("Sync interval (hours)", { exact: true })).toHaveValue("168");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",

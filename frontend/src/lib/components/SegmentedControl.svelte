@@ -26,7 +26,7 @@
   .segmented-control {
     display: flex;
     align-items: center;
-    background: var(--bg-tertiary);
+    background: var(--track-bg);
     border: var(--border-subtle);
     border-radius: var(--radius-sm);
     padding: 2px;
@@ -46,7 +46,7 @@
     border-radius: calc(var(--radius-sm) - 2px);
     font-size: var(--text-xs);
     font-weight: 500;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     cursor: pointer;
     white-space: nowrap;
   }
@@ -57,7 +57,7 @@
   }
 
   .segment-btn.active {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--accent-text);
     font-weight: 600;
     box-shadow: var(--shadow-sm);

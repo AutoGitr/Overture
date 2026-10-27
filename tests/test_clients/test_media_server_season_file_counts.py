@@ -490,11 +490,12 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
                 )
             if include_types == "Movie":
                 assert params.get("Fields") == (
-                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Etag"
+                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags,"
+                    "Etag"
                 )
             else:
                 assert params.get("Fields") == (
-                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear"
+                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags"
                 )
             assert params.get("EnableUserData") == "false"
             assert params.get("EnableImages") == "true"
@@ -529,6 +530,7 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
                             "Path": "/media/shows/Show",
                             "ImageTags": {"Primary": "poster-tag"},
                             "BackdropImageTags": ["background-tag"],
+                            "TagItems": [{"Name": "Kids", "Id": 7}],
                         }
                     ]
                 },
@@ -551,6 +553,8 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
     assert [item.id for item in items] == ["movie1", "show1"]
     movie, show = items
     assert show.year == 2024
+    # Emby lists the Tags field as TagItems.
+    assert show.labels == ("Kids",)
     assert show.folder_path == "/media/shows/Show"
     assert show.poster_url == (
         "http://emby.test:8096/emby/Items/show1/Images/Primary?Tag=poster-tag"

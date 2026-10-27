@@ -81,7 +81,7 @@
 
   .popup-tab.active {
     color: var(--accent-text);
-    background: var(--accent);
+    background: var(--accent-fill);
     font-weight: 600;
   }
 

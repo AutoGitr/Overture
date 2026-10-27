@@ -1,6 +1,7 @@
 """Plex media-server adapter."""
 
-lazy from collections.abc import AsyncIterator, Collection
+lazy import urllib.parse
+lazy from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 lazy from datetime import datetime
 lazy from typing import ClassVar, Literal, override
 
@@ -333,9 +334,14 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     async def _image_request(
         self, server_item_id: str, art_type: ArtType, size: ImageSize | None
     ) -> ProviderImageRequest:
+        path = f"/library/metadata/{server_item_id}/{_art_field(art_type)}"
+        return await self._path_request(path, art_type, size)
+
+    async def _path_request(
+        self, path: str, art_type: ArtType, size: ImageSize | None
+    ) -> ProviderImageRequest:
         """Return a Plex image request, through the transcoder when sized."""
         plex_base = await self.client.base_url()
-        path = f"/library/metadata/{server_item_id}/{_art_field(art_type)}"
         headers = self.client.auth_headers
         if size is None:
             return ProviderImageRequest(url=f"{plex_base}{path}", headers=headers)
@@ -351,6 +357,24 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                 "upscale": "0",
             },
         )
+
+    @override
+    async def build_collection_image_request(
+        self,
+        server_item_id: str,
+        art_type: ArtType,
+        size: ImageSize | None,
+        *,
+        current_url: str,
+    ) -> ProviderImageRequest:
+        """Request the image Plex lists; a generated poster is only a composite.
+
+        ``/library/metadata/{id}/thumb`` answers 404 for a collection whose
+        poster Plex composes from its members.
+        """
+        parsed = urllib.parse.urlsplit(current_url)
+        path = urllib.parse.urlunsplit(("", "", parsed.path, parsed.query, ""))
+        return await self._path_request(path, art_type, size)
 
     @override
     async def get_active_art_url(self, server_id: str, art_type: ArtType) -> str | None:
@@ -471,14 +495,14 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         media_type: MediaType,
         label: str,
         *,
-        add_ids: list[str],
+        add: Mapping[str, Sequence[str]],
         remove_ids: list[str],
     ) -> None:
         await self.client.sync_item_labels(
             section_key,
             media_type,
             label,
-            add_ids=add_ids,
+            add=add,
             remove_ids=remove_ids,
         )
 
@@ -496,6 +520,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         sort_title: str | None,
         mode: CollectionMode,
         order: CollectionOrder,
+        smart: bool,
         visible_home: bool,
         visible_shared: bool = False,
         visible_library: bool = False,
@@ -508,6 +533,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             sort_title=sort_title,
             mode=mode,
             order=order,
+            smart=smart,
             visible_home=visible_home,
             visible_shared=visible_shared,
             visible_library=visible_library,

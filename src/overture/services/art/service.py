@@ -591,8 +591,10 @@ class ArtService:
             raise PublicServiceError(
                 409, "The collection is inactive and has no server copy"
             )
+        if (current_url := row.server_image_url(art_type)) is None:
+            raise PublicServiceError(422, "The collection has no image to match")
         request = await self._provider_registry.provider.build_collection_image_request(
-            row.server_item_id, art_type, ImageSize.DISPLAY
+            row.server_item_id, art_type, ImageSize.DISPLAY, current_url=current_url
         )
         fetched = await fetch_image(
             request.url,

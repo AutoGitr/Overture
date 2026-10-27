@@ -37,6 +37,20 @@ globalThis.ResizeObserver = MockResizeObserver;
 // buries real output under the notice - a no-op keeps the run readable.
 window.scrollTo = () => {};
 
+// jsdom doesn't implement matchMedia, which the "system" theme and Svelte's
+// MediaQuery read. Tests run as a device that prefers dark mode and matches
+// no other query.
+window.matchMedia = (query: string): MediaQueryList => ({
+  matches: query === "(prefers-color-scheme: dark)",
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+});
+
 // jsdom exposes dialog elements but not their modal lifecycle. Browser tests
 // cover native focus containment, background inertness, and Escape handling.
 HTMLDialogElement.prototype.showModal = function () {

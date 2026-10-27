@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ORDER_LABELS } from "../utils/collectionCriteria";
+  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
   import type {
     CollectionFiltering,
     CollectionMode,
@@ -94,7 +94,7 @@
     {prefix}Sort
     <select bind:value={policy.order_type}>
       <option value={null}>Default</option>
-      {#each orders as order (order)}
+      {#each sortedOrders(orders) as order (order)}
         <option value={order}>{ORDER_LABELS[order]}</option>
       {/each}
     </select>

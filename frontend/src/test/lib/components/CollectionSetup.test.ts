@@ -133,14 +133,25 @@ describe("collection setup flow", () => {
       expect(document.getElementById(target ?? "")).not.toBeNull();
     }
 
-    await fireEvent.click(setup.getByLabelText("Collection set"));
-    expect(setup.queryByLabelText("Title")).toBeNull();
-    expect(setup.getByRole("combobox", { name: /^Group/ })).toBeRequired();
+    // Presets of both kinds share one list, grouped by what they create.
+    const start = setup.getByLabelText(/^Start from/);
     expect(
-      within(setup.getByLabelText(/^Start from/))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["Choose a set", "Decades"]);
+      within(start)
+        .getAllByRole("group")
+        .map((group) => [
+          group.getAttribute("label"),
+          within(group)
+            .getAllByRole("option")
+            .map((option) => option.textContent),
+        ]),
+    ).toEqual([
+      ["One collection", ["Unplayed"]],
+      ["One collection per value", ["Decades"]],
+    ]);
+
+    await fireEvent.click(setup.getByLabelText("One per value"));
+    expect(setup.queryByLabelText("Title")).toBeNull();
+    expect(setup.getByRole("combobox", { name: /^Group/ })).not.toBeRequired();
     expect(screen.getAllByRole("link").map((link) => link.textContent?.trim())).toEqual(
       expect.arrayContaining(["Setup", "Collections", "Defaults"]),
     );
@@ -243,8 +254,9 @@ describe("collection setup flow", () => {
     await createPage();
     const setup = within(screen.getByRole("region", { name: "Collection setup" }));
     await fireEvent.change(setup.getByLabelText("Library"), { target: { value: "other" } });
-    await fireEvent.click(setup.getByLabelText("Collection set"));
+    // Choosing a set preset switches the form to a set.
     await fireEvent.change(setup.getByLabelText(/^Start from/), { target: { value: "decades" } });
+    expect(setup.getByLabelText("One per value")).toBeChecked();
     expect(setup.getByRole("combobox", { name: /^Group/ })).toHaveValue("Decades");
     const set = within(screen.getByRole("region", { name: "Set collections" }));
     expect(set.getByLabelText("One collection per")).toHaveValue("decade");

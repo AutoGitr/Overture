@@ -71,6 +71,8 @@ class JellyfinClient(MediaServerHttpClient):
         "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
         "Tags,ProductionLocations,Width"
     )
+    #: The DTO field a metadata update reads the sort name from.
+    _SORT_NAME_FIELD: ClassVar[str] = "ForcedSortName"
 
     @property
     def web_base_url(self) -> str:
@@ -415,16 +417,22 @@ class JellyfinClient(MediaServerHttpClient):
         sort_title: str | None,
         order: CollectionOrder,
     ) -> None:
-        """Preserve metadata fields the server requires in its replacement DTO."""
+        """Preserve metadata fields the server requires in its replacement DTO.
+
+        ``None`` keeps the overview or sort name; an empty sort name hands it
+        back to the server, which derives one from the name.
+        """
         details = await self.collection_metadata(collection_id)
         details.update(
             Name=title,
-            Overview=summary or "",
-            ForcedSortName=sort_title or "",
             DisplayOrder="PremiereDate"
             if order is CollectionOrder.RELEASE_ASC
             else "SortName",
         )
+        if summary is not None:
+            details["Overview"] = summary
+        if sort_title is not None:
+            details[self._SORT_NAME_FIELD] = sort_title or None
         await self._request("POST", f"/Items/{collection_id}", json=details)
 
     async def upload_collection_art(

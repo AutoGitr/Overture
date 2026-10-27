@@ -1,7 +1,7 @@
 """Shared media-server provider base implementation."""
 
 lazy from abc import ABC, abstractmethod
-lazy from collections.abc import AsyncIterator, Collection
+lazy from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 lazy from datetime import datetime
 lazy from typing import ClassVar
 
@@ -82,7 +82,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         media_type: MediaType,
         label: str,
         *,
-        add_ids: list[str],
+        add: Mapping[str, Sequence[str]],
         remove_ids: list[str],
     ) -> None:
         """Add and remove a managed label on library items."""
@@ -101,6 +101,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         sort_title: str | None,
         mode: CollectionMode,
         order: CollectionOrder,
+        smart: bool,
         visible_home: bool,
         visible_shared: bool = False,
         visible_library: bool = False,
@@ -248,9 +249,18 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         return await self._image_request(server_item_id, art_type, size)
 
     async def build_collection_image_request(
-        self, server_item_id: str, art_type: ArtType, size: ImageSize | None
+        self,
+        server_item_id: str,
+        art_type: ArtType,
+        size: ImageSize | None,
+        *,
+        current_url: str,
     ) -> ProviderImageRequest:
-        """Return request details for a collection image, scaled to *size* if given."""
+        """Return request details for a collection image, scaled to *size* if given.
+
+        *current_url* is the image sync saw, for servers that address a
+        collection's images by path rather than by item.
+        """
         return await self._image_request(server_item_id, art_type, size)
 
     def get_download_headers(self, url: str) -> dict[str, str]:

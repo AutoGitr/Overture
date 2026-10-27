@@ -666,7 +666,20 @@ async def test_plex_image_requests_go_through_the_transcoder_only_when_sized(
         "7", ArtType.POSTER, ImageSize.DISPLAY
     )
     backdrop = await provider.build_collection_image_request(
-        "9", ArtType.BACKGROUND, ImageSize.DISPLAY
+        "9",
+        ArtType.BACKGROUND,
+        ImageSize.DISPLAY,
+        current_url="http://plex.local:32400/library/metadata/9/art/123",
+    )
+    # A generated poster exists only as a composite; the metadata thumb is 404.
+    composite = await provider.build_collection_image_request(
+        "9",
+        ArtType.POSTER,
+        None,
+        current_url="http://plex.local:32400/library/collections/9/composite/5?width=400",
+    )
+    assert composite.url == (
+        "http://plex.local:32400/library/collections/9/composite/5?width=400"
     )
 
     assert original.url == "http://plex.local:32400/library/metadata/7/art"
@@ -681,7 +694,7 @@ async def test_plex_image_requests_go_through_the_transcoder_only_when_sized(
         "upscale": "0",
     }
     assert backdrop.params is not None
-    assert backdrop.params["url"] == "/library/metadata/9/art"
+    assert backdrop.params["url"] == "/library/metadata/9/art/123"
     assert (backdrop.params["width"], backdrop.params["height"]) == ("960", "540")
 
 

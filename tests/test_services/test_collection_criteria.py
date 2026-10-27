@@ -219,12 +219,12 @@ def test_rules_need_a_condition_and_a_plex_order_when_smart() -> None:
 def test_plex_query_uses_documented_operators_and_tag_keys() -> None:
     criteria = FilterGroup(
         conditions=[
-            _field(FilterField.TITLE, FilterOperator.IS, "Alien"),
+            _field(FilterField.TITLE, FilterOperator.IS, "12 Angry Men"),
             _field(FilterField.STUDIO, FilterOperator.DOES_NOT_CONTAIN, "Fox"),
             _field(FilterField.GENRE, FilterOperator.IS, "action"),
             _field(FilterField.COUNTRY, FilterOperator.IS_NOT, "Atlantis"),
             _field(FilterField.YEAR, FilterOperator.GTE, 1990),
-            _field(FilterField.CRITIC_RATING, FilterOperator.LTE, 7.5),
+            _field(FilterField.USER_RATING, FilterOperator.LTE, 7),
             _field(FilterField.DURATION, FilterOperator.LT, 60),
             _field(FilterField.ADDED, FilterOperator.IN_LAST, 30),
             _field(FilterField.RELEASED, FilterOperator.BEFORE, "2000-01-01"),
@@ -233,33 +233,79 @@ def test_plex_query_uses_documented_operators_and_tag_keys() -> None:
     )
     query = compile_plex_query(
         criteria,
+        media_type=MediaType.MOVIE,
         order=CollectionOrder.CRITIC_RATING_DESC,
         limit=50,
         choices={"genre": choice_keys([("12", "Action")])},
         labels={},
     )
+    # The operator's "=" is encoded: Plex reads a bare "title==X" as
+    # "title contains =X". ">=" and "<=" are Plex's inclusive bounds.
     assert query.split("&") == [
-        "sort=rating:desc",
+        "sort=rating%3Adesc",
         "limit=50",
-        "title==Alien",
+        "title%3D=12%20Angry%20Men",
         "and=1",
-        "studio!=Fox",
+        "studio%21=Fox",
         "and=1",
         "genre=12",
         "and=1",
-        "country!=-1",
+        "country%21=-1",
         "and=1",
-        "year>>=1989",
+        "year%3E=1990",
         "and=1",
-        "rating<<=7.55",
+        "userRating%3C=7",
         "and=1",
-        "duration<<=3600000",
+        "duration%3C%3C=3600000",
         "and=1",
-        "addedAt>>=-30d",
+        "addedAt%3E%3E=-30d",
         "and=1",
-        "originallyAvailableAt<<=946684800",
+        "originallyAvailableAt%3C%3C=946684800",
         "and=1",
         "unwatched=0",
+    ]
+
+
+def test_plex_query_works_around_what_plex_ignores_and_names_show_fields() -> None:
+    criteria = FilterGroup(
+        conditions=[
+            _field(FilterField.DECADE, FilterOperator.IS_NOT, 1990),
+            _field(FilterField.AUDIO_LANGUAGE, FilterOperator.IS_NOT, "English"),
+            _field(FilterField.AUDIO_LANGUAGE, FilterOperator.IS, "english"),
+            _field(FilterField.UNPLAYED, FilterOperator.IS, True),
+        ]
+    )
+    query = compile_plex_query(
+        criteria,
+        media_type=MediaType.SHOW,
+        order=CollectionOrder.TITLE_ASC,
+        limit=None,
+        choices={
+            "episode.audioLanguage": choice_keys(
+                [("en", "English"), ("en-US", "English"), ("sv", "Svenska")]
+            )
+        },
+        labels={},
+    )
+    # Plex ignores "decade!=", lists English under two keys and tests a show's
+    # audio on its episodes and its unplayed episodes as "unwatchedLeaves".
+    assert query.split("&") == [
+        "sort=titleSort",
+        "push=1",
+        "year%3C%3C=1990",
+        "or=1",
+        "year%3E%3E=1999",
+        "pop=1",
+        "and=1",
+        "push=1",
+        "episode.audioLanguage%21=en",
+        "and=1",
+        "episode.audioLanguage%21=en-US",
+        "pop=1",
+        "and=1",
+        "episode.audioLanguage=en%2Cen-US",
+        "and=1",
+        "unwatchedLeaves=1",
     ]
 
 
@@ -278,15 +324,52 @@ def test_plex_query_nests_groups_and_filters_sources_by_label() -> None:
             FilterGroup(),
         ],
     )
-    assert tag_keys(criteria) == {"label"}
+    assert tag_keys(criteria, MediaType.MOVIE) == {"label"}
     query = compile_plex_query(
         criteria,
+        media_type=MediaType.MOVIE,
         order=CollectionOrder.RANDOM,
         limit=None,
         choices={"label": choice_keys([("7", "overture:x"), ("8", "Kids")])},
         labels={source.key: "overture:x"},
     )
     assert query == "sort=random&label=7&or=1&push=1&label=8&and=1&hdr=1&pop=1"
+
+
+def test_plex_show_queries_test_media_fields_on_episodes() -> None:
+    criteria = FilterGroup(
+        conditions=[
+            _field(FilterField.RESOLUTION, FilterOperator.IS, "4K"),
+            _field(FilterField.DOLBY_VISION, FilterOperator.IS, True),
+            _field(FilterField.AGE_RATING, FilterOperator.LT, 13),
+        ]
+    )
+    assert tag_keys(criteria, MediaType.SHOW) == {"episode.resolution"}
+    query = compile_plex_query(
+        criteria,
+        media_type=MediaType.SHOW,
+        order=CollectionOrder.TITLE_ASC,
+        limit=None,
+        choices={"episode.resolution": choice_keys([("4k", "4K")])},
+        labels={},
+    )
+    assert query.split("&") == [
+        "sort=titleSort",
+        "episode.resolution=4k",
+        "and=1",
+        "episode.dovi=1",
+        "and=1",
+        "contentRatingAge%3C%3C=13",
+    ]
+    assert field_available(
+        FilterField.RESOLUTION, ServerType.PLEX, MediaType.SHOW, smart=True
+    )
+    assert not field_available(
+        FilterField.RESOLUTION, ServerType.PLEX, MediaType.SHOW, smart=False
+    )
+    assert not field_available(
+        FilterField.EDITION, ServerType.PLEX, MediaType.SHOW, smart=True
+    )
 
 
 def test_fields_adapt_to_the_server_and_evaluation() -> None:

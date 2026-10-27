@@ -188,7 +188,12 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                 if person.get("Type") == "Producer" and (name := person.get("Name"))
             ),
             countries=tuple(metadata.get("ProductionLocations") or []),
-            labels=tuple(metadata.get("Tags") or []),
+            labels=tuple(metadata.get("Tags") or ())
+            or tuple(
+                name
+                for tag in metadata.get("TagItems") or ()
+                if (name := tag.get("Name"))
+            ),
             content_rating=metadata.get("OfficialRating") or None,
             resolution=video_resolution(metadata.get("Width")) if movie else None,
             # Critic ratings are percentages; Overture rates out of ten like Plex.
@@ -388,6 +393,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         sort_title: str | None,
         mode: CollectionMode,
         order: CollectionOrder,
+        smart: bool,
         visible_home: bool,
         visible_shared: bool = False,
         visible_library: bool = False,

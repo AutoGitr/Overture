@@ -45,10 +45,27 @@ _SHOW_SOURCES = frozenset({SourceType.SONARR_TAG})
 def source_label(condition: SourceCondition) -> str:
     """The label marking a source's items, for Plex smart collections to filter on.
 
-    Collections with the same source share its label.
+    A source with one identifier names it, so the label stays readable and
+    stable (``overture:tmdb_person:5292:director``); others fall back to a
+    digest of the whole source. Collections with the same source share it.
     """
-    digest = hashlib.sha256(condition.key.encode()).hexdigest()[:8]
-    return f"{SOURCE_LABEL_PREFIX}{condition.source.type}:{digest}"
+    return f"{SOURCE_LABEL_PREFIX}{condition.source.type}:{_source_identity(condition)}"
+
+
+def _source_identity(condition: SourceCondition) -> str:
+    match condition.source:
+        case TmdbCollectionSource(collection_id=identity):
+            return str(identity)
+        case TmdbPersonSource(person_id=identity, roles=roles):
+            return f"{identity}:{'+'.join(sorted(roles))}"
+        case TmdbListSource(list_ids=[identity]):
+            return str(identity)
+        case MdblistSource(identifiers=[identity]):
+            return identity
+        case RadarrTagSource(tags=[identity]) | SonarrTagSource(tags=[identity]):
+            return identity
+        case _:
+            return hashlib.sha256(condition.key.encode()).hexdigest()[:8]
 
 
 class SourceResolver:

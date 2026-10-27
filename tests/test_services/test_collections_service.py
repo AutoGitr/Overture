@@ -57,7 +57,7 @@ class FakePlex(PlexProvider):
         super().__init__(app_config=app_config)
         self._delete_error = delete_error
         self.deleted_theme_for: list[str] = []
-        self.image_requests: list[tuple[str, ArtType, ImageSize | None]] = []
+        self.image_requests: list[tuple[str, ArtType, ImageSize | None, str]] = []
 
     @override
     async def delete_collection_theme(self, server_item_id: str) -> None:
@@ -67,9 +67,14 @@ class FakePlex(PlexProvider):
 
     @override
     async def build_collection_image_request(
-        self, server_item_id: str, art_type: ArtType, size: ImageSize | None
+        self,
+        server_item_id: str,
+        art_type: ArtType,
+        size: ImageSize | None,
+        *,
+        current_url: str,
     ) -> ProviderImageRequest:
-        self.image_requests.append((server_item_id, art_type, size))
+        self.image_requests.append((server_item_id, art_type, size, current_url))
         return ProviderImageRequest(url="https://example.test/img", headers={})
 
 
@@ -367,7 +372,9 @@ async def test_proxy_collection_image_delegates_to_proxy_provider_image(
     app_config: Settings,
     database: Database,
 ) -> None:
-    await _collection(db_session)
+    await _collection(
+        db_session, thumb_url="http://plex/library/collections/c1/composite/5"
+    )
     provider = FakePlex(app_config=app_config)
 
     async def fake_proxy_provider_image(
@@ -381,7 +388,19 @@ async def test_proxy_collection_image_delegates_to_proxy_provider_image(
     result = await service.proxy_collection_image(1, ArtType.POSTER, ImageSize.DISPLAY)
 
     assert result.body == b"sentinel-response"
-    assert provider.image_requests == [("c1", ArtType.POSTER, ImageSize.DISPLAY)]
+    assert provider.image_requests == [
+        (
+            "c1",
+            ArtType.POSTER,
+            ImageSize.DISPLAY,
+            "http://plex/library/collections/c1/composite/5",
+        )
+    ]
+    # Without a background sync saw, the server is not asked for one.
+    with pytest.raises(PublicServiceError) as exc_info:
+        await service.proxy_collection_image(1, ArtType.BACKGROUND, None)
+    assert exc_info.value.status_code == 404
+    assert len(provider.image_requests) == 1
 
 
 async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_facts(

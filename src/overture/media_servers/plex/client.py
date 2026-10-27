@@ -3,7 +3,7 @@
 lazy import asyncio
 lazy import logging
 lazy import urllib.parse
-lazy from collections.abc import AsyncIterator, Callable, Collection
+lazy from collections.abc import AsyncIterator, Callable, Collection, Mapping, Sequence
 lazy from ipaddress import IPv4Address
 lazy from typing import Any, ClassVar, Literal, override
 
@@ -66,6 +66,8 @@ _ARTWORK_LISTING = frozendict(
 _PLEX_TYPES = frozendict(
     {MediaType.MOVIE: 1, MediaType.SHOW: 2}  # pyright: ignore[reportCallIssue] -- stale frozendict stub
 )
+#: Plex's metadata type number for episodes, whose fields show sections test.
+_EPISODE_TYPE = 4
 #: The member orders Plex keeps itself; others are stored as a custom order.
 PLEX_COLLECTION_SORTS: frozendict[CollectionOrder, int] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -89,6 +91,17 @@ PLEX_COLLECTION_FILTERING: frozendict[CollectionFiltering, int] = frozendict(
         CollectionFiltering.USER: 1,
     }
 )
+
+
+def _filter_key(key: str) -> str:
+    """Decode a filter value's key; Plex percent-encodes some once or twice.
+
+    Studios arrive as ``A%2520B`` and ratings as ``16%2B``, and Plex matches
+    only the decoded value.
+    """
+    while (decoded := urllib.parse.unquote(key)) != key:
+        key = decoded
+    return key
 
 
 def plex_web_link(
@@ -720,20 +733,33 @@ class PlexClient(MediaServerHttpClient):
         media_type: MediaType,
         label: str,
         *,
-        add_ids: list[str],
+        add: Mapping[str, Sequence[str]],
         remove_ids: list[str],
     ) -> None:
-        """Apply batched label additions and removals in a Plex section."""
+        """Add and remove a managed label on items in a Plex section.
+
+        Plex replaces an item's labels with the ``label[i]`` it is sent, so an
+        addition resends the labels each item already has; items that share
+        them share a request.
+        """
         type_num = _PLEX_TYPES[media_type]
-        if add_ids:
+        groups: dict[tuple[str, ...], list[str]] = {}
+        for item_id, existing in add.items():
+            others = {tag for tag in existing if tag.casefold() != label.casefold()}
+            kept = tuple(sorted({*others, label}, key=str.casefold))
+            groups.setdefault(kept, []).append(item_id)
+        for labels, ids in groups.items():
             await self._request(
                 "PUT",
                 f"/library/sections/{section_key}/all",
                 params={
                     "type": type_num,
-                    "id": ",".join(add_ids),
+                    "id": ",".join(sorted(ids)),
                     "includeExternalMedia": 1,
-                    "label[0].tag.tag": label,
+                    **{
+                        f"label[{index}].tag.tag": tag
+                        for index, tag in enumerate(labels)
+                    },
                     "label.locked": 1,
                 },
             )
@@ -752,16 +778,24 @@ class PlexClient(MediaServerHttpClient):
     async def get_filter_choices(
         self, section_key: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
-        """List the keys and names of a field's values in a section."""
+        """List the keys and names of a field's values in a section.
+
+        Show sections list the values of an ``episode.`` field among episodes.
+        """
+        episode_field = field.removeprefix("episode.")
         data = await self._get(
-            f"/library/sections/{section_key}/{field}",
-            params={"type": _PLEX_TYPES[media_type]},
+            f"/library/sections/{section_key}/{episode_field}",
+            params={
+                "type": _EPISODE_TYPE
+                if episode_field != field
+                else _PLEX_TYPES[media_type]
+            },
         )
         entries: list[object] = data["MediaContainer"].get("Directory") or []
         return [
-            (str(entry["key"]), str(entry.get("title") or entry["key"]))
+            (key, str(entry.get("title") or key))
             for entry in map(wire_object, entries)
-            if entry.get("key") is not None
+            if entry.get("key") is not None and (key := _filter_key(str(entry["key"])))
         ]
 
     async def delete_collection(self, collection_id: str) -> None:
@@ -817,29 +851,32 @@ class PlexClient(MediaServerHttpClient):
         sort_title: str | None,
         mode: CollectionMode,
         order: CollectionOrder,
+        smart: bool,
         visible_home: bool,
         visible_shared: bool = False,
         visible_library: bool = False,
         filtering: CollectionFiltering | None = None,
     ) -> None:
-        """Edit collection metadata and its library visibility preferences."""
-        await self._request(
-            "PUT",
-            f"/library/metadata/{collection_id}",
-            params={
-                "title.value": title,
-                "title.locked": 1,
-                "summary.value": summary or "",
-                "summary.locked": 1,
-                "titleSort.value": sort_title or "",
-                "titleSort.locked": 1,
-            },
-        )
-        prefs: dict[str, int] = {
-            "collectionMode": PLEX_COLLECTION_MODES[mode],
-            "collectionSort": PLEX_COLLECTION_SORTS.get(order, PLEX_CUSTOM_SORT),
-        }
-        if filtering is not None:
+        """Edit collection metadata and its library visibility preferences.
+
+        ``None`` leaves the summary or sort title as it is; an empty sort title
+        hands it back to Plex. Plex rejects a smart collection's
+        ``collectionSort`` (its query sorts it) and a regular collection's
+        ``collectionFilterBasedOnUser`` with 400 Bad Request.
+        """
+        fields: dict[str, str | int] = {"title.value": title, "title.locked": 1}
+        if summary is not None:
+            fields |= {"summary.value": summary, "summary.locked": int(bool(summary))}
+        if sort_title is not None:
+            fields |= {
+                "titleSort.value": sort_title,
+                "titleSort.locked": int(bool(sort_title)),
+            }
+        await self._request("PUT", f"/library/metadata/{collection_id}", params=fields)
+        prefs: dict[str, int] = {"collectionMode": PLEX_COLLECTION_MODES[mode]}
+        if not smart:
+            prefs["collectionSort"] = PLEX_COLLECTION_SORTS.get(order, PLEX_CUSTOM_SORT)
+        elif filtering is not None:
             prefs["collectionFilterBasedOnUser"] = PLEX_COLLECTION_FILTERING[filtering]
         await self._request(
             "PUT",

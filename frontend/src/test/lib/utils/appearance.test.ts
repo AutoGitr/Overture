@@ -2,98 +2,73 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ACCENT,
   DEFAULT_APPEARANCE,
-  DEFAULT_DARK_BG,
-  DEFAULT_LIGHT_BG,
   applyAppearancePreferences,
   loadAppearancePreferences,
   normalizeHexColor,
+  resolvedTheme,
   saveAppearancePreferences,
-  withThemeMode,
 } from "../../../lib/utils/appearance";
 
 describe("appearance preferences", () => {
-  it("uses the light background and the one default accent when light mode has no saved colors", () => {
-    localStorage.setItem("theme", JSON.stringify("light"));
-    const prefs = loadAppearancePreferences();
-    expect(prefs.accentColor).toBe(DEFAULT_ACCENT);
-    expect(prefs.bgColor).toBe(DEFAULT_LIGHT_BG);
-    applyAppearancePreferences(prefs);
+  it("follows the device and keeps the one default accent when nothing is saved", () => {
+    expect(loadAppearancePreferences()).toEqual(DEFAULT_APPEARANCE);
+    expect(DEFAULT_APPEARANCE).toMatchObject({ theme: "system", accentColor: DEFAULT_ACCENT });
+    // The test device prefers dark mode.
+    expect(resolvedTheme("system")).toBe("dark");
+    applyAppearancePreferences(loadAppearancePreferences());
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("");
-  });
-
-  it("falls back to dark defaults when stored values are absent", () => {
-    expect(loadAppearancePreferences()).toEqual({
-      theme: "dark",
-      accentColor: DEFAULT_ACCENT,
-      bgColor: DEFAULT_DARK_BG,
-      showBackgroundImage: true,
-    });
   });
 
   it("round-trips saved preferences and applies document attributes", () => {
     const themeColor = document.createElement("meta");
     themeColor.name = "theme-color";
     document.head.append(themeColor);
+    document.body.style.backgroundColor = "rgb(250, 248, 245)";
 
     saveAppearancePreferences({
       theme: "light",
+      contrast: "more",
       accentColor: "#ff0055",
-      bgColor: "#ffffff",
       showBackgroundImage: false,
     });
 
     expect(loadAppearancePreferences()).toEqual({
       theme: "light",
+      contrast: "more",
       accentColor: "#ff0055",
-      bgColor: "#ffffff",
       showBackgroundImage: false,
     });
 
     applyAppearancePreferences(loadAppearancePreferences());
 
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(document.documentElement).toHaveAttribute("data-contrast", "more");
     expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("#ff0055");
-    expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("#ffffff");
-    expect(themeColor).toHaveAttribute("content", "#ffffff");
+    // The browser's address bar takes the page's own background.
+    expect(themeColor).toHaveAttribute("content", "rgb(250, 248, 245)");
   });
 
   it("removes custom styles when defaults are restored", () => {
     applyAppearancePreferences({
-      theme: "dark",
+      ...DEFAULT_APPEARANCE,
+      contrast: "more",
       accentColor: "#ff0055",
-      bgColor: "#123456",
-      showBackgroundImage: true,
     });
     expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("#ff0055");
-    expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("#123456");
 
-    applyAppearancePreferences({
-      theme: "dark",
-      accentColor: DEFAULT_ACCENT,
-      bgColor: DEFAULT_DARK_BG,
-      showBackgroundImage: true,
-    });
+    applyAppearancePreferences(DEFAULT_APPEARANCE);
 
-    expect(document.documentElement).not.toHaveAttribute("data-theme");
+    expect(document.documentElement).not.toHaveAttribute("data-contrast");
     expect(document.documentElement.style.getPropertyValue("--accent-color")).toBe("");
-    expect(document.documentElement.style.getPropertyValue("--bg-root")).toBe("");
   });
 
-  it("keeps a light background for an invalid colour saved in light mode", () => {
-    saveAppearancePreferences({ ...DEFAULT_APPEARANCE, theme: "light", bgColor: "nope" });
+  it("replaces unknown stored values with the defaults", () => {
+    localStorage.setItem("theme", JSON.stringify("sepia"));
+    localStorage.setItem("contrast", JSON.stringify("max"));
+    localStorage.setItem("accentColor", JSON.stringify("nope"));
 
-    expect(loadAppearancePreferences().bgColor).toBe(DEFAULT_LIGHT_BG);
-  });
-
-  it("switches mode with its background, keeping the accent", () => {
-    expect(withThemeMode(DEFAULT_APPEARANCE, "light")).toMatchObject({
-      theme: "light",
-      accentColor: DEFAULT_ACCENT,
-      bgColor: DEFAULT_LIGHT_BG,
-    });
-    expect(withThemeMode({ ...DEFAULT_APPEARANCE, accentColor: "#ff0000" }, "light")).toMatchObject(
-      { accentColor: "#ff0000", bgColor: DEFAULT_LIGHT_BG },
-    );
+    expect(loadAppearancePreferences()).toEqual(DEFAULT_APPEARANCE);
   });
 
   describe("normalizeHexColor", () => {

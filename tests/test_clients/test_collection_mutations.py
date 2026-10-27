@@ -74,6 +74,8 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     assert metadata["ProviderIds"] == {"Tmdb": "10"}
     assert metadata["LockedFields"] == ["Overview"]
     assert metadata["DisplayOrder"] == "SortName"
+    # Jellyfin's editor sends ForcedSortName; Emby ignores it and reads SortName.
+    assert metadata["SortName" if emby else "ForcedSortName"] == "!After"
     assert base64.b64decode(mutations[4].content) == b"image"
     assert mutations[4].headers["Content-Type"] == "image/png"
     assert mutations[-1].method == "DELETE"
@@ -133,7 +135,19 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
             sort_title="!Saga",
             mode=CollectionMode.HIDE_ITEMS,
             order=CollectionOrder.CRITIC_RATING_DESC,
+            smart=False,
             visible_home=True,
+            filtering=CollectionFiltering.USER,
+        )
+        await client.update_collection_details(
+            "box",
+            title="Saga",
+            summary="",
+            sort_title=None,
+            mode=CollectionMode.DEFAULT,
+            order=CollectionOrder.CRITIC_RATING_DESC,
+            smart=True,
+            visible_home=False,
             filtering=CollectionFiltering.USER,
         )
         await client.upload_collection_art(
@@ -153,13 +167,31 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         ("PUT", "/library/collections/box/items/add/move", {}),
         ("PUT", "/library/collections/box/items/keep/move", {"after": "add"}),
     ]
-    prefs = next(entry for entry in mutations if entry[1].endswith("/prefs"))
-    # Plex keeps an order it cannot sort by as its custom order.
-    assert prefs[2] == {
-        "collectionMode": "1",
-        "collectionSort": "2",
-        "collectionFilterBasedOnUser": "1",
-    }
+    edits = [
+        entry[2] for entry in mutations if entry[:2] == ("PUT", "/library/metadata/box")
+    ]
+    # An unset summary or sort title stays as it is; an empty one is cleared.
+    assert edits == [
+        {
+            "title.value": "Saga",
+            "title.locked": "1",
+            "titleSort.value": "!Saga",
+            "titleSort.locked": "1",
+        },
+        {
+            "title.value": "Saga",
+            "title.locked": "1",
+            "summary.value": "",
+            "summary.locked": "0",
+        },
+    ]
+    prefs = [entry[2] for entry in mutations if entry[1].endswith("/prefs")]
+    # Plex keeps an order it cannot sort by as its custom order. It refuses a
+    # smart collection's sort and a regular collection's user filtering.
+    assert prefs == [
+        {"collectionMode": "1", "collectionSort": "2"},
+        {"collectionMode": "-1", "collectionFilterBasedOnUser": "1"},
+    ]
     upload = next(r for r in requests if r.url.path == "/library/metadata/box/art")
     assert upload.content == b"image"
     assert mutations[-1] == ("DELETE", "/library/metadata/box", {})
@@ -220,3 +252,80 @@ async def test_plex_append_preserves_manual_remote_members(
         assert all(request.method != "DELETE" for request in transport.requests)
     finally:
         await client.close()
+
+
+async def test_plex_labels_keep_the_labels_items_already_have(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200)
+
+    factory, transport = mock_client_factory(handle)
+    client = PlexClient(app_config=app_config, client_factory=factory)
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    try:
+        await client.sync_item_labels(
+            "1",
+            MediaType.MOVIE,
+            "overture:mdblist:a/b",
+            add={
+                "m1": [],
+                "m2": ["Kids"],
+                "m3": [],
+                "m4": ["kids", "Overture:mdblist:a/b"],
+            },
+            remove_ids=["m9"],
+        )
+    finally:
+        await client.close()
+    edits = [dict(request.url.params) for request in transport.requests]
+    # Plex replaces an item's labels with those it is sent.
+    assert [
+        {key: value for key, value in edit.items() if key.startswith("label")}
+        for edit in edits
+    ] == [
+        {"label[0].tag.tag": "overture:mdblist:a/b", "label.locked": "1"},
+        {
+            "label[0].tag.tag": "Kids",
+            "label[1].tag.tag": "overture:mdblist:a/b",
+            "label.locked": "1",
+        },
+        {
+            "label[0].tag.tag": "kids",
+            "label[1].tag.tag": "overture:mdblist:a/b",
+            "label.locked": "1",
+        },
+        {"label[].tag.tag-": "overture:mdblist:a/b"},
+    ]
+    assert [edit["id"] for edit in edits] == ["m1,m3", "m2", "m4", "m9"]
+
+
+async def test_plex_filter_choices_decode_the_keys_plex_encodes(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        directory = [
+            {"key": "01%2520Start%2520Films", "title": "01 Start Films"},
+            {"key": "16%2B", "title": "16+"},
+            {"key": "42", "title": "Action"},
+        ]
+        return httpx2.Response(200, json={"MediaContainer": {"Directory": directory}})
+
+    factory, transport = mock_client_factory(handle)
+    client = PlexClient(app_config=app_config, client_factory=factory)
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    try:
+        choices = await client.get_filter_choices("1", MediaType.MOVIE, "studio")
+        await client.get_filter_choices("2", MediaType.SHOW, "episode.resolution")
+    finally:
+        await client.close()
+    # Plex matches only decoded values; studios arrive encoded twice.
+    assert choices == [
+        ("01 Start Films", "01 Start Films"),
+        ("16+", "16+"),
+        ("42", "Action"),
+    ]
+    # Show sections list an episode field's values among their episodes.
+    assert [
+        (request.url.path, request.url.params["type"]) for request in transport.requests
+    ] == [("/library/sections/1/studio", "1"), ("/library/sections/2/resolution", "4")]

@@ -2,16 +2,18 @@
 
 Plex documents the language in its API reference ("Media Queries"): a field
 and operator form the parameter name, ``push``/``pop`` open and close a group,
-and ``and``/``or`` join its terms. Tag fields take the keys Plex lists for the
-section's values, so names are looked up first; a name Plex does not list
-matches nothing, as it would in Plex itself.
+and ``and``/``or`` join its terms. Operators end in ``=``, which also separates
+a parameter from its value, so the name is percent-encoded: Plex reads a bare
+``title==Alien`` as "title contains =Alien". Tag fields take the keys Plex
+lists for the section's values, so names are looked up first; a name Plex does
+not list matches nothing, as it would in Plex itself.
 """
 
 lazy import urllib.parse
 lazy from collections.abc import Mapping
 lazy from datetime import UTC, date, datetime, timedelta
 
-lazy from ...domain import CollectionOrder, FilterField, FilterOperator
+lazy from ...domain import CollectionOrder, FilterField, FilterOperator, MediaType
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
 lazy from .fields import FIELDS, PlexField, order_field
 
@@ -20,46 +22,44 @@ _MISSING_TAG = "-1"
 
 _STRING_OPERATORS: frozendict[FilterOperator, str] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        FilterOperator.IS: "==",
+        FilterOperator.IS_NOT: "!==",
+        FilterOperator.CONTAINS: "=",
+        FilterOperator.DOES_NOT_CONTAIN: "!=",
+        FilterOperator.STARTS_WITH: "<=",
+        FilterOperator.ENDS_WITH: ">=",
+    }
+)
+
+#: Plex lists ``>>=`` and ``<<=``; its ``>=`` and ``<=`` are the inclusive bounds.
+_NUMBER_OPERATORS: frozendict[FilterOperator, str] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         FilterOperator.IS: "=",
         FilterOperator.IS_NOT: "!=",
-        FilterOperator.CONTAINS: "",
-        FilterOperator.DOES_NOT_CONTAIN: "!",
-        FilterOperator.STARTS_WITH: "<",
-        FilterOperator.ENDS_WITH: ">",
+        FilterOperator.GT: ">>=",
+        FilterOperator.GTE: ">=",
+        FilterOperator.LT: "<<=",
+        FilterOperator.LTE: "<=",
     }
 )
 
-#: Plex's documented comparisons are strict; inclusive bounds move by a step.
-_NUMBER_OPERATORS: frozendict[FilterOperator, tuple[str, int]] = frozendict(
-    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-        FilterOperator.IS: ("", 0),
-        FilterOperator.IS_NOT: ("!", 0),
-        FilterOperator.GT: (">>", 0),
-        FilterOperator.GTE: (">>", -1),
-        FilterOperator.LT: ("<<", 0),
-        FilterOperator.LTE: ("<<", 1),
-    }
-)
-
-#: Plex stores ratings to one decimal, so half a step separates neighbours.
-_RATING_STEP = 0.05
-
-type PlexChoices = Mapping[str, Mapping[str, str]]
+#: Keys by folded name and key, per Plex field; a name can stand for several keys.
+type PlexChoices = Mapping[str, Mapping[str, tuple[str, ...]]]
 type Pair = tuple[str, str]
 
 
 def plex_field(field: FilterField) -> PlexField:
     """The Plex definition of a field smart collections can test."""
     plex = FIELDS[field].plex
-    if plex is None:
+    if plex is None or not plex.filterable:
         raise ValueError(f"Plex smart collections cannot test {field}")
     return plex
 
 
-def tag_keys(criteria: FilterGroup) -> set[str]:
+def tag_keys(criteria: FilterGroup, media_type: MediaType) -> set[str]:
     """The Plex tag fields whose keys the criteria need looked up."""
     keys = {
-        plex.key
+        plex.key_for(media_type)
         for condition in criteria.field_conditions()
         if (plex := plex_field(condition.field)).type == "tag"
     }
@@ -68,84 +68,141 @@ def tag_keys(criteria: FilterGroup) -> set[str]:
     return keys
 
 
-def choice_keys(choices: list[tuple[str, str]]) -> dict[str, str]:
-    """Index a field's listed values by key and by name, ignoring case."""
-    return {
-        **{title.casefold(): key for key, title in choices},
-        **{key.casefold(): key for key, _ in choices},
-    }
+def choice_keys(choices: list[tuple[str, str]]) -> dict[str, tuple[str, ...]]:
+    """Index a field's listed values by key and by name, ignoring case.
+
+    Plex lists one name under several keys (English as ``en`` and ``en-US``),
+    so a name stands for all of them.
+    """
+    index: dict[str, tuple[str, ...]] = {}
+    for key, title in choices:
+        index[title.casefold()] = (*index.get(title.casefold(), ()), key)
+    for key, _ in choices:
+        index[key.casefold()] = (key,)
+    return index
 
 
-def _number(value: float, plex: PlexField, step: int) -> str:
+def _op(key: str, operator: str, value: object) -> Pair:
+    """Split an operator ending in ``=`` into Plex's parameter name and value."""
+    return f"{key}{operator[:-1]}", str(value)
+
+
+def _group(terms: list[list[Pair]], joiner: str) -> list[Pair]:
+    pairs: list[Pair] = []
+    for index, term in enumerate(terms):
+        if index:
+            pairs.append((joiner, "1"))
+        pairs.extend(term)
+    return pairs
+
+
+def _nested(terms: list[list[Pair]], joiner: str) -> list[Pair]:
+    if len(terms) == 1:
+        return terms[0]
+    return [("push", "1"), *_group(terms, joiner), ("pop", "1")]
+
+
+def _number(value: float, plex: PlexField) -> str:
     scaled = value * plex.scale
-    if plex.type == "integer":
-        return str(int(scaled) + step)
-    return f"{scaled + step * _RATING_STEP:g}"
+    return str(int(scaled)) if plex.type == "integer" else f"{scaled:g}"
 
 
 def _epoch(day: date) -> str:
     return str(int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()))
 
 
-def _field_pair(condition: FieldCondition, choices: PlexChoices) -> Pair:
+def _decade(operator: FilterOperator, value: float) -> list[Pair]:
+    """Test a decade as a year range; Plex ignores ``decade!=``."""
+    start = int(value) // 10 * 10
+    end = start + 9
+    match operator:
+        case FilterOperator.IS:
+            return _nested(
+                [[_op("year", ">=", start)], [_op("year", "<=", end)]], "and"
+            )
+        case FilterOperator.IS_NOT:
+            return _nested(
+                [[_op("year", "<<=", start)], [_op("year", ">>=", end)]], "or"
+            )
+        case FilterOperator.GT:
+            return [_op("year", ">>=", end)]
+        case FilterOperator.GTE:
+            return [_op("year", ">=", start)]
+        case FilterOperator.LT:
+            return [_op("year", "<<=", start)]
+        case _:
+            return [_op("year", "<=", end)]
+
+
+def _tag(key: str, operator: FilterOperator, keys: tuple[str, ...]) -> list[Pair]:
+    """A comma joins keys Plex tests together; a negation tests each one."""
+    if operator is FilterOperator.IS:
+        return [_op(key, "=", ",".join(keys))]
+    return _nested([[_op(key, "!=", tag)] for tag in keys], "and")
+
+
+def _field_pairs(
+    condition: FieldCondition, media_type: MediaType, choices: PlexChoices
+) -> list[Pair]:
+    if condition.field is FilterField.DECADE:
+        return _decade(condition.operator, float(condition.value))
     plex = plex_field(condition.field)
+    key = plex.key_for(media_type)
     operator, value = condition.operator, condition.value
     match plex.type:
         case "string":
-            return f"{plex.key}{_STRING_OPERATORS[operator]}", str(value)
+            return [_op(key, _STRING_OPERATORS[operator], value)]
         case "tag":
-            key = choices.get(plex.key, {}).get(str(value).casefold(), _MISSING_TAG)
-            negate = "!" if operator is FilterOperator.IS_NOT else ""
-            return f"{plex.key}{negate}", key
+            keys = choices.get(key, {}).get(str(value).casefold(), (_MISSING_TAG,))
+            return _tag(key, operator, keys)
         case "boolean":
             flag = bool(value) is (operator is FilterOperator.IS)
-            return plex.key, "1" if flag else "0"
+            return [(key, "1" if flag else "0")]
         case "integer" | "float":
-            suffix, step = _NUMBER_OPERATORS[operator]
-            return f"{plex.key}{suffix}", _number(float(value), plex, step)
+            return [_op(key, _NUMBER_OPERATORS[operator], _number(float(value), plex))]
         case "date":
             match operator:
                 case FilterOperator.IN_LAST:
-                    return f"{plex.key}>>", f"-{value}d"
+                    return [_op(key, ">>=", f"-{value}d")]
                 case FilterOperator.NOT_IN_LAST:
-                    return f"{plex.key}<<", f"-{value}d"
+                    return [_op(key, "<<=", f"-{value}d")]
                 case FilterOperator.BEFORE:
-                    return f"{plex.key}<<", _epoch(date.fromisoformat(str(value)))
+                    return [_op(key, "<<=", _epoch(date.fromisoformat(str(value))))]
                 case _:
                     after = date.fromisoformat(str(value)) + timedelta(days=1)
-                    return f"{plex.key}>>", str(int(_epoch(after)) - 1)
+                    return [_op(key, ">>=", str(int(_epoch(after)) - 1))]
 
 
-def _source_pair(
+def _source_pairs(
     condition: SourceCondition, choices: PlexChoices, labels: Mapping[str, str]
-) -> Pair:
+) -> list[Pair]:
     key = plex_field(FilterField.LABEL).key
-    tag = choices.get(key, {}).get(labels[condition.key].casefold(), _MISSING_TAG)
-    return f"{key}!" if condition.operator is FilterOperator.IS_NOT else key, tag
+    keys = choices.get(key, {}).get(labels[condition.key].casefold(), (_MISSING_TAG,))
+    return _tag(key, condition.operator, keys)
 
 
 def _group_pairs(
-    group: FilterGroup, choices: PlexChoices, labels: Mapping[str, str]
+    group: FilterGroup,
+    media_type: MediaType,
+    choices: PlexChoices,
+    labels: Mapping[str, str],
 ) -> list[Pair]:
     terms: list[list[Pair]] = [
-        [
-            _source_pair(condition, choices, labels)
-            if isinstance(condition, SourceCondition)
-            else _field_pair(condition, choices)
-        ]
+        _source_pairs(condition, choices, labels)
+        if isinstance(condition, SourceCondition)
+        else _field_pairs(condition, media_type, choices)
         for condition in group.conditions
     ]
     terms.extend(
-        [("push", "1"), *_group_pairs(nested, choices, labels), ("pop", "1")]
+        [
+            ("push", "1"),
+            *_group_pairs(nested, media_type, choices, labels),
+            ("pop", "1"),
+        ]
         for nested in group.groups
         if not nested.is_empty()
     )
-    pairs: list[Pair] = []
-    for index, term in enumerate(terms):
-        if index:
-            pairs.append(("and" if group.mode == "all" else "or", "1"))
-        pairs.extend(term)
-    return pairs
+    return _group(terms, "and" if group.mode == "all" else "or")
 
 
 def plex_sort(order: CollectionOrder) -> str:
@@ -153,15 +210,17 @@ def plex_sort(order: CollectionOrder) -> str:
     if order is CollectionOrder.RANDOM:
         return "random"
     field = order_field(order)
-    if field is None:
+    plex = FIELDS[field].plex if field is not None else None
+    if plex is None:
         raise ValueError("Smart collections are ordered by Plex; choose a sort")
-    key = "titleSort" if field is FilterField.TITLE else plex_field(field).key
+    key = "titleSort" if field is FilterField.TITLE else plex.key
     return f"{key}:desc" if order.value.endswith(".desc") else key
 
 
 def compile_plex_query(
     criteria: FilterGroup,
     *,
+    media_type: MediaType,
     order: CollectionOrder,
     limit: int | None,
     choices: PlexChoices,
@@ -174,5 +233,5 @@ def compile_plex_query(
     pairs: list[Pair] = [("sort", plex_sort(order))]
     if limit is not None:
         pairs.append(("limit", str(limit)))
-    pairs.extend(_group_pairs(criteria, choices, labels))
-    return urllib.parse.urlencode(pairs, safe=":<>=!-")
+    pairs.extend(_group_pairs(criteria, media_type, choices, labels))
+    return urllib.parse.urlencode(pairs, quote_via=urllib.parse.quote)

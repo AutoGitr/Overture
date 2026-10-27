@@ -67,9 +67,10 @@ group, with **in** or **not in**, like any other condition.
 
 ## One collection per decade, genre or franchise
 
-1. **+ Create collection**, choose the library, then **Collection set**.
-2. **Start from** Decades (or Genres, Directors, TMDB franchises and so on), and
-   name the group, such as `Decades`.
+1. **+ Create collection** and choose the library.
+2. **Start from** Decades (or Genres, Directors, TMDB franchises and so on),
+   which switches **Create** to **One per value**, and name the group, or leave
+   it blank to name it after the values, such as `Decades`.
 3. Adjust the set: the title template, the most common values only, values to
    include or skip, text to remove from names, conditions every collection
    needs, and whether to create Plex smart collections.

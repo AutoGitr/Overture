@@ -1,7 +1,7 @@
 <script lang="ts">
   import DetailForm from "./DetailForm.svelte";
   import type { CollectionDraft, CollectionEditor } from "../utils/collectionForms.svelte";
-  import { ORDER_LABELS } from "../utils/collectionCriteria";
+  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
 
   let {
     editor,
@@ -24,7 +24,7 @@
       Sort
       <select bind:value={editor.orderType}>
         <option value={null}>Default</option>
-        {#each editor.orders as order (order)}
+        {#each sortedOrders(editor.orders) as order (order)}
           <option value={order}>{ORDER_LABELS[order]}</option>
         {/each}
       </select>

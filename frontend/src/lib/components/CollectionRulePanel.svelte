@@ -9,7 +9,7 @@
   let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
 
   const CONTENT = [
-    ["manual", "Chosen by hand"],
+    ["manual", "Manual"],
     ["criteria", "Matching criteria"],
   ] as const;
   const EVALUATION = [

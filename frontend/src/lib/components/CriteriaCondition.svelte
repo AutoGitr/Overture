@@ -48,7 +48,9 @@
   let subject = $derived(
     condition.kind === "field" ? `field:${condition.field}` : `source:${condition.source.type}`,
   );
-  // Tag values are suggested from the library, or from Plex for fields only Plex knows.
+  // Tag and text values are suggested from the library, or from Plex for fields
+  // only Plex knows.
+  let suggested = $derived(field?.kind === "tag" || field?.kind === "text");
   const values = createQuery(() => ({
     ...listCollectionFieldValuesOptions({
       query: {
@@ -57,7 +59,7 @@
         field: condition.kind === "field" ? condition.field : "title",
       },
     }),
-    enabled: field?.kind === "tag" && !!libraryId,
+    enabled: suggested && !!libraryId,
   }));
 
   function choose(value: string) {
@@ -147,11 +149,11 @@
       <input
         required
         aria-label={`${label} value`}
-        list={kind === "tag" ? listId : undefined}
+        list={suggested ? listId : undefined}
         value={String(condition.value)}
         oninput={(event) => (condition.value = event.currentTarget.value)}
       />
-      {#if kind === "tag"}
+      {#if suggested}
         <datalist id={listId}>
           {#each values.data ?? [] as entry (entry.value)}
             <option value={entry.value}>{entry.count ? `${entry.count} titles` : ""}</option>

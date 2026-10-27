@@ -485,10 +485,14 @@ export class CollectionDraft {
   get orders() {
     return availableOrders(this.capabilities.data, this.smart);
   }
-  /** Presets of the kind being created. */
-  get kindPresets() {
-    return (this.presets.data ?? []).filter((preset) =>
-      this.kind === "set" ? preset.set : preset.collection,
+  /** The group a set saves into: the one named, or else the dimension's name. */
+  get setGroup() {
+    return (
+      this.collectionGroup.trim() ||
+      this.capabilities.data?.dimensions.find(
+        (entry) => entry.dimension === this.generator.dimension,
+      )?.label ||
+      ""
     );
   }
   get busy() {
@@ -496,7 +500,7 @@ export class CollectionDraft {
   }
   get canSubmit() {
     if (!this.libraryId) return false;
-    if (this.kind === "set") return !!this.collectionGroup.trim();
+    if (this.kind === "set") return !!this.setGroup;
     return !!this.title.trim();
   }
 
@@ -510,9 +514,10 @@ export class CollectionDraft {
     this.presetKey = "";
   }
 
-  /** Start from a preset: it fills the form, which stays editable. */
+  /** Start from a preset of either kind: it fills the form, which stays editable. */
   applyPreset(preset: CollectionPresetRead | undefined) {
     this.presetKey = preset?.key ?? "";
+    if (preset) this.kind = preset.set ? "set" : "collection";
     if (preset?.collection) {
       this.title = preset.collection.title;
       this.collectionFiltering = preset.collection.collection_filtering;
@@ -557,7 +562,7 @@ export class CollectionDraft {
 
   /** Save the set into its group, keeping the group's other defaults, then run it. */
   private async saveSet() {
-    const name = this.collectionGroup.trim();
+    const name = this.setGroup;
     const query = { name, media_type: this.mediaType };
     try {
       const existing = await queryClient.fetchQuery(getCollectionGroupPolicyOptions({ query }));

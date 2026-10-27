@@ -53,6 +53,15 @@ export const ORDER_LABELS: Record<CollectionOrder, string> = {
   random: "Random",
 };
 
+/** Sort orders alphabetically, keeping a field's two directions together and custom first. */
+export function sortedOrders(orders: readonly CollectionOrder[]): CollectionOrder[] {
+  return [...orders].sort(
+    (a, b) =>
+      Number(b === "custom") - Number(a === "custom") ||
+      ORDER_LABELS[a].localeCompare(ORDER_LABELS[b]),
+  );
+}
+
 export function emptyGroup(mode: FilterGroupInput["mode"] = "all"): FilterGroupInput {
   return { mode, conditions: [], groups: [] };
 }

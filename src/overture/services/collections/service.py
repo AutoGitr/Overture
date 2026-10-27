@@ -2,6 +2,7 @@
 
 lazy import logging
 lazy from collections import Counter
+lazy from contextlib import suppress
 lazy from datetime import datetime, timedelta
 lazy from pathlib import Path
 
@@ -167,6 +168,13 @@ _DISPLAY_OVERRIDES = frozenset(
 )
 
 
+def _by_label(
+    option: CollectionFieldRead | CollectionSourceRead | CollectionDimensionRead,
+) -> str:
+    """Dropdowns list options alphabetically within their group."""
+    return option.label.casefold()
+
+
 def _criteria(rule: CollectionRule) -> FilterGroup:
     return FilterGroup.model_validate_json(rule.criteria_json)
 
@@ -278,40 +286,51 @@ class CollectionsService:
             smart_orders=available_orders(server, media_type, smart=True)
             if plex
             else [],
-            fields=[
-                CollectionFieldRead(
-                    field=field,
-                    label=field_label(field, server),
-                    kind=spec.kind,
-                    operators=list(OPERATORS[spec.kind]),
-                    local=local,
-                    smart=smart,
-                )
-                for field, spec in FIELDS.items()
-                if (local := field_available(field, server, media_type, smart=False))
-                | (smart := field_available(field, server, media_type, smart=True))
-            ],
-            sources=[
-                CollectionSourceRead(
-                    type=source,
-                    label=label,
-                    unavailable=self._sources.unavailable(source, media_type),
-                )
-                for source, label in SOURCE_LABELS.items()
-            ],
-            dimensions=[
-                CollectionDimensionRead(
-                    dimension=dimension,
-                    label=spec.label,
-                    title_format=spec.title_format,
-                )
-                for dimension, spec in DIMENSIONS.items()
-                if dimension_available(dimension, server, media_type)
-                and (
-                    dimension is not SetDimension.FRANCHISE
-                    or self._app_config.tmdb_configured
-                )
-            ],
+            fields=sorted(
+                (
+                    CollectionFieldRead(
+                        field=field,
+                        label=field_label(field, server),
+                        kind=spec.kind,
+                        operators=list(OPERATORS[spec.kind]),
+                        local=local,
+                        smart=smart,
+                    )
+                    for field, spec in FIELDS.items()
+                    if (
+                        local := field_available(field, server, media_type, smart=False)
+                    )
+                    | (smart := field_available(field, server, media_type, smart=True))
+                ),
+                key=_by_label,
+            ),
+            sources=sorted(
+                (
+                    CollectionSourceRead(
+                        type=source,
+                        label=label,
+                        unavailable=self._sources.unavailable(source, media_type),
+                    )
+                    for source, label in SOURCE_LABELS.items()
+                ),
+                key=_by_label,
+            ),
+            dimensions=sorted(
+                (
+                    CollectionDimensionRead(
+                        dimension=dimension,
+                        label=spec.label,
+                        title_format=spec.title_format,
+                    )
+                    for dimension, spec in DIMENSIONS.items()
+                    if dimension_available(dimension, server, media_type)
+                    and (
+                        dimension is not SetDimension.FRANCHISE
+                        or self._app_config.tmdb_configured
+                    )
+                ),
+                key=_by_label,
+            ),
         )
 
     def presets(self, media_type: MediaType) -> list[CollectionPresetRead]:
@@ -328,7 +347,7 @@ class CollectionsService:
     async def field_values(
         self, media_type: MediaType, library_id: str, field: FilterField
     ) -> list[CollectionFieldValue]:
-        """List a field's values in a library, most common first.
+        """List a field's values in a library, alphabetically.
 
         Overture counts what sync stored; fields only Plex knows are listed by
         Plex, without counts.
@@ -351,17 +370,21 @@ class CollectionsService:
             return [
                 CollectionFieldValue(value=value, count=count)
                 for value, count in sorted(
-                    counts.items(), key=lambda pair: (-pair[1], pair[0].casefold())
+                    counts.items(), key=lambda pair: pair[0].casefold()
                 )
             ]
         plex = FIELDS[field].plex
         if not field_available(field, server, media_type, smart=True) or plex is None:
             raise PublicServiceError(422, "The media server cannot list this field")
+        titles = {
+            title
+            for _, title in await self._provider().filter_choices(
+                library_id, media_type, plex.key_for(media_type)
+            )
+        }
         return [
             CollectionFieldValue(value=title, count=0)
-            for _, title in await self._provider().filter_choices(
-                library_id, media_type, plex.key
-            )
+            for title in sorted(titles, key=str.casefold)
         ]
 
     # Validation shared by every write
@@ -412,6 +435,18 @@ class CollectionsService:
                     f"{label} is only available in Plex smart collections"
                     if field_available(condition.field, server, media_type, smart=True)
                     else f"{label} is not available for this library",
+                )
+            plex = FIELDS[condition.field].plex
+            if (
+                smart
+                and condition.operator is FilterOperator.IS_NOT
+                and plex is not None
+                and not plex.negatable
+            ):
+                raise PublicServiceError(
+                    422,
+                    f"Plex smart collections cannot test that "
+                    f"{field_label(condition.field, server)} is not a value",
                 )
         for condition in criteria.source_conditions():
             self._sources.require(condition.source.type, media_type)
@@ -510,13 +545,21 @@ class CollectionsService:
             for item in items
             if any(existing.casefold() == folded for existing in item.labels)
         }
-        server_ids = {item.id or 0: item.server_item_id or "" for item in items}
-        add = sorted(server_ids[i] for i in wanted_ids - labeled if server_ids.get(i))
-        remove = sorted(server_ids[i] for i in labeled - wanted_ids if server_ids[i])
+        by_id = {item.id or 0: item for item in items}
+        add = {
+            server_id: by_id[i].labels
+            for i in wanted_ids - labeled
+            if i in by_id and (server_id := by_id[i].server_item_id)
+        }
+        remove = sorted(
+            server_id
+            for i in labeled - wanted_ids
+            if (server_id := by_id[i].server_item_id)
+        )
         if not add and not remove:
             return
         await self._provider().sync_item_labels(
-            library_id, media_type, label, add_ids=add, remove_ids=remove
+            library_id, media_type, label, add=add, remove_ids=remove
         )
         async with self._database.write_session() as session:
             for item in await CollectionRepository(session).library_items(
@@ -579,10 +622,11 @@ class CollectionsService:
             key: choice_keys(
                 await self._provider().filter_choices(library_id, row.media_type, key)
             )
-            for key in tag_keys(rule.criteria)
+            for key in tag_keys(rule.criteria, row.media_type)
         }
         return compile_plex_query(
             rule.criteria,
+            media_type=row.media_type,
             order=order,
             limit=rule.limit,
             choices=choices,
@@ -693,6 +737,7 @@ class CollectionsService:
             sort_title=sort_title,
             mode=options.collection_mode or policy.collection_mode,
             order=order,
+            smart=row.kind is CollectionKind.SMART,
             visible_home=visible_home,
             visible_shared=visible_shared,
             visible_library=visible_library,
@@ -820,16 +865,7 @@ class CollectionsService:
             )
             if not withhold:
                 items = await self._create_on_server(row, body, items, library_items)
-            row.child_count = len(items)
-            row.summary_source = body.summary
-            effective = await self._push_options(row, body, rule)
-            row.sqlmodel_update(effective.model_dump())
-            if not smart and row.server_item_id is not None and items:
-                await self._provider().set_collection_members(
-                    row.server_item_id,
-                    [item.server_item_id for item in items if item.server_item_id],
-                    order=body.order_type,
-                )
+            await self._configure_new(row, body, rule, items, smart=smart)
             async with self._database.write_session() as session:
                 if rule is not None and row.tmdb_collection_id is None:
                     row.tmdb_collection_id = min(
@@ -844,6 +880,34 @@ class CollectionsService:
                     session.add(_rule_row(row.id or 0, rule))
         await self._publisher.broadcast("collections.changed")
         return await self.get_collection(row.id or 0, body.media_type)
+
+    async def _configure_new(
+        self,
+        row: MediaCollection,
+        body: CollectionCreate,
+        rule: CollectionRuleWrite | None,
+        items: list[MediaItem],
+        *,
+        smart: bool,
+    ) -> None:
+        """Apply display options and order to a new collection, or remove it."""
+        try:
+            row.child_count = len(items)
+            row.summary_source = body.summary
+            effective = await self._push_options(row, body, rule)
+            row.sqlmodel_update(effective.model_dump())
+            if not smart and row.server_item_id is not None and items:
+                await self._provider().set_collection_members(
+                    row.server_item_id,
+                    [item.server_item_id for item in items if item.server_item_id],
+                    order=body.order_type,
+                )
+        except Exception:
+            # Overture records nothing, so the server keeps no half-made copy.
+            if row.server_item_id is not None:
+                with suppress(MediaServerError):
+                    await self._provider().delete_collection(row.server_item_id)
+            raise
 
     async def _initial_members(
         self,
@@ -2317,7 +2381,9 @@ class CollectionsService:
             row = await CollectionRepository(session).get(collection_id)
         if row is None or row.last_synced_at is None or row.server_item_id is None:
             raise PublicServiceError(404, "Collection not found")
+        if (current_url := row.server_image_url(art_type)) is None:
+            raise PublicServiceError(404, "Collection image not found")
         request = await provider.build_collection_image_request(
-            row.server_item_id, art_type, size
+            row.server_item_id, art_type, size, current_url=current_url
         )
         return await proxy_provider_image(request, proxy_clients=self._proxy_clients)

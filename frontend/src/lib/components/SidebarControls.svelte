@@ -274,9 +274,14 @@
     padding: 0 var(--space-2) 0 0;
     overflow: visible;
     color: var(--text-tertiary);
-    background: var(--bg-tertiary);
-    border: var(--border-subtle);
+    background: var(--field-bg);
+    border: var(--border-muted);
     border-radius: var(--radius-sm);
+  }
+
+  .search-wrapper:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
   }
 
   .search-clear-btn {

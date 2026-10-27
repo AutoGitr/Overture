@@ -14,8 +14,8 @@
     DEFAULT_APPEARANCE,
     loadAppearancePreferences,
     saveAppearancePreferences,
-    withThemeMode,
     type AppearancePreferences,
+    type ThemeMode,
   } from "../utils/appearance";
   import { delayedFlag } from "../utils/delayedFlag.svelte";
   import { errorMessage } from "../utils/errors";
@@ -23,6 +23,13 @@
   import PopupShell from "../components/PopupShell.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   import ColorInput from "../components/ColorInput.svelte";
+  import SegmentedControl from "../components/SegmentedControl.svelte";
+
+  const THEMES: readonly (readonly [ThemeMode, string])[] = [
+    ["system", "System"],
+    ["light", "Light"],
+    ["dark", "Dark"],
+  ];
 
   const queryClient = useQueryClient();
 
@@ -211,20 +218,24 @@
       <div class="option-card">
         <span class="form-label">Appearance</span>
         <div class="options-col">
+          <div class="form-row justify-between">
+            <span>Theme</span>
+            <SegmentedControl
+              --segmented-width="auto"
+              --segmented-margin="0"
+              label="Theme"
+              options={THEMES}
+              bind:value={appearance.theme}
+            />
+          </div>
           <label class="form-row justify-between">
-            <span>Theme Mode</span>
-            <select
-              class="select-compact"
-              value={appearance.theme}
+            <span>Increase contrast</span>
+            <input
+              type="checkbox"
+              checked={appearance.contrast === "more"}
               onchange={(event) =>
-                (appearance = withThemeMode(
-                  appearance,
-                  event.currentTarget.value === "light" ? "light" : "dark",
-                ))}
-            >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
+                (appearance.contrast = event.currentTarget.checked ? "more" : "standard")}
+            />
           </label>
           <div class="form-row justify-between">
             <label for="accent-color">Accent Color</label>
@@ -232,15 +243,6 @@
               id="accent-color"
               label="Accent Color"
               bind:value={appearance.accentColor}
-              disabled={!canEdit || showSaving.current}
-            />
-          </div>
-          <div class="form-row justify-between">
-            <label for="bg-color">Background Color</label>
-            <ColorInput
-              id="bg-color"
-              label="Background Color"
-              bind:value={appearance.bgColor}
               disabled={!canEdit || showSaving.current}
             />
           </div>

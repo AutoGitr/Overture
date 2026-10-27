@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { MediaQuery } from "svelte/reactivity";
   import { session } from "./lib/auth/session.svelte";
   import AppLoader from "./lib/components/AppLoader.svelte";
   import Notice from "./lib/components/Notice.svelte";
   import NotificationHost from "./lib/components/NotificationHost.svelte";
   import PinnedNotices from "./lib/components/PinnedNotices.svelte";
   import ProductBrand from "./lib/components/ProductBrand.svelte";
-  import { applyStoredAppearance } from "./lib/utils/appearance";
+  import { applyStoredAppearance, DARK_QUERY } from "./lib/utils/appearance";
   import { delayedFlag } from "./lib/utils/delayedFlag.svelte";
   import Login from "./Login.svelte";
   import Main from "./Main.svelte";
@@ -20,9 +21,15 @@
     if (online && session.phase === "unavailable") void session.check();
   }
 
+  // The "system" theme follows the device as it switches between light and dark.
+  const systemDark = new MediaQuery(DARK_QUERY);
+  $effect(() => {
+    void systemDark.current;
+    applyStoredAppearance();
+  });
+
   onMount(() => {
     updateConnection();
-    applyStoredAppearance();
     return session.start();
   });
 </script>

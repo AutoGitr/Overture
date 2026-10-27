@@ -17,12 +17,13 @@
 
   const id = $props.id();
   const KINDS = [
-    ["collection", "Collection"],
-    ["set", "Collection set"],
+    ["collection", "One collection"],
+    ["set", "One per value"],
   ] as const;
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
-  let preset = $derived(draft?.kindPresets.find((entry) => entry.key === draft?.presetKey));
+  let presets = $derived(draft?.presets.data ?? []);
+  let preset = $derived(presets.find((entry) => entry.key === draft?.presetKey));
 </script>
 
 <DetailForm
@@ -30,7 +31,7 @@
   expanded
   title="Setup"
   description={creatingSet
-    ? "A collection set creates one collection per value in the library, such as each decade, and keeps them up to date."
+    ? "Creates one collection per value in the library, such as each decade, and keeps them up to date."
     : "Choose where the collection lives, then give it a name and an optional group."}
   busy={editor.busy}
 >
@@ -54,6 +55,29 @@
 
   {#if draft}
     {@const form = draft}
+    <label class="form-label">
+      Start from
+      <select
+        value={form.presetKey}
+        onchange={(event) =>
+          form.applyPreset(presets.find((entry) => entry.key === event.currentTarget.value))}
+      >
+        <option value="">Blank</option>
+        <optgroup label="One collection">
+          {#each presets.filter((entry) => entry.collection) as entry (entry.key)}
+            <option value={entry.key}>{entry.label}</option>
+          {/each}
+        </optgroup>
+        <optgroup label="One collection per value">
+          {#each presets.filter((entry) => entry.set) as entry (entry.key)}
+            <option value={entry.key}>{entry.label}</option>
+          {/each}
+        </optgroup>
+      </select>
+      <span class="hint"
+        >{preset?.description ?? "Presets fill in everything below, which stays editable."}</span
+      >
+    </label>
     <div class="form-label">
       <span>Create</span>
       <SegmentedControl
@@ -63,45 +87,23 @@
         bind:value={() => form.kind, (kind) => form.selectKind(kind)}
       />
     </div>
-    <label class="form-label">
-      Start from
-      <select
-        value={form.presetKey}
-        onchange={(event) =>
-          form.applyPreset(
-            form.kindPresets.find((entry) => entry.key === event.currentTarget.value),
-          )}
-      >
-        <option value="">{creatingSet ? "Choose a set" : "Blank collection"}</option>
-        {#each form.kindPresets as entry (entry.key)}
-          <option value={entry.key}>{entry.label}</option>
-        {/each}
-      </select>
-      <span class="hint"
-        >{preset?.description ??
-          (creatingSet
-            ? "Presets fill in the set below; everything stays editable."
-            : "Presets fill in the criteria below; everything stays editable.")}</span
-      >
-    </label>
   {/if}
 
   {#if creatingSet}
     <label class="form-label">
       Group
       <input
-        required
         maxlength="200"
         bind:value={editor.collectionGroup}
-        placeholder="e.g. Decades"
+        placeholder={draft?.setGroup || "e.g. Decades"}
         list={`${id}-groups`}
       />
       <datalist id={`${id}-groups`}>
         {#each groups as group (group)}<option value={group}></option>{/each}
       </datalist>
       <span class="hint"
-        >The set's collections share this group and its defaults, such as sort titles and
-        visibility.</span
+        >The collections share this group and its defaults, such as sort titles and visibility.
+        Blank names it after what it splits by.</span
       >
     </label>
   {:else}

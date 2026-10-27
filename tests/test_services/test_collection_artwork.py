@@ -110,7 +110,12 @@ class ArtProvider(Provider):
 
     @override
     async def build_collection_image_request(
-        self, server_item_id: str, art_type: ArtType, size: ImageSize | None
+        self,
+        server_item_id: str,
+        art_type: ArtType,
+        size: ImageSize | None,
+        *,
+        current_url: str,
     ) -> ProviderImageRequest:
         return ProviderImageRequest(URL, {})
 

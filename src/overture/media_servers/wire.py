@@ -111,7 +111,7 @@ class MediaBrowserPerson(TypedDict, total=False):
     Type: str | None
 
 
-class MediaBrowserStudio(TypedDict, total=False):
+class MediaBrowserNamed(TypedDict, total=False):
     Name: str | None
 
 
@@ -126,9 +126,11 @@ class MediaBrowserItem(TypedDict, total=False):
     ImageTags: dict[str, str] | None
     BackdropImageTags: list[str] | None
     People: list[MediaBrowserPerson] | None
-    Studios: list[MediaBrowserStudio] | None
+    Studios: list[MediaBrowserNamed] | None
     Genres: list[str] | None
     Tags: list[str] | None
+    #: Emby's name for the tags it lists when asked for the Tags field.
+    TagItems: list[MediaBrowserNamed] | None
     ProductionLocations: list[str] | None
     OfficialRating: str | None
     CommunityRating: float | int | None

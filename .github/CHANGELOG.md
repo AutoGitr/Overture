@@ -9,6 +9,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Plex smart collections can test Dolby Vision, HDR10+, Dolby Atmos, video and audio codec, audio channels and minimum age, and show collections can test resolution, HDR, languages and codecs through their episodes.
 - Collection criteria: groups that match all or any of their conditions, nested freely, where a condition tests item metadata or whether a TMDB franchise, TMDB list, TMDB titles, a TMDB person's credits, an MDBList list or Radarr and Sonarr tags hold the item. Values such as genres are suggested from the library, and people and franchises can be found by searching TMDB.
 - On Plex, the same criteria can make a Plex smart collection with every Plex filter, including audio and subtitle language, HDR, edition and per-user play state; lists in its criteria become labels Overture keeps current.
 - Collection sets create and maintain one collection per decade, year, genre, studio, country, content rating, resolution, label, actor, director, writer, producer or TMDB franchise in a library, with title templates, top values, include and exclude lists, shared conditions and a preview.
@@ -34,6 +35,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Appearance: Theme offers System, Light and Dark, and System (the new default) follows your device as it switches. The palette is rebuilt so text meets WCAG AA contrast in both modes and the accent looks the same in each; a new Increase contrast option strengthens secondary text and outlines. Controls, menus and cards share one modern style.
+- Collection creation lists collection and set presets together under Start from, picking a set preset switches to One per value, and a set's group defaults to what it splits by, such as Decades.
+- Collection criteria suggest title, studio and edition values from the library, as they already did for tags.
+- Collection field, source, set and sort dropdowns list their options alphabetically within their groups, and field values are listed alphabetically. Hand-picked collections are labelled Manual.
 - Collection sections collapse independently, with Setup and Content expanded initially; inherited choices use Default and text fields show inherited placeholders.
 - Collection forms use full-width sections, and Sort title and Summary each accept text or templates in one field. Existing collection metadata is preserved on upgrade.
 
@@ -54,12 +59,21 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 
+- The Background Color appearance setting; each mode now has one tuned background. A saved background colour is ignored.
 - Legacy collection preset generator, single-source rules, separate builders, managed Plex labels and group TMDB discovery, in favor of criteria and collection sets.
 - Collection matching endpoints and automatic member voting. Set `tmdb_collection_id` through collection creation or update instead.
 - The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
 
 ### Fixed
 
+- Emby collection sort titles now apply; Emby ignored the field Overture sent.
+- Emby tags now sync, so Tag conditions on Emby match; run a full Sync to fetch them.
+- Plex smart collections with "is" or "is not" on text fields, such as Title is 12 Angry Men, now match exactly instead of matching titles containing "=12 Angry Men".
+- Creating a Plex smart collection no longer fails with "Media server returned an unsuccessful response" and no longer leaves the collection in Plex when a later step fails.
+- Saving a collection no longer empties and locks its sort title or summary on Plex, Jellyfin and Emby when you have not set one; an unset sort title is left to the media server.
+- Adding a source label to Plex items no longer removes the labels they already had. Source labels now name their source, such as `overture:tmdb_person:5292:actor`; the old hashed labels are removed on the next sync.
+- Plex collection posters that Plex composes from members load instead of failing with 502, and a missing background returns 404.
+- Plex smart collections test decades correctly when negated, match studios, editions and content ratings whose names Plex encodes, match every Plex key of a language, and test a show's unplayed and in-progress episodes. "Is not" is rejected for resolution, which Plex cannot negate, and critic and audience rating are offered only as sort orders, since Plex cannot filter on them.
 - Collections can be deleted from Overture when they have already been removed from the media server.
 - Plex smart collections work: filters use the keys Plex lists for tags such as genres, labels and languages, the operators Plex documents, exact number bounds and explicit and/or groups. Plex smart collections show server-controlled members without manual editing.
 - Plex collection filtering (admin or user) is saved to the preference Plex reads, and imported Plex collections keep their visibility, sort and filtering.

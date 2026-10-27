@@ -6,6 +6,7 @@ lazy from typing import Any, ClassVar
 lazy from sqlmodel import Field, Index, Relationship, SQLModel, UniqueConstraint
 
 lazy from ...domain import (
+    ArtType,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
@@ -114,6 +115,10 @@ class MediaCollection(MediaCollectionBase, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+    def server_image_url(self, art_type: ArtType) -> str | None:
+        """The server's current poster or background, as sync last saw it."""
+        return self.thumb_url if art_type is ArtType.POSTER else self.art_url
 
 
 class MediaCollectionMember(SQLModel, table=True):

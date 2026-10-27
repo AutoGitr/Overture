@@ -34,12 +34,32 @@ class PlexField:
 
     ``tag`` fields take the keys Plex lists for the section's values, such as
     tag IDs or language codes, rather than their names. ``scale`` converts
-    Overture's unit into Plex's (minutes into milliseconds).
+    Overture's unit into Plex's (minutes into milliseconds). ``show_key``
+    names the field in show sections where Plex tests it under another name,
+    which lets smart collections of shows test it even where Overture cannot.
     """
 
     key: str
     type: PlexFieldType
     scale: int = 1
+    show_key: str | None = None
+    #: Plex lists only ``=`` for some fields and ignores ``!=`` on them.
+    negatable: bool = True
+    #: Plex sorts by some fields its media queries cannot filter on.
+    filterable: bool = True
+
+    def key_for(self, media_type: MediaType) -> str:
+        """The field's name in a section of *media_type*."""
+        return (
+            self.show_key
+            if media_type is MediaType.SHOW and self.show_key
+            else self.key
+        )
+
+
+def _media(key: str, kind: PlexFieldType, *, negatable: bool = True) -> PlexField:
+    """A field of the media files, which show sections test on their episodes."""
+    return PlexField(key, kind, show_key=f"episode.{key}", negatable=negatable)
 
 
 @dataclass(slots=True, frozen=True)
@@ -134,24 +154,66 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             FieldKind.TAG,
             _MOVIES,
             _EVERY_SERVER,
-            PlexField("resolution", "tag"),
+            _media("resolution", "tag", negatable=False),
         ),
         FilterField.AUDIO_LANGUAGE: FieldSpec(
             "Audio language",
             FieldKind.TAG,
             _MOVIES,
             _NO_SERVER,
-            PlexField("audioLanguage", "tag"),
+            _media("audioLanguage", "tag"),
         ),
         FilterField.SUBTITLE_LANGUAGE: FieldSpec(
             "Subtitle language",
             FieldKind.TAG,
             _MOVIES,
             _NO_SERVER,
-            PlexField("subtitleLanguage", "tag"),
+            _media("subtitleLanguage", "tag"),
+        ),
+        FilterField.VIDEO_CODEC: FieldSpec(
+            "Video codec",
+            FieldKind.TAG,
+            _MOVIES,
+            _NO_SERVER,
+            _media("videoCodec", "tag"),
+        ),
+        FilterField.AUDIO_CODEC: FieldSpec(
+            "Audio codec",
+            FieldKind.TAG,
+            _MOVIES,
+            _NO_SERVER,
+            _media("audioCodec", "tag"),
+        ),
+        FilterField.AUDIO_LAYOUT: FieldSpec(
+            "Audio channels",
+            FieldKind.TAG,
+            _MOVIES,
+            _NO_SERVER,
+            _media("audioLayout", "tag"),
         ),
         FilterField.HDR: FieldSpec(
-            "HDR", FieldKind.BOOLEAN, _MOVIES, _NO_SERVER, PlexField("hdr", "boolean")
+            "HDR", FieldKind.BOOLEAN, _MOVIES, _NO_SERVER, _media("hdr", "boolean")
+        ),
+        FilterField.DOLBY_VISION: FieldSpec(
+            "Dolby Vision",
+            FieldKind.BOOLEAN,
+            _MOVIES,
+            _NO_SERVER,
+            _media("dovi", "boolean"),
+        ),
+        FilterField.HDR10_PLUS: FieldSpec(
+            "HDR10+",
+            FieldKind.BOOLEAN,
+            _MOVIES,
+            _NO_SERVER,
+            _media("hdr10plus", "boolean"),
+        ),
+        FilterField.ATMOS: FieldSpec(
+            "Dolby Atmos",
+            FieldKind.BOOLEAN,
+            _MOVIES,
+            _NO_SERVER,
+            _media("atmos", "boolean"),
         ),
         FilterField.YEAR: FieldSpec(
             "Year",
@@ -174,14 +236,14 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             FieldKind.NUMBER,
             _ALL_MEDIA,
             _EVERY_SERVER,
-            PlexField("rating", "float"),
+            PlexField("rating", "float", filterable=False),
         ),
         FilterField.AUDIENCE_RATING: FieldSpec(
             "Audience rating",
             FieldKind.NUMBER,
             _ALL_MEDIA,
             _EVERY_SERVER,
-            PlexField("audienceRating", "float"),
+            PlexField("audienceRating", "float", filterable=False),
         ),
         FilterField.USER_RATING: FieldSpec(
             "User rating",
@@ -189,6 +251,14 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             _ALL_MEDIA,
             _PLEX,
             PlexField("userRating", "float"),
+        ),
+        FilterField.AGE_RATING: FieldSpec(
+            "Minimum age",
+            FieldKind.NUMBER,
+            _ALL_MEDIA,
+            _NO_SERVER,
+            PlexField("contentRatingAge", "integer"),
+            integer=True,
         ),
         FilterField.DURATION: FieldSpec(
             "Duration (minutes)",
@@ -232,14 +302,14 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             FieldKind.BOOLEAN,
             _ALL_MEDIA,
             _PLEX,
-            PlexField("unwatched", "boolean"),
+            PlexField("unwatched", "boolean", show_key="unwatchedLeaves"),
         ),
         FilterField.IN_PROGRESS: FieldSpec(
             "In progress",
             FieldKind.BOOLEAN,
             _ALL_MEDIA,
             _PLEX,
-            PlexField("inProgress", "boolean"),
+            PlexField("inProgress", "boolean", show_key="episode.inProgress"),
         ),
     }
 )
@@ -292,11 +362,18 @@ def field_available(
 ) -> bool:
     """Whether a collection evaluated by Overture, or by Plex if smart, can test it."""
     spec = FIELDS[field]
-    if media_type not in spec.media_types:
-        return False
     if smart:
-        return server is ServerType.PLEX and spec.plex is not None
-    return server in spec.local
+        plex = spec.plex
+        return (
+            server is ServerType.PLEX
+            and plex is not None
+            and plex.filterable
+            and (
+                media_type in spec.media_types
+                or (media_type is MediaType.SHOW and plex.show_key is not None)
+            )
+        )
+    return media_type in spec.media_types and server in spec.local
 
 
 @dataclass(slots=True, frozen=True)
@@ -398,7 +475,17 @@ def available_orders(
             order is not CollectionOrder.CUSTOM
             and (
                 (field := order_field(order)) is None
-                or field_available(field, server, media_type, smart=smart)
+                or (
+                    _plex_sorts_by(field, media_type)
+                    if smart
+                    else field_available(field, server, media_type, smart=False)
+                )
             )
         )
     ]
+
+
+def _plex_sorts_by(field: FilterField, media_type: MediaType) -> bool:
+    """Plex sorts smart collections by fields it may not filter on."""
+    spec = FIELDS[field]
+    return media_type in spec.media_types and spec.plex is not None

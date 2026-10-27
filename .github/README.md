@@ -420,9 +420,10 @@ finds their media folder.
 ### Collections
 
 Plex, Jellyfin and Emby collections appear under **Collections** in the library
-sidebar. **+ Create collection** opens a Configure page at Setup, where you
-create either a single **Collection** or a **Collection set**, from scratch or
-from a preset under **Start from**.
+sidebar. **+ Create collection** opens a Configure page at Setup, the one place
+to create anything: **One collection**, or **One per value** (a collection set),
+from scratch or from any preset under **Start from**, which switches to the kind
+the preset creates.
 
 **Criteria** decide a collection's members. Each condition tests either item
 metadata, such as Genre is Action, Year is at least 1990 or Date added in the
@@ -432,7 +433,8 @@ not in a collection like any other condition. Conditions sit in groups that
 match **all** or **any** of them, and groups nest, so "(in my MDBList or a TMDB
 list) and not yet played" is one collection. Tag values such as genres are
 suggested from the library, and TMDB people and franchises can be searched by
-name instead of entering their IDs.
+name instead of entering their IDs. Text values such as titles and studios are
+suggested too.
 
 On Plex, choose how the criteria are evaluated:
 
@@ -441,9 +443,12 @@ On Plex, choose how the criteria are evaluated:
   server, offering only the fields that server provides.
 - **Plex smart collection** creates a Plex smart collection that Plex keeps
   current, with every Plex filter, including audio and subtitle language, HDR,
-  edition and play state for each user. Overture keeps a label such as
-  `overture:mdblist:3fa2c1b0` on the items of each list the criteria use and
-  removes it when no smart collection needs it. Set **Collection filtering** to
+  Dolby Vision, HDR10+, Dolby Atmos, codecs, audio channels, minimum age,
+  edition and play state for each user. Show collections test the media of each
+  show's episodes, such as 4K or HDR. Overture keeps a label naming each list
+  the criteria use, such as `overture:tmdb_person:5292:actor`, on its items,
+  keeps the items' other labels, and removes the label when no smart collection
+  needs it. Set **Collection filtering** to
   User library for per-user collections such as Unplayed.
 
 **Sort** orders members by release date, title, date added, ratings, duration,
@@ -456,7 +461,8 @@ order, such as the 100 highest rated.
 A **Collection set** creates one collection per value in a library: each decade,
 year, genre, studio, country, content rating, resolution, label, actor, director,
 writer or producer, or each TMDB franchise. A set lives in a group, whose
-defaults its collections share. Choose the title template (`{value}s` turns
+defaults its collections share; left blank, the group is named after what the
+set splits by, such as Decades. Choose the title template (`{value}s` turns
 1990 into 1990s), keep only the most common values, include or skip values by
 name or title, remove text such as "The" and " Collection" from names, add
 conditions every collection requires (such as Unplayed), and create Plex smart
