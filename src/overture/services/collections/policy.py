@@ -52,8 +52,12 @@ class CollectionPolicy:
     active_start_mmdd: str | None = None
     active_end_mmdd: str | None = None
     delete_when_inactive: bool = False
-    sync_interval_hours: int = 24
+    sync_schedule: str = "0 3 * * *"
     sync_enabled: bool = True
+    request_missing: bool = False
+    member_label: str | None = None
+    arr_tag: str | None = None
+    home_order: int | None = None
 
 
 def resolve_policy(
@@ -141,14 +145,31 @@ def resolve_policy(
             group.delete_when_inactive if group else None,
             defaults.collection_delete_when_inactive,
         ),
-        sync_interval_hours=inherit(
-            rule.sync_interval_hours if rule else None,
-            group.sync_interval_hours if group else None,
-            defaults.collection_sync_interval_hours,
+        sync_schedule=inherit(
+            rule.sync_schedule if rule else None,
+            group.sync_schedule if group else None,
+            defaults.collection_sync_schedule,
         ),
         sync_enabled=inherit(
-            rule.enabled if rule else None,
+            rule.sync_enabled if rule else None,
             group.sync_enabled if group else None,
             defaults.collection_sync_enabled,
+        ),
+        request_missing=inherit(
+            rule.request_missing if rule else None,
+            group.request_missing if group else None,
+            defaults.collection_request_missing,
+        ),
+        member_label=inherit_optional(
+            rule.member_label if rule else None,
+            group.member_label if group else None,
+        ),
+        arr_tag=inherit_optional(
+            rule.arr_tag if rule else None,
+            group.arr_tag if group else None,
+        ),
+        home_order=inherit_optional(
+            rule.home_order if rule else None,
+            group.home_order if group else None,
         ),
     )

@@ -1,7 +1,6 @@
 <script lang="ts">
   import type {
     CollectionDetail,
-    TmdbItemResult,
     MediaItemRead,
     LibrarySectionRead,
   } from "../../generated/rest/types.gen";
@@ -10,12 +9,14 @@
   import CollectionDefinition from "./CollectionDefinition.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
   import CollectionSettings from "./CollectionSettings.svelte";
-  import CollectionGroupDefaults from "./CollectionGroupDefaults.svelte";
+  import CollectionMissing from "./CollectionMissing.svelte";
+  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
+  import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
+  import { availableOrders } from "../utils/collectionCriteria";
   import CollectionSchedule from "./CollectionSchedule.svelte";
   import CollectionSetEditor from "./CollectionSetEditor.svelte";
   import CollectionMembers from "./CollectionMembers.svelte";
   import DetailForm from "./DetailForm.svelte";
-  import DetailSection from "./DetailSection.svelte";
   import WorkflowSections from "./WorkflowSections.svelte";
   import PendingButton from "./PendingButton.svelte";
   import DataStatus from "./DataStatus.svelte";
@@ -27,10 +28,8 @@
     groups,
     formId,
     libraries,
-    sourceRoster = [],
   }: {
     collection?: CollectionDetail;
-    sourceRoster?: TmdbItemResult[];
     editor: CollectionEditor | CollectionDraft;
     libraryItems: MediaItemRead[];
     groups: string[];
@@ -82,68 +81,82 @@
       <CollectionDefinition {editor} {groups} {libraries} />
     </section>
 
-    {#if set}
-      <section id={`${formId}-content`} aria-label="Set collections" tabindex="-1">
+    <section id={`${formId}-content`} aria-label="Collection content" tabindex="-1">
+      {#if set}
         <DetailForm
           collapsible
           expanded
-          title="Collections"
-          description="Choose what the set creates a collection for. Preview to see the collections before creating them."
+          title="Content"
+          description="What the set makes a collection for, and what every one needs."
           busy={set.busy}
         >
           <CollectionSetEditor
             generator={set.generator}
-            libraryId={set.libraryId}
+            libraryIds={set.libraryIds}
+            {libraries}
             mediaType={set.mediaType}
             capabilities={set.capabilities.data}
-            group={set.collectionGroup}
+            group={set.setGroup}
             minimum={set.setPolicy.minimum_items ?? null}
           />
         </DetailForm>
-      </section>
-      <section id={`${formId}-settings`} aria-label="Set defaults" tabindex="-1">
-        <DetailForm
-          collapsible
-          title="Defaults"
-          description="The group's defaults, which every collection in the set inherits."
-          busy={set.busy}
-        >
-          <CollectionGroupDefaults
-            policy={set.setPolicy}
-            defaults={set.defaults.data}
-            capabilities={set.capabilities.data}
-            smart={!!set.generator.smart}
-          />
-        </DetailForm>
-      </section>
-    {:else}
-      <section id={`${formId}-content`} aria-label="Collection content" tabindex="-1">
+      {:else}
         <CollectionRulePanel {editor} />
-      </section>
-
-      {#if collection && editor instanceof CollectionEditor}
-        <section id={`${formId}-members`} aria-label="Collection members" tabindex="-1">
-          <CollectionMembers members={collection.members} {editor} {libraryItems} />
-          {#if sourceRoster.length}
-            <DetailSection
-              collapsible
-              title="Source roster"
-              description="Movies in the TMDB franchise, including titles missing from your library."
-            >
-              <CollectionMembers members={sourceRoster} />
-            </DetailSection>
-          {/if}
-        </section>
       {/if}
+    </section>
 
-      <section id={`${formId}-settings`} aria-label="Collection settings" tabindex="-1">
-        <CollectionSettings {editor} />
-      </section>
-
-      <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
-        <CollectionSchedule {editor} />
+    {#if collection && editor instanceof CollectionEditor}
+      <section id={`${formId}-members`} aria-label="Collection members" tabindex="-1">
+        <CollectionMembers members={collection.members} {editor} {libraryItems} />
+        {#if collection.rule}<CollectionMissing {collection} />{/if}
       </section>
     {/if}
+
+    <section id={`${formId}-settings`} aria-label="Collection settings" tabindex="-1">
+      {#if set}
+        <DetailForm
+          collapsible
+          title="Settings"
+          description="The set's group defaults, which each of its collections inherits."
+          busy={set.busy}
+        >
+          <CollectionPolicyFields
+            policy={set.setPolicy}
+            level="group"
+            defaults={set.defaults.data}
+            plex={set.capabilities.data?.visibility ?? false}
+            orders={availableOrders(set.capabilities.data, !!set.generator.smart)}
+            arr={set.capabilities.data?.arr
+              ? set.mediaType === "movie"
+                ? "Radarr"
+                : "Sonarr"
+              : null}
+            memberLabels={set.capabilities.data?.member_labels ?? false}
+          />
+        </DetailForm>
+      {:else}
+        <CollectionSettings {editor} />
+      {/if}
+    </section>
+
+    <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
+      {#if set}
+        <DetailForm
+          collapsible
+          title="Schedule"
+          description="When the set syncs, and when its collections are active each year."
+          busy={set.busy}
+        >
+          <CollectionScheduleFields
+            policy={set.setPolicy}
+            level="group"
+            defaults={set.defaults.data}
+          />
+        </DetailForm>
+      {:else}
+        <CollectionSchedule {editor} />
+      {/if}
+    </section>
     <div class="form-row" role="group" aria-label="Save">
       <PendingButton
         type="submit"

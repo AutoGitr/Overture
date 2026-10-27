@@ -13,6 +13,7 @@ lazy from ..schemas.collections import (
     BulkCollectionMonitorUpdate,
     BulkCollectionOperation,
     BulkCollectionOperationResult,
+    CollectionArrOptions,
     CollectionArtwork,
     CollectionCapabilities,
     CollectionCreate,
@@ -23,10 +24,16 @@ lazy from ..schemas.collections import (
     CollectionGroupRename,
     CollectionGroupSyncResult,
     CollectionMembersUpdate,
+    CollectionMissing,
     CollectionOptions,
     CollectionPolicyBase,
     CollectionPresetRead,
+    CollectionPresetSave,
+    CollectionPreview,
+    CollectionPreviewRequest,
     CollectionRead,
+    CollectionRequest,
+    CollectionRequestResult,
     CollectionRuleRead,
     CollectionRuleWrite,
     CollectionSetEntry,
@@ -97,8 +104,40 @@ async def get_collection_capabilities(
 async def list_collection_presets(
     collections: CollectionsDep, media_type: MediaTypeQuery
 ) -> list[CollectionPresetRead]:
-    """Return the collection and set presets the media server can evaluate."""
-    return collections.presets(media_type)
+    """Return saved presets, then the built-in ones the server can evaluate."""
+    return await collections.presets(media_type)
+
+
+@router.post("/presets")
+async def save_collection_preset(
+    body: CollectionPresetSave, collections: CollectionsDep
+) -> CollectionPresetRead:
+    """Keep a collection or set as a preset."""
+    return await collections.save_preset(body)
+
+
+@router.delete("/presets/{preset_id}")
+async def delete_collection_preset(
+    preset_id: Annotated[int, Path(gt=0)], collections: CollectionsDep
+) -> StatusResponse:
+    """Forget a saved preset."""
+    return await collections.delete_preset(preset_id)
+
+
+@router.post("/preview")
+async def preview_collection(
+    body: CollectionPreviewRequest, collections: CollectionsDep
+) -> CollectionPreview:
+    """Show what criteria select now, before the collection is saved."""
+    return await collections.preview(body)
+
+
+@router.get("/arr-options")
+async def get_collection_arr_options(
+    collections: CollectionsDep, media_type: MediaTypeQuery
+) -> CollectionArrOptions:
+    """List where Radarr or Sonarr can put requested titles."""
+    return await collections.arr_options(media_type)
 
 
 @router.get("/field-values")
@@ -226,6 +265,27 @@ async def get_collection_sources(
         youtube_id_overturedb=detail.youtube_id_overturedb,
         youtube_id_themerrdb=detail.youtube_id_themerrdb,
     )
+
+
+@router.get("/{collection_id}/missing")
+async def get_collection_missing(
+    collection_id: CollectionIdPath,
+    collections: CollectionsDep,
+    media_type: MediaTypeQuery,
+) -> CollectionMissing:
+    """List titles the collection's lists hold that the library lacks."""
+    return await collections.missing(collection_id, media_type)
+
+
+@router.post("/{collection_id}/missing/request")
+async def request_collection_missing(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    body: CollectionRequest,
+    collections: CollectionsDep,
+) -> CollectionRequestResult:
+    """Ask Radarr or Sonarr for the collection's missing titles."""
+    return await collections.request_missing(collection_id, media_type, body)
 
 
 @router.get("/{collection_id}/theme")

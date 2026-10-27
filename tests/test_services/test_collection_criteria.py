@@ -404,7 +404,7 @@ def test_fields_adapt_to_the_server_and_evaluation() -> None:
         ServerType.PLEX, MediaType.MOVIE, smart=True
     )
     assert not dimension_available(
-        SetDimension.FRANCHISE, ServerType.PLEX, MediaType.SHOW
+        SetDimension.FRANCHISE, ServerType.PLEX, MediaType.SHOW, smart=False
     )
 
 
@@ -470,13 +470,15 @@ def test_set_titles_need_the_value() -> None:
 def test_presets_adapt_to_the_server() -> None:
     plex = {
         preset.key: preset
-        for preset in available_presets(ServerType.PLEX, MediaType.MOVIE)
+        for preset in available_presets(ServerType.PLEX, MediaType.MOVIE, tmdb=True)
     }
     jellyfin = {
-        preset.key for preset in available_presets(ServerType.JELLYFIN, MediaType.MOVIE)
+        preset.key
+        for preset in available_presets(ServerType.JELLYFIN, MediaType.MOVIE, tmdb=True)
     }
     shows = {
-        preset.key for preset in available_presets(ServerType.PLEX, MediaType.SHOW)
+        preset.key
+        for preset in available_presets(ServerType.PLEX, MediaType.SHOW, tmdb=True)
     }
     unplayed = plex["unplayed"].collection
     assert unplayed is not None

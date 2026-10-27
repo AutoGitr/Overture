@@ -9,6 +9,15 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- TMDB charts as collection lists: Popular, Top rated, Trending, In cinemas, Coming soon, Airing today and Airing this week, read for the new TMDB region setting.
+- Collection criteria test what TMDB says about each title: original language, origin country, TMDB rating and votes, TMDB keywords, production companies, streaming services in your region, and for shows their network, status and last air date. Full Sync reads them for every title with a TMDB ID, and again weekly. Plex can also test how many versions a movie has, and every server its folder.
+- Collection sets split by edition, network, original language, origin country or streaming service; on Plex, smart sets split by audio or subtitle language. Custom sets list their own collections, each with its own criteria, such as A to Z or Based on a book. Any set can rename or merge values, and can remove collections whose value disappears.
+- A collection in several libraries: choose more than one library in Setup and it is kept alike in each.
+- A Missing panel lists the titles a collection's lists hold that the library lacks, and requests them from Radarr or Sonarr. Request missing does this after each sync; choose the root folder and quality profile under Settings > Collection defaults.
+- Member label and Radarr/Sonarr tag give a collection's members a label or tag and remove it from others. Home order arranges promoted collections on Plex's Home.
+- Preview members shows what a collection's criteria select before you save. Save as preset keeps any collection or set as a starting point under Start from.
+- Presets for TMDB charts, Most played, Returning series, Christmas, Halloween, Thanksgiving, Valentine's Day, the Marvel and DC universes, and sets for streaming services, languages, origin countries, networks, editions, Based on and A to Z.
+- Collections whose criteria list a TMDB person offer the person's photos as poster candidates.
 - Plex smart collections can test Dolby Vision, HDR10+, Dolby Atmos, video and audio codec, audio channels and minimum age, and show collections can test resolution, HDR, languages and codecs through their episodes.
 - Collection criteria: groups that match all or any of their conditions, nested freely, where a condition tests item metadata or whether a TMDB franchise, TMDB list, TMDB titles, a TMDB person's credits, an MDBList list or Radarr and Sonarr tags hold the item. Values such as genres are suggested from the library, and people and franchises can be found by searching TMDB.
 - On Plex, the same criteria can make a Plex smart collection with every Plex filter, including audio and subtitle language, HDR, edition and per-user play state; lists in its criteria become labels Overture keeps current.
@@ -35,6 +44,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Collections sync on a schedule like Overture's other jobs: a cron expression at the collection, group or global level replaces the interval in hours, which is converted. Scheduled sync can now be inherited by a collection like its other settings.
+- Collection settings look the same everywhere: a collection's Settings and Schedule, a group's in the Collection groups popup and the global defaults under Settings use the same fields and names, and each Default names the value it inherits. One collection and One per value share Setup, Content, Settings and Schedule; a set's title template is in Setup.
+- Summary templates take {source_summary}, the description of the first list or a person's biography, which replaces the person condition's Biography as summary. Existing biography summaries are converted.
+- A set's collections are now removed when their value disappears only if the set says so, separately from Below minimum.
 - Collections save in Overture only with Save (or Enter); Save and Create or Save and Sync also updates the media server. Members edited in Members wait for the next sync, a library sync keeps changes not yet synced, and a collection or set never created waits for Save and Create instead of the scheduler. Unsynced collections show an Unsynced badge.
 - Collection pages keep both tab rows in every view: the art tabs always sit in the lower row next to links to Setup, Content, Members, Settings and Schedule, which open Configure at that section. A new collection has no tab rows and saves from the bottom of the form.
 - Collection Display is now Settings and also holds Sort, Limit, Sync mode, the minimum and automatic art and theme; Content keeps only how members are chosen and the criteria. Groups are created in the Collection groups popup, which Create new group in the Group list opens; its buttons are Save, Save and Apply and Save and Sync.

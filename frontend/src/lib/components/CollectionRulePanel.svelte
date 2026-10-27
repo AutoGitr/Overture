@@ -1,6 +1,8 @@
 <script lang="ts">
   import { CollectionEditor, type CollectionDraft } from "../utils/collectionForms.svelte";
+  import { errorMessage } from "../utils/errors";
   import DetailForm from "./DetailForm.svelte";
+  import PendingButton from "./PendingButton.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
 
@@ -86,10 +88,38 @@
         label="Criteria"
       />
     </fieldset>
+    <div class="form-wide preview">
+      <PendingButton
+        type="button"
+        class="btn btn-secondary"
+        pending={editor.preview.pending}
+        pendingLabel="Previewing..."
+        disabled={!editor.libraryId}
+        onclick={() => editor.preview.run()}>Preview members</PendingButton
+      >
+      {#if editor.preview.error}
+        <p role="alert">{errorMessage(editor.preview.error, "Could not preview the members")}</p>
+      {:else if editor.preview.result}
+        {@const result = editor.preview.result}
+        <p class="hint">
+          {result.member_count}
+          {result.member_count === 1 ? "member" : "members"}{result.members.length
+            ? `: ${result.members.join(", ")}${result.member_count > result.members.length ? ", ..." : ""}`
+            : ""}
+        </p>
+      {/if}
+    </div>
   {/if}
 </DetailForm>
 
 <style>
+  .preview {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
   .criteria {
     min-width: 0;
     margin: 0;

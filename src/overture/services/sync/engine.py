@@ -41,7 +41,7 @@ lazy from ..scheduler import SchedulerService
 lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler
 lazy from .runner import run_sync as _run_sync
-lazy from .tmdb_collections import TmdbCollectionEnrichment
+lazy from .tmdb_enrichment import TmdbEnrichment
 lazy from .tmdb_seasons import TmdbSeasonSync
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class SyncEngine:
         )
         self._collections = CollectionSync(
             provider_registry=provider_registry,
-            enrichment=TmdbCollectionEnrichment(
+            enrichment=TmdbEnrichment(
                 app_config=app_config, database=database, tmdb_client=tmdb_client
             ),
             publisher=publisher,

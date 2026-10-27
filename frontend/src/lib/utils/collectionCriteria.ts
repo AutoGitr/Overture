@@ -109,7 +109,9 @@ export function newSource(type: SourceType): CollectionSourceInput {
     case "tmdb_item":
       return { type, tmdb_ids: [] };
     case "tmdb_person":
-      return { type, person_id: 0, roles: ["actor"], use_biography: false };
+      return { type, person_id: 0, roles: ["actor"] };
+    case "tmdb_chart":
+      return { type, chart: "popular", limit: 100 };
     case "mdblist":
       return { type, identifiers: [] };
     case "radarr_tag":

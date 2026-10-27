@@ -1,8 +1,8 @@
-"""Read-only Radarr and Sonarr v3 API client for tag-based collection rules."""
+"""Radarr and Sonarr v3 API client: tags, libraries and requested titles."""
 
 lazy from collections.abc import Callable, Sequence
 lazy from dataclasses import dataclass
-lazy from typing import Literal
+lazy from typing import Any, Literal
 
 lazy import httpx2
 lazy from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
@@ -28,6 +28,33 @@ class ArrTagMatches:
     imdb_ids: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class ArrTitle:
+    """A movie or series the Arr server holds, by its own and external IDs."""
+
+    id: int
+    tmdb_id: int | None
+    tvdb_id: int | None
+    tags: frozenset[int]
+
+
+@dataclass(frozen=True, slots=True)
+class ArrOptions:
+    """Where a requested title goes and how it is downloaded."""
+
+    root_folders: tuple[str, ...]
+    quality_profiles: tuple[ArrTag, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ArrRequest:
+    """How titles are added."""
+
+    root_folder: str
+    quality_profile_id: int
+    search: bool
+
+
 class _TagRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -38,6 +65,7 @@ class _TagRecord(BaseModel):
 class _MediaRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    id: int = 0
     tmdb_id: int | None = Field(default=None, validation_alias="tmdbId")
     tvdb_id: int | None = Field(default=None, validation_alias="tvdbId")
     imdb_id: str | None = Field(default=None, validation_alias="imdbId")
@@ -48,8 +76,25 @@ _TAG_LIST = TypeAdapter(list[_TagRecord])
 _MEDIA_LIST = TypeAdapter(list[_MediaRecord])
 
 
+class _FolderRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    path: str = Field(min_length=1)
+
+
+class _ProfileRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: int = Field(gt=0)
+    name: str = Field(min_length=1)
+
+
+_FOLDER_LIST = TypeAdapter(list[_FolderRecord])
+_PROFILE_LIST = TypeAdapter(list[_ProfileRecord])
+
+
 class ArrClient:
-    """Read-only client for a Radarr or Sonarr v3 instance."""
+    """Client for a Radarr or Sonarr v3 instance."""
 
     def __init__(
         self,
@@ -154,4 +199,115 @@ class ArrClient:
             tmdb_ids=tuple(tmdb_ids),
             tvdb_ids=tuple(tvdb_ids),
             imdb_ids=tuple(imdb_ids),
+        )
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        """Send one request, raising a public error naming the server."""
+        self._require_configured()
+        try:
+            response = await request_with_retry(
+                await self._client.get(), method, path, limiter=self._limiter, **kwargs
+            )
+            response.raise_for_status()
+        except httpx2.HTTPError as exc:
+            raise PublicServiceError(502, f"{self._label} refused the request") from exc
+        return response.json() if response.content else None
+
+    async def options(self) -> ArrOptions:
+        """The root folders and quality profiles titles can be requested with."""
+        try:
+            folders = _FOLDER_LIST.validate_python(
+                await self._request("GET", "/api/v3/rootfolder")
+            )
+            profiles = _PROFILE_LIST.validate_python(
+                await self._request("GET", "/api/v3/qualityprofile")
+            )
+        except ValidationError as exc:
+            raise PublicServiceError(
+                502, f"{self._label} returned unreadable options"
+            ) from exc
+        return ArrOptions(
+            root_folders=tuple(folder.path for folder in folders),
+            quality_profiles=tuple(
+                ArrTag(id=profile.id, label=profile.name) for profile in profiles
+            ),
+        )
+
+    async def titles(self) -> list[ArrTitle]:
+        """Every movie or series the server holds."""
+        try:
+            records = _MEDIA_LIST.validate_python(
+                await self._request("GET", self._endpoint)
+            )
+        except ValidationError as exc:
+            raise PublicServiceError(
+                502, f"{self._label} returned an unreadable library"
+            ) from exc
+        return [
+            ArrTitle(
+                id=record.id,
+                tmdb_id=record.tmdb_id,
+                tvdb_id=record.tvdb_id,
+                tags=frozenset(record.tags),
+            )
+            for record in records
+            if record.id > 0
+        ]
+
+    async def add(self, external_id: int, request: ArrRequest) -> None:
+        """Add a movie by TMDB ID, or a series by TVDB ID, and maybe search for it."""
+        if self._kind == "radarr":
+            found = await self._request(
+                "GET", "/api/v3/movie/lookup/tmdb", params={"tmdbId": external_id}
+            )
+            options = {"searchForMovie": request.search}
+        else:
+            results: list[Any] = (
+                await self._request(
+                    "GET",
+                    "/api/v3/series/lookup",
+                    params={"term": f"tvdb:{external_id}"},
+                )
+                or []
+            )
+            found = results[0] if results else None
+            options = {"monitor": "all", "searchForMissingEpisodes": request.search}
+        if not isinstance(found, dict):
+            raise PublicServiceError(404, f"{self._label} does not know this title")
+        body: dict[str, Any] = {
+            **found,
+            "qualityProfileId": request.quality_profile_id,
+            "rootFolderPath": request.root_folder,
+            "monitored": True,
+            "addOptions": options,
+        }
+        if self._kind == "sonarr":
+            body["seasonFolder"] = True
+        await self._request("POST", self._endpoint, json=body)
+
+    async def tag_id(self, label: str) -> int:
+        """The ID of a tag, created when the server lacks it."""
+        for tag in await self.list_tags():
+            if tag.label.casefold() == label.casefold():
+                return tag.id
+        created = _TagRecord.model_validate(
+            await self._request("POST", "/api/v3/tag", json={"label": label})
+        )
+        return created.id
+
+    async def edit_tag(
+        self, tag_id: int, title_ids: Sequence[int], *, add: bool
+    ) -> None:
+        """Add the tag to, or remove it from, the titles with these Arr IDs."""
+        if not title_ids:
+            return
+        key = "movieIds" if self._kind == "radarr" else "seriesIds"
+        await self._request(
+            "PUT",
+            f"{self._endpoint}/editor",
+            json={
+                key: list(title_ids),
+                "tags": [tag_id],
+                "applyTags": "add" if add else "remove",
+            },
         )

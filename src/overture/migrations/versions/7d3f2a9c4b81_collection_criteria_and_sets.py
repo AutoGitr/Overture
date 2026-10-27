@@ -18,7 +18,6 @@ from sqlalchemy.dialects import sqlite
 
 from overture.domain import CollectionOrder, FieldKind, FilterField, SetDimension
 from overture.schemas.collections import (
-    CollectionGenerator,
     FieldCondition,
     FilterGroup,
 )
@@ -153,15 +152,23 @@ def _criteria(row: dict[str, Any]) -> tuple[str | None, bool, int | None, str | 
 
 
 def _generator(raw: str) -> str:
+    """The generator as this revision stored it; later revisions convert it."""
     config = json.loads(raw)
-    return CollectionGenerator(
-        dimension=SetDimension.FRANCHISE,
-        library_id=config["library_id"],
-        exclude=[str(tmdb_id) for tmdb_id in config.get("exclude_tmdb_ids", [])],
-        strip_prefix=config.get("strip_prefix", ""),
-        strip_suffix=config.get("strip_suffix", ""),
-        enabled=config.get("enabled", True),
-    ).model_dump_json()
+    return json.dumps(
+        {
+            "dimension": SetDimension.FRANCHISE.value,
+            "include": [],
+            "exclude": [str(tmdb_id) for tmdb_id in config.get("exclude_tmdb_ids", [])],
+            "top": None,
+            "title_format": "{value}",
+            "strip_prefix": config.get("strip_prefix", ""),
+            "strip_suffix": config.get("strip_suffix", ""),
+            "criteria": {"mode": "all", "conditions": [], "groups": []},
+            "smart": False,
+            "enabled": config.get("enabled", True),
+            "library_id": config["library_id"],
+        }
+    )
 
 
 _PREVIOUS_FIELDS = frozenset(
@@ -458,8 +465,8 @@ def downgrade() -> None:
         )
     ).mappings()
     for row in list(groups):
-        generator = CollectionGenerator.model_validate_json(row["generator_json"])
-        if generator.dimension is not SetDimension.FRANCHISE:
+        generator: dict[str, Any] = json.loads(row["generator_json"])
+        if generator["dimension"] != SetDimension.FRANCHISE:
             continue
         connection.execute(
             sa.text(
@@ -469,12 +476,14 @@ def downgrade() -> None:
                 "id": row["id"],
                 "value": json.dumps(
                     {
-                        "enabled": generator.enabled,
-                        "library_id": generator.library_id,
-                        "strip_prefix": generator.strip_prefix,
-                        "strip_suffix": generator.strip_suffix,
+                        "enabled": generator.get("enabled", True),
+                        "library_id": generator["library_id"],
+                        "strip_prefix": generator.get("strip_prefix", ""),
+                        "strip_suffix": generator.get("strip_suffix", ""),
                         "exclude_tmdb_ids": [
-                            int(value) for value in generator.exclude if value.isdigit()
+                            int(value)
+                            for value in generator.get("exclude", [])
+                            if value.isdigit()
                         ],
                         "auto_exclude_from_other_collections": True,
                     }

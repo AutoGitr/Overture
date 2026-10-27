@@ -7,12 +7,15 @@
     children,
     collapsible = false,
     expanded = false,
+    ontoggle,
   }: {
     title: string;
     description: string;
     children: Snippet;
     collapsible?: boolean;
     expanded?: boolean;
+    /** Opening or closing a collapsible section. */
+    ontoggle?: (open: boolean) => void;
   } = $props();
   let open = $derived(expanded);
   const bodyId = $props.id();
@@ -26,7 +29,10 @@
           type="button"
           aria-expanded={open}
           aria-controls={bodyId}
-          onclick={() => (open = !open)}
+          onclick={() => {
+            open = !open;
+            ontoggle?.(open);
+          }}
         >
           {title}<ChevronDown size={18} class={open ? "expanded" : ""} />
         </button>

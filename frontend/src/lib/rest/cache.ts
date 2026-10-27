@@ -310,3 +310,10 @@ const SCHEDULE_LISTS = {
 export function invalidateSchedules(kind: SchedulesChangedEvent["kind"]): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: SCHEDULE_LISTS[kind] });
 }
+
+/** Saved presets join the built-in ones, so every preset list refetches. */
+export function refreshCollectionPresets(): Promise<void> {
+  return queryClient.invalidateQueries({
+    predicate: ({ queryKey }) => isTaggedQuery(queryKey, "listCollectionPresets"),
+  });
+}

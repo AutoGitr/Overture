@@ -76,6 +76,18 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """List the keys and names a smart filter field accepts in a section."""
         raise NotImplementedError
 
+    async def find_matching(
+        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+    ) -> tuple[int, list[str]]:
+        """How many items a smart filter matches, and the first *size* IDs."""
+        raise NotImplementedError
+
+    async def order_collection_hubs(
+        self, section_key: str, server_collection_ids: Sequence[str]
+    ) -> None:
+        """Order promoted collections' Home rows, first to last."""
+        raise NotImplementedError
+
     async def sync_item_labels(
         self,
         section_key: str,

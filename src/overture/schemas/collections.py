@@ -27,12 +27,14 @@ lazy from ..domain import (
     SetDimension,
     SourceType,
     SyncMode,
+    TmdbChart,
     TmdbPersonRole,
 )
 lazy from ..integrations.mdblist import mdblist_identifier
 lazy from ..services.collections.fields import FIELDS, OPERATORS
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
+    MemberTagFormat,
     SeasonalDate,
     SetTitleFormat,
     SortTitleFormat,
@@ -41,7 +43,7 @@ lazy from ..utils.collection_formats import (
 lazy from .base import StrictBaseModel
 lazy from .common import StatusResponse
 lazy from .library import MediaItemRead
-lazy from .validators import YouTubeId
+lazy from .validators import CronExpression, YouTubeId
 
 
 class ArrTagRead(StrictBaseModel):
@@ -140,7 +142,14 @@ class TmdbPersonSource(StrictBaseModel):
     roles: Annotated[list[TmdbPersonRole], Field(min_length=1)] = Field(
         default_factory=lambda: [TmdbPersonRole.ACTOR]
     )
-    use_biography: bool = False
+
+
+class TmdbChartSource(StrictBaseModel):
+    """The top titles of a TMDB chart, such as Popular or Trending this week."""
+
+    type: Literal[SourceType.TMDB_CHART] = SourceType.TMDB_CHART
+    chart: TmdbChart
+    limit: Annotated[int, Field(ge=1, le=500)] = 100
 
 
 class MdblistSource(StrictBaseModel):
@@ -184,6 +193,7 @@ type CollectionSource = Annotated[
     | TmdbItemSource
     | TmdbListSource
     | TmdbPersonSource
+    | TmdbChartSource
     | MdblistSource
     | RadarrTagSource
     | SonarrTagSource,
@@ -508,6 +518,17 @@ class CollectionPolicyBase(StrictBaseModel):
     summary_format: SummaryFormat | None = None
     active_start_mmdd: SeasonalDate | None = None
     active_end_mmdd: SeasonalDate | None = None
+    #: When scheduled syncs run, as a cron expression.
+    sync_schedule: CronExpression | None = None
+    sync_enabled: bool | None = None
+    #: Ask Radarr or Sonarr for list titles the library lacks after each sync.
+    request_missing: bool | None = None
+    #: A server label members get and other items lose; {title} and {group}.
+    member_label: MemberTagFormat | None = None
+    #: A Radarr or Sonarr tag members get and other titles lose.
+    arr_tag: MemberTagFormat | None = None
+    #: Where a promoted collection's row sits on Plex's Home; lower comes first.
+    home_order: Annotated[int, Field(ge=1, le=999)] | None = None
 
     @model_validator(mode="after")
     def validate_seasonal_window(self) -> Self:
@@ -592,8 +613,6 @@ class CollectionRuleWrite(CollectionPolicyBase):
     #: Plex evaluates the criteria live instead of Overture on each sync.
     smart: bool = False
     limit: Annotated[int, Field(ge=1, le=10000)] | None = None
-    sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] = 24
-    enabled: bool = True
 
     @model_validator(mode="after")
     def validate_rule(self) -> Self:
@@ -610,6 +629,8 @@ class CollectionRuleRead(CollectionRuleWrite):
 
     last_synced_at: datetime | None = None
     last_error: str | None = None
+    #: The description of the first list, which {source_summary} shows.
+    source_summary: str | None = None
 
 
 class CollectionSyncResponse(StrictBaseModel):
@@ -619,6 +640,30 @@ class CollectionSyncResponse(StrictBaseModel):
     removed: int = 0
     skipped: bool = False
     deleted: bool = False
+
+
+class CustomSetValue(StrictBaseModel):
+    """One collection of a custom set."""
+
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    criteria: FilterGroup
+
+    @model_validator(mode="after")
+    def validate_criteria(self) -> Self:
+        """Each collection needs a condition of its own."""
+        if self.criteria.is_empty():
+            raise ValueError(f"Add a condition to {self.name}")
+        return self
+
+
+class SetValueAlias(StrictBaseModel):
+    """Values that make one collection under a name of their own."""
+
+    values: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200)]],
+        Field(min_length=1, max_length=50),
+    ]
+    name: Annotated[str, Field(min_length=1, max_length=200)]
 
 
 class CollectionGeneratorBase(StrictBaseModel):
@@ -641,20 +686,44 @@ class CollectionGeneratorBase(StrictBaseModel):
     #: Conditions every collection in the set adds to its value's condition.
     criteria: FilterGroup = Field(default_factory=FilterGroup)
     smart: bool = False
-    enabled: bool = True
+    #: The collections of a custom set, each with its own conditions.
+    custom_values: Annotated[list[CustomSetValue], Field(max_length=200)] = Field(
+        default_factory=list[CustomSetValue]
+    )
+    #: Values renamed, or merged into one collection.
+    aliases: Annotated[list[SetValueAlias], Field(max_length=200)] = Field(
+        default_factory=list[SetValueAlias]
+    )
+    #: Remove the collections of values the library no longer holds.
+    remove_vanished: bool = False
+
+    @model_validator(mode="after")
+    def validate_values(self) -> Self:
+        """A custom set lists its collections; other sets find them."""
+        if (self.dimension is SetDimension.CUSTOM) != bool(self.custom_values):
+            raise ValueError(
+                "Add the custom set's collections"
+                if self.dimension is SetDimension.CUSTOM
+                else "Only custom sets list their collections"
+            )
+        names = [value.name.casefold() for value in self.custom_values]
+        if len(names) != len(set(names)):
+            raise ValueError("Give each collection of the set its own name")
+        return self
 
 
 class CollectionGenerator(CollectionGeneratorBase):
-    """A collection set: one collection per value in a library."""
+    """A collection set: its collections in each of its libraries."""
 
-    library_id: Annotated[str, Field(min_length=1, max_length=200)]
+    library_ids: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200)]],
+        Field(min_length=1, max_length=20),
+    ]
 
 
 class CollectionGroupPolicy(CollectionPolicyBase):
     """Nullable group defaults; null inherits the application setting."""
 
-    sync_interval_hours: Annotated[int, Field(ge=1, le=8760)] | None = None
-    sync_enabled: bool | None = None
     generator: CollectionGenerator | None = None
 
 
@@ -681,14 +750,76 @@ class CollectionSetPreview(StrictBaseModel):
 
 
 class CollectionSetEntry(StrictBaseModel):
-    """One collection a set creates, keeps or skips."""
+    """One collection a set creates, keeps or skips, in one of its libraries."""
 
+    library_id: str
     value: str
     title: str
     member_count: int
     below_minimum: bool
     #: The set's existing collection for the value.
     collection_id: int | None = None
+
+
+class CollectionMissingTitle(StrictBaseModel):
+    """A title a collection's lists hold that the library lacks."""
+
+    tmdb_id: int
+    title: str
+    year: int | None = None
+    poster_url: str | None = None
+    #: Radarr or Sonarr already has it.
+    requested: bool = False
+
+
+class CollectionMissing(StrictBaseModel):
+    """What a collection's lists hold beyond the library."""
+
+    titles: list[CollectionMissingTitle]
+    #: More titles are missing than are listed.
+    truncated: bool = False
+    #: Radarr or Sonarr is set up to take requests for the library.
+    requestable: bool = False
+
+
+class CollectionRequest(StrictBaseModel):
+    """Titles to request; none requests every missing one."""
+
+    tmdb_ids: (
+        Annotated[list[Annotated[int, Field(gt=0)]], Field(max_length=500)] | None
+    ) = None
+
+
+class CollectionRequestResult(StrictBaseModel):
+    """What a request added to Radarr or Sonarr."""
+
+    requested: int = 0
+    #: Already in Radarr or Sonarr.
+    present: int = 0
+    errors: list[str] = Field(default_factory=list[str])
+
+
+class CollectionArrOptions(StrictBaseModel):
+    """Where Radarr or Sonarr can put requested titles."""
+
+    root_folders: list[str]
+    quality_profiles: list[ArrTagRead]
+
+
+class CollectionPreview(StrictBaseModel):
+    """What a collection's criteria select now, before it is saved."""
+
+    member_count: int
+    #: The first members, in the collection's order.
+    members: list[str]
+
+
+class CollectionPreviewRequest(StrictBaseModel):
+    """Criteria to preview in one library."""
+
+    media_type: MediaType
+    library_id: Annotated[str, Field(min_length=1, max_length=200)]
+    rule: CollectionRuleWrite
 
 
 class CollectionGroupSyncResult(StrictBaseModel):
@@ -717,13 +848,32 @@ class CollectionPresetSet(StrictBaseModel):
 
 
 class CollectionPresetRead(StrictBaseModel):
-    """A starting point for a collection or a set, like Kometa's defaults."""
+    """A starting point for a new collection or collection set."""
 
     key: str
     label: str
     description: str
     collection: CollectionPresetCollection | None = None
     set: CollectionPresetSet | None = None
+    #: Set for a preset saved from the form, which can be deleted.
+    saved_id: int | None = None
+
+
+class CollectionPresetSave(StrictBaseModel):
+    """A collection or set to keep as a preset."""
+
+    media_type: MediaType
+    label: Annotated[str, Field(min_length=1, max_length=100)]
+    description: Annotated[str, Field(max_length=500)] = ""
+    collection: CollectionPresetCollection | None = None
+    set: CollectionPresetSet | None = None
+
+    @model_validator(mode="after")
+    def validate_kind(self) -> Self:
+        """A preset makes either one collection or a set."""
+        if (self.collection is None) == (self.set is None):
+            raise ValueError("Save either a collection or a set")
+        return self
 
 
 class CollectionFieldRead(StrictBaseModel):
@@ -753,6 +903,8 @@ class CollectionDimensionRead(StrictBaseModel):
     dimension: SetDimension
     label: str
     title_format: str
+    #: Only a set of Plex smart collections can enumerate it.
+    smart_only: bool = False
 
 
 class CollectionCapabilities(StrictBaseModel):
@@ -760,12 +912,19 @@ class CollectionCapabilities(StrictBaseModel):
 
     server_type: ServerType
     smart: bool
+    #: Plex's visibility, Home promotion and Home order.
     visibility: bool
+    #: The server takes labels Overture puts on members.
+    member_labels: bool
+    #: Radarr (movies) or Sonarr (shows) can take requests and tags.
+    arr: bool
     orders: list[CollectionOrder]
     smart_orders: list[CollectionOrder]
     fields: list[CollectionFieldRead]
     sources: list[CollectionSourceRead]
     dimensions: list[CollectionDimensionRead]
+    #: The TMDB charts there are for the media type.
+    charts: list[TmdbChart]
 
 
 class CollectionFieldValue(StrictBaseModel):

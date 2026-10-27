@@ -8,7 +8,6 @@
     MediaItemRead,
     LibrarySectionRead,
     TmdbCollectionResponse,
-    TmdbItemResult,
   } from "../../generated/rest/types.gen";
   import { untrack } from "svelte";
   import { uiState } from "../stores/uiState.svelte";
@@ -43,11 +42,9 @@
     groups,
     libraries,
     seed = null,
-    sourceRoster = [],
   }: {
     collection: CollectionDetail | null;
     seed?: TmdbCollectionResponse | null;
-    sourceRoster?: TmdbItemResult[];
     libraryItems: MediaItemRead[];
     groups: string[];
     libraries: LibrarySectionRead[];
@@ -195,7 +192,6 @@
           onretry={() => editor.save()}
         />{/if}
       <CollectionConfigure
-        {sourceRoster}
         collection={collection ?? undefined}
         {editor}
         {libraryItems}

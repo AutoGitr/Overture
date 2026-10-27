@@ -27,13 +27,7 @@
   let collection = $derived(
     collectionQuery.data?.id === collectionId ? collectionQuery.data : null,
   );
-  let seedId = $derived(
-    creating
-      ? Number(route.search.tmdb_id) || 0
-      : routedCollectionView() === "configure"
-        ? (collection?.tmdb_collection_id ?? 0)
-        : 0,
-  );
+  let seedId = $derived(creating ? Number(route.search.tmdb_id) || 0 : 0);
   const seed = createQuery(() => ({
     ...getTmdbCollectionOptions({ path: { collection_id: seedId } }),
     enabled: seedId > 0,
@@ -94,7 +88,6 @@
   {#key creating ? `${uiState.sidebarTab}:${route.search.draft ?? ""}` : collectionId}<CollectionManager
       {collection}
       seed={creating ? (seed.data ?? null) : null}
-      sourceRoster={creating ? [] : (seed.data?.items ?? [])}
       libraries={libraries.data ?? []}
       groups={groupsQuery.data ?? []}
       libraryItems={itemsQuery.data?.items ?? []}

@@ -1,6 +1,4 @@
-<script lang="ts">
-  import type { Snippet } from "svelte";
-  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
+<script module lang="ts">
   import type {
     CollectionFiltering,
     CollectionMode,
@@ -8,36 +6,83 @@
     SyncMode,
   } from "../../generated/rest/types.gen";
 
-  type PolicyData = {
+  /** Collection policy as a collection, a group and the global defaults hold it. */
+  export type PolicyData = {
     sync_mode?: SyncMode | null;
     minimum_items?: number | null;
     delete_below_minimum?: boolean | null;
     auto_match_art?: boolean | null;
     auto_match_theme?: boolean | null;
-    delete_when_inactive?: boolean | null;
+    request_missing?: boolean | null;
+    member_label?: string | null;
+    arr_tag?: string | null;
     collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
     order_type?: CollectionOrder | null;
     visible_home?: boolean | null;
     visible_shared?: boolean | null;
     visible_library?: boolean | null;
+    home_order?: number | null;
+    sort_title_format?: string | null;
+    summary_format?: string | null;
   };
 
   /**
-   * The policy a collection and a group share, with the same labels in both.
-   * Every choice can stay at Default to inherit.
+   * Where settings are edited. Global defaults always hold a value; groups and
+   * collections inherit theirs with Default, and only they name a group or
+   * tag their members.
    */
+  export type PolicyLevel = "global" | "group" | "collection";
+
+  const MODES: readonly (readonly [CollectionMode, string])[] = [
+    ["default", "Library default"],
+    ["hide_items", "Hide items"],
+    ["show_items", "Show collection and items"],
+    ["hide", "Hide collection"],
+  ];
+  const FILTERINGS: readonly (readonly [CollectionFiltering, string])[] = [
+    ["admin", "Admin's library"],
+    ["user", "User's library"],
+  ];
+  const SYNC_MODES: readonly (readonly [SyncMode, string])[] = [
+    ["sync", "Sync"],
+    ["append", "Append"],
+  ];
+  const ON_OFF = [
+    [true, "On"],
+    [false, "Off"],
+  ] as const;
+  const SHOW_HIDE = [
+    [true, "Show"],
+    [false, "Hide"],
+  ] as const;
+  const DELETE_KEEP = [
+    [true, "Delete collection"],
+    [false, "Keep collection"],
+  ] as const;
+</script>
+
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
+  import InheritedSelect from "./InheritedSelect.svelte";
+
   let {
     policy,
+    level,
+    defaults,
     plex = false,
     orders = [],
     sortHint,
     sync = true,
-    seasonal = true,
-    defaults,
+    arr = null,
+    memberLabels = false,
     children,
   }: {
     policy: PolicyData;
+    level: PolicyLevel;
+    /** What Default resolves to here, named in each Default option. */
+    defaults?: PolicyData;
     /** Show the visibility choices only Plex offers. */
     plex?: boolean;
     /** The orders the server offers collections of this media type. */
@@ -45,37 +90,39 @@
     sortHint?: string;
     /** Show the choices that apply when Overture syncs criteria. */
     sync?: boolean;
-    /** Show what happens outside the active dates. */
-    seasonal?: boolean;
-    defaults?: PolicyData;
+    /** The Arr server that takes requests and tags, when one is set up. */
+    arr?: string | null;
+    /** The server takes labels Overture puts on members. */
+    memberLabels?: boolean;
     /** Fields placed right after Sort. */
     children?: Snippet;
   } = $props();
+
+  const id = $props.id();
+  let inherits = $derived(level !== "global");
+  let sorts = $derived(sortedOrders(orders).map((order) => [order, ORDER_LABELS[order]] as const));
 </script>
 
-<label class="form-label">
-  Sort
-  <select aria-label="Sort" bind:value={policy.order_type}>
-    <option value={null}>Default</option>
-    {#each sortedOrders(orders) as order (order)}
-      <option value={order}>{ORDER_LABELS[order]}</option>
-    {/each}
-  </select>
-  {#if sortHint}<span class="hint">{sortHint}</span>{/if}
-</label>
+<InheritedSelect
+  label="Sort"
+  {inherits}
+  bind:value={policy.order_type}
+  inherited={defaults?.order_type}
+  options={sorts}
+  hint={sortHint}
+/>
 
 {@render children?.()}
 
 {#if sync}
-  <label class="form-label">
-    Sync mode
-    <select aria-label="Sync mode" bind:value={policy.sync_mode}>
-      <option value={null}>Default</option>
-      <option value="sync">Sync</option>
-      <option value="append">Append</option>
-    </select>
-    <span class="hint">Sync removes members that stop matching; Append keeps them.</span>
-  </label>
+  <InheritedSelect
+    label="Sync mode"
+    {inherits}
+    bind:value={policy.sync_mode}
+    inherited={defaults?.sync_mode}
+    options={SYNC_MODES}
+    hint="Sync removes members that stop matching; Append keeps them."
+  />
 
   <label class="form-label">
     Minimum members
@@ -83,8 +130,9 @@
       type="number"
       min="1"
       max="100"
+      required={!inherits}
       value={policy.minimum_items ?? ""}
-      placeholder={String(defaults?.minimum_items ?? "")}
+      placeholder={inherits ? `Default (${defaults?.minimum_items ?? 1})` : ""}
       oninput={(event) =>
         (policy.minimum_items = event.currentTarget.value
           ? event.currentTarget.valueAsNumber
@@ -92,88 +140,154 @@
     />
   </label>
 
-  <label class="form-label">
-    Below minimum
-    <select bind:value={policy.delete_below_minimum}>
-      <option value={null}>Default</option>
-      <option value={true}>Delete collection</option>
-      <option value={false}>Keep collection</option>
-    </select>
-  </label>
-
-  <label class="form-label">
-    Automatic art
-    <select bind:value={policy.auto_match_art}>
-      <option value={null}>Default</option>
-      <option value={true}>On</option>
-      <option value={false}>Off</option>
-    </select>
-  </label>
-
-  <label class="form-label">
-    Automatic theme
-    <select bind:value={policy.auto_match_theme}>
-      <option value={null}>Default</option>
-      <option value={true}>On</option>
-      <option value={false}>Off</option>
-    </select>
-  </label>
-{/if}
-
-{#if seasonal}
-  <label class="form-label">
-    When inactive
-    <select bind:value={policy.delete_when_inactive}>
-      <option value={null}>Default</option>
-      <option value={true}>Remove from server</option>
-      <option value={false}>Keep on server</option>
-    </select>
-  </label>
+  <InheritedSelect
+    label="Below minimum"
+    {inherits}
+    bind:value={policy.delete_below_minimum}
+    inherited={defaults?.delete_below_minimum}
+    options={DELETE_KEEP}
+  />
+  <InheritedSelect
+    label="Automatic art"
+    {inherits}
+    bind:value={policy.auto_match_art}
+    inherited={defaults?.auto_match_art}
+    options={ON_OFF}
+    hint="Picks art after a sync when none is chosen."
+  />
+  <InheritedSelect
+    label="Automatic theme"
+    {inherits}
+    bind:value={policy.auto_match_theme}
+    inherited={defaults?.auto_match_theme}
+    options={ON_OFF}
+    hint="Picks the OvertureDB theme after a sync when none is chosen."
+  />
+  {#if arr}
+    <InheritedSelect
+      label="Request missing"
+      {inherits}
+      bind:value={policy.request_missing}
+      inherited={defaults?.request_missing}
+      options={ON_OFF}
+      hint={`After a sync, asks ${arr} for list titles the library lacks.`}
+    />
+  {/if}
+  {#if inherits && memberLabels}
+    <div class="form-label">
+      <label for={`${id}-member-label`}>Member label</label>
+      <input
+        id={`${id}-member-label`}
+        maxlength="200"
+        value={policy.member_label ?? ""}
+        placeholder={defaults?.member_label || "None"}
+        oninput={(event) => (policy.member_label = event.currentTarget.value || null)}
+      />
+      <span class="hint"
+        >Members get this server label and others lose it. Text or &#123;title&#125; and
+        &#123;group&#125;.</span
+      >
+    </div>
+  {/if}
+  {#if inherits && arr}
+    <div class="form-label">
+      <label for={`${id}-arr-tag`}>{arr} tag</label>
+      <input
+        id={`${id}-arr-tag`}
+        maxlength="200"
+        value={policy.arr_tag ?? ""}
+        placeholder={defaults?.arr_tag || "None"}
+        oninput={(event) => (policy.arr_tag = event.currentTarget.value || null)}
+      />
+      <span class="hint"
+        >Members get this {arr} tag and others lose it. Text or &#123;title&#125; and &#123;group&#125;.</span
+      >
+    </div>
+  {/if}
 {/if}
 
 {#if plex}
-  <label class="form-label">
-    Collection mode
-    <select bind:value={policy.collection_mode}>
-      <option value={null}>Default</option>
-      <option value="default">Library default</option>
-      <option value="hide_items">Hide items</option>
-      <option value="show_items">Show collection and items</option>
-      <option value="hide">Hide collection</option>
-    </select>
-  </label>
-
-  <label class="form-label">
-    Collection filtering
-    <select bind:value={policy.collection_filtering}>
-      <option value={null}>Default</option>
-      <option value="admin">Admin's library</option>
-      <option value="user">User's library</option>
-    </select>
-  </label>
-
-  <label class="form-label">
-    Library recommended
-    <select bind:value={policy.visible_library}>
-      <option value={null}>Default</option>
-      <option value={true}>Show</option>
-      <option value={false}>Hide</option>
-    </select>
-  </label>
-  <label class="form-label">
-    Home
-    <select bind:value={policy.visible_home}>
-      <option value={null}>Default</option>
-      <option value={true}>Show</option>
-      <option value={false}>Hide</option>
-    </select>
-  </label>
-  <label class="form-label">
-    Shared users' home
-    <select bind:value={policy.visible_shared}>
-      <option value={null}>Default</option>
-      <option value={true}>Show</option>
-      <option value={false}>Hide</option>
-    </select>
-  </label>
+  <InheritedSelect
+    label="Collection mode"
+    {inherits}
+    bind:value={policy.collection_mode}
+    inherited={defaults?.collection_mode}
+    options={MODES}
+  />
+  <InheritedSelect
+    label="Collection filtering"
+    {inherits}
+    bind:value={policy.collection_filtering}
+    inherited={defaults?.collection_filtering}
+    options={FILTERINGS}
+    hint="User's library makes per-user smart collections such as Unplayed."
+  />
+  <InheritedSelect
+    label="Library recommended"
+    {inherits}
+    bind:value={policy.visible_library}
+    inherited={defaults?.visible_library}
+    options={SHOW_HIDE}
+  />
+  <InheritedSelect
+    label="Home"
+    {inherits}
+    bind:value={policy.visible_home}
+    inherited={defaults?.visible_home}
+    options={SHOW_HIDE}
+  />
+  <InheritedSelect
+    label="Shared users' home"
+    {inherits}
+    bind:value={policy.visible_shared}
+    inherited={defaults?.visible_shared}
+    options={SHOW_HIDE}
+  />
+  {#if inherits && sync}
+    <div class="form-label">
+      <label for={`${id}-home-order`}>Home order</label>
+      <input
+        id={`${id}-home-order`}
+        type="number"
+        min="1"
+        max="999"
+        value={policy.home_order ?? ""}
+        placeholder={defaults?.home_order ? `Default (${defaults.home_order})` : "Unordered"}
+        oninput={(event) =>
+          (policy.home_order = event.currentTarget.value
+            ? event.currentTarget.valueAsNumber
+            : null)}
+      />
+      <span class="hint">Promoted rows with a lower number come first.</span>
+    </div>
+  {/if}
 {/if}
+
+<div class="form-label">
+  <label for={`${id}-sort-title`}>Sort title</label>
+  <input
+    id={`${id}-sort-title`}
+    maxlength="400"
+    value={policy.sort_title_format ?? ""}
+    placeholder={defaults?.sort_title_format || (inherits ? "Default" : "The server's")}
+    oninput={(event) => (policy.sort_title_format = event.currentTarget.value || null)}
+  />
+  <span class="hint"
+    >Text or a template with &#123;title&#125; and &#123;group&#125;, such as 01_&#123;title&#125;.</span
+  >
+</div>
+<div class="form-label form-wide">
+  <label for={`${id}-summary`}>Summary</label>
+  <textarea
+    id={`${id}-summary`}
+    maxlength="20000"
+    rows="3"
+    value={policy.summary_format ?? ""}
+    placeholder={defaults?.summary_format || (inherits ? "Default" : "The server's")}
+    oninput={(event) => (policy.summary_format = event.currentTarget.value || null)}></textarea>
+  <span class="hint"
+    >Text or a template with &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
+    &#123;end_date&#125;, &#123;summary&#125; (the server's) and &#123;source_summary&#125; (the
+    first list's description or person's biography).</span
+  >
+</div>

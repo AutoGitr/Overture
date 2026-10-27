@@ -5,17 +5,19 @@ lazy from collections.abc import Sequence
 
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import MediaType, SourceType
+lazy from ...domain import FilterOperator, MediaType, SourceType
 lazy from ...integrations.arr import ArrClient
 lazy from ...integrations.mdblist import MDBListClient
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionSource,
+    FilterGroup,
     MdblistSource,
     RadarrTagSource,
     SonarrTagSource,
     SourceCondition,
+    TmdbChartSource,
     TmdbCollectionSource,
     TmdbItemSource,
     TmdbListSource,
@@ -29,6 +31,7 @@ SOURCE_LABELS: frozendict[SourceType, str] = frozendict(
         SourceType.TMDB_LIST: "TMDB list",
         SourceType.TMDB_ITEM: "TMDB titles",
         SourceType.TMDB_PERSON: "TMDB person",
+        SourceType.TMDB_CHART: "TMDB chart",
         SourceType.MDBLIST: "MDBList",
         SourceType.RADARR_TAG: "Radarr tags",
         SourceType.SONARR_TAG: "Sonarr tags",
@@ -60,6 +63,8 @@ def _source_identity(condition: SourceCondition) -> str:
             return f"{identity}:{'+'.join(sorted(roles))}"
         case TmdbListSource(list_ids=[identity]):
             return str(identity)
+        case TmdbChartSource(chart=chart, limit=limit):
+            return f"{chart}:{limit}"
         case MdblistSource(identifiers=[identity]):
             return identity
         case RadarrTagSource(tags=[identity]) | SonarrTagSource(tags=[identity]):
@@ -123,6 +128,10 @@ class SourceResolver:
         if reason := self.unavailable(source, media_type):
             raise PublicServiceError(422, reason)
 
+    def arr(self, media_type: MediaType) -> ArrClient:
+        """Radarr for movies, Sonarr for shows."""
+        return self._radarr if media_type is MediaType.MOVIE else self._sonarr
+
     async def radarr_tags(self) -> list[ArrTagRead]:
         """Return all tags configured in Radarr."""
         return [
@@ -137,18 +146,36 @@ class SourceResolver:
             for tag in await self._sonarr.list_tags()
         ]
 
-    async def biography(self, source: TmdbPersonSource) -> str | None:
-        """The person's TMDB biography, for a source that asks for it."""
-        if not source.use_biography:
-            return None
-        person = await self._tmdb.get_person(source.person_id)
-        return person.biography if person and person.biography else None
+    async def summary(self, criteria: FilterGroup) -> str | None:
+        """The description of the first list the criteria include, if it has one.
+
+        TMDB franchises and lists have overviews and people their biography.
+        """
+        for condition in criteria.source_conditions():
+            if condition.operator is not FilterOperator.IS:
+                continue
+            match condition.source:
+                case TmdbCollectionSource(collection_id=identity):
+                    franchise = await self._tmdb.get_collection(identity)
+                    text = franchise.overview if franchise else None
+                case TmdbListSource(list_ids=[identity, *_]):
+                    text = await self._tmdb.get_list_description(identity)
+                case TmdbPersonSource(person_id=identity):
+                    person = await self._tmdb.get_person(identity)
+                    text = person.biography if person else None
+                case _:
+                    continue
+            if text:
+                return text
+        return None
 
     async def resolve(
         self,
         source: CollectionSource,
         media_type: MediaType,
         items: Sequence[MediaItem],
+        *,
+        region: str,
     ) -> list[int]:
         """Return the IDs of the library items the source holds, in source order.
 
@@ -170,7 +197,7 @@ class SourceResolver:
                 for item in items
                 if item.tmdb_id in tmdb or item.tvdb_id in tvdb or item.imdb_id in imdb
             ]
-        ranked = await self._tmdb_ids(source, media_type)
+        ranked = await self.tmdb_ids(source, media_type, region=region)
         rank: dict[int, int] = {}
         for index, tmdb_id in enumerate(ranked):
             rank.setdefault(tmdb_id, index)
@@ -182,16 +209,26 @@ class SourceResolver:
             )
         ]
 
-    async def _tmdb_ids(
+    async def tmdb_ids(
         self,
         source: TmdbCollectionSource
         | TmdbItemSource
         | TmdbListSource
         | TmdbPersonSource
+        | TmdbChartSource
         | MdblistSource,
         media_type: MediaType,
+        *,
+        region: str,
     ) -> list[int]:
+        """The TMDB IDs a list holds, in its order, in the library or not."""
         match source:
+            case TmdbChartSource():
+                return list(
+                    await self._tmdb.get_chart_ids(
+                        media_type, source.chart, source.limit, region
+                    )
+                )
             case MdblistSource():
                 return [
                     tmdb_id

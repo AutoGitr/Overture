@@ -52,6 +52,14 @@ function addTmdbTitles(ids: string) {
   return addSource("tmdb_item", "Criteria condition 1 TMDB IDs", ids);
 }
 
+/** Choose exactly one library in Setup's Libraries. */
+async function onlyLibrary(scope: Pick<typeof screen, "getByRole">, name: string) {
+  const libraries = within(scope.getByRole("group", { name: "Libraries" }));
+  const chosen = libraries.getByRole("checkbox", { name });
+  for (const box of libraries.getAllByRole<HTMLInputElement>("checkbox"))
+    if (box.checked !== (box === chosen)) await fireEvent.click(box);
+}
+
 describe("collection management", () => {
   beforeEach(async () => {
     queryClient.clear();
@@ -240,7 +248,7 @@ describe("collection management", () => {
     });
     await navigate("/movies/collections/new");
     const view = renderWithQueryClient(CollectionPage);
-    await waitFor(() => expect(screen.getByLabelText("Library")).toHaveValue("movies"));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Movies" })).toBeChecked());
     expect(screen.getByLabelText("Title")).toHaveValue("");
     view.unmount();
     queryClient.clear();
@@ -255,8 +263,9 @@ describe("collection management", () => {
     });
     await navigate("/movies/collections/new");
     renderWithQueryClient(CollectionPage);
-    await screen.findByRole("option", { name: "Other" });
-    expect(screen.getByLabelText("Library")).toHaveValue("");
+    await screen.findByRole("checkbox", { name: "Other" });
+    for (const name of ["Movies", "Other"])
+      expect(screen.getByRole("checkbox", { name })).not.toBeChecked();
   });
 
   it("edits an explicit TMDB ID without matching or automatic voting controls", async () => {
@@ -320,8 +329,8 @@ describe("collection management", () => {
     await navigate("/movies/collections/new");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
-    await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await screen.findByRole("checkbox", { name: "Movies" });
+    await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
@@ -432,14 +441,14 @@ describe("collection management", () => {
     await navigate("/movies/collections/new");
     renderWithQueryClient(CollectionPage);
     expect(screen.queryByLabelText("Search members")).toBeNull();
-    await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await screen.findByRole("checkbox", { name: "Movies" });
+    await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
     const submit = screen.getByRole("button", { name: "Save and Create" });
     expect(submit).toBeDisabled();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "  Saga  " } });
     expect(submit).toBeEnabled();
-    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "other" } });
+    await onlyLibrary(screen, "Other");
     expect(screen.getByRole("button", { name: "Save and Create" })).toBeEnabled();
     expect(screen.getByLabelText("Criteria condition 1 TMDB IDs")).toHaveValue("11");
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
@@ -477,8 +486,8 @@ describe("collection management", () => {
     await navigate("/movies/collections/new");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
-    await screen.findByRole("option", { name: "Movies" });
-    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await screen.findByRole("checkbox", { name: "Movies" });
+    await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Create refused");
@@ -655,7 +664,7 @@ describe("collection management", () => {
         Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : policy),
     });
     renderWithQueryClient(CollectionGroupSettings, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Defaults" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     await fireEvent.input(await screen.findByLabelText("Minimum members"), {
       target: { value: "2" },
     });
@@ -697,39 +706,37 @@ describe("collection management", () => {
     expect(calls.some((call) => call.url.includes("/sync"))).toBe(false);
   });
 
-  it("reuses the TMDB roster grid to show owned and missing source titles", async () => {
+  it("lists the titles the lists hold beyond the library and requests them", async () => {
+    let requested: unknown = null;
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
-      "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
+      "/api/collections/12": { ...detail, rule },
       "/api/collections/groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: members, total: 2 },
-      "/api/tmdb/collections/10": {
-        tmdb_id: 10,
-        title: "Saga",
-        items: [
-          {
-            kind: "item",
-            media_type: "movie",
-            tmdb_id: 11,
-            title: "Owned source movie",
-            existing_item_id: 1,
-          },
-          {
-            kind: "item",
-            media_type: "movie",
-            tmdb_id: 99,
-            title: "Missing source movie",
-            existing_item_id: null,
-          },
+      "/api/collections/12/missing": {
+        titles: [
+          { tmdb_id: 99, title: "Missing film", year: 2020, poster_url: null, requested: false },
+          { tmdb_id: 98, title: "Wanted film", year: null, poster_url: null, requested: true },
         ],
+        truncated: false,
+        requestable: true,
+      },
+      "/api/collections/12/missing/request": ({ init }: { init: RequestInit }) => {
+        requested = JSON.parse(String(init.body));
+        return Response.json({ requested: 1, present: 0, errors: [] });
       },
     });
+    goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
-    const roster = await screen.findByRole("region", { name: "Source roster" });
-    expect(await within(roster).findByText("Owned source movie")).toBeInTheDocument();
-    expect(within(roster).getByText("Missing source movie")).toBeInTheDocument();
-    expect(within(roster).getAllByText("In library")).toHaveLength(1);
+    await fireEvent.click(await screen.findByRole("button", { name: "Missing" }));
+    const missing = within(screen.getByRole("region", { name: "Missing" }));
+    expect(await missing.findByText("Missing film (2020)")).toBeInTheDocument();
+    expect(missing.getByText("In Radarr")).toBeInTheDocument();
+    await fireEvent.click(
+      missing.getByRole("button", { name: "Request Missing film from Radarr" }),
+    );
+    await waitFor(() => expect(requested).toEqual({ tmdb_ids: [99] }));
   });
 });

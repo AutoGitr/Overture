@@ -48,8 +48,12 @@ class CollectionGroup(SQLModel, table=True):
     delete_when_inactive: bool | None = None
     auto_match_art: bool | None = None
     auto_match_theme: bool | None = None
-    sync_interval_hours: int | None = None
+    sync_schedule: str | None = None
     sync_enabled: bool | None = None
+    request_missing: bool | None = None
+    member_label: str | None = None
+    arr_tag: str | None = None
+    home_order: int | None = None
     #: A ``CollectionGenerator`` that makes the group a collection set.
     generator_json: str | None = None
     #: When the set last created and updated its collections.

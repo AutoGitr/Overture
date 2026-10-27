@@ -27,6 +27,7 @@ lazy from ...utils.collection_formats import (
     validate_sort_title_format,
     validate_summary_format,
 )
+lazy from ...utils.cron import validate_cron_expression
 lazy from ..columns import enum_columns, enum_type
 
 #: The settings row is a singleton; pinning its key makes that a database rule
@@ -66,9 +67,18 @@ class AppSettingsBase(SQLModel):
     collection_sort_title_format: str = Field(default="", max_length=200)
     collection_summary_format: str = Field(default="", max_length=2000)
     collection_delete_when_inactive: bool = False
-    collection_sync_interval_hours: int = Field(default=24, ge=0, le=8760)
+    collection_sync_schedule: str = Field(default="0 3 * * *", max_length=100)
     collection_sync_enabled: bool = True
+    collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
+    #: The country whose charts and streaming services TMDB reports.
+    tmdb_region: str = Field(default="US", min_length=2, max_length=2)
+    radarr_root_folder: str = Field(default="", max_length=500)
+    radarr_quality_profile_id: int | None = Field(default=None, ge=1)
+    radarr_search: bool = True
+    sonarr_root_folder: str = Field(default="", max_length=500)
+    sonarr_quality_profile_id: int | None = Field(default=None, ge=1)
+    sonarr_search: bool = True
     auto_match_art: bool = False
     workflow: Workflow = Field(default=Workflow.ART, sa_type=enum_type(Workflow))
     theme_search_format: str = Field(
@@ -98,6 +108,20 @@ class AppSettingsBase(SQLModel):
     def valid_collection_sort_title_format(cls, value: str) -> str:
         """Use the same template syntax as generators and bulk operations."""
         return validate_sort_title_format(value)
+
+    @field_validator("collection_sync_schedule")
+    @classmethod
+    def valid_collection_sync_schedule(cls, value: str) -> str:
+        """Collections share the cron syntax of every other schedule."""
+        return validate_cron_expression(value)
+
+    @field_validator("tmdb_region")
+    @classmethod
+    def valid_tmdb_region(cls, value: str) -> str:
+        """TMDB names regions by ISO 3166-1 code."""
+        if not value.isascii() or not value.isalpha():
+            raise ValueError("Use a two-letter country code, such as US")
+        return value.upper()
 
     @field_validator("collection_summary_format")
     @classmethod

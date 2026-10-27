@@ -17,7 +17,9 @@
   import { createNotifier } from "../stores/notificationState.svelte";
   import { defaultGenerator, type SetGenerator } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
-  import CollectionGroupDefaults from "./CollectionGroupDefaults.svelte";
+  import { availableOrders } from "../utils/collectionCriteria";
+  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
+  import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
   import CollectionSetEditor from "./CollectionSetEditor.svelte";
   import DataStatus from "./DataStatus.svelte";
   import DetailForm from "./DetailForm.svelte";
@@ -145,43 +147,64 @@
         checked={!!form.generator}
         onchange={(event) =>
           (form.generator = event.currentTarget.checked
-            ? defaultGenerator(libraries[0]?.id ?? "")
+            ? defaultGenerator(libraries.slice(0, 1).map((library) => library.id))
             : null)}
       />
       Create this group's collections
     </label>
     {#if form.generator}
       {@const generator = form.generator}
-      <label class="form-label">
-        Library
-        <select required bind:value={generator.library_id}>
-          {#each libraries as library (library.id)}
-            <option value={library.id}>{library.title}</option>
-          {/each}
-        </select>
-      </label>
+      <fieldset class="libraries form-wide">
+        <legend class="form-label">Libraries</legend>
+        {#each libraries as library (library.id)}
+          <label class="form-row">
+            <input
+              type="checkbox"
+              checked={generator.library_ids.includes(library.id)}
+              onchange={(event) =>
+                (generator.library_ids = event.currentTarget.checked
+                  ? [...generator.library_ids, library.id]
+                  : generator.library_ids.filter((id) => id !== library.id))}
+            />
+            {library.title}
+          </label>
+        {/each}
+      </fieldset>
       <CollectionSetEditor
         {generator}
-        libraryId={generator.library_id}
+        libraryIds={generator.library_ids}
+        {libraries}
         {mediaType}
         capabilities={capabilities.data}
         {group}
         minimum={form.minimum_items ?? null}
+        titled
       />
     {/if}
   </DetailForm>
   <DetailForm
     collapsible
-    title="Defaults"
-    description="Collections in the group inherit these unless they set their own. Default inherits the global setting."
+    title="Settings"
+    description="Collections in the group inherit these unless they set their own."
     {busy}
   >
-    <CollectionGroupDefaults
+    <CollectionPolicyFields
       policy={form}
+      level="group"
       defaults={defaults.data}
-      capabilities={capabilities.data}
-      smart={!!form.generator?.smart}
+      plex={capabilities.data?.visibility ?? false}
+      orders={availableOrders(capabilities.data, !!form.generator?.smart)}
+      arr={capabilities.data?.arr ? (mediaType === "movie" ? "Radarr" : "Sonarr") : null}
+      memberLabels={capabilities.data?.member_labels ?? false}
     />
+  </DetailForm>
+  <DetailForm
+    collapsible
+    title="Schedule"
+    description="When the group's collections sync, and when they are active each year."
+    {busy}
+  >
+    <CollectionScheduleFields policy={form} level="group" defaults={defaults.data} />
   </DetailForm>
   <div class="actions" role="group" aria-label="Group actions">
     <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
@@ -207,6 +230,21 @@
 {/if}
 
 <style>
+  .libraries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .libraries legend {
+    width: 100%;
+    padding: 0;
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;

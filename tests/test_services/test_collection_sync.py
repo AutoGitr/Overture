@@ -1,6 +1,7 @@
 """Mirroring media-server collections, their members and their TMDB match."""
 
 lazy from dataclasses import replace
+lazy from datetime import timedelta
 lazy from pathlib import Path
 lazy from typing import override
 
@@ -23,7 +24,7 @@ lazy from overture.domain import (
     MediaType,
     ServerType,
 )
-lazy from overture.integrations.tmdb import TMDBClient, TmdbDetails
+lazy from overture.integrations.tmdb import TMDBClient, TmdbFacts
 lazy from overture.jobs.runner import ManagedJob, run_managed_job
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
@@ -34,7 +35,7 @@ lazy from overture.services.collections.theme_files import (
     inspect_theme_file,
 )
 lazy from overture.services.sync.collection_sync import CollectionSync
-lazy from overture.services.sync.tmdb_collections import TmdbCollectionEnrichment
+lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnrichment
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
 lazy from tests.publishers import NullEventPublisher
@@ -71,7 +72,7 @@ class Server:
         return self.listed
 
 
-class NoTmdb(TmdbCollectionEnrichment):
+class NoTmdb(TmdbEnrichment):
     def __init__(self) -> None:
         pass
 
@@ -287,7 +288,23 @@ async def test_jellyfin_collections_take_type_library_and_theme_from_disk(
     assert row.theme_file_size == 3
 
 
-async def test_enrichment_asks_tmdb_once_per_tmdb_id(
+def _facts(tmdb_id: int) -> TmdbFacts:
+    return TmdbFacts(
+        original_language="English",
+        origin_countries=("United States of America",),
+        rating=7.5,
+        votes=1200,
+        keywords=("christmas",),
+        companies=("Studio",),
+        networks=("HBO",) if tmdb_id == 4 else (),
+        streaming=("Netflix",),
+        status="Ended",
+        last_aired="2020-05-01" if tmdb_id == 4 else None,
+        collection_id=10 if tmdb_id == 1 else None,
+    )
+
+
+async def test_enrichment_reads_new_rematched_and_old_titles_once(
     *, app_config: Settings, database: Database
 ) -> None:
     app_config.TMDB_API_KEY = SecretStr("key")
@@ -298,23 +315,14 @@ async def test_enrichment_asks_tmdb_once_per_tmdb_id(
             pass
 
         @override
-        async def get_details(
-            self, media_type: MediaType, tmdb_id: int
-        ) -> TmdbDetails | None:
+        async def get_facts(
+            self, media_type: MediaType, tmdb_id: int, region: str
+        ) -> TmdbFacts | None:
             asked.append(tmdb_id)
-            return TmdbDetails(
-                media_type=media_type,
-                tmdb_id=tmdb_id,
-                title="Movie",
-                year=None,
-                tvdb_id=None,
-                imdb_id=None,
-                poster_url=None,
-                background_url=None,
-                seasons=(),
-                collection_id=10 if tmdb_id == 1 else None,
-            )
+            assert region == "US"
+            return _facts(tmdb_id)
 
+    now = utc_now()
     async with database.write_session() as session:
         session.add_all(
             [
@@ -324,32 +332,47 @@ async def test_enrichment_asks_tmdb_once_per_tmdb_id(
                     media_type=MediaType.MOVIE,
                     title="Checked",
                     tmdb_id=3,
-                    tmdb_collection_checked_id=3,
+                    tmdb_checked_id=3,
+                    tmdb_checked_at=now,
                 ),
                 MediaItem(media_type=MediaType.SHOW, title="Show", tmdb_id=4),
+                MediaItem(
+                    media_type=MediaType.MOVIE,
+                    title="Old",
+                    tmdb_id=5,
+                    tmdb_checked_id=5,
+                    tmdb_checked_at=now - REFRESH_AFTER - timedelta(hours=1),
+                ),
             ]
         )
-    enrichment = TmdbCollectionEnrichment(
+    enrichment = TmdbEnrichment(
         app_config=app_config, database=database, tmdb_client=Tmdb()
     )
 
     async with run_managed_job(JobProbe().context, SyncTally()) as job:
-        assert await enrichment.run(job) == 2
+        assert await enrichment.run(job) == 4
         assert await enrichment.run(job) == 0
 
-    assert sorted(asked) == [1, 2]
+    assert sorted(asked) == [1, 2, 4, 5]
     async with database.read_session() as session:
-        found = {
-            item.title: item.tmdb_collection_id
-            for item in (await session.exec(select(MediaItem))).all()
+        items = {
+            item.title: item for item in (await session.exec(select(MediaItem))).all()
         }
-    assert found == {"A": 10, "B": None, "Checked": None, "Show": None}
+    assert items["A"].tmdb_collection_id == 10
+    assert items["A"].tmdb_keywords == ["christmas"]
+    assert items["Checked"].tmdb_keywords == []
+    show = items["Show"]
+    assert (show.networks, show.last_aired, show.streaming) == (
+        ["HBO"],
+        "2020-05-01",
+        ["Netflix"],
+    )
 
 
 async def test_enrichment_does_nothing_without_a_tmdb_key(
     *, app_config: Settings, database: Database
 ) -> None:
-    enrichment = TmdbCollectionEnrichment(
+    enrichment = TmdbEnrichment(
         app_config=app_config, database=database, tmdb_client=unused(TMDBClient)
     )
     async with run_managed_job(JobProbe().context, SyncTally()) as job:
@@ -371,9 +394,9 @@ async def test_collection_discovery_includes_ungrouped_movies_in_the_sync_scope(
             pass
 
         @override
-        async def get_details(
-            self, media_type: MediaType, tmdb_id: int
-        ) -> TmdbDetails | None:
+        async def get_facts(
+            self, media_type: MediaType, tmdb_id: int, region: str
+        ) -> TmdbFacts | None:
             asked.append(tmdb_id)
             return None
 
@@ -392,7 +415,7 @@ async def test_collection_discovery_includes_ungrouped_movies_in_the_sync_scope(
     probe = JobProbe()
     sync = CollectionSync(
         provider_registry=NoopProviderRegistry(server, collections=False),
-        enrichment=TmdbCollectionEnrichment(
+        enrichment=TmdbEnrichment(
             app_config=app_config, database=database, tmdb_client=Tmdb()
         ),
         downloads=make_bulk_downloads(
@@ -407,7 +430,7 @@ async def test_collection_discovery_includes_ungrouped_movies_in_the_sync_scope(
 
     assert sorted(asked) == ([2] if library_ids else [1, 2, 3])
     assert any(
-        "checking TMDB memberships" in payload.get("log", {}).get("reason", "")
+        "reading details" in payload.get("log", {}).get("reason", "")
         for _, payload in probe.events
     )
 

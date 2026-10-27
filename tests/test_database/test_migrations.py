@@ -28,6 +28,21 @@ lazy from overture.domain import MediaType, ServerType
 lazy from overture.migrations import versions_at_head
 
 
+def _previous_settings(settings: Table, **values: object) -> dict[str, object]:
+    """Today's settings defaults, plus the interval revisions before cron had."""
+    return {
+        **AppSettings().model_dump(
+            include={column.name for column in settings.columns}
+        ),
+        **(
+            {"collection_sync_interval_hours": 24}
+            if "collection_sync_interval_hours" in settings.c
+            else {}
+        ),
+        **values,
+    }
+
+
 def test_baseline_downgrade_removes_all_tables_and_can_be_reapplied() -> None:
     engine = create_engine("sqlite://")
     try:
@@ -579,9 +594,7 @@ def test_collection_group_policy_migration_preserves_existing_settings_and_rules
             rules = Table("collection_rules", old, autoload_with=conn)
             conn.execute(
                 settings.insert().values(
-                    **AppSettings(collection_minimum_items=4).model_dump(
-                        include={column.name for column in settings.columns}
-                    )
+                    **_previous_settings(settings, collection_minimum_items=4)
                 )
             )
             conn.execute(
@@ -659,12 +672,7 @@ def test_collection_template_sources_preserve_metadata_and_sync_schedules() -> N
             collections = Table("media_collections", old, autoload_with=conn)
             conn.execute(
                 settings.insert().values(
-                    **{
-                        **AppSettings().model_dump(
-                            include={column.name for column in settings.columns}
-                        ),
-                        "collection_order_default": "release",
-                    }
+                    **_previous_settings(settings, collection_order_default="release")
                 )
             )
             conn.execute(
@@ -1005,5 +1013,120 @@ def test_unsynced_collections_upgrade_as_synced_and_downgrade() -> None:
             assert connection.exec_driver_sql(
                 "SELECT title FROM media_collections"
             ).all() == [("Saga",)]
+    finally:
+        engine.dispose()
+
+
+def test_cron_schedules_member_effects_and_set_libraries_convert_both_ways() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "b4e8c1d2f3a7")
+            old = MetaData()
+            settings = Table("app_settings", old, autoload_with=conn)
+            conn.execute(
+                settings.insert().values(
+                    **_previous_settings(settings, collection_sync_interval_hours=6)
+                )
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections "
+                "(id, server_item_id, media_type, server_type, kind, title, "
+                "child_count, monitored, order_type, visible_home, visible_shared, "
+                "visible_library, unsynced) "
+                "VALUES (1, 'saga', 'movie', 'plex', 'regular', 'Saga', 0, 1, "
+                "'release.asc', 0, 0, 0, 0)"
+            )
+            person = {
+                "mode": "all",
+                "conditions": [
+                    {
+                        "kind": "source",
+                        "operator": "is",
+                        "source": {
+                            "type": "tmdb_person",
+                            "person_id": 5,
+                            "roles": ["director"],
+                            "use_biography": True,
+                        },
+                    }
+                ],
+                "groups": [],
+            }
+            conn.execute(
+                text(
+                    "INSERT INTO collection_rules (collection_id, criteria_json, "
+                    "smart, sync_interval_hours, enabled) "
+                    "VALUES (1, :criteria, 0, 168, 0)"
+                ),
+                {"criteria": json.dumps(person)},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO collection_groups (server_type, media_type, name, "
+                    "sync_interval_hours, generator_json) "
+                    "VALUES ('plex', 'movie', 'Decades', 12, :generator)"
+                ),
+                {
+                    "generator": json.dumps(
+                        {
+                            "dimension": "decade",
+                            "library_id": "movies",
+                            "enabled": False,
+                            "criteria": person,
+                        }
+                    )
+                },
+            )
+            command.upgrade(config, "head")
+            assert conn.exec_driver_sql(
+                "SELECT collection_sync_schedule, tmdb_region FROM app_settings"
+            ).one() == ("0 */6 * * *", "US")
+            schedule, sync_enabled, criteria = conn.exec_driver_sql(
+                "SELECT sync_schedule, sync_enabled, criteria_json "
+                "FROM collection_rules"
+            ).one()
+            assert (schedule, sync_enabled) == ("0 3 * * 0", 0)
+            assert "use_biography" not in criteria
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT summary_format FROM media_collections"
+                ).scalar()
+                == "{source_summary}"
+            )
+            group_schedule, group_enabled, summary, generator = conn.exec_driver_sql(
+                "SELECT sync_schedule, sync_enabled, summary_format, generator_json "
+                "FROM collection_groups"
+            ).one()
+            assert (group_schedule, group_enabled, summary) == (
+                "0 */12 * * *",
+                0,
+                "{source_summary}",
+            )
+            stored = json.loads(generator)
+            assert (stored["library_ids"], stored["remove_vanished"]) == (
+                ["movies"],
+                False,
+            )
+            assert "enabled" not in stored
+
+            command.downgrade(config, "b4e8c1d2f3a7")
+            assert conn.exec_driver_sql(
+                "SELECT sync_interval_hours, enabled FROM collection_rules"
+            ).one() == (168, 0)
+            restored = json.loads(
+                conn.exec_driver_sql(
+                    "SELECT generator_json FROM collection_groups"
+                ).scalar_one()
+            )
+            assert restored["library_id"] == "movies"
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT collection_sync_interval_hours FROM app_settings"
+                ).scalar()
+                == 6
+            )
     finally:
         engine.dispose()

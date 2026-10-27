@@ -27,8 +27,10 @@ lazy from ...domain import (
 )
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.art import ArtCandidate
+lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
 lazy from ...utils.errors import public_error_message
 lazy from ...utils.image import is_valid_aspect_ratio, is_valid_image_format
 lazy from ..public_dataset.lookup import build_candidate, get_art_candidates
@@ -226,7 +228,12 @@ class ArtCandidates:
         self, collection: MediaCollection, art_type: ArtType, policy: CandidatePolicy
     ) -> CandidateSources:
         """Use the same source policy, ordering and error handling for collections."""
-        if collection.tmdb_collection_id is None:
+        person = (
+            await self._collection_person(collection)
+            if collection.tmdb_collection_id is None and art_type is ArtType.POSTER
+            else None
+        )
+        if collection.tmdb_collection_id is None and person is None:
             return CandidateSources()
         lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {
             ArtSource.OVERTUREDB: self._collection_catalog(collection, art_type)
@@ -235,11 +242,38 @@ class ArtCandidates:
             lookups[ArtSource.TMDB] = self._collection_tmdb(
                 collection.tmdb_collection_id, art_type, policy
             )
+        elif self._app_config.tmdb_configured and person is not None:
+            lookups[ArtSource.TMDB] = self._person_tmdb(person, policy)
         if not policy.disable_media_server_art and collection.server_item_id:
             lookups[self._providers.provider.server_type] = self._server_art(
                 collection.server_item_id, art_type, policy
             )
         return await self._resolve(collection.title, lookups)
+
+    async def _collection_person(self, collection: MediaCollection) -> int | None:
+        """The TMDB person whose credits a collection's criteria list first."""
+        async with self._database.read_session() as session:
+            rule = await CollectionRepository(session).rule(collection.id or 0)
+        if rule is None:
+            return None
+        criteria = FilterGroup.model_validate_json(rule.criteria_json)
+        return next(
+            (
+                condition.source.person_id
+                for condition in criteria.source_conditions()
+                if isinstance(condition.source, TmdbPersonSource)
+            ),
+            None,
+        )
+
+    async def _person_tmdb(
+        self, person_id: int, policy: CandidatePolicy
+    ) -> list[ArtCandidate]:
+        return [
+            candidate
+            for candidate in await self._tmdb.person_portraits(person_id)
+            if policy.accepts(candidate, ArtType.POSTER)
+        ]
 
     async def _collection_tmdb(
         self, tmdb_id: int, art_type: ArtType, policy: CandidatePolicy

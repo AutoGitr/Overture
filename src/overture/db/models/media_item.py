@@ -67,6 +67,21 @@ class MediaItemBase(SQLModel):
     unplayed: bool | None = None
     in_progress: bool | None = None
     release_date: str | None = None
+    #: Plex lists each version of a movie as its own media.
+    versions: int | None = None
+
+    # What TMDB says about the title, read by TMDB enrichment.
+    original_language: str | None = None
+    origin_countries: list[str] = Field(default_factory=list, sa_type=JSON)
+    tmdb_rating: float | None = None
+    tmdb_votes: int | None = None
+    tmdb_keywords: list[str] = Field(default_factory=list, sa_type=JSON)
+    companies: list[str] = Field(default_factory=list, sa_type=JSON)
+    networks: list[str] = Field(default_factory=list, sa_type=JSON)
+    #: Subscription services streaming the title in the configured region.
+    streaming: list[str] = Field(default_factory=list, sa_type=JSON)
+    show_status: str | None = None
+    last_aired: str | None = None
 
     last_synced_at: datetime | None = None
     last_matched_at: datetime | None = None
@@ -100,9 +115,10 @@ class MediaItem(MediaItemBase, table=True):
     #: Seconds, read from the file at the revision above.
     theme_file_duration: int | None = None
     theme_provenance_cleared: bool = Field(default=False, nullable=False)
-    #: The tmdb_id whose collection tmdb_collection_id records; a different
-    #: tmdb_id means the collection has to be looked up again.
-    tmdb_collection_checked_id: int | None = None
+    #: The tmdb_id the TMDB fields describe; a different tmdb_id means they
+    #: have to be looked up again, as does an old lookup.
+    tmdb_checked_id: int | None = None
+    tmdb_checked_at: datetime | None = None
 
     # Relationships. Foreign keys cascade in the database, so a deleted
     # item cannot leave seasons, artwork, or jobs behind whether the delete goes

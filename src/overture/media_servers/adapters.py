@@ -121,6 +121,8 @@ class ServerItem:
     unplayed: bool | None = None
     in_progress: bool | None = None
     release_date: str | None = None
+    #: How many versions (files) of a movie the server holds, where it says.
+    versions: int | None = None
     server_added_at: datetime | None = None
     server_updated_at: datetime | None = None
     seasons: list[ServerSeason] = field(default_factory=list[ServerSeason])

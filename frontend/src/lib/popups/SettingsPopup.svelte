@@ -23,6 +23,7 @@
   import PopupShell from "../components/PopupShell.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   import ColorInput from "../components/ColorInput.svelte";
+  import GlobalCollectionDefaults from "../components/GlobalCollectionDefaults.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
 
   const THEMES: readonly (readonly [ThemeMode, string])[] = [
@@ -258,61 +259,7 @@
       </div>
       <div class="option-card">
         <span class="form-label">Collection defaults</span>
-        <label class="form-row"
-          ><input type="checkbox" bind:checked={draft.collection_import_unmanaged} />Import new
-          unmanaged collections during Sync</label
-        >
-        <p class="hint">
-          Off leaves new server collections outside Overture; existing imports are kept. Groups and
-          collections can override everything below.
-        </p>
-        <div class="options-col">
-          <label class="form-label"
-            >Sync mode<select bind:value={draft.collection_sync_mode}
-              ><option value="sync">Sync</option><option value="append">Append</option></select
-            ></label
-          >
-          {#if settingsState.current.media_server === "plex"}<label class="form-label"
-              >Collection mode<select bind:value={draft.collection_mode_default}
-                ><option value="default">Library default</option><option value="hide_items"
-                  >Hide items</option
-                ><option value="show_items">Show collection and items</option><option value="hide"
-                  >Hide collection</option
-                ></select
-              ></label
-            >{/if}
-          <label class="form-label"
-            >Minimum members<input
-              type="number"
-              min="1"
-              max="100"
-              bind:value={draft.collection_minimum_items}
-            /></label
-          >
-          <label class="form-row"
-            ><input type="checkbox" bind:checked={draft.collection_delete_below_minimum} />Delete
-            collections below the minimum</label
-          >
-          <label class="form-label"
-            >Sort title
-            <input
-              maxlength="200"
-              bind:value={draft.collection_sort_title_format}
-              placeholder="+&#123;title&#125;"
-            />
-            <span class="hint"
-              >Text or a template with &#123;title&#125; and &#123;group&#125;. Blank keeps the
-              server's sort title.</span
-            >
-          </label>
-          <label class="form-row"
-            ><input type="checkbox" bind:checked={draft.collection_auto_match_art} />Automatic art</label
-          >
-          <label class="form-row"
-            ><input type="checkbox" bind:checked={draft.collection_auto_match_theme} />Automatic
-            theme</label
-          >
-        </div>
+        <GlobalCollectionDefaults {draft} />
       </div>
     </CardColumn>
   </fieldset>

@@ -99,6 +99,9 @@ async def test_collection_routes_delegate_to_service() -> None:
         fields=[],
         sources=[],
         dimensions=[],
+        member_labels=True,
+        arr=False,
+        charts=[],
     )
     service.list_radarr_tags = AsyncMock(return_value=[ArrTagRead(id=1, label="tag1")])
     service.list_sonarr_tags = AsyncMock(return_value=[ArrTagRead(id=2, label="tag2")])
@@ -180,7 +183,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     preview = CollectionSetPreview(
         media_type=MediaType.MOVIE,
         generator=CollectionGenerator(
-            dimension=SetDimension.DECADE, library_id="movies"
+            dimension=SetDimension.DECADE, library_ids=["movies"]
         ),
     )
     assert await collections_router.preview_collection_set(preview, service) == []
@@ -190,7 +193,7 @@ async def test_collection_routes_delegate_to_service() -> None:
         await collections_router.get_collection_capabilities(service, MediaType.MOVIE)
         == capabilities
     )
-    service.presets = MagicMock(return_value=[])
+    service.presets = AsyncMock(return_value=[])
     assert (
         await collections_router.list_collection_presets(service, MediaType.MOVIE) == []
     )

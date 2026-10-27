@@ -420,161 +420,94 @@ finds their media folder.
 ### Collections
 
 Plex, Jellyfin and Emby collections appear under **Collections** in the library
-sidebar. **+ Create collection** opens a Configure page at Setup, the one place
-to create anything: **One collection**, or **One per value** (a collection set),
-from scratch or from any preset under **Start from**, which switches to the kind
-the preset creates.
+sidebar. **+ Create collection** opens a Configure page, the one place to create
+anything: **One collection**, or **One per value** (a collection set), from
+scratch, from a preset or from a preset you saved, under **Start from**.
 
-**Criteria** decide a collection's members. Each condition tests either item
-metadata, such as Genre is Action, Year is at least 1990 or Date added in the
-last 30 days, or a list: a TMDB franchise, TMDB lists, explicit TMDB titles, a
-TMDB person's credits, MDBList lists, or Radarr and Sonarr tags. Lists are in or
-not in a collection like any other condition. Conditions sit in groups that
-match **all** or **any** of them, and groups nest, so "(in my MDBList or a TMDB
-list) and not yet played" is one collection. Tag values such as genres are
-suggested from the library, and TMDB people and franchises can be searched by
-name instead of entering their IDs. Text values such as titles and studios are
-suggested too.
+Both kinds share the same sections, in the same order:
 
-On Plex, choose how the criteria are evaluated:
+1. **Setup**: the libraries, the preset, what to create, the title (a set's
+   title template, where `{value}s` turns 1990 into 1990s) and the group. One
+   collection in several libraries becomes a set with that collection in each,
+   kept alike. **Save as preset** keeps the form for later.
+2. **Content**: whether members are chosen by hand or by criteria, who
+   evaluates them, and the criteria, with **Preview members**. A set instead
+   chooses what it **Splits by**, its values and the conditions every
+   collection needs, with **Preview collections**.
+3. **Members** (a saved collection): its members, and **Missing**, the titles
+   its lists hold that the library lacks, which **Request** sends to Radarr or
+   Sonarr.
+4. **Settings**: sort and limit, Sync mode (Sync removes members that stop
+   matching, Append keeps them), minimum, automatic art and theme, Request
+   missing, Member label, Radarr or Sonarr tag, Plex's collection mode,
+   filtering, Home and recommended promotion and Home order, sort title and
+   summary templates, and the TMDB collection ID.
+5. **Schedule**: Scheduled sync, the sync schedule (a cron expression with
+   presets), the active dates, which repeat yearly and can cross New Year, and
+   whether an inactive collection leaves the server.
 
-- **Overture** evaluates them against the metadata the last library
-  sync stored, and adds and removes members on its schedule. It works with every
-  server, offering only the fields that server provides.
-- **Plex (smart)** creates a Plex smart collection that Plex keeps
-  current, with every Plex filter, including audio and subtitle language, HDR,
-  Dolby Vision, HDR10+, Dolby Atmos, codecs, audio channels, minimum age,
-  edition and play state for each user. Show collections test the media of each
-  show's episodes, such as 4K or HDR. Overture keeps a label naming each list
-  the criteria use, such as `overture:tmdb_person:5292:actor`, on its items,
-  keeps the items' other labels, and removes the label when no smart collection
-  needs it. Set **Collection filtering** to
-  User's library for per-user collections such as Unplayed.
+A group's settings in **Collection groups** and the global defaults under
+**Settings > Collection defaults** use the same fields and names. **Default**
+inherits, from the group and then the global default, and names the value it
+inherits.
 
-**Sort** orders members by release date, title, date added, ratings, duration,
-plays, last played or randomly, or keeps a custom order: the order you drag
-members into, or the order of the first list the criteria use. Plex sorts smart
-collections itself and stores other orders as a custom order; Jellyfin and Emby
-offer release date and title. **Limit** keeps only the first members in that
-order, such as the 100 highest rated.
+**Criteria** decide a collection's members. A condition tests item metadata,
+such as Genre is Action or Date added in the last 30 days, or a list: a TMDB
+franchise, list, chart, titles or person's credits, MDBList lists, or Radarr and
+Sonarr tags. Conditions sit in groups that match **all** or **any** of them, and
+groups nest. With `TMDB_API_KEY`, Full Sync also stores what TMDB says about
+each title, read again weekly: original language, origin country, TMDB rating
+and votes, keywords, production companies, streaming services in the TMDB
+region, and for shows their network, status and last air date. Values are
+suggested from the library, and TMDB people and franchises can be searched.
 
-A **Collection set** creates one collection per value in a library: each decade,
-year, genre, studio, country, content rating, resolution, label, actor, director,
-writer or producer, or each TMDB franchise. A set lives in a group, whose
-defaults its collections share; left blank, the group is named after what the
-set splits by, such as Decades. Choose the title template (`{value}s` turns
-1990 into 1990s), keep only the most common values, include or skip values by
-name or title, remove text such as "The" and " Collection" from names, add
-conditions every collection requires (such as Unplayed), and create Plex smart
-collections. **Preview collections** shows what the set creates before you
-create it. On its schedule, a set creates collections for new values, updates
-its collections when you change it, and removes collections whose value it no
-longer produces when **Below minimum** is set to delete. Its collections'
-criteria and titles belong to the set; edit the set in **Collection groups**.
-Franchises already held by collections in other groups are skipped.
+On Plex, **Evaluated by** chooses Overture, which tests the metadata the last
+sync stored, or **Plex (smart)**, a Plex smart collection Plex keeps current
+with every Plex filter, including languages, HDR, codecs and play state for
+each user. Lists in smart criteria become labels Overture keeps on their items,
+such as `overture:tmdb_person:5292:actor`. TMDB facts are tested by Overture
+only.
 
-Presets fill in the form; everything stays editable. Set presets cover the
-dimensions above. Collection presets include Recently added, Recently released,
-Top rated, 4K and Short films, and on Plex Unplayed, Continue watching and
-Recently played. Overture only offers presets your server can evaluate.
-
-The Configure page has these sections:
-
-1. **Setup** holds the library, what to create, the preset, and the title and
-   group. The only library is selected automatically.
-2. **Content** chooses whether members are chosen by hand or by criteria, and
-   holds the criteria.
-3. **Members** shows a saved collection's members and any TMDB source roster.
-   Collections chosen by hand, and Append collections, take additions; Plex
-   collections can be reordered by dragging or with Up and Down.
-4. **Settings** holds the sort and limit, the **Sync mode** (Sync removes
-   members that stop matching, Append keeps them), the minimum, automatic art and
-   theme, the sort title and summary, which accept text or a template, the
-   optional TMDB collection ID, and Plex visibility.
-5. **Schedule** holds the sync interval and recurring seasonal dates. Leave both
-   dates blank for year-round activity; a range can cross New Year. A seasonal
-   collection can be kept or removed from the server while inactive.
-
-A saved collection keeps the art tabs and links to these sections in its lower
-tab row in every view. A new set shows **Setup**, **Collections** and
-**Defaults**, the group's defaults.
+A **collection set** creates one collection per value in its libraries: each
+decade, year, genre, studio, network, country, origin country, original
+language, streaming service, content rating, resolution, edition, label, actor,
+director, writer or producer, or TMDB franchise; on Plex smart sets also each
+audio or subtitle language. A **custom** set lists its collections, each with
+its own criteria, such as A to Z or Based on a book. Sets can keep the most
+common values, include or skip values, remove text from names, and rename or
+merge values. Values below the minimum are removed when **Below minimum**
+deletes, and collections whose value disappears when the set says so. A set's
+collections take their criteria and titles from the set; edit it in
+**Collection groups**. A set runs on its schedule once it has been synced.
 
 **Save** (or Enter) saves in Overture only and never changes the media server.
 **Save and Create** saves and creates the collection or set on the server;
-**Save and Sync** saves an existing collection and makes the server match it.
-Members you add, remove or reorder also wait for the next sync. A collection
-with changes the server does not have shows **Unsynced**, and a library sync
-keeps those changes. The scheduler leaves a collection or set alone until it has
-been created once.
+**Save and Sync** saves an existing collection and makes the server match it,
+then picks art and themes, labels and tags members, requests missing titles and
+orders Home rows as its settings say. Members you add, remove or reorder also
+wait for the next sync. A collection with changes the server does not have
+shows **Unsynced**, and a library sync keeps those changes.
 
-Choose **Default** to inherit a setting; empty text fields show the inherited
-value as a placeholder. Imported Plex smart collections keep their Plex filter
-when you save other changes, until you choose **Replace the Plex filter with
-these criteria**. Failed list lookups keep existing members.
+Summary templates take `{title}`, `{group}`, `{start_date}`, `{end_date}`,
+`{summary}` (the server's) and `{source_summary}`, the description of the first
+list or a person's biography. Collections whose criteria list a TMDB person
+offer that person's photos as poster candidates.
 
-Set `TMDB_API_KEY` for TMDB lists, titles, people and franchises,
-`MDBLIST_API_KEY` for MDBList (a list ID, `user/list` or HTTPS list URL), and the
-Radarr or Sonarr URL and API key for their tags. Unavailable sources are shown
-with the reason. Full Sync stores the metadata criteria test; run one after
-upgrading so ratings, plays, editions and Jellyfin tags are available.
+Set `TMDB_API_KEY` for TMDB lists, charts, titles, people, franchises and facts,
+`MDBLIST_API_KEY` for MDBList, and the Radarr or Sonarr URL and API key for
+their tags, requests and member tags. Choose where requested titles go under
+**Settings > Collection defaults**. Imported Plex smart collections keep their
+Plex filter until you choose **Replace the Plex filter with these criteria**.
+Failed list lookups keep existing members.
 
-**Collection groups**, opened from the collection sidebar or **Create new group**
-in Setup's Group list, creates groups and edits a group's defaults and its
-collection set; Setup only assigns a group. **Save** takes effect on the next
-sync, **Save and Apply** sends its collections' display settings to the server at
-once while keeping their members and explicit overrides, and **Save and Sync**
-runs the set and syncs the group's collections. A sort title such as `01_{title}` keeps a group
-together. A group can be renamed or deleted. Deleting only the group keeps its
-collections ungrouped; you can instead remove its collections from Overture, the
-media server, or both. Server-only removal keeps Overture's configuration and
-disables scheduled sync. Collections kept only in Overture show **Not on
-server**; collections a set made show their set. Media files are always kept.
-
-Settings resolve from a collection's explicit choice, to its group, to
-**Settings > Collection defaults**. **Import new unmanaged collections during
-Sync** controls whether collections created outside Overture are imported; it
-never deletes server collections. Sort-title templates accept `{title}` and
-`{group}`; summary templates also accept `{start_date}`, `{end_date}` and
-`{summary}`, the original summary. Double braces represent literal braces.
-
-The collection sidebar searches by title, group, TMDB collection ID or YouTube
-link, and sorts by title, sort title (the order the media server shows),
-number of items, date added, last sync or theme length. **Filters** offers the
-same monitor, media server, art, theme and catalog filters as items, plus
-members (criteria or manual), kind (regular or smart), last sync and size.
-Filtered bulk operations respect search, library filters and the open group:
-monitor, assign groups, sort, set Plex visibility, format sort titles, sync or
-delete collections. Each target commits independently and reports its own
-failures. **Operations > Server audit > Empty collections** also reviews and
-removes empty collections. Collections in a group appear after opening it in the
-sidebar.
-
-See [Kometa configuration equivalents](COLLECTIONS.md) to recreate an existing
-Kometa setup.
-
-Movie collections with a TMDB ID show the existing source roster grid beside
-resolved members, including library matches and missing franchise titles.
-
-A movie collection's optional **TMDB collection ID** is its explicit identity.
-Existing IDs are preserved during upgrade; changing members never guesses or
-replaces an ID. Criteria that select a TMDB franchise set the ID from it.
-Collections without an ID offer custom artwork paste and skip candidate lookup.
-Art, Themes, Poster and Background controls share status and clear actions;
-clearing artwork forgets its selection and keeps the server image.
-
-Full Sync looks up unchecked movies' TMDB memberships within the selected
-libraries, including movies outside server collections. It reports that work
-in its log and stops pending requests when you select **Stop**.
-
-Collection themes include OvertureDB and ThemerrDB candidates alongside YouTube
-search. Plex receives the theme through its API. For Jellyfin 12, mount its
-collections directory into Overture, set `JELLYFIN_COLLECTIONS_PATH` to that mount,
-and run a full Sync. Overture writes `theme.mp3` into the BoxSet folder and asks
-Jellyfin to refresh it. The folder must have a `[boxset]` suffix or contain
-`collection.xml`; Jellyfin can leave out that file when XML saving is disabled.
-Without an accessible mount, the collection page explains why themes cannot be
-applied. An unavailable mount preserves previously saved choices and file facts.
-Emby collection themes are not supported.
+**Collection groups**, opened from **Groups** in the collection sidebar or
+**Create new group** in Setup's Group list, creates groups and edits a group's
+collection set, Settings and Schedule; Setup only assigns a group. **Save**
+takes effect on the next sync, **Save and Apply** sends display settings to the
+server at once while keeping members and explicit overrides, and **Save and
+Sync** runs the set and syncs the group's collections. A group can be renamed
+or deleted; deleting can keep its collections or remove them from Overture, the
+media server or both. Media files are always kept.
 
 ### Operations
 

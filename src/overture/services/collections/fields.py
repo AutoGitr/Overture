@@ -74,6 +74,8 @@ class FieldSpec:
     plex: PlexField | None
     #: Whole numbers, which Plex compares without a fractional margin.
     integer: bool = False
+    #: TMDB enrichment stores the value, which needs ``TMDB_API_KEY``.
+    tmdb: bool = False
 
 
 FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
@@ -147,7 +149,12 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             PlexField("contentRating", "tag"),
         ),
         FilterField.NETWORK: FieldSpec(
-            "Network", FieldKind.TAG, _SHOWS, _NO_SERVER, PlexField("network", "tag")
+            "Network",
+            FieldKind.TAG,
+            _SHOWS,
+            _EVERY_SERVER,
+            PlexField("network", "tag"),
+            tmdb=True,
         ),
         FilterField.RESOLUTION: FieldSpec(
             "Resolution",
@@ -311,6 +318,55 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             _PLEX,
             PlexField("inProgress", "boolean", show_key="episode.inProgress"),
         ),
+        FilterField.VERSIONS: FieldSpec(
+            "Versions", FieldKind.NUMBER, _MOVIES, _PLEX, None, integer=True
+        ),
+        FilterField.FOLDER: FieldSpec(
+            "Folder", FieldKind.TEXT, _ALL_MEDIA, _EVERY_SERVER, None
+        ),
+        FilterField.ORIGINAL_LANGUAGE: FieldSpec(
+            "Original language",
+            FieldKind.TAG,
+            _ALL_MEDIA,
+            _EVERY_SERVER,
+            None,
+            tmdb=True,
+        ),
+        FilterField.ORIGIN_COUNTRY: FieldSpec(
+            "Origin country", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, tmdb=True
+        ),
+        FilterField.TMDB_RATING: FieldSpec(
+            "TMDB rating", FieldKind.NUMBER, _ALL_MEDIA, _EVERY_SERVER, None, tmdb=True
+        ),
+        FilterField.TMDB_VOTES: FieldSpec(
+            "TMDB votes",
+            FieldKind.NUMBER,
+            _ALL_MEDIA,
+            _EVERY_SERVER,
+            None,
+            integer=True,
+            tmdb=True,
+        ),
+        FilterField.TMDB_KEYWORD: FieldSpec(
+            "TMDB keyword", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, tmdb=True
+        ),
+        FilterField.COMPANY: FieldSpec(
+            "Production company",
+            FieldKind.TAG,
+            _ALL_MEDIA,
+            _EVERY_SERVER,
+            None,
+            tmdb=True,
+        ),
+        FilterField.STREAMING: FieldSpec(
+            "Streaming on", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, tmdb=True
+        ),
+        FilterField.SHOW_STATUS: FieldSpec(
+            "Show status", FieldKind.TAG, _SHOWS, _EVERY_SERVER, None, tmdb=True
+        ),
+        FilterField.LAST_AIRED: FieldSpec(
+            "Last aired", FieldKind.DATE, _SHOWS, _EVERY_SERVER, None, tmdb=True
+        ),
     }
 )
 
@@ -407,18 +463,53 @@ DIMENSIONS: frozendict[SetDimension, DimensionSpec] = frozendict(
         SetDimension.WRITER: DimensionSpec("Writers", FilterField.WRITER),
         SetDimension.PRODUCER: DimensionSpec("Producers", FilterField.PRODUCER),
         SetDimension.FRANCHISE: DimensionSpec("TMDB franchises", None),
+        SetDimension.EDITION: DimensionSpec("Editions", FilterField.EDITION),
+        SetDimension.NETWORK: DimensionSpec("Networks", FilterField.NETWORK),
+        SetDimension.ORIGINAL_LANGUAGE: DimensionSpec(
+            "Original languages", FilterField.ORIGINAL_LANGUAGE
+        ),
+        SetDimension.ORIGIN_COUNTRY: DimensionSpec(
+            "Origin countries", FilterField.ORIGIN_COUNTRY
+        ),
+        SetDimension.STREAMING: DimensionSpec(
+            "Streaming services", FilterField.STREAMING
+        ),
+        SetDimension.AUDIO_LANGUAGE: DimensionSpec(
+            "Audio languages", FilterField.AUDIO_LANGUAGE
+        ),
+        SetDimension.SUBTITLE_LANGUAGE: DimensionSpec(
+            "Subtitle languages", FilterField.SUBTITLE_LANGUAGE
+        ),
+        SetDimension.CUSTOM: DimensionSpec("Custom", None),
     }
 )
 
 
 def dimension_available(
-    dimension: SetDimension, server: ServerType, media_type: MediaType
+    dimension: SetDimension, server: ServerType, media_type: MediaType, *, smart: bool
 ) -> bool:
-    """Sets enumerate values from synced metadata, so the field must be local."""
+    """Whether a set can enumerate the dimension's values.
+
+    Sets count values in synced metadata; a field only Plex knows works for
+    sets of smart collections, whose values and counts Plex reports.
+    """
+    if dimension is SetDimension.CUSTOM:
+        return True
     field = DIMENSIONS[dimension].field
     if field is None:
         return media_type is MediaType.MOVIE
-    return field_available(field, server, media_type, smart=False)
+    return field_available(field, server, media_type, smart=False) or (
+        smart and field_available(field, server, media_type, smart=True)
+    )
+
+
+def smart_only_dimension(
+    dimension: SetDimension, server: ServerType, media_type: MediaType
+) -> bool:
+    """Whether only a set of Plex smart collections can use the dimension."""
+    return dimension_available(
+        dimension, server, media_type, smart=True
+    ) and not dimension_available(dimension, server, media_type, smart=False)
 
 
 #: Orders Overture computes from synced metadata for regular collections.

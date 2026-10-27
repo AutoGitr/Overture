@@ -19,6 +19,7 @@ lazy from ...utils.time import utc_now
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from .art_urls import ResolvedArtUrls, apply_provider_art_urls
 lazy from .season_sync import SeasonSynchronizer
+lazy from .tmdb_enrichment import record_tmdb_facts
 
 
 class ItemReconciler:
@@ -324,20 +325,21 @@ def apply_server_metadata(item: MediaItem, server_item: ServerItem) -> None:
     item.unplayed = server_item.unplayed
     item.in_progress = server_item.in_progress
     item.release_date = server_item.release_date
+    item.versions = server_item.versions
 
 
 def apply_provider_collection(item: MediaItem, server_item: ServerItem) -> None:
-    """Record the TMDB collection a server names for a movie, sparing TMDB.
+    """Record the TMDB collection a server names for a movie, without a TMDB key.
 
-    Jellyfin's TMDB plugin stores it among the movie's provider IDs.
+    Jellyfin's TMDB plugin stores it among the movie's provider IDs. A
+    rematched title drops the TMDB facts of its previous match.
     """
-    if item.tmdb_collection_checked_id != item.tmdb_id:
-        item.tmdb_collection_id = None
-        item.tmdb_collection_checked_id = None
+    if item.tmdb_checked_id is not None and item.tmdb_checked_id != item.tmdb_id:
+        record_tmdb_facts(item, None)
+        item.tmdb_checked_id = None
     collection_id = guid_int(server_item.guids, "tmdbcollection")
     if item.media_type is MediaType.MOVIE and collection_id and item.tmdb_id:
         item.tmdb_collection_id = collection_id
-        item.tmdb_collection_checked_id = item.tmdb_id
 
 
 def _art_slot_fingerprint(

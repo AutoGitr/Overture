@@ -94,9 +94,23 @@ class SourceType(StrEnum):
     TMDB_ITEM = "tmdb_item"
     TMDB_LIST = "tmdb_list"
     TMDB_PERSON = "tmdb_person"
+    TMDB_CHART = "tmdb_chart"
     MDBLIST = "mdblist"
     RADARR_TAG = "radarr_tag"
     SONARR_TAG = "sonarr_tag"
+
+
+class TmdbChart(StrEnum):
+    """A TMDB chart; some exist for movies or for shows only."""
+
+    POPULAR = "popular"
+    TOP_RATED = "top_rated"
+    TRENDING_DAY = "trending_day"
+    TRENDING_WEEK = "trending_week"
+    NOW_PLAYING = "now_playing"
+    UPCOMING = "upcoming"
+    AIRING_TODAY = "airing_today"
+    ON_THE_AIR = "on_the_air"
 
 
 class TmdbPersonRole(StrEnum):
@@ -148,6 +162,17 @@ class FilterField(StrEnum):
     LAST_PLAYED = "last_played"
     UNPLAYED = "unplayed"
     IN_PROGRESS = "in_progress"
+    VERSIONS = "versions"
+    FOLDER = "folder"
+    ORIGINAL_LANGUAGE = "original_language"
+    ORIGIN_COUNTRY = "origin_country"
+    TMDB_RATING = "tmdb_rating"
+    TMDB_VOTES = "tmdb_votes"
+    TMDB_KEYWORD = "tmdb_keyword"
+    COMPANY = "company"
+    STREAMING = "streaming"
+    SHOW_STATUS = "show_status"
+    LAST_AIRED = "last_aired"
 
 
 class FieldKind(StrEnum):
@@ -195,6 +220,15 @@ class SetDimension(StrEnum):
     WRITER = "writer"
     PRODUCER = "producer"
     FRANCHISE = "franchise"
+    EDITION = "edition"
+    NETWORK = "network"
+    ORIGINAL_LANGUAGE = "original_language"
+    ORIGIN_COUNTRY = "origin_country"
+    STREAMING = "streaming"
+    AUDIO_LANGUAGE = "audio_language"
+    SUBTITLE_LANGUAGE = "subtitle_language"
+    #: Collections the set lists itself, each with its own conditions.
+    CUSTOM = "custom"
 
 
 class ThemeIdSource(StrEnum):

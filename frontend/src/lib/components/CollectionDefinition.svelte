@@ -2,7 +2,11 @@
   import { uiState } from "../stores/uiState.svelte";
   import DetailForm from "./DetailForm.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
-  import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
+  import {
+    CollectionDraft,
+    PresetActions,
+    type CollectionEditor,
+  } from "../utils/collectionForms.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
 
   let {
@@ -21,10 +25,12 @@
     ["collection", "One collection"],
     ["set", "One per value"],
   ] as const;
+  const presetActions = new PresetActions(() => editor);
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
   let presets = $derived(draft?.presets.data ?? []);
   let preset = $derived(presets.find((entry) => entry.key === draft?.presetKey));
+  let saved = $derived(presets.filter((entry) => entry.saved_id != null));
 </script>
 
 <DetailForm
@@ -36,26 +42,30 @@
     : "Where the collection lives, its title and its group."}
   busy={editor.busy}
 >
-  <label class="form-label">
-    Library
-    <select
-      required
-      value={editor.libraryId}
-      disabled={!draft}
-      onchange={(event) => draft?.selectLibrary(event.currentTarget.value)}
-    >
-      <option value="">Select a library</option>
-      {#if !draft && editor.libraryId && !libraries.some((library) => library.id === editor.libraryId)}
-        <option value={editor.libraryId}>{editor.libraryId}</option>
-      {/if}
-      {#each libraries as library (library.id)}
-        <option value={library.id}>{library.title}</option>
-      {/each}
-    </select>
-  </label>
-
   {#if draft}
     {@const form = draft}
+    <fieldset class="libraries form-wide">
+      <legend class="form-label">Libraries</legend>
+      {#each libraries as library (library.id)}
+        <label class="form-row">
+          <input
+            type="checkbox"
+            checked={form.libraryIds.includes(library.id)}
+            onchange={(event) =>
+              (form.libraryIds = event.currentTarget.checked
+                ? [...form.libraryIds, library.id]
+                : form.libraryIds.filter((libraryId) => libraryId !== library.id))}
+          />
+          {library.title}
+        </label>
+      {/each}
+      {#if form.linked}
+        <span class="hint"
+          >Several libraries make a set with this collection in each, kept alike.</span
+        >
+      {/if}
+    </fieldset>
+
     <label class="form-label">
       Start from
       <select
@@ -64,21 +74,40 @@
           form.applyPreset(presets.find((entry) => entry.key === event.currentTarget.value))}
       >
         <option value="">Blank</option>
+        {#if saved.length}
+          <optgroup label="Saved">
+            {#each saved as entry (entry.key)}
+              <option value={entry.key}>{entry.label}</option>
+            {/each}
+          </optgroup>
+        {/if}
         <optgroup label="One collection">
-          {#each presets.filter((entry) => entry.collection) as entry (entry.key)}
+          {#each presets.filter((entry) => entry.collection && entry.saved_id == null) as entry (entry.key)}
             <option value={entry.key}>{entry.label}</option>
           {/each}
         </optgroup>
         <optgroup label="One collection per value">
-          {#each presets.filter((entry) => entry.set) as entry (entry.key)}
+          {#each presets.filter((entry) => entry.set && entry.saved_id == null) as entry (entry.key)}
             <option value={entry.key}>{entry.label}</option>
           {/each}
         </optgroup>
       </select>
       <span class="hint"
-        >{preset?.description ?? "A preset fills in the form, which stays editable."}</span
+        >{preset?.description || "A preset fills in the form, which stays editable."}</span
       >
     </label>
+    {#if preset?.saved_id != null}
+      {@const chosen = preset}
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        disabled={presetActions.busy}
+        onclick={async () => {
+          await presetActions.delete(chosen);
+          form.applyPreset(undefined);
+        }}>Delete preset</button
+      >
+    {/if}
     <div class="form-label">
       <span>Create</span>
       <SegmentedControl
@@ -88,22 +117,44 @@
         bind:value={() => form.kind, (kind) => form.selectKind(kind)}
       />
     </div>
+  {:else}
+    <label class="form-label">
+      Library
+      <select value={editor.libraryId} disabled>
+        <option value={editor.libraryId}
+          >{libraries.find((library) => library.id === editor.libraryId)?.title ??
+            editor.libraryId}</option
+        >
+      </select>
+    </label>
   {/if}
 
-  {#if creatingSet}
+  {#if draft && creatingSet}
+    {@const form = draft}
+    <label class="form-label">
+      Title template
+      <input
+        required
+        maxlength="200"
+        bind:value={form.generator.title_format}
+        placeholder={"{value}"}
+      />
+      <span class="hint">&#123;value&#125; becomes each value, such as 1990 or Action.</span>
+    </label>
     <label class="form-label">
       Group
       <input
         maxlength="200"
-        bind:value={editor.collectionGroup}
-        placeholder={draft?.setGroup || "e.g. Decades"}
+        bind:value={form.collectionGroup}
+        placeholder={form.setGroup || "e.g. Decades"}
         list={`${id}-groups`}
       />
       <datalist id={`${id}-groups`}>
         {#each groups as group (group)}<option value={group}></option>{/each}
       </datalist>
       <span class="hint"
-        >The set's collections share this group and its defaults. Blank names it after the values.</span
+        >A set is a group whose collections it creates. Blank names it after the values; an existing
+        group becomes this set.</span
       >
     </label>
   {:else}
@@ -150,4 +201,56 @@
       >
     </div>
   {/if}
+
+  <div class="form-label form-wide">
+    <label for={`${id}-preset`}>Save as preset</label>
+    <div class="preset-row">
+      <input
+        id={`${id}-preset`}
+        maxlength="100"
+        placeholder="Preset name"
+        bind:value={presetActions.label}
+        onkeydown={(event) => {
+          // Enter saves the preset here, not the collection.
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          void presetActions.save();
+        }}
+      />
+      <button
+        type="button"
+        class="btn btn-secondary"
+        disabled={presetActions.busy || !presetActions.label.trim()}
+        onclick={() => void presetActions.save()}>Save preset</button
+      >
+    </div>
+    <span class="hint">New collections can start from it under Start from.</span>
+  </div>
 </DetailForm>
+
+<style>
+  .libraries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .libraries legend {
+    width: 100%;
+    padding: 0;
+  }
+
+  .preset-row {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .preset-row input {
+    flex: 1;
+    min-width: 0;
+  }
+</style>

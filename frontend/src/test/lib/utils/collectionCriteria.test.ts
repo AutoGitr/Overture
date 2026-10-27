@@ -47,8 +47,8 @@ describe("collection criteria helpers", () => {
       type: "tmdb_person",
       person_id: 0,
       roles: ["actor"],
-      use_biography: false,
     });
+    expect(newSource("tmdb_chart")).toEqual({ type: "tmdb_chart", chart: "popular", limit: 100 });
     expect(newSource("mdblist")).toEqual({ type: "mdblist", identifiers: [] });
     expect(groupIsEmpty({ ...emptyGroup(), groups: [emptyGroup("any")] })).toBe(true);
     expect(groupIsEmpty(franchiseCriteria(10))).toBe(false);

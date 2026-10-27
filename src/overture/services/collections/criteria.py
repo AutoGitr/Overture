@@ -33,6 +33,13 @@ def _release(item: MediaItem) -> date | None:
     return date(item.year, 1, 1) if item.year else None
 
 
+def _iso_day(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat(value[:10]) if value else None
+    except ValueError:
+        return None
+
+
 def _day(value: datetime | None) -> date | None:
     return value.date() if value else None
 
@@ -69,6 +76,18 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.LAST_PLAYED: lambda item: _day(item.last_played_at),
     FilterField.UNPLAYED: lambda item: item.unplayed,
     FilterField.IN_PROGRESS: lambda item: item.in_progress,
+    FilterField.VERSIONS: lambda item: item.versions,
+    FilterField.FOLDER: lambda item: item.folder_path,
+    FilterField.NETWORK: lambda item: item.networks,
+    FilterField.ORIGINAL_LANGUAGE: lambda item: _one(item.original_language),
+    FilterField.ORIGIN_COUNTRY: lambda item: item.origin_countries,
+    FilterField.TMDB_RATING: lambda item: item.tmdb_rating,
+    FilterField.TMDB_VOTES: lambda item: item.tmdb_votes,
+    FilterField.TMDB_KEYWORD: lambda item: item.tmdb_keywords,
+    FilterField.COMPANY: lambda item: item.companies,
+    FilterField.STREAMING: lambda item: item.streaming,
+    FilterField.SHOW_STATUS: lambda item: _one(item.show_status),
+    FilterField.LAST_AIRED: lambda item: _iso_day(item.last_aired),
 }
 _VALUES: frozendict[FilterField, _Getter] = frozendict(_GETTERS)  # pyright: ignore[reportCallIssue] -- stale frozendict stub
 

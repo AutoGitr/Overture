@@ -36,7 +36,7 @@ lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.queue import AssetScope
 lazy from ..downloads.service import DownloadService
 lazy from ..public_dataset.downloads import queue_catalog_themes_for_collections
-lazy from .tmdb_collections import TmdbCollectionEnrichment
+lazy from .tmdb_enrichment import TmdbEnrichment
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class CollectionSync:
         self,
         *,
         provider_registry: ProviderRegistry,
-        enrichment: TmdbCollectionEnrichment,
+        enrichment: TmdbEnrichment,
         publisher: protocols.EventPublisher,
         app_config: Settings,
         database: Database,

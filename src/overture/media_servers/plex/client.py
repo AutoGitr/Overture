@@ -798,6 +798,39 @@ class PlexClient(MediaServerHttpClient):
             if entry.get("key") is not None and (key := _filter_key(str(entry["key"])))
         ]
 
+    async def find_matching(
+        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+    ) -> tuple[int, list[str]]:
+        """How many items a smart filter matches, and the first *size* of them."""
+        suffix = f"&{filter_query}" if filter_query else ""
+        data = await self._get(
+            f"/library/sections/{section_key}/all?type={_PLEX_TYPES[media_type]}{suffix}",
+            params={"X-Plex-Container-Start": 0, "X-Plex-Container-Size": size},
+        )
+        page = plex_page(data)
+        return (
+            page.total if page.total is not None else len(page.items),
+            [str(key) for row in page.items if (key := row.get("ratingKey"))],
+        )
+
+    async def order_collection_hubs(
+        self, section_key: str, collection_ids: Sequence[str]
+    ) -> None:
+        """Put promoted collections' rows first on Plex's Home, in this order.
+
+        Plex names a collection's hub after its section and rating key; each
+        moves after the previous one, the first to the top.
+        """
+        previous: str | None = None
+        for collection_id in collection_ids:
+            identifier = f"custom.collection.{section_key}.{collection_id}"
+            await self._request(
+                "PUT",
+                f"/hubs/sections/{section_key}/manage/{identifier}/move",
+                params={"after": previous} if previous else None,
+            )
+            previous = identifier
+
     async def delete_collection(self, collection_id: str) -> None:
         """Delete only the collection metadata."""
         await self._request("DELETE", f"/library/metadata/{collection_id}")

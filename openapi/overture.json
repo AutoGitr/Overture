@@ -77,6 +77,11 @@
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
           },
+          "collection_request_missing": {
+            "default": false,
+            "title": "Collection Request Missing",
+            "type": "boolean"
+          },
           "collection_sort_title_format": {
             "default": "",
             "maxLength": 200,
@@ -94,16 +99,15 @@
             "title": "Collection Sync Enabled",
             "type": "boolean"
           },
-          "collection_sync_interval_hours": {
-            "default": 24,
-            "maximum": 8760.0,
-            "minimum": 0.0,
-            "title": "Collection Sync Interval Hours",
-            "type": "integer"
-          },
           "collection_sync_mode": {
             "$ref": "#/components/schemas/SyncMode",
             "default": "sync"
+          },
+          "collection_sync_schedule": {
+            "default": "0 3 * * *",
+            "maxLength": 100,
+            "title": "Collection Sync Schedule",
+            "type": "string"
           },
           "collection_themes_unavailable": {
             "anyOf": [
@@ -180,6 +184,29 @@
             "title": "Radarr Configured",
             "type": "boolean"
           },
+          "radarr_quality_profile_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radarr Quality Profile Id"
+          },
+          "radarr_root_folder": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Radarr Root Folder",
+            "type": "string"
+          },
+          "radarr_search": {
+            "default": true,
+            "title": "Radarr Search",
+            "type": "boolean"
+          },
           "skip_media_server_tmdb_urls": {
             "default": false,
             "title": "Skip Media Server Tmdb Urls",
@@ -188,6 +215,29 @@
           "sonarr_configured": {
             "default": false,
             "title": "Sonarr Configured",
+            "type": "boolean"
+          },
+          "sonarr_quality_profile_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sonarr Quality Profile Id"
+          },
+          "sonarr_root_folder": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Sonarr Root Folder",
+            "type": "string"
+          },
+          "sonarr_search": {
+            "default": true,
+            "title": "Sonarr Search",
             "type": "boolean"
           },
           "theme_download_workers": {
@@ -210,6 +260,13 @@
           "tmdb_language_filter": {
             "$ref": "#/components/schemas/TmdbLanguageFilter",
             "default": "en_null"
+          },
+          "tmdb_region": {
+            "default": "US",
+            "maxLength": 2,
+            "minLength": 2,
+            "title": "Tmdb Region",
+            "type": "string"
           },
           "updated_at": {
             "anyOf": [
@@ -243,9 +300,17 @@
           "collection_sort_title_format",
           "collection_summary_format",
           "collection_delete_when_inactive",
-          "collection_sync_interval_hours",
+          "collection_sync_schedule",
           "collection_sync_enabled",
+          "collection_request_missing",
           "collection_import_unmanaged",
+          "tmdb_region",
+          "radarr_root_folder",
+          "radarr_quality_profile_id",
+          "radarr_search",
+          "sonarr_root_folder",
+          "sonarr_quality_profile_id",
+          "sonarr_search",
           "auto_match_art",
           "workflow",
           "theme_search_format",
@@ -426,6 +491,17 @@
               }
             ]
           },
+          "collection_request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Request Missing"
+          },
           "collection_sort_title_format": {
             "anyOf": [
               {
@@ -459,17 +535,6 @@
             ],
             "title": "Collection Sync Enabled"
           },
-          "collection_sync_interval_hours": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Sync Interval Hours"
-          },
           "collection_sync_mode": {
             "anyOf": [
               {
@@ -479,6 +544,17 @@
                 "type": "null"
               }
             ]
+          },
+          "collection_sync_schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Sync Schedule"
           },
           "collection_visible_home": {
             "anyOf": [
@@ -557,6 +633,39 @@
             ],
             "title": "Normalize Theme Loudness"
           },
+          "radarr_quality_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radarr Quality Profile Id"
+          },
+          "radarr_root_folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radarr Root Folder"
+          },
+          "radarr_search": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radarr Search"
+          },
           "skip_media_server_tmdb_urls": {
             "anyOf": [
               {
@@ -567,6 +676,39 @@
               }
             ],
             "title": "Skip Media Server Tmdb Urls"
+          },
+          "sonarr_quality_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sonarr Quality Profile Id"
+          },
+          "sonarr_root_folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sonarr Root Folder"
+          },
+          "sonarr_search": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sonarr Search"
           },
           "theme_search_format": {
             "anyOf": [
@@ -588,6 +730,17 @@
                 "type": "null"
               }
             ]
+          },
+          "tmdb_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Region"
           },
           "workflow": {
             "anyOf": [
@@ -2514,6 +2667,32 @@
         "title": "CatalogSeason",
         "type": "object"
       },
+      "CollectionArrOptions": {
+        "additionalProperties": false,
+        "description": "Where Radarr or Sonarr can put requested titles.",
+        "properties": {
+          "quality_profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ArrTagRead"
+            },
+            "title": "Quality Profiles",
+            "type": "array"
+          },
+          "root_folders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Root Folders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "root_folders",
+          "quality_profiles"
+        ],
+        "title": "CollectionArrOptions",
+        "type": "object"
+      },
       "CollectionArtwork": {
         "additionalProperties": false,
         "description": "Selected collection artwork and its completion state.",
@@ -2567,6 +2746,17 @@
         "additionalProperties": false,
         "description": "What the active media server lets collections do, for one media type.",
         "properties": {
+          "arr": {
+            "title": "Arr",
+            "type": "boolean"
+          },
+          "charts": {
+            "items": {
+              "$ref": "#/components/schemas/TmdbChart"
+            },
+            "title": "Charts",
+            "type": "array"
+          },
           "dimensions": {
             "items": {
               "$ref": "#/components/schemas/CollectionDimensionRead"
@@ -2580,6 +2770,10 @@
             },
             "title": "Fields",
             "type": "array"
+          },
+          "member_labels": {
+            "title": "Member Labels",
+            "type": "boolean"
           },
           "orders": {
             "items": {
@@ -2618,11 +2812,14 @@
           "server_type",
           "smart",
           "visibility",
+          "member_labels",
+          "arr",
           "orders",
           "smart_orders",
           "fields",
           "sources",
-          "dimensions"
+          "dimensions",
+          "charts"
         ],
         "title": "CollectionCapabilities",
         "type": "object"
@@ -3336,6 +3533,11 @@
             "title": "Label",
             "type": "string"
           },
+          "smart_only": {
+            "default": false,
+            "title": "Smart Only",
+            "type": "boolean"
+          },
           "title_format": {
             "title": "Title Format",
             "type": "string"
@@ -3344,7 +3546,8 @@
         "required": [
           "dimension",
           "label",
-          "title_format"
+          "title_format",
+          "smart_only"
         ],
         "title": "CollectionDimensionRead",
         "type": "object"
@@ -3421,18 +3624,29 @@
       },
       "CollectionGenerator-Input": {
         "additionalProperties": false,
-        "description": "A collection set: one collection per value in a library.",
+        "description": "A collection set: its collections in each of its libraries.",
         "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/SetValueAlias"
+            },
+            "maxItems": 200,
+            "title": "Aliases",
+            "type": "array"
+          },
           "criteria": {
             "$ref": "#/components/schemas/FilterGroup-Input"
           },
+          "custom_values": {
+            "items": {
+              "$ref": "#/components/schemas/CustomSetValue-Input"
+            },
+            "maxItems": 200,
+            "title": "Custom Values",
+            "type": "array"
+          },
           "dimension": {
             "$ref": "#/components/schemas/SetDimension"
-          },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
           },
           "exclude": {
             "items": {
@@ -3454,11 +3668,21 @@
             "title": "Include",
             "type": "array"
           },
-          "library_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Library Id",
-            "type": "string"
+          "library_ids": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Library Ids",
+            "type": "array"
+          },
+          "remove_vanished": {
+            "default": false,
+            "title": "Remove Vanished",
+            "type": "boolean"
           },
           "smart": {
             "default": false,
@@ -3497,25 +3721,36 @@
         },
         "required": [
           "dimension",
-          "library_id"
+          "library_ids"
         ],
         "title": "CollectionGenerator",
         "type": "object"
       },
       "CollectionGenerator-Output": {
         "additionalProperties": false,
-        "description": "A collection set: one collection per value in a library.",
+        "description": "A collection set: its collections in each of its libraries.",
         "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/SetValueAlias"
+            },
+            "maxItems": 200,
+            "title": "Aliases",
+            "type": "array"
+          },
           "criteria": {
             "$ref": "#/components/schemas/FilterGroup-Output"
           },
+          "custom_values": {
+            "items": {
+              "$ref": "#/components/schemas/CustomSetValue-Output"
+            },
+            "maxItems": 200,
+            "title": "Custom Values",
+            "type": "array"
+          },
           "dimension": {
             "$ref": "#/components/schemas/SetDimension"
-          },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
           },
           "exclude": {
             "items": {
@@ -3537,11 +3772,21 @@
             "title": "Include",
             "type": "array"
           },
-          "library_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Library Id",
-            "type": "string"
+          "library_ids": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Library Ids",
+            "type": "array"
+          },
+          "remove_vanished": {
+            "default": false,
+            "title": "Remove Vanished",
+            "type": "boolean"
           },
           "smart": {
             "default": false,
@@ -3588,26 +3833,39 @@
           "strip_suffix",
           "criteria",
           "smart",
-          "enabled",
-          "library_id"
+          "custom_values",
+          "aliases",
+          "remove_vanished",
+          "library_ids"
         ],
         "title": "CollectionGenerator",
         "type": "object"
       },
-      "CollectionGeneratorBase": {
+      "CollectionGeneratorBase-Input": {
         "additionalProperties": false,
         "description": "What a collection set creates one collection for, before a library is chosen.",
         "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/SetValueAlias"
+            },
+            "maxItems": 200,
+            "title": "Aliases",
+            "type": "array"
+          },
           "criteria": {
-            "$ref": "#/components/schemas/FilterGroup-Output"
+            "$ref": "#/components/schemas/FilterGroup-Input"
+          },
+          "custom_values": {
+            "items": {
+              "$ref": "#/components/schemas/CustomSetValue-Input"
+            },
+            "maxItems": 200,
+            "title": "Custom Values",
+            "type": "array"
           },
           "dimension": {
             "$ref": "#/components/schemas/SetDimension"
-          },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
           },
           "exclude": {
             "items": {
@@ -3628,6 +3886,103 @@
             "maxItems": 500,
             "title": "Include",
             "type": "array"
+          },
+          "remove_vanished": {
+            "default": false,
+            "title": "Remove Vanished",
+            "type": "boolean"
+          },
+          "smart": {
+            "default": false,
+            "title": "Smart",
+            "type": "boolean"
+          },
+          "strip_prefix": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Strip Suffix",
+            "type": "string"
+          },
+          "title_format": {
+            "$ref": "#/components/schemas/SetTitleFormat",
+            "default": "{value}"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top"
+          }
+        },
+        "required": [
+          "dimension"
+        ],
+        "title": "CollectionGeneratorBase",
+        "type": "object"
+      },
+      "CollectionGeneratorBase-Output": {
+        "additionalProperties": false,
+        "description": "What a collection set creates one collection for, before a library is chosen.",
+        "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/SetValueAlias"
+            },
+            "maxItems": 200,
+            "title": "Aliases",
+            "type": "array"
+          },
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Output"
+          },
+          "custom_values": {
+            "items": {
+              "$ref": "#/components/schemas/CustomSetValue-Output"
+            },
+            "maxItems": 200,
+            "title": "Custom Values",
+            "type": "array"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/SetDimension"
+          },
+          "exclude": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Exclude",
+            "type": "array"
+          },
+          "include": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Include",
+            "type": "array"
+          },
+          "remove_vanished": {
+            "default": false,
+            "title": "Remove Vanished",
+            "type": "boolean"
           },
           "smart": {
             "default": false,
@@ -3674,7 +4029,9 @@
           "strip_suffix",
           "criteria",
           "smart",
-          "enabled"
+          "custom_values",
+          "aliases",
+          "remove_vanished"
         ],
         "title": "CollectionGeneratorBase",
         "type": "object"
@@ -3716,6 +4073,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
               },
               {
                 "type": "null"
@@ -3796,6 +4163,29 @@
               }
             ]
           },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -3818,6 +4208,17 @@
                 "type": "null"
               }
             ]
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
           },
           "sort_title_format": {
             "anyOf": [
@@ -3850,23 +4251,20 @@
             ],
             "title": "Sync Enabled"
           },
-          "sync_interval_hours": {
-            "anyOf": [
-              {
-                "maximum": 8760.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Interval Hours"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -3928,6 +4326,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
               },
               {
                 "type": "null"
@@ -4008,6 +4416,29 @@
               }
             ]
           },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -4030,6 +4461,17 @@
                 "type": "null"
               }
             ]
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
           },
           "sort_title_format": {
             "anyOf": [
@@ -4062,23 +4504,20 @@
             ],
             "title": "Sync Enabled"
           },
-          "sync_interval_hours": {
-            "anyOf": [
-              {
-                "maximum": 8760.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Interval Hours"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -4136,8 +4575,12 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "sync_interval_hours",
+          "sync_schedule",
           "sync_enabled",
+          "request_missing",
+          "member_label",
+          "arr_tag",
+          "home_order",
           "generator"
         ],
         "title": "CollectionGroupPolicy",
@@ -4231,6 +4674,86 @@
           "order_type"
         ],
         "title": "CollectionMembersUpdate",
+        "type": "object"
+      },
+      "CollectionMissing": {
+        "additionalProperties": false,
+        "description": "What a collection's lists hold beyond the library.",
+        "properties": {
+          "requestable": {
+            "default": false,
+            "title": "Requestable",
+            "type": "boolean"
+          },
+          "titles": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionMissingTitle"
+            },
+            "title": "Titles",
+            "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "titles",
+          "truncated",
+          "requestable"
+        ],
+        "title": "CollectionMissing",
+        "type": "object"
+      },
+      "CollectionMissingTitle": {
+        "additionalProperties": false,
+        "description": "A title a collection's lists hold that the library lacks.",
+        "properties": {
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "requested": {
+            "default": false,
+            "title": "Requested",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_id": {
+            "title": "Tmdb Id",
+            "type": "integer"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "tmdb_id",
+          "title",
+          "year",
+          "poster_url",
+          "requested"
+        ],
+        "title": "CollectionMissingTitle",
         "type": "object"
       },
       "CollectionMode": {
@@ -4426,7 +4949,7 @@
         "title": "CollectionOrder",
         "type": "string"
       },
-      "CollectionPolicyBase": {
+      "CollectionPolicyBase-Input": {
         "additionalProperties": false,
         "description": "Shared policy and media server display configuration.",
         "properties": {
@@ -4444,6 +4967,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
               },
               {
                 "type": "null"
@@ -4514,6 +5047,29 @@
             ],
             "title": "Delete When Inactive"
           },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -4537,6 +5093,17 @@
               }
             ]
           },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
           "sort_title_format": {
             "anyOf": [
               {
@@ -4557,10 +5124,274 @@
               }
             ]
           },
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
+          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "title": "CollectionPolicyBase",
+        "type": "object"
+      },
+      "CollectionPolicyBase-Output": {
+        "additionalProperties": false,
+        "description": "Shared policy and media server display configuration.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_match_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -4617,12 +5448,47 @@
           "sort_title_format",
           "summary_format",
           "active_start_mmdd",
-          "active_end_mmdd"
+          "active_end_mmdd",
+          "sync_schedule",
+          "sync_enabled",
+          "request_missing",
+          "member_label",
+          "arr_tag",
+          "home_order"
         ],
         "title": "CollectionPolicyBase",
         "type": "object"
       },
-      "CollectionPresetCollection": {
+      "CollectionPresetCollection-Input": {
+        "additionalProperties": false,
+        "description": "A single collection a preset starts from.",
+        "properties": {
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CollectionRuleWrite-Input"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "rule"
+        ],
+        "title": "CollectionPresetCollection",
+        "type": "object"
+      },
+      "CollectionPresetCollection-Output": {
         "additionalProperties": false,
         "description": "A single collection a preset starts from.",
         "properties": {
@@ -4654,12 +5520,12 @@
       },
       "CollectionPresetRead": {
         "additionalProperties": false,
-        "description": "A starting point for a collection or a set, like Kometa's defaults.",
+        "description": "A starting point for a new collection or collection set.",
         "properties": {
           "collection": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/CollectionPresetCollection"
+                "$ref": "#/components/schemas/CollectionPresetCollection-Output"
               },
               {
                 "type": "null"
@@ -4678,10 +5544,21 @@
             "title": "Label",
             "type": "string"
           },
+          "saved_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Id"
+          },
           "set": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/CollectionPresetSet"
+                "$ref": "#/components/schemas/CollectionPresetSet-Output"
               },
               {
                 "type": "null"
@@ -4694,24 +5571,72 @@
           "label",
           "description",
           "collection",
-          "set"
+          "set",
+          "saved_id"
         ],
         "title": "CollectionPresetRead",
         "type": "object"
       },
-      "CollectionPresetSet": {
+      "CollectionPresetSave": {
+        "additionalProperties": false,
+        "description": "A collection or set to keep as a preset.",
+        "properties": {
+          "collection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPresetCollection-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPresetSet-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "media_type",
+          "label"
+        ],
+        "title": "CollectionPresetSave",
+        "type": "object"
+      },
+      "CollectionPresetSet-Input": {
         "additionalProperties": false,
         "description": "A collection set a preset starts from.",
         "properties": {
           "generator": {
-            "$ref": "#/components/schemas/CollectionGeneratorBase"
+            "$ref": "#/components/schemas/CollectionGeneratorBase-Input"
           },
           "group": {
             "title": "Group",
             "type": "string"
           },
           "policy": {
-            "$ref": "#/components/schemas/CollectionPolicyBase"
+            "$ref": "#/components/schemas/CollectionPolicyBase-Input"
           }
         },
         "required": [
@@ -4720,6 +5645,77 @@
           "generator"
         ],
         "title": "CollectionPresetSet",
+        "type": "object"
+      },
+      "CollectionPresetSet-Output": {
+        "additionalProperties": false,
+        "description": "A collection set a preset starts from.",
+        "properties": {
+          "generator": {
+            "$ref": "#/components/schemas/CollectionGeneratorBase-Output"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/CollectionPolicyBase-Output"
+          }
+        },
+        "required": [
+          "group",
+          "policy",
+          "generator"
+        ],
+        "title": "CollectionPresetSet",
+        "type": "object"
+      },
+      "CollectionPreview": {
+        "additionalProperties": false,
+        "description": "What a collection's criteria select now, before it is saved.",
+        "properties": {
+          "member_count": {
+            "title": "Member Count",
+            "type": "integer"
+          },
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "member_count",
+          "members"
+        ],
+        "title": "CollectionPreview",
+        "type": "object"
+      },
+      "CollectionPreviewRequest": {
+        "additionalProperties": false,
+        "description": "Criteria to preview in one library.",
+        "properties": {
+          "library_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Id",
+            "type": "string"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CollectionRuleWrite-Input"
+          }
+        },
+        "required": [
+          "media_type",
+          "library_id",
+          "rule"
+        ],
+        "title": "CollectionPreviewRequest",
         "type": "object"
       },
       "CollectionRead": {
@@ -5145,6 +6141,60 @@
         "title": "CollectionRead",
         "type": "object"
       },
+      "CollectionRequest": {
+        "additionalProperties": false,
+        "description": "Titles to request; none requests every missing one.",
+        "properties": {
+          "tmdb_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "exclusiveMinimum": 0.0,
+                  "type": "integer"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Ids"
+          }
+        },
+        "title": "CollectionRequest",
+        "type": "object"
+      },
+      "CollectionRequestResult": {
+        "additionalProperties": false,
+        "description": "What a request added to Radarr or Sonarr.",
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "present": {
+            "default": 0,
+            "title": "Present",
+            "type": "integer"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requested",
+          "present",
+          "errors"
+        ],
+        "title": "CollectionRequestResult",
+        "type": "object"
+      },
       "CollectionRuleRead": {
         "additionalProperties": false,
         "description": "Saved rule with its most recent outcome.",
@@ -5163,6 +6213,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
               },
               {
                 "type": "null"
@@ -5236,10 +6296,18 @@
             ],
             "title": "Delete When Inactive"
           },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
           },
           "last_error": {
             "anyOf": [
@@ -5277,6 +6345,16 @@
             ],
             "title": "Limit"
           },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minimum_items": {
             "anyOf": [
               {
@@ -5300,6 +6378,17 @@
               }
             ]
           },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
           "smart": {
             "default": false,
             "title": "Smart",
@@ -5315,6 +6404,17 @@
               }
             ]
           },
+          "source_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Summary"
+          },
           "summary_format": {
             "anyOf": [
               {
@@ -5325,17 +6425,31 @@
               }
             ]
           },
-          "sync_interval_hours": {
-            "default": 24,
-            "maximum": 8760.0,
-            "minimum": 1.0,
-            "title": "Sync Interval Hours",
-            "type": "integer"
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
           },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5393,13 +6507,18 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
+          "sync_schedule",
+          "sync_enabled",
+          "request_missing",
+          "member_label",
+          "arr_tag",
+          "home_order",
           "criteria",
           "smart",
           "limit",
-          "sync_interval_hours",
-          "enabled",
           "last_synced_at",
-          "last_error"
+          "last_error",
+          "source_summary"
         ],
         "title": "CollectionRuleRead",
         "type": "object"
@@ -5422,6 +6541,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
               },
               {
                 "type": "null"
@@ -5495,10 +6624,18 @@
             ],
             "title": "Delete When Inactive"
           },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
           },
           "limit": {
             "anyOf": [
@@ -5512,6 +6649,16 @@
               }
             ],
             "title": "Limit"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "minimum_items": {
             "anyOf": [
@@ -5535,6 +6682,17 @@
                 "type": "null"
               }
             ]
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
           },
           "smart": {
             "default": false,
@@ -5561,17 +6719,31 @@
               }
             ]
           },
-          "sync_interval_hours": {
-            "default": 24,
-            "maximum": 8760.0,
-            "minimum": 1.0,
-            "title": "Sync Interval Hours",
-            "type": "integer"
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
           },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5636,6 +6808,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
               },
               {
                 "type": "null"
@@ -5709,10 +6891,18 @@
             ],
             "title": "Delete When Inactive"
           },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
           },
           "limit": {
             "anyOf": [
@@ -5726,6 +6916,16 @@
               }
             ],
             "title": "Limit"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "minimum_items": {
             "anyOf": [
@@ -5749,6 +6949,17 @@
                 "type": "null"
               }
             ]
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
           },
           "smart": {
             "default": false,
@@ -5775,17 +6986,31 @@
               }
             ]
           },
-          "sync_interval_hours": {
-            "default": 24,
-            "maximum": 8760.0,
-            "minimum": 1.0,
-            "title": "Sync Interval Hours",
-            "type": "integer"
+          "sync_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Enabled"
           },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5843,18 +7068,22 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
+          "sync_schedule",
+          "sync_enabled",
+          "request_missing",
+          "member_label",
+          "arr_tag",
+          "home_order",
           "criteria",
           "smart",
-          "limit",
-          "sync_interval_hours",
-          "enabled"
+          "limit"
         ],
         "title": "CollectionRuleWrite",
         "type": "object"
       },
       "CollectionSetEntry": {
         "additionalProperties": false,
-        "description": "One collection a set creates, keeps or skips.",
+        "description": "One collection a set creates, keeps or skips, in one of its libraries.",
         "properties": {
           "below_minimum": {
             "title": "Below Minimum",
@@ -5871,6 +7100,10 @@
             ],
             "title": "Collection Id"
           },
+          "library_id": {
+            "title": "Library Id",
+            "type": "string"
+          },
           "member_count": {
             "title": "Member Count",
             "type": "integer"
@@ -5885,6 +7118,7 @@
           }
         },
         "required": [
+          "library_id",
           "value",
           "title",
           "member_count",
@@ -5943,6 +7177,7 @@
             "mdblist": "#/components/schemas/MdblistSource-Input",
             "radarr_tag": "#/components/schemas/RadarrTagSource-Input",
             "sonarr_tag": "#/components/schemas/SonarrTagSource-Input",
+            "tmdb_chart": "#/components/schemas/TmdbChartSource-Input",
             "tmdb_collection": "#/components/schemas/TmdbCollectionSource-Input",
             "tmdb_item": "#/components/schemas/TmdbItemSource-Input",
             "tmdb_list": "#/components/schemas/TmdbListSource-Input",
@@ -5964,6 +7199,9 @@
             "$ref": "#/components/schemas/TmdbPersonSource-Input"
           },
           {
+            "$ref": "#/components/schemas/TmdbChartSource-Input"
+          },
+          {
             "$ref": "#/components/schemas/MdblistSource-Input"
           },
           {
@@ -5980,6 +7218,7 @@
             "mdblist": "#/components/schemas/MdblistSource-Output",
             "radarr_tag": "#/components/schemas/RadarrTagSource-Output",
             "sonarr_tag": "#/components/schemas/SonarrTagSource-Output",
+            "tmdb_chart": "#/components/schemas/TmdbChartSource-Output",
             "tmdb_collection": "#/components/schemas/TmdbCollectionSource-Output",
             "tmdb_item": "#/components/schemas/TmdbItemSource-Output",
             "tmdb_list": "#/components/schemas/TmdbListSource-Output",
@@ -5999,6 +7238,9 @@
           },
           {
             "$ref": "#/components/schemas/TmdbPersonSource-Output"
+          },
+          {
+            "$ref": "#/components/schemas/TmdbChartSource-Output"
           },
           {
             "$ref": "#/components/schemas/MdblistSource-Output"
@@ -6298,6 +7540,48 @@
       },
       "CronExpression": {
         "type": "string"
+      },
+      "CustomSetValue-Input": {
+        "additionalProperties": false,
+        "description": "One collection of a custom set.",
+        "properties": {
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Input"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "criteria"
+        ],
+        "title": "CustomSetValue",
+        "type": "object"
+      },
+      "CustomSetValue-Output": {
+        "additionalProperties": false,
+        "description": "One collection of a custom set.",
+        "properties": {
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Output"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "criteria"
+        ],
+        "title": "CustomSetValue",
+        "type": "object"
       },
       "DatabaseStats": {
         "additionalProperties": false,
@@ -6710,7 +7994,18 @@
           "released",
           "last_played",
           "unplayed",
-          "in_progress"
+          "in_progress",
+          "versions",
+          "folder",
+          "original_language",
+          "origin_country",
+          "tmdb_rating",
+          "tmdb_votes",
+          "tmdb_keyword",
+          "company",
+          "streaming",
+          "show_status",
+          "last_aired"
         ],
         "title": "FilterField",
         "type": "string"
@@ -8084,6 +9379,11 @@
         "title": "MediaType",
         "type": "string"
       },
+      "MemberTagFormat": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+      },
       "MonitorUpdate": {
         "additionalProperties": false,
         "description": "Whether an item or collection is monitored.",
@@ -9339,7 +10639,15 @@
           "director",
           "writer",
           "producer",
-          "franchise"
+          "franchise",
+          "edition",
+          "network",
+          "original_language",
+          "origin_country",
+          "streaming",
+          "audio_language",
+          "subtitle_language",
+          "custom"
         ],
         "title": "SetDimension",
         "type": "string"
@@ -9347,6 +10655,35 @@
       "SetTitleFormat": {
         "maxLength": 200,
         "type": "string"
+      },
+      "SetValueAlias": {
+        "additionalProperties": false,
+        "description": "Values that make one collection under a name of their own.",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values",
+          "name"
+        ],
+        "title": "SetValueAlias",
+        "type": "object"
       },
       "SonarrTagSource-Input": {
         "additionalProperties": false,
@@ -9484,6 +10821,7 @@
           "tmdb_item",
           "tmdb_list",
           "tmdb_person",
+          "tmdb_chart",
           "mdblist",
           "radarr_tag",
           "sonarr_tag"
@@ -10005,6 +11343,77 @@
           "overall"
         ],
         "title": "ThemeStats",
+        "type": "object"
+      },
+      "TmdbChart": {
+        "description": "A TMDB chart; some exist for movies or for shows only.",
+        "enum": [
+          "popular",
+          "top_rated",
+          "trending_day",
+          "trending_week",
+          "now_playing",
+          "upcoming",
+          "airing_today",
+          "on_the_air"
+        ],
+        "title": "TmdbChart",
+        "type": "string"
+      },
+      "TmdbChartSource-Input": {
+        "additionalProperties": false,
+        "description": "The top titles of a TMDB chart, such as Popular or Trending this week.",
+        "properties": {
+          "chart": {
+            "$ref": "#/components/schemas/TmdbChart"
+          },
+          "limit": {
+            "default": 100,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "type": {
+            "const": "tmdb_chart",
+            "default": "tmdb_chart",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chart"
+        ],
+        "title": "TmdbChartSource",
+        "type": "object"
+      },
+      "TmdbChartSource-Output": {
+        "additionalProperties": false,
+        "description": "The top titles of a TMDB chart, such as Popular or Trending this week.",
+        "properties": {
+          "chart": {
+            "$ref": "#/components/schemas/TmdbChart"
+          },
+          "limit": {
+            "default": 100,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "type": {
+            "const": "tmdb_chart",
+            "default": "tmdb_chart",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "chart",
+          "limit"
+        ],
+        "title": "TmdbChartSource",
         "type": "object"
       },
       "TmdbCollectionResponse": {
@@ -10577,11 +11986,6 @@
             "default": "tmdb_person",
             "title": "Type",
             "type": "string"
-          },
-          "use_biography": {
-            "default": false,
-            "title": "Use Biography",
-            "type": "boolean"
           }
         },
         "required": [
@@ -10624,19 +12028,13 @@
             "default": "tmdb_person",
             "title": "Type",
             "type": "string"
-          },
-          "use_biography": {
-            "default": false,
-            "title": "Use Biography",
-            "type": "boolean"
           }
         },
         "required": [
           "type",
           "person_id",
           "person_name",
-          "roles",
-          "use_biography"
+          "roles"
         ],
         "title": "TmdbPersonSource",
         "type": "object"
@@ -12492,6 +13890,68 @@
         ]
       }
     },
+    "/api/collections/arr-options": {
+      "get": {
+        "description": "List where Radarr or Sonarr can put requested titles.",
+        "operationId": "get_collection_arr_options",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionArrOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection Arr Options",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/bulk-monitored": {
       "patch": {
         "description": "Set the monitored flag for multiple collections at once.",
@@ -12734,7 +14194,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionPolicyBase"
+                  "$ref": "#/components/schemas/CollectionPolicyBase-Output"
                 }
               }
             },
@@ -13372,7 +14832,7 @@
     },
     "/api/collections/presets": {
       "get": {
-        "description": "Return the collection and set presets the media server can evaluate.",
+        "description": "Return saved presets, then the built-in ones the server can evaluate.",
         "operationId": "list_collection_presets",
         "parameters": [
           {
@@ -13431,6 +14891,190 @@
           }
         },
         "summary": "List Collection Presets",
+        "tags": [
+          "collections"
+        ]
+      },
+      "post": {
+        "description": "Keep a collection or set as a preset.",
+        "operationId": "save_collection_preset",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPresetSave"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPresetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Collection Preset",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/presets/{preset_id}": {
+      "delete": {
+        "description": "Forget a saved preset.",
+        "operationId": "delete_collection_preset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "preset_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Preset Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Collection Preset",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/preview": {
+      "post": {
+        "description": "Show what criteria select now, before the collection is saved.",
+        "operationId": "preview_collection",
+        "parameters": [
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Collection",
         "tags": [
           "collections"
         ]
@@ -14460,6 +16104,164 @@
           }
         },
         "summary": "Set Collection Members",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/missing": {
+      "get": {
+        "description": "List titles the collection's lists hold that the library lacks.",
+        "operationId": "get_collection_missing",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionMissing"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Collection Missing",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/missing/request": {
+      "post": {
+        "description": "Ask Radarr or Sonarr for the collection's missing titles.",
+        "operationId": "request_collection_missing",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRequestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Collection Missing",
         "tags": [
           "collections"
         ]

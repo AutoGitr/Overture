@@ -219,7 +219,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("movies");
+  await expect(page.getByRole("checkbox", { name: "Movies", exact: true })).toBeChecked();
   await expect(page.getByLabel(/^Start from/)).toBeInViewport();
   await page.getByLabel("Title", { exact: true }).fill("New collection");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
@@ -359,13 +359,13 @@ test("creating again opens a fresh draft and multiple libraries require a choice
   await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
   await logIn(page, "/movies/collections");
   await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("");
+  await expect(page.getByRole("checkbox", { name: "Other", exact: true })).not.toBeChecked();
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
   if (await page.getByRole("button", { name: "Toggle sidebar" }).isVisible())
     await page.getByRole("button", { name: "Toggle sidebar" }).click();
   await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
-  await expect(page.getByRole("combobox", { name: "Library", exact: true })).toHaveValue("");
+  await expect(page.getByRole("checkbox", { name: "Other", exact: true })).not.toBeChecked();
 });
 
 test("a franchise set shares Setup and saves its library, group and schedule", async ({ page }) => {
@@ -388,11 +388,11 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
       expect(body).toMatchObject({
-        sync_interval_hours: 168,
+        sync_schedule: "0 3 * * 0",
         visible_home: true,
         generator: {
           dimension: "franchise",
-          library_id: "other",
+          library_ids: ["other"],
           strip_suffix: " Collection",
           exclude: ["10", "20"],
         },
@@ -410,22 +410,22 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await logIn(page, "/movies/collections/new");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
-  await setup.getByRole("combobox", { name: "Library", exact: true }).selectOption("other");
+  await setup.getByRole("checkbox", { name: "Other", exact: true }).check();
   await setup.getByText("One per value", { exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Configure sections" })).toHaveCount(0);
   const submit = page.getByRole("button", { name: "Save and Create", exact: true });
-  await page.getByLabel(/^One collection per/).selectOption("franchise");
+  await page.getByLabel(/^Split by/).selectOption("franchise");
   // A blank group is named after what the set splits by.
   await expect(setup.getByLabel(/^Group/)).toHaveAttribute("placeholder", "TMDB franchises");
   await setup.getByLabel(/^Group/).fill("Franchises");
   await page.getByLabel("Trailing text to remove", { exact: true }).fill(" Collection");
   await page.getByLabel(/^Skip these values/).fill("10, 20");
-  await page.getByRole("button", { name: "Defaults", exact: true }).click();
-  await page.getByLabel("Sync interval (hours)", { exact: true }).fill("168");
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByLabel("Sync schedule", { exact: true }).fill("0 3 * * 0");
   await setup.getByText("One collection", { exact: true }).click();
   await expect(setup.getByLabel("Title", { exact: true })).toHaveValue("Unsaved single collection");
   await setup.getByText("One per value", { exact: true }).click();
-  await expect(page.getByLabel("Sync interval (hours)", { exact: true })).toHaveValue("168");
+  await expect(page.getByLabel("Sync schedule", { exact: true })).toHaveValue("0 3 * * 0");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
@@ -546,7 +546,7 @@ test("group management saves and applies defaults separately from an unsaved col
   await expect(setup.getByLabel("Group", { exact: true })).toHaveValue("Weekend");
   const dialog = page.getByRole("dialog", { name: "Collection groups" });
   await dialog.getByRole("combobox", { name: "Group", exact: true }).selectOption("Weekend");
-  await dialog.getByRole("button", { name: "Defaults", exact: true }).click();
+  await dialog.getByRole("button", { name: "Settings", exact: true }).click();
   await dialog.getByRole("textbox", { name: "Sort title", exact: true }).fill("02_{title}");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",

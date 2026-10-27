@@ -49,10 +49,16 @@ class CollectionRule(SQLModel, table=True):
     delete_when_inactive: bool | None = None
     auto_match_art: bool | None = None
     auto_match_theme: bool | None = None
-    sync_interval_hours: int = Field(default=24)
+    sync_schedule: str | None = None
+    sync_enabled: bool | None = None
+    request_missing: bool | None = None
+    member_label: str | None = None
+    arr_tag: str | None = None
+    home_order: int | None = None
+    #: The description of the first list the criteria use, for summaries.
+    source_summary: str | None = None
     last_synced_at: datetime | None = None
     last_error: str | None = None
-    enabled: bool = True
 
 
 enum_columns(CollectionRule)

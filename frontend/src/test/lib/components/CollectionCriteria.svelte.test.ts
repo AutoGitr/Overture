@@ -7,6 +7,8 @@ import type {
 } from "../../../generated/rest/types.gen";
 import CollectionGroupSettings from "../../../lib/components/CollectionGroupSettings.svelte";
 import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
+import CollectionSetEditor from "../../../lib/components/CollectionSetEditor.svelte";
+import GlobalCollectionDefaults from "../../../lib/components/GlobalCollectionDefaults.svelte";
 import CriteriaEditor from "../../../lib/components/CriteriaEditor.svelte";
 import SourceFields from "../../../lib/components/SourceFields.svelte";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
@@ -14,6 +16,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { goToCollectionView, navigate } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { emptyGroup } from "../../../lib/utils/collectionCriteria";
+import { defaultGenerator } from "../../../lib/utils/collectionForms.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   appSettings,
@@ -124,7 +127,6 @@ describe("collection criteria", () => {
       type: "tmdb_person",
       person_id: 0,
       roles: ["actor"],
-      use_biography: false,
     });
     const tags = $state<CollectionSourceInput>({ type: "radarr_tag", tags: [] });
     renderWithQueryClient(SourceFields, { source: person, mediaType: "movie", label: "Person" });
@@ -136,12 +138,10 @@ describe("collection criteria", () => {
     const credits = within(screen.getByRole("group", { name: "Person credits" }));
     await fireEvent.click(credits.getByLabelText("Director"));
     await fireEvent.click(credits.getByLabelText("Actor"));
-    await fireEvent.click(credits.getByLabelText("Biography as summary"));
     expect($state.snapshot(person)).toEqual({
       type: "tmdb_person",
       person_id: 525,
       roles: ["director"],
-      use_biography: true,
     });
 
     await fireEvent.click(await screen.findByRole("button", { name: "criterion" }));
@@ -201,9 +201,35 @@ describe("collection criteria", () => {
     expect(screen.getByLabelText("Saga TMDB franchise ID")).toHaveValue(10);
   });
 
+  it("names inherited values and keeps member effects off the global level", () => {
+    const collection = renderWithQueryClient(CollectionPolicyFields, {
+      policy: { sync_mode: null },
+      level: "collection",
+      defaults: { sync_mode: "append" },
+      arr: "Radarr",
+      memberLabels: true,
+    });
+    expect(screen.getByRole("option", { name: "Default (Append)" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Member label")).toBeInTheDocument();
+    expect(screen.getByLabelText("Radarr tag")).toBeInTheDocument();
+    collection.unmount();
+
+    renderWithQueryClient(CollectionPolicyFields, {
+      policy: { sync_mode: "sync" },
+      level: "global",
+      arr: "Radarr",
+      memberLabels: true,
+    });
+    expect(screen.queryByRole("option", { name: /^Default/ })).toBeNull();
+    expect(screen.queryByLabelText("Member label")).toBeNull();
+    expect(screen.queryByLabelText("Radarr tag")).toBeNull();
+    expect(screen.getByLabelText("Request missing")).toBeInTheDocument();
+  });
+
   it("offers the sorts the server supports", () => {
     renderWithQueryClient(CollectionPolicyFields, {
       policy: { order_type: null },
+      level: "collection",
       orders: ["custom", "critic_rating.desc"],
     });
     expect(
@@ -327,7 +353,11 @@ describe("collection criteria", () => {
       active_end_mmdd: null,
       generator: null,
       sync_enabled: null,
-      sync_interval_hours: null,
+      sync_schedule: null,
+      request_missing: null,
+      member_label: null,
+      arr_tag: null,
+      home_order: null,
       visible_home: null,
       order_type: null,
     };
@@ -370,7 +400,7 @@ describe("collection criteria", () => {
 
     await fireEvent.click(await screen.findByRole("button", { name: "Collection set" }));
     await fireEvent.click(screen.getByLabelText("Create this group's collections"));
-    await fireEvent.change(screen.getByLabelText("One collection per"), {
+    await fireEvent.change(screen.getByLabelText("Split by"), {
       target: { value: "genre" },
     });
     expect(screen.getByLabelText(/^Title/)).toHaveValue("{value}");
@@ -386,7 +416,7 @@ describe("collection criteria", () => {
       media_type: "movie",
       group: "Genres",
       minimum_items: 2,
-      generator: { dimension: "genre", library_id: "movies", top: 10 },
+      generator: { dimension: "genre", library_ids: ["movies"], top: 10 },
     });
 
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -394,9 +424,123 @@ describe("collection criteria", () => {
     expect(synced).toBe(false);
     expect(putBody).toMatchObject({
       minimum_items: 2,
-      generator: { dimension: "genre", library_id: "movies", title_format: "{value}", top: 10 },
+      generator: { dimension: "genre", library_ids: ["movies"], title_format: "{value}", top: 10 },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() => expect(synced).toBe(true));
+  });
+
+  it("lists a custom set's collections and renames or merges other values", async () => {
+    const generator = $state(defaultGenerator(["movies"]));
+    renderWithQueryClient(CollectionSetEditor, {
+      generator,
+      libraryIds: ["movies"],
+      libraries: [{ id: "movies", title: "Movies", count: 1 }],
+      mediaType: "movie",
+      capabilities: collectionCapabilities({
+        dimensions: [
+          ...capabilities.dimensions,
+          {
+            dimension: "audio_language",
+            label: "Audio languages",
+            title_format: "{value}",
+            smart_only: true,
+          },
+        ],
+      }),
+      group: "Mine",
+      minimum: null,
+      titled: true,
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
+    await fireEvent.change(screen.getByLabelText("Alias 1 values"), {
+      target: { value: "1990, 2000" },
+    });
+    await fireEvent.input(screen.getByLabelText("Alias 1 title"), {
+      target: { value: "Turn of the century" },
+    });
+    expect($state.snapshot(generator.aliases)).toEqual([
+      { values: ["1990", "2000"], name: "Turn of the century" },
+    ]);
+    await fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(generator.aliases).toEqual([]);
+
+    await fireEvent.change(screen.getByLabelText("Split by"), { target: { value: "custom" } });
+    expect(generator.custom_values).toHaveLength(1);
+    await fireEvent.click(screen.getByRole("button", { name: "Add collection" }));
+    await fireEvent.input(screen.getByLabelText("Collection 2 name"), {
+      target: { value: "B" },
+    });
+    expect(generator.custom_values?.map((value) => value.name)).toEqual(["", "B"]);
+    await fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]!);
+    expect(generator.custom_values?.map((value) => value.name)).toEqual(["B"]);
+
+    await fireEvent.change(screen.getByLabelText("Split by"), {
+      target: { value: "audio_language" },
+    });
+    expect(generator.smart).toBe(true);
+    expect(generator.custom_values).toEqual([]);
+    expect(screen.getByText("Only Plex knows these values.")).toBeInTheDocument();
+    await fireEvent.click(screen.getByLabelText(/Remove collections whose value/));
+    expect(generator.remove_vanished).toBe(true);
+  });
+
+  it("edits the global defaults under their own names and where requests go", async () => {
+    settingsState.load(
+      appSettings({
+        media_server: "plex",
+        collections_supported: true,
+        radarr_configured: true,
+        tmdb_configured: true,
+      }),
+    );
+    mockFetchRoutes({
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/arr-options": {
+        root_folders: ["/movies"],
+        quality_profiles: [{ id: 4, label: "HD" }],
+      },
+    });
+    const draft = $state(settingsState.toUpdatePayload());
+    renderWithQueryClient(GlobalCollectionDefaults, { draft });
+    await fireEvent.change(screen.getByLabelText("Sync mode"), { target: { value: "append" } });
+    expect(draft.collection_sync_mode).toBe("append");
+    await fireEvent.input(screen.getByLabelText("Sort title"), { target: { value: "" } });
+    expect(draft.collection_sort_title_format).toBe("");
+    await fireEvent.change(screen.getByLabelText("Collection mode"), {
+      target: { value: "hide" },
+    });
+    expect(draft.collection_mode_default).toBe("hide");
+    await fireEvent.input(screen.getByLabelText("TMDB region"), { target: { value: "SE" } });
+    expect(draft.tmdb_region).toBe("SE");
+    await screen.findByRole("option", { name: "/movies" });
+    await fireEvent.change(screen.getByLabelText("Radarr root folder"), {
+      target: { value: "/movies" },
+    });
+    expect(draft.radarr_root_folder).toBe("/movies");
+    expect(screen.queryByLabelText("Sonarr root folder")).toBeNull();
+    expect(screen.queryByRole("option", { name: /^Default/ })).toBeNull();
+  });
+
+  it("picks a TMDB chart and how many of its titles count", async () => {
+    mockFetchRoutes({ "/api/collections/capabilities": capabilities });
+    const chart = $state<CollectionSourceInput>({
+      type: "tmdb_chart",
+      chart: "popular",
+      limit: 100,
+    });
+    renderWithQueryClient(SourceFields, { source: chart, mediaType: "movie", label: "Chart" });
+    await screen.findByRole("option", { name: "Trending this week" });
+    await fireEvent.change(screen.getByLabelText("Chart TMDB chart"), {
+      target: { value: "trending_week" },
+    });
+    await fireEvent.input(screen.getByLabelText("Chart chart length"), {
+      target: { value: "25" },
+    });
+    expect($state.snapshot(chart)).toEqual({
+      type: "tmdb_chart",
+      chart: "trending_week",
+      limit: 25,
+    });
   });
 });

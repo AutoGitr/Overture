@@ -403,24 +403,24 @@ class MediaItemRepository:
             found.extend(await self.session.exec(stmt))
         return found
 
-    async def movies_without_tmdb_collection_check(
-        self, library_ids: list[str] | None = None
-    ) -> list[tuple[int, int]]:
-        """Return ``(id, tmdb_id)`` of visible movies whose collection is unknown."""
-        stmt = select(MediaItem.id, MediaItem.tmdb_id).where(
-            col(MediaItem.media_type) == MediaType.MOVIE,
+    async def titles_needing_tmdb_facts(
+        self, checked_before: datetime, library_ids: list[str] | None = None
+    ) -> list[tuple[int, MediaType, int]]:
+        """``(id, media_type, tmdb_id)`` of visible titles never or long ago read."""
+        stmt = select(MediaItem.id, MediaItem.media_type, MediaItem.tmdb_id).where(
             col(MediaItem.server_removed_at).is_(None),
             col(MediaItem.tmdb_id).is_not(None),
             or_(
-                col(MediaItem.tmdb_collection_checked_id).is_(None),
-                col(MediaItem.tmdb_collection_checked_id) != col(MediaItem.tmdb_id),
+                col(MediaItem.tmdb_checked_id).is_(None),
+                col(MediaItem.tmdb_checked_id) != col(MediaItem.tmdb_id),
+                col(MediaItem.tmdb_checked_at) < checked_before,
             ),
         )
         if library_ids:
             stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
         return [
-            (item_id, tmdb_id)
-            for item_id, tmdb_id in await self.session.exec(stmt)
+            (item_id, MediaType(media_type), tmdb_id)
+            for item_id, media_type, tmdb_id in await self.session.exec(stmt)
             if item_id is not None and tmdb_id is not None
         ]
 

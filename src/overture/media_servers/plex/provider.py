@@ -273,6 +273,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             if movie
             else 0 < (metadata.get("viewedLeafCount") or 0) < leaves,
             release_date=metadata.get("originallyAvailableAt") or None,
+            versions=(len(metadata.get("Media") or ()) or None) if movie else None,
             server_added_at=parse_utc_datetime(metadata.get("addedAt")),
             server_updated_at=parse_utc_datetime(metadata.get("updatedAt")),
         )
@@ -487,6 +488,20 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         self, section_key: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
         return await self.client.get_filter_choices(section_key, media_type, field)
+
+    @override
+    async def find_matching(
+        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+    ) -> tuple[int, list[str]]:
+        return await self.client.find_matching(
+            section_key, media_type, filter_query, size
+        )
+
+    @override
+    async def order_collection_hubs(
+        self, section_key: str, server_collection_ids: Sequence[str]
+    ) -> None:
+        await self.client.order_collection_hubs(section_key, server_collection_ids)
 
     @override
     async def sync_item_labels(

@@ -17,7 +17,7 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaType, ServerType
-lazy from overture.integrations.tmdb import TMDBClient, TmdbDetails
+lazy from overture.integrations.tmdb import TMDBClient, TmdbFacts
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.jobs.progress_log import JobLogEntry, JobOutcome, log_entry
 lazy from overture.jobs.runner import JobContext
@@ -744,7 +744,7 @@ async def test_start_background_sync_rejects_duplicate_running_task(
     assert engine.job.running is False
 
 
-@pytest.mark.parametrize("phase", ["collection listing", "TMDB collection lookup"])
+@pytest.mark.parametrize("phase", ["collection listing", "TMDB lookup"])
 async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
     phase: str,
     tmp_path: Path,
@@ -783,9 +783,9 @@ async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
             pass
 
         @override
-        async def get_details(
-            self, media_type: MediaType, tmdb_id: int
-        ) -> TmdbDetails | None:
+        async def get_facts(
+            self, media_type: MediaType, tmdb_id: int, region: str
+        ) -> TmdbFacts | None:
             await wait_for_cancel()
             return None
 
