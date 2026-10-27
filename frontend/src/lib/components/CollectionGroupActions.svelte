@@ -21,8 +21,8 @@
 </script>
 
 <DetailForm
-  title="Manage group"
-  description="Rename the group or choose what happens to its collections when you delete it. Media files are always kept."
+  title="Rename or delete"
+  description="Media files are always kept."
   busy={actions.busy}
   collapsible
 >
@@ -37,15 +37,15 @@
     onclick={async () => {
       const name = await actions.rename();
       if (name) onrename(name);
-    }}>Rename group</button
+    }}>Rename</button
   >
   <label class="form-label">
-    When deleting this group
+    On delete
     <select bind:value={actions.removal}>
-      <option value="keep">Delete group only; keep collections</option>
-      <option value="overture">Delete group and collections from Overture</option>
-      <option value="server">Delete group and collections from media server</option>
-      <option value="both">Delete group and collections from both</option>
+      <option value="keep">Keep its collections</option>
+      <option value="overture">Remove its collections from Overture</option>
+      <option value="server">Remove its collections from the server</option>
+      <option value="both">Remove its collections from both</option>
     </select>
   </label>
   <button

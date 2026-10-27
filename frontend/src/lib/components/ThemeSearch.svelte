@@ -17,7 +17,6 @@
    */
   let {
     label,
-    inputId,
     initialQuery,
     videoIds = [],
     present = (results) => results,
@@ -28,7 +27,6 @@
     onselect,
   }: {
     label: string;
-    inputId?: string;
     initialQuery: string;
     /** Videos shown with their metadata whatever is searched for. */
     videoIds?: string[];
@@ -84,7 +82,6 @@
 
 <div class="theme-search-row">
   <input
-    id={inputId}
     type="text"
     class="theme-search-input"
     placeholder="Search YouTube or paste URL..."

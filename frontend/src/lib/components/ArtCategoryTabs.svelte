@@ -50,7 +50,8 @@
     onselect,
     onclear,
   }: {
-    active: ArtSubTab;
+    /** Null outside the art mode, where the tabs only open it. */
+    active: ArtSubTab | null;
     seasons?: boolean;
     statuses?: Partial<Record<ArtSubTab, StatusTone | null>>;
     clearable?: Partial<Record<ArtSubTab, boolean>>;

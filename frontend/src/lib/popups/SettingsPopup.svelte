@@ -263,19 +263,17 @@
           unmanaged collections during Sync</label
         >
         <p class="hint">
-          Turn off to leave new server collections outside Overture. Existing imports are kept.
-          Membership sync controls only collections with source rules; it does not delete unmanaged
-          collections.
+          Off leaves new server collections outside Overture; existing imports are kept. Groups and
+          collections can override everything below.
         </p>
         <div class="options-col">
           <label class="form-label"
-            >Membership sync<select bind:value={draft.collection_sync_mode}
-              ><option value="sync">Strict sync</option><option value="append">Append</option
-              ></select
+            >Sync mode<select bind:value={draft.collection_sync_mode}
+              ><option value="sync">Sync</option><option value="append">Append</option></select
             ></label
           >
           {#if settingsState.current.media_server === "plex"}<label class="form-label"
-              >Collection visibility<select bind:value={draft.collection_mode_default}
+              >Collection mode<select bind:value={draft.collection_mode_default}
                 ><option value="default">Library default</option><option value="hide_items"
                   >Hide items</option
                 ><option value="show_items">Show collection and items</option><option value="hide"
@@ -284,7 +282,7 @@
               ></label
             >{/if}
           <label class="form-label"
-            >Minimum collection members<input
+            >Minimum members<input
               type="number"
               min="1"
               max="100"
@@ -293,27 +291,26 @@
           >
           <label class="form-row"
             ><input type="checkbox" bind:checked={draft.collection_delete_below_minimum} />Delete
-            collections below minimum</label
+            collections below the minimum</label
           >
           <label class="form-label"
-            >Fallback sort title for managed collections
+            >Sort title
             <input
               maxlength="200"
               bind:value={draft.collection_sort_title_format}
               placeholder="+&#123;title&#125;"
             />
             <span class="hint"
-              >Used when a managed collection and its group have no override. Use &#123;title&#125;
-              and &#123;group&#125;; blank preserves the server sort title.</span
+              >Text or a template with &#123;title&#125; and &#123;group&#125;. Blank keeps the
+              server's sort title.</span
             >
           </label>
           <label class="form-row"
-            ><input type="checkbox" bind:checked={draft.collection_auto_match_art} />Automatically
-            select collection artwork on rule sync</label
+            ><input type="checkbox" bind:checked={draft.collection_auto_match_art} />Automatic art</label
           >
           <label class="form-row"
-            ><input type="checkbox" bind:checked={draft.collection_auto_match_theme} />Automatically
-            select collection themes on rule sync</label
+            ><input type="checkbox" bind:checked={draft.collection_auto_match_theme} />Automatic
+            theme</label
           >
         </div>
       </div>

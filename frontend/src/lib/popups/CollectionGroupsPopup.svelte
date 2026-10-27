@@ -13,6 +13,8 @@
   import { openSidebarGroup, sidebarGroup } from "../router/routes";
   let name = $state(uiState.collectionGroupToEdit);
   let newName = $state(uiState.collectionGroupToEdit);
+  /** The group being configured has not been saved yet. */
+  let unsaved = $state(false);
   const groups = createQuery(() =>
     listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
   );
@@ -23,8 +25,8 @@
 
 <PopupShell title="Collection groups" size="wide" onclose={() => uiState.closePopup()}>
   <p class="hint">
-    Groups share defaults, and a group can be a collection set that creates its collections.
-    Collections keep their explicit overrides.
+    Collections in a group share its defaults, and a group can be a set that creates its
+    collections.
   </p>
   <DataStatus
     label="collection groups"
@@ -46,6 +48,7 @@
       value={groups.data?.includes(name) ? name : "__new__"}
       onchange={(event) => {
         name = event.currentTarget.value === "__new__" ? "" : event.currentTarget.value;
+        unsaved = false;
       }}
     >
       <option value="__new__">Create new group...</option>
@@ -60,7 +63,10 @@
       class="btn btn-secondary"
       type="button"
       disabled={!newName.trim()}
-      onclick={() => (name = newName.trim())}>Configure new group</button
+      onclick={() => {
+        name = newName.trim();
+        unsaved = true;
+      }}>Configure</button
     >
   {/if}
   {#if name.trim()}
@@ -87,6 +93,10 @@
           group={name.trim()}
           mediaType={uiState.sidebarTab}
           libraries={libraries.data ?? []}
+          onsave={() => {
+            if (unsaved) uiState.collectionGroupChanged("", name.trim());
+            unsaved = false;
+          }}
         />{/key}
     </WorkflowSections>
   {/if}

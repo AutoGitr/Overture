@@ -12,7 +12,7 @@ import {
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
   syncCollectionGroupMutation,
-  syncCollectionRuleMutation,
+  syncCollectionMutation,
   updateCollectionMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
@@ -218,7 +218,7 @@ export class CollectionEditor {
   private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
   private readonly ruleRequest = createMutation(() => saveCollectionRuleMutation());
   private readonly removeRuleRequest = createMutation(() => deleteCollectionRuleMutation());
-  private readonly syncRequest = createMutation(() => syncCollectionRuleMutation());
+  private readonly syncRequest = createMutation(() => syncCollectionMutation());
   private readonly deleteRequest = createMutation(() => deleteCollectionMutation());
   private readonly feedback = createNotifier();
 
@@ -309,27 +309,43 @@ export class CollectionEditor {
     return { path: { collection_id: c.id }, query: { media_type: c.media_type } };
   }
 
+  /** Writes that stay in Overture until the collection is synced. */
+  private get localTarget() {
+    return { ...this.target, query: { ...this.target.query, to_server: false } };
+  }
+
   private async perform(action: () => Promise<void>): Promise<boolean> {
     if (this.busy) return false;
     try {
       await action();
       return true;
     } catch (error) {
-      this.feedback.error(errorMessage(error, "Collection update failed"));
+      this.feedback.error(errorMessage(error, "Could not update the collection"));
       return false;
     }
   }
 
-  save() {
+  /** Save in Overture; with `sync`, then make the server match. */
+  save(sync = false) {
     return this.perform(async () => {
       const rule = await this.persistRule();
       const saved = await this.updateRequest.mutateAsync({
-        ...this.target,
+        ...this.localTarget,
         body: optionsBody(this),
       });
       storeCollectionDetail(saved);
       if (rule !== undefined) patchCollectionRule(saved.id, rule);
-      this.feedback.success("Collection changes saved.");
+      if (!sync) {
+        this.feedback.success("Saved.");
+        return;
+      }
+      const result = await this.syncRequest.mutateAsync(this.target);
+      if (result.deleted) goToCollectionsList(this.collection.media_type);
+      this.feedback.success(
+        result.skipped
+          ? "Saved. Below minimum or out of season, so the server is unchanged."
+          : `Saved and synced: ${result.added} added, ${result.removed} removed.`,
+      );
     });
   }
 
@@ -348,7 +364,7 @@ export class CollectionEditor {
     return this.perform(async () => {
       storeCollectionDetail(
         await this.membersRequest.mutateAsync({
-          ...this.target,
+          ...this.localTarget,
           body: { member_ids: memberIds, order_type: order },
         }),
       );
@@ -378,20 +394,6 @@ export class CollectionEditor {
     ids.splice(fromIndex, 1);
     ids.splice(targetIndex, 0, id);
     return this.setMembers(ids, "custom");
-  }
-
-  sync() {
-    return this.perform(async () => {
-      const result = await this.syncRequest.mutateAsync(this.target);
-      if (result.deleted) {
-        goToCollectionsList(this.collection.media_type);
-      }
-      this.feedback.success(
-        result.skipped
-          ? "Below minimum or out of season; membership kept."
-          : `Synced: ${result.added} added, ${result.removed} removed.`,
-      );
-    });
   }
 
   async delete() {
@@ -535,14 +537,16 @@ export class CollectionDraft {
     }
   }
 
-  async save() {
+  /** Save in Overture; with `sync`, then create it on the server. */
+  async save(sync = false) {
     if (this.busy) return false;
-    return this.kind === "set" ? this.saveSet() : this.saveCollection();
+    return this.kind === "set" ? this.saveSet(sync) : this.saveCollection(sync);
   }
 
-  private async saveCollection() {
+  private async saveCollection(sync: boolean) {
     try {
       const collection = await this.request.mutateAsync({
+        query: { to_server: sync },
         body: {
           ...optionsBody(this),
           media_type: this.mediaType,
@@ -555,13 +559,13 @@ export class CollectionDraft {
       goToCollection(collection);
       return true;
     } catch (error) {
-      this.feedback.error(errorMessage(error, "Collection creation failed"));
+      this.feedback.error(errorMessage(error, "Could not save the collection"));
       return false;
     }
   }
 
-  /** Save the set into its group, keeping the group's other defaults, then run it. */
-  private async saveSet() {
+  /** Save the set into its group, keeping the group's other defaults; `sync` runs it. */
+  private async saveSet(sync: boolean) {
     const name = this.setGroup;
     const query = { name, media_type: this.mediaType };
     try {
@@ -579,6 +583,11 @@ export class CollectionDraft {
         },
       });
       queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
+      if (!sync) {
+        this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
+        goToCollectionsList(this.mediaType, name);
+        return true;
+      }
       const result = await this.syncGroupRequest.mutateAsync({ query });
       const errors = Object.entries(result.errors);
       if (errors.length) {
@@ -593,7 +602,7 @@ export class CollectionDraft {
       goToCollectionsList(this.mediaType, name);
       return true;
     } catch (error) {
-      this.feedback.error(errorMessage(error, "Collection set creation failed"));
+      this.feedback.error(errorMessage(error, "Could not save the set"));
       return false;
     }
   }

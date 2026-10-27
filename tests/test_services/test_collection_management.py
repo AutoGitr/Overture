@@ -2,6 +2,7 @@
 
 lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass, field
+lazy from datetime import timedelta
 lazy from typing import ClassVar, override
 lazy from unittest.mock import AsyncMock
 
@@ -72,6 +73,7 @@ lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import source_label
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 lazy from tests.test_services.test_collections_service import (
@@ -1720,7 +1722,9 @@ async def test_formatted_options(manager: Manager) -> None:
         )
 
 
-async def test_sync_due_runs_due_sets_and_rules(manager: Manager) -> None:
+async def test_sync_due_runs_due_sets_and_rules(
+    manager: Manager, database: Database
+) -> None:
     await manager.service.save_group_policy(
         MediaType.MOVIE,
         "Franchises",
@@ -1743,12 +1747,22 @@ async def test_sync_due_runs_due_sets_and_rules(manager: Manager) -> None:
             ),
         )
     )
-    # Run sync_due
     await manager.service.sync_due()
     detail = await manager.service.get_collection(created.id, MediaType.MOVIE)
     assert detail.rule is not None
     assert detail.rule.last_synced_at is not None
-
+    # A set first runs by hand; the scheduler then keeps it current.
+    assert {
+        row.title for row in await manager.service.list_collections(MediaType.MOVIE)
+    } == {"Due Collection"}
+    async with database.write_session() as session:
+        group = await CollectionRepository(session).group_policy(
+            ServerType.PLEX, MediaType.MOVIE, "Franchises"
+        )
+        assert group is not None
+        group.generated_at = utc_now() - timedelta(days=2)
+        session.add(group)
+    await manager.service.sync_due()
     assert {
         row.title for row in await manager.service.list_collections(MediaType.MOVIE)
     } == {"Saga", "Due Collection"}
@@ -2375,3 +2389,77 @@ async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
     assert refreshed.rule.visible_home is None
     assert refreshed.rule.visible_shared is True
     assert refreshed.rule.order_type is None
+
+
+async def test_saved_only_collection_stays_off_the_server_until_synced(
+    manager: Manager,
+) -> None:
+    saved = await manager.service.create(
+        CollectionCreate(
+            title="Draft",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        ),
+        sync=False,
+    )
+    assert (saved.withheld, saved.unsynced) == (True, True)
+    await manager.service.sync_due()
+    assert manager.provider.created == []
+
+    await manager.service.sync(saved.id, MediaType.MOVIE)
+    synced = await manager.service.get_collection(saved.id, MediaType.MOVIE)
+    assert manager.provider.created == ["Draft"]
+    assert (synced.withheld, synced.unsynced) == (False, False)
+
+
+async def test_saved_only_edits_wait_for_sync(manager: Manager) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity, MediaType.MOVIE, CollectionOptions(title="Renamed"), sync=False
+    )
+    detail = await manager.service.set_members(
+        identity,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(
+            member_ids=list(reversed(manager.ids)), order_type=CollectionOrder.CUSTOM
+        ),
+        sync=False,
+    )
+    assert (detail.title, detail.unsynced) == ("Renamed", True)
+    assert [member.id for member in detail.members] == list(reversed(manager.ids))
+    assert manager.provider.members["1"] == ["m0", "m1", "m2"]
+    assert manager.provider.options["1"][0] == "Saga"
+
+    await manager.service.sync(identity, MediaType.MOVIE)
+    synced = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert manager.provider.members["1"] == ["m2", "m1", "m0"]
+    assert manager.provider.options["1"][0] == "Renamed"
+    assert synced.unsynced is False
+
+
+async def test_append_sync_sends_members_chosen_since_the_last_sync(
+    manager: Manager,
+) -> None:
+    created = await manager.service.create(
+        CollectionCreate(
+            title="Append",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11])),
+                sync_mode=SyncMode.APPEND,
+            ),
+        )
+    )
+    chosen = [*[member.id for member in created.members], manager.ids[2]]
+    await manager.service.set_members(
+        created.id,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(member_ids=chosen, order_type=CollectionOrder.CUSTOM),
+        sync=False,
+    )
+    await manager.service.sync(created.id, MediaType.MOVIE)
+    detail = await manager.service.get_collection(created.id, MediaType.MOVIE)
+    assert {member.id for member in detail.members} == set(chosen)
+    assert detail.unsynced is False

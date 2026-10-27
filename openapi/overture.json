@@ -3183,6 +3183,11 @@
             ],
             "title": "Tmdb Collection Id"
           },
+          "unsynced": {
+            "default": false,
+            "title": "Unsynced",
+            "type": "boolean"
+          },
           "visible_home": {
             "default": false,
             "title": "Visible Home",
@@ -3283,6 +3288,7 @@
           "active_end_mmdd",
           "delete_when_inactive",
           "withheld",
+          "unsynced",
           "managed",
           "sync_failed",
           "last_rule_sync",
@@ -5028,6 +5034,11 @@
             ],
             "title": "Tmdb Collection Id"
           },
+          "unsynced": {
+            "default": false,
+            "title": "Unsynced",
+            "type": "boolean"
+          },
           "visible_home": {
             "default": false,
             "title": "Visible Home",
@@ -5106,6 +5117,7 @@
           "active_end_mmdd",
           "delete_when_inactive",
           "withheld",
+          "unsynced",
           "managed",
           "sync_failed",
           "last_rule_sync",
@@ -12408,9 +12420,21 @@
         ]
       },
       "post": {
-        "description": "Create a collection in a server library.",
+        "description": "Create a collection in a server library, or only in Overture.",
         "operationId": "create_collection",
         "parameters": [
+          {
+            "description": "Also send the change to the media server",
+            "in": "query",
+            "name": "to_server",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Also send the change to the media server",
+              "title": "To Server",
+              "type": "boolean"
+            }
+          },
           {
             "description": "Session token",
             "in": "cookie",
@@ -13762,6 +13786,18 @@
             }
           },
           {
+            "description": "Also send the change to the media server",
+            "in": "query",
+            "name": "to_server",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Also send the change to the media server",
+              "title": "To Server",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Session token",
             "in": "cookie",
             "name": "overture_token",
@@ -14361,6 +14397,18 @@
             }
           },
           {
+            "description": "Also send the change to the media server",
+            "in": "query",
+            "name": "to_server",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Also send the change to the media server",
+              "title": "To Server",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Session token",
             "in": "cookie",
             "name": "overture_token",
@@ -14733,8 +14781,8 @@
     },
     "/api/collections/{collection_id}/sync": {
       "post": {
-        "description": "Apply the collection's criteria immediately.",
-        "operationId": "sync_collection_rule",
+        "description": "Make the media server match the collection saved in Overture.",
+        "operationId": "sync_collection",
         "parameters": [
           {
             "description": "Collection ID",
@@ -14799,7 +14847,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Sync Collection Rule",
+        "summary": "Sync Collection",
         "tags": [
           "collections"
         ]

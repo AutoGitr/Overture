@@ -28,6 +28,7 @@ lazy from overture.jobs.runner import ManagedJob, run_managed_job
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
+lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.services.collections.theme_files import (
     collection_folder,
     inspect_theme_file,
@@ -563,3 +564,27 @@ async def test_imported_literal_expressions_follow_server_metadata(
     assert refreshed.summary == "Changed {overview}"
     assert refreshed.summary_source == "Changed {overview}"
     assert refreshed.summary_format == "Changed {{overview}}"
+
+
+async def test_unsynced_choices_and_members_survive_a_library_sync(
+    *, app_config: Settings, database: Database
+) -> None:
+    movies = await _seed_movies(database)
+    server = Server(_collection("saga", "m0", "m1"))
+    await _run(server, database, app_config)
+    async with database.write_session() as session:
+        row = (await _rows(database))["saga"]
+        row.title = "Renamed"
+        row.unsynced = True
+        session.add(row)
+        await CollectionRepository(session).replace_members(row.id or 0, [movies["m2"]])
+    server.listed = [replace(server.listed[0], thumb_url="https://server.test/new")]
+    await _run(server, database, app_config)
+    refreshed = (await _rows(database))["saga"]
+    assert (refreshed.title, refreshed.thumb_url) == (
+        "Renamed",
+        "https://server.test/new",
+    )
+    async with database.read_session() as session:
+        members = await CollectionRepository(session).members(refreshed.id or 0)
+    assert [member.id for member in members] == [movies["m2"]]

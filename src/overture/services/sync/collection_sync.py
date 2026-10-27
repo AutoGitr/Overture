@@ -295,36 +295,13 @@ class CollectionSync:
             if media_type is MediaType.MOVIE
             else None,
         )
-        if row.id is None or collection.summary != row.summary:
-            row.summary_source = collection.summary
-        if row.id is None or (
-            row.summary is not None
-            and row.summary_format == literal_template(row.summary)
-        ):
-            row.summary_format = (
-                literal_template(collection.summary)
-                if collection.summary is not None
-                else None
-            )
-        sort_title = collection.sort_title or row.sort_title
-        if row.id is None or (
-            row.sort_title is not None
-            and row.sort_title_format == literal_template(row.sort_title)
-        ):
-            row.sort_title_format = (
-                literal_template(sort_title) if sort_title is not None else None
-            )
         row.sqlmodel_update(
             {
                 "media_type": media_type,
                 "kind": (
                     CollectionKind.SMART if collection.smart else CollectionKind.REGULAR
                 ),
-                "title": collection.title,
-                "summary": collection.summary,
-                "sort_title": sort_title,
                 "library_id": library_id,
-                "child_count": len(collection.member_ids),
                 "thumb_url": collection.thumb_url,
                 "art_url": collection.art_url,
                 "server_link": collection.server_link,
@@ -335,19 +312,10 @@ class CollectionSync:
                 "updated_at": now,
             }
         )
-        if collection.collection_mode is not None:
-            row.collection_mode = collection.collection_mode
-        if collection.collection_filtering is not None:
-            row.collection_filtering = collection.collection_filtering
-        # Overture keeps orders the server cannot sort by as a custom order.
-        computed = row.order_type not in {
-            CollectionOrder.RELEASE_ASC,
-            CollectionOrder.TITLE_ASC,
-        }
-        if collection.order_type is not None and not (
-            collection.order_type is CollectionOrder.CUSTOM and computed
-        ):
-            row.order_type = collection.order_type
+        # Choices saved in Overture and not yet synced win over the server's.
+        keep_choices = row.id is not None and row.unsynced
+        if not keep_choices:
+            _store_choices(row, collection)
         if theme_checked:
             replaced = (
                 (
@@ -376,5 +344,49 @@ class CollectionSync:
         await repository.session.flush()
         if row.id is None:
             raise RuntimeError("Collection row was not assigned an ID")
-        await repository.replace_members(row.id, [member.id for member in members])
+        if not keep_choices:
+            await repository.replace_members(row.id, [member.id for member in members])
         return row
+
+
+def _store_choices(row: MediaCollection, collection: ServerCollection) -> None:
+    """Take the title, summary, sorting and visibility the server holds."""
+    if row.id is None or collection.summary != row.summary:
+        row.summary_source = collection.summary
+    if row.id is None or (
+        row.summary is not None and row.summary_format == literal_template(row.summary)
+    ):
+        row.summary_format = (
+            literal_template(collection.summary)
+            if collection.summary is not None
+            else None
+        )
+    sort_title = collection.sort_title or row.sort_title
+    if row.id is None or (
+        row.sort_title is not None
+        and row.sort_title_format == literal_template(row.sort_title)
+    ):
+        row.sort_title_format = (
+            literal_template(sort_title) if sort_title is not None else None
+        )
+    row.sqlmodel_update(
+        {
+            "title": collection.title,
+            "summary": collection.summary,
+            "sort_title": sort_title,
+            "child_count": len(collection.member_ids),
+        }
+    )
+    if collection.collection_mode is not None:
+        row.collection_mode = collection.collection_mode
+    if collection.collection_filtering is not None:
+        row.collection_filtering = collection.collection_filtering
+    # Overture keeps orders the server cannot sort by as a custom order.
+    computed = row.order_type not in {
+        CollectionOrder.RELEASE_ASC,
+        CollectionOrder.TITLE_ASC,
+    }
+    if collection.order_type is not None and not (
+        collection.order_type is CollectionOrder.CUSTOM and computed
+    ):
+        row.order_type = collection.order_type

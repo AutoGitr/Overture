@@ -5,10 +5,11 @@
     MediaItemRead,
     LibrarySectionRead,
   } from "../../generated/rest/types.gen";
+  import { route } from "../router/routes";
   import { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
   import CollectionDefinition from "./CollectionDefinition.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
-  import CollectionDisplaySettings from "./CollectionDisplaySettings.svelte";
+  import CollectionSettings from "./CollectionSettings.svelte";
   import CollectionGroupDefaults from "./CollectionGroupDefaults.svelte";
   import CollectionSchedule from "./CollectionSchedule.svelte";
   import CollectionSetEditor from "./CollectionSetEditor.svelte";
@@ -37,7 +38,19 @@
     libraries: LibrarySectionRead[];
   } = $props();
 
+  let onServer = $derived(!!collection && !collection.withheld);
   let set = $derived(editor instanceof CollectionDraft && editor.kind === "set" ? editor : null);
+  /** Which save is running, for its pending label. */
+  let syncing = $state(false);
+
+  // A section link may open this view, so show the section it names once it renders.
+  $effect(() => {
+    const section = route.hash.startsWith(`#${formId}-`)
+      ? document.getElementById(route.hash.slice(1))
+      : null;
+    section?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click();
+    section?.focus();
+  });
 </script>
 
 <WorkflowSections>
@@ -60,7 +73,9 @@
     aria-label="Configure collection"
     onsubmit={(event) => {
       event.preventDefault();
-      void editor.save();
+      // Enter submits with the first button, Save.
+      syncing = event.submitter instanceof HTMLButtonElement && event.submitter.value === "sync";
+      void editor.save(syncing);
     }}
   >
     <section id={`${formId}-setup`} aria-label="Collection setup" tabindex="-1">
@@ -86,7 +101,7 @@
           />
         </DetailForm>
       </section>
-      <section id={`${formId}-display`} aria-label="Set defaults" tabindex="-1">
+      <section id={`${formId}-settings`} aria-label="Set defaults" tabindex="-1">
         <DetailForm
           collapsible
           title="Defaults"
@@ -107,7 +122,7 @@
       </section>
 
       {#if collection && editor instanceof CollectionEditor}
-        <section id={`${formId}-members`} aria-label="Resolved members" tabindex="-1">
+        <section id={`${formId}-members`} aria-label="Collection members" tabindex="-1">
           <CollectionMembers members={collection.members} {editor} {libraryItems} />
           {#if sourceRoster.length}
             <DetailSection
@@ -121,23 +136,34 @@
         </section>
       {/if}
 
-      <section id={`${formId}-display`} aria-label="Collection display" tabindex="-1">
-        <CollectionDisplaySettings {editor} />
+      <section id={`${formId}-settings`} aria-label="Collection settings" tabindex="-1">
+        <CollectionSettings {editor} />
       </section>
 
       <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
         <CollectionSchedule {editor} />
       </section>
     {/if}
-    <div class="form-row" role="group" aria-label="Collection form actions">
+    <div class="form-row" role="group" aria-label="Save">
       <PendingButton
         type="submit"
         class="btn btn-primary"
+        title="Save in Overture without changing the server"
         pending={editor.busy}
-        pendingLabel={editor.creating ? "Creating..." : "Saving..."}
+        pendingLabel={syncing ? undefined : "Saving..."}
         disabled={editor instanceof CollectionDraft && !editor.canSubmit}
       >
-        {editor.creating ? "Create" : "Save"}
+        Save
+      </PendingButton>
+      <PendingButton
+        type="submit"
+        value="sync"
+        class="btn btn-secondary"
+        pending={editor.busy}
+        pendingLabel={syncing ? (onServer ? "Syncing..." : "Creating...") : undefined}
+        disabled={editor instanceof CollectionDraft && !editor.canSubmit}
+      >
+        {onServer ? "Save and Sync" : "Save and Create"}
       </PendingButton>
     </div>
   </form>

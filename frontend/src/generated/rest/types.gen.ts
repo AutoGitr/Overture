@@ -1509,6 +1509,10 @@ export type CollectionDetail = {
      */
     tmdb_collection_id: number | null;
     /**
+     * Unsynced
+     */
+    unsynced: boolean;
+    /**
      * Visible Home
      */
     visible_home: boolean;
@@ -2220,6 +2224,10 @@ export type CollectionRead = {
      * Tmdb Collection Id
      */
     tmdb_collection_id: number | null;
+    /**
+     * Unsynced
+     */
+    unsynced: boolean;
     /**
      * Visible Home
      */
@@ -5946,7 +5954,14 @@ export type ListCollectionsResponse = ListCollectionsResponses[keyof ListCollect
 export type CreateCollectionData = {
     body: CollectionCreate;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * To Server
+         *
+         * Also send the change to the media server
+         */
+        to_server?: boolean;
+    };
     url: '/api/collections';
 };
 
@@ -6557,6 +6572,12 @@ export type UpdateCollectionData = {
          * Media type ('movie' or 'show')
          */
         media_type: MediaType;
+        /**
+         * To Server
+         *
+         * Also send the change to the media server
+         */
+        to_server?: boolean;
     };
     url: '/api/collections/{collection_id}';
 };
@@ -6840,6 +6861,12 @@ export type SetCollectionMembersData = {
          * Media type ('movie' or 'show')
          */
         media_type: MediaType;
+        /**
+         * To Server
+         *
+         * Also send the change to the media server
+         */
+        to_server?: boolean;
     };
     url: '/api/collections/{collection_id}/members';
 };
@@ -7010,7 +7037,7 @@ export type GetCollectionSourcesResponses = {
 
 export type GetCollectionSourcesResponse = GetCollectionSourcesResponses[keyof GetCollectionSourcesResponses];
 
-export type SyncCollectionRuleData = {
+export type SyncCollectionData = {
     body?: never;
     path: {
         /**
@@ -7029,23 +7056,23 @@ export type SyncCollectionRuleData = {
     url: '/api/collections/{collection_id}/sync';
 };
 
-export type SyncCollectionRuleErrors = {
+export type SyncCollectionErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type SyncCollectionRuleError = SyncCollectionRuleErrors[keyof SyncCollectionRuleErrors];
+export type SyncCollectionError = SyncCollectionErrors[keyof SyncCollectionErrors];
 
-export type SyncCollectionRuleResponses = {
+export type SyncCollectionResponses = {
     /**
      * Successful Response
      */
     200: CollectionSyncResponse;
 };
 
-export type SyncCollectionRuleResponse = SyncCollectionRuleResponses[keyof SyncCollectionRuleResponses];
+export type SyncCollectionResponse = SyncCollectionResponses[keyof SyncCollectionResponses];
 
 export type DeleteCollectionThemeData = {
     body?: never;

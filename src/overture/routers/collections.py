@@ -48,6 +48,9 @@ lazy from .auth import require_auth
 lazy from .parameters import ArtTypePath, ImageSizeQuery, MediaTypeQuery
 
 CollectionIdPath = Annotated[int, Path(gt=0, description="Collection ID")]
+ToServerQuery = Annotated[
+    bool, Query(description="Also send the change to the media server")
+]
 
 router = APIRouter(
     prefix="/collections",
@@ -291,10 +294,10 @@ async def proxy_collection_image(
 
 @router.post("")
 async def create_collection(
-    body: CollectionCreate, collections: CollectionsDep
+    body: CollectionCreate, collections: CollectionsDep, to_server: ToServerQuery = True
 ) -> CollectionDetail:
-    """Create a collection in a server library."""
-    return await collections.create(body)
+    """Create a collection in a server library, or only in Overture."""
+    return await collections.create(body, sync=to_server)
 
 
 @router.put("/{collection_id}")
@@ -303,9 +306,10 @@ async def update_collection(
     media_type: MediaTypeQuery,
     body: CollectionOptions,
     collections: CollectionsDep,
+    to_server: ToServerQuery = True,
 ) -> CollectionDetail:
     """Update collection metadata and display options."""
-    return await collections.update(collection_id, media_type, body)
+    return await collections.update(collection_id, media_type, body, sync=to_server)
 
 
 @router.delete("/{collection_id}")
@@ -324,9 +328,12 @@ async def set_collection_members(
     media_type: MediaTypeQuery,
     body: CollectionMembersUpdate,
     collections: CollectionsDep,
+    to_server: ToServerQuery = True,
 ) -> CollectionDetail:
     """Replace collection membership and order."""
-    return await collections.set_members(collection_id, media_type, body)
+    return await collections.set_members(
+        collection_id, media_type, body, sync=to_server
+    )
 
 
 @router.put("/{collection_id}/rule")
@@ -351,13 +358,13 @@ async def delete_collection_rule(
 
 
 @router.post("/{collection_id}/sync")
-async def sync_collection_rule(
+async def sync_collection(
     collection_id: CollectionIdPath,
     media_type: MediaTypeQuery,
     collections: CollectionsDep,
 ) -> CollectionSyncResponse:
-    """Apply the collection's criteria immediately."""
-    return await collections.sync_rule(collection_id, media_type)
+    """Make the media server match the collection saved in Overture."""
+    return await collections.sync(collection_id, media_type)
 
 
 @router.delete("/{collection_id}/art")

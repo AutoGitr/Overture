@@ -1,13 +1,13 @@
 # Collections and Kometa equivalents
 
 Overture configures collections through **Collections > + Create collection**
-and **Manage groups**. It covers most of what a Kometa configuration does with
+and **Collection groups**. It covers most of what a Kometa configuration does with
 its own forms; it does not import Kometa YAML or run Kometa defaults files.
 
 | Kometa | Overture |
 | --- | --- |
-| `smart_filter` with `all` / `any` | Criteria evaluated as a **Plex smart collection** |
-| `plex_search`, `filters` | Criteria **Synced by Overture** |
+| `smart_filter` with `all` / `any` | Criteria evaluated by **Plex (smart)** |
+| `plex_search`, `filters` | Criteria evaluated by **Overture** |
 | `smart_label` | Lists in Plex smart criteria; Overture keeps their labels |
 | `tmdb_collection`, `tmdb_list`, `tmdb_movie`, `tmdb_show` | TMDB franchise, list and title conditions |
 | `tmdb_actor`, `tmdb_director`, `tmdb_writer`, `tmdb_producer`, `tmdb_biography` | TMDB person condition with roles and **Biography as summary** |
@@ -16,8 +16,8 @@ its own forms; it does not import Kometa YAML or run Kometa defaults files.
 | `.not` modifiers, exclusions | **is not** and **not in** conditions |
 | `sort_by`, `collection_order` | **Sort** (custom keeps the first list's order) |
 | `limit` | **Limit** |
-| `minimum_items`, `delete_below_minimum`, `sync_mode` | Content and group defaults |
-| `collection_mode`, `collection_filtering`, `visible_*` | **Display** (Plex) |
+| `minimum_items`, `delete_below_minimum`, `sync_mode` | **Settings** and group defaults |
+| `collection_mode`, `collection_filtering`, `visible_*` | **Settings** (Plex) |
 | `sort_title`, `summary` with template variables | **Sort title** and **Summary** templates |
 | `schedule: range(...)`, `delete_not_scheduled` | Seasonal dates and **When inactive** |
 | `dynamic_collections` | A **Collection set** on a group |
@@ -40,13 +40,13 @@ Foreign:
     sort_by: title.asc
 ```
 
-Overture: create a collection, choose **Plex smart collection**, set **Match all
+Overture: create a collection, choose **Plex (smart)**, set **Match all
 of the following**, and add **Audio language is not English**, **Country is not
 Canada** and **Country is not United States of America**. Set **Sort** to Title
 (A to Z). Each condition lists the values Plex knows for the library.
 
 The **Unplayed**, **Recently played** and **Continue watching** presets set
-**Collection filtering** to User library, so each user sees their own.
+**Collection filtering** to User's library, so each user sees their own.
 
 ## Lists combined with live filters
 
@@ -77,7 +77,8 @@ group, with **in** or **not in**, like any other condition.
 4. **Preview collections** lists each collection and its size; values below the
    group's minimum are left out.
 5. Set the group's defaults under **Defaults**, such as a `01_{title}` sort title
-   and the sync interval, then **Create set**.
+   and the sync interval, then **Save and Create**. **Save** keeps the set in
+   Overture until you sync its group.
 
 On its schedule the set creates collections for new values, renames and updates
 its collections when you change the set, and removes the collections of values
@@ -90,11 +91,11 @@ imports, and skip franchises held by collections outside the group.
 ## Groups, overrides and deletion
 
 A collection's explicit choice overrides its group, and the group overrides
-**Settings > Collection defaults**. **Default** inherits. **Save & Apply**
+**Settings > Collection defaults**. **Default** inherits. **Save and Apply**
 updates the group's display settings at once, keeping members and explicit
 overrides.
 
-**Manage groups > Manage group** renames or deletes a group. Deleting just the
+**Collection groups > Rename or delete** renames or deletes a group. Deleting just the
 group leaves its collections ungrouped; you can also remove its collections from
 Overture, the media server, or both. Server-only removal keeps the configuration
 with scheduled sync disabled. Media files are always kept.

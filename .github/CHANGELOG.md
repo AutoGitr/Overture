@@ -35,6 +35,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Collections save in Overture only with Save (or Enter); Save and Create or Save and Sync also updates the media server. Members edited in Members wait for the next sync, a library sync keeps changes not yet synced, and a collection or set never created waits for Save and Create instead of the scheduler. Unsynced collections show an Unsynced badge.
+- Collection pages keep both tab rows in every view: the art tabs always sit in the lower row next to links to Setup, Content, Members, Settings and Schedule, which open Configure at that section. A new collection has no tab rows and saves from the bottom of the form.
+- Collection Display is now Settings and also holds Sort, Limit, Sync mode, the minimum and automatic art and theme; Content keeps only how members are chosen and the criteria. Groups are created in the Collection groups popup, which Create new group in the Group list opens; its buttons are Save, Save and Apply and Save and Sync.
+- Theme status moved from the tab row into the Themes view, and labels across collections and groups now match, such as Sync mode, Collection mode, Active from and Active until.
 - Appearance: Theme offers System, Light and Dark, and System (the new default) follows your device as it switches. The palette is rebuilt so text meets WCAG AA contrast in both modes and the accent looks the same in each; a new Increase contrast option strengthens secondary text and outlines. Controls, menus and cards share one modern style.
 - Collection creation lists collection and set presets together under Start from, picking a set preset switches to One per value, and a set's group defaults to what it splits by, such as Decades.
 - Collection criteria suggest title, studio and edition values from the library, as they already did for tags.

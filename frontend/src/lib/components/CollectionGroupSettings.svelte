@@ -26,10 +26,13 @@
     group,
     mediaType,
     libraries = [],
+    onsave,
   }: {
     group: string;
     mediaType: MediaType;
     libraries?: LibrarySectionRead[];
+    /** The group is saved, so it exists from now on. */
+    onsave?: () => void;
   } = $props();
 
   const client = useQueryClient();
@@ -58,7 +61,8 @@
   });
   let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
 
-  async function save(apply = false) {
+  /** Save in Overture; `then` applies the defaults or syncs the group on the server. */
+  async function save(then?: "apply" | "sync") {
     if (!draft || busy) return;
     const variables = {
       query: { name: group, media_type: mediaType },
@@ -70,8 +74,10 @@
         getCollectionGroupPolicyOptions({ query: variables.query }).queryKey,
         saved,
       );
-      if (!apply) {
-        feedback.success("Group saved. Its collections use it on their next save or sync.");
+      onsave?.();
+      if (then === "sync") return await sync();
+      if (!then) {
+        feedback.success("Saved. Collections use it from their next sync.");
         return;
       }
       const result = await applyRequest.mutateAsync({ query: variables.query });
@@ -83,7 +89,7 @@
         return;
       }
       feedback.success(
-        `Group defaults applied to ${result.collection_ids.length} collection${result.collection_ids.length === 1 ? "" : "s"}. Explicit overrides were kept.`,
+        `Saved and applied to ${result.collection_ids.length} collection${result.collection_ids.length === 1 ? "" : "s"}.`,
       );
     } catch (error) {
       feedback.error(errorMessage(error, "Could not save the group"));
@@ -91,7 +97,6 @@
   }
 
   async function sync() {
-    if (busy) return;
     try {
       const result = await syncRequest.mutateAsync({
         query: { name: group, media_type: mediaType },
@@ -103,10 +108,10 @@
           `${summary}. ${errors.length} failed: ${errors.map(([title, error]) => `${title}: ${error}`).join("; ")}`,
         );
       } else {
-        feedback.success(`Group "${group}" synced: ${summary}.`);
+        feedback.success(`Saved and synced: ${summary}.`);
       }
     } catch (error) {
-      feedback.error(errorMessage(error, "Failed to sync the group"));
+      feedback.error(errorMessage(error, "Could not sync the group"));
     }
   }
 </script>
@@ -131,7 +136,7 @@
     collapsible
     expanded={!!form.generator}
     title="Collection set"
-    description="A set creates one collection in this group per value in a library, such as each decade, and keeps them current on its schedule."
+    description="One collection in this group per value in a library, such as each decade, kept up to date."
     {busy}
   >
     <label class="form-row form-wide">
@@ -143,7 +148,7 @@
             ? defaultGenerator(libraries[0]?.id ?? "")
             : null)}
       />
-      Create this group's collections automatically
+      Create this group's collections
     </label>
     {#if form.generator}
       {@const generator = form.generator}
@@ -167,8 +172,8 @@
   </DetailForm>
   <DetailForm
     collapsible
-    title="Group defaults"
-    description="Collections in the group inherit these unless they override them. Blank values inherit the global defaults; Save & Apply updates display settings without changing members."
+    title="Defaults"
+    description="Collections in the group inherit these unless they set their own. Default inherits the global setting."
     {busy}
   >
     <CollectionGroupDefaults
@@ -179,15 +184,24 @@
     />
   </DetailForm>
   <div class="actions" role="group" aria-label="Group actions">
-    <button type="button" class="btn btn-secondary" disabled={busy} onclick={() => void save()}
-      >Save group</button
+    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
+      >Save</button
     >
-    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save(true)}
-      >Save &amp; Apply</button
+    <button
+      type="button"
+      class="btn btn-secondary"
+      title="Send the defaults to the server without changing members"
+      disabled={busy}
+      onclick={() => void save("apply")}>Save and Apply</button
     >
-    <button type="button" class="btn btn-ghost" disabled={busy} onclick={() => void sync()}>
+    <button
+      type="button"
+      class="btn btn-secondary"
+      disabled={busy}
+      onclick={() => void save("sync")}
+    >
       <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />
-      {form.generator ? "Run set & sync" : "Sync group"}
+      Save and Sync
     </button>
   </div>
 {/if}

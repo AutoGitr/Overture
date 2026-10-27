@@ -47,7 +47,7 @@ test("a collection set previews and creates its collections without horizontal o
     "aria-expanded",
     "true",
   );
-  await expect(page.getByRole("button", { name: "Display", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toHaveAttribute(
     "aria-expanded",
     "false",
   );
@@ -110,7 +110,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   const title = page.getByLabel("Title", { exact: true });
   await title.fill("");
   await page.getByRole("button", { name: "Setup", exact: true }).click();
-  await page.getByRole("button", { name: "Save Changes", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(title).toBeFocused();
   await title.fill("Saga");
   await page.getByRole("link", { name: "Members", exact: true }).click();
@@ -124,21 +124,24 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(page.getByRole("listitem").first()).toContainText("Second");
   await page.getByRole("button", { name: "Remove First from collection" }).click();
   await expect(page.getByRole("listitem")).toHaveCount(1);
-  const views = page.getByRole("group", { name: "Configure navigation" });
+  const views = page.getByRole("navigation", { name: "Configure sections" });
   await views.getByRole("link", { name: "Setup", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill("Curated saga");
   await page
-    .getByRole("group", { name: "Collection form actions", exact: true })
+    .getByRole("group", { name: "Save", exact: true })
     .getByRole("button", { name: "Save", exact: true })
     .click();
   await expect(page.getByRole("heading", { name: "Curated saga", exact: true })).toBeVisible();
   await views.getByRole("link", { name: "Content", exact: true }).click();
-  await page.getByText("Matching criteria", { exact: true }).click();
-  await expect(page.getByLabel("Sync strategy")).toHaveValue("");
+  await page
+    .getByRole("radiogroup", { name: "Members", exact: true })
+    .getByText("Criteria", { exact: true })
+    .click();
+  await expect(page.getByLabel("Sync mode", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
   await page.getByLabel("Criteria condition 1 field", { exact: true }).selectOption("field:year");
   await page.getByLabel("Criteria condition 1 value", { exact: true }).fill("1990");
-  await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
   const actions = page.getByRole("group", { name: "Record actions", exact: true });
   await expect(actions.getByRole("button")).toHaveCount(3);
@@ -148,7 +151,8 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(boxes).toHaveCount(2);
   const lowerBox = await boxes.nth(1).boundingBox();
   await modes.getByRole("tab", { name: "Art", exact: true }).click();
-  await expect(views).toHaveCount(0);
+  // Both rows keep their contents in every mode.
+  await expect(views).toBeVisible();
   const categories = page.getByRole("tablist", { name: "Art categories", exact: true });
   await categories.getByRole("tab", { name: "Background", exact: true }).click();
   await expect(page).toHaveURL(/\/art\/background$/);
@@ -156,11 +160,10 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(categories.getByRole("tab", { name: "Background", selected: true })).toBeVisible();
   await modes.getByRole("tab", { name: "Themes", exact: true }).click();
   await expect(page.getByLabel("Search collection themes")).toBeVisible();
-  await expect(categories).toHaveCount(0);
+  await expect(categories.getByRole("tab", { selected: true })).toHaveCount(0);
+  await expect(views).toBeVisible();
   await expect(boxes).toHaveCount(2);
   expect((await boxes.nth(1).boundingBox())?.height).toBe(lowerBox?.height);
-  await page.getByRole("button", { name: "Search YouTube" }).click();
-  await expect(page.getByLabel("Search collection themes")).toBeFocused();
   await expect(page.getByRole("button", { name: /^Paste URL/ })).toHaveCount(0);
   await expect(actions.getByRole("button")).toHaveCount(3);
   await modes.getByRole("tab", { name: "Configure", exact: true }).click();
@@ -224,7 +227,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
     .getByLabel("Criteria condition 1 field", { exact: true })
     .selectOption("source:tmdb_list");
   await page.getByLabel("Criteria condition 1 TMDB list IDs", { exact: true }).fill("123");
-  await page.getByRole("button", { name: "Create collection", exact: true }).click();
+  await page.getByRole("button", { name: "Save and Create", exact: true }).click();
   await expect(page).toHaveURL(/collections\/12-new-collection$/);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
 });
@@ -239,7 +242,7 @@ test("items and collections share record actions and fit a narrow viewport", asy
   );
   await logIn(page);
   for (const [path, deleteLabel] of [
-    ["/movies/1-alien/art/poster", "Delete Item from Database"],
+    ["/movies/1-alien/art/poster", "Delete item from database"],
     ["/movies/collections/12-saga", "Delete collection"],
   ] as const) {
     await page.goto(path);
@@ -261,7 +264,7 @@ test("items and collections share record actions and fit a narrow viewport", asy
   }
   await page.getByRole("link", { name: "Setup", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
-  const save = page.getByRole("button", { name: "Save Changes" });
+  const save = page.getByRole("button", { name: "Save", exact: true });
   await save.scrollIntoViewIfNeeded();
   await expect(save).toBeInViewport();
 });
@@ -409,17 +412,16 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
   await setup.getByRole("combobox", { name: "Library", exact: true }).selectOption("other");
   await setup.getByText("One per value", { exact: true }).click();
-  await expect(page.getByRole("link", { name: "Display", exact: true })).toHaveCount(0);
-  const submit = page.getByRole("button", { name: "Create set", exact: true });
+  await expect(page.getByRole("navigation", { name: "Configure sections" })).toHaveCount(0);
+  const submit = page.getByRole("button", { name: "Save and Create", exact: true });
   await page.getByLabel(/^One collection per/).selectOption("franchise");
   // A blank group is named after what the set splits by.
   await expect(setup.getByLabel(/^Group/)).toHaveAttribute("placeholder", "TMDB franchises");
   await setup.getByLabel(/^Group/).fill("Franchises");
   await page.getByLabel("Trailing text to remove", { exact: true }).fill(" Collection");
   await page.getByLabel(/^Skip these values/).fill("10, 20");
-  await page.getByRole("link", { name: "Defaults", exact: true }).click();
+  await page.getByRole("button", { name: "Defaults", exact: true }).click();
   await page.getByLabel("Sync interval (hours)", { exact: true }).fill("168");
-  await page.getByRole("link", { name: "Setup", exact: true }).click();
   await setup.getByText("One collection", { exact: true }).click();
   await expect(setup.getByLabel("Title", { exact: true })).toHaveValue("Unsaved single collection");
   await setup.getByText("One per value", { exact: true }).click();
@@ -481,7 +483,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
   await page.route("**/api/collections/12?*", (route) => route.fulfill({ json: detail }));
   await logIn(page, "/movies/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unwatched favorites");
-  await page.getByText("Plex smart collection", { exact: true }).click();
+  await page.getByText("Plex (smart)", { exact: true }).click();
   await page.getByRole("button", { name: "Condition", exact: true }).click();
   await page
     .getByLabel("Criteria condition 1 field", { exact: true })
@@ -493,21 +495,21 @@ test("smart collections combine list sources and live criteria", async ({ page }
   await page
     .getByLabel("Criteria condition 2 field", { exact: true })
     .selectOption("field:unplayed");
-  await page.getByRole("link", { name: "Display", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Collection filtering", exact: true })
     .selectOption("user");
-  await page.getByRole("link", { name: "Schedule", exact: true }).click();
-  await page.getByLabel(/^Active start/).fill("12-01");
-  await page.getByLabel(/^Active end/).fill("01-05");
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByLabel(/^Active from/).fill("12-01");
+  await page.getByLabel(/^Active until/).fill("01-05");
   await expect(page.getByLabel("Search members", { exact: true })).toHaveCount(0);
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   const submit = page
-    .getByRole("group", { name: "Collection form actions", exact: true })
-    .getByRole("button", { name: "Create", exact: true });
+    .getByRole("group", { name: "Save", exact: true })
+    .getByRole("button", { name: "Save and Create", exact: true });
   await submit.scrollIntoViewIfNeeded();
   await submit.click();
   await expect(page).toHaveURL(/collections\/12-unwatched-favorites$/);
@@ -537,23 +539,21 @@ test("group management saves and applies defaults separately from an unsaved col
   await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
   await logIn(page, "/movies/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
-  await page.getByLabel("Group", { exact: true }).selectOption("Weekend");
-  await page
-    .getByRole("region", { name: "Collection setup", exact: true })
-    .getByRole("button", { name: "Manage groups", exact: true })
-    .click();
+  const setup = page.getByRole("region", { name: "Collection setup", exact: true });
+  await setup.getByLabel("Group", { exact: true }).selectOption("Weekend");
+  // Groups are created and edited only in the popup.
+  await setup.getByLabel("Group", { exact: true }).selectOption("Create new group...");
+  await expect(setup.getByLabel("Group", { exact: true })).toHaveValue("Weekend");
   const dialog = page.getByRole("dialog", { name: "Collection groups" });
-  await expect(dialog.getByRole("combobox", { name: "Group", exact: true })).toHaveValue("Weekend");
-  await dialog.getByRole("button", { name: "Group defaults", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Group", exact: true }).selectOption("Weekend");
+  await dialog.getByRole("button", { name: "Defaults", exact: true }).click();
   await dialog.getByRole("textbox", { name: "Sort title", exact: true }).fill("02_{title}");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
-  await dialog.getByRole("button", { name: "Save & Apply", exact: true }).click();
-  await expect(
-    page.getByText("Group defaults applied to 1 collection. Explicit overrides were kept."),
-  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Save and Apply", exact: true }).click();
+  await expect(page.getByText("Saved and applied to 1 collection.")).toBeVisible();
   expect(applied).toBe(true);
   await dialog.getByRole("button", { name: "Close popup", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved collection");

@@ -41,8 +41,8 @@
     oninput={(event) => (policy.sort_title_format = event.currentTarget.value || null)}
   />
   <span class="hint"
-    >A template with &#123;title&#125; and &#123;group&#125;, such as 01_&#123;title&#125;, keeps
-    the group together. Blank uses the global default.</span
+    >Text or a template with &#123;title&#125; and &#123;group&#125;, such as 01_&#123;title&#125;.
+    Blank inherits.</span
   >
 </div>
 <div class="form-label">
@@ -55,8 +55,8 @@
     oninput={(event) => (policy.summary_format = event.currentTarget.value || null)}
   />
   <span class="hint"
-    >Tokens: &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;, &#123;end_date&#125;,
-    &#123;summary&#125;.</span
+    >Text or a template with &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
+    &#123;end_date&#125; and &#123;summary&#125; (the original). Blank inherits.</span
   >
 </div>
 <div class="form-label">
@@ -97,7 +97,7 @@
   Scheduled sync
   <select bind:value={policy.sync_enabled}>
     <option value={null}>Default</option>
-    <option value={true}>Enabled</option>
-    <option value={false}>Disabled</option>
+    <option value={true}>On</option>
+    <option value={false}>Off</option>
   </select>
 </label>

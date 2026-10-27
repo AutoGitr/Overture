@@ -230,22 +230,24 @@ describe("collection criteria", () => {
     renderWithQueryClient(CollectionPage);
 
     const content = within(await screen.findByRole("region", { name: "Collection content" }));
+    const settings = within(screen.getByRole("region", { name: "Collection settings" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     const field = await content.findByLabelText("Criteria condition 1 field");
     expect(within(field).queryByRole("option", { name: "HDR" })).toBeNull();
     expect(
-      within(content.getByLabelText(/^Sort/)).getByRole("option", { name: /^Custom/ }),
+      within(settings.getByLabelText("Sort")).getByRole("option", { name: /^Custom/ }),
     ).toBeInTheDocument();
 
-    await fireEvent.click(content.getByLabelText("Plex smart collection"));
+    await fireEvent.click(content.getByLabelText("Plex (smart)"));
     expect(within(field).getByRole("option", { name: "HDR" })).toBeInTheDocument();
     expect(
-      within(content.getByLabelText(/^Sort/)).queryByRole("option", { name: /^Custom/ }),
+      within(settings.getByLabelText("Sort")).queryByRole("option", { name: /^Custom/ }),
     ).toBeNull();
-    await fireEvent.change(content.getByLabelText(/^Sort/), {
+    await fireEvent.change(settings.getByLabelText("Sort"), {
       target: { value: "critic_rating.desc" },
     });
-    await fireEvent.input(content.getByLabelText(/^Limit/), { target: { value: "25" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.input(settings.getByLabelText(/^Limit/), { target: { value: "25" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(saved).not.toBeNull());
     expect(saved).toMatchObject({
@@ -276,22 +278,24 @@ describe("collection criteria", () => {
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
 
-    const display = within(await screen.findByRole("region", { name: "Collection display" }));
+    const display = within(await screen.findByRole("region", { name: "Collection settings" }));
     await fireEvent.input(display.getByLabelText(/^Summary$/i), {
       target: { value: "{title} - {group}" },
     });
     const schedule = within(screen.getByRole("region", { name: "Collection schedule" }));
-    await fireEvent.input(schedule.getByLabelText(/^Active start/i), {
+    await fireEvent.input(schedule.getByLabelText(/^Active from/i), {
       target: { value: "12-15" },
     });
-    await fireEvent.input(schedule.getByLabelText(/^Active end/i), { target: { value: "01-05" } });
-    await fireEvent.change(await display.findByLabelText(/Visible to shared users/i), {
+    await fireEvent.input(schedule.getByLabelText(/^Active until/i), {
+      target: { value: "01-05" },
+    });
+    await fireEvent.change(await display.findByLabelText(/Shared users' home/i), {
       target: { value: "true" },
     });
     await fireEvent.change(display.getByLabelText(/Collection filtering/i), {
       target: { value: "admin" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(putBody).not.toBeNull());
     expect(putBody).toMatchObject({
@@ -365,7 +369,7 @@ describe("collection criteria", () => {
     });
 
     await fireEvent.click(await screen.findByRole("button", { name: "Collection set" }));
-    await fireEvent.click(screen.getByLabelText("Create this group's collections automatically"));
+    await fireEvent.click(screen.getByLabelText("Create this group's collections"));
     await fireEvent.change(screen.getByLabelText("One collection per"), {
       target: { value: "genre" },
     });
@@ -385,13 +389,14 @@ describe("collection criteria", () => {
       generator: { dimension: "genre", library_id: "movies", top: 10 },
     });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Save group" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(putBody).not.toBeNull());
+    expect(synced).toBe(false);
     expect(putBody).toMatchObject({
       minimum_items: 2,
       generator: { dimension: "genre", library_id: "movies", title_format: "{value}", top: 10 },
     });
-    await fireEvent.click(screen.getByRole("button", { name: /Run set & sync/ }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() => expect(synced).toBe(true));
   });
 });

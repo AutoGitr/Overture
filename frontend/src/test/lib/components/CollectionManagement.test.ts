@@ -12,6 +12,7 @@ import {
   routedCollectionView,
 } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
+import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   appSettings,
@@ -70,7 +71,7 @@ describe("collection management", () => {
     renderWithQueryClient(CollectionPage);
     expect(await screen.findByText("Not on server")).toHaveAttribute(
       "title",
-      "Collection kept in Overture and absent from the media server",
+      "Saved in Overture only",
     );
   });
 
@@ -84,7 +85,7 @@ describe("collection management", () => {
       "/api/collections/12/members": { ...detail, members: [members[1]], child_count: 1 },
     });
     renderWithQueryClient(CollectionPage);
-    await fireEvent.click(await screen.findByRole("button", { name: "Resolved Members" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
     await fireEvent.click(
       await screen.findByRole("button", { name: "Remove First from collection" }),
     );
@@ -93,9 +94,10 @@ describe("collection management", () => {
         screen.queryByRole("button", { name: "Remove First from collection" }),
       ).not.toBeInTheDocument(),
     );
-    expect(calls.find((call) => call.init.method === "PUT")?.init.body).toBe(
-      JSON.stringify({ member_ids: [2], order_type: "release.asc" }),
-    );
+    const put = calls.find((call) => call.init.method === "PUT");
+    // Member edits stay in Overture until the collection is synced.
+    expect(put?.url).toContain("to_server=false");
+    expect(put?.init.body).toBe(JSON.stringify({ member_ids: [2], order_type: "release.asc" }));
   });
 
   it("saves settings without losing nullable inheritance", async () => {
@@ -115,7 +117,7 @@ describe("collection management", () => {
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(await screen.findByLabelText("Title"), { target: { value: "New saga" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(saved).toBe(true));
     expect(await screen.findByRole("heading", { name: "New saga" })).toBeInTheDocument();
   });
@@ -131,10 +133,10 @@ describe("collection management", () => {
     });
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
-    await fireEvent.change(await screen.findByLabelText("Sync strategy"), {
+    await fireEvent.change(await screen.findByLabelText("Sync mode"), {
       target: { value: "append" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     await waitFor(() =>
       expect(calls.some((call) => call.url.includes("/rule") && call.init.method === "PUT")).toBe(
@@ -148,7 +150,10 @@ describe("collection management", () => {
     );
     expect(body.sync_mode).toBe("append");
     expect(body.minimum_items).toBeNull();
-    await fireEvent.click(screen.getByRole("button", { name: "Sync Now" }));
+    expect(calls.some((call) => call.url.includes("/sync") && call.init.method === "POST")).toBe(
+      false,
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() =>
       expect(calls.some((call) => call.url.includes("/sync") && call.init.method === "POST")).toBe(
         true,
@@ -168,11 +173,30 @@ describe("collection management", () => {
     const group = await screen.findByLabelText("Group");
     await screen.findByRole("option", { name: "Weekend" });
     await fireEvent.change(group, { target: { value: "Weekend" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
     ).toMatchObject({ collection_group: "Weekend" });
+  });
+
+  it("creates a group only through the groups popup, then assigns it", async () => {
+    mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/groups": ["Weekend"],
+      "/api/collections/12": detail,
+    });
+    renderWithQueryClient(CollectionPage);
+    const group = await screen.findByLabelText("Group");
+    await screen.findByRole("option", { name: "Weekend" });
+    expect(screen.queryByRole("button", { name: "Manage groups" })).toBeNull();
+    await fireEvent.change(group, { target: { value: "__new__" } });
+    expect(uiState.openPopup).toBe("collection-groups");
+    expect(group).toHaveValue("");
+    uiState.collectionGroupChanged("", "Fresh");
+    await waitFor(() => expect(group).toHaveValue("Fresh"));
+    uiState.closePopup();
   });
 
   it("only offers manual additions for manual and append collections", async () => {
@@ -184,8 +208,8 @@ describe("collection management", () => {
     renderWithQueryClient(CollectionPage);
     await screen.findByRole("heading", { name: "Saga" });
     expect(screen.queryByLabelText("Add item")).toBeNull();
-    const content = within(await screen.findByRole("region", { name: "Collection content" }));
-    expect(content.getByLabelText(/^Sort/)).toBeInTheDocument();
+    const settings = within(await screen.findByRole("region", { name: "Collection settings" }));
+    expect(settings.getByLabelText("Sort")).toBeInTheDocument();
   });
 
   it("supports keyboard mode navigation while keeping both header boxes", async () => {
@@ -247,7 +271,7 @@ describe("collection management", () => {
     expect(input).toHaveValue(10);
     expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
     await fireEvent.input(input, { target: { value: "99" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
@@ -299,7 +323,7 @@ describe("collection management", () => {
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await addTmdbTitles("11");
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
@@ -335,7 +359,7 @@ describe("collection management", () => {
       },
     });
     renderWithQueryClient(CollectionPage);
-    await fireEvent.click(await screen.findByRole("button", { name: "Resolved Members" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
     expect(await screen.findByRole("button", { name: "Move First up" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move Second down" })).toBeDisabled();
     await fireEvent.click(screen.getByRole("button", { name: button }));
@@ -361,7 +385,7 @@ describe("collection management", () => {
       },
     });
     renderWithQueryClient(CollectionPage);
-    await fireEvent.click(await screen.findByRole("button", { name: "Resolved Members" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
     await fireEvent.dragStart(await screen.findByRole("button", { name: "Drag First to reorder" }));
     const target = screen
       .getAllByRole("listitem")
@@ -383,7 +407,7 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
     });
     renderWithQueryClient(CollectionPage);
-    await fireEvent.click(await screen.findByRole("button", { name: "Resolved Members" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
     const search = await screen.findByLabelText("Add item");
     await fireEvent.input(search, { target: { value: "   " } });
     expect(screen.queryByText("No matching library items.")).not.toBeInTheDocument();
@@ -411,14 +435,14 @@ describe("collection management", () => {
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await addTmdbTitles("11");
-    const submit = screen.getByRole("button", { name: "Create collection" });
+    const submit = screen.getByRole("button", { name: "Save and Create" });
     expect(submit).toBeDisabled();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "  Saga  " } });
     expect(submit).toBeEnabled();
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "other" } });
-    expect(screen.getByRole("button", { name: "Create collection" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save and Create" })).toBeEnabled();
     expect(screen.getByLabelText("Criteria condition 1 TMDB IDs")).toHaveValue("11");
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
@@ -456,7 +480,7 @@ describe("collection management", () => {
     await screen.findByRole("option", { name: "Movies" });
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await addTmdbTitles("11");
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Create refused");
     await fireEvent.click(await screen.findByRole("button", { name: "Retry collection creation" }));
     await waitFor(() => expect(attempts).toBe(2));
@@ -476,10 +500,12 @@ describe("collection management", () => {
     });
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
-    await fireEvent.click(await screen.findByLabelText("Matching criteria"));
+    await fireEvent.click(await screen.findByLabelText("Criteria"));
     await addSource("mdblist", "Criteria condition 1 MDBList lists", "user/list");
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Sync Now" })).toBeEnabled());
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save and Sync" })).toBeEnabled(),
+    );
     expect(screen.queryByRole("option", { name: "Manual selection" })).toBeNull();
   });
 
@@ -542,7 +568,10 @@ describe("collection management", () => {
           await screen.findByRole("button", { name: "Paste URL & save as poster" }),
         ).toBeInTheDocument();
       } else {
-        expect(screen.queryByRole("tablist", { name: "Art categories" })).toBeNull();
+        // The art tabs stay in place, with none selected outside the art view.
+        const art = within(screen.getByRole("tablist", { name: "Art categories" }));
+        expect(art.queryByRole("tab", { selected: true })).toBeNull();
+        expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
         expect(screen.queryByRole("button", { name: /^Paste URL/ })).toBeNull();
       }
     }
@@ -581,7 +610,7 @@ describe("collection management", () => {
     await fireEvent.input(screen.getByLabelText("Summary"), {
       target: { value: "Unsaved summary" },
     });
-    await fireEvent.click(screen.getByLabelText("Matching criteria"));
+    await fireEvent.click(screen.getByLabelText("Criteria"));
     await addSource("mdblist", "Criteria condition 1 MDBList lists", "draft/list");
     await fireEvent.click(screen.getByTitle("Unmonitored - click to monitor"));
     await screen.findByTitle("Monitored - click to unmonitor");
@@ -626,7 +655,7 @@ describe("collection management", () => {
         Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : policy),
     });
     renderWithQueryClient(CollectionGroupSettings, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Group defaults" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Defaults" }));
     await fireEvent.input(await screen.findByLabelText("Minimum members"), {
       target: { value: "2" },
     });
@@ -636,7 +665,7 @@ describe("collection management", () => {
     await fireEvent.input(screen.getByRole("textbox", { name: "Sort title" }), {
       target: { value: "+{title}" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save group" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     const saved = calls.find((call) => call.init.method === "PUT");
     expect(saved?.url).toContain("/api/collections/group-policy?");
@@ -660,7 +689,7 @@ describe("collection management", () => {
       "/api/collections/group-policy/apply": { collection_ids: [12, 13], errors: {} },
     });
     renderWithQueryClient(CollectionGroupSettings, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Save & Apply" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Save and Apply" }));
     await waitFor(() => expect(calls.some((call) => call.url.includes("/apply"))).toBe(true));
     expect(
       calls.filter((call) => call.init.method !== "GET").map((call) => call.init.method),

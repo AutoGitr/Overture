@@ -14,11 +14,9 @@
   let {
     collection: coll,
     actions,
-    searchInputId,
   }: {
     collection: CollectionDetail;
     actions: CollectionActions;
-    searchInputId?: string;
   } = $props();
 </script>
 
@@ -60,7 +58,6 @@
     {#key coll.id}
       <ThemeSearch
         label="Search collection themes"
-        inputId={searchInputId}
         initialQuery={buildCollectionThemeSearchQuery(coll.title)}
         videoIds={[
           ...new Set(

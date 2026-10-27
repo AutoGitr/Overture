@@ -16,6 +16,7 @@
   } = $props();
 
   const id = $props.id();
+  const NEW_GROUP = "__new__";
   const KINDS = [
     ["collection", "One collection"],
     ["set", "One per value"],
@@ -31,8 +32,8 @@
   expanded
   title="Setup"
   description={creatingSet
-    ? "Creates one collection per value in the library, such as each decade, and keeps them up to date."
-    : "Choose where the collection lives, then give it a name and an optional group."}
+    ? "One collection per value in the library, such as each decade, kept up to date."
+    : "Where the collection lives, its title and its group."}
   busy={editor.busy}
 >
   <label class="form-label">
@@ -75,7 +76,7 @@
         </optgroup>
       </select>
       <span class="hint"
-        >{preset?.description ?? "Presets fill in everything below, which stays editable."}</span
+        >{preset?.description ?? "A preset fills in the form, which stays editable."}</span
       >
     </label>
     <div class="form-label">
@@ -102,8 +103,7 @@
         {#each groups as group (group)}<option value={group}></option>{/each}
       </datalist>
       <span class="hint"
-        >The collections share this group and its defaults, such as sort titles and visibility.
-        Blank names it after what it splits by.</span
+        >The set's collections share this group and its defaults. Blank names it after the values.</span
       >
     </label>
   {:else}
@@ -116,9 +116,6 @@
         disabled={editor.generated}
         placeholder="Collection title"
       />
-      {#if editor.generated}<span class="hint"
-          >The collection set of its group titles this collection.</span
-        >{/if}
     </label>
 
     <div class="form-label">
@@ -126,37 +123,30 @@
       <select
         id={`${id}-group`}
         disabled={editor.generated}
-        value={groups.includes(editor.collectionGroup)
-          ? editor.collectionGroup
-          : editor.collectionGroup
-            ? "__new__"
-            : ""}
+        value={editor.collectionGroup}
         onchange={(event) => {
-          editor.collectionGroup =
-            event.currentTarget.value === "__new__" ? "New group" : event.currentTarget.value;
+          if (event.currentTarget.value !== NEW_GROUP) {
+            editor.collectionGroup = event.currentTarget.value;
+            return;
+          }
+          // The select keeps showing the current group until the popup creates one.
+          event.currentTarget.value = editor.collectionGroup;
+          uiState.openCollectionGroups("", (name, replacement) => {
+            if (!name || editor.collectionGroup === name) editor.collectionGroup = replacement;
+          });
         }}
       >
         <option value="">No group</option>
+        {#if editor.collectionGroup && !groups.includes(editor.collectionGroup)}
+          <option value={editor.collectionGroup}>{editor.collectionGroup}</option>
+        {/if}
         {#each groups as group (group)}<option value={group}>{group}</option>{/each}
-        <option value="__new__">Create new group...</option>
+        <option value={NEW_GROUP}>Create new group...</option>
       </select>
-      {#if editor.collectionGroup && !groups.includes(editor.collectionGroup)}
-        <label for={`${id}-new-group`}>New group name</label>
-        <input
-          id={`${id}-new-group`}
-          required
-          maxlength="200"
-          bind:value={editor.collectionGroup}
-        />
-      {/if}
-      <span class="hint">Group defaults apply unless this collection overrides them.</span>
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm"
-        onclick={() =>
-          uiState.openCollectionGroups(editor.collectionGroup, (name, replacement) => {
-            if (editor.collectionGroup === name) editor.collectionGroup = replacement;
-          })}>{editor.generated ? "Edit the set" : "Manage groups"}</button
+      <span class="hint"
+        >{editor.generated
+          ? "Its group's set titles this collection."
+          : "The collection inherits the group's defaults."}</span
       >
     </div>
   {/if}

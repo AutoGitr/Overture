@@ -395,7 +395,7 @@
         >+ Create collection</button
       >
       <button class="btn btn-ghost btn-sm" onclick={() => uiState.openCollectionGroups()}
-        >Manage groups</button
+        >Groups</button
       >
     </div>
   {/if}

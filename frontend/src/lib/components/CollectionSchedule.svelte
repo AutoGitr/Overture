@@ -9,8 +9,8 @@
   collapsible
   title="Schedule"
   description={syncs
-    ? "Choose how often Overture applies the criteria and when the collection is active. Seasonal dates repeat every year, including across New Year."
-    : "Seasonal dates apply when you save the collection. Criteria keep a seasonal collection current."}
+    ? "How often the criteria sync, and when the collection is active each year."
+    : "When the collection is active each year."}
   busy={editor.busy}
 >
   {#if syncs}
@@ -19,20 +19,20 @@
       <input type="number" min="1" max="8760" bind:value={editor.rule.sync_interval_hours} />
     </label>
     <label class="form-row">
-      <input type="checkbox" bind:checked={editor.rule.enabled} /> Enable scheduled sync
+      <input type="checkbox" bind:checked={editor.rule.enabled} /> Scheduled sync
     </label>
   {/if}
   <label class="form-label">
-    Active start (MM-DD)
+    Active from (MM-DD)
     <input
       placeholder={editor.defaults.data?.active_start_mmdd ?? ""}
       maxlength="5"
       bind:value={editor.activeStartMmdd}
     />
-    <span class="hint">Leave both dates blank for a year-round collection.</span>
+    <span class="hint">Blank for all year. A range can cross New Year.</span>
   </label>
   <label class="form-label">
-    Active end (MM-DD)
+    Active until (MM-DD)
     <input
       placeholder={editor.defaults.data?.active_end_mmdd ?? ""}
       maxlength="5"
@@ -41,11 +41,11 @@
   </label>
   {#if editor.activeStartMmdd || editor.activeEndMmdd}
     <label class="form-label">
-      Seasonal inactivity behavior
+      When inactive
       <select bind:value={editor.deleteWhenInactive}>
         <option value={null}>Default</option>
-        <option value={true}>Delete from media server when inactive</option>
-        <option value={false}>Keep collection on media server</option>
+        <option value={true}>Remove from server</option>
+        <option value={false}>Keep on server</option>
       </select>
     </label>
   {/if}

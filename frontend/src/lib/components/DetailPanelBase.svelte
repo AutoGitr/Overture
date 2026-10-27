@@ -30,15 +30,15 @@
     meta?: Snippet;
     /** `IdBadge` links. */
     badges: Snippet;
-    /** The section tabs, such as Collection, Art and Themes. */
-    tabs: Snippet;
+    /** The mode tabs, such as Configure, Art and Themes; without them the panel has no tab rows. */
+    tabs?: Snippet;
     /** Record actions share a fixed position beside the mode tabs. */
     recordActions?: Snippet;
-    /** The active section's category tabs. */
+    /** The art category tabs, shown in every mode so the row never changes. */
     subtabs?: Snippet;
-    subtabLabel?: string;
-    subtabRole?: "tablist" | "group";
-    /** Actions beside the category tabs. */
+    /** Links to the sections of a form, beside the art tabs. */
+    sectionLinks?: Snippet;
+    /** Actions beside the art tabs. */
     subtabActions?: Snippet;
     content: Snippet;
   }
@@ -61,8 +61,7 @@
     tabs,
     recordActions,
     subtabs,
-    subtabLabel = "Art categories",
-    subtabRole = "tablist",
+    sectionLinks,
     subtabActions,
     content,
   }: Props = $props();
@@ -148,40 +147,45 @@
           {/if}
         </div>
 
-        <div class="detail-sections">
-          <div class="detail-tab-row tab-bar">
-            <div
-              class="mode-tabs"
-              role="tablist"
-              tabindex="-1"
-              aria-label="Detail modes"
-              onkeydown={navigateTabs}
-            >
-              {@render tabs()}
-            </div>
-            {#if recordActions}
-              <div class="record-actions" role="group" aria-label="Record actions">
-                {@render recordActions()}
+        {#if tabs}<div class="detail-sections">
+            <div class="detail-tab-row tab-bar">
+              <div
+                class="mode-tabs"
+                role="tablist"
+                tabindex="-1"
+                aria-label="Detail modes"
+                onkeydown={navigateTabs}
+              >
+                {@render tabs()}
               </div>
-            {/if}
-          </div>
-          <div class="detail-tab-row tab-bar">
-            <div
-              class="detail-subtabs"
-              role={subtabRole}
-              tabindex="-1"
-              aria-label={subtabLabel}
-              onkeydown={navigateTabs}
-            >
-              {@render subtabs?.()}
+              {#if recordActions}
+                <div class="record-actions" role="group" aria-label="Record actions">
+                  {@render recordActions()}
+                </div>
+              {/if}
             </div>
-            {#if subtabActions}
-              <div class="section-actions" role="group" aria-label="Section actions">
-                {@render subtabActions()}
+            <div class="detail-tab-row tab-bar">
+              <div
+                class="detail-subtabs"
+                role="tablist"
+                tabindex="-1"
+                aria-label="Art categories"
+                onkeydown={navigateTabs}
+              >
+                {@render subtabs?.()}
               </div>
-            {/if}
-          </div>
-        </div>
+              {#if sectionLinks}
+                <nav class="section-links" aria-label="Configure sections">
+                  {@render sectionLinks()}
+                </nav>
+              {/if}
+              {#if subtabActions}
+                <div class="section-actions" role="group" aria-label="Section actions">
+                  {@render subtabActions()}
+                </div>
+              {/if}
+            </div>
+          </div>{/if}
       </div>
     </div>
 
@@ -396,6 +400,7 @@
 
   .mode-tabs,
   .detail-subtabs,
+  .section-links,
   .record-actions,
   .section-actions {
     display: flex;
@@ -403,6 +408,11 @@
     flex-shrink: 0;
     gap: var(--space-1);
     white-space: nowrap;
+  }
+
+  .section-links {
+    padding-left: var(--space-1);
+    border-left: var(--border-subtle);
   }
 
   .record-actions :global(.tab-item.danger) {

@@ -119,7 +119,7 @@ describe("collection setup flow", () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
   });
 
-  it("adapts Setup and the section shortcuts to a collection or a set", async () => {
+  it("adapts Setup to a collection or a set, with no tab rows while new", async () => {
     mockPage();
     await createPage();
     const setup = within(screen.getByRole("region", { name: "Collection setup" }));
@@ -127,11 +127,8 @@ describe("collection setup flow", () => {
       expect(setup.getByLabelText(name)).toBeInTheDocument();
     }
     expect(setup.queryByLabelText("TMDB collection ID")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Members" })).toBeNull();
-    for (const name of ["Setup", "Content", "Display", "Schedule"]) {
-      const target = screen.getByRole("link", { name }).getAttribute("href")?.slice(1);
-      expect(document.getElementById(target ?? "")).not.toBeNull();
-    }
+    expect(screen.queryByRole("tablist", { name: "Detail modes" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Configure sections" })).toBeNull();
 
     // Presets of both kinds share one list, grouped by what they create.
     const start = setup.getByLabelText(/^Start from/);
@@ -152,21 +149,40 @@ describe("collection setup flow", () => {
     await fireEvent.click(setup.getByLabelText("One per value"));
     expect(setup.queryByLabelText("Title")).toBeNull();
     expect(setup.getByRole("combobox", { name: /^Group/ })).not.toBeRequired();
-    expect(screen.getAllByRole("link").map((link) => link.textContent?.trim())).toEqual(
-      expect.arrayContaining(["Setup", "Collections", "Defaults"]),
-    );
-    expect(screen.queryByRole("link", { name: "Schedule" })).toBeNull();
+    for (const name of ["Set collections", "Set defaults"])
+      expect(screen.getByRole("region", { name })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Collection schedule" })).toBeNull();
   });
 
-  it("starts with only Setup and Content expanded and opens sections through navigation", async () => {
+  it("starts with only Setup and Content expanded and opens sections from any view", async () => {
     mockPage();
-    await createPage();
+    goToCollectionView(detail, "art");
+    renderWithQueryClient(CollectionPage);
+    await fireEvent.click(await screen.findByRole("link", { name: "Settings" }));
     for (const name of ["Setup", "Content"])
-      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-expanded", "true");
-    const display = screen.getByRole("button", { name: "Display" });
-    expect(display).toHaveAttribute("aria-expanded", "false");
-    await fireEvent.click(screen.getByRole("link", { name: "Display" }));
-    expect(display).toHaveAttribute("aria-expanded", "true");
+      expect(await screen.findByRole("button", { name })).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      ),
+    );
+    expect(screen.getByRole("region", { name: "Collection settings" })).toHaveFocus();
+  });
+
+  it("saves a new collection without the server on Enter", async () => {
+    const { calls } = mockPage();
+    await createPage();
+    await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
+    await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Draft" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
+    await fireEvent.submit(screen.getByRole("form", { name: "Configure collection" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    expect(
+      calls
+        .find((call) => call.init.method === "POST")
+        ?.url.startsWith("/api/collections?to_server=false"),
+    ).toBe(true);
   });
 
   it("creates a per-user smart collection from a preset", async () => {
@@ -176,9 +192,9 @@ describe("collection setup flow", () => {
     await fireEvent.change(screen.getByLabelText(/^Start from/), { target: { value: "unplayed" } });
     expect(screen.getByText(presets[1]?.description ?? "")).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toHaveValue("Unplayed");
-    expect(screen.getByLabelText("Plex smart collection")).toBeChecked();
+    expect(screen.getByLabelText("Plex (smart)")).toBeChecked();
     expect(screen.getByLabelText("Criteria condition 1 field")).toHaveValue("field:unplayed");
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
     expect(postedBody(calls, "/api/collections")).toMatchObject({
       title: "Unplayed",
@@ -200,7 +216,7 @@ describe("collection setup flow", () => {
     await createPage();
     await fireEvent.change(screen.getByLabelText("Library"), { target: { value: "movies" } });
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Requests" } });
-    await fireEvent.click(screen.getByLabelText("Plex smart collection"));
+    await fireEvent.click(screen.getByLabelText("Plex (smart)"));
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "source:radarr_tag" },
@@ -215,7 +231,7 @@ describe("collection setup flow", () => {
     await fireEvent.change(screen.getByLabelText("Criteria condition 2 value"), {
       target: { value: "false" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
     expect(postedBody(calls, "/api/collections").rule).toMatchObject({
       smart: true,
@@ -262,7 +278,7 @@ describe("collection setup flow", () => {
     expect(set.getByLabelText("One collection per")).toHaveValue("decade");
     await fireEvent.click(set.getByRole("button", { name: "Preview collections" }));
     expect(await set.findByText("1990s")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: "Create set" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
 
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
     expect(postedBody(calls, "/api/collections/group-policy?")).toMatchObject({
@@ -294,17 +310,17 @@ describe("collection setup flow", () => {
     await fireEvent.input(screen.getByLabelText("Title"), {
       target: { value: "Renamed smart collection" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     expect(calls.some((call) => call.url.includes("/rule"))).toBe(false);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save Changes" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
     await fireEvent.click(replace);
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
     await fireEvent.input(screen.getByLabelText("Criteria condition 1 value"), {
       target: { value: "Saga" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(calls.some((call) => call.url.includes("/rule") && call.init.method === "PUT")).toBe(
         true,
@@ -328,21 +344,22 @@ describe("collection setup flow", () => {
       });
       await createPage();
       await screen.findByRole("button", { name: "Condition" });
-      expect(screen.queryByRole("radiogroup", { name: "Evaluation" })).toBeNull();
+      expect(screen.queryByRole("radiogroup", { name: "Evaluated by" })).toBeNull();
       await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
       const field = screen.getByLabelText("Criteria condition 1 field");
       expect(within(field).queryByRole("option", { name: "Unplayed" })).toBeNull();
       expect(within(field).queryByRole("option", { name: "HDR" })).toBeNull();
+      await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
       expect(
         within(
-          within(screen.getByRole("region", { name: "Collection content" })).getByLabelText(
-            /^Sort/,
+          within(screen.getByRole("region", { name: "Collection settings" })).getByLabelText(
+            "Sort",
           ),
         )
           .getAllByRole("option")
           .map((option) => option.textContent),
       ).toEqual(["Default", "Release date (oldest first)", "Title (A to Z)"]);
-      expect(screen.queryByLabelText("Visibility")).toBeNull();
+      expect(screen.queryByLabelText("Collection mode")).toBeNull();
     },
   );
 });

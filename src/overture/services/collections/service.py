@@ -201,6 +201,16 @@ def _rule_row(collection_id: int, body: CollectionRuleWrite) -> CollectionRule:
     )
 
 
+def _outdates_server(row: MediaCollection) -> bool:
+    """A local save outdates a server copy; a seasonally withheld one has none."""
+    return row.unsynced or row.server_item_id is not None
+
+
+def _never_created(row: MediaCollection) -> bool:
+    """Saved in Overture only, so the scheduler leaves it until it is synced."""
+    return row.unsynced and row.server_item_id is None
+
+
 def _generator(group: CollectionGroup | None) -> CollectionGenerator | None:
     if group is None or not group.generator_json:
         return None
@@ -673,6 +683,8 @@ class CollectionsService:
         row: MediaCollection,
         options: CollectionOptions,
         rule: RuleOrPolicy = None,
+        *,
+        push: bool = True,
     ) -> CollectionOptions:
         async with self._database.read_session() as session:
             if rule is None and row.id is not None:
@@ -728,7 +740,7 @@ class CollectionsService:
                 "collection_filtering": filtering,
             }
         )
-        if row.server_item_id is None:
+        if row.server_item_id is None or not push:
             return effective
         await self._provider().update_collection_details(
             row.server_item_id,
@@ -797,11 +809,16 @@ class CollectionsService:
             raise PublicServiceError(422, str(exc)) from exc
 
     async def create(
-        self, body: CollectionCreate, *, generated_value: str | None = None
+        self,
+        body: CollectionCreate,
+        *,
+        generated_value: str | None = None,
+        sync: bool = True,
     ) -> CollectionDetail:
         """Create on the server, then record its complete local membership.
 
-        *generated_value* marks a collection its group's set creates.
+        *generated_value* marks a collection its group's set creates. Without
+        *sync* the collection is saved in Overture only, until it is synced.
         """
         if body.rule is not None:
             overrides = body.model_dump(
@@ -829,7 +846,7 @@ class CollectionsService:
             body = body.model_copy(update={"order_type": policy.order_type})
         items = await self._initial_members(body, policy, library_items)
         body = await self._with_biography(body)
-        if not smart and len(items) < policy.minimum_items:
+        if sync and not smart and len(items) < policy.minimum_items:
             raise PublicServiceError(
                 422, "Collection has fewer members than the effective minimum"
             )
@@ -856,6 +873,7 @@ class CollectionsService:
                 library_id=body.library_id,
                 kind=CollectionKind.SMART if smart else CollectionKind.REGULAR,
                 generated_value=generated_value,
+                unsynced=not sync,
                 last_synced_at=now,
                 created_at=now,
                 updated_at=now,
@@ -863,7 +881,7 @@ class CollectionsService:
                     exclude={"media_type", "library_id", "member_ids", "rule"}
                 ),
             )
-            if not withhold:
+            if sync and not withhold:
                 items = await self._create_on_server(row, body, items, library_items)
             await self._configure_new(row, body, rule, items, smart=smart)
             async with self._database.write_session() as session:
@@ -990,7 +1008,12 @@ class CollectionsService:
         return is_within_active_window(start, end, today)
 
     async def update(
-        self, collection_id: int, media_type: MediaType, body: CollectionOptions
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        body: CollectionOptions,
+        *,
+        sync: bool = True,
     ) -> CollectionDetail:
         """Edit collection metadata without touching movie or show metadata."""
         if body.tmdb_collection_id is not None and media_type is not MediaType.MOVIE:
@@ -1005,14 +1028,14 @@ class CollectionsService:
                 raise PublicServiceError(
                     422, "Its collection set titles this collection; edit the set"
                 )
-            await self._update_locked(row, body)
+            await self._update_locked(row, body, push=sync)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
         )
         return await self.get_collection(collection_id, media_type)
 
     async def _update_locked(
-        self, row: MediaCollection, body: CollectionOptions
+        self, row: MediaCollection, body: CollectionOptions, *, push: bool = True
     ) -> None:
         """Persist display choices after the caller acquires the collection locks."""
         overrides: dict[str, object] = {}
@@ -1031,7 +1054,7 @@ class CollectionsService:
             rule = await CollectionRepository(session).rule(row.id or 0)
         if rule is not None:
             rule.sqlmodel_update(display)
-        effective = await self._push_options(row, body, rule)
+        effective = await self._push_options(row, body, rule, push=push)
         summary_source = row.summary_source
         async with self._database.write_session() as session:
             saved = await self._require(session, row.id or 0, row.media_type)
@@ -1041,6 +1064,8 @@ class CollectionsService:
                 fields.pop("tmdb_collection_id")
             saved.sqlmodel_update(fields)
             saved.updated_at = utc_now()
+            if not push:
+                saved.unsynced = _outdates_server(saved)
             session.add(saved)
             if rule is not None and display:
                 saved_rule = await CollectionRepository(session).rule(row.id or 0)
@@ -1143,7 +1168,12 @@ class CollectionsService:
         await self._publisher.broadcast("collection.updated", {"collection_id": row.id})
 
     async def set_members(
-        self, collection_id: int, media_type: MediaType, body: CollectionMembersUpdate
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        body: CollectionMembersUpdate,
+        *,
+        sync: bool = True,
     ) -> CollectionDetail:
         """Replace members, in an order the server supports."""
         self._validate_display(body, media_type, smart=False)
@@ -1164,14 +1194,33 @@ class CollectionsService:
                 ),
                 body.order_type,
             )
-            await self._push_options(
-                row,
-                self._saved_options(row, None).model_copy(
-                    update={"order_type": body.order_type}
-                ),
-            )
-            await self._set_members_locked(row, items, body.order_type)
+            if sync:
+                await self._push_options(
+                    row,
+                    self._saved_options(row, None).model_copy(
+                        update={"order_type": body.order_type}
+                    ),
+                )
+                await self._set_members_locked(row, items, body.order_type)
+            else:
+                await self._store_members(row, items, body.order_type)
         return await self.get_collection(collection_id, media_type)
+
+    async def _store_members(
+        self, row: MediaCollection, items: list[MediaItem], order: CollectionOrder
+    ) -> None:
+        """Save members in Overture only; the next sync sends them."""
+        async with self._database.write_session() as session:
+            current = await self._require(session, row.id or 0, row.media_type)
+            await CollectionRepository(session).replace_members(
+                row.id or 0, [item.id or 0 for item in items]
+            )
+            current.child_count = len(items)
+            current.order_type = order
+            current.unsynced = _outdates_server(current)
+            current.updated_at = utc_now()
+            session.add(current)
+        await self._publisher.broadcast("collection.updated", {"collection_id": row.id})
 
     async def save_rule(
         self, collection_id: int, media_type: MediaType, body: CollectionRuleWrite
@@ -1352,6 +1401,11 @@ class CollectionsService:
             limit=rule.item_limit,
         )
         append = policy.sync_mode is SyncMode.APPEND and not was_smart
+        if append and row.unsynced:
+            # Members chosen in Overture since the last sync replace the server's.
+            chosen = {item.id for item in wanted}
+            wanted += [item for item in current if item.id not in chosen]
+            append = False
         member_count = len(wanted)
         if append and row.server_item_id is not None:
             remote_ids = await self._provider().get_collection_member_ids(
@@ -1433,9 +1487,45 @@ class CollectionsService:
                 await self._publisher.broadcast(
                     "collection.updated", {"collection_id": collection_id}
                 )
+            # A skipped server copy still lacks the changes; a collection
+            # without one is now withheld until it is active or large enough.
+            if not result.skipped or row.server_item_id is None:
+                await self._mark_synced(collection_id)
         if not result.skipped and not result.deleted:
             await self._run_post_sync_assets(collection_id, media_type)
         return result
+
+    async def _mark_synced(self, collection_id: int) -> None:
+        async with self._database.write_session() as session:
+            current = await CollectionRepository(session).get(collection_id)
+            if current is not None and current.unsynced:
+                current.unsynced = False
+                session.add(current)
+
+    async def sync(
+        self, collection_id: int, media_type: MediaType
+    ) -> CollectionSyncResponse:
+        """Make the server match Overture: run the criteria, or send the members."""
+        async with self._database.read_session() as session:
+            rule = await CollectionRepository(session).rule(collection_id)
+        if rule is not None:
+            return await self.sync_rule(collection_id, media_type)
+        async with (
+            self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
+            self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
+        ):
+            async with self._database.read_session() as session:
+                row = await self._require(session, collection_id, media_type)
+                current = await CollectionRepository(session).members(collection_id)
+            # Plex keeps the filter of a smart collection Overture has no criteria for.
+            if row.kind is not CollectionKind.SMART:
+                await self._set_members_locked(row, current, row.order_type)
+            await self._update_locked(row, self._saved_options(row, None))
+            await self._mark_synced(collection_id)
+        await self._publisher.broadcast(
+            "collection.updated", {"collection_id": collection_id}
+        )
+        return CollectionSyncResponse()
 
     @staticmethod
     def _due(rule: CollectionRule, policy: CollectionPolicy) -> bool:
@@ -1474,9 +1564,11 @@ class CollectionsService:
                 continue
             async with self._database.read_session() as session:
                 policy = await self._policy(session, group.media_type, group.name)
-            if not policy.sync_enabled or (
-                group.generated_at is not None
-                and now
+            # A set runs on its schedule once it has been synced by hand.
+            if (
+                not policy.sync_enabled
+                or group.generated_at is None
+                or now
                 < group.generated_at + timedelta(hours=policy.sync_interval_hours)
             ):
                 continue
@@ -1489,7 +1581,7 @@ class CollectionsService:
         for rule in rules:
             async with self._database.read_session() as session:
                 row = await CollectionRepository(session).get(rule.collection_id)
-                if row is None or row.server_type is not server:
+                if row is None or row.server_type is not server or _never_created(row):
                     continue
                 policy = await self._policy(
                     session, row.media_type, row.collection_group, rule

@@ -1,8 +1,6 @@
 <script lang="ts">
   import { CollectionEditor, type CollectionDraft } from "../utils/collectionForms.svelte";
-  import { ORDER_LABELS } from "../utils/collectionCriteria";
   import DetailForm from "./DetailForm.svelte";
-  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
 
@@ -10,11 +8,11 @@
 
   const CONTENT = [
     ["manual", "Manual"],
-    ["criteria", "Matching criteria"],
+    ["criteria", "Criteria"],
   ] as const;
   const EVALUATION = [
-    ["overture", "Synced by Overture"],
-    ["smart", "Plex smart collection"],
+    ["overture", "Overture"],
+    ["smart", "Plex (smart)"],
   ] as const;
   let capabilities = $derived(editor.capabilities.data);
   let editable = $derived(!editor.generated && editor.criteriaEditable);
@@ -25,12 +23,12 @@
   expanded
   title="Content"
   description={editor.generated
-    ? "The collection set of this collection's group decides its criteria. Edit the set to change them."
+    ? "Its group's set decides the criteria."
     : editor.content === "manual"
-      ? "Members are added and ordered by hand in Members."
+      ? "Choose members by hand in Members."
       : editor.smart
-        ? "Plex keeps the members current and evaluates play state for each user."
-        : "Overture adds the items matching the criteria and removes the rest on each sync."}
+        ? "Plex keeps the members current, with play state per user."
+        : "Each sync adds what matches the criteria."}
   busy={editor.busy}
 >
   {#if editor instanceof CollectionEditor && !editor.generated}
@@ -48,10 +46,10 @@
   {#if editor.content === "criteria"}
     {#if capabilities?.smart}
       <div class="form-label">
-        <span>Evaluation</span>
+        <span>Evaluated by</span>
         <SegmentedControl
           --segmented-margin="0"
-          label="Evaluation"
+          label="Evaluated by"
           options={EVALUATION}
           bind:value={
             () => (editor.rule.smart ? "smart" : "overture"),
@@ -60,8 +58,8 @@
         />
         <span class="hint"
           >{editor.rule.smart
-            ? "Live and per user, with every Plex filter. Lists and tags become Plex labels Overture keeps up to date."
-            : "Uses synced metadata, so play state follows the last library sync."}</span
+            ? "Live, per user and with every Plex filter. Lists and tags become Plex labels."
+            : "Uses library metadata, so play state is as of the last library sync."}</span
         >
       </div>
     {/if}
@@ -69,8 +67,7 @@
       {@const form = editor}
       <div class="form-wide">
         <p class="hint">
-          Plex manages this smart collection's filter. Display changes keep it; take it over to
-          replace it with criteria defined here.
+          Plex holds this smart collection's filter. Replace it to edit the criteria here.
         </p>
         <label class="form-row">
           <input type="checkbox" bind:checked={form.manageServerFilter} />
@@ -89,39 +86,6 @@
         label="Criteria"
       />
     </fieldset>
-    <label class="form-label">
-      Sort
-      <select bind:value={editor.orderType}>
-        <option value={null}>Default</option>
-        {#each editor.orders as order (order)}
-          <option value={order}>{ORDER_LABELS[order]}</option>
-        {/each}
-      </select>
-      <span class="hint"
-        >{editor.smart
-          ? "Plex sorts smart collections itself."
-          : "Custom keeps the order of the first list the criteria use."}</span
-      >
-    </label>
-    <label class="form-label">
-      Limit
-      <input
-        type="number"
-        min="1"
-        max="10000"
-        placeholder="All matching items"
-        disabled={!editable}
-        value={editor.rule.limit ?? ""}
-        oninput={(event) =>
-          (editor.rule.limit = event.currentTarget.value
-            ? event.currentTarget.valueAsNumber
-            : null)}
-      />
-      <span class="hint">Keep only the first items in the chosen sort.</span>
-    </label>
-    {#if !editor.smart}
-      <CollectionPolicyFields policy={editor.rule} defaults={editor.defaults.data} section="sync" />
-    {/if}
   {/if}
 </DetailForm>
 

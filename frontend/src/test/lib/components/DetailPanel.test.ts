@@ -103,7 +103,7 @@ describe("DetailPanel", () => {
       "https://www.imdb.com/title/tt0133093/",
     );
     expect(screen.queryByTitle("Open Database Record")).not.toBeInTheDocument();
-    expect(screen.queryByTitle("Delete Item from Database")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Delete item from database")).not.toBeInTheDocument();
     // An unsaved title has missing selections, while TMDB artwork remains a preview.
     expect(screen.getByRole("tab", { name: "Art" }).querySelector("[data-status]")).toHaveAttribute(
       "data-status",
@@ -140,19 +140,21 @@ describe("DetailPanel", () => {
     renderWithQueryClient(DetailPanel, { item: mediaItem({ id: 7, title: "The Matrix" }) });
 
     expect(screen.getByTitle("Open Database Record")).toBeInTheDocument();
-    expect(screen.getByTitle("Delete Item from Database")).toBeInTheDocument();
+    expect(screen.getByTitle("Delete item from database")).toBeInTheDocument();
     const controls = screen.getByRole("group", { name: "Record actions" });
     expect(within(controls).getAllByRole("button")).toHaveLength(3);
   });
 
-  it("hides artwork categories and paste actions when showing themes", () => {
+  it("keeps the art categories, unselected, and drops paste actions when showing themes", () => {
     renderWithQueryClient(DetailPanel, {
       item: mediaItem({ id: 7, title: "The Matrix" }),
       view: { mode: "themes", artSubTab: "poster", drillSeasonNum: null },
     });
     expect(screen.getByRole("tab", { name: "Themes", selected: true })).toBeInTheDocument();
-    expect(screen.queryByRole("tablist", { name: "Art categories" })).toBeNull();
+    const art = within(screen.getByRole("tablist", { name: "Art categories" }));
+    expect(art.getByRole("tab", { name: "Poster", selected: false })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Paste URL/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Search YouTube" })).toBeNull();
     expect(screen.getByRole("group", { name: "Record actions" })).toBeInTheDocument();
   });
 });
@@ -383,7 +385,7 @@ describe("DetailPanel record actions", () => {
     });
     await fireEvent.click(screen.getByRole("tab", { name: "Themes" }));
     await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
-    await fireEvent.click(screen.getByTitle("Delete Item from Database"));
+    await fireEvent.click(screen.getByTitle("Delete item from database"));
 
     await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(3));
     expect(clearAllArt).not.toHaveBeenCalled();
@@ -437,7 +439,7 @@ describe("DetailPanel record actions", () => {
     deleteItem.mockResolvedValue({ data: { status: "deleted" } });
     renderWithQueryClient(DetailPanel, { item: firefly });
 
-    await fireEvent.click(screen.getByTitle("Delete Item from Database"));
+    await fireEvent.click(screen.getByTitle("Delete item from database"));
 
     await waitFor(() => expect(route.pathname).toBe("/shows"));
     expect(confirmAction).toHaveBeenCalledWith(

@@ -90,6 +90,9 @@ class MediaCollectionBase(SQLModel):
 
     # Whether the collection is included in theme workflows.
     monitored: bool = Field(default=True, nullable=False)
+    # Saved in Overture and not yet sent to the server. Library syncs keep the
+    # saved choices, and the scheduler never creates a collection still unsynced.
+    unsynced: bool = Field(default=False, nullable=False)
 
     # Unset until a sync lists the collection; such rows are not shown.
     last_synced_at: datetime | None = None

@@ -980,3 +980,30 @@ def test_collection_criteria_migration_converts_rules_sets_orders_and_items() ->
             command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+def test_unsynced_collections_upgrade_as_synced_and_downgrade() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "7d3f2a9c4b81")
+            connection.exec_driver_sql(
+                "INSERT INTO media_collections "
+                "(id, server_item_id, media_type, server_type, kind, title, "
+                "child_count, monitored, order_type, visible_home, visible_shared, "
+                "visible_library) "
+                "VALUES (1, 'saga', 'movie', 'plex', 'regular', 'Saga', 0, 1, "
+                "'release.asc', 0, 0, 0)"
+            )
+            command.upgrade(config, "head")
+            assert connection.exec_driver_sql(
+                "SELECT title, unsynced FROM media_collections"
+            ).all() == [("Saga", 0)]
+            command.downgrade(config, "7d3f2a9c4b81")
+            assert connection.exec_driver_sql(
+                "SELECT title FROM media_collections"
+            ).all() == [("Saga",)]
+    finally:
+        engine.dispose()

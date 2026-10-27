@@ -26,7 +26,6 @@
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
   import ThemeStatus from "./ThemeStatus.svelte";
-  import ThemeActions from "./ThemeActions.svelte";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
   import PasteArtButton from "./PasteArtButton.svelte";
@@ -72,7 +71,6 @@
   let managing = $derived(editor.creating || view === "configure");
   const panelId = $props.id();
   const formId = `${panelId}-configure`;
-  const themeInputId = `${panelId}-theme-search`;
 </script>
 
 <DetailPanelBase
@@ -88,12 +86,7 @@
   posterLinkTitle={collection?.server_link
     ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
     : null}
-  subtabLabel={managing
-    ? "Configure navigation"
-    : view === "themes"
-      ? "Theme status"
-      : "Art categories"}
-  subtabRole={view === "art" ? "tablist" : "group"}
+  tabs={collection ? tabs : undefined}
 >
   {#snippet emptyIcon()}<Layers size={64} />{/snippet}
   {#snippet posterIcon()}<Layers size={48} />{/snippet}
@@ -104,13 +97,16 @@
         <span class="badge">Smart</span>
       {/if}
       {#if collection.generated_value !== null}
-        <span class="badge" title="Created and kept current by its group's collection set"
+        <span class="badge" title="Created and kept up to date by its group's set"
           >Set: {collection.collection_group}</span
         >
       {/if}
       {#if collection.withheld}
-        <span class="badge" title="Collection kept in Overture and absent from the media server"
-          >Not on server</span
+        <span class="badge" title="Saved in Overture only">Not on server</span>
+      {/if}
+      {#if collection.unsynced}
+        <span class="badge badge-warning" title="Saved changes the server does not have yet"
+          >Unsynced</span
         >
       {/if}
     {/if}
@@ -154,33 +150,6 @@
       {/if}
     {/if}
   {/snippet}
-  {#snippet tabs()}
-    <StatusTab
-      icon={Settings}
-      label="Configure"
-      active={managing}
-      onselect={() => {
-        if (collection) goToCollectionView(collection, "configure");
-      }}
-    />
-    {#if collection && actions}<AssetModeTabs
-        mode={view}
-        artStatus={statusTone(collection.art_status, actions.clearingArt)}
-        themeStatus={collection.theme_unavailable
-          ? null
-          : statusTone(collection.theme_status, actions.themeBusy)}
-        onart={() => goToCollectionView(collection, "art", artType)}
-        onthemes={() => goToCollectionView(collection, "themes")}
-        onclearart={collection.poster_url || collection.background_url
-          ? () => void actions.clearArt("all")
-          : null}
-        oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"
-          ? () => void actions.clearTheme()
-          : null}
-        artBusy={actions.clearingArt}
-        themeBusy={actions.uploading}
-      />{/if}
-  {/snippet}
   {#snippet recordActions()}
     {#if collection && actions && editor instanceof CollectionEditor}
       <DetailRecordActions
@@ -194,18 +163,9 @@
     {/if}
   {/snippet}
   {#snippet subtabs()}
-    {#if managing}
-      <ConfigureNavigation {formId} {editor} />
-    {:else if collection && view === "themes"}
-      <ThemeStatus
-        status={collection.theme_status}
-        duration={collection.theme_status === "missing" ? null : collection.theme_duration}
-        title={collection.youtube_title}
-        unavailable={collection.theme_unavailable}
-      />
-    {:else if collection && actions}
+    {#if collection && actions}
       <ArtCategoryTabs
-        active={artType}
+        active={view === "art" ? artType : null}
         statuses={{
           poster: statusTone(collection.poster_status, actions.clearingArt),
           background: statusTone(collection.background_status, actions.clearingArt),
@@ -221,37 +181,10 @@
       />
     {/if}
   {/snippet}
-  {#snippet subtabActions()}
-    {#if managing}
-      <button
-        class="tab-item"
-        type="submit"
-        form={formId}
-        disabled={editor.busy || (editor instanceof CollectionDraft && !editor.canSubmit)}
-        >{editor instanceof CollectionDraft && editor.kind === "set"
-          ? "Create set"
-          : editor.creating
-            ? "Create collection"
-            : "Save Changes"}</button
-      >
-      {#if collection && editor instanceof CollectionEditor}<button
-          class="tab-item"
-          type="button"
-          disabled={editor.busy || !collection.rule}
-          onclick={() => {
-            if (editor instanceof CollectionEditor) void editor.sync();
-          }}>Sync Now</button
-        >{/if}
-    {:else if view === "art"}<PasteArtButton />
-    {:else if collection && actions}
-      <ThemeActions
-        inputId={themeInputId}
-        disabled={!!collection.theme_unavailable || actions.uploading}
-        clearDisabled={collection.theme_status === "missing"}
-        onclear={() => void actions.clearTheme()}
-      />
-    {/if}
+  {#snippet sectionLinks()}
+    {#if collection}<ConfigureNavigation {formId} {collection} configuring={managing} />{/if}
   {/snippet}
+  {#snippet subtabActions()}<PasteArtButton />{/snippet}
   {#snippet content()}
     {#if managing}
       {#if editor instanceof CollectionDraft && editor.request.error}<DataStatus
@@ -271,7 +204,12 @@
         {libraries}
       />
     {:else if collection && actions && view === "themes"}
-      <CollectionThemePanel {collection} {actions} searchInputId={themeInputId} />
+      {#if !collection.theme_unavailable}<ThemeStatus
+          status={collection.theme_status}
+          duration={collection.theme_status === "missing" ? null : collection.theme_duration}
+          title={collection.youtube_title}
+        />{/if}
+      <CollectionThemePanel {collection} {actions} />
     {:else if collection}
       {#key `${collection.id}-${artType}`}
         <ArtSlotPanel
@@ -288,3 +226,31 @@
     {/if}
   {/snippet}
 </DetailPanelBase>
+
+{#snippet tabs()}
+  <StatusTab
+    icon={Settings}
+    label="Configure"
+    active={managing}
+    onselect={() => {
+      if (collection) goToCollectionView(collection, "configure");
+    }}
+  />
+  {#if collection && actions}<AssetModeTabs
+      mode={view}
+      artStatus={statusTone(collection.art_status, actions.clearingArt)}
+      themeStatus={collection.theme_unavailable
+        ? null
+        : statusTone(collection.theme_status, actions.themeBusy)}
+      onart={() => goToCollectionView(collection, "art", artType)}
+      onthemes={() => goToCollectionView(collection, "themes")}
+      onclearart={collection.poster_url || collection.background_url
+        ? () => void actions.clearArt("all")
+        : null}
+      oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"
+        ? () => void actions.clearTheme()
+        : null}
+      artBusy={actions.clearingArt}
+      themeBusy={actions.uploading}
+    />{/if}
+{/snippet}

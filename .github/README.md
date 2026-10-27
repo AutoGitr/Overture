@@ -438,10 +438,10 @@ suggested too.
 
 On Plex, choose how the criteria are evaluated:
 
-- **Synced by Overture** evaluates them against the metadata the last library
+- **Overture** evaluates them against the metadata the last library
   sync stored, and adds and removes members on its schedule. It works with every
   server, offering only the fields that server provides.
-- **Plex smart collection** creates a Plex smart collection that Plex keeps
+- **Plex (smart)** creates a Plex smart collection that Plex keeps
   current, with every Plex filter, including audio and subtitle language, HDR,
   Dolby Vision, HDR10+, Dolby Atmos, codecs, audio channels, minimum age,
   edition and play state for each user. Show collections test the media of each
@@ -449,7 +449,7 @@ On Plex, choose how the criteria are evaluated:
   the criteria use, such as `overture:tmdb_person:5292:actor`, on its items,
   keeps the items' other labels, and removes the label when no smart collection
   needs it. Set **Collection filtering** to
-  User library for per-user collections such as Unplayed.
+  User's library for per-user collections such as Unplayed.
 
 **Sort** orders members by release date, title, date added, ratings, duration,
 plays, last played or randomly, or keeps a custom order: the order you drag
@@ -470,7 +470,7 @@ collections. **Preview collections** shows what the set creates before you
 create it. On its schedule, a set creates collections for new values, updates
 its collections when you change it, and removes collections whose value it no
 longer produces when **Below minimum** is set to delete. Its collections'
-criteria and titles belong to the set; edit the set in **Manage groups**.
+criteria and titles belong to the set; edit the set in **Collection groups**.
 Franchises already held by collections in other groups are skipped.
 
 Presets fill in the form; everything stays editable. Set presets cover the
@@ -482,23 +482,34 @@ The Configure page has these sections:
 
 1. **Setup** holds the library, what to create, the preset, and the title and
    group. The only library is selected automatically.
-2. **Content** chooses whether members are chosen by hand or match criteria,
-   holds the criteria, sort and limit, and the membership policy: Strict sync
-   mirrors the criteria, Append also keeps members added by hand.
+2. **Content** chooses whether members are chosen by hand or by criteria, and
+   holds the criteria.
 3. **Members** shows a saved collection's members and any TMDB source roster.
    Collections chosen by hand, and Append collections, take additions; Plex
    collections can be reordered by dragging or with Up and Down.
-4. **Display** holds the sort title and summary, which accept text or a
-   template, the optional TMDB collection ID, and Plex visibility and promotion.
+4. **Settings** holds the sort and limit, the **Sync mode** (Sync removes
+   members that stop matching, Append keeps them), the minimum, automatic art and
+   theme, the sort title and summary, which accept text or a template, the
+   optional TMDB collection ID, and Plex visibility.
 5. **Schedule** holds the sync interval and recurring seasonal dates. Leave both
    dates blank for year-round activity; a range can cross New Year. A seasonal
    collection can be kept or removed from the server while inactive.
 
-A new set shows **Setup**, **Collections** and **Defaults**, the group's
-defaults. **Save Changes** saves a collection; **Sync Now** applies its criteria.
+A saved collection keeps the art tabs and links to these sections in its lower
+tab row in every view. A new set shows **Setup**, **Collections** and
+**Defaults**, the group's defaults.
+
+**Save** (or Enter) saves in Overture only and never changes the media server.
+**Save and Create** saves and creates the collection or set on the server;
+**Save and Sync** saves an existing collection and makes the server match it.
+Members you add, remove or reorder also wait for the next sync. A collection
+with changes the server does not have shows **Unsynced**, and a library sync
+keeps those changes. The scheduler leaves a collection or set alone until it has
+been created once.
+
 Choose **Default** to inherit a setting; empty text fields show the inherited
 value as a placeholder. Imported Plex smart collections keep their Plex filter
-when you save display changes, until you choose **Replace the Plex filter with
+when you save other changes, until you choose **Replace the Plex filter with
 these criteria**. Failed list lookups keep existing members.
 
 Set `TMDB_API_KEY` for TMDB lists, titles, people and franchises,
@@ -507,11 +518,12 @@ Radarr or Sonarr URL and API key for their tags. Unavailable sources are shown
 with the reason. Full Sync stores the metadata criteria test; run one after
 upgrading so ratings, plays, editions and Jellyfin tags are available.
 
-**Manage groups**, in Setup and the collection sidebar, edits a group's defaults
-and its collection set. **Save group** takes effect on the next save or sync,
-**Save & Apply** updates its collections' display settings at once while keeping
-their members and explicit overrides, and **Run set & sync** runs the set and
-syncs the group's collections. A sort title such as `01_{title}` keeps a group
+**Collection groups**, opened from the collection sidebar or **Create new group**
+in Setup's Group list, creates groups and edits a group's defaults and its
+collection set; Setup only assigns a group. **Save** takes effect on the next
+sync, **Save and Apply** sends its collections' display settings to the server at
+once while keeping their members and explicit overrides, and **Save and Sync**
+runs the set and syncs the group's collections. A sort title such as `01_{title}` keeps a group
 together. A group can be renamed or deleted. Deleting only the group keeps its
 collections ungrouped; you can instead remove its collections from Overture, the
 media server, or both. Server-only removal keeps Overture's configuration and

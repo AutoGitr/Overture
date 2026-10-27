@@ -300,6 +300,8 @@ class CollectionRead(CollectionArtwork):
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
     withheld: bool = False
+    #: Overture holds saved changes the media server does not have yet.
+    unsynced: bool = False
     #: Overture maintains the members from criteria.
     managed: bool = False
     #: The last sync of the criteria failed.
@@ -424,6 +426,7 @@ def collection_read(
         active_end_mmdd=row.active_end_mmdd,
         delete_when_inactive=row.delete_when_inactive,
         withheld=row.server_item_id is None,
+        unsynced=row.unsynced,
         managed=rule is not None,
         sync_failed=bool(rule and rule.last_error),
         last_rule_sync=rule.last_synced_at if rule else None,

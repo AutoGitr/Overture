@@ -140,7 +140,7 @@ async def test_collection_routes_delegate_to_service() -> None:
         )
     )
     service.delete_rule = AsyncMock(return_value=StatusResponse(status=Status.OK))
-    service.sync_rule = AsyncMock(return_value=CollectionSyncResponse(added=2))
+    service.sync = AsyncMock(return_value=CollectionSyncResponse(added=2))
 
     art_service = MagicMock()
     art_service.clear_collection = AsyncMock(return_value=artwork)
@@ -315,9 +315,7 @@ async def test_collection_routes_delegate_to_service() -> None:
         1, MediaType.MOVIE, service
     )
     assert del_rule.status == Status.OK
-    sync_res = await collections_router.sync_collection_rule(
-        1, MediaType.MOVIE, service
-    )
+    sync_res = await collections_router.sync_collection(1, MediaType.MOVIE, service)
     assert sync_res.added == 2
 
     # Art endpoints

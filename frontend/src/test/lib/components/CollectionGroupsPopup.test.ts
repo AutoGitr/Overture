@@ -36,9 +36,9 @@ it("renames the selected group", async () => {
   const changed = vi.fn();
   uiState.openCollectionGroups("Weekend", changed);
   const { calls } = renderGroups();
-  await fireEvent.click(await screen.findByRole("button", { name: "Manage group" }));
+  await fireEvent.click(await screen.findByRole("button", { name: "Rename or delete" }));
   await fireEvent.input(screen.getByLabelText("Group name"), { target: { value: "Evenings" } });
-  await fireEvent.click(screen.getByRole("button", { name: "Rename group" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(calls.find((call) => call.init.method === "PATCH")?.init.body).toBe(
       JSON.stringify({ name: "Evenings" }),
@@ -51,8 +51,8 @@ it.each(["keep", "overture", "server", "both"])(
   "confirms and submits the %s deletion scope",
   async (scope) => {
     const { calls } = renderGroups();
-    await fireEvent.click(await screen.findByRole("button", { name: "Manage group" }));
-    await fireEvent.change(screen.getByLabelText("When deleting this group"), {
+    await fireEvent.click(await screen.findByRole("button", { name: "Rename or delete" }));
+    await fireEvent.change(screen.getByLabelText("On delete"), {
       target: { value: scope },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Delete group" }));
@@ -64,3 +64,15 @@ it.each(["keep", "overture", "server", "both"])(
     );
   },
 );
+
+it("reports a new group once it is saved, so the collection can take it", async () => {
+  const changed = vi.fn();
+  uiState.openCollectionGroups("", changed);
+  renderGroups();
+  await fireEvent.input(await screen.findByLabelText("Group name"), {
+    target: { value: "Fresh" },
+  });
+  await fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+  await fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+  await waitFor(() => expect(changed).toHaveBeenCalledWith("", "Fresh"));
+});

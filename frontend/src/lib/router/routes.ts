@@ -151,38 +151,26 @@ export function routedCollectionArtType(): "poster" | "background" {
   return route.params.subtab === "background" ? "background" : "poster";
 }
 
+/** Open a collection's view; `hash` names a configure section to show. */
 export function goToCollectionView(
   collection: SelectableCollection,
   view: CollectionView,
   subtab: "poster" | "background" = "poster",
+  hash?: string,
 ): void {
   const params = { collectionSlug: buildIdSlug(collection.id, collection.title), subtab };
+  const options = { params, search: sidebarSearch(), hash };
   if (collection.media_type === "show") {
-    if (view === "configure")
-      void navigate("/shows/collections/:collectionSlug", { params, search: sidebarSearch() });
+    if (view === "configure") void navigate("/shows/collections/:collectionSlug", options);
     else if (view === "art")
-      void navigate("/shows/collections/:collectionSlug/art/:subtab", {
-        params,
-        search: sidebarSearch(),
-      });
-    else if (view === "themes")
-      void navigate("/shows/collections/:collectionSlug/themes", {
-        params,
-        search: sidebarSearch(),
-      });
+      void navigate("/shows/collections/:collectionSlug/art/:subtab", options);
+    else if (view === "themes") void navigate("/shows/collections/:collectionSlug/themes", options);
   } else {
-    if (view === "configure")
-      void navigate("/movies/collections/:collectionSlug", { params, search: sidebarSearch() });
+    if (view === "configure") void navigate("/movies/collections/:collectionSlug", options);
     else if (view === "art")
-      void navigate("/movies/collections/:collectionSlug/art/:subtab", {
-        params,
-        search: sidebarSearch(),
-      });
+      void navigate("/movies/collections/:collectionSlug/art/:subtab", options);
     else if (view === "themes")
-      void navigate("/movies/collections/:collectionSlug/themes", {
-        params,
-        search: sidebarSearch(),
-      });
+      void navigate("/movies/collections/:collectionSlug/themes", options);
   }
 }
 

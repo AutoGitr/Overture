@@ -139,6 +139,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     visible_library: false,
     visible_shared: false,
     withheld: false,
+    unsynced: false,
     below_minimum: false,
     art_url: null,
     sort_title: null,

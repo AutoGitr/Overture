@@ -1,42 +1,49 @@
-<script lang="ts">
+<script module lang="ts">
   import Settings from "@lucide/svelte/icons/settings";
   import WandSparkles from "@lucide/svelte/icons/wand-sparkles";
   import Users from "@lucide/svelte/icons/users";
-  import Eye from "@lucide/svelte/icons/eye";
+  import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
   import Calendar from "@lucide/svelte/icons/calendar";
-  import { route } from "../router/routes";
-  import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
-  let { formId, editor }: { formId: string; editor: CollectionEditor | CollectionDraft } = $props();
-  let set = $derived(editor instanceof CollectionDraft && editor.kind === "set");
-  let sections = $derived(
-    set
-      ? [
-          { key: "setup", label: "Setup", icon: Settings },
-          { key: "content", label: "Collections", icon: WandSparkles },
-          { key: "display", label: "Defaults", icon: Eye },
-        ]
-      : [
-          { key: "setup", label: "Setup", icon: Settings },
-          { key: "content", label: "Content", icon: WandSparkles },
-          ...(editor.creating ? [] : [{ key: "members", label: "Members", icon: Users }]),
-          { key: "display", label: "Display", icon: Eye },
-          { key: "schedule", label: "Schedule", icon: Calendar },
-        ],
-  );
+
+  const SECTIONS = [
+    { key: "setup", label: "Setup", icon: Settings },
+    { key: "content", label: "Content", icon: WandSparkles },
+    { key: "members", label: "Members", icon: Users },
+    { key: "settings", label: "Settings", icon: SlidersHorizontal },
+    { key: "schedule", label: "Schedule", icon: Calendar },
+  ] as const;
+</script>
+
+<script lang="ts">
+  import type { CollectionDetail } from "../../generated/rest/types.gen";
+  import { goToCollectionView, route } from "../router/routes";
+
+  let {
+    formId,
+    collection,
+    configuring,
+  }: {
+    formId: string;
+    collection: CollectionDetail;
+    /** The configure view is open, so one section is the current one. */
+    configuring: boolean;
+  } = $props();
+
   let active = $derived(
-    sections.find((section) => route.hash === `#${formId}-${section.key}`)?.key ?? "setup",
+    configuring
+      ? (SECTIONS.find((section) => route.hash === `#${formId}-${section.key}`)?.key ?? "setup")
+      : null,
   );
 </script>
 
-{#each sections as section (section.key)}
+{#each SECTIONS as section (section.key)}
   <a
     class={["tab-item", { active: active === section.key }]}
     href={`#${formId}-${section.key}`}
-    onclick={() =>
-      document
-        .getElementById(`${formId}-${section.key}`)
-        ?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')
-        ?.click()}
+    onclick={(event) => {
+      event.preventDefault();
+      goToCollectionView(collection, "configure", "poster", `${formId}-${section.key}`);
+    }}
     aria-current={active === section.key ? "location" : undefined}
   >
     <section.icon size={16} /><span>{section.label}</span>
