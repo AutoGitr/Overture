@@ -23,6 +23,7 @@ lazy from ...domain import ArtType, CatalogMediaType, MediaType, ThemeBulkSource
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...repositories.public_dataset_drafts import PublicDatasetDraftRepository
+lazy from ...utils.art_urls import art_refusals
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.temporary import create_operation_directory
 lazy from ...utils.threads import owned_thread
@@ -84,20 +85,28 @@ def _item_entry(item: MediaItem) -> dict[str, Any] | None:
 def _collection_entry(
     collection: MediaCollection, catalog: PublicDatasetCollection | None
 ) -> dict[str, Any] | None:
-    """Return the theme chosen for a matched collection as a catalog entry."""
-    if collection.tmdb_collection_id is None or collection.youtube_id is None:
+    """Return a matched collection's art and theme as a catalog entry, if any.
+
+    A ThemerrDB theme is not OvertureDB's to take, so it is left out.
+    """
+    if collection.tmdb_collection_id is None:
         return None
+    poster = _catalog_art_url(read_art_slot(collection, ArtType.POSTER).url)
+    background = _catalog_art_url(read_art_slot(collection, ArtType.BACKGROUND).url)
+    theme = collection.youtube_id
     if collection.youtube_id_source is ThemeBulkSource.THEMERRDB or (
-        catalog and collection.youtube_id == catalog.youtube_id_themerrdb
+        catalog and theme == catalog.youtube_id_themerrdb
     ):
+        theme = None
+    if not (poster or background or theme):
         return None
     return {
         "media_type": CatalogMediaType.COLLECTION.value,
         "title": catalog.title if catalog else collection.title,
         "tmdb_id": collection.tmdb_collection_id,
-        "poster_url": None,
-        "background_url": None,
-        "youtube_id_overturedb": collection.youtube_id,
+        "poster_url": poster,
+        "background_url": background,
+        "youtube_id_overturedb": theme,
         "youtube_id_themerrdb": None,
     }
 
@@ -158,7 +167,11 @@ def _stage_batch(
         connection.commit()
 
 
-def _archive(directory: Path) -> Path:
+#: The export summary in the archive; the bulk import reads only its JSON files.
+REPORT_NAME = "EXPORT-REPORT.txt"
+
+
+def _archive(directory: Path, left_out: list[str]) -> Path:
     target = directory / "overturedb-selections.zip"
     with (
         closing(sqlite3.connect(directory / "export.sqlite")) as connection,
@@ -168,7 +181,24 @@ def _archive(directory: Path) -> Path:
             "SELECT path, content FROM files ORDER BY path"
         ):
             archive.writestr(path, content)
+        if left_out:
+            archive.writestr(
+                REPORT_NAME,
+                "Left out of this export:\n"
+                + "".join(f"- {line}\n" for line in left_out),
+            )
     return target
+
+
+def _left_out(title: str, owner: MediaItem | MediaCollection) -> list[str]:
+    """The selected art OvertureDB would refuse, as lines of the export summary."""
+    return [
+        f"{title}: {line}"
+        for line in art_refusals(
+            read_art_slot(owner, ArtType.POSTER).url,
+            read_art_slot(owner, ArtType.BACKGROUND).url,
+        )
+    ]
 
 
 async def export_selections(database: Database, directory: Path) -> Path:
@@ -178,6 +208,7 @@ async def export_selections(database: Database, directory: Path) -> Path:
     the themes chosen for matched collections.
     """
     await owned_thread(_initialize, directory)
+    left_out: list[str] = []
     async with database.read_session() as session:
         drafts = await PublicDatasetDraftRepository(session).list_all()
     await owned_thread(
@@ -219,6 +250,7 @@ async def export_selections(database: Database, directory: Path) -> Path:
         if not items:
             break
         entries = [entry for item in items if (entry := _item_entry(item))]
+        left_out.extend(line for item in items for line in _left_out(item.title, item))
         await owned_thread(_stage_batch, directory, entries)
         after = items[-1].id or after
     async with database.read_session() as session:
@@ -231,8 +263,14 @@ async def export_selections(database: Database, directory: Path) -> Path:
         for row in collections
         if (entry := _collection_entry(row, catalog.get(row.tmdb_collection_id or 0)))
     ]
+    left_out.extend(
+        line
+        for row in collections
+        if row.tmdb_collection_id is not None
+        for line in _left_out(row.title, row)
+    )
     await owned_thread(_stage_batch, directory, entries)
-    return await owned_thread(_archive, directory)
+    return await owned_thread(_archive, directory, left_out)
 
 
 class _ArchiveResponse(FileResponse):

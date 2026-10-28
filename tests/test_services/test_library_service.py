@@ -886,7 +886,9 @@ async def test_local_season_poster_is_downscaled_and_cached_while_current(
     show_folder = tmp_path / "Show"
     season_folder = show_folder / "Season 1"
     season_folder.mkdir(parents=True)
-    poster = season_folder / season_poster_candidates(app_config.MEDIA_SERVER, 1)[0]
+    poster = (
+        season_folder / season_poster_candidates(app_config.MEDIA_SERVER or "", 1)[0]
+    )
     _write_jpeg(poster, 1000, 1500)
     db_session.add(
         MediaItem(

@@ -48,6 +48,8 @@ export function logEntry(
 export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead {
   return {
     art_status: "missing",
+    catalog_no_theme: false,
+    contribution_warnings: [],
     background_status: "missing",
     background_hash: null,
     background_height: null,
@@ -146,6 +148,16 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     collection_group: null,
     poster_url: null,
     background_url: null,
+    poster_source: null,
+    background_source: null,
+    poster_width: null,
+    poster_height: null,
+    background_width: null,
+    background_height: null,
+    has_incorrect_aspect_ratio: false,
+    home_order: null,
+    catalog_no_theme: false,
+    contribution_warnings: [],
     poster_status: "missing",
     background_status: "missing",
     art_status: "missing",
@@ -339,6 +351,7 @@ export function collectionDetail(overrides: Partial<CollectionDetail> = {}): Col
 export function catalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
     media_type: "movie",
+    no_theme: false,
     title: "Alien",
     year: 1979,
     tmdb_id: 348,
@@ -423,10 +436,11 @@ export function publicDatasetRecordSeason(
 export function publicDatasetRecord(
   overrides: Partial<PublicDatasetRecord> = {},
 ): PublicDatasetRecord {
-  const { item, seasons, ...recordOverrides } = overrides;
+  const { item, seasons, collection, ...recordOverrides } = overrides;
   return {
     found: true,
     item: item === undefined ? publicDatasetRecordItem() : item,
+    collection: collection ?? null,
     seasons: seasons ?? [],
     ...recordOverrides,
   };
@@ -491,6 +505,7 @@ export function itemDownload(
       status,
       target: {
         target_type: "item",
+        source: null,
         media_item_id: mediaItemId,
         title: "Alien",
         job_type: "art",
@@ -506,7 +521,7 @@ export function itemDownload(
 export function appSettings(overrides: Partial<AppSettingsRead> = {}): AppSettingsRead {
   return {
     ...DEFAULT_APP_SETTINGS,
-    media_server: null,
+    media_server: "plex",
     tmdb_configured: false,
     mdblist_configured: false,
     radarr_configured: false,
@@ -570,6 +585,8 @@ export function bulkAssetsSchedule(
       library_ids: ["1"],
       item_ids: null,
       collection_ids: null,
+      collection_groups: null,
+      all_collections: false,
       skip_recent_val: 4,
       skip_recent_unit: "days",
       include_unmonitored: true,

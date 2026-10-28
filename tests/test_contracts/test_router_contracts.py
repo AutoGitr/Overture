@@ -705,7 +705,7 @@ class TestServerAuditContract:
         season_folder.mkdir(parents=True)
         for name in ("theme.mp3", "background.jpg", "poster.jpg"):
             (folder / name).write_bytes(b"asset")
-        poster_name = season_poster_candidates(app_config.MEDIA_SERVER, 1)[0]
+        poster_name = season_poster_candidates(app_config.MEDIA_SERVER or "", 1)[0]
         (season_folder / poster_name).write_bytes(b"season")
         item = MediaItem(
             id=1, media_type=MediaType.SHOW, title="Show", folder_path=str(folder)

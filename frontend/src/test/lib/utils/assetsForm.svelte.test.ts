@@ -13,6 +13,7 @@ function form({ dataset = true, loaded = true } = {}) {
     showLibraries: () => shows,
     librariesLoaded: () => loaded,
     publicDatasetEnabled: () => dataset,
+    collectionGroups: () => ["Sagas", "Studios"],
   });
 }
 
@@ -83,6 +84,8 @@ describe("AssetsForm", () => {
         library_ids: ["2", "gone"],
         item_ids: null,
         collection_ids: null,
+        collection_groups: null,
+        all_collections: false,
         include_unmonitored: true,
         overwrite_existing: true,
         skip_recent_val: 3,
@@ -117,20 +120,20 @@ describe("collection theme scope", () => {
     sidebarState.collections = null;
   });
 
-  it("runs the current collection rows as themes while remembering the art configuration", () => {
+  it("runs art and themes over the sidebar's collection rows", () => {
     sidebarState.collections = { type: "movie", collectionIds: [12, 34] };
     const assets = form();
     assets.config.useSidebarItems = true;
+    assets.config.artTypes = ["poster"];
     expect(assets.canRun).toBe(true);
     expect(assets.request()).toMatchObject({
       library_ids: [],
       collection_ids: [12, 34],
-      art: null,
+      art: { art_types: ["poster"] },
     });
     expect(assets.request().item_ids).toBeUndefined();
-    expect(assets.config.enableArt).toBe(true);
     assets.config.enableThemes = false;
-    expect(assets.canRun).toBe(false);
+    expect(assets.canRun).toBe(true);
     sidebarState.collections = null;
   });
 
@@ -141,5 +144,38 @@ describe("collection theme scope", () => {
     assets.config.includeCollections = true;
     expect(assets.request().themes?.include_collections).toBe(true);
     expect(assets.request().collection_ids).toBeUndefined();
+  });
+
+  it("runs over every collection, or the chosen groups, with collection art", () => {
+    const assets = form();
+    assets.config.scope = "collections";
+    assets.config.artTypes = ["poster", "season_poster"];
+
+    expect(assets.canRun).toBe(true);
+    expect(assets.request()).toMatchObject({
+      library_ids: [],
+      all_collections: true,
+      art: { art_types: ["poster"] },
+    });
+
+    assets.toggleCollectionGroup("Sagas");
+    expect(assets.request()).toMatchObject({ collection_groups: ["Sagas"] });
+    expect(assets.request()).not.toHaveProperty("all_collections");
+  });
+
+  it("loads a saved collection-group schedule into the Collections scope", () => {
+    const assets = form();
+    assets.applySchedule(
+      bulkAssetsSchedule({
+        config: {
+          ...bulkAssetsSchedule().config,
+          library_ids: [],
+          collection_groups: ["Studios", "gone"],
+        },
+      }),
+    );
+
+    expect(assets.config.scope).toBe("collections");
+    expect(assets.selectedCollectionGroups).toEqual(["Studios"]);
   });
 });

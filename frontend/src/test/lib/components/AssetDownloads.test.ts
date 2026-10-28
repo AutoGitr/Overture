@@ -12,6 +12,7 @@ const activeJob: DownloadJobEvent = {
     status: "progress",
     target: {
       target_type: "item",
+      source: null,
       job_type: "art",
       media_item_id: 1,
       season_id: null,

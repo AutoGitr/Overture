@@ -27,9 +27,6 @@ lazy from .selection import resolve_art_target
 
 logger = logging.getLogger(__name__)
 
-#: Candidate images fetched and hashed at once while matching one slot.
-_COMPARE_CONCURRENCY = 10
-
 
 @dataclass(slots=True, frozen=True)
 class ArtMatchOutcome:
@@ -69,8 +66,11 @@ class ArtMatcher:
         cache: ArtMatcherCache | None = None,
         app_config: Settings,
         database: Database,
+        compare_concurrency: int,
     ) -> None:
         self._app_config = app_config
+        #: Candidate images fetched and hashed at once while matching one slot.
+        self._compare_concurrency = compare_concurrency
         self._database = database
         self.phash = phash
         self._local_assets = local_assets
@@ -133,7 +133,7 @@ class ArtMatcher:
                 await compare(candidate)
 
         async with asyncio.TaskGroup() as group:
-            for _ in range(min(_COMPARE_CONCURRENCY, len(filtered))):
+            for _ in range(min(self._compare_concurrency, len(filtered))):
                 group.create_task(consume())
 
         results.sort(

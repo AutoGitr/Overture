@@ -23,6 +23,8 @@ class PublicDatasetItemBase(SQLModel):
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    #: OvertureDB says the title has no theme music.
+    no_theme: bool = False
     catalog_synced_at: datetime | None = None
 
 
@@ -103,6 +105,8 @@ class PublicDatasetCollection(SQLModel, table=True):
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    #: OvertureDB says the collection has no theme music.
+    no_theme: bool = False
     catalog_synced_at: datetime | None = None
 
 

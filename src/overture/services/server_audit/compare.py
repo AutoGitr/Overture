@@ -399,6 +399,7 @@ async def run_server_audit(
         catch=AUDIT_ERRORS,
     ) as job:
         await job.started()
+        await audit_context.provider_registry.require_reachable()
         targets = await plan_audit(
             params, audit_context.local_assets, database=audit_context.database
         )

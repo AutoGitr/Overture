@@ -5,7 +5,7 @@ lazy from typing import Annotated
 lazy from fastapi import APIRouter, Depends, Path, Query
 lazy from fastapi.responses import Response
 
-lazy from ..dependencies import ArtDep, CollectionsDep
+lazy from ..dependencies import ArtDep, CollectionsDep, require_media_server
 lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX, FilterField
 lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
@@ -39,6 +39,7 @@ lazy from ..schemas.collections import (
     CollectionSetEntry,
     CollectionSetPreview,
     CollectionSyncResponse,
+    CollectionTakeOver,
     CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
@@ -52,9 +53,13 @@ lazy from ..schemas.common import (
     StatusResponse,
 )
 lazy from .auth import require_auth
-lazy from .parameters import ArtTypePath, ImageSizeQuery, MediaTypeQuery
+lazy from .parameters import (
+    ArtTypePath,
+    CollectionIdPath,
+    ImageSizeQuery,
+    MediaTypeQuery,
+)
 
-CollectionIdPath = Annotated[int, Path(gt=0, description="Collection ID")]
 ToServerQuery = Annotated[
     bool, Query(description="Also send the change to the media server")
 ]
@@ -62,7 +67,7 @@ ToServerQuery = Annotated[
 router = APIRouter(
     prefix="/collections",
     tags=["collections"],
-    dependencies=[Depends(require_auth)],
+    dependencies=[Depends(require_auth), Depends(require_media_server)],
 )
 
 
@@ -415,6 +420,17 @@ async def delete_collection_rule(
 ) -> StatusResponse:
     """Remove a rule while keeping current membership."""
     return await collections.delete_rule(collection_id, media_type)
+
+
+@router.post("/{collection_id}/take-over")
+async def take_over_collection(
+    collection_id: CollectionIdPath,
+    media_type: MediaTypeQuery,
+    body: CollectionTakeOver,
+    collections: CollectionsDep,
+) -> CollectionDetail:
+    """Let Overture manage a collection made outside it, keeping what it holds."""
+    return await collections.take_over(collection_id, media_type, body)
 
 
 @router.post("/{collection_id}/sync")

@@ -8,6 +8,7 @@ lazy from overture.config import Settings
 lazy from overture.db.models.settings import AppSettings, get_app_settings
 lazy from overture.domain import (
     AspectRatioTolerance,
+    AutoAdvance,
     AutoUnmonitor,
     ServerType,
     TmdbLanguageFilter,
@@ -88,7 +89,7 @@ async def test_get_settings_creates_default_row(
     assert result.theme_search_format == "{title} {year} main theme music ost"
     # No TMDB key configured in the test environment, so the default stays False.
     assert result.skip_media_server_tmdb_urls is False
-    assert result.auto_advance is False
+    assert result.auto_advance is AutoAdvance.OFF
     assert result.auto_unmonitor == "off"
     assert result.auto_advance_skip_completed is True
 
@@ -139,7 +140,7 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
         disable_media_server_art=True,
         aspect_ratio_tolerance=AspectRatioTolerance.LENIENT,
         tmdb_language_filter=TmdbLanguageFilter.ALL,
-        auto_advance=True,
+        auto_advance=AutoAdvance.SLOTS_AND_ITEMS,
         auto_unmonitor=AutoUnmonitor.ART_AND_THEME,
         auto_advance_skip_completed=False,
     )
@@ -160,7 +161,7 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
     assert result.disable_media_server_art is True
     assert result.aspect_ratio_tolerance == "lenient"
     assert result.tmdb_language_filter == "all"
-    assert result.auto_advance is True
+    assert result.auto_advance is AutoAdvance.SLOTS_AND_ITEMS
     assert result.auto_unmonitor == "art_and_theme"
     assert result.auto_advance_skip_completed is False
     assert result.updated_at is not None

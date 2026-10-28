@@ -549,6 +549,23 @@ class ArtService:
         )
         return StatusResponse(status=Status.OK)
 
+    async def adopt_collection(
+        self, collection_id: int, media_type: MediaType, art_type: ArtType, url: str
+    ) -> None:
+        """Save *url* as the selection of art the server already shows."""
+        async with (
+            self._asset_storage.asset_locks.acquire(f"collection:{collection_id}"),
+            self._database.write_session() as db,
+        ):
+            row = await self._require_collection(
+                db, collection_id, media_type, art_type
+            )
+            select_art(row, art_type, url)
+            db.add(row)
+        await self._publisher.broadcast(
+            "collection.updated", {"collection_id": collection_id}
+        )
+
     async def clear_collection(
         self, collection_id: int, media_type: MediaType, art_type: ArtType | None
     ) -> CollectionArtwork:

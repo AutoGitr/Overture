@@ -5,7 +5,7 @@
     getSettingsOptions,
     updateSettingsMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { DEFAULT_APP_SETTINGS } from "../../generated/settings";
+  import { ASPECT_TOLERANCES, DEFAULT_APP_SETTINGS } from "../../generated/settings";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
@@ -80,6 +80,10 @@
     }
     saving = false;
   }
+
+  function percent(fraction: number): string {
+    return `${Number((fraction * 100).toFixed(1))}%`;
+  }
 </script>
 
 <PopupShell title="Settings" onclose={() => uiState.closePopup()}>
@@ -103,13 +107,13 @@
           <label class="form-row justify-between">
             <span>Aspect ratio control</span>
             <select bind:value={draft.aspect_ratio_tolerance} class="select-compact">
-              <option value="strict">Strict (+/-1%)</option>
-              <option value="lenient">Lenient (+/-5%)</option>
+              <option value="strict">Strict (+/-{percent(ASPECT_TOLERANCES.strict)})</option>
+              <option value="lenient">Lenient (+/-{percent(ASPECT_TOLERANCES.lenient)})</option>
               <option value="off">Off (any ratio)</option>
             </select>
           </label>
           <label class="form-row justify-between">
-            <span>Auto-Match Art on Load</span>
+            <span>Auto-match art on load</span>
             <input type="checkbox" bind:checked={draft.auto_match_art} />
           </label>
           <label class="form-row justify-between">
@@ -193,16 +197,28 @@
               <option value="themes">Themes</option>
             </select>
           </label>
-          <label class="form-row justify-between">
-            <span>Auto-advance</span>
-            <input type="checkbox" bind:checked={draft.auto_advance} />
-          </label>
+          <div class="form-label">
+            Auto-advance
+            <SegmentedControl
+              label="Auto-advance"
+              options={[
+                ["off", "Off"],
+                ["slots", "Slots"],
+                ["slots_and_items", "Slots and items"],
+              ]}
+              bind:value={() => draft.auto_advance ?? "off", (mode) => (draft.auto_advance = mode)}
+            />
+            <span class="hint"
+              >After a selection, open the next slot, and with Slots and items the next item. The
+              Themes workflow has one slot, so there Slots behaves like Off.</span
+            >
+          </div>
           <label class="form-row justify-between">
             <span>Skip completed slots and items</span>
             <input
               type="checkbox"
               bind:checked={draft.auto_advance_skip_completed}
-              disabled={!draft.auto_advance}
+              disabled={draft.auto_advance === "off"}
             />
           </label>
           <label class="form-row justify-between">
@@ -250,7 +266,7 @@
             />
           </div>
           <label class="form-row justify-between">
-            <span>Show Background Image</span>
+            <span>Show background image</span>
             <input type="checkbox" bind:checked={appearance.showBackgroundImage} />
           </label>
           <button
@@ -266,7 +282,7 @@
     </CardColumn>
   </fieldset>
   {#snippet footer()}
-    <button class="btn btn-ghost" onclick={() => uiState.closePopup()}>Cancel</button>
+    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
     <button class="btn btn-primary" onclick={save} disabled={showSaving.current || !canEdit}>
       {showSaving.current ? "Saving..." : "Save"}
     </button>

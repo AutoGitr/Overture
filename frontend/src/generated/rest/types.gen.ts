@@ -18,10 +18,7 @@ export type AppSettingsRead = {
      */
     art_download_workers: number;
     aspect_ratio_tolerance: AspectRatioTolerance;
-    /**
-     * Auto Advance
-     */
-    auto_advance: boolean;
+    auto_advance: AutoAdvance;
     /**
      * Auto Advance Skip Completed
      */
@@ -62,6 +59,10 @@ export type AppSettingsRead = {
      * Collection Request Missing
      */
     collection_request_missing: boolean;
+    /**
+     * Collection Require Group
+     */
+    collection_require_group: boolean;
     /**
      * Collection Sort Title Format
      */
@@ -193,10 +194,7 @@ export type AppSettingsRead = {
  */
 export type AppSettingsUpdate = {
     aspect_ratio_tolerance?: AspectRatioTolerance | null;
-    /**
-     * Auto Advance
-     */
-    auto_advance?: boolean | null;
+    auto_advance?: AutoAdvance | null;
     /**
      * Auto Advance Skip Completed
      */
@@ -237,6 +235,10 @@ export type AppSettingsUpdate = {
      * Collection Request Missing
      */
     collection_request_missing?: boolean | null;
+    /**
+     * Collection Require Group
+     */
+    collection_require_group?: boolean | null;
     /**
      * Collection Sort Title Format
      */
@@ -554,6 +556,13 @@ export type AuthConfig = {
 };
 
 /**
+ * AutoAdvance
+ *
+ * What the editor moves on to once a selection is saved.
+ */
+export type AutoAdvance = 'off' | 'slots' | 'slots_and_items';
+
+/**
  * AutoUnmonitor
  *
  * Completion condition that automatically stops monitoring an item.
@@ -757,7 +766,12 @@ export type BulkAssetsArtConfigOutput = {
  * Validate the unified assets workflow request payload.
  */
 export type BulkAssetsRequestInput = {
+    /**
+     * All Collections
+     */
+    all_collections?: boolean;
     art?: BulkAssetsArtConfigInput | null;
+    collection_groups?: UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1 | null;
     collection_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
     /**
      * Include Unmonitored
@@ -787,7 +801,12 @@ export type BulkAssetsRequestInput = {
  * Validate the unified assets workflow request payload.
  */
 export type BulkAssetsRequestOutput = {
+    /**
+     * All Collections
+     */
+    all_collections: boolean;
     art: BulkAssetsArtConfigOutput | null;
+    collection_groups: UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1 | null;
     collection_ids: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
     /**
      * Include Unmonitored
@@ -967,10 +986,7 @@ export type BulkCollectionMonitorUpdate = {
  * One bounded operation over an explicit collection selection.
  */
 export type BulkCollectionOperation = {
-    /**
-     * Collection Group
-     */
-    collection_group?: string | null;
+    collection_group?: GroupName | null;
     /**
      * Collection Ids
      */
@@ -984,7 +1000,7 @@ export type BulkCollectionOperation = {
     /**
      * Operation
      */
-    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'trigger_sync' | 'delete';
+    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'trigger_sync' | 'take_over' | 'clear_artwork' | 'clear_themes' | 'delete';
     order_type?: CollectionOrder | null;
     sort_title_format?: SortTitleFormat | null;
     /**
@@ -1015,6 +1031,12 @@ export type BulkCollectionOperationResult = {
      * Errors
      */
     errors: {
+        [key: string]: string;
+    };
+    /**
+     * Skipped
+     */
+    skipped: {
         [key: string]: string;
     };
 };
@@ -1098,6 +1120,10 @@ export type CatalogDraftUpdate = {
      */
     imdb_id?: string | null;
     /**
+     * No Theme
+     */
+    no_theme?: boolean | null;
+    /**
      * Poster Url
      */
     poster_url?: string | null;
@@ -1128,6 +1154,30 @@ export type CatalogDraftUpdate = {
 };
 
 /**
+ * CatalogDraftsDiscard
+ *
+ * The entries whose drafts to discard, by entry name.
+ */
+export type CatalogDraftsDiscard = {
+    /**
+     * Entry Keys
+     */
+    entry_keys: Array<string>;
+};
+
+/**
+ * CatalogDraftsDiscarded
+ *
+ * How many of the named entries had a draft that is now gone.
+ */
+export type CatalogDraftsDiscarded = {
+    /**
+     * Discarded
+     */
+    discarded: number;
+};
+
+/**
  * CatalogEntry
  *
  * A catalog entry; fields its media type does not carry are ``None``.
@@ -1142,6 +1192,10 @@ export type CatalogEntry = {
      */
     imdb_id: string | null;
     media_type: CatalogMediaType;
+    /**
+     * No Theme
+     */
+    no_theme: boolean;
     /**
      * Poster Url
      */
@@ -1230,6 +1284,10 @@ export type CatalogEntryRow = {
     library_item_id: number | null;
     media_type: CatalogMediaType;
     /**
+     * No Theme
+     */
+    no_theme: boolean;
+    /**
      * Poster Preview Url
      */
     poster_preview_url: string | null;
@@ -1313,16 +1371,38 @@ export type CollectionArrOptions = {
  */
 export type CollectionArtwork = {
     art_status: AssetStatus;
+    /**
+     * Background Height
+     */
+    background_height: number | null;
+    background_source: ArtSource | null;
     background_status: AssetStatus;
     /**
      * Background Url
      */
     background_url: string | null;
+    /**
+     * Background Width
+     */
+    background_width: number | null;
+    /**
+     * Contribution Warnings
+     */
+    contribution_warnings: Array<string>;
+    /**
+     * Poster Height
+     */
+    poster_height: number | null;
+    poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
      * Poster Url
      */
     poster_url: string | null;
+    /**
+     * Poster Width
+     */
+    poster_width: number | null;
 };
 
 /**
@@ -1383,10 +1463,7 @@ export type CollectionCreate = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     collection_filtering?: CollectionFiltering | null;
-    /**
-     * Collection Group
-     */
-    collection_group?: string | null;
+    collection_group?: GroupName | null;
     collection_mode?: CollectionMode | null;
     /**
      * Delete When Inactive
@@ -1454,11 +1531,20 @@ export type CollectionDetail = {
      * Art Url
      */
     art_url: string | null;
+    /**
+     * Background Height
+     */
+    background_height: number | null;
+    background_source: ArtSource | null;
     background_status: AssetStatus;
     /**
      * Background Url
      */
     background_url: string | null;
+    /**
+     * Background Width
+     */
+    background_width: number | null;
     /**
      * Below Minimum
      */
@@ -1467,6 +1553,10 @@ export type CollectionDetail = {
      * Catalog Entry Key
      */
     catalog_entry_key: string | null;
+    /**
+     * Catalog No Theme
+     */
+    catalog_no_theme: boolean;
     /**
      * Catalog Title
      */
@@ -1482,6 +1572,10 @@ export type CollectionDetail = {
     collection_group: string | null;
     collection_mode: CollectionMode | null;
     /**
+     * Contribution Warnings
+     */
+    contribution_warnings: Array<string>;
+    /**
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
@@ -1491,9 +1585,17 @@ export type CollectionDetail = {
      */
     generated_value: string | null;
     /**
+     * Has Incorrect Aspect Ratio
+     */
+    has_incorrect_aspect_ratio: boolean;
+    /**
      * Has Theme
      */
     has_theme: boolean;
+    /**
+     * Home Order
+     */
+    home_order: number | null;
     /**
      * Id
      */
@@ -1521,11 +1623,20 @@ export type CollectionDetail = {
      */
     monitored: boolean;
     order_type: CollectionOrder;
+    /**
+     * Poster Height
+     */
+    poster_height: number | null;
+    poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
      * Poster Url
      */
     poster_url: string | null;
+    /**
+     * Poster Width
+     */
+    poster_width: number | null;
     /**
      * Public Dataset Complete
      */
@@ -2043,10 +2154,7 @@ export type CollectionGroupPolicyOutput = {
  * A replacement group name, scoped by the request.
  */
 export type CollectionGroupRename = {
-    /**
-     * Name
-     */
-    name: string;
+    name: GroupName;
 };
 
 /**
@@ -2159,10 +2267,7 @@ export type CollectionOptions = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     collection_filtering?: CollectionFiltering | null;
-    /**
-     * Collection Group
-     */
-    collection_group?: string | null;
+    collection_group?: GroupName | null;
     collection_mode?: CollectionMode | null;
     /**
      * Delete When Inactive
@@ -2453,6 +2558,7 @@ export type CollectionPreview = {
      * Members
      */
     members: Array<string>;
+    recommendation: KindRecommendation | null;
 };
 
 /**
@@ -2488,15 +2594,28 @@ export type CollectionRead = {
      * Art Url
      */
     art_url: string | null;
+    /**
+     * Background Height
+     */
+    background_height: number | null;
+    background_source: ArtSource | null;
     background_status: AssetStatus;
     /**
      * Background Url
      */
     background_url: string | null;
     /**
+     * Background Width
+     */
+    background_width: number | null;
+    /**
      * Below Minimum
      */
     below_minimum: boolean;
+    /**
+     * Catalog No Theme
+     */
+    catalog_no_theme: boolean;
     /**
      * Child Count
      */
@@ -2508,6 +2627,10 @@ export type CollectionRead = {
     collection_group: string | null;
     collection_mode: CollectionMode | null;
     /**
+     * Contribution Warnings
+     */
+    contribution_warnings: Array<string>;
+    /**
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
@@ -2516,9 +2639,17 @@ export type CollectionRead = {
      */
     generated_value: string | null;
     /**
+     * Has Incorrect Aspect Ratio
+     */
+    has_incorrect_aspect_ratio: boolean;
+    /**
      * Has Theme
      */
     has_theme: boolean;
+    /**
+     * Home Order
+     */
+    home_order: number | null;
     /**
      * Id
      */
@@ -2542,11 +2673,20 @@ export type CollectionRead = {
      */
     monitored: boolean;
     order_type: CollectionOrder;
+    /**
+     * Poster Height
+     */
+    poster_height: number | null;
+    poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
      * Poster Url
      */
     poster_url: string | null;
+    /**
+     * Poster Width
+     */
+    poster_width: number | null;
     /**
      * Public Dataset Complete
      */
@@ -3023,6 +3163,15 @@ export type CollectionSyncResponse = {
 };
 
 /**
+ * CollectionTakeOver
+ *
+ * The group a collection joins when Overture takes it over.
+ */
+export type CollectionTakeOver = {
+    group?: GroupName | null;
+};
+
+/**
  * CollectionThemeDownloadTarget
  *
  * Target for a media-server collection theme upload.
@@ -3032,6 +3181,10 @@ export type CollectionThemeDownloadTarget = {
      * Collection Id
      */
     collection_id: number;
+    /**
+     * Source
+     */
+    source: string | null;
     /**
      * Target Type
      */
@@ -3468,6 +3621,8 @@ export type FolderRootsResponse = {
     shows: Array<string>;
 };
 
+export type GroupName = string;
+
 /**
  * HTTPValidationError
  */
@@ -3543,6 +3698,10 @@ export type ItemDownloadTarget = {
      * Season Id
      */
     season_id: number | null;
+    /**
+     * Source
+     */
+    source: string | null;
     /**
      * Target Type
      */
@@ -3668,6 +3827,19 @@ export type JobSnapshotClearResponse = {
 export type JsonValue = string | number | number | boolean | Array<JsonValue> | {
     [key: string]: JsonValue;
 } | null;
+
+/**
+ * KindRecommendation
+ *
+ * The collection kind that suits the criteria, and why.
+ */
+export type KindRecommendation = {
+    kind: CollectionKind;
+    /**
+     * Reason
+     */
+    reason: string;
+};
 
 export type LibraryIds = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
 
@@ -3872,6 +4044,14 @@ export type MediaItemRead = {
      * Background Width
      */
     background_width: number | null;
+    /**
+     * Catalog No Theme
+     */
+    catalog_no_theme: boolean;
+    /**
+     * Contribution Warnings
+     */
+    contribution_warnings: Array<string>;
     /**
      * Created At
      */
@@ -4111,6 +4291,7 @@ export type PublicDatasetEnabledRequest = {
  * Public dataset record response.
  */
 export type PublicDatasetRecord = {
+    collection: PublicDatasetRecordCollection | null;
     /**
      * Found
      */
@@ -4120,6 +4301,46 @@ export type PublicDatasetRecord = {
      * Seasons
      */
     seasons: Array<PublicDatasetRecordSeason>;
+};
+
+/**
+ * PublicDatasetRecordCollection
+ *
+ * Persisted public dataset collection record.
+ */
+export type PublicDatasetRecordCollection = {
+    /**
+     * Background Url
+     */
+    background_url: string | null;
+    /**
+     * Catalog Synced At
+     */
+    catalog_synced_at: string | null;
+    /**
+     * Id
+     */
+    id: number | null;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
 };
 
 /**
@@ -4247,6 +4468,10 @@ export type PublicDatasetSourcesItem = {
      * Background
      */
     background: Array<ArtCandidate>;
+    /**
+     * Entry Key
+     */
+    entry_key: string | null;
     /**
      * Poster
      */
@@ -5605,6 +5830,8 @@ export type TmdbSeasonPreview = {
 export type UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 = Array<number>;
 
 export type UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200 = Array<string>;
+
+export type UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1 = Array<string>;
 
 export type UniqueListArtBulkSourceMinLenMinLength1 = Array<ArtBulkSource>;
 
@@ -7809,6 +8036,43 @@ export type SyncCollectionResponses = {
 
 export type SyncCollectionResponse = SyncCollectionResponses[keyof SyncCollectionResponses];
 
+export type TakeOverCollectionData = {
+    body: CollectionTakeOver;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/collections/{collection_id}/take-over';
+};
+
+export type TakeOverCollectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TakeOverCollectionError = TakeOverCollectionErrors[keyof TakeOverCollectionErrors];
+
+export type TakeOverCollectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionDetail;
+};
+
+export type TakeOverCollectionResponse = TakeOverCollectionResponses[keyof TakeOverCollectionResponses];
+
 export type DeleteCollectionThemeData = {
     body?: never;
     path: {
@@ -8559,6 +8823,36 @@ export type GetCatalogCountsResponses = {
 
 export type GetCatalogCountsResponse = GetCatalogCountsResponses[keyof GetCatalogCountsResponses];
 
+export type DiscardCatalogDraftsData = {
+    body: CatalogDraftsDiscard;
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+    };
+    query?: never;
+    url: '/api/public-dataset/catalog/{media_type}/drafts';
+};
+
+export type DiscardCatalogDraftsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DiscardCatalogDraftsError = DiscardCatalogDraftsErrors[keyof DiscardCatalogDraftsErrors];
+
+export type DiscardCatalogDraftsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogDraftsDiscarded;
+};
+
+export type DiscardCatalogDraftsResponse = DiscardCatalogDraftsResponses[keyof DiscardCatalogDraftsResponses];
+
 export type GetCatalogEntryData = {
     body?: never;
     path: {
@@ -8666,6 +8960,74 @@ export type SaveCatalogDraftResponses = {
 };
 
 export type SaveCatalogDraftResponse = SaveCatalogDraftResponses[keyof SaveCatalogDraftResponses];
+
+export type GetCatalogEntryRecordData = {
+    body?: never;
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/record';
+};
+
+export type GetCatalogEntryRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogEntryRecordError = GetCatalogEntryRecordErrors[keyof GetCatalogEntryRecordErrors];
+
+export type GetCatalogEntryRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicDatasetRecord;
+};
+
+export type GetCatalogEntryRecordResponse = GetCatalogEntryRecordResponses[keyof GetCatalogEntryRecordResponses];
+
+export type GetPublicDatasetCollectionRecordData = {
+    body?: never;
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query?: never;
+    url: '/api/public-dataset/collections/{collection_id}/record';
+};
+
+export type GetPublicDatasetCollectionRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPublicDatasetCollectionRecordError = GetPublicDatasetCollectionRecordErrors[keyof GetPublicDatasetCollectionRecordErrors];
+
+export type GetPublicDatasetCollectionRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicDatasetRecord;
+};
+
+export type GetPublicDatasetCollectionRecordResponse = GetPublicDatasetCollectionRecordResponses[keyof GetPublicDatasetCollectionRecordResponses];
 
 export type SetPublicDatasetEnabledData = {
     body: PublicDatasetEnabledRequest;

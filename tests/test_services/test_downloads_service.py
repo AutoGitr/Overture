@@ -30,6 +30,7 @@ lazy from overture.domain import (
     ArtType,
     JobStatus,
     JobType,
+    MediaServerState,
     MediaType,
     ServerAsset,
     ServerType,
@@ -41,7 +42,7 @@ lazy from overture.repositories.downloads import DownloadJobRepository
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.downloads import art as art_module
 lazy from overture.services.downloads.art import DownloadArtHandler
-lazy from overture.services.downloads.events import DownloadEventPublisher
+lazy from overture.services.downloads.events import DownloadEventPublisher, job_target
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.results import DownloadedCollectionTheme
 lazy from overture.services.downloads.service import DownloadService
@@ -1732,3 +1733,63 @@ async def test_download_workers_reserve_gate_before_awaiting_a_claim(
     finally:
         await manager.stop()
     assert gate.blocker("sync") is None
+
+
+async def test_art_download_from_a_down_media_server_gives_its_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    async def fail(*_args: object, **_kwargs: object) -> bytes:
+        raise httpx2.ConnectError("Connection refused")
+
+    monkeypatch.setattr(art_module, "fetch_image_bytes", fail)
+    movie_dir = tmp_path / "Movie"
+    movie_dir.mkdir()
+    item = MediaItem(
+        id=1, media_type=MediaType.MOVIE, title="Movie", folder_path=str(movie_dir)
+    )
+    job = DownloadJob(
+        id="job-art",
+        media_item_id=1,
+        job_type=JobType.ART,
+        art_type=ArtType.POSTER,
+        target_url=f"{app_config.MEDIA_SERVER_URL}/library/metadata/1/thumb",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    registry = NoopProviderRegistry(RefreshingProvider())
+    registry.health.record(MediaServerState.UNREACHABLE, "Plex is not answering")
+    handler = DownloadArtHandler(
+        provider_registry=registry,
+        asset_storage=AssetStorage(app_config=app_config),
+        image_cache=make_image_cache(app_config),
+        phash=PhashService(app_config=app_config),
+        image_clients=cast("Any", StaticImageClients()),
+        app_config=app_config,
+        database=database,
+    )
+
+    with pytest.raises(DownloadError, match=r"^Plex is not answering$"):
+        await handler.download(job, item, _noop_progress)
+
+
+def test_download_targets_name_their_source() -> None:
+    art = DownloadJob(
+        id="a",
+        media_item_id=1,
+        job_type=JobType.ART,
+        art_type=ArtType.POSTER,
+        target_url="https://image.tmdb.org/t/p/original/a.jpg",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    theme = DownloadJob(
+        id="t",
+        media_item_id=1,
+        job_type=JobType.THEME,
+        target_url="abcdefghijk",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    assert job_target(art, "Alien")["source"] == "TMDB"
+    assert job_target(theme, "Alien")["source"] == "YouTube"

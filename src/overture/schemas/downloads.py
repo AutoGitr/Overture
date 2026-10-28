@@ -19,6 +19,8 @@ class ItemDownloadTarget(StrictBaseModel):
     season_id: int | None = None
     job_type: Literal[JobType.ART, JobType.THEME] | None = None
     art_type: ArtType | None = None
+    #: Where the download comes from: the art's host, or YouTube.
+    source: str | None = None
 
 
 class CollectionThemeDownloadTarget(StrictBaseModel):
@@ -27,6 +29,7 @@ class CollectionThemeDownloadTarget(StrictBaseModel):
     target_type: Literal["collection_theme"]
     collection_id: int
     title: str
+    source: str | None = None
 
 
 DownloadJobTarget = Annotated[

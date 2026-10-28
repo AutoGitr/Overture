@@ -44,7 +44,6 @@ lazy from ..bulk_common import (
     queue_and_report,
     queue_download,
     report_downloads,
-    report_planned,
     report_unloaded,
 )
 lazy from ..downloads.queue import JobTarget
@@ -55,8 +54,10 @@ lazy from ..local_assets.service import LocalAssets
 lazy from ..public_dataset.index import PublicDatasetIndex
 lazy from .bulk_targets import target_art_slot
 lazy from .bulk_work import load_art_batch, plan_bulk_art
+lazy from .collection_bulk import plan_collection_art, run_collection_art
 lazy from .matcher import ArtMatcher
 lazy from .selection import adopt_art
+lazy from .service import ArtService
 lazy from .targets import target_label
 
 logger = logging.getLogger(__name__)
@@ -438,6 +439,7 @@ async def run_bulk_art_match(
     downloads: DownloadService,
     art_matcher: ArtMatcher,
     *,
+    art: ArtService,
     local_assets: LocalAssets,
     app_config: Settings,
     database: Database,
@@ -463,7 +465,11 @@ async def run_bulk_art_match(
             )
             await job.started()
             plan = await plan_bulk_art(params, app_config=app_config, database=database)
-            await report_planned(job, plan, _count_label)
+            collection_plan = await plan_collection_art(params, database=database)
+            await job.planned(plan.total + collection_plan.total)
+            for planned in (plan, collection_plan):
+                for (outcome, reason), count in planned.decided.items():
+                    await job.report(outcome, _count_label(count), reason, count=count)
             async with report_downloads(job, watch, downloads=downloads):
                 try:
                     for batch in plan.batches():
@@ -515,6 +521,14 @@ async def run_bulk_art_match(
                                         slot.target,
                                         public_error_message(exc),
                                     )
+                    await run_collection_art(
+                        job,
+                        params,
+                        collection_plan,
+                        art=art,
+                        matcher=art_matcher,
+                        database=database,
+                    )
                 finally:
                     await run.stamper.flush()
 

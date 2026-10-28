@@ -10,6 +10,8 @@ lazy from ..domain import CatalogMediaType
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.public_dataset import (
     CatalogCounts,
+    CatalogDraftsDiscard,
+    CatalogDraftsDiscarded,
     CatalogDraftUpdate,
     CatalogEntryDetail,
     CatalogEntryRow,
@@ -20,7 +22,7 @@ lazy from ..schemas.public_dataset import (
 )
 lazy from ..services.public_dataset.export import export_archive
 lazy from .auth import require_auth
-lazy from .parameters import ItemIdPath
+lazy from .parameters import CollectionIdPath, ItemIdPath
 
 CatalogMediaTypePath = Annotated[CatalogMediaType, Path(description="Entry kind")]
 EntryKeyPath = Annotated[
@@ -88,6 +90,22 @@ async def get_public_dataset_record(
     return await dataset.get_record_for_item(item_id)
 
 
+@router.get("/collections/{collection_id}/record")
+async def get_public_dataset_collection_record(
+    collection_id: CollectionIdPath, dataset: PublicDatasetDep
+) -> PublicDatasetRecord:
+    """Return the catalog record of a library collection."""
+    return await dataset.get_record_for_collection(collection_id)
+
+
+@router.get("/catalog/{media_type}/{entry_key}/record")
+async def get_catalog_entry_record(
+    media_type: CatalogMediaTypePath, entry_key: EntryKeyPath, dataset: PublicDatasetDep
+) -> PublicDatasetRecord:
+    """Return the catalog record an entry name identifies."""
+    return await dataset.get_record_for_entry(media_type, entry_key)
+
+
 @router.get("/catalog/counts")
 async def get_catalog_counts(dataset: PublicDatasetDep) -> CatalogCounts:
     """Return catalog and draft counts without reading every entry."""
@@ -109,6 +127,16 @@ async def get_catalog_entry(
 ) -> CatalogEntryDetail:
     """Return one catalog entry with its local draft."""
     return await dataset.catalog.get_entry(media_type, entry_key)
+
+
+@router.delete("/catalog/{media_type}/drafts")
+async def discard_catalog_drafts(
+    media_type: CatalogMediaTypePath,
+    body: CatalogDraftsDiscard,
+    dataset: PublicDatasetDep,
+) -> CatalogDraftsDiscarded:
+    """Discard the local drafts of the named entries."""
+    return await dataset.catalog.discard_drafts(media_type, body)
 
 
 @router.put("/catalog/{media_type}/{entry_key}/draft")

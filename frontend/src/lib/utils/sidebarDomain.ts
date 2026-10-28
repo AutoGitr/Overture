@@ -1,4 +1,8 @@
-import { SELECTED_ART_SOURCE_LABELS } from "../../generated/settings";
+import {
+  ASPECT_RATIOS,
+  SELECTED_ART_SOURCE_LABELS,
+  UNMANAGED_GROUP,
+} from "../../generated/settings";
 import type {
   CatalogEntryRow,
   CollectionRead,
@@ -45,8 +49,6 @@ export function filterCatalogEntries(options: {
   sortDir?: SidebarSortDir;
 }): CatalogEntryRow[] {
   const { filters } = options;
-  const query = options.searchQuery.trim().toLowerCase();
-  const linkedId = extractYouTubeId(query) ?? query;
   const rows = options.entries.filter((entry) => {
     const presence: Record<keyof CatalogFilters, boolean> = {
       poster: !!entry.poster_url,
@@ -57,35 +59,16 @@ export function filterCatalogEntries(options: {
       draft: entry.has_draft,
       library: entry.library_item_id !== null || entry.library_collection_id !== null,
     };
-    if (
-      !keysOf(filters).every(
-        (key) =>
-          (key === "seasonPosters" && entry.media_type !== "show") ||
-          matchesTriState(presence[key], filters[key], "present"),
-      )
-    )
-      return false;
-    if (!query) return true;
-    if (options.searchField === "external_id")
-      return [entry.tmdb_id, entry.tvdb_id, entry.imdb_id].some(
-        (id) => id != null && String(id).toLowerCase() === query,
-      );
-    if (options.searchField === "year") return String(entry.year ?? "").startsWith(query);
-    if (options.searchField === "youtube")
-      return [entry.youtube_id_overturedb, entry.youtube_id_themerrdb].some(
-        (id) => id?.toLowerCase() === linkedId.toLowerCase(),
-      );
-    return entry.title.toLowerCase().includes(query);
+    return keysOf(filters).every(
+      (key) =>
+        (key === "seasonPosters" && entry.media_type !== "show") ||
+        matchesTriState(presence[key], filters[key], "present"),
+    );
   });
-  return rows.sort((a, b) => {
-    const direction = options.sortDir === "desc" ? -1 : 1;
-    if (options.sortField === "year" && a.year !== b.year) {
-      if (a.year === null) return 1;
-      if (b.year === null) return -1;
-      return (a.year - b.year) * direction;
-    }
-    return titleCollator.compare(a.title, b.title) * direction;
-  });
+  const query = options.searchQuery.trim();
+  const matcher = query ? search(options.searchField ?? "title")?.overturedb : undefined;
+  const matching = matcher ? rows.filter(matcher(query)) : rows;
+  return sortBy(matching, "overturedb", options.sortField, options.sortDir);
 }
 export type SidebarSortDir = "asc" | "desc";
 export type StatusTone = "success" | "warning" | "danger" | "downloading";
@@ -123,97 +106,143 @@ function timestamp(value: string | null): number | null {
   return value ? Date.parse(value) : null;
 }
 
-type ItemSortField =
-  | "title"
-  | "year"
-  | "server_added_at"
-  | "last_synced_at"
-  | "last_matched_at"
-  | "poster_resolution"
-  | "background_resolution"
-  | "theme_length";
-type CollectionSortField =
-  "title" | "sort_title" | "child_count" | "server_added_at" | "last_rule_sync" | "theme_length";
-export type SidebarSortField = ItemSortField | CollectionSortField;
-
-/** Which list a sort applies to; each remembers its own. */
+/** Which list a sort, search or filter applies to; each list remembers its own sort. */
 export type SortScope = "library" | "collections" | "overturedb";
 
 type SortKey = number | string | null;
 
-interface SortOption<T> {
+/** One sort, by the list it applies to: the row's key, where rows without one stay last. */
+interface SortDef {
   label: string;
   shortLabel: string;
-  /** Sort key; titles sort by collation. Rows without one stay last. */
-  value: (row: T) => SortKey;
+  library?: (row: MediaItemRead) => SortKey;
+  collections?: (row: CollectionRead) => SortKey;
+  overturedb?: (row: CatalogEntryRow) => SortKey;
 }
 
-/** Sort fields in menu order. */
-export const SIDEBAR_SORT_OPTIONS: Record<ItemSortField, SortOption<MediaItemRead>> = {
-  title: { label: "Title", shortLabel: "Title", value: (item) => item.title },
-  year: { label: "Year", shortLabel: "Year", value: (item) => item.year },
-  server_added_at: {
-    label: "Date added",
-    shortLabel: "Added",
-    value: (item) => timestamp(item.server_added_at),
-  },
-  last_synced_at: {
-    label: "Last synced",
-    shortLabel: "Synced",
-    value: (item) => timestamp(item.last_synced_at),
-  },
-  last_matched_at: {
-    label: "Last matched",
-    shortLabel: "Matched",
-    value: (item) => timestamp(item.last_matched_at),
-  },
-  poster_resolution: {
-    label: "Poster width",
-    shortLabel: "Poster",
-    value: (item) => item.poster_width,
-  },
-  background_resolution: {
-    label: "Background width",
-    shortLabel: "Background",
-    value: (item) => item.background_width,
-  },
-  theme_length: {
-    label: "Theme length",
-    shortLabel: "Theme",
-    value: (item) => item.theme_duration,
-  },
-};
+/** How far art is from its slot's shape, |w/h - target| / target; unmeasured art has none. */
+export function aspectDeviation(
+  width: number | null,
+  height: number | null,
+  artType: keyof typeof ASPECT_RATIOS,
+): number | null {
+  if (!width || !height) return null;
+  const target = ASPECT_RATIOS[artType];
+  return Math.abs(width / height - target) / target;
+}
 
-export const COLLECTION_SORT_OPTIONS: Record<CollectionSortField, SortOption<CollectionRead>> = {
-  title: { label: "Title", shortLabel: "Title", value: (collection) => collection.title },
+/** The art and theme fields a catalog entry has filled. */
+function catalogCompleteness(entry: CatalogEntryRow): number {
+  return [
+    entry.poster_url,
+    entry.background_url,
+    entry.media_type === "show" ? entry.season_posters > 0 : null,
+    entry.youtube_id_overturedb,
+    entry.youtube_id_themerrdb,
+  ].filter(Boolean).length;
+}
+
+/** Every sort, in menu order. */
+export const SORTS = {
+  title: {
+    label: "Title",
+    shortLabel: "Title",
+    library: (item) => item.title,
+    collections: (collection) => collection.title,
+    overturedb: (entry) => entry.title,
+  },
   sort_title: {
     label: "Sort title (media server order)",
     shortLabel: "Sort title",
-    value: (collection) => collection.sort_title || collection.title,
+    collections: (collection) => collection.sort_title || collection.title,
+  },
+  year: {
+    label: "Year",
+    shortLabel: "Year",
+    library: (item) => item.year,
+    overturedb: (entry) => entry.year,
+  },
+  group: {
+    label: "Group",
+    shortLabel: "Group",
+    collections: (collection) => collection.collection_group,
+  },
+  home_order: {
+    label: "Home order",
+    shortLabel: "Home",
+    collections: (collection) => collection.home_order,
   },
   child_count: {
     label: "Number of items",
     shortLabel: "Items",
-    value: (collection) => collection.child_count,
+    collections: (collection) => collection.child_count,
   },
   server_added_at: {
     label: "Date added",
     shortLabel: "Added",
-    value: (collection) => timestamp(collection.server_added_at),
+    library: (item) => timestamp(item.server_added_at),
+    collections: (collection) => timestamp(collection.server_added_at),
   },
-  last_rule_sync: {
+  last_synced_at: {
     label: "Last synced",
     shortLabel: "Synced",
-    value: (collection) => timestamp(collection.last_rule_sync),
+    library: (item) => timestamp(item.last_synced_at),
+    collections: (collection) => timestamp(collection.last_rule_sync),
+  },
+  last_matched_at: {
+    label: "Last matched",
+    shortLabel: "Matched",
+    library: (item) => timestamp(item.last_matched_at),
+  },
+  poster_resolution: {
+    label: "Poster width",
+    shortLabel: "Poster",
+    library: (item) => item.poster_width,
+    collections: (collection) => collection.poster_width,
+  },
+  background_resolution: {
+    label: "Background width",
+    shortLabel: "Background",
+    library: (item) => item.background_width,
+    collections: (collection) => collection.background_width,
+  },
+  poster_aspect: {
+    label: "Poster aspect deviation",
+    shortLabel: "Poster shape",
+    library: (item) => aspectDeviation(item.poster_width, item.poster_height, "poster"),
+    collections: (row) => aspectDeviation(row.poster_width, row.poster_height, "poster"),
+  },
+  background_aspect: {
+    label: "Background aspect deviation",
+    shortLabel: "Background shape",
+    library: (item) => aspectDeviation(item.background_width, item.background_height, "background"),
+    collections: (row) =>
+      aspectDeviation(row.background_width, row.background_height, "background"),
   },
   theme_length: {
     label: "Theme length",
     shortLabel: "Theme",
-    value: (collection) => collection.theme_duration,
+    library: (item) => item.theme_duration,
+    collections: (collection) => collection.theme_duration,
   },
-};
-
-const CATALOG_SORT_FIELDS: readonly ItemSortField[] = ["title", "year"];
+  completeness: {
+    label: "Completeness",
+    shortLabel: "Complete",
+    overturedb: catalogCompleteness,
+  },
+  has_draft: {
+    label: "Has draft",
+    shortLabel: "Draft",
+    overturedb: (entry) => (entry.has_draft ? 1 : 0),
+  },
+  in_library: {
+    label: "In library",
+    shortLabel: "Library",
+    overturedb: (entry) =>
+      entry.library_item_id !== null || entry.library_collection_id !== null ? 1 : 0,
+  },
+} as const satisfies Record<string, SortDef>;
+export type SidebarSortField = keyof typeof SORTS;
 
 export interface MenuEntry<F extends string> {
   id: F;
@@ -221,27 +250,30 @@ export interface MenuEntry<F extends string> {
   shortLabel: string;
 }
 
-function menu<F extends SidebarSortField, T>(
-  options: Record<F, SortOption<T>>,
-  fields: readonly F[],
-): MenuEntry<SidebarSortField>[] {
-  return fields.map((id) => ({ id, label: options[id].label, shortLabel: options[id].shortLabel }));
+function sortKey(field: string, scope: SortScope): ((row: never) => SortKey) | undefined {
+  const sort: SortDef | undefined = hasKey(SORTS, field) ? SORTS[field] : undefined;
+  return sort?.[scope];
 }
 
 /** The sort fields a list offers, in menu order. */
 export function sortMenu(scope: SortScope): MenuEntry<SidebarSortField>[] {
-  if (scope === "collections")
-    return menu(COLLECTION_SORT_OPTIONS, keysOf(COLLECTION_SORT_OPTIONS));
-  return menu(
-    SIDEBAR_SORT_OPTIONS,
-    scope === "overturedb" ? CATALOG_SORT_FIELDS : keysOf(SIDEBAR_SORT_OPTIONS),
-  );
+  return keysOf(SORTS)
+    .filter((id) => sortKey(id, scope))
+    .map((id) => ({ id, label: SORTS[id].label, shortLabel: SORTS[id].shortLabel }));
 }
 
 export type SidebarSortPreference = { field: SidebarSortField; dir: SidebarSortDir };
 
+const ASCENDING_SORTS: ReadonlySet<SidebarSortField> = new Set([
+  "title",
+  "sort_title",
+  "group",
+  "home_order",
+]);
+
+/** Names and orders read A to Z; measures, dates and deviations worst or newest first. */
 export function defaultSortDir(field: SidebarSortField): SidebarSortDir {
-  return field === "title" || field === "sort_title" ? "asc" : "desc";
+  return ASCENDING_SORTS.has(field) ? "asc" : "desc";
 }
 
 export function normalizeSortPreference(value: unknown, scope: SortScope): SidebarSortPreference {
@@ -281,34 +313,48 @@ function sortRows<T extends { title: string }>(
     .map(({ row }) => row);
 }
 
-type ItemSearchField =
-  "title" | "director" | "studio" | "year" | "external_id" | "youtube" | "tmdb";
-type CollectionSearchField = "title" | "group" | "external_id" | "youtube";
-export type SidebarSearchField = ItemSearchField | CollectionSearchField;
-
-interface SearchFieldOption<T> {
-  label: string;
-  placeholder?: string;
-  movieOnly?: boolean;
-  /**
-   * Builds the row predicate for one trimmed, non-empty query. A field
-   * without one searches TMDB on the server instead of filtering the library.
-   */
-  matcher?: (query: string) => (row: T) => boolean;
+function sortBy<T extends { title: string }>(
+  rows: T[],
+  scope: SortScope,
+  field: string | undefined,
+  dir: SidebarSortDir | undefined,
+): T[] {
+  // A list's own sorts take its row type; an unknown field sorts by title.
+  const key = (sortKey(field ?? "title", scope) ?? sortKey("title", scope)) as (row: T) => SortKey;
+  return sortRows(rows, key, dir ?? "asc");
 }
 
-function textMatcher<T>(text: (row: T) => string | null) {
-  return (query: string) => {
+type Matcher<T> = (query: string) => (row: T) => boolean;
+
+/** One search-by field, by the list it applies to; a list without a matcher lacks it. */
+interface SearchDef {
+  label: string;
+  /** What the field is called in the collection list, where it differs. */
+  collectionsLabel?: string;
+  placeholder?: string;
+  movieOnly?: boolean;
+  library?: Matcher<MediaItemRead>;
+  collections?: Matcher<CollectionRead>;
+  overturedb?: Matcher<CatalogEntryRow>;
+  /** Searches TMDB on the server instead of filtering the library. */
+  tmdb?: true;
+}
+
+function textMatcher<T>(text: (row: T) => string | null): Matcher<T> {
+  return (query) => {
     const needle = query.toLowerCase();
-    return (row: T) => text(row)?.toLowerCase().includes(needle) ?? false;
+    return (row) => text(row)?.toLowerCase().includes(needle) ?? false;
   };
 }
 
-function youtubeMatcher<T>(ids: (row: T) => (string | null)[], title: (row: T) => string | null) {
-  return (query: string) => {
+function youtubeMatcher<T>(
+  ids: (row: T) => (string | null)[],
+  title: (row: T) => string | null,
+): Matcher<T> {
+  return (query) => {
     const linkedId = extractYouTubeId(query);
     const needle = query.toLowerCase();
-    return (row: T) =>
+    return (row) =>
       linkedId
         ? ids(row).includes(linkedId)
         : ids(row).some((id) => id?.toLowerCase() === needle) ||
@@ -316,95 +362,102 @@ function youtubeMatcher<T>(ids: (row: T) => (string | null)[], title: (row: T) =
   };
 }
 
-/** Search fields in menu order. */
-export const SIDEBAR_SEARCH_FIELDS: Record<ItemSearchField, SearchFieldOption<MediaItemRead>> = {
+function externalIdMatcher<
+  T extends { tmdb_id: number | null; tvdb_id: number | null; imdb_id: string | null },
+>(): Matcher<T> {
+  return (query) => {
+    // A pasted IMDb link carries its ID; every other ID must match exactly.
+    const id = (/tt\d+/i.exec(query)?.[0] ?? query).toLowerCase();
+    return (row) =>
+      [row.tmdb_id, row.tvdb_id, row.imdb_id].some(
+        (value) => value != null && String(value).toLowerCase() === id,
+      );
+  };
+}
+
+/** Every search-by field, in menu order. */
+export const SEARCHES = {
   title: {
     label: "Title",
-    matcher: textMatcher((item) => item.title),
+    collectionsLabel: "Title or TMDB collection ID",
+    library: textMatcher((item) => item.title),
+    collections: (query) => {
+      const byTitle = textMatcher<CollectionRead>((collection) => collection.title)(query);
+      return (collection) =>
+        String(collection.tmdb_collection_id ?? "") === query || byTitle(collection);
+    },
+    overturedb: textMatcher((entry) => entry.title),
   },
   director: {
     label: "Director",
     placeholder: "Search directors...",
     movieOnly: true,
-    matcher: textMatcher((item) => (item.media_type === "movie" ? item.director : null)),
+    library: textMatcher((item) => (item.media_type === "movie" ? item.director : null)),
   },
   studio: {
     label: "Studio",
     placeholder: "Search studios...",
-    matcher: textMatcher((item) => item.studio),
+    library: textMatcher((item) => item.studio),
+  },
+  group: {
+    label: "Group",
+    placeholder: "Search groups...",
+    collections: textMatcher((collection) => collection.collection_group),
   },
   year: {
     label: "Year",
     placeholder: "Search years...",
-    matcher: (query) => (item) => String(item.year ?? "").startsWith(query),
+    library: (query) => (item) => String(item.year ?? "").startsWith(query),
+    overturedb: (query) => (entry) => String(entry.year ?? "").startsWith(query),
   },
   external_id: {
     label: "TMDB, TVDB or IMDb ID",
     placeholder: "Search IDs...",
-    matcher: (query) => {
-      // A pasted IMDb link carries its ID; every other ID must match exactly.
-      const id = (/tt\d+/i.exec(query)?.[0] ?? query).toLowerCase();
-      return (item) =>
-        [item.tmdb_id, item.tvdb_id, item.imdb_id].some(
-          (value) => value != null && String(value).toLowerCase() === id,
-        );
-    },
+    library: externalIdMatcher(),
+    overturedb: externalIdMatcher(),
   },
   youtube: {
     label: "YouTube link, ID or title",
     placeholder: "Search YouTube...",
-    matcher: youtubeMatcher(
+    library: youtubeMatcher(
       (item) => [item.youtube_id],
       (item) => item.youtube_title,
+    ),
+    collections: youtubeMatcher(
+      (collection) => [collection.youtube_id],
+      (collection) => collection.youtube_title,
+    ),
+    overturedb: youtubeMatcher(
+      (entry) => [entry.youtube_id_overturedb, entry.youtube_id_themerrdb],
+      () => null,
     ),
   },
   tmdb: {
     // Listed under a "TMDB" heading, apart from the library fields.
     label: "Title or ID",
     placeholder: "Search TMDB by title or ID...",
+    tmdb: true,
   },
-};
+} as const satisfies Record<string, SearchDef>;
+export type SidebarSearchField = keyof typeof SEARCHES;
 
-export const COLLECTION_SEARCH_FIELDS: Record<
-  CollectionSearchField,
-  SearchFieldOption<CollectionRead>
-> = {
-  title: {
-    label: "Title",
-    matcher: textMatcher((collection) => collection.title),
-  },
-  group: {
-    label: "Group",
-    placeholder: "Search groups...",
-    matcher: textMatcher((collection) => collection.collection_group),
-  },
-  external_id: {
-    label: "TMDB collection ID",
-    placeholder: "Search TMDB IDs...",
-    matcher: (query) => (collection) => String(collection.tmdb_collection_id ?? "") === query,
-  },
-  youtube: {
-    label: "YouTube link, ID or title",
-    placeholder: "Search YouTube...",
-    matcher: youtubeMatcher(
-      (collection) => [collection.youtube_id],
-      (collection) => collection.youtube_title,
-    ),
-  },
-};
+function search(field: string): SearchDef | undefined {
+  return hasKey(SEARCHES, field) ? SEARCHES[field] : undefined;
+}
 
 export interface SearchFieldGroup {
   label: "Library" | "TMDB" | "OvertureDB" | "Collections";
   fields: MenuEntry<SidebarSearchField>[];
 }
 
-function entries<F extends SidebarSearchField>(
-  options: Partial<Record<F, SearchFieldOption<never>>>,
-  fields: readonly F[],
+function searchEntries(
+  fields: readonly SidebarSearchField[],
+  scope: SortScope,
 ): MenuEntry<SidebarSearchField>[] {
-  return fields.flatMap((id) => {
-    const option = options[id];
-    return option ? [{ id, label: option.label, shortLabel: option.label }] : [];
+  return fields.map((id) => {
+    const field: SearchDef = SEARCHES[id];
+    const label = (scope === "collections" && field.collectionsLabel) || field.label;
+    return { id, label, shortLabel: label };
   });
 }
 
@@ -415,49 +468,45 @@ export function searchFieldGroups(
   tab: SidebarTab,
   tmdbConfigured: boolean,
 ): SearchFieldGroup[] {
-  if (source === "overturedb") {
+  const scope = sortScope(source, mode);
+  const fields = keysOf(SEARCHES).filter((id) => {
+    const field: SearchDef = SEARCHES[id];
+    return tab === "movie" || !field.movieOnly;
+  });
+  if (scope !== "library") {
     return [
       {
-        label: "OvertureDB",
-        fields: entries(SIDEBAR_SEARCH_FIELDS, ["title", "year", "external_id", "youtube"]),
+        label: scope === "overturedb" ? "OvertureDB" : "Collections",
+        fields: searchEntries(
+          fields.filter((id) => search(id)?.[scope]),
+          scope,
+        ),
       },
     ];
   }
-  if (mode === "collections") {
-    return [
-      {
-        label: "Collections",
-        fields: entries(COLLECTION_SEARCH_FIELDS, keysOf(COLLECTION_SEARCH_FIELDS)),
-      },
-    ];
-  }
-  const fields = searchFieldsFor(tab, tmdbConfigured);
   const groups: SearchFieldGroup[] = [
     {
       label: "Library",
-      fields: entries(
-        SIDEBAR_SEARCH_FIELDS,
-        fields.filter((field) => SIDEBAR_SEARCH_FIELDS[field].matcher),
+      fields: searchEntries(
+        fields.filter((id) => search(id)?.library),
+        scope,
       ),
     },
     {
       label: "TMDB",
-      fields: entries(
-        SIDEBAR_SEARCH_FIELDS,
-        fields.filter((field) => !SIDEBAR_SEARCH_FIELDS[field].matcher),
+      fields: searchEntries(
+        fields.filter((id) => search(id)?.tmdb && tmdbConfigured),
+        scope,
       ),
     },
   ];
   return groups.filter((group) => group.fields.length > 0);
 }
 
-/** The search fields a tab offers; TMDB only while an API key is set. */
-export function searchFieldsFor(tab: SidebarTab, tmdbConfigured: boolean): ItemSearchField[] {
-  return keysOf(SIDEBAR_SEARCH_FIELDS).filter(
-    (field) =>
-      (tab === "movie" || !SIDEBAR_SEARCH_FIELDS[field].movieOnly) &&
-      (field !== "tmdb" || tmdbConfigured),
-  );
+/** The list a sidebar source and mode show. */
+export function sortScope(source: SidebarSource, mode: SidebarMode): SortScope {
+  if (source === "overturedb") return "overturedb";
+  return mode === "collections" ? "collections" : "library";
 }
 
 /** What the search box says, naming the field or what it searches. */
@@ -467,9 +516,7 @@ export function searchPlaceholder(
   field: SidebarSearchField,
   count: number,
 ): string {
-  const options: Partial<Record<SidebarSearchField, SearchFieldOption<never>>> =
-    mode === "collections" ? COLLECTION_SEARCH_FIELDS : SIDEBAR_SEARCH_FIELDS;
-  const placeholder = options[field]?.placeholder;
+  const placeholder = search(field)?.placeholder;
   if (placeholder) return placeholder;
   if (mode === "collections") return `Search ${count} collection${count === 1 ? "" : "s"}...`;
   return `Search ${count} ${tab === "movie" ? "movies" : "shows"}...`;
@@ -493,12 +540,12 @@ export const THEME_SOURCES = keysOf(THEME_SOURCE_LABELS);
 export const ART_SOURCE_LABELS: Record<ArtSource, string> = SELECTED_ART_SOURCE_LABELS;
 export const ART_SOURCES = keysOf(ART_SOURCE_LABELS);
 
-/** Which of an item's artwork the art source filter looks at. */
+/** Which of a row's artwork the art source filter looks at. */
 export const ART_SOURCE_SLOTS = {
   any: ["poster_source", "background_source"],
   poster: ["poster_source"],
   background: ["background_source"],
-} as const satisfies Record<string, readonly (keyof MediaItemRead)[]>;
+} as const satisfies Record<string, readonly (keyof MediaItemRead & keyof CollectionRead)[]>;
 export type ArtSourceSlot = keyof typeof ART_SOURCE_SLOTS;
 
 export type MetadataIssue =
@@ -515,34 +562,53 @@ interface MetadataIssueCheck {
   showOnly?: boolean;
   /** Only checked while OvertureDB is enabled. */
   needsDataset?: boolean;
-  applies: (item: MediaItemRead) => boolean;
+  library: (item: MediaItemRead) => boolean;
+  /** Collections have only some of an item's metadata. */
+  collections?: (collection: CollectionRead) => boolean;
 }
 
 export const METADATA_ISSUE_CHECKS: Record<MetadataIssue, MetadataIssueCheck> = {
-  no_tmdb_id: { label: "No TMDB ID", applies: (item) => !item.tmdb_id },
-  no_tvdb_id: { label: "No TVDB ID", showOnly: true, applies: (item) => !item.tvdb_id },
-  no_imdb_id: { label: "No IMDb ID", applies: (item) => !item.imdb_id },
-  no_local_path: { label: "No local path", applies: (item) => !item.folder_path },
-  no_year: { label: "No year", applies: (item) => !item.year },
-  no_server_id: { label: "No media server ID", applies: (item) => !item.server_item_id },
+  no_tmdb_id: {
+    label: "No TMDB ID",
+    library: (item) => !item.tmdb_id,
+    collections: (collection) => !collection.tmdb_collection_id,
+  },
+  no_tvdb_id: { label: "No TVDB ID", showOnly: true, library: (item) => !item.tvdb_id },
+  no_imdb_id: { label: "No IMDb ID", library: (item) => !item.imdb_id },
+  no_local_path: { label: "No local path", library: (item) => !item.folder_path },
+  no_year: { label: "No year", library: (item) => !item.year },
+  no_server_id: {
+    label: "No media server ID",
+    library: (item) => !item.server_item_id,
+    collections: (collection) => collection.withheld,
+  },
   id_mismatch: {
     label: "ID mismatch",
     needsDataset: true,
-    applies: (item) => item.public_dataset_ids === "mismatching",
+    library: (item) => item.public_dataset_ids === "mismatching",
   },
 };
 export const METADATA_ISSUES = keysOf(METADATA_ISSUE_CHECKS);
 
-/** Whether *flag* can be checked: OvertureDB's issues need it enabled. */
-function issueAvailable(flag: MetadataIssue, publicDatasetEnabled: boolean): boolean {
-  return publicDatasetEnabled || !METADATA_ISSUE_CHECKS[flag].needsDataset;
+/** Whether *flag* can be checked in the list: OvertureDB's issues need it enabled. */
+function issueAvailable(
+  flag: MetadataIssue,
+  publicDatasetEnabled: boolean,
+  mode: SidebarMode = "items",
+): boolean {
+  const check = METADATA_ISSUE_CHECKS[flag];
+  return (publicDatasetEnabled || !check.needsDataset) && (mode === "items" || !!check.collections);
 }
 
-export function metadataIssuesFor(tab: SidebarTab, publicDatasetEnabled: boolean): MetadataIssue[] {
+export function metadataIssuesFor(
+  tab: SidebarTab,
+  publicDatasetEnabled: boolean,
+  mode: SidebarMode = "items",
+): MetadataIssue[] {
   return METADATA_ISSUES.filter(
     (flag) =>
       (tab === "show" || !METADATA_ISSUE_CHECKS[flag].showOnly) &&
-      issueAvailable(flag, publicDatasetEnabled),
+      issueAvailable(flag, publicDatasetEnabled, mode),
   );
 }
 
@@ -577,25 +643,249 @@ function matchesTriState(value: boolean, filter: string, whenTrue: string): bool
 }
 
 type Predicate<T> = (entry: T) => boolean;
+type Row = MediaItemRead | CollectionRead;
 
-/** Filters both items and collections apply. */
-function sharedPredicates(filters: FilterState): Predicate<MediaItemRead | CollectionRead>[] {
-  const predicates: Predicate<MediaItemRead | CollectionRead>[] = [];
-  if (filters.monitored !== "all") {
-    predicates.push((entry) => matchesTriState(entry.monitored, filters.monitored, "monitored"));
-  }
-  if (filters.libraryIds.length) {
-    predicates.push((entry) => !!entry.library_id && filters.libraryIds.includes(entry.library_id));
-  }
-  if (filters.theme !== "all") {
-    predicates.push((entry) =>
-      matchesTriState(entry.theme_status === "complete", filters.theme, "complete"),
-    );
-  }
-  if (isRangeActive(filters.themeLength)) {
-    predicates.push((entry) => inRange(entry.theme_duration, filters.themeLength));
-  }
-  return predicates;
+/**
+ * One filter section: its heading, its place, and the predicate it adds for
+ * each list it applies to, or ``null`` while it is left at All.
+ */
+interface FilterDef {
+  label: string;
+  order: number;
+  mediaTypes?: readonly SidebarTab[];
+  /** Shown only while OvertureDB is enabled. */
+  needsDataset?: boolean;
+  /** Shown only where the server has smart collections. */
+  needsSmart?: boolean;
+  library?: (filters: FilterState, datasetEnabled: boolean) => Predicate<MediaItemRead> | null;
+  collections?: (filters: FilterState, datasetEnabled: boolean) => Predicate<CollectionRead> | null;
+}
+
+function triState<T>(
+  filter: string,
+  whenTrue: string,
+  value: (row: T) => boolean,
+): Predicate<T> | null {
+  return filter === "all" ? null : (row) => matchesTriState(value(row), filter, whenTrue);
+}
+
+function artSourcePredicate(filters: FilterState): Predicate<Row> | null {
+  if (!filters.artSource.sources.length) return null;
+  const sources = new Set<string | null>(filters.artSource.sources);
+  const slots = ART_SOURCE_SLOTS[filters.artSource.artType];
+  return (row) => slots.some((slot) => sources.has(row[slot]));
+}
+
+function resolutionPredicate(filters: FilterState): Predicate<Row> | null {
+  if (!isRangeActive(filters.resolution)) return null;
+  const width = filters.resolution.artType === "poster" ? "poster_width" : "background_width";
+  return (row) => inRange(row[width], filters.resolution);
+}
+
+function issuesPredicate<T>(
+  filters: FilterState,
+  datasetEnabled: boolean,
+  check: (flag: MetadataIssueCheck) => ((row: T) => boolean) | undefined,
+): Predicate<T> | null {
+  const checks = filters.metadataIssues.flags
+    .filter((flag) => issueAvailable(flag, datasetEnabled))
+    .flatMap((flag) => check(METADATA_ISSUE_CHECKS[flag]) ?? []);
+  if (!checks.length) return null;
+  return filters.metadataIssues.mode === "any"
+    ? (row) => checks.some((applies) => applies(row))
+    : (row) => checks.every((applies) => applies(row));
+}
+
+/** Every filter section, placed by ``order``; the media server always comes last. */
+export const FILTERS = {
+  libraries: {
+    label: "Libraries",
+    order: 10,
+    library: (filters) =>
+      filters.libraryIds.length
+        ? (item) => !!item.library_id && filters.libraryIds.includes(item.library_id)
+        : null,
+    collections: (filters) =>
+      filters.libraryIds.length
+        ? (row) => !!row.library_id && filters.libraryIds.includes(row.library_id)
+        : null,
+  },
+  monitored: {
+    label: "Monitor status",
+    order: 20,
+    library: (filters) => triState(filters.monitored, "monitored", (item) => item.monitored),
+    collections: (filters) => triState(filters.monitored, "monitored", (row) => row.monitored),
+  },
+  art: {
+    label: "Art",
+    order: 30,
+    library: (filters) =>
+      triState(filters.art, "complete", (item) => item.art_status === "complete"),
+    collections: (filters) =>
+      triState(filters.art, "complete", (row) => row.art_status === "complete"),
+  },
+  aspectRatio: {
+    label: "Aspect ratio",
+    order: 40,
+    library: (filters) =>
+      triState(filters.aspectRatio, "incorrect", (item) => item.has_incorrect_aspect_ratio),
+    collections: (filters) =>
+      triState(filters.aspectRatio, "incorrect", (row) => row.has_incorrect_aspect_ratio),
+  },
+  resolution: {
+    label: "Art resolution",
+    order: 50,
+    library: resolutionPredicate,
+    collections: resolutionPredicate,
+  },
+  artSource: {
+    label: "Art source",
+    order: 60,
+    library: artSourcePredicate,
+    collections: artSourcePredicate,
+  },
+  theme: {
+    label: "Theme music",
+    order: 70,
+    library: (filters) =>
+      triState(filters.theme, "complete", (item) => item.theme_status === "complete"),
+    collections: (filters) =>
+      triState(filters.theme, "complete", (row) => row.theme_status === "complete"),
+  },
+  themeLength: {
+    label: "Theme length",
+    order: 80,
+    library: (filters) =>
+      isRangeActive(filters.themeLength)
+        ? (item) => inRange(item.theme_duration, filters.themeLength)
+        : null,
+    collections: (filters) =>
+      isRangeActive(filters.themeLength)
+        ? (row) => inRange(row.theme_duration, filters.themeLength)
+        : null,
+  },
+  themeSources: {
+    label: "Theme source",
+    order: 90,
+    library: (filters) => {
+      if (!filters.themeSources.length) return null;
+      const sources = new Set(filters.themeSources);
+      return (item) => !!item.youtube_id_source && sources.has(item.youtube_id_source);
+    },
+  },
+  overtureDb: {
+    label: "OvertureDB",
+    order: 100,
+    needsDataset: true,
+    library: (filters, datasetEnabled) =>
+      datasetEnabled
+        ? triState(filters.overtureDb, "complete", (item) => item.public_dataset_complete)
+        : null,
+    collections: (filters, datasetEnabled) =>
+      datasetEnabled
+        ? triState(filters.overtureDb, "complete", (row) => row.public_dataset_complete)
+        : null,
+  },
+  themerrDb: {
+    label: "ThemerrDB",
+    order: 110,
+    needsDataset: true,
+    library: (filters, datasetEnabled) =>
+      datasetEnabled
+        ? triState(filters.themerrDb, "complete", (item) => item.public_dataset_themerrdb)
+        : null,
+    collections: (filters, datasetEnabled) =>
+      datasetEnabled
+        ? triState(filters.themerrDb, "complete", (row) => row.public_dataset_themerrdb)
+        : null,
+  },
+  metadataIssues: {
+    label: "Metadata issues",
+    order: 120,
+    library: (filters, datasetEnabled) =>
+      issuesPredicate(filters, datasetEnabled, (check) => check.library),
+    collections: (filters, datasetEnabled) =>
+      issuesPredicate(filters, datasetEnabled, (check) => check.collections),
+  },
+  collectionMembers: {
+    label: "Members",
+    order: 130,
+    collections: (filters) => triState(filters.collectionMembers, "criteria", (row) => row.managed),
+  },
+  collectionKind: {
+    label: "Kind",
+    order: 140,
+    needsSmart: true,
+    collections: (filters) =>
+      triState(filters.collectionKind, "smart", (row) => row.kind === "smart"),
+  },
+  collectionSync: {
+    label: "Last sync",
+    order: 150,
+    // Only collections with criteria sync.
+    collections: (filters) =>
+      filters.collectionSync === "all"
+        ? null
+        : (row) =>
+            row.managed && matchesTriState(row.sync_failed, filters.collectionSync, "failed"),
+  },
+  collectionSize: {
+    label: "Size",
+    order: 160,
+    collections: (filters) =>
+      filters.collectionSize === "empty"
+        ? (row) => row.child_count === 0
+        : filters.collectionSize === "below_minimum"
+          ? (row) => row.below_minimum
+          : null,
+  },
+  mediaServer: {
+    label: "Media server",
+    order: 1000,
+    // Items the server removed are not listed, so only unlinked ones are missing.
+    library: (filters) => triState(filters.mediaServer, "missing", (item) => !item.server_item_id),
+    collections: (filters) => triState(filters.mediaServer, "missing", (row) => row.withheld),
+  },
+} as const satisfies Record<string, FilterDef>;
+export type FilterKey = keyof typeof FILTERS;
+
+/** The filter sections a list shows, in order. */
+export function filterSections(
+  mode: SidebarMode,
+  options: { tab: SidebarTab; datasetEnabled: boolean; smart: boolean },
+): FilterKey[] {
+  const scope = mode === "collections" ? "collections" : "library";
+  return keysOf(FILTERS)
+    .filter((key) => {
+      const filter: FilterDef = FILTERS[key];
+      return (
+        !!filter[scope] &&
+        (!filter.mediaTypes || filter.mediaTypes.includes(options.tab)) &&
+        (!filter.needsDataset || options.datasetEnabled) &&
+        (!filter.needsSmart || options.smart)
+      );
+    })
+    .sort((a, b) => FILTERS[a].order - FILTERS[b].order);
+}
+
+function libraryPredicates(
+  filters: FilterState,
+  datasetEnabled: boolean,
+): Predicate<MediaItemRead>[] {
+  return keysOf(FILTERS).flatMap((key) => {
+    const filter: FilterDef = FILTERS[key];
+    return filter.library?.(filters, datasetEnabled) ?? [];
+  });
+}
+
+function collectionPredicates(
+  filters: FilterState,
+  datasetEnabled: boolean,
+): Predicate<CollectionRead>[] {
+  return keysOf(FILTERS).flatMap((key) => {
+    const filter: FilterDef = FILTERS[key];
+    return filter.collections?.(filters, datasetEnabled) ?? [];
+  });
 }
 
 export function hasVisibleActiveFilters(
@@ -603,91 +893,9 @@ export function hasVisibleActiveFilters(
   publicDatasetEnabled: boolean,
   mode: SidebarMode,
 ): boolean {
-  const shared =
-    filters.monitored !== "all" ||
-    filters.theme !== "all" ||
-    filters.libraryIds.length > 0 ||
-    isRangeActive(filters.themeLength);
-  if (mode === "collections")
-    return (
-      shared ||
-      filters.collectionSize !== "all" ||
-      filters.collectionKind !== "all" ||
-      filters.collectionMembers !== "all" ||
-      filters.collectionSync !== "all" ||
-      filters.art !== "all" ||
-      filters.mediaServer !== "all" ||
-      (publicDatasetEnabled && (filters.overtureDb !== "all" || filters.themerrDb !== "all"))
-    );
-  return (
-    shared ||
-    filters.art !== "all" ||
-    (publicDatasetEnabled && filters.overtureDb !== "all") ||
-    (publicDatasetEnabled && filters.themerrDb !== "all") ||
-    filters.aspectRatio !== "all" ||
-    filters.mediaServer !== "all" ||
-    filters.themeSources.length > 0 ||
-    filters.artSource.sources.length > 0 ||
-    filters.metadataIssues.flags.some((flag) => issueAvailable(flag, publicDatasetEnabled)) ||
-    isRangeActive(filters.resolution)
-  );
-}
-
-function itemPredicates(
-  filters: FilterState,
-  publicDatasetEnabled: boolean,
-): Predicate<MediaItemRead>[] {
-  const predicates: Predicate<MediaItemRead>[] = sharedPredicates(filters);
-  if (filters.art !== "all") {
-    predicates.push((item) =>
-      matchesTriState(item.art_status === "complete", filters.art, "complete"),
-    );
-  }
-  if (publicDatasetEnabled && filters.overtureDb !== "all") {
-    predicates.push((item) =>
-      matchesTriState(item.public_dataset_complete, filters.overtureDb, "complete"),
-    );
-  }
-  if (publicDatasetEnabled && filters.themerrDb !== "all") {
-    predicates.push((item) =>
-      matchesTriState(item.public_dataset_themerrdb, filters.themerrDb, "complete"),
-    );
-  }
-  if (filters.aspectRatio !== "all") {
-    predicates.push((item) =>
-      matchesTriState(item.has_incorrect_aspect_ratio, filters.aspectRatio, "incorrect"),
-    );
-  }
-  if (filters.mediaServer !== "all") {
-    predicates.push((item) =>
-      // Items the server removed are not listed, so only unlinked ones are missing.
-      matchesTriState(!item.server_item_id, filters.mediaServer, "missing"),
-    );
-  }
-  if (filters.themeSources.length) {
-    const sources = new Set(filters.themeSources);
-    predicates.push((item) => !!item.youtube_id_source && sources.has(item.youtube_id_source));
-  }
-  if (filters.artSource.sources.length) {
-    const sources = new Set<string | null>(filters.artSource.sources);
-    const slots = ART_SOURCE_SLOTS[filters.artSource.artType];
-    predicates.push((item) => slots.some((slot) => sources.has(item[slot])));
-  }
-  if (isRangeActive(filters.resolution)) {
-    const width = filters.resolution.artType === "poster" ? "poster_width" : "background_width";
-    predicates.push((item) => inRange(item[width], filters.resolution));
-  }
-  const { mode } = filters.metadataIssues;
-  const flags = filters.metadataIssues.flags.filter((flag) =>
-    issueAvailable(flag, publicDatasetEnabled),
-  );
-  if (flags.length) {
-    const checks = flags.map((flag) => METADATA_ISSUE_CHECKS[flag].applies);
-    predicates.push((item) =>
-      mode === "any" ? checks.some((check) => check(item)) : checks.every((check) => check(item)),
-    );
-  }
-  return predicates;
+  return mode === "collections"
+    ? collectionPredicates(filters, publicDatasetEnabled).length > 0
+    : libraryPredicates(filters, publicDatasetEnabled).length > 0;
 }
 
 export function filterSidebarItems(options: {
@@ -699,52 +907,12 @@ export function filterSidebarItems(options: {
   sortField: SidebarSortField;
   sortDir: SidebarSortDir;
 }): MediaItemRead[] {
-  const predicates = itemPredicates(options.filters, options.publicDatasetEnabled);
+  const predicates = libraryPredicates(options.filters, options.publicDatasetEnabled);
   const query = options.searchQuery.trim();
-  const matcher = hasKey(SIDEBAR_SEARCH_FIELDS, options.searchField)
-    ? SIDEBAR_SEARCH_FIELDS[options.searchField].matcher
-    : undefined;
+  const matcher = search(options.searchField)?.library;
   if (query && matcher) predicates.push(matcher(query));
   const items = options.items.filter((item) => predicates.every((matches) => matches(item)));
-  const sort = hasKey(SIDEBAR_SORT_OPTIONS, options.sortField)
-    ? SIDEBAR_SORT_OPTIONS[options.sortField]
-    : SIDEBAR_SORT_OPTIONS.title;
-  return sortRows(items, sort.value, options.sortDir);
-}
-
-function collectionPredicates(
-  filters: FilterState,
-  publicDatasetEnabled: boolean,
-): Predicate<CollectionRead>[] {
-  const predicates: Predicate<CollectionRead>[] = sharedPredicates(filters);
-  const triState = (
-    filter: string,
-    whenTrue: string,
-    value: (collection: CollectionRead) => boolean,
-  ) => {
-    if (filter !== "all") predicates.push((row) => matchesTriState(value(row), filter, whenTrue));
-  };
-  triState(filters.art, "complete", (collection) => collection.art_status === "complete");
-  triState(filters.mediaServer, "missing", (collection) => collection.withheld);
-  triState(filters.collectionKind, "smart", (collection) => collection.kind === "smart");
-  triState(filters.collectionMembers, "criteria", (collection) => collection.managed);
-  if (publicDatasetEnabled) {
-    triState(filters.overtureDb, "complete", (collection) => collection.public_dataset_complete);
-    triState(filters.themerrDb, "complete", (collection) => collection.public_dataset_themerrdb);
-  }
-  if (filters.collectionSync !== "all") {
-    // Only collections with criteria sync.
-    predicates.push(
-      (collection) =>
-        collection.managed &&
-        matchesTriState(collection.sync_failed, filters.collectionSync, "failed"),
-    );
-  }
-  if (filters.collectionSize === "empty")
-    predicates.push((collection) => collection.child_count === 0);
-  if (filters.collectionSize === "below_minimum")
-    predicates.push((collection) => collection.below_minimum);
-  return predicates;
+  return sortBy(items, "library", options.sortField, options.sortDir);
 }
 
 export function filterSidebarCollections(options: {
@@ -758,17 +926,12 @@ export function filterSidebarCollections(options: {
 }): CollectionRead[] {
   const predicates = collectionPredicates(options.filters, options.publicDatasetEnabled);
   const query = options.searchQuery.trim();
-  const matcher = hasKey(COLLECTION_SEARCH_FIELDS, options.searchField)
-    ? COLLECTION_SEARCH_FIELDS[options.searchField].matcher
-    : undefined;
+  const matcher = search(options.searchField)?.collections;
   if (query && matcher) predicates.push(matcher(query));
   const collections = options.collections.filter((collection) =>
     predicates.every((matches) => matches(collection)),
   );
-  const sort = hasKey(COLLECTION_SORT_OPTIONS, options.sortField)
-    ? COLLECTION_SORT_OPTIONS[options.sortField]
-    : COLLECTION_SORT_OPTIONS.title;
-  return sortRows(collections, sort.value, options.sortDir);
+  return sortBy(collections, "collections", options.sortField, options.sortDir);
 }
 
 const STATUS_TONES: Record<AssetStatus, StatusTone> = {
@@ -806,4 +969,12 @@ export function preloadRowIndexes(first: number, end: number, count: number): nu
     ...Array.from({ length: belowEnd - belowStart }, (_, offset) => belowStart + offset),
     ...Array.from({ length: aboveEnd - aboveStart }, (_, offset) => aboveEnd - 1 - offset),
   ];
+}
+
+/** Whether a collection belongs to *group*; the virtual Unmanaged group holds those without rules. */
+export function inCollectionGroup(
+  collection: Pick<CollectionRead, "collection_group" | "managed">,
+  group: string | null,
+): boolean {
+  return group === UNMANAGED_GROUP ? !collection.managed : collection.collection_group === group;
 }

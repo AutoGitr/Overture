@@ -132,6 +132,7 @@ class CollectionRepository:
         *,
         after: int = 0,
         collection_ids: list[int] | None = None,
+        collection_groups: list[str] | None = None,
         library_ids: list[str] | None = None,
         include_unmonitored: bool = False,
         limit: int = CHUNK_SIZE,
@@ -143,6 +144,10 @@ class CollectionRepository:
         )
         if collection_ids is not None:
             stmt = stmt.where(col(MediaCollection.id).in_(collection_ids))
+        if collection_groups is not None:
+            stmt = stmt.where(
+                col(MediaCollection.collection_group).in_(collection_groups)
+            )
         if library_ids:
             stmt = stmt.where(col(MediaCollection.library_id).in_(library_ids))
         if not include_unmonitored:

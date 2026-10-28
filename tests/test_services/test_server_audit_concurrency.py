@@ -1,6 +1,7 @@
 """Server audit runs targets together but reports them in plan order."""
 
 lazy import asyncio
+lazy from dataclasses import replace
 lazy from pathlib import Path
 lazy from typing import Any, cast
 
@@ -9,7 +10,7 @@ lazy import pytest
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import ArtFileFacts
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, ServerAsset
+lazy from overture.domain import ArtType, MediaServerState, ServerAsset
 lazy from overture.schemas.server_audit import (
     AuditStatus,
     ServerAuditRequest,
@@ -146,3 +147,39 @@ async def testlocal_fingerprint_reuses_the_record_until_the_file_changes(
         == "b" * PHASH_HEX_LENGTH
     )
     assert computed == [str(poster)]
+
+
+async def test_server_audit_fails_at_once_while_the_media_server_is_down(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    class DownProvider:
+        async def test_connection(self) -> bool:
+            return False
+
+    async def unplanned(*_args: object, **_kwargs: object) -> list[AuditTarget]:
+        raise AssertionError("A run against a down server must not plan targets")
+
+    monkeypatch.setattr(server_audit, "plan_audit", unplanned)
+    context = _audit_context(
+        tmp_path,
+        app_config=app_config,
+        database=database,
+        phash=PhashService(app_config=app_config),
+    )
+    registry = NoopProviderRegistry(DownProvider())
+    registry.health.record(MediaServerState.REJECTED, "check MEDIA_SERVER_API_KEY")
+    probe = JobProbe()
+
+    await server_audit.run_server_audit(
+        ServerAuditRequest(),
+        probe.context,
+        audit_context=replace(context, provider_registry=registry),
+    )
+
+    assert probe.names()[-1].endswith(".failed")
+    _, payload = probe.terminal()
+    assert payload["job"]["error"]["message"] == "check MEDIA_SERVER_API_KEY"

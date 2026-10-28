@@ -2,19 +2,25 @@ import { describe, expect, it } from "vitest";
 import type { CollectionRead, MediaItemRead } from "../../../generated/rest/types.gen";
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
+  aspectDeviation,
   CATALOG_FILTER_KEYS,
   catalogStatus,
   defaultCatalogFilters,
+  defaultSortDir,
+  FILTERS,
   filterCatalogEntries,
+  filterSections,
   filterSidebarCollections,
   filterSidebarItems,
   hasThemeAttributes,
   hasVisibleActiveFilters,
+  inCollectionGroup,
   metadataIssuesFor,
   normalizeSortPreference,
   preloadRowIndexes,
-  searchFieldsFor,
+  searchFieldGroups,
   sortMenu,
+  type SidebarSortField,
   statusTone,
 } from "../../../lib/utils/sidebarDomain";
 import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
@@ -310,10 +316,14 @@ describe("sidebar item filters", () => {
     expect(metadataIssuesFor("show", true)).toContain("no_tvdb_id");
     expect(metadataIssuesFor("movie", true)).toContain("id_mismatch");
     expect(metadataIssuesFor("movie", false)).not.toContain("id_mismatch");
-    expect(searchFieldsFor("movie", false)).toContain("director");
-    expect(searchFieldsFor("show", false)).not.toContain("director");
-    expect(searchFieldsFor("show", false)).not.toContain("tmdb");
-    expect(searchFieldsFor("show", true)).toContain("tmdb");
+    const fields = (tab: "movie" | "show", tmdb: boolean) =>
+      searchFieldGroups("library", "items", tab, tmdb).flatMap((group) =>
+        group.fields.map((field) => field.id),
+      );
+    expect(fields("movie", false)).toContain("director");
+    expect(fields("show", false)).not.toContain("director");
+    expect(fields("show", false)).not.toContain("tmdb");
+    expect(fields("show", true)).toContain("tmdb");
   });
 });
 
@@ -475,16 +485,33 @@ describe("sidebar collections", () => {
     ).toEqual(["Server Only"]);
   });
 
-  it("applies the filters collections share with items and ignores item-only ones", () => {
+  it("applies the item filters collections have the data for and ignores the rest", () => {
     const collections = [
       collection({ id: 1, title: "Saga 10", art_status: "complete" }),
-      collection({ id: 2, title: "Saga 2", art_status: "partial", withheld: true }),
+      collection({
+        id: 2,
+        title: "Saga 2",
+        art_status: "partial",
+        withheld: true,
+        has_incorrect_aspect_ratio: true,
+        poster_width: 500,
+        poster_source: "tpdb",
+      }),
     ];
     expect(
       filterCollections(collections, {
-        filters: withFilters({ art: "complete", aspectRatio: "incorrect" }),
+        filters: withFilters({ art: "complete", themeSources: ["download"] }),
       }),
     ).toEqual(["Saga 10"]);
+    const narrowing: Partial<FilterState>[] = [
+      { aspectRatio: "incorrect" },
+      { resolution: { artType: "poster", min: null, max: 600 } },
+      { artSource: { artType: "poster", sources: ["tpdb"] } },
+      { metadataIssues: { flags: ["no_server_id", "no_tmdb_id"], mode: "all" } },
+    ];
+    for (const filters of narrowing) {
+      expect(filterCollections(collections, { filters: withFilters(filters) })).toEqual(["Saga 2"]);
+    }
     expect(
       filterCollections(collections, { filters: withFilters({ mediaServer: "missing" }) }),
     ).toEqual(["Saga 2"]);
@@ -532,9 +559,12 @@ describe("sidebar collections", () => {
     expect(filterCollections(collections, { searchField: "group", searchQuery: "franch" })).toEqual(
       ["Alien"],
     );
-    expect(
-      filterCollections(collections, { searchField: "external_id", searchQuery: "8091" }),
-    ).toEqual(["Alien"]);
+    expect(filterCollections(collections, { searchField: "title", searchQuery: "8091" })).toEqual([
+      "Alien",
+    ]);
+    expect(filterCollections(collections, { searchField: "title", searchQuery: "bat" })).toEqual([
+      "Batman",
+    ]);
     expect(
       filterCollections(collections, {
         searchField: "youtube",
@@ -554,10 +584,7 @@ describe("sidebar collections", () => {
   });
 
   it("reports only the filters the current mode applies as active", () => {
-    const itemOnly = withFilters({
-      aspectRatio: "incorrect",
-      resolution: { artType: "poster", min: 1, max: null },
-    });
+    const itemOnly = withFilters({ themeSources: ["download"] });
     const shared = withFilters({ themeLength: { min: 60, max: null } });
 
     expect(hasVisibleActiveFilters(itemOnly, false, "items")).toBe(true);
@@ -606,7 +633,13 @@ describe("sidebar sort preferences", () => {
   );
 
   it("offers each list its own sort fields", () => {
-    expect(sortMenu("overturedb").map((entry) => entry.id)).toEqual(["title", "year"]);
+    expect(sortMenu("overturedb").map((entry) => entry.id)).toEqual([
+      "title",
+      "year",
+      "completeness",
+      "has_draft",
+      "in_library",
+    ]);
     expect(sortMenu("collections").map((entry) => entry.id)).toContain("child_count");
     expect(sortMenu("library").map((entry) => entry.id)).not.toContain("child_count");
   });
@@ -686,5 +719,99 @@ describe("catalog filters", () => {
         searchQuery: "",
       }),
     ).toEqual([entry]);
+  });
+});
+
+describe("sidebar registry", () => {
+  it("places every list's filters in order, with the media server last", () => {
+    const options = { tab: "movie", datasetEnabled: true, smart: true } as const;
+    for (const mode of ["items", "collections"] as const) {
+      const sections = filterSections(mode, options);
+      expect(sections.at(-1)).toBe("mediaServer");
+      expect(sections.map((key) => FILTERS[key].order)).toEqual(
+        sections.map((key) => FILTERS[key].order).sort((a, b) => a - b),
+      );
+    }
+    expect(filterSections("items", options)).not.toContain("collectionKind");
+    expect(filterSections("collections", options)).not.toContain("themeSources");
+    expect(filterSections("collections", { ...options, smart: false })).not.toContain(
+      "collectionKind",
+    );
+    expect(filterSections("items", { ...options, datasetEnabled: false })).not.toContain(
+      "overtureDb",
+    );
+  });
+
+  it("offers collections only the metadata issues they have data for", () => {
+    expect(metadataIssuesFor("movie", true, "collections")).toEqual(["no_tmdb_id", "no_server_id"]);
+  });
+
+  it("merges the collection title and TMDB ID search into one field", () => {
+    const [group] = searchFieldGroups("library", "collections", "movie", true);
+    expect(group?.fields.map((field) => field.label)).toEqual([
+      "Title or TMDB collection ID",
+      "Group",
+      "YouTube link, ID or title",
+    ]);
+  });
+
+  it("sorts by aspect deviation worst first, leaving unmeasured art last", () => {
+    expect(aspectDeviation(1000, 1500, "poster")).toBe(0);
+    expect(aspectDeviation(null, 1500, "poster")).toBeNull();
+    const items = [
+      mediaItem({ id: 1, title: "Exact", poster_width: 1000, poster_height: 1500 }),
+      mediaItem({ id: 2, title: "Square", poster_width: 1000, poster_height: 1000 }),
+      mediaItem({ id: 3, title: "Unmeasured" }),
+      mediaItem({ id: 4, title: "Close", poster_width: 1010, poster_height: 1500 }),
+    ];
+    expect(
+      filterItems(items, { sortField: "poster_aspect", sortDir: defaultSortDir("poster_aspect") }),
+    ).toEqual(["Square", "Close", "Exact", "Unmeasured"]);
+  });
+
+  it("sorts collections by Home order and group", () => {
+    const collections = [
+      collection({ id: 1, title: "B", home_order: 2, collection_group: "Studios" }),
+      collection({ id: 2, title: "A", home_order: null, collection_group: "Sagas" }),
+      collection({ id: 3, title: "C", home_order: 1 }),
+    ];
+    expect(filterCollections(collections, { sortField: "home_order" })).toEqual(["C", "B", "A"]);
+    expect(filterCollections(collections, { sortField: "group" })).toEqual(["A", "B", "C"]);
+  });
+
+  it("sorts catalog entries by completeness, draft and library presence", () => {
+    const entries = [
+      catalogRow({ entry_key: "a", title: "Bare" }),
+      catalogRow({
+        entry_key: "b",
+        title: "Full",
+        poster_url: "p",
+        background_url: "b",
+        youtube_id_overturedb: "o",
+        has_draft: true,
+      }),
+      catalogRow({ entry_key: "c", title: "Linked", poster_url: "p", library_item_id: 3 }),
+    ];
+    const sorted = (sortField: SidebarSortField) =>
+      filterCatalogEntries({
+        entries,
+        filters: defaultCatalogFilters(),
+        searchQuery: "",
+        sortField,
+        sortDir: "desc",
+      }).map((entry) => entry.title);
+    expect(sorted("completeness")).toEqual(["Full", "Linked", "Bare"]);
+    expect(sorted("has_draft")[0]).toBe("Full");
+    expect(sorted("in_library")[0]).toBe("Linked");
+  });
+});
+
+describe("inCollectionGroup", () => {
+  it("puts collections without rules in the virtual Unmanaged group", () => {
+    const imported = { collection_group: "Weekend", managed: false };
+    const managed = { collection_group: "Weekend", managed: true };
+    expect(inCollectionGroup(imported, "Unmanaged")).toBe(true);
+    expect(inCollectionGroup(managed, "Unmanaged")).toBe(false);
+    expect(inCollectionGroup(imported, "Weekend")).toBe(true);
   });
 });

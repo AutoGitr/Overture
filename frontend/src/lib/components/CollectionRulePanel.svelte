@@ -65,6 +65,11 @@
         >
       </div>
     {/if}
+    {#if editor instanceof CollectionEditor && !editor.collection.managed}
+      <p class="hint form-wide">
+        Saving takes this collection over: Overture then keeps its members to these criteria.
+      </p>
+    {/if}
     {#if editor instanceof CollectionEditor && !editor.criteriaEditable}
       {@const form = editor}
       <div class="form-wide">
@@ -107,6 +112,18 @@
             ? `: ${result.members.join(", ")}${result.member_count > result.members.length ? ", ..." : ""}`
             : ""}
         </p>
+        {@const recommendation = result.recommendation}
+        {#if recommendation && (recommendation.kind === "smart") !== !!editor.rule.smart}
+          <p class="hint" role="note">
+            {recommendation.kind === "smart" ? "A smart collection" : "A regular collection"} suits these
+            criteria: {recommendation.reason}.
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              onclick={() => (editor.rule.smart = recommendation.kind === "smart")}>Switch</button
+            >
+          </p>
+        {/if}
       {/if}
     </div>
   {/if}

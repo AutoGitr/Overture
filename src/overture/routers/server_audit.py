@@ -2,7 +2,7 @@
 
 lazy from fastapi import APIRouter, Depends
 
-lazy from ..dependencies import AuditDep
+lazy from ..dependencies import AuditDep, require_media_server
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.server_audit import (
     FixAuditRequest,
@@ -13,7 +13,7 @@ lazy from .auth import require_auth
 router = APIRouter(
     prefix="/server-audit",
     tags=["server-audit"],
-    dependencies=[Depends(require_auth)],
+    dependencies=[Depends(require_auth), Depends(require_media_server)],
 )
 
 

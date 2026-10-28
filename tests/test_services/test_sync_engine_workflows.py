@@ -17,7 +17,7 @@ lazy from overture.db.models.job_result import JobRun
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
-lazy from overture.domain import MediaType, ServerType
+lazy from overture.domain import MediaServerState, MediaType, ServerType
 lazy from overture.integrations.tmdb import TMDBClient, TmdbFacts
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.jobs.progress_log import JobLogEntry, JobOutcome, log_entry
@@ -1144,3 +1144,39 @@ async def test_a_scheduled_full_sync_names_its_schedule(
     assert saved.last_run is not None
     assert not saved.last_run.failed
     await engine.schedules.stop()
+
+
+class DownProvider(FakeProvider):
+    """A server that was down and still does not answer its probe."""
+
+    async def test_connection(self) -> bool:
+        return False
+
+    @override
+    async def iter_items(
+        self,
+        library_ids: list[str] | None = None,
+    ) -> AsyncIterator[list[ServerItem]]:
+        raise AssertionError("A run against a down server must not list items")
+        yield []
+
+
+async def test_run_sync_fails_at_once_while_the_media_server_is_down(
+    tmp_path: Path,
+) -> None:
+    registry = NoopProviderRegistry(DownProvider())
+    registry.health.record(MediaServerState.UNREACHABLE, "Plex is not answering")
+    probe = JobProbe()
+
+    await sync_runner_module.run_sync(
+        probe.context,
+        provider_registry=registry,
+        reconciler=FakeReconciler(),
+        config_dir=tmp_path,
+        tmdb_seasons=NoTmdbShows(),
+        collections=NoCollections(),
+    )
+
+    assert probe.names()[-1] == "sync.failed"
+    _, payload = probe.terminal()
+    assert payload["job"]["error"]["message"] == "Plex is not answering"

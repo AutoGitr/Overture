@@ -13,6 +13,7 @@ lazy from urllib.parse import urlsplit
 lazy from ..config import Settings, in_plex_direct_domain
 lazy from ..domain import ArtSource, ArtType
 lazy from ..services.public_dataset.schema.contract import (
+    CATALOG_ART_SOURCE_LABELS,
     art_source,
     canonical_art_url,
     preview_art_url,
@@ -83,3 +84,28 @@ def art_source_label(url: str) -> str:
         hostname = ""
     labels = hostname.rstrip(".").split(".")
     return labels[-2] if len(labels) >= 2 else hostname or "external"
+
+
+def refused_art_host(url: str | None) -> str | None:
+    """Say why OvertureDB would refuse artwork from *url*'s host, or None if not.
+
+    Overture accepts art from any host; only a contribution is held to the
+    catalog's art sources.
+    """
+    if not url or selected_art_source(url) is not None:
+        return None
+    *others, last = CATALOG_ART_SOURCE_LABELS
+    host = urlsplit(url).hostname or url
+    return (
+        f"OvertureDB won't accept art from {host}; "
+        f"it accepts {', '.join(others)} and {last}"
+    )
+
+
+def art_refusals(poster_url: str | None, background_url: str | None) -> list[str]:
+    """Why OvertureDB would refuse a poster and background, naming each slot."""
+    return [
+        f"{label}: {reason}"
+        for label, url in (("Poster", poster_url), ("Background", background_url))
+        if (reason := refused_art_host(url))
+    ]

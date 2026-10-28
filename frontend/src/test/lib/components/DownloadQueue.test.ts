@@ -11,6 +11,7 @@ function download(id: string, title: string, jobType: "art" | "theme" = "art"): 
   const event = itemDownload(id, 1);
   const target = {
     target_type: "item",
+    source: jobType === "art" ? "TMDB" : "YouTube",
     media_item_id: 1,
     title,
     job_type: jobType,
@@ -29,6 +30,12 @@ function rows(): string[] {
 describe("DownloadQueue", () => {
   beforeEach(() => {
     downloadState.replaceSnapshot([]);
+  });
+
+  it("names where each download comes from after its kind", () => {
+    downloadState.replaceSnapshot([download("art", "Alien")]);
+    render(DownloadQueue, { lane: "art", label: "Downloads" });
+    expect(screen.getByText("TMDB")).toHaveClass("text-muted");
   });
 
   it("lists the lane's downloads with their kind and step", () => {

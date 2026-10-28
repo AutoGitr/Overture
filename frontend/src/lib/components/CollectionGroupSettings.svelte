@@ -1,5 +1,6 @@
 <script lang="ts">
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import { onMount, type Snippet } from "svelte";
   import { createQuery, createMutation, useQueryClient } from "@tanstack/svelte-query";
   import {
     applyCollectionGroupPolicyMutation,
@@ -29,13 +30,20 @@
     mediaType,
     libraries = [],
     onsave,
+    onfooterchange,
   }: {
     group: string;
     mediaType: MediaType;
     libraries?: LibrarySectionRead[];
     /** The group is saved, so it exists from now on. */
     onsave?: () => void;
+    /** Hand the popup the save actions, which belong in its footer. */
+    onfooterchange?: (footer: Snippet) => void;
   } = $props();
+
+  onMount(() => {
+    onfooterchange?.(actions);
+  });
 
   const client = useQueryClient();
   const query = createQuery(() => ({
@@ -206,10 +214,10 @@
   >
     <CollectionScheduleFields policy={form} level="group" defaults={defaults.data} />
   </DetailForm>
-  <div class="actions" role="group" aria-label="Group actions">
-    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
-      >Save</button
-    >
+{/if}
+
+{#snippet actions()}
+  {#if draft}
     <button
       type="button"
       class="btn btn-secondary"
@@ -226,8 +234,11 @@
       <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />
       Save and Sync
     </button>
-  </div>
-{/if}
+    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
+      >Save</button
+    >
+  {/if}
+{/snippet}
 
 <style>
   .libraries {
@@ -243,12 +254,5 @@
   .libraries legend {
     width: 100%;
     padding: 0;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-3);
   }
 </style>

@@ -1,9 +1,16 @@
 <script lang="ts">
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createMutation, createQuery } from "@tanstack/svelte-query";
+  import type { Snippet } from "svelte";
   import {
+    bulkOperateCollectionsMutation,
     getLibrariesOptions,
     listCollectionGroupsOptions,
+    listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { UNMANAGED_GROUP } from "../../generated/settings";
+  import { createNotifier } from "../stores/notificationState.svelte";
+  import { runBulkCollections } from "../utils/bulkCollections";
+  import { errorMessage } from "../utils/errors";
   import { uiState } from "../stores/uiState.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import CollectionGroupSettings from "../components/CollectionGroupSettings.svelte";
@@ -21,6 +28,32 @@
   const libraries = createQuery(() =>
     getLibrariesOptions({ query: { media_type: uiState.sidebarTab } }),
   );
+  let unmanaged = $derived(name === UNMANAGED_GROUP);
+  /** The open group's save actions, which its settings hand over. */
+  let groupFooter = $state<Snippet | null>(null);
+  const collections = createQuery(() => ({
+    ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
+    enabled: unmanaged,
+  }));
+  let unmanagedIds = $derived(
+    (collections.data ?? []).filter((row) => !row.managed).map((row) => row.id),
+  );
+  const takeOver = createMutation(() => bulkOperateCollectionsMutation());
+  const feedback = createNotifier();
+
+  async function takeOverAll() {
+    feedback.clear();
+    try {
+      const result = await runBulkCollections(
+        { collection_ids: unmanagedIds, media_type: uiState.sidebarTab, operation: "take_over" },
+        (body) => takeOver.mutateAsync({ body }),
+      );
+      feedback.success(`Took over ${result.collection_ids.length} collections.`);
+      for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
+    } catch (error) {
+      feedback.error(errorMessage(error, "Take over failed"));
+    }
+  }
 </script>
 
 <PopupShell title="Collection groups" size="wide" onclose={() => uiState.closePopup()}>
@@ -69,7 +102,13 @@
       }}>Configure</button
     >
   {/if}
-  {#if name.trim()}
+  {#if unmanaged}
+    <p class="hint">
+      Unmanaged lists collections made outside Overture, which have no criteria. It is not a stored
+      group and has no defaults. Taking a collection over gives it criteria that keep what it holds
+      today; a Plex smart collection keeps its filter.
+    </p>
+  {:else if name.trim()}
     <WorkflowSections>
       {#if groups.data?.includes(name)}
         <CollectionGroupActions
@@ -93,6 +132,7 @@
           group={name.trim()}
           mediaType={uiState.sidebarTab}
           libraries={libraries.data ?? []}
+          onfooterchange={(footer) => (groupFooter = footer)}
           onsave={() => {
             if (!unsaved) return;
             uiState.collectionGroupChanged("", name.trim());
@@ -102,6 +142,22 @@
         />{/key}
     </WorkflowSections>
   {/if}
+
+  {#snippet footer()}
+    <button type="button" class="btn btn-secondary" onclick={() => uiState.closePopup()}
+      >Close</button
+    >
+    {#if unmanaged}
+      <button
+        class="btn btn-primary"
+        type="button"
+        disabled={!unmanagedIds.length || takeOver.isPending}
+        onclick={() => void takeOverAll()}>Take over all ({unmanagedIds.length})</button
+      >
+    {:else if name.trim() && groupFooter}
+      {@render groupFooter()}
+    {/if}
+  {/snippet}
 </PopupShell>
 
 <style>

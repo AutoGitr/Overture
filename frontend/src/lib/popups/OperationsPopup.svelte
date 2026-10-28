@@ -6,7 +6,8 @@
   import RenamerTab from "../components/operations/RenamerTab.svelte";
   import ServerAuditTab from "../components/operations/ServerAuditTab.svelte";
   import SyncTab from "../components/operations/SyncTab.svelte";
-  import { OPERATION_TABS, OPERATIONS } from "../stores/operations";
+  import { availableOperations, OPERATIONS } from "../stores/operations";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { uiState, type OperationsTab } from "../stores/uiState.svelte";
 
   const PANELS = {
@@ -16,7 +17,10 @@
     audit: ServerAuditTab,
   } as const satisfies Record<OperationsTab, unknown>;
 
-  let activeTab = $derived(uiState.operationsTab);
+  let operationTabs = $derived(availableOperations(!settingsState.standalone));
+  let activeTab = $derived(
+    operationTabs.includes(uiState.operationsTab) ? uiState.operationsTab : "assets",
+  );
   let active = $derived(OPERATIONS[activeTab]);
   let footers = $state<Partial<Record<OperationsTab, Snippet>>>({});
 </script>
@@ -28,7 +32,7 @@
 
   {#snippet tabs()}
     <PopupTabs
-      tabs={OPERATION_TABS.map((id) => ({ id, ...OPERATIONS[id] }))}
+      tabs={operationTabs.map((id) => ({ id, ...OPERATIONS[id] }))}
       active={activeTab}
       label="Operation modes"
       idPrefix="operations"
@@ -41,7 +45,7 @@
     Work keeps running when this window is closed.
   {/snippet}
 
-  {#each OPERATION_TABS as tab (tab)}
+  {#each operationTabs as tab (tab)}
     {@const Panel = PANELS[tab]}
     <div
       class="tab-panel"

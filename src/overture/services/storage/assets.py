@@ -160,7 +160,9 @@ class AssetStorage:
             )
         return str(
             dest_folder
-            / season_poster_filename(self._app_config.MEDIA_SERVER, season_num, ext)
+            / season_poster_filename(
+                self._app_config.MEDIA_SERVER or "", season_num, ext
+            )
         )
 
     def _resolve_season_folder(
@@ -255,7 +257,7 @@ class AssetStorage:
         if folder is None:
             return None
         candidates = season_poster_candidates(
-            self._app_config.MEDIA_SERVER, season.season_num
+            self._app_config.MEDIA_SERVER or "", season.season_num
         )
         if item.folder_path and listing.same_folder(folder, Path(item.folder_path)):
             # A root-level poster belongs to the show, never the season.

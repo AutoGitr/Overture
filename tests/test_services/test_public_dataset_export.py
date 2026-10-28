@@ -8,16 +8,20 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.art_slots import write_art_slot
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType
+lazy from overture.domain import ArtType, MediaType, ServerType, ThemeBulkSource
+lazy from overture.schemas.library import media_item_read_from_model
 lazy from overture.services.public_dataset.export import (
+    REPORT_NAME,
     export_archive,
     export_selections,
 )
 lazy from overture.services.public_dataset.schema.contract import validate_entries
 lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.time import utc_now
 
 
 async def test_export_reads_saved_season_art_and_omits_private_fields(
@@ -136,9 +140,13 @@ async def test_export_filters_unallowed_art_hosts_and_skips_unsupported(
     await db_session.commit()
 
     with ZipFile(await export_selections(database, tmp_path)) as archive:
-        assert set(archive.namelist()) == {
-            "data/movies/tmdb-10.json",
-        }
+        assert set(archive.namelist()) == {"data/movies/tmdb-10.json", REPORT_NAME}
+        report = archive.read(REPORT_NAME).decode()
+        assert (
+            "Mixed Art: Poster: OvertureDB won't accept art from m.media-amazon.com"
+            in (report)
+        )
+        assert "Amazon Only: Poster:" in report
         entry = json.loads(archive.read("data/movies/tmdb-10.json"))
         validate_entries([entry])
         assert entry["poster_url"] is None
@@ -166,3 +174,50 @@ async def test_export_archive_cleans_up_on_failure(
     with pytest.raises(PublicServiceError):
         await export_archive(database, config_dir)
     assert list(config_dir.iterdir()) == []
+
+
+async def test_export_carries_collection_art_without_a_themerrdb_theme(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    database: Database,
+) -> None:
+    collection = MediaCollection(
+        server_item_id="saga",
+        media_type=MediaType.MOVIE,
+        server_type=ServerType.PLEX,
+        title="Saga",
+        tmdb_collection_id=10,
+        youtube_id="themerrdb01",
+        youtube_id_source=ThemeBulkSource.THEMERRDB,
+        last_synced_at=utc_now(),
+    )
+    write_art_slot(
+        collection, ArtType.POSTER, url="https://image.tmdb.org/t/p/w500/saga.jpg"
+    )
+    db_session.add(collection)
+    await db_session.commit()
+
+    with ZipFile(await export_selections(database, tmp_path)) as archive:
+        entry = json.loads(archive.read("data/collections/tmdb-10.json"))
+
+    assert entry["poster_url"] == "https://image.tmdb.org/t/p/original/saga.jpg"
+    assert entry["background_url"] is None
+    assert entry["youtube_id_overturedb"] is None
+
+
+def test_items_warn_about_art_from_a_host_overturedb_refuses() -> None:
+    item = MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie", tmdb_id=1)
+    write_art_slot(
+        item, ArtType.POSTER, url="https://m.media-amazon.com/images/M/a.jpg"
+    )
+    write_art_slot(
+        item, ArtType.BACKGROUND, url="https://image.tmdb.org/t/p/original/b.jpg"
+    )
+
+    read = media_item_read_from_model(item, seasons=[])
+
+    warning = (
+        "Poster: OvertureDB won't accept art from m.media-amazon.com; it accepts "
+        "TMDB, ThePosterDB, fanart.tv, TheTVDB and Plex"
+    )
+    assert read.contribution_warnings == [warning]

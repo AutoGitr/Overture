@@ -18,6 +18,7 @@
     deleteBulkAssetsScheduleMutation,
     getLibrariesOptions,
     getPublicDatasetStatusOptions,
+    listCollectionGroupsOptions,
     listBulkAssetsSchedulesOptions,
     runBulkAssetsScheduleMutation,
     startBulkAssetsMutation,
@@ -25,6 +26,7 @@
     updateBulkAssetsScheduleMutation,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
   import { libraryGate } from "../../stores/libraryGate.svelte";
+  import { settingsState } from "../../stores/settingsState.svelte";
   import { createNotifier } from "../../stores/notificationState.svelte";
   import { OPERATIONS } from "../../stores/operations";
   import { matchState, themeJobState } from "../../stores/bulkJobState.svelte";
@@ -68,11 +70,24 @@
       ? errorMessage(datasetStatusQuery.error, "Failed to load OvertureDB status")
       : "",
   );
+  let collectionsSupported = $derived(settingsState.current.collections_supported);
+  const movieGroupsQuery = createQuery(() => ({
+    ...listCollectionGroupsOptions({ query: { media_type: "movie" } }),
+    enabled: isActive && collectionsSupported,
+  }));
+  const showGroupsQuery = createQuery(() => ({
+    ...listCollectionGroupsOptions({ query: { media_type: "show" } }),
+    enabled: isActive && collectionsSupported,
+  }));
+  let collectionGroups = $derived([
+    ...new Set([...(movieGroupsQuery.data ?? []), ...(showGroupsQuery.data ?? [])]),
+  ]);
   const form = new AssetsForm({
     movieLibraries: () => movieLibraries,
     showLibraries: () => showLibraries,
     librariesLoaded: () => librariesLoaded,
     publicDatasetEnabled: () => publicDatasetEnabled,
+    collectionGroups: () => collectionGroups,
   });
   const config = form.config;
 

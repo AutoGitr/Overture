@@ -17,6 +17,7 @@ const run = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
 const updateSchedule = vi.hoisted(() => vi.fn());
 const runSchedule = vi.hoisted(() => vi.fn());
+const syncGroup = vi.hoisted(() => vi.fn());
 const defaultDatasetStatus = vi.hoisted(() => ({
   enabled: false,
   repo_url: "https://example.test/repo",
@@ -33,6 +34,9 @@ vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({
   listServerLibraries: async () => ({ data: await libraries() }),
   listSyncSchedules: async () => ({ data: await schedules() }),
   getPublicDatasetStatus: async () => ({ data: await datasetStatus() }),
+  listCollectionGroups: async (options: { query: { media_type: string } }) => ({
+    data: options.query.media_type === "movie" ? ["Sagas"] : [],
+  }),
 }));
 vi.mock("../../../../generated/rest/@tanstack/svelte-query.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -42,6 +46,7 @@ vi.mock("../../../../generated/rest/@tanstack/svelte-query.gen", async (importOr
   createSyncScheduleMutation: () => ({ mutationFn: createSchedule }),
   updateSyncScheduleMutation: () => ({ mutationFn: updateSchedule }),
   runSyncScheduleMutation: () => ({ mutationFn: runSchedule }),
+  syncCollectionGroupMutation: () => ({ mutationFn: syncGroup }),
 }));
 
 const SAVED_POLL = {
@@ -80,7 +85,7 @@ describe("Sync tab", () => {
     uiState.openOperations("sync");
     syncState.reset();
     matchState.reset();
-    settingsState.load(appSettings({ tmdb_configured: false }));
+    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: false }));
     libraries.mockReset().mockResolvedValue([
       { key: "1", title: "Movies", media_type: "movie" },
       { key: "2", title: "Shows", media_type: "show" },
@@ -113,6 +118,24 @@ describe("Sync tab", () => {
     );
   });
 
+  it("syncs one collection group instead of a full sync", async () => {
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    syncGroup.mockReset().mockResolvedValue({ created: [], removed: [], synced: 4, errors: {} });
+    await renderSync();
+    const choice = await screen.findByRole("combobox", { name: "Collections to sync" });
+    await screen.findByRole("option", { name: "Group: Sagas (movie)" });
+    await fireEvent.change(choice, { target: { value: "movie:Sagas" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+
+    await waitFor(() =>
+      expect(syncGroup).toHaveBeenCalledWith(
+        { query: { media_type: "movie", name: "Sagas" } },
+        expect.anything(),
+      ),
+    );
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("can exclude collections independently of the selected libraries", async () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     await renderSync();
@@ -135,7 +158,7 @@ describe("Sync tab", () => {
 
   it("runs a full TMDB season refresh without server libraries", async () => {
     libraries.mockResolvedValue([]);
-    settingsState.load(appSettings({ tmdb_configured: true }));
+    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("No libraries found on media server.");
 
@@ -150,7 +173,7 @@ describe("Sync tab", () => {
   });
 
   it("still requires a library selection when server libraries exist", async () => {
-    settingsState.load(appSettings({ tmdb_configured: true }));
+    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
     await renderSync();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect All" }));
 
@@ -159,7 +182,7 @@ describe("Sync tab", () => {
   });
 
   it("does not run a TMDB refresh when server libraries failed to load", async () => {
-    settingsState.load(appSettings({ tmdb_configured: true }));
+    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
     libraries.mockRejectedValue(new Error("Media server is unavailable"));
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("Media server is unavailable");

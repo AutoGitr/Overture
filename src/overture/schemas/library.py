@@ -13,7 +13,7 @@ lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..domain import ArtSource, ArtType, AssetStatus, MediaType, ThemeIdSource
-lazy from ..utils.art_urls import art_preview_url, selected_art_source
+lazy from ..utils.art_urls import art_preview_url, art_refusals, selected_art_source
 lazy from ..utils.security import strip_sensitive_url
 lazy from .base import StrictBaseModel
 lazy from .common import SaveSelectionResponse
@@ -60,10 +60,14 @@ class MediaItemRead(StrictBaseModel):
     background_width: int | None = None
     background_height: int | None = None
     has_incorrect_aspect_ratio: bool = False
+    #: Why OvertureDB would refuse the selected art, slot by slot.
+    contribution_warnings: list[str] = Field(default_factory=list[str])
 
     # Theme
     youtube_id: str | None = None
     youtube_id_source: ThemeIdSource | None = None
+    #: OvertureDB says the title has no theme music, so none is missing.
+    catalog_no_theme: bool = False
     youtube_title: str | None = None
     youtube_duration: int | None = None
     theme_file_hash: str | None = None
@@ -176,6 +180,7 @@ def media_item_read_from_model(
     public_dataset_themerrdb: bool = False,
     seasons: Sequence[Season],
     has_incorrect_aspect_ratio: bool = False,
+    catalog_no_theme: bool = False,
     public_dataset_ids: Literal["matching", "mismatching"] | None = None,
     library_collection_id: int | None = None,
 ) -> MediaItemRead:
@@ -195,10 +200,14 @@ def media_item_read_from_model(
             # Only a remote poster is shown in place of a file, at preview size.
             "poster_preview_url": _preview_url(poster, ArtType.POSTER),
             "poster_source": selected_art_source(poster.url),
+            "contribution_warnings": art_refusals(poster.url, background.url),
             "background_source": selected_art_source(background.url),
             **asdict(art_completion(item, seasons)),
             "theme_duration": item.theme_file_duration or item.youtube_duration,
-            "theme_status": theme_status(item),
+            "theme_status": AssetStatus.COMPLETE
+            if catalog_no_theme
+            else theme_status(item),
+            "catalog_no_theme": catalog_no_theme,
             "public_dataset_complete": public_dataset_complete,
             "public_dataset_themerrdb": public_dataset_themerrdb,
             "library_collection_id": library_collection_id,

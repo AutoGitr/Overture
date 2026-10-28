@@ -226,6 +226,7 @@ def test_job_target_has_stable_websocket_payload_shape() -> None:
 
     assert job_target(job, "Firefly") == {
         "target_type": "item",
+        "source": None,
         "media_item_id": 7,
         "title": "Firefly",
         "season_id": 3,

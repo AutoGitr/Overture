@@ -99,6 +99,7 @@ def art_matcher(*, app_config: Settings, database: Database) -> ArtMatcher:
         image_clients=unused(ProxyClientManager),
         app_config=app_config,
         database=database,
+        compare_concurrency=2,
     )
 
 

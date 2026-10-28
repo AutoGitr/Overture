@@ -2,14 +2,14 @@
 
 lazy from fastapi import APIRouter, Depends
 
-lazy from ..dependencies import ProviderRegistryDep
+lazy from ..dependencies import ProviderRegistryDep, require_media_server
 lazy from ..schemas.media_server import MediaServerErrorResponse, ServerLibraryRead
 lazy from .auth import require_auth
 
 router = APIRouter(
     prefix="/media-server",
     tags=["media-server"],
-    dependencies=[Depends(require_auth)],
+    dependencies=[Depends(require_auth), Depends(require_media_server)],
 )
 
 

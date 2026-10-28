@@ -26,6 +26,7 @@
     filterSidebarCollections,
     filterSidebarItems,
     hasThemeAttributes,
+    inCollectionGroup,
   } from "../utils/sidebarDomain";
 
   /** A request the popup owns, so its other actions wait while one runs. */
@@ -86,7 +87,7 @@
           sortField: "title",
           sortDir: "asc",
         }).filter(
-          (collection) => sidebarGroup() === null || collection.collection_group === sidebarGroup(),
+          (collection) => sidebarGroup() === null || inCollectionGroup(collection, sidebarGroup()),
         )
       : [],
   );
@@ -223,6 +224,36 @@
       feedback.error(errorMessage(err, `Failed to ${actionWord.toLowerCase()}`));
     }
   }
+  let collectionsWithThemes = $derived(collections.filter(hasThemeAttributes));
+
+  /** Forget the art or theme choices of every matching collection. */
+  async function clearCollections(operation: "clear_artwork" | "clear_themes") {
+    const targets = operation === "clear_themes" ? collectionsWithThemes : collections;
+    if (busy || !resultsReady || forItems || !targets.length) return;
+    const target = `${targets.length} filtered collections`;
+    const confirmed = await confirmAction(
+      CONFIRMATIONS[operation === "clear_artwork" ? "artwork" : "themes"](target),
+    );
+    if (!confirmed) return;
+    feedback.clear();
+    try {
+      const result = await runBulkCollections(
+        {
+          collection_ids: targets.map((collection) => collection.id),
+          media_type: uiState.sidebarTab,
+          operation,
+        },
+        (body) => collectionsRequest.mutateAsync({ body }),
+      );
+      feedback.success(
+        `Cleared ${operation === "clear_artwork" ? "artwork" : "theme"} selections for ${result.collection_ids.length} collections.`,
+      );
+      for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
+    } catch (error) {
+      feedback.error(errorMessage(error, "Bulk operation failed"));
+    }
+  }
+
   let collectionOperation = $state<BulkCollectionOperation["operation"]>("trigger_sync");
   let targetGroup = $state("");
   let template = $state("{title}");
@@ -251,7 +282,9 @@
       media_type: uiState.sidebarTab,
       operation,
     };
-    if (operation === "set_group") body.collection_group = targetGroup || null;
+    if (operation === "set_group" || operation === "take_over") {
+      body.collection_group = targetGroup || null;
+    }
     if (operation === "apply_sort_title_format") body.sort_title_format = template;
     if (operation === "set_order") body.order_type = order;
     if (operation === "set_visibility") {
@@ -331,6 +364,24 @@
       >
         Delete from Overture <span class="operation-count">{matchCount}</span>
       </button>
+    {:else}
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        onclick={() => void clearCollections("clear_artwork")}
+        disabled={matchCount === 0 || busy || !resultsReady}
+      >
+        Clear artwork selections <span class="operation-count">{matchCount}</span>
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        title="Clears the saved YouTube details"
+        onclick={() => void clearCollections("clear_themes")}
+        disabled={collectionsWithThemes.length === 0 || busy || !resultsReady}
+      >
+        Clear theme selections <span class="operation-count">{collectionsWithThemes.length}</span>
+      </button>
     {/if}
   </div>
   {#if !forItems}
@@ -341,6 +392,7 @@
         <select bind:value={collectionOperation}>
           <option value="trigger_sync">Sync criteria collections</option>
           <option value="set_group">Assign group</option>
+          <option value="take_over">Take over</option>
           <option value="set_order">Set sort</option>
           <option value="apply_sort_title_format">Format sort titles</option>
           {#if capabilities.data?.visibility}<option value="set_visibility">Set visibility</option
@@ -348,7 +400,8 @@
           <option value="delete">Delete collections</option>
         </select>
       </label>
-      {#if collectionOperation === "set_group"}<label class="form-label"
+      {#if collectionOperation === "set_group" || collectionOperation === "take_over"}<label
+          class="form-label"
           >Target group<input
             maxlength="200"
             bind:value={targetGroup}

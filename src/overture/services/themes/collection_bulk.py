@@ -27,7 +27,7 @@ lazy from ..downloads.collection_theme import collection_themes_unavailable
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
-lazy from ..public_dataset.index import PublicDatasetIndex
+lazy from ..public_dataset.index import NO_THEME, PublicDatasetIndex
 
 
 async def plan_collection_themes(
@@ -35,7 +35,7 @@ async def plan_collection_themes(
 ) -> AssetPlan[None]:
     """Plan bounded collection pages using the same skip rules as item themes."""
     plan = AssetPlan[None]()
-    if params.collection_ids is None and (
+    if not params.collection_scope and (
         not params.include_collections or params.item_ids is not None
     ):
         return plan
@@ -45,6 +45,7 @@ async def plan_collection_themes(
             rows = await CollectionRepository(session).bulk_targets(
                 after=after,
                 collection_ids=params.collection_ids,
+                collection_groups=params.collection_groups,
                 library_ids=params.library_ids,
                 include_unmonitored=params.include_unmonitored,
             )
@@ -57,6 +58,9 @@ async def plan_collection_themes(
         if not rows:
             return plan
         for row in rows:
+            if index.has_no_theme(row):
+                plan.decide((JobOutcome.SKIPPED, NO_THEME))
+                continue
             outcome = planned_outcome(
                 params,
                 saved=row.youtube_id,

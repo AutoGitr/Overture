@@ -146,7 +146,7 @@
       {:else}
         <span></span>
       {/if}
-      <button type="button" class="btn btn-ghost" onclick={() => uiState.closePopup()}>
+      <button type="button" class="btn btn-secondary" onclick={() => uiState.closePopup()}>
         Close
       </button>
     </div>

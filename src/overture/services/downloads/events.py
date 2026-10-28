@@ -10,7 +10,9 @@ lazy from ...jobs.kinds import DownloadStatus, JobKind
 lazy from ...jobs.lifecycle import publish_job_lifecycle
 lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...schemas.downloads import DownloadJobEvent
+lazy from ...utils.art_urls import art_source_label
 lazy from ...utils.job_events import build_job_payload
+lazy from ..public_dataset.schema.contract import ART_SOURCE_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,16 @@ _STATUSES = frozendict(
 )
 
 
+def _source(job: DownloadJob) -> str | None:
+    """Name where a download comes from: the art's host, or YouTube for themes."""
+    if job.job_type is not JobType.ART:
+        return "YouTube"
+    if not job.target_url:
+        return None
+    source = art_source_label(job.target_url)
+    return ART_SOURCE_LABELS.get(source, source)
+
+
 def job_target(job: DownloadJob, title: str | None) -> dict[str, int | str | None]:
     """Return a stable target descriptor for item or collection download events."""
     if job.job_type is JobType.COLLECTION_THEME:
@@ -32,9 +44,11 @@ def job_target(job: DownloadJob, title: str | None) -> dict[str, int | str | Non
             "target_type": "collection_theme",
             "collection_id": job.collection_id,
             "title": title or job.collection_title,
+            "source": _source(job),
         }
     return {
         "target_type": "item",
+        "source": _source(job),
         "media_item_id": job.media_item_id,
         "title": title,
         "season_id": job.season_id,

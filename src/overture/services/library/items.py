@@ -29,7 +29,9 @@ lazy from ...utils.image import has_incorrect_aspect_ratio
 
 
 def _public_dataset_complete(item: PublicDatasetItem) -> bool:
-    return bool(item.poster_url and item.background_url and item.youtube_id_overturedb)
+    # A title flagged as having no theme lacks no theme.
+    themed = item.youtube_id_overturedb or item.no_theme
+    return bool(item.poster_url and item.background_url and themed)
 
 
 async def _public_dataset_status_item_ids(
@@ -149,6 +151,7 @@ async def media_item_reads_with_public_dataset_status(
                 has_incorrect_aspect_ratio=_has_incorrect_aspect_ratio(
                     item, seasons, tolerance
                 ),
+                catalog_no_theme=bool(public_item and public_item.no_theme),
             )
         )
 

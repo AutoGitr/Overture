@@ -43,7 +43,7 @@ const sameView = { mode: "art", artSubTab: "poster", drillSeasonNum: null };
 describe("persisting a TMDB preview", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    settingsState.load(appSettings({ auto_advance: false, workflow: "art_and_themes" }));
+    settingsState.load(appSettings({ auto_advance: "off", workflow: "art_and_themes" }));
     routed.view = sameView;
     route.pathname = "/movies/tmdb-603-matrix/art/poster";
     sidebarState.current = null;
@@ -63,7 +63,9 @@ describe("persisting a TMDB preview", () => {
   });
 
   it("replaces the title with the item, then advances to the next slot", async () => {
-    settingsState.load(appSettings({ auto_advance: true, workflow: "art_and_themes" }));
+    settingsState.load(
+      appSettings({ auto_advance: "slots_and_items", workflow: "art_and_themes" }),
+    );
 
     await openPersistedItem(stored, poster, beginAutoAdvance());
     expect(goToItemView).not.toHaveBeenCalled();
@@ -74,7 +76,7 @@ describe("persisting a TMDB preview", () => {
   });
 
   it("moves from a show's season poster to its next season", async () => {
-    settingsState.load(appSettings({ auto_advance: true, workflow: "art" }));
+    settingsState.load(appSettings({ auto_advance: "slots_and_items", workflow: "art" }));
     const show = mediaItem({ id: 8, media_type: "show" });
     const next = season({ id: 82, media_item_id: 8, season_num: 1 });
     vi.spyOn(queryClient, "fetchQuery").mockResolvedValue([
@@ -89,7 +91,7 @@ describe("persisting a TMDB preview", () => {
   });
 
   it("moves on to the next TMDB result once the item is done", async () => {
-    settingsState.load(appSettings({ auto_advance: true, workflow: "themes" }));
+    settingsState.load(appSettings({ auto_advance: "slots_and_items", workflow: "themes" }));
     routed.view = { mode: "themes", artSubTab: "poster", drillSeasonNum: null };
     vi.mocked(findCachedLibraryItem).mockReturnValue(
       mediaItem({ id: 9, theme_status: "complete" }),

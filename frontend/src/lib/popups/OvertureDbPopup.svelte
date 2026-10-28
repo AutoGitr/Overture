@@ -9,7 +9,8 @@
     setPublicDatasetEnabledMutation,
     syncPublicDatasetNowMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { createNotifier } from "../stores/notificationState.svelte";
+  import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+  import { discardDrafts, draftedEntries } from "../utils/catalogDrafts";
   import { publicDatasetSyncState } from "../stores/jobStates.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
@@ -49,6 +50,26 @@
       URL.revokeObjectURL(url);
     } catch (err) {
       feedback.error(errorMessage(err, "Failed to export selections"));
+      return;
+    }
+    await offerDraftDiscard();
+  }
+
+  /** Drafts the export carried are done with once they reach an issue. */
+  async function offerDraftDiscard() {
+    if (!draftCount) return;
+    const confirmed = await confirmAction({
+      title: "Discard exported drafts?",
+      message:
+        "Keep them until the contribution is merged if you may edit it; discard them once it is attached to an issue.",
+      confirmLabel: "Discard drafts",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      feedback.success(`Discarded ${await discardDrafts(await draftedEntries())} drafts.`);
+    } catch (err) {
+      feedback.error(errorMessage(err, "Could not discard the drafts"));
     }
   }
   let draftInitialised = false;
@@ -255,7 +276,7 @@
     </div>
   </CardColumn>
   {#snippet footer()}
-    <button class="btn btn-ghost" onclick={() => uiState.closePopup()}> Cancel </button>
+    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
     <PendingButton
       class="btn btn-primary"
       onclick={save}

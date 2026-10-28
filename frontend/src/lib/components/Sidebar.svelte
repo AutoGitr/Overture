@@ -38,6 +38,7 @@
     SidebarSortField as SortField,
   } from "../utils/sidebarDomain";
   import * as sidebarDomain from "../utils/sidebarDomain";
+  import { UNMANAGED_GROUP } from "../../generated/settings";
   import { readJson, writeJson } from "../utils/storage";
   import DataStatus from "./DataStatus.svelte";
   import SidebarControls from "./SidebarControls.svelte";
@@ -228,16 +229,17 @@
     }),
   );
 
-  let collectionGroups = $derived(
-    [
+  let collectionGroups = $derived([
+    ...[
       ...new Set(
         filteredCollections.flatMap((row) => (row.collection_group ? [row.collection_group] : [])),
       ),
     ].sort(),
-  );
+    ...(filteredCollections.some((row) => !row.managed) ? [UNMANAGED_GROUP] : []),
+  ]);
   let currentGroup = $derived(sidebarGroup());
   let visibleCollections = $derived(
-    filteredCollections.filter((row) => row.collection_group === currentGroup),
+    filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, currentGroup)),
   );
 
   $effect(() => {
@@ -324,7 +326,7 @@
 {#snippet collectionGroupRow(group: string, _index: number, style: string)}
   <SidebarGroupRow
     title={group}
-    count={filteredCollections.filter((row) => row.collection_group === group).length}
+    count={filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, group)).length}
     {style}
     onselect={() => openSidebarGroup(group)}
   />

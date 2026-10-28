@@ -64,7 +64,10 @@
           <span class="download-title truncate" title={job.title ?? undefined}
             >{job.title || "Queued download"}</span
           >
-          <span class="badge {what.badge}">{what.label}</span>
+          <span class="download-kind truncate"
+            ><span class="badge {what.badge}">{what.label}</span>{#if job.source}
+              <span class="text-muted">{job.source}</span>{/if}</span
+          >
           <span class="download-stage truncate" title={stage}>{stage}</span>
         </div>
       {:else}
@@ -108,7 +111,7 @@
   .download-row {
     position: relative;
     display: grid;
-    grid-template-columns: 12px minmax(0, 1fr) 7.5rem 9rem;
+    grid-template-columns: 12px minmax(0, 1fr) 11rem 9rem;
     align-items: center;
     gap: var(--space-2);
     height: 28px;
@@ -160,7 +163,7 @@
 
   @container (max-width: 30rem) {
     .download-row {
-      grid-template-columns: 12px minmax(0, 1fr) 7.5rem;
+      grid-template-columns: 12px minmax(0, 1fr) 11rem;
     }
 
     .download-row .badge {

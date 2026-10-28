@@ -8,6 +8,7 @@ lazy import pytest
 lazy from starlette.requests import Request
 
 lazy from overture.domain import ArtType, AspectRatioTolerance
+lazy from overture.services.public_dataset.schema.contract import ASPECT_TOLERANCE
 lazy from overture.utils.http_security import (
     CSRF_COOKIE,
     CSRF_HEADER,
@@ -178,7 +179,8 @@ class TestSSRFAndImageHelper:
         assert is_blocked_ip(ipaddress.ip_address("2606:4700:4700::1111")) is False
 
     def test_aspect_ratio_tolerances_and_checks(self) -> None:
-        assert AspectRatioTolerance.STRICT.fraction == 0.01
+        # Strict is the catalog contract's tolerance, at its boundary.
+        assert AspectRatioTolerance.STRICT.fraction == ASPECT_TOLERANCE == 0.01
         assert AspectRatioTolerance.LENIENT.fraction == 0.05
         assert AspectRatioTolerance.OFF.fraction is None
 
@@ -188,6 +190,8 @@ class TestSSRFAndImageHelper:
         assert is_valid_aspect_ratio(1, 1, ArtType.POSTER, AspectRatioTolerance.OFF)
         assert not is_valid_aspect_ratio(1920, 1080, ArtType.POSTER, strict)
         assert not is_valid_aspect_ratio(0, 1080, ArtType.BACKGROUND, strict)
+        assert is_valid_aspect_ratio(990, 1500, ArtType.POSTER, strict)
+        assert not is_valid_aspect_ratio(989, 1500, ArtType.POSTER, strict)
 
     def test_image_format_and_content_type_helpers(self) -> None:
         assert is_valid_image_format("https://example.test/poster.JPG")

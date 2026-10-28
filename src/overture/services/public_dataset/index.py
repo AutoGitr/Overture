@@ -56,6 +56,9 @@ class CatalogPick:
         return "; ".join(self.notes)
 
 
+#: Why a theme run leaves a title OvertureDB flags as having no theme.
+NO_THEME = "OvertureDB: this title has no theme"
+
 #: Why OvertureDB offers nothing while the user has it switched off.
 DATASET_DISABLED = "OvertureDB is disabled"
 
@@ -159,6 +162,15 @@ class PublicDatasetIndex:
             notes=(self._missing(item, f"no {art_type.label} for it"),),
             enabled=self.enabled,
         )
+
+    def has_no_theme(self, item: MediaItem | MediaCollection) -> bool:
+        """Whether OvertureDB says *item* has no theme music."""
+        public_item = (
+            self.collections.get(item.tmdb_collection_id or 0)
+            if isinstance(item, MediaCollection)
+            else self.items.get(item.id or 0)
+        )
+        return self.enabled and public_item is not None and public_item.no_theme
 
     def theme(
         self,

@@ -179,12 +179,13 @@ def _lowercase(value: object) -> object:
 
 
 def _media_server(value: object) -> object:
-    """Require a media server kind, in any case."""
+    """Require a media server kind, in any case; ``none`` runs without one."""
     if not value:
         raise ValueError(
-            "MEDIA_SERVER is required and must be 'plex', 'jellyfin', or 'emby'."
+            "MEDIA_SERVER is required and must be 'plex', 'jellyfin', 'emby' or 'none'."
         )
-    return _lowercase(value)
+    value = _lowercase(value)
+    return None if value == "none" else value
 
 
 class RuntimeSettings(BaseSettings):
@@ -243,7 +244,8 @@ class Settings(RuntimeSettings):
     # Required. Settings come from the environment, which type checkers cannot
     # see, so the field has a default: an empty one, which validate_default
     # passes to _media_server to report as missing.
-    MEDIA_SERVER: Annotated[ServerType, BeforeValidator(_media_server)] = cast(
+    #: ``None`` when MEDIA_SERVER=none: Overture runs on the catalog and TMDB.
+    MEDIA_SERVER: Annotated[ServerType | None, BeforeValidator(_media_server)] = cast(
         "ServerType", ""
     )
     MEDIA_SERVER_URL: Annotated[str, AfterValidator(_media_server_url)] = ""
@@ -352,7 +354,7 @@ class Settings(RuntimeSettings):
         missing = [
             name
             for name in ("MEDIA_SERVER_URL", "MEDIA_SERVER_API_KEY")
-            if not getattr(self, name)
+            if self.MEDIA_SERVER is not None and not getattr(self, name)
         ]
         if missing:
             raise ValueError(

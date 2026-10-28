@@ -42,6 +42,7 @@ function collectionDownload(id: string): DownloadJobEvent {
       status: "completed",
       target: {
         target_type: "collection_theme",
+        source: null,
         collection_id: 1,
         title: "Saga",
       },

@@ -35,6 +35,7 @@ lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.matcher import ArtMatchOutcome
+lazy from overture.services.art.service import ArtService
 lazy from overture.services.bulk_common import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
@@ -53,7 +54,7 @@ lazy from tests.bulk_helpers import (
     progress_logs,
     write_existing_asset,
 )
-lazy from tests.runtime_helpers import make_local_assets
+lazy from tests.runtime_helpers import make_local_assets, unused
 
 CATALOG_URL = "https://public.test/image.jpg"
 SAVED_URL = "https://saved.test/image.jpg"
@@ -348,6 +349,7 @@ async def test_art_source_matrix(
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(
             app_config=app_config,
             database=database,

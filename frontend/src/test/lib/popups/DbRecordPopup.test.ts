@@ -7,7 +7,7 @@ import {
 import type { MediaItemRead } from "../../../generated/rest/types.gen";
 import DbRecordPopup from "../../../lib/popups/DbRecordPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
-import { goToItem, navigate, route } from "../../../lib/router/routes";
+import { goToCatalogEntry, goToItem, navigate, route } from "../../../lib/router/routes";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   collection,
@@ -158,20 +158,42 @@ describe("DbRecordPopup", () => {
     expect(screen.getByText("Season 2", { selector: "summary" })).toBeInTheDocument();
   });
 
-  it("shows the selected collection in collections mode without reading item records", async () => {
+  it("shows the selected collection and its OvertureDB record, never an item's", async () => {
     queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
       collection({ id: 12, title: "Action", media_type: "movie" }),
     ]);
     await navigate("/movies/collections/:collectionSlug", {
       params: { collectionSlug: "12-action" },
     });
-    const { calls } = mockFetchRoutes({});
+    const { calls } = mockFetchRoutes({
+      "/api/public-dataset/collections/12/record": {
+        found: true,
+        item: null,
+        seasons: [],
+        collection: { id: 1, tmdb_id: 10, title: "Action Collection" },
+      },
+    });
 
     await renderPopup();
 
     expect(screen.getByRole("dialog", { name: "Database Record - Action" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Collection" })).toBeInTheDocument();
-    expect(field("title")).toHaveTextContent("Action");
-    expect(calls).toEqual([]);
+    expect(
+      await screen.findByRole("heading", { name: "OvertureDB Collection" }),
+    ).toBeInTheDocument();
+    expect(calls.map((call) => call.url)).toEqual(["/api/public-dataset/collections/12/record"]);
+  });
+
+  it("shows a catalog entry's OvertureDB record", async () => {
+    goToCatalogEntry({ media_type: "movie", entry_key: "tmdb-348" });
+    await waitFor(() => expect(route.params.entrySlug).toBe("tmdb-348"));
+    mockFetchRoutes({
+      "/api/public-dataset/catalog/movie/tmdb-348/record": publicDatasetRecord(),
+    });
+
+    await renderPopup();
+
+    expect(await screen.findByRole("heading", { name: "OvertureDB Item" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Media Item" })).not.toBeInTheDocument();
   });
 });

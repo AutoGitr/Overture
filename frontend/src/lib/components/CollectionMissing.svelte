@@ -70,7 +70,7 @@
           <li>
             <span>{title.title}{title.year ? ` (${title.year})` : ""}</span>
             {#if title.requested}
-              <span class="badge">In {arr}</span>
+              <span class="badge badge-muted">In {arr}</span>
             {:else if data.requestable}
               <button
                 type="button"

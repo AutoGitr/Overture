@@ -23,7 +23,7 @@
 
 <section class="detail-section" aria-label={title}>
   <header>
-    <h3>
+    <h3 class="section-heading">
       {#if collapsible}
         <button
           type="button"
@@ -68,8 +68,7 @@
     border-bottom: var(--section-header-border, var(--border-subtle));
   }
   h3 {
-    margin: 0 0 var(--space-2);
-    font-size: var(--text-lg);
+    margin-bottom: var(--space-2);
   }
   h3 button {
     display: flex;

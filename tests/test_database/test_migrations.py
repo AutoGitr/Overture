@@ -7,6 +7,7 @@ lazy from pathlib import Path
 lazy import pytest
 lazy from alembic import command
 lazy from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     MetaData,
     Table,
@@ -29,7 +30,7 @@ lazy from overture.migrations import versions_at_head
 
 
 def _previous_settings(settings: Table, **values: object) -> dict[str, object]:
-    """Today's settings defaults, plus the interval revisions before cron had."""
+    """Today's settings defaults, in the forms earlier revisions stored."""
     return {
         **AppSettings().model_dump(
             include={column.name for column in settings.columns}
@@ -37,6 +38,12 @@ def _previous_settings(settings: Table, **values: object) -> dict[str, object]:
         **(
             {"collection_sync_interval_hours": 24}
             if "collection_sync_interval_hours" in settings.c
+            else {}
+        ),
+        # Auto-advance was a flag before it had modes.
+        **(
+            {"auto_advance": False}
+            if isinstance(settings.c.auto_advance.type, Boolean)
             else {}
         ),
         **values,
@@ -1201,5 +1208,62 @@ def test_incremental_poll_figures_move_to_the_last_run_and_back() -> None:
                 "SELECT state_json FROM saved_schedules"
             ).scalar_one()
             assert json.loads(restored) == state
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("enabled", "mode"), [(True, "slots_and_items"), (False, "off")]
+)
+def test_auto_advance_becomes_a_mode_and_require_group_defaults_off(
+    enabled: bool, mode: str
+) -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "a7d2e9c4f1b3")
+            settings = Table("app_settings", MetaData(), autoload_with=connection)
+            connection.execute(
+                settings.insert().values(
+                    **_previous_settings(settings, id=1, auto_advance=enabled)
+                )
+            )
+            command.upgrade(config, "head")
+            assert connection.exec_driver_sql(
+                "SELECT auto_advance, collection_require_group FROM app_settings"
+            ).all() == [(mode, 0)]
+            command.downgrade(config, "a7d2e9c4f1b3")
+            assert connection.exec_driver_sql(
+                "SELECT auto_advance FROM app_settings"
+            ).all() == [(int(enabled),)]
+    finally:
+        engine.dispose()
+
+
+def test_catalog_rows_gain_an_unset_no_theme_flag_and_lose_it_again() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "b4e8c2d6a9f1")
+            connection.exec_driver_sql(
+                "INSERT INTO public_dataset_collections (id, tmdb_id, title) "
+                "VALUES (1, 10, 'Saga')"
+            )
+            command.upgrade(config, "head")
+            assert connection.exec_driver_sql(
+                "SELECT title, no_theme FROM public_dataset_collections"
+            ).all() == [("Saga", 0)]
+            command.downgrade(config, "b4e8c2d6a9f1")
+            columns = {
+                row[1]
+                for row in connection.exec_driver_sql(
+                    "PRAGMA table_info(public_dataset_collections)"
+                )
+            }
+            assert "no_theme" not in columns
     finally:
         engine.dispose()

@@ -167,26 +167,36 @@ async def test_incremental_fill_keeps_choices_and_deletion_cascades_jobs(
         assert (await session.exec(select(DownloadJob))).all() == []
 
 
-def test_collection_requests_reject_art_mixed_scopes_and_saved_sidebar_snapshots() -> (
-    None
-):
-
+def test_bulk_requests_take_exactly_one_scope() -> None:
     invalid: list[dict[str, Any]] = [
-        {"collection_ids": [1], "art": {}},
         {"collection_ids": [1], "library_ids": ["movies"], "themes": {}},
+        {"collection_groups": ["Sagas"], "all_collections": True, "themes": {}},
         {"collection_ids": [], "themes": {}},
+        {"collection_groups": [], "art": {}},
+        {"themes": {}},
     ]
     for fields in invalid:
         with pytest.raises(ValidationError):
             BulkAssetsRequest.model_validate(fields)
-    with pytest.raises(ValidationError, match="library selection"):
-        BulkAssetsScheduleWrite.model_validate(
-            {
-                "name": "Collections",
-                "cron_expression": "0 3 * * *",
-                "config": {"collection_ids": [1], "themes": {}},
-            }
+    for scope in (
+        {"collection_ids": [1]},
+        {"collection_groups": ["Sagas"]},
+        {"all_collections": True},
+    ):
+        request = BulkAssetsRequest.model_validate({**scope, "art": {}, "themes": {}})
+        assert request.collection_scope
+
+
+def test_schedules_take_collection_scopes_but_not_sidebar_items() -> None:
+    def schedule(config: dict[str, Any]) -> BulkAssetsScheduleWrite:
+        return BulkAssetsScheduleWrite.model_validate(
+            {"name": "Collections", "cron_expression": "0 3 * * *", "config": config}
         )
+
+    assert schedule({"collection_groups": ["Sagas"], "art": {}}).config.art
+    assert schedule({"all_collections": True, "themes": {}}).config.themes
+    with pytest.raises(ValidationError, match="Scheduled assets require"):
+        schedule({"item_ids": [1], "themes": {}})
 
 
 @pytest.mark.parametrize("existing_file", [False, True])

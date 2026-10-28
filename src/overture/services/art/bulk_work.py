@@ -68,6 +68,8 @@ async def plan_bulk_art(
     item_art_types, season_art_types = split_art_types(params.art_types)
     dataset_only = all(source.catalog for source in params.source_order)
     plan = AssetPlan[ArtTarget]()
+    if params.collection_scope:
+        return plan
     async with aclosing(scope_chunks(params, database=database, chunk=chunk)) as chunks:
         async for session, items in chunks:
             show_ids = [

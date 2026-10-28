@@ -5,6 +5,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import { answerConfirmation } from "../../helpers/notifications";
+import { collection } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 import { navigate } from "../../../lib/router/routes";
 
@@ -87,4 +88,27 @@ it("stays open after creating a group when opened from the sidebar", async () =>
   await fireEvent.click(screen.getByRole("button", { name: "Configure" }));
   await fireEvent.click(await screen.findByRole("button", { name: "Save" }));
   await waitFor(() => expect(uiState.openPopup).toBe("collection-groups"));
+});
+
+it("offers only an explanation and Take over all for the virtual Unmanaged group", async () => {
+  uiState.openCollectionGroups("Unmanaged");
+  const { calls } = mockFetchRoutes({
+    "/api/collections/groups": ["Weekend", "Unmanaged"],
+    "/api/library/libraries": [],
+    "/api/collections/bulk-operation": { collection_ids: [3], errors: {}, skipped: {} },
+    "/api/collections": [
+      collection({ id: 3, managed: false }),
+      collection({ id: 4, managed: true }),
+    ],
+  });
+  renderWithQueryClient(CollectionGroupsPopup);
+
+  expect(await screen.findByText(/not a stored group/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Rename or delete" })).not.toBeInTheDocument();
+  await fireEvent.click(await screen.findByRole("button", { name: "Take over all (1)" }));
+  await waitFor(() =>
+    expect(
+      JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
+    ).toEqual({ collection_ids: [3], media_type: "movie", operation: "take_over" }),
+  );
 });

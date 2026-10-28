@@ -184,6 +184,11 @@ class NoopProviderRegistry(ProviderRegistry):
 
     @property
     @override
+    def configured(self) -> bool:
+        return True
+
+    @property
+    @override
     def provider(self) -> Any:
         if self._provider is None:
             raise AssertionError("This test configured no media server provider")

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Check from "@lucide/svelte/icons/check";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+  import Send from "@lucide/svelte/icons/send";
   import type { ThemeSearchResultItem } from "../utils/themeSearch";
   import { formatThemeDuration, youtubeEmbedUrl } from "../utils/themeSearch";
 
@@ -11,6 +12,10 @@
     disabled?: boolean;
     selectLabel?: (video: ThemeSearchResultItem) => string;
     onSelect: (video: ThemeSearchResultItem) => void | Promise<void>;
+    /** Draft the video as the catalog's theme without selecting it. */
+    oncontribute?: (video: ThemeSearchResultItem) => void;
+    /** Why a video cannot be contributed, or null when it can. */
+    contributeBlocked?: (video: ThemeSearchResultItem) => string | null;
   }
 
   function defaultSelectLabel(video: ThemeSearchResultItem): string {
@@ -44,6 +49,8 @@
     disabled = false,
     selectLabel = defaultSelectLabel,
     onSelect,
+    oncontribute,
+    contributeBlocked = () => null,
   }: Props = $props();
 </script>
 
@@ -99,6 +106,19 @@
               {/if}
             </div>
 
+            {#if oncontribute}
+              {@const blocked = contributeBlocked(video)}
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm btn-icon"
+                aria-label="Contribute to OvertureDB"
+                title={blocked ?? "Contribute to OvertureDB"}
+                disabled={disabled || !!blocked}
+                onclick={() => oncontribute(video)}
+              >
+                <Send size={12} />
+              </button>
+            {/if}
             <button
               class={[
                 "btn btn-sm",

@@ -1,0 +1,3 @@
+[install]
+# Matches Renovate's minimum release age for dependency updates.
+minimumReleaseAge = "3d"

@@ -9,6 +9,7 @@ lazy from sqlmodel._compat import SQLModelConfig
 lazy from ..db.models.settings import AppSettingsBase
 lazy from ..domain import (
     AspectRatioTolerance,
+    AutoAdvance,
     AutoUnmonitor,
     CollectionFiltering,
     CollectionMode,
@@ -83,6 +84,7 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_sync_enabled: bool | None = None
     collection_request_missing: bool | None = None
     collection_import_unmanaged: bool | None = None
+    collection_require_group: bool | None = None
     tmdb_region: str | None = None
     radarr_root_folder: str | None = None
     radarr_quality_profile_id: int | None = None
@@ -100,7 +102,7 @@ class AppSettingsUpdate(StrictBaseModel):
     disable_media_server_art: bool | None = None
     aspect_ratio_tolerance: AspectRatioTolerance | None = None
     tmdb_language_filter: TmdbLanguageFilter | None = None
-    auto_advance: bool | None = None
+    auto_advance: AutoAdvance | None = None
     auto_advance_skip_completed: bool | None = None
     auto_unmonitor: AutoUnmonitor | None = None
 

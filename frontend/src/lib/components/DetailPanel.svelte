@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Database from "@lucide/svelte/icons/database";
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
@@ -209,7 +210,7 @@
 <DetailPanelBase
   isEmpty={!subject}
   {subjectKey}
-  recordActions={item ? recordActions : undefined}
+  recordActions={item || catalog ? recordActions : undefined}
   {backgroundUrl}
   posterHref={item?.server_link ?? null}
   posterLinkTitle={item?.server_link ? `Open in ${settingsState.media_server_name}` : null}
@@ -263,7 +264,7 @@
     {#if showContributionLink}
       <IdBadge
         href={contributionUrl}
-        title="Contribute to OvertureDB"
+        title={["Contribute to OvertureDB", ...(item?.contribution_warnings ?? [])].join("\n")}
         icon={githubIcon}
         alt="GitHub"
         onclick={openContributionIssue}
@@ -356,5 +357,14 @@
       ontoggle={() => void actions.toggleMonitored()}
       ondelete={() => void actions.delete()}
     />
+  {:else if catalog}
+    <button
+      type="button"
+      class="tab-item"
+      onclick={() => uiState.openPopupByName("database")}
+      title="Open Database Record"
+    >
+      <Database size={16} />
+    </button>
   {/if}
 {/snippet}

@@ -11,9 +11,16 @@ not list matches nothing, as it would in Plex itself.
 
 lazy import urllib.parse
 lazy from collections.abc import Mapping
+lazy from dataclasses import dataclass
 lazy from datetime import UTC, date, datetime, timedelta
 
-lazy from ...domain import CollectionOrder, FilterField, FilterOperator, MediaType
+lazy from ...domain import (
+    SMART_CUSTOM_ORDER,
+    CollectionOrder,
+    FilterField,
+    FilterOperator,
+    MediaType,
+)
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
 lazy from .fields import FIELDS, PlexField, order_field
 
@@ -212,7 +219,7 @@ def plex_sort(order: CollectionOrder) -> str:
     field = order_field(order)
     plex = FIELDS[field].plex if field is not None else None
     if plex is None:
-        raise ValueError("Smart collections are ordered by Plex; choose a sort")
+        raise ValueError(SMART_CUSTOM_ORDER)
     key = "titleSort" if field is FilterField.TITLE else plex.key
     return f"{key}:desc" if order.value.endswith(".desc") else key
 
@@ -235,3 +242,202 @@ def compile_plex_query(
         pairs.append(("limit", str(limit)))
     pairs.extend(_group_pairs(criteria, media_type, choices, labels))
     return urllib.parse.urlencode(pairs, quote_via=urllib.parse.quote)
+
+
+class UnmappableFilterError(ValueError):
+    """A Plex filter with terms Overture's criteria cannot express."""
+
+    def __init__(self, terms: list[str]) -> None:
+        self.terms = terms
+        super().__init__(
+            "Overture cannot express these Plex filters: " + ", ".join(terms)
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class DecompiledQuery:
+    """The criteria, sort and limit a Plex smart filter stands for."""
+
+    criteria: FilterGroup
+    order: CollectionOrder
+    limit: int | None
+
+
+#: Tag names by Plex field and tag key, as the section lists them.
+type PlexNames = Mapping[str, Mapping[str, str]]
+type _Term = FieldCondition | FilterGroup
+
+_STRING_FROM_PLEX = {plex: ours for ours, plex in _STRING_OPERATORS.items()}
+_NUMBER_FROM_PLEX = {plex: ours for ours, plex in _NUMBER_OPERATORS.items()}
+
+
+def plex_field_keys(media_type: MediaType) -> dict[str, FilterField]:
+    """The field each Plex key in a section of *media_type* names."""
+    keys: dict[str, FilterField] = {}
+    for field, spec in FIELDS.items():
+        if spec.plex is not None and spec.plex.filterable:
+            keys.setdefault(spec.plex.key_for(media_type), field)
+    return keys
+
+
+def _order(sort: str) -> CollectionOrder | None:
+    for order in CollectionOrder:
+        try:
+            if plex_sort(order) == sort:
+                return order
+        except ValueError:
+            continue
+    return None
+
+
+def _from_epoch(value: str, offset: int = 0) -> str:
+    moment = datetime.fromtimestamp(int(value) + offset, tz=UTC)
+    return moment.date().isoformat()
+
+
+class _Decompiler:
+    def __init__(self, media_type: MediaType, names: PlexNames) -> None:
+        self._fields = plex_field_keys(media_type)
+        self._names = names
+        self.unmappable: list[str] = []
+
+    def condition(self, name: str, value: str) -> FieldCondition | None:
+        key = name.rstrip("!<>=")
+        operator = f"{name[len(key) :]}="
+        field = self._fields.get(key)
+        plex = FIELDS[field].plex if field is not None else None
+        try:
+            if field is None or plex is None:
+                raise ValueError
+            operator_, operand = self._operand(plex, key, operator, value)
+            return FieldCondition(field=field, operator=operator_, value=operand)
+        except ValueError, KeyError:
+            self.unmappable.append(f"{name}={value}")
+            return None
+
+    def _operand(
+        self, plex: PlexField, key: str, operator: str, value: str
+    ) -> tuple[FilterOperator, str | int | float | bool]:
+        match plex.type:
+            case "string":
+                return _STRING_FROM_PLEX[operator], value
+            case "tag":
+                names = {self._names.get(key, {})[tag] for tag in value.split(",")}
+                if len(names) != 1 or operator not in {"=", "!="}:
+                    raise ValueError
+                negated = operator == "!="
+                return (
+                    FilterOperator.IS_NOT if negated else FilterOperator.IS,
+                    names.pop(),
+                )
+            case "boolean":
+                return FilterOperator.IS, value == "1"
+            case "integer" | "float":
+                number = float(value) / plex.scale
+                return _NUMBER_FROM_PLEX[operator], int(
+                    number
+                ) if number.is_integer() else number
+            case "date":
+                if value.startswith("-") and value.endswith("d"):
+                    days = int(value[1:-1])
+                    if operator == ">>=":
+                        return FilterOperator.IN_LAST, days
+                    return FilterOperator.NOT_IN_LAST, days
+                if operator == "<<=":
+                    return FilterOperator.BEFORE, _from_epoch(value)
+                after = date.fromisoformat(_from_epoch(value, 1)) - timedelta(days=1)
+                return FilterOperator.AFTER, after.isoformat()
+
+    def group(self, pairs: list[Pair], start: int) -> tuple[FilterGroup, int]:
+        """Read terms up to the matching ``pop``, returning the index after it."""
+        terms: list[_Term] = []
+        joiners: set[str] = set()
+        index = start
+        while index < len(pairs):
+            name, value = pairs[index]
+            index += 1
+            if name == "pop":
+                break
+            if name in {"and", "or"}:
+                joiners.add(name)
+            elif name == "push":
+                nested, index = self.group(pairs, index)
+                terms.append(_collapse(nested))
+            elif (condition := self.condition(name, value)) is not None:
+                terms.append(condition)
+        if len(joiners) > 1:
+            self.unmappable.append("a group mixing and with or")
+        return (
+            FilterGroup(
+                mode="any" if joiners == {"or"} else "all",
+                conditions=[term for term in terms if isinstance(term, FieldCondition)],
+                groups=[term for term in terms if isinstance(term, FilterGroup)],
+            ),
+            index,
+        )
+
+
+#: The year ranges a decade compiles to, by group mode and their operators.
+_DECADES: frozendict[tuple[str, FilterOperator, FilterOperator], FilterOperator] = (
+    frozendict(
+        {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+            ("all", FilterOperator.GTE, FilterOperator.LTE): FilterOperator.IS,
+            ("any", FilterOperator.LT, FilterOperator.GT): FilterOperator.IS_NOT,
+        }
+    )
+)
+
+
+def _collapse(group: FilterGroup) -> _Term:
+    """Read back the groups the compiler emits for one decade or negated tag."""
+    conditions = [c for c in group.conditions if isinstance(c, FieldCondition)]
+    if group.groups or len(conditions) < 2 or len(conditions) != len(group.conditions):
+        return group
+    fields = {condition.field for condition in conditions}
+    operators = [condition.operator for condition in conditions]
+    values = [condition.value for condition in conditions]
+    if fields == {FilterField.YEAR} and len(conditions) == 2:
+        low, high = values
+        decade = _DECADES.get((group.mode, operators[0], operators[1]))
+        decade_start = isinstance(low, int) and low % 10 == 0 and high == low + 9
+        if decade is not None and decade_start:
+            return FieldCondition(field=FilterField.DECADE, operator=decade, value=low)
+    (field, *others) = fields
+    if (
+        not others
+        and group.mode == "all"
+        and set(operators) == {FilterOperator.IS_NOT}
+        and len(set(values)) == 1
+        and plex_field(field).type == "tag"
+    ):
+        return conditions[0]
+    return group
+
+
+def decompile_plex_query(
+    query: str, *, media_type: MediaType, names: PlexNames
+) -> DecompiledQuery:
+    """Read a Plex smart filter back into criteria, as compiling would write it.
+
+    Raises:
+        UnmappableFilterError: When a term has no equivalent criterion.
+    """
+    pairs = urllib.parse.parse_qsl(query, keep_blank_values=True)
+    decompiler = _Decompiler(media_type, names)
+    order, limit = CollectionOrder.TITLE_ASC, None
+    terms: list[Pair] = []
+    for name, value in pairs:
+        if name == "sort":
+            found = _order(value)
+            if found is None:
+                decompiler.unmappable.append(f"sort={value}")
+            else:
+                order = found
+        elif name == "limit" and value.isdigit():
+            limit = int(value)
+        else:
+            terms.append((name, value))
+    criteria, _ = decompiler.group(terms, 0)
+    if decompiler.unmappable:
+        raise UnmappableFilterError(decompiler.unmappable)
+    return DecompiledQuery(criteria, order, limit)

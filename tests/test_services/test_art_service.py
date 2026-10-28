@@ -81,6 +81,7 @@ def _art_matcher(
         image_clients=unused(ProxyClientManager),
         app_config=app_config,
         database=database,
+        compare_concurrency=2,
     )
     calls: list[dict[str, Any]] = []
 

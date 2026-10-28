@@ -123,6 +123,16 @@ describe("CollectionThemePanel search", () => {
       expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
       await rerender({ collection: { ...coll, youtube_id: coll.youtube_id_overturedb } });
       expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
+      // Art is contributed too, without a theme the catalog already has.
+      const poster = "https://image.tmdb.org/t/p/original/saga.jpg";
+      await rerender({
+        collection: { ...coll, youtube_id: coll.youtube_id_themerrdb, poster_url: poster },
+      });
+      const artIssue = new URL(
+        (await screen.findByRole("link", { name: "GitHub" })).getAttribute("href") ?? "",
+      );
+      expect(artIssue.searchParams.get("poster_url")).toBe(poster);
+      expect(artIssue.searchParams.get("youtube_id")).toBe("");
     },
   );
 

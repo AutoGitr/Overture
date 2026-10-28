@@ -56,6 +56,8 @@ class _BulkSharedRunFields(StrictBaseModel):
     library_ids: LibraryIds = Field(default_factory=list[str])
     item_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
     collection_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
+    collection_groups: UniqueList[Annotated[str, Field(min_length=1)]] | None = None
+    all_collections: bool = False
     include_unmonitored: bool = Field(
         default=False, description="Include unmonitored items in either target scope."
     )
@@ -71,14 +73,31 @@ class _BulkSharedRunFields(StrictBaseModel):
     skip_recent_val: Annotated[int, Field(ge=0)] = 0
     skip_recent_unit: RecentUnit = RecentUnit.HOURS
 
+    @property
+    def collection_scope(self) -> bool:
+        """Whether the run targets collections instead of library items."""
+        return (
+            self.all_collections
+            or self.collection_ids is not None
+            or self.collection_groups is not None
+        )
+
     @model_validator(mode="after")
     def validate_target_selection(self) -> Self:
-        """Explicit items replace libraries; an empty list never means all items."""
-        if self.collection_ids is not None:
-            if not self.collection_ids:
-                raise ValueError("collection_ids must include at least one collection")
-            if self.library_ids or self.item_ids is not None:
-                raise ValueError("Select collections, items, or libraries")
+        """Exactly one scope; an empty list never means everything."""
+        if self.collection_ids == []:
+            raise ValueError("collection_ids must include at least one collection")
+        if self.collection_groups == []:
+            raise ValueError("collection_groups must include at least one group")
+        scopes = (
+            bool(self.library_ids),
+            self.item_ids is not None,
+            self.collection_ids is not None,
+            self.collection_groups is not None,
+            self.all_collections,
+        )
+        if sum(scopes) > 1:
+            raise ValueError("Select collections, items, or libraries")
         if self.item_ids is not None:
             if self.library_ids:
                 raise ValueError("Select either library_ids or item_ids")
@@ -110,13 +129,7 @@ class BulkAssetsRequest(_BulkSharedRunFields):
         """Require at least one selected asset workflow and a valid target."""
         if self.art is None and self.themes is None:
             raise ValueError("At least one asset workflow must be selected")
-        if self.collection_ids is not None and self.art is not None:
-            raise ValueError("Collection runs support themes only")
-        if (
-            self.item_ids is None
-            and self.collection_ids is None
-            and not self.library_ids
-        ):
+        if self.item_ids is None and not self.collection_scope and not self.library_ids:
             raise ValueError("Select at least one library")
         return self
 
@@ -157,8 +170,10 @@ class BulkAssetsScheduleWrite(ScheduleWrite[BulkAssetsRequest]):
     @model_validator(mode="after")
     def validate_schedule_scope(self) -> Self:
         """Sidebar snapshots are only available for immediate runs."""
-        if self.config.item_ids is not None or self.config.collection_ids is not None:
-            raise ValueError("Scheduled assets require a library selection")
+        if self.config.item_ids is not None:
+            raise ValueError(
+                "Scheduled assets require libraries, collections or collection groups"
+            )
         return self
 
 

@@ -1,6 +1,7 @@
 """Collection service operations."""
 
 lazy import logging
+lazy import urllib.parse
 lazy from collections import Counter
 lazy from collections.abc import Awaitable, Callable, Mapping
 lazy from contextlib import suppress
@@ -12,7 +13,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
-lazy from ...db.art_slots import read_art_slot
+lazy from ...db.art_slots import clear_art_selection, find_art_slot, read_art_slot
 lazy from ...db.completion import collection_theme_status
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_preset import CollectionPreset
@@ -24,6 +25,9 @@ lazy from ...db.models.settings import AppSettings, get_app_settings
 lazy from ...db.session import Database
 lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import (
+    ITEM_ART_TYPES,
+    SMART_CUSTOM_ORDER,
+    UNMANAGED_GROUP,
     ArtType,
     CollectionFiltering,
     CollectionKind,
@@ -83,13 +87,18 @@ lazy from ...schemas.collections import (
     CollectionSetPreview,
     CollectionSourceRead,
     CollectionSyncResponse,
+    CollectionTakeOver,
     CollectionThemeStatusResponse,
+    Condition,
     DeleteCollectionThemeResponse,
     FieldCondition,
     FilterGroup,
+    KindRecommendation,
     SetCollectionThemeRequest,
+    SourceCondition,
     TmdbChartSource,
     TmdbCollectionSource,
+    TmdbItemSource,
     collection_read,
     collection_theme_status_response,
 )
@@ -100,6 +109,7 @@ lazy from ...schemas.common import (
     Status,
     StatusResponse,
 )
+lazy from ...schemas.validators import check_group_name
 lazy from ...utils.assets import THEME_FILENAME
 lazy from ...utils.collection_formats import (
     format_member_tag,
@@ -110,6 +120,7 @@ lazy from ...utils.collection_formats import (
 )
 lazy from ...utils.cron import next_run_after
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.image import has_incorrect_aspect_ratio
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
@@ -139,9 +150,18 @@ lazy from .fields import (
     smart_only_dimension,
 )
 lazy from .member_effects import MemberEffects
-lazy from .plex_query import choice_keys, compile_plex_query, tag_keys
+lazy from .plex_query import (
+    UnmappableFilterError,
+    choice_keys,
+    compile_plex_query,
+    decompile_plex_query,
+    plex_field,
+    plex_field_keys,
+    tag_keys,
+)
 lazy from .policy import CollectionPolicy, RuleOrPolicy, resolve_policy
 lazy from .presets import available_presets, saved_preset_read
+lazy from .recommend import recommend_kind
 lazy from .sets import SetValue, count_values, set_values
 lazy from .sources import (
     SOURCE_LABEL_PREFIX,
@@ -225,6 +245,39 @@ def _outdates_server(row: MediaCollection) -> bool:
 def _never_created(row: MediaCollection) -> bool:
     """Saved in Overture only, so the scheduler leaves it until it is synced."""
     return row.unsynced and row.server_item_id is None
+
+
+def _member_criteria(row: MediaCollection, members: list[MediaItem]) -> FilterGroup:
+    """Criteria that select exactly a collection's current members.
+
+    Members are named by TMDB ID where they have one, else by title.
+    """
+    tmdb_ids = [item.tmdb_id for item in members if item.tmdb_id is not None]
+    conditions: list[Condition] = [
+        FieldCondition(field=FilterField.TITLE, value=item.title)
+        for item in members
+        if item.tmdb_id is None
+    ]
+    if tmdb_ids:
+        conditions.insert(0, SourceCondition(source=TmdbItemSource(tmdb_ids=tmdb_ids)))
+    if not conditions:
+        raise PublicServiceError(422, f"{row.title} has no members to keep")
+    return FilterGroup(mode="any", conditions=conditions)
+
+
+def _group_name(name: str) -> str:
+    """Return a stored group's name, stripped, refusing empty or reserved ones.
+
+    Raises:
+        PublicServiceError: 422 for an empty or reserved name.
+    """
+    name = name.strip()
+    if not name:
+        raise PublicServiceError(422, "A group needs a name")
+    try:
+        return check_group_name(name)
+    except ValueError as exc:
+        raise PublicServiceError(422, str(exc)) from exc
 
 
 def _generator(group: CollectionGroup | None) -> CollectionGenerator | None:
@@ -456,7 +509,7 @@ class CollectionsService:
         ):
             raise PublicServiceError(
                 422,
-                "Smart collections are ordered by Plex; choose a sort"
+                SMART_CUSTOM_ORDER
                 if smart and options.order_type is CollectionOrder.CUSTOM
                 else "The media server cannot order collections this way",
             )
@@ -881,6 +934,8 @@ class CollectionsService:
         rule = body.rule
         smart = rule is not None and rule.smart
         self._validate_display(body, body.media_type, smart=smart)
+        if rule is not None:
+            await self._require_group(body.collection_group)
         if (
             body.tmdb_collection_id is not None
             and body.media_type is not MediaType.MOVIE
@@ -1102,6 +1157,7 @@ class CollectionsService:
         async with self._database.read_session() as session:
             rule = await CollectionRepository(session).rule(row.id or 0)
         if rule is not None:
+            await self._require_group(body.collection_group)
             rule.sqlmodel_update(display)
         effective = await self._push_options(row, body, rule, push=push)
         summary_source = row.summary_source
@@ -1292,6 +1348,7 @@ class CollectionsService:
         self, row: MediaCollection, body: CollectionRuleWrite
     ) -> CollectionRuleRead:
         collection_id = row.id or 0
+        await self._require_group(row.collection_group)
         async with self._database.read_session() as session:
             existing = await CollectionRepository(session).rule(collection_id)
             policy = await self._policy(
@@ -1838,6 +1895,17 @@ class CollectionsService:
         async with self._database.read_session() as session:
             policy = await self._policy(session, body.media_type, None, rule)
         items = await self._library_items(body.library_id, body.media_type)
+        recommended = recommend_kind(
+            rule,
+            self.capabilities(body.media_type),
+            media_type=body.media_type,
+            order=policy.order_type,
+        )
+        recommendation = (
+            None
+            if recommended is None
+            else KindRecommendation(kind=recommended[0], reason=recommended[1])
+        )
         server = self._provider().server_type
         local = all(
             field_available(condition.field, server, body.media_type, smart=False)
@@ -1860,6 +1928,7 @@ class CollectionsService:
             return CollectionPreview(
                 member_count=min(total, rule.limit or total),
                 members=[by_server_id[i] for i in ids if i in by_server_id],
+                recommendation=recommendation,
             )
         wanted = await self._wanted(
             body.media_type,
@@ -1870,7 +1939,9 @@ class CollectionsService:
             limit=rule.limit,
         )
         return CollectionPreview(
-            member_count=len(wanted), members=[item.title for item in wanted[:20]]
+            member_count=len(wanted),
+            members=[item.title for item in wanted[:20]],
+            recommendation=recommendation,
         )
 
     async def save_preset(self, body: CollectionPresetSave) -> CollectionPresetRead:
@@ -2320,9 +2391,7 @@ class CollectionsService:
         self, media_type: MediaType, name: str, replacement: str
     ) -> StatusResponse:
         """Rename defaults and every member atomically, including unlisted rows."""
-        name, replacement = name.strip(), replacement.strip()
-        if not replacement:
-            raise PublicServiceError(422, "A group needs a name")
+        name, replacement = name.strip(), _group_name(replacement)
         server = self._provider().server_type
         async with (
             self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
@@ -2421,16 +2490,12 @@ class CollectionsService:
         self, media_type: MediaType, name: str, body: CollectionGroupPolicy
     ) -> CollectionGroupPolicy:
         """Save group defaults without replacing explicit collection overrides."""
-        name = name.strip()
-        if not name:
-            raise PublicServiceError(422, "A group needs a name")
+        name = _group_name(name)
         self._validate_display(body, media_type, smart=False)
         if body.generator is not None:
             self._validate_generator(media_type, body.generator)
             if body.generator.smart and body.order_type is CollectionOrder.CUSTOM:
-                raise PublicServiceError(
-                    422, "Smart collections are ordered by Plex; choose a sort"
-                )
+                raise PublicServiceError(422, SMART_CUSTOM_ORDER)
         async with self._database.write_session() as session:
             row = await CollectionRepository(session).group_policy(
                 self._provider().server_type, media_type, name
@@ -2452,16 +2517,30 @@ class CollectionsService:
     async def apply_group_policy(
         self, media_type: MediaType, name: str
     ) -> BulkCollectionOperationResult:
-        """Apply display defaults while preserving sources and rule overrides."""
+        """Apply display defaults while preserving sources and rule overrides.
+
+        A group may mix regular and smart collections; Plex orders smart ones
+        itself, so a custom order skips them.
+        """
+        server = self._provider().server_type
         async with self._database.read_session() as session:
-            ids = [
-                row.id
-                for row in await CollectionRepository(session).list_listed(media_type)
+            repo = CollectionRepository(session)
+            policy = await repo.group_policy(server, media_type, name)
+            rows = [
+                row
+                for row in await repo.list_listed(media_type)
                 if row.collection_group == name
-                and row.server_type is self._provider().server_type
+                and row.server_type is server
                 and row.id is not None
             ]
         result = BulkCollectionOperationResult()
+        custom = policy is not None and policy.order_type is CollectionOrder.CUSTOM
+        ids: list[int] = []
+        for row in rows:
+            if custom and row.kind is CollectionKind.SMART:
+                result.skipped[row.id or 0] = SMART_CUSTOM_ORDER
+            else:
+                ids.append(row.id or 0)
         for collection_id in ids:
             try:
                 async with (
@@ -2571,6 +2650,8 @@ class CollectionsService:
         self, body: BulkCollectionOperation
     ) -> BulkCollectionOperationResult:
         """Use the single-collection workflows, committing each target independently."""
+        if body.operation in {"set_group", "take_over"}:
+            await self._require_group(body.collection_group)
         result = BulkCollectionOperationResult()
         for collection_id in body.collection_ids:
             try:
@@ -2578,6 +2659,18 @@ class CollectionsService:
                     await self.delete(collection_id, body.media_type)
                 elif body.operation == "trigger_sync":
                     await self.sync_rule(collection_id, body.media_type)
+                elif body.operation in {"clear_artwork", "clear_themes"}:
+                    await self._forget_selections(
+                        collection_id,
+                        body.media_type,
+                        artwork=body.operation == "clear_artwork",
+                    )
+                elif body.operation == "take_over":
+                    await self.take_over(
+                        collection_id,
+                        body.media_type,
+                        CollectionTakeOver(group=body.collection_group),
+                    )
                 elif body.operation == "set_monitored":
                     await self.set_collection_monitored(
                         collection_id, body.media_type, bool(body.monitored)
@@ -2663,31 +2756,143 @@ class CollectionsService:
                 row, catalog.get(row.tmdb_collection_id or 0), rule
             ).model_copy(
                 update={
-                    "below_minimum": row.child_count
-                    < resolve_policy(
-                        defaults, groups.get(row.collection_group or ""), rule
-                    ).minimum_items
+                    "below_minimum": row.child_count < policy.minimum_items,
+                    "home_order": policy.home_order,
+                    "has_incorrect_aspect_ratio": any(
+                        has_incorrect_aspect_ratio(
+                            slot.width,
+                            slot.height,
+                            art_type,
+                            defaults.aspect_ratio_tolerance,
+                        )
+                        for art_type in ITEM_ART_TYPES
+                        if (slot := find_art_slot(row, art_type)) is not None
+                    ),
                 }
             )
             for row in rows
             for rule in (rules.get(row.id or 0),)
+            for policy in (
+                resolve_policy(defaults, groups.get(row.collection_group or ""), rule),
+            )
         ]
 
     async def groups(self, media_type: MediaType) -> list[str]:
-        """Return the groups with defaults or collections on the active server."""
+        """Return the groups with defaults or collections on the active server.
+
+        The virtual Unmanaged group comes last whenever a collection has no rule.
+        """
         provider = self._provider()
         async with self._database.read_session() as session:
-            rows = await CollectionRepository(session).list_listed(media_type)
-            policies = await CollectionRepository(session).group_policies(
-                provider.server_type, media_type
-            )
-        return sorted(
+            repo = CollectionRepository(session)
+            rows = [
+                row
+                for row in await repo.list_listed(media_type)
+                if row.server_type is provider.server_type
+            ]
+            policies = await repo.group_policies(provider.server_type, media_type)
+            managed = {rule.collection_id for rule in await repo.rules()}
+        groups = sorted(
             {group.name for group in policies}
-            | {
-                row.collection_group
-                for row in rows
-                if row.server_type is provider.server_type and row.collection_group
-            }
+            | {row.collection_group for row in rows if row.collection_group}
+        )
+        if any(row.id not in managed for row in rows):
+            groups.append(UNMANAGED_GROUP)
+        return groups
+
+    async def _forget_selections(
+        self, collection_id: int, media_type: MediaType, *, artwork: bool
+    ) -> None:
+        """Forget saved art or theme choices; server images and files stay."""
+        async with (
+            self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
+            self._database.write_session() as session,
+        ):
+            row = await self._require(session, collection_id, media_type)
+            if artwork:
+                for art_type in ITEM_ART_TYPES:
+                    clear_art_selection(row, art_type)
+            else:
+                row.youtube_id = None
+                row.youtube_id_source = None
+                row.youtube_title = None
+                row.youtube_duration = None
+            row.updated_at = utc_now()
+            session.add(row)
+        await self._publisher.broadcast(
+            "collection.updated", {"collection_id": collection_id}
+        )
+
+    async def _require_group(self, group: str | None) -> None:
+        """Refuse a managed collection without a group while the setting asks.
+
+        Raises:
+            PublicServiceError: 422 when *group* is empty and groups are required.
+        """
+        if group and group.strip():
+            return
+        async with self._database.read_session() as session:
+            required = (await get_app_settings(session)).collection_require_group
+        if required:
+            raise PublicServiceError(
+                422, "Choose a group: Settings require one for every managed collection"
+            )
+
+    async def take_over(
+        self, collection_id: int, media_type: MediaType, body: CollectionTakeOver
+    ) -> CollectionDetail:
+        """Give a collection made outside Overture a rule that keeps it as it is.
+
+        A regular collection keeps its current members; a Plex smart collection
+        keeps its filter, read back into criteria.
+
+        Raises:
+            PublicServiceError: 409 when it already has a rule, 422 when its
+                Plex filter has terms criteria cannot express.
+        """
+        async with self._database.read_session() as session:
+            repo = CollectionRepository(session)
+            row = await self._require(session, collection_id, media_type)
+            if await repo.rule(collection_id) is not None:
+                raise PublicServiceError(409, "Overture already manages it")
+            members = await repo.members(collection_id)
+        await self._require_group(body.group)
+        if row.kind is CollectionKind.SMART:
+            rule = await self._smart_takeover_rule(row)
+        else:
+            rule = CollectionRuleWrite(criteria=_member_criteria(row, members))
+        async with self._database.write_session() as session:
+            stored = await self._require(session, collection_id, media_type)
+            stored.collection_group = body.group
+            session.add(stored)
+        await self.save_rule(collection_id, media_type, rule)
+        return await self.get_collection(collection_id, media_type)
+
+    async def _smart_takeover_rule(self, row: MediaCollection) -> CollectionRuleWrite:
+        provider = self._provider()
+        if row.server_item_id is None or row.library_id is None:
+            raise PublicServiceError(409, "The collection has no server copy")
+        query = await provider.smart_collection_filter(row.server_item_id)
+        fields = plex_field_keys(row.media_type)
+        names: dict[str, dict[str, str]] = {}
+        for name, _ in urllib.parse.parse_qsl(query):
+            key = name.rstrip("!<>=")
+            field = fields.get(key)
+            if field is None or key in names or plex_field(field).type != "tag":
+                continue
+            choices = await provider.filter_choices(row.library_id, row.media_type, key)
+            names[key] = dict(choices)
+        try:
+            decompiled = decompile_plex_query(
+                query, media_type=row.media_type, names=names
+            )
+        except UnmappableFilterError as exc:
+            raise PublicServiceError(422, str(exc)) from exc
+        return CollectionRuleWrite(
+            criteria=decompiled.criteria,
+            smart=True,
+            order_type=decompiled.order,
+            limit=decompiled.limit,
         )
 
     async def get_collection(

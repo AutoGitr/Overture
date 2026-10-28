@@ -207,6 +207,22 @@ domain.
 </details>
 
 <details>
+<summary><b>No media server</b></summary>
+
+Set `MEDIA_SERVER=none` to curate OvertureDB without a media server; leave
+`MEDIA_SERVER_URL` and `MEDIA_SERVER_API_KEY` unset. Sync, Audit and
+Collections are hidden, the sidebar opens on OvertureDB, and nothing reports
+the server as down.
+
+| Feature                                       | With `TMDB_API_KEY` | Without |
+| --------------------------------------------- | ------------------- | ------- |
+| Browse the catalog, drafts, export and issues | Yes                 | Yes     |
+| Pasted art URLs and YouTube theme search      | Yes                 | Yes     |
+| TMDB art candidates and TMDB-only titles      | Yes                 | No      |
+
+</details>
+
+<details>
 <summary><b>Emby</b></summary>
 
 1. Create a key under **Dashboard -> Advanced -> API Keys**.
@@ -228,9 +244,9 @@ its [settings file](#native-service-settings). Empty values count as unset.
 
 | Variable                  | Required           | Default                   | Description                                                                                                                |
 | ------------------------- | ------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `MEDIA_SERVER`            | Yes                |                           | `plex`, `jellyfin` or `emby`                                                                                               |
-| `MEDIA_SERVER_URL`        | Yes                |                           | Server address with protocol, port and any base path.                                                                      |
-| `MEDIA_SERVER_API_KEY`    | Yes                |                           | Server token or API key                                                                                                    |
+| `MEDIA_SERVER`            | Yes                |                           | `plex`, `jellyfin`, `emby` or `none`                                                                                       |
+| `MEDIA_SERVER_URL`        | Unless `none`      |                           | Server address with protocol, port and any base path.                                                                      |
+| `MEDIA_SERVER_API_KEY`    | Unless `none`      |                           | Server token or API key                                                                                                    |
 | `MEDIA_SERVER_VERIFY_TLS` | No                 | `true`                    | Set to `false` only for a self-signed certificate; keep it on for Plex                                                     |
 | `JELLYFIN_COLLECTIONS_PATH` | No                |                           | Local mount of Jellyfin's collections directory, used to write BoxSet themes                                               |
 | `MDBLIST_API_KEY`         | No                 |                           | Enables dynamic collection membership from MDBList JSON lists; kept on the backend                                         |
@@ -457,7 +473,19 @@ Both kinds share the same sections, in the same order:
 A group's settings in **Collection groups** and the global defaults under
 **Settings > Collection defaults** use the same fields and names. **Default**
 inherits, from the group and then the global default, and names the value it
-inherits.
+inherits. A group can hold regular and smart collections; a custom order applies
+to its regular ones only.
+
+Collections made outside Overture, without criteria, are also listed under the
+virtual **Unmanaged** group. **Take over all** there, or **Take over** in Bulk
+operations, gives each criteria that keep what it holds today: a regular
+collection keeps its members, and a Plex smart collection keeps its filter when
+every Plex filter has an equivalent condition. Otherwise Overture lists the
+filters it cannot read; edit the criteria and choose **Replace the Plex filter
+with these criteria**. Saving criteria on an unmanaged collection also takes it
+over. `Unmanaged` cannot name a group. Turn on **Require a group for every
+managed collection** under **Settings > Collection defaults** to keep every
+managed collection in one.
 
 **Criteria** decide a collection's members. A condition tests item metadata,
 such as Genre is Action or Date added in the last 30 days, or a list: a TMDB
@@ -539,11 +567,15 @@ Assets can use OvertureDB and local-image matching for artwork; theme sources
 are OvertureDB, ThemerrDB and YouTube search. Local-image matching finds a source
 for artwork already on disk. The library checklist in **Assets** and full **Sync**
 includes a single **Collections** checkbox below Movies and Shows. In Sync it
-refreshes collection metadata and memberships for the selected libraries. In
-Assets it fills collection themes in those libraries; collection artwork remains
-available on each collection page. Use **Current sidebar items** from the
-collection list to target its filtered rows. Collections use OvertureDB and
-ThemerrDB in the configured order; YouTube search applies to movies and shows.
+refreshes collection metadata and memberships for the selected libraries; pick a
+collection group under **Collections** to sync only that group. In Assets it
+fills collection themes in those libraries. Switch Assets to **Collections** to
+run art and themes over every collection or the groups you tick, now or on a
+schedule, or use **Current sidebar items** from the collection list to target
+its filtered rows. Collection posters and backgrounds come from OvertureDB, or
+local-image matching against the server's current image, and are uploaded to the
+media server. Collection themes use OvertureDB and ThemerrDB in the configured
+order; YouTube search applies to movies and shows.
 New collection IDs imported by a full Sync also use the catalog theme order of
 an enabled incremental schedule covering their library.
 

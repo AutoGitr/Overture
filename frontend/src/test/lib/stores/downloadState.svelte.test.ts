@@ -28,6 +28,7 @@ function itemEvent(
       status,
       target: {
         target_type: "item",
+        source: null,
         media_item_id: mediaItemId,
         title,
         job_type: jobType,
@@ -68,6 +69,7 @@ describe("downloadState", () => {
   it("announces a collection theme once its download completes", () => {
     const target = {
       target_type: "collection_theme",
+      source: null,
       collection_id: 1,
       title: "Star Wars",
     } as const;
@@ -137,6 +139,7 @@ describe("downloadState", () => {
         status: "pending",
         target: {
           target_type: "collection_theme",
+          source: null,
           collection_id: 1,
           title: "Movies",
         },
@@ -269,6 +272,7 @@ describe("downloadState", () => {
         status: "failed",
         target: {
           target_type: "collection_theme",
+          source: null,
           collection_id: 1,
           title: "Saga",
         },

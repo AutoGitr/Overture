@@ -5,7 +5,7 @@ import type {
   CollectionSourceInput,
   FilterGroupInput,
 } from "../../../generated/rest/types.gen";
-import CollectionGroupSettings from "../../../lib/components/CollectionGroupSettings.svelte";
+import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
 import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
 import CollectionSetEditor from "../../../lib/components/CollectionSetEditor.svelte";
 import GlobalCollectionDefaults from "../../../lib/components/GlobalCollectionDefaults.svelte";
@@ -421,7 +421,7 @@ describe("collection criteria", () => {
         return Response.json({ created: [4], removed: [], synced: 0, errors: {} });
       },
     });
-    renderWithQueryClient(CollectionGroupSettings, {
+    renderWithQueryClient(GroupSettingsHarness, {
       group: "Genres",
       mediaType: "movie",
       libraries: [{ id: "movies", title: "Movies", count: 10 }],

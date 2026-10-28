@@ -34,26 +34,29 @@ export class CollectionActions {
 
   get contributionUrl() {
     const coll = this.current();
-    if (
-      !coll.tmdb_collection_id ||
-      !coll.youtube_id ||
-      !this.datasetQuery.data?.repo_url ||
-      coll.youtube_id === coll.youtube_id_overturedb ||
-      coll.youtube_id === coll.youtube_id_themerrdb
-    )
-      return null;
-    return buildContributionIssueUrl(this.datasetQuery.data.repo_url, {
+    const repoUrl = this.datasetQuery.data?.repo_url;
+    if (!coll.tmdb_collection_id || !repoUrl) return null;
+    // A theme the catalog already has is not a contribution.
+    const theme =
+      coll.youtube_id &&
+      coll.youtube_id !== coll.youtube_id_overturedb &&
+      coll.youtube_id !== coll.youtube_id_themerrdb
+        ? coll.youtube_id
+        : null;
+    if (!theme && !coll.poster_url && !coll.background_url) return null;
+    return buildContributionIssueUrl(repoUrl, {
       media_type: "collection",
       title: coll.title,
       tmdb_id: coll.tmdb_collection_id,
       tvdb_id: null,
       imdb_id: null,
       year: null,
-      poster_url: null,
-      background_url: null,
+      poster_url: coll.poster_url,
+      background_url: coll.background_url,
       seasons: null,
-      youtube_id_overturedb: coll.youtube_id,
+      youtube_id_overturedb: theme,
       youtube_id_themerrdb: null,
+      no_theme: false,
     });
   }
 

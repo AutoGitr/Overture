@@ -14,6 +14,11 @@ class MediaServerHealth:
     #: What the person running Overture can do about it, when it is down.
     message: str = ""
 
+    @property
+    def down(self) -> bool:
+        """Whether the server could not be reached or refused Overture."""
+        return self.state in {MediaServerState.UNREACHABLE, MediaServerState.REJECTED}
+
 
 class MediaServerHealthTracker:
     """Track request outcomes and tell a listener when the state changes."""

@@ -60,7 +60,7 @@
     <BackupList />
   </CardColumn>
   {#snippet footer()}
-    <button class="btn btn-ghost" onclick={() => uiState.closePopup()}>Close</button>
+    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Close</button>
   {/snippet}
 </PopupShell>
 

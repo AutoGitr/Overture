@@ -47,6 +47,9 @@ describe("uiState persisted filters", () => {
         metadataIssues: { flags: ["no_tmdb_id", "no_poster", 7, null], mode: "invalid" },
         resolution: { artType: "icon", min: -20, max: "2000" },
         themeLength: { min: 30, max: Number.POSITIVE_INFINITY },
+        // Keys a removed filter left behind drop out.
+        collectionCard: "smart",
+        tmdbCollectionSearch: "8091",
       }),
     );
 

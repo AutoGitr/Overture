@@ -15,6 +15,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...domain import (
     AspectRatioTolerance,
+    AutoAdvance,
     AutoUnmonitor,
     CollectionFiltering,
     CollectionMode,
@@ -71,6 +72,8 @@ class AppSettingsBase(SQLModel):
     collection_sync_enabled: bool = True
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
+    #: Every managed collection must belong to a group.
+    collection_require_group: bool = False
     #: The country whose charts and streaming services TMDB reports.
     tmdb_region: str = Field(default="US", min_length=2, max_length=2)
     radarr_root_folder: str = Field(default="", max_length=500)
@@ -97,7 +100,9 @@ class AppSettingsBase(SQLModel):
     tmdb_language_filter: TmdbLanguageFilter = Field(
         default=TmdbLanguageFilter.EN_NULL, sa_type=enum_type(TmdbLanguageFilter)
     )
-    auto_advance: bool = False
+    auto_advance: AutoAdvance = Field(
+        default=AutoAdvance.OFF, sa_type=enum_type(AutoAdvance)
+    )
     auto_advance_skip_completed: bool = True
     auto_unmonitor: AutoUnmonitor = Field(
         default=AutoUnmonitor.OFF, sa_type=enum_type(AutoUnmonitor)

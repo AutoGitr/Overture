@@ -1,10 +1,7 @@
 # Agent guide
 
-Write production-quality code: correct, secure, fully typed, tested, minimal and
-idiomatic for the versions pinned here. Follow the established best practice of
-each framework and library, using the skills below; where this guide is silent,
-that practice applies. Leave every file you touch at least as clean as you found
-it.
+Write correct, secure, fully typed, tested and minimal code, following each
+framework's best practice through the skills below.
 
 Setup, commands and workflow are in [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 This file adds the rules for agents.
@@ -46,48 +43,25 @@ Read the matching skill before working in its area and follow it.
 | End-to-end tests and browser checks | `playwright-best-practices`, `playwright-cli` |
 | Failed end-to-end runs | `playwright-trace` |
 
-Run `npx` commands that skills show through Bun (`bunx playwright cli`,
-`bunx @sveltejs/mcp svelte-autofixer <file>`).
+Run `npx` commands from skills as `bunx`.
 
-`.agents/skills.json` lists every skill and subagent with its source, and
-`uv run python -m scripts.sync_skills` installs them into `.agents/skills/`,
-`.claude/skills/` and `.claude/agents/`:
-
-- Skills shipped inside dependencies follow the lockfiles; run the sync after a
-  dependency update.
-- GitHub skills are pinned to a commit; `--update` moves them to the latest one.
-- `svelte-query` is Overture's own skill and is edited in `.agents/skills/`.
-  Every other installed copy is generated; never edit it.
-- `--check` fails when a copy differs from its source or a skill is not listed.
+`uv run python -m scripts.sync_skills` installs the skills listed in
+`.agents/skills.json`; only `.agents/skills/svelte-query` is edited by hand.
 
 ## Engineering standards
 
-- **Root cause first.** Fix problems where they originate. No wrappers, defensive
-  fallbacks or patch layers around code that should be corrected.
-- **Minimal code.** No unnecessary abstractions, dead code, redundant helpers or
-  boilerplate. Prefer deleting code to adding it; an abstraction needs more than
-  one real user.
-- **One source of truth.** Define every rule, constant and mapping once and
-  import it. Business rules live in the backend; the frontend uses the generated
-  contracts and leaves validation to the API.
+- **Root cause first.** Fix problems where they originate; no wrappers or
+  defensive fallbacks around code that should be corrected.
+- **Minimal code.** No dead code, redundant helpers or abstractions with a
+  single user. Prefer deleting code to adding it.
+- **One source of truth.** Define every rule, constant and mapping once. Business
+  rules live in the backend; the frontend uses the generated contracts.
 - **Secure by default.** Remote fetches go through the private-address guards
-  (`src/overture/utils/ssrf.py` and the image fetch helpers), errors and logs
-  pass through `sanitise_error`, and credentials never reach URLs, responses or
-  the browser.
-- **Tested.** Every behaviour change comes with tests at the level where the
-  behaviour lives. Tests are deterministic and never touch the real network or
-  DNS. Fix a failing test by fixing the code or updating it to the new intent,
-  never by weakening it.
-- **Comments explain why**: an invariant, a security boundary or an upstream
-  quirk. Never narrate the code or its history. Docstrings are one line unless
-  a caller needs more.
-- **Suppressions.** `# noqa`, `# type: ignore` and `# pyright: ignore` only for an
-  external constraint that cannot be typed or refactored away. Name the exact
-  code and say why in a comment. File-category exemptions belong in
-  `per-file-ignores` in `pyproject.toml`.
-- **Pure ASCII source.** Code and config files contain no curly quotes, en or em
-  dashes or look-alike Unicode. Write non-ASCII test data as escapes
-  (`"\u00e9"`), and non-ASCII markup as entities (`&middot;`).
+  (`utils/ssrf.py`, image fetch helpers), errors and logs through
+  `sanitise_error`; credentials never reach URLs, responses or the browser.
+- **Tested.** Tests are deterministic and never touch the real network or DNS.
+- **Comments explain why**, never narrate. Docstrings are one line unless a
+  caller needs more. Suppressions name the exact code and say why.
 
 ## Backend
 
@@ -117,42 +91,16 @@ Run `npx` commands that skills show through Bun (`bunx playwright cli`,
 - Work over many rows commits per item or per bounded chunk (`CHUNK_SIZE`), so
   one failure rolls back only itself and the rest is counted.
 
-### Python
-
-- Pyright strict mode covers `src/` and `tests/`; `scripts/` and `packaging/`
-  are linted by Ruff only.
-- Use built-in generics, `X | None`, PEP 695 generics (`def f[T]()`,
-  `type Alias = ...`) and unparenthesised multi-exception clauses where there is
-  no `as` (`except TypeError, ValueError:`).
-- Module-level imports are `lazy` (Ruff enforces it), so there are no
-  `TYPE_CHECKING` blocks. Annotations are deferred natively (PEP 649); never add
-  `from __future__ import annotations`. Use `sentinel("NAME")` for sentinel
-  values and `re.prefixmatch`/`re.fullmatch` rather than `re.match`. Text I/O is
-  UTF-8 by default; pass `encoding=` only for anything else.
-- Choose data structures for their access pattern: `set`/`dict` for membership,
-  `deque` for queues (never `list.pop(0)`), `tuple`/`frozenset` for immutable
-  values and keys, `frozendict` for constant mappings. Prefer comprehensions to
-  append loops.
-- Model data by role: `StrictBaseModel` (`src/overture/schemas/base.py`) for API
-  contracts, `@dataclass(slots=True, frozen=True)` for internal values,
-  `NamedTuple` for small records, and closed unions over open protocols when
-  the set of cases is known.
-
 ## Frontend
 
 ### Layout
 
-- `src/generated/` holds the contracts generated from the backend; never edit
-  it. Talk to the backend only through its REST client and query helpers.
-- `lib/rest/` holds the query client and its cache policy (`queryClient.ts`) and
-  the cache helpers (`cache.ts`); `lib/realtime/` applies WebSocket events to the
-  cache and to stores.
-- `lib/router/` holds the routes and their pages; `lib/components/`,
-  `lib/popups/` (opened through `popups/registry.ts`) and feature folders such as
-  `components/operations/` hold the views.
-- `lib/stores/` holds client state and realtime projections; `lib/utils/` holds
-  pure helpers and `.svelte.ts` classes.
-- `src/test/` mirrors `src/`, with shared helpers in `src/test/helpers/`.
+- `src/generated/` holds the generated contracts; never edit it. Talk to the
+  backend only through the REST client and query helpers in `lib/rest/`;
+  `lib/realtime/` applies WebSocket events to the cache and stores.
+- Views live in `lib/router/` (pages), `lib/components/` and `lib/popups/`
+  (opened through `popups/registry.ts`); client state in `lib/stores/`; pure
+  helpers and `.svelte.ts` classes in `lib/utils/`. `src/test/` mirrors `src/`.
 
 ### State
 
@@ -170,22 +118,6 @@ Run `npx` commands that skills show through Bun (`bunx playwright cli`,
 - Listen to the window or document with `<svelte:window>` and
   `<svelte:document>`, never with `addEventListener` in an effect or `onMount`.
 
-### Components
-
-- **Split by responsibility**, not by how often a component is used. A part
-  becomes its own component when it has its own state or queries, needs a
-  `{#key}` boundary to start over, loads lazily as a route or popup, or is worth
-  testing alone. Fold a small stateless component that only passes props on
-  into its parent, or into a snippet.
-- Move form and business logic into a `.svelte.ts` class or a `.ts` module,
-  where it can be tested without rendering, and pass that object to the view
-  instead of long lists of callbacks.
-- Props are typed with `$props()`; callback props are named `on...`. Use
-  `$bindable` only for a form control's value. Keep a component generic
-  (`generics="T extends string"`) rather than widening a union to `string`.
-- Use the `class={[...]}` and `class={{ ... }}` forms rather than `class:`
-  directives.
-
 ### Styles
 
 - **Styles are scoped to the component that renders the markup.** Share a look
@@ -199,24 +131,13 @@ Run `npx` commands that skills show through Bun (`bunx playwright cli`,
   rule, and never repeat a rule `app.css` already has.
 - Keep a responsive override next to the rule it changes.
 
-### TypeScript
-
-- No `as` casts or `!` assertions where the types can say it: Svelte types
-  `event.currentTarget` in handlers, generic components keep unions typed, and
-  type guards or lookups narrow unknown values. A cast that bridges an untyped
-  browser or library API says so in a comment.
-
 ## Tests
 
-- Backend tests use the real services against the test database from
-  `tests/conftest.py`; replace only the network and the collaborators a test is
-  not about.
-- Run frontend unit tests with `bun run test:unit`. Vitest runs on Node where
-  it is installed, as in CI; never force Bun's runtime with `bun --bun`, since
-  jsdom then fails to start in the Linux fork workers.
-- Test a component through its props, and render the page or popup when the
-  behaviour is how the parts work together. Find elements by role or label,
-  never by class or generated id.
+- Backend tests use the real services and the test database; replace only the
+  network and collaborators a test is not about.
+- Run frontend unit tests with `bun run test:unit`; never force `bun --bun`
+  (jsdom fails in the fork workers).
+- Test components through their props; find elements by role or label.
 - Run `bun run test:e2e` after changing layout or styles; it checks desktop and
   mobile.
 
@@ -224,44 +145,31 @@ Run `npx` commands that skills show through Bun (`bunx playwright cli`,
 
 Every change that needs a migration must ship with one:
 
-- **Schema changes:** any model change. Autogenerate against a database at head,
-  then review it.
-- **Data changes:** any change to how stored values are written or read (a new
-  format, a renamed enum value, moved or merged data) converts the existing
-  rows, including copies held elsewhere, such as the JSON in
-  `saved_schedules.payload` and `job_results.payload`. Never leave old rows for
-  runtime code to tolerate.
-- Convert with the rule the application uses (for example the vendored
-  contract), so migrated rows equal what the app now writes.
+- **Schema changes:** any model change; autogenerate at head, then review.
+- **Data changes:** a new stored format converts existing rows, including JSON
+  copies in `saved_schedules.payload` and `job_results.payload`, with the rule
+  the app uses, so migrated rows equal what the app now writes.
 - Chain from the current head and implement `downgrade()`, or explain in it why
   data stays as it is. Add a test to `tests/test_database/test_migrations.py`
   that seeds the previous revision.
 
 ## Environment
 
-- Always `uv run ...`; never activate `.venv`, run bare `python` or use `pip`.
-  Change dependencies with `uv add` and `uv remove`.
-- Bun only; never `npm`, `npx`, `yarn` or `pnpm`.
-- Leave staging and commits to the user unless asked, and never push or
-  otherwise publish to a remote.
-- End every finished task with a commit message for it in the final reply, in
-  the Conventional Commits format of
-  [CONTRIBUTING.md](.github/CONTRIBUTING.md), ready to pass to `git commit -F -`.
+- Always `uv run ...` (never `.venv`, bare `python` or `pip`); Bun only (never
+  `npm`, `npx`, `yarn` or `pnpm`).
+- Leave staging and commits to the user unless asked; never push.
+- End every finished task with a Conventional Commits message
+  ([CONTRIBUTING.md](.github/CONTRIBUTING.md)) in the final reply.
 
 ## Changelog
 
 `.github/CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and becomes the release notes.
 
-- A change users notice adds an entry under `## [Unreleased]` in the same
-  commit: behaviour, settings, API, database, packaging, security fixes and
-  dependency updates that fix something. Skip refactors, tests, CI and
-  contributor docs.
-- File it under `### Added`, `Changed`, `Deprecated`, `Removed`, `Fixed` or
-  `Security`, and write one line for the person running Overture: what changed
-  for them and what they must do, not how it was implemented.
-- Never edit released sections; `scripts/release.sh` moves `[Unreleased]`
-  under the new version.
+- A change users notice (behaviour, settings, API, database, packaging,
+  security) adds one line under `## [Unreleased]` in the right Keep a Changelog
+  heading, written for the person running Overture. Skip refactors, tests and
+  CI. Never edit released sections.
 
 ## Before finishing
 

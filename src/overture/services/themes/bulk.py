@@ -45,7 +45,7 @@ lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..local_assets.service import LocalAssets
-lazy from ..public_dataset.index import PublicDatasetIndex
+lazy from ..public_dataset.index import NO_THEME, PublicDatasetIndex
 lazy from .collection_bulk import plan_collection_themes, run_collection_themes
 lazy from .youtube_resolver import YouTubeResolver
 
@@ -347,14 +347,13 @@ async def plan_bulk_themes(
     """
     dataset_only = all(source.catalog for source in params.source_order)
     plan = AssetPlan[ThemeTarget]()
-    if params.collection_ids is not None:
+    if params.collection_scope:
         return plan
     async with aclosing(scope_chunks(params, database=database, chunk=chunk)) as chunks:
         async for session, items in chunks:
-            index = (
-                await PublicDatasetIndex.build(session, items, app_config=app_config)
-                if dataset_only
-                else None
+            # Every run reads the catalog: a title it flags has no theme to find.
+            index = await PublicDatasetIndex.build(
+                session, items, app_config=app_config
             )
             failed_themes = (
                 await DownloadJobRepository(session).failed_themes_by_item(
@@ -364,6 +363,9 @@ async def plan_bulk_themes(
                 else {}
             )
             for item in items:
+                if index.has_no_theme(item):
+                    plan.decide((JobOutcome.SKIPPED, NO_THEME))
+                    continue
                 decided = planned_outcome(
                     params,
                     saved=item.youtube_id,
@@ -371,7 +373,7 @@ async def plan_bulk_themes(
                     and item.folder_path is not None,
                     last_checked=item.last_matched_at,
                     catalog=None
-                    if index is None
+                    if not dataset_only
                     else index.theme(
                         item,
                         params.source_order,

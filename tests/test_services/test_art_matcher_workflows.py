@@ -1,6 +1,7 @@
 """Art matcher filtering, caching, and ordering tests."""
 
 lazy import asyncio
+lazy from pathlib import Path
 
 lazy import httpx2
 lazy import pytest
@@ -9,6 +10,7 @@ lazy from overture.config import Settings
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, AspectRatioTolerance, TmdbLanguageFilter
 lazy from overture.integrations.proxy import ProxyClientManager
+lazy from overture.runtime import build_runtime
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.services.art.candidates import ArtCandidates, CandidatePolicy
 lazy from overture.services.art.matcher import ArtMatcher, ArtMatcherCache
@@ -88,6 +90,7 @@ async def test_match_candidates_skips_images_narrower_than_the_reference(
         cache=cache,
         app_config=app_config,
         database=database,
+        compare_concurrency=2,
     ).match_candidates(
         "reference",
         [
@@ -268,3 +271,45 @@ async def test_cached_url_phash_keeps_waiters_serialized_after_a_failure(
     assert await asyncio.gather(retry, third) == ["abc123", "abc123"]
 
     assert peak == 1
+
+
+async def test_one_hash_worker_compares_two_candidates_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+    app_config: Settings,
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    runtime = build_runtime(
+        app_settings=app_config.model_copy(update={"PHASH_WORKERS": 1}),
+        database=database,
+        config_dir=tmp_path,
+    )
+    running = 0
+    peak = 0
+    two_running = asyncio.Event()
+    release = asyncio.Event()
+
+    class SlowCache:
+        async def cached_url_phash(self, _url: str) -> str | None:
+            nonlocal running, peak
+            running += 1
+            peak = max(peak, running)
+            if running == 2:
+                two_running.set()
+            await release.wait()
+            running -= 1
+            return None
+
+    monkeypatch.setattr(runtime.art_matcher, "_cache", SlowCache())
+    comparison = asyncio.create_task(
+        runtime.art_matcher.match_candidates(
+            "reference",
+            [ArtCandidate(url=f"https://ok.test/{n}.jpg") for n in range(5)],
+        )
+    )
+    await asyncio.wait_for(two_running.wait(), timeout=5)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert peak == 2
+    release.set()
+    assert (await comparison).failed == 5

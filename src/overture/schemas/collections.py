@@ -13,6 +13,8 @@ lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.public_dataset import PublicDatasetCollection
 lazy from ..domain import (
+    SMART_CUSTOM_ORDER,
+    ArtSource,
     ArtType,
     AssetStatus,
     CollectionFiltering,
@@ -32,6 +34,7 @@ lazy from ..domain import (
 )
 lazy from ..integrations.mdblist import mdblist_identifier
 lazy from ..services.collections.fields import FIELDS, OPERATORS
+lazy from ..utils.art_urls import art_refusals, selected_art_source
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
     MemberTagFormat,
@@ -43,7 +46,7 @@ lazy from ..utils.collection_formats import (
 lazy from .base import StrictBaseModel
 lazy from .common import StatusResponse
 lazy from .library import MediaItemRead
-lazy from .validators import CronExpression, YouTubeId
+lazy from .validators import CronExpression, GroupName, YouTubeId
 
 
 class ArrTagRead(StrictBaseModel):
@@ -272,6 +275,14 @@ class CollectionArtwork(StrictBaseModel):
 
     poster_url: str | None = None
     background_url: str | None = None
+    poster_source: ArtSource | None = None
+    background_source: ArtSource | None = None
+    poster_width: int | None = None
+    poster_height: int | None = None
+    background_width: int | None = None
+    background_height: int | None = None
+    #: Why OvertureDB would refuse the selected art, slot by slot.
+    contribution_warnings: list[str] = Field(default_factory=list[str])
     poster_status: AssetStatus = AssetStatus.MISSING
     background_status: AssetStatus = AssetStatus.MISSING
     art_status: AssetStatus = AssetStatus.MISSING
@@ -280,9 +291,18 @@ class CollectionArtwork(StrictBaseModel):
 def collection_artwork(row: MediaCollection) -> CollectionArtwork:
     """Project the collection's art slots without exposing server URLs."""
     completion = collection_art_completion(row)
+    poster = read_art_slot(row, ArtType.POSTER)
+    background = read_art_slot(row, ArtType.BACKGROUND)
     return CollectionArtwork(
-        poster_url=read_art_slot(row, ArtType.POSTER).url,
-        background_url=read_art_slot(row, ArtType.BACKGROUND).url,
+        poster_url=poster.url,
+        background_url=background.url,
+        poster_source=selected_art_source(poster.url),
+        background_source=selected_art_source(background.url),
+        poster_width=poster.width,
+        poster_height=poster.height,
+        background_width=background.width,
+        background_height=background.height,
+        contribution_warnings=art_refusals(poster.url, background.url),
         poster_status=completion.poster_status,
         background_status=completion.background_status,
         art_status=completion.art_status,
@@ -341,6 +361,12 @@ class CollectionRead(CollectionArtwork):
     public_dataset_complete: bool = False
     #: The catalog has a ThemerrDB theme for it.
     public_dataset_themerrdb: bool = False
+    #: The poster or background is outside the aspect ratio tolerance.
+    has_incorrect_aspect_ratio: bool = False
+    #: OvertureDB says the collection has no theme music, so none is missing.
+    catalog_no_theme: bool = False
+    #: Where Plex's Home lists it among promoted collections, lowest first.
+    home_order: int | None = None
 
 
 class CollectionDetail(CollectionRead):
@@ -456,12 +482,17 @@ def collection_read(
         youtube_title=row.youtube_title,
         youtube_duration=row.youtube_duration,
         theme_duration=row.theme_file_duration or row.youtube_duration,
-        theme_status=collection_theme_status(
+        theme_status=AssetStatus.COMPLETE
+        if catalog and catalog.no_theme
+        else collection_theme_status(
             server_has_theme=has_theme, youtube_id=row.youtube_id
         ),
+        catalog_no_theme=bool(catalog and catalog.no_theme),
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
-        public_dataset_complete=bool(catalog and catalog.youtube_id_overturedb),
+        public_dataset_complete=bool(
+            catalog and (catalog.youtube_id_overturedb or catalog.no_theme)
+        ),
         public_dataset_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
 
@@ -551,7 +582,7 @@ class CollectionOptions(StrictBaseModel):
     summary_format: SummaryFormat | None = None
     sort_title: Annotated[str, Field(max_length=200)] | None = None
     sort_title_format: SortTitleFormat | None = None
-    collection_group: Annotated[str, Field(max_length=200)] | None = None
+    collection_group: GroupName | None = None
     tmdb_collection_id: Annotated[int, Field(gt=0)] | None = None
     collection_mode: CollectionMode | None = None
     order_type: CollectionOrder = CollectionOrder.RELEASE_ASC
@@ -620,7 +651,7 @@ class CollectionRuleWrite(CollectionPolicyBase):
         if self.criteria.is_empty():
             raise ValueError("Add at least one condition")
         if self.smart and self.order_type is CollectionOrder.CUSTOM:
-            raise ValueError("Smart collections are ordered by Plex; choose a sort")
+            raise ValueError(SMART_CUSTOM_ORDER)
         return self
 
 
@@ -727,10 +758,16 @@ class CollectionGroupPolicy(CollectionPolicyBase):
     generator: CollectionGenerator | None = None
 
 
+class CollectionTakeOver(StrictBaseModel):
+    """The group a collection joins when Overture takes it over."""
+
+    group: GroupName | None = None
+
+
 class CollectionGroupRename(StrictBaseModel):
     """A replacement group name, scoped by the request."""
 
-    name: Annotated[str, Field(min_length=1, max_length=200)]
+    name: Annotated[GroupName, Field(min_length=1)]
 
 
 class CollectionGroupDelete(StrictBaseModel):
@@ -806,12 +843,21 @@ class CollectionArrOptions(StrictBaseModel):
     quality_profiles: list[ArrTagRead]
 
 
+class KindRecommendation(StrictBaseModel):
+    """The collection kind that suits the criteria, and why."""
+
+    kind: CollectionKind
+    reason: str
+
+
 class CollectionPreview(StrictBaseModel):
     """What a collection's criteria select now, before it is saved."""
 
     member_count: int
     #: The first members, in the collection's order.
     members: list[str]
+    #: Only on servers with smart collections.
+    recommendation: KindRecommendation | None = None
 
 
 class CollectionPreviewRequest(StrictBaseModel):
@@ -948,6 +994,9 @@ class BulkCollectionOperation(StrictBaseModel):
         "set_group",
         "apply_sort_title_format",
         "trigger_sync",
+        "take_over",
+        "clear_artwork",
+        "clear_themes",
         "delete",
     ]
     collection_mode: CollectionMode | None = None
@@ -956,7 +1005,7 @@ class BulkCollectionOperation(StrictBaseModel):
     visible_library: bool | None = None
     order_type: CollectionOrder | None = None
     monitored: bool | None = None
-    collection_group: Annotated[str, Field(max_length=200)] | None = None
+    collection_group: GroupName | None = None
     sort_title_format: SortTitleFormat | None = None
 
     @model_validator(mode="after")
@@ -986,3 +1035,5 @@ class BulkCollectionOperationResult(StrictBaseModel):
 
     collection_ids: list[int] = Field(default_factory=list[int])
     errors: dict[int, str] = Field(default_factory=dict[int, str])
+    #: Collections left as they were, and why.
+    skipped: dict[int, str] = Field(default_factory=dict[int, str])

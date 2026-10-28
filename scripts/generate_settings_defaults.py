@@ -11,14 +11,19 @@ lazy from overture.domain import (
     MATCH_THRESHOLD_DEFAULT,
     MATCH_THRESHOLD_MAX,
     PERFECT_MATCH_ONLY,
+    UNMANAGED_GROUP,
     ArtBulkSource,
     ArtSource,
     ArtType,
+    AspectRatioTolerance,
     ServerAsset,
     ServerType,
     ThemeBulkSource,
 )
-lazy from overture.services.public_dataset.schema.contract import ART_SOURCE_LABELS
+lazy from overture.services.public_dataset.schema.contract import (
+    ART_SOURCE_LABELS,
+    ASPECT_RATIOS,
+)
 lazy from overture.utils.http_security import (
     CSRF_COOKIE,
     CSRF_HEADER,
@@ -72,6 +77,16 @@ def render_settings_defaults() -> str:
             ),
         ),
         ("ITEM_ART_TYPES", list(ITEM_ART_TYPES)),
+        ("UNMANAGED_GROUP", UNMANAGED_GROUP),
+        ("ASPECT_RATIOS", dict(ASPECT_RATIOS)),
+        (
+            "ASPECT_TOLERANCES",
+            {
+                tolerance.value: tolerance.fraction
+                for tolerance in AspectRatioTolerance
+                if tolerance.fraction is not None
+            },
+        ),
         ("SERVER_ASSETS", [asset.value for asset in ServerAsset]),
         (
             "SEASON_ART_TYPES",

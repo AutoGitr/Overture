@@ -12,6 +12,7 @@ lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.session import Database
+lazy from ...domain import CatalogMediaType
 lazy from ...jobs.kinds import JobKind
 lazy from ...jobs.lifecycle import ManagedJobLifecycle
 lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, log_entry
@@ -38,7 +39,12 @@ lazy from ..schedule_store import (
 lazy from ..scheduler import SchedulerService
 lazy from . import catalog, staging
 lazy from .browse import CatalogBrowser
-lazy from .lookup import get_record_for_item, get_sources_for_item
+lazy from .lookup import (
+    get_record_for_collection,
+    get_record_for_entry,
+    get_record_for_item,
+    get_sources_for_item,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -268,3 +274,17 @@ class PublicDatasetService:
     async def get_record_for_item(self, item_id: int) -> PublicDatasetRecord:
         """Look up public dataset record for an item."""
         return await get_record_for_item(item_id, database=self._database)
+
+    async def get_record_for_collection(
+        self, collection_id: int
+    ) -> PublicDatasetRecord:
+        """Look up the catalog record of a library collection."""
+        return await get_record_for_collection(collection_id, database=self._database)
+
+    async def get_record_for_entry(
+        self, media_type: CatalogMediaType, entry_key: str
+    ) -> PublicDatasetRecord:
+        """Look up the catalog record an entry name identifies."""
+        return await get_record_for_entry(
+            media_type, entry_key, database=self._database
+        )

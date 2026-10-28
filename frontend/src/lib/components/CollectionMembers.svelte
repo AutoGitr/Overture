@@ -56,7 +56,7 @@
           ? "Add, remove or drag members into place. The next sync sends them."
           : "Add or remove members. The next sync sends them."}
     >
-      <span class="badge" aria-label="Resolved member count"
+      <span class="badge badge-muted" aria-label="Resolved member count"
         >{editor.collection.child_count} members</span
       >
       <div class="member-toolbar">

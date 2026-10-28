@@ -804,6 +804,17 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
+/* Headings come in three levels, defined here only:
+   section (.section-heading), subsection (.form-label), group (.caps-label). */
+.section-heading {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 2px solid var(--section-accent, var(--accent));
+  font-size: var(--text-lg);
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
 .form-label {
   font-size: var(--text-sm);
   font-weight: 550;

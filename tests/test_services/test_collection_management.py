@@ -7,16 +7,18 @@ lazy from typing import ClassVar, override
 lazy from unittest.mock import AsyncMock
 
 lazy import pytest
-lazy from pydantic import SecretStr
+lazy from pydantic import SecretStr, ValidationError
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.art_slots import ArtFileFacts, record_art_file, select_art
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    SMART_CUSTOM_ORDER,
+    UNMANAGED_GROUP,
     ArtType,
     CollectionFiltering,
     CollectionKind,
@@ -60,6 +62,7 @@ lazy from overture.schemas.collections import (
     CollectionGenerator,
     CollectionGroupDelete,
     CollectionGroupPolicy,
+    CollectionGroupRename,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionPresetCollection,
@@ -69,6 +72,7 @@ lazy from overture.schemas.collections import (
     CollectionRuleWrite,
     CollectionSetPreview,
     CollectionSource,
+    CollectionTakeOver,
     CustomSetValue,
     FieldCondition,
     FilterGroup,
@@ -87,6 +91,7 @@ lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.collections.criteria import CriteriaContext, evaluate
 lazy from overture.services.collections.fields import FIELDS
+lazy from overture.services.collections.recommend import recommend_kind
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import source_label
 lazy from overture.services.scheduler import SchedulerService
@@ -631,7 +636,7 @@ async def test_group_delete_failure_preserves_group_for_retry(
         MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="both")
     )
     assert identity in result.errors
-    assert await manager.service.groups(MediaType.MOVIE) == ["Weekend"]
+    assert await manager.service.groups(MediaType.MOVIE) == ["Weekend", UNMANAGED_GROUP]
 
 
 async def test_group_rename_preserves_defaults_and_rejects_collisions(
@@ -1179,7 +1184,7 @@ async def test_custom_group_round_trips_and_joins_group_choices(
     )
     assert detail.collection_group == "Weekend"
     groups = await manager.service.groups(MediaType.MOVIE)
-    assert set(groups) == {"Weekend"}
+    assert groups == ["Weekend", UNMANAGED_GROUP]
     listed = await manager.service.list_collections(MediaType.MOVIE)
     assert listed[0].collection_group == "Weekend"
     detail = await manager.service.update(
@@ -2845,3 +2850,227 @@ def test_tmdb_facts_are_tested_like_other_metadata() -> None:
         )
         assert evaluate([item], criteria, context) == [item], tested
     assert FIELDS[FilterField.VERSIONS].plex is None
+
+
+async def test_unmanaged_group_lists_only_while_a_collection_has_no_rule(
+    manager: Manager,
+) -> None:
+    assert await manager.service.groups(MediaType.MOVIE) == []
+    identity = await create(manager)
+    assert await manager.service.groups(MediaType.MOVIE) == [UNMANAGED_GROUP]
+
+    detail = await manager.service.take_over(
+        identity, MediaType.MOVIE, CollectionTakeOver(group="Sagas")
+    )
+
+    assert await manager.service.groups(MediaType.MOVIE) == ["Sagas"]
+    assert detail.collection_group == "Sagas"
+    assert detail.rule is not None
+    assert detail.rule.criteria == sources(
+        TmdbItemSource(tmdb_ids=[11 + index for index in range(len(manager.ids))])
+    )
+    assert [member.id for member in detail.members] == manager.ids
+    with pytest.raises(PublicServiceError, match="already manages"):
+        await manager.service.take_over(identity, MediaType.MOVIE, CollectionTakeOver())
+
+
+async def test_the_unmanaged_name_is_reserved(manager: Manager) -> None:
+    identity = await create(manager)
+    await manager.service.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    with pytest.raises(PublicServiceError, match="reserved"):
+        await manager.service.save_group_policy(
+            MediaType.MOVIE, "unmanaged", CollectionGroupPolicy()
+        )
+    with pytest.raises(PublicServiceError, match="reserved"):
+        await manager.service.rename_group(MediaType.MOVIE, "Weekend", " UNMANAGED ")
+    for invalid in (
+        lambda: CollectionOptions(title="Saga", collection_group="Unmanaged"),
+        lambda: CollectionGroupRename(name="unmanaged"),
+        lambda: CollectionTakeOver(group="Unmanaged"),
+    ):
+        with pytest.raises(ValidationError, match="reserved"):
+            invalid()
+
+
+async def test_group_apply_skips_smart_members_under_a_custom_order(
+    manager: Manager,
+) -> None:
+    regular, smart = [
+        await manager.service.create(
+            CollectionCreate(
+                title=title,
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                collection_group="Mixed",
+                rule=CollectionRuleWrite(
+                    criteria=where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
+                    smart=title == "Smart",
+                ),
+            )
+        )
+        for title in ("Regular", "Smart")
+    ]
+    await manager.service.save_group_policy(
+        MediaType.MOVIE,
+        "Mixed",
+        CollectionGroupPolicy(order_type=CollectionOrder.CUSTOM),
+    )
+
+    result = await manager.service.apply_group_policy(MediaType.MOVIE, "Mixed")
+
+    assert result.collection_ids == [regular.id]
+    assert result.skipped == {smart.id: SMART_CUSTOM_ORDER}
+
+
+async def test_required_groups_refuse_managed_collections_without_one(
+    manager: Manager, database: Database
+) -> None:
+    unmanaged = await create(manager)
+    async with database.write_session() as session:
+        session.add(AppSettings(collection_require_group=True))
+    rule = CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11])))
+
+    with pytest.raises(PublicServiceError, match="Choose a group"):
+        await manager.service.create(
+            CollectionCreate(
+                title="Ungrouped",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                rule=rule,
+            )
+        )
+    with pytest.raises(PublicServiceError, match="Choose a group"):
+        await manager.service.take_over(
+            unmanaged, MediaType.MOVIE, CollectionTakeOver()
+        )
+    with pytest.raises(PublicServiceError, match="Choose a group"):
+        await manager.service.bulk_operation(
+            BulkCollectionOperation(
+                collection_ids=[unmanaged],
+                media_type=MediaType.MOVIE,
+                operation="set_group",
+            )
+        )
+    grouped = await manager.service.create(
+        CollectionCreate(
+            title="Grouped",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Sagas",
+            rule=rule,
+        )
+    )
+    assert grouped.collection_group == "Sagas"
+
+
+@pytest.mark.parametrize(
+    ("criteria", "order", "expected"),
+    [
+        (
+            where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
+            CollectionOrder.TITLE_ASC,
+            (CollectionKind.SMART, "Plex keeps it current without syncs"),
+        ),
+        (
+            sources(TmdbItemSource(tmdb_ids=[11])),
+            CollectionOrder.TITLE_ASC,
+            (CollectionKind.REGULAR, "Lists and tags need Overture to sync members"),
+        ),
+        (
+            where(FilterField.TMDB_RATING, FilterOperator.GTE, 7),
+            CollectionOrder.TITLE_ASC,
+            (CollectionKind.REGULAR, "Plex cannot test TMDB rating"),
+        ),
+        (
+            where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
+            CollectionOrder.CUSTOM,
+            (CollectionKind.REGULAR, "Plex cannot keep a custom order"),
+        ),
+    ],
+)
+def test_kind_recommendation_follows_what_plex_can_evaluate(
+    manager: Manager,
+    criteria: FilterGroup,
+    order: CollectionOrder,
+    expected: tuple[CollectionKind, str],
+) -> None:
+    capabilities = manager.service.capabilities(MediaType.MOVIE)
+    rule = CollectionRuleWrite(criteria=criteria)
+
+    assert (
+        recommend_kind(rule, capabilities, media_type=MediaType.MOVIE, order=order)
+        == expected
+    )
+    assert (
+        recommend_kind(
+            rule,
+            capabilities.model_copy(update={"smart": False}),
+            media_type=MediaType.MOVIE,
+            order=order,
+        )
+        is None
+    )
+
+
+async def test_preview_carries_the_kind_recommendation(manager: Manager) -> None:
+    preview = await manager.service.preview(
+        CollectionPreviewRequest(
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=CollectionRuleWrite(
+                criteria=where(FilterField.STUDIO, FilterOperator.IS, "Studio")
+            ),
+        )
+    )
+    assert preview.recommendation is not None
+    assert preview.recommendation.kind is CollectionKind.SMART
+
+
+async def test_collection_rows_report_art_size_source_and_shape(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, identity)
+        assert row is not None
+        select_art(row, ArtType.POSTER, "https://image.tmdb.org/t/p/original/a.jpg")
+        record_art_file(
+            row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1000, 1, 1)
+        )
+        session.add(row)
+
+    [listed] = await manager.service.list_collections(MediaType.MOVIE)
+
+    assert (listed.poster_width, listed.poster_height) == (1000, 1000)
+    assert listed.poster_source == "tmdb"
+    assert listed.background_width is None
+    assert listed.has_incorrect_aspect_ratio
+
+
+async def test_bulk_clears_forget_collection_art_and_theme_choices(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, identity)
+        assert row is not None
+        select_art(row, ArtType.POSTER, "https://image.tmdb.org/t/p/original/a.jpg")
+        row.youtube_id = "abcdefghijk"
+        session.add(row)
+
+    for operation in ("clear_artwork", "clear_themes"):
+        result = await manager.service.bulk_operation(
+            BulkCollectionOperation(
+                collection_ids=[identity],
+                media_type=MediaType.MOVIE,
+                operation=operation,
+            )
+        )
+        assert result.collection_ids == [identity]
+
+    detail = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert (detail.poster_url, detail.youtube_id) == (None, None)

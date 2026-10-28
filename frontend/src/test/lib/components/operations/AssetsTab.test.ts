@@ -7,9 +7,10 @@ import { sidebarState } from "../../../../lib/stores/sidebarState.svelte";
 import { syncState } from "../../../../lib/stores/jobStates.svelte";
 import { matchState, themeJobState } from "../../../../lib/stores/bulkJobState.svelte";
 import { downloadState } from "../../../../lib/stores/downloadState.svelte";
+import { settingsState } from "../../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
 import { renderWithQueryClient } from "../../../helpers/render";
-import { bulkAssetsSchedule } from "../../../helpers/fixtures";
+import { appSettings, bulkAssetsSchedule } from "../../../helpers/fixtures";
 
 const startBulkAssets = vi.hoisted(() => vi.fn());
 const stopBulkAssets = vi.hoisted(() => vi.fn());
@@ -31,6 +32,9 @@ const reads = vi.hoisted(() => ({
   ),
   getPublicDatasetStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
   clearJobSnapshot: vi.fn(() => Promise.resolve({ data: { status: "cleared" } })),
+  listCollectionGroups: vi.fn((options: { query?: { media_type?: string } }) =>
+    Promise.resolve({ data: options.query?.media_type === "movie" ? ["Sagas", "Studios"] : [] }),
+  ),
 }));
 
 vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({
@@ -89,6 +93,27 @@ describe("AssetsPopup", () => {
     deleteBulkAssetsSchedule.mockResolvedValue({ status: "deleted" });
     runBulkAssetsSchedule.mockResolvedValue({ status: "queued" });
     schedules.value = [];
+    settingsState.reset();
+  });
+
+  it("runs art and themes over chosen collection groups", async () => {
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    renderWithQueryClient(OperationsPopup);
+    await fireEvent.click(assetsPanel().getByRole("radio", { name: "Collections" }));
+    expect(assetsPanel().getByText(/Every collection/)).toBeInTheDocument();
+    await fireEvent.click(await assetsPanel().findByRole("checkbox", { name: "Sagas" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+
+    await waitFor(() =>
+      expect(startBulkAssets).toHaveBeenCalledWith(
+        expect.objectContaining({
+          library_ids: [],
+          collection_groups: ["Sagas"],
+          art: expect.objectContaining({ art_types: ["poster"] }),
+        }),
+      ),
+    );
   });
 
   it("shows independent downloads alongside the bulk configuration", () => {

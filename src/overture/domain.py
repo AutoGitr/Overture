@@ -11,6 +11,11 @@ generated frontend client turns into a named type.
 lazy from collections.abc import Mapping
 lazy from enum import StrEnum
 
+lazy from .services.public_dataset.schema.contract import (
+    ASPECT_RATIOS,
+    ASPECT_TOLERANCE,
+)
+
 
 class MediaType(StrEnum):
     """Kind of library item Overture tracks."""
@@ -71,6 +76,23 @@ class CollectionOrder(StrEnum):
     LAST_PLAYED_DESC = "last_played.desc"
     LAST_PLAYED_ASC = "last_played.asc"
     RANDOM = "random"
+
+
+class AutoAdvance(StrEnum):
+    """What the editor moves on to once a selection is saved."""
+
+    OFF = "off"
+    #: The item's next slot, stopping after its last one.
+    SLOTS = "slots"
+    #: The next slot, then the next item.
+    SLOTS_AND_ITEMS = "slots_and_items"
+
+
+#: Why a smart collection cannot take a custom order.
+SMART_CUSTOM_ORDER = "Smart collections are ordered by Plex; choose a sort"
+
+#: The virtual group of collections without rules; no stored group may use it.
+UNMANAGED_GROUP = "Unmanaged"
 
 
 class CollectionKind(StrEnum):
@@ -314,7 +336,7 @@ class ArtType(StrEnum):
     @property
     def aspect_ratio(self) -> float:
         """Return the width-to-height ratio artwork in this slot should have."""
-        return 16 / 9 if self is ArtType.BACKGROUND else 2 / 3
+        return ASPECT_RATIOS["background" if self is ArtType.BACKGROUND else "poster"]
 
     @property
     def display_width(self) -> int:
@@ -460,7 +482,7 @@ class AspectRatioTolerance(StrEnum):
         ``strict`` only absorbs fractional-resolution rounding; ``lenient``
         allows slightly off-spec art.
         """
-        return {"strict": 0.01, "lenient": 0.05, "off": None}[self.value]
+        return {"strict": ASPECT_TOLERANCE, "lenient": 0.05, "off": None}[self.value]
 
 
 class TmdbLanguageFilter(StrEnum):

@@ -49,7 +49,7 @@ export function computeNextArtworkTarget(options: {
 }): NavigationTarget {
   const { item, artType, seasonId, seasons, settings } = options;
 
-  if (!settings.auto_advance || settings.workflow === "themes") return null;
+  if (settings.auto_advance === "off" || settings.workflow === "themes") return null;
 
   if (artType === "poster") {
     if (!settings.auto_advance_skip_completed || item.background_status !== "complete") {
@@ -76,7 +76,7 @@ export function computeNextArtworkTarget(options: {
   ) {
     return { type: "theme" };
   }
-  return { type: "next_item" };
+  return settings.auto_advance === "slots_and_items" ? { type: "next_item" } : null;
 }
 
 /** The first selection of a TMDB title: an artwork slot, or its theme. */
@@ -86,7 +86,8 @@ export type FirstSelection = { artType: ArtType; seasonNum: number | null } | { 
  * Determine the next navigation target after selecting a theme song.
  */
 export function computeNextThemeTarget(settings: AutoAdvanceSettings): NavigationTarget {
-  if (settings.auto_advance && settings.workflow !== "art") {
+  // The theme is an item's last slot, so only the item mode moves on from it.
+  if (settings.auto_advance === "slots_and_items" && settings.workflow !== "art") {
     return { type: "next_item" };
   }
   return null;
@@ -153,7 +154,7 @@ function nextAdvanceEntry(
  * show at once when it does.
  */
 export function preloadNextItem(currentItem: MediaItemRead, settings: AutoAdvanceSettings): void {
-  if (!settings.auto_advance) return;
+  if (settings.auto_advance !== "slots_and_items") return;
   const next = nextAdvanceEntry(currentItem, settings, advanceOrder());
   if (next?.candidate) {
     preloadImages(itemDetailImageUrls(next.candidate, settingsState.show_background_image), "next");
@@ -257,7 +258,7 @@ export async function handleArtworkSelectionAdvance(options: {
   if (!isCurrent(context) || item.id !== context.itemId) return;
   // A snapshot: loading settings replaces the object rather than changing it.
   const settings = settingsState.current;
-  if (!settings.auto_advance || settings.workflow === "themes") return;
+  if (settings.auto_advance === "off" || settings.workflow === "themes") return;
 
   // An unfulfilled seasons query is not an empty show. Wait before resolving its next slot.
   const seasons =
@@ -298,7 +299,7 @@ async function firstSelectionTarget(
   settings: AutoAdvanceSettings,
 ): Promise<NavigationTarget> {
   if ("theme" in selection) return computeNextThemeTarget(settings);
-  if (!settings.auto_advance || settings.workflow === "themes") return null;
+  if (settings.auto_advance === "off" || settings.workflow === "themes") return null;
   const seasons =
     item.media_type === "show"
       ? await queryClient.fetchQuery(getSeasonsOptions({ path: { item_id: item.id } }))

@@ -91,15 +91,15 @@
     {#if collection}
       <span>{collection.child_count} items</span>
       {#if collection.kind === "smart"}
-        <span class="badge">Smart</span>
+        <span class="badge badge-accent">Smart</span>
       {/if}
       {#if collection.generated_value !== null}
-        <span class="badge" title="Created and kept up to date by its group's set"
+        <span class="badge badge-muted" title="Created and kept up to date by its group's set"
           >Set: {collection.collection_group}</span
         >
       {/if}
       {#if collection.withheld}
-        <span class="badge" title="Saved in Overture only">Not on server</span>
+        <span class="badge badge-warning" title="Saved in Overture only">Not on server</span>
       {/if}
       {#if collection.unsynced}
         <span class="badge badge-warning" title="Saved changes the server does not have yet"
@@ -140,7 +140,7 @@
       {#if actions.contributionUrl}
         <IdBadge
           href={actions.contributionUrl}
-          title="Contribute to OvertureDB"
+          title={["Contribute to OvertureDB", ...collection.contribution_warnings].join("\n")}
           icon={githubIcon}
           alt="GitHub"
         />

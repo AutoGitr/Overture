@@ -22,9 +22,15 @@ export type ArtAssetSource = ArtBulkSource;
 export type ThemeAssetSource = ThemeBulkSource;
 
 /** The persisted assets-workflow configuration shared by the popup's panels. */
+/** What an Assets run targets when it does not use the sidebar's items. */
+export type AssetsScope = "libraries" | "collections";
+
 export interface AssetsConfig {
   selectedLibraries: string[];
   useSidebarItems: boolean;
+  scope: AssetsScope;
+  /** Collection groups a Collections run covers; none means every collection. */
+  collectionGroups: string[];
   includeCollections: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
@@ -147,6 +153,8 @@ export interface BulkAssetsRequestParams {
   selectedLibraries: string[];
   itemIds?: number[];
   collectionIds?: number[];
+  /** Groups for a Collections run; an empty list means every collection. */
+  collectionGroups?: string[];
   includeCollections?: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
@@ -162,25 +170,31 @@ export interface BulkAssetsRequestParams {
 
 /** Build the bulk-assets start request from the current popup configuration. */
 export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAssetsRequest {
+  const { collectionGroups } = params;
+  const libraries =
+    params.itemIds === undefined &&
+    params.collectionIds === undefined &&
+    collectionGroups === undefined;
   return {
-    library_ids:
-      params.itemIds === undefined && params.collectionIds === undefined
-        ? params.selectedLibraries
-        : [],
+    library_ids: libraries ? params.selectedLibraries : [],
     ...(params.itemIds === undefined ? {} : { item_ids: [...params.itemIds] }),
     ...(params.collectionIds === undefined ? {} : { collection_ids: [...params.collectionIds] }),
+    ...(collectionGroups === undefined
+      ? {}
+      : collectionGroups.length
+        ? { collection_groups: [...collectionGroups] }
+        : { all_collections: true }),
     include_unmonitored: params.includeUnmonitored,
     overwrite_existing: params.overwriteExisting,
     skip_recent_val: params.skipRecentVal,
     skip_recent_unit: params.skipRecentUnit,
-    art:
-      params.enableArt && params.collectionIds === undefined
-        ? {
-            art_types: params.artTypes,
-            source_order: params.activeArtSources,
-            threshold: params.threshold,
-          }
-        : null,
+    art: params.enableArt
+      ? {
+          art_types: params.artTypes,
+          source_order: params.activeArtSources,
+          threshold: params.threshold,
+        }
+      : null,
     themes: params.enableThemes
       ? {
           source_order: params.activeThemeSources,

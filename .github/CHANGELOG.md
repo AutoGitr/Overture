@@ -42,6 +42,18 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Collection pages show their members, explicit TMDB identity and OvertureDB/ThemerrDB theme candidates. Jellyfin 12 collection themes write into a mounted collections directory configured with `JELLYFIN_COLLECTIONS_PATH`.
 
 - Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly identified collections can receive catalog themes automatically from an enabled incremental sync policy.
+- Assets can run over collections: every collection or chosen groups, for posters, backgrounds and themes, now or on a schedule. Sync can sync a single collection group from the Sync tab.
+- Collections made outside Overture are listed under a virtual Unmanaged group. Take over one, many, or all of them to give them criteria that keep what they hold; a Plex smart collection keeps its filter. The group name Unmanaged is reserved.
+- Settings > Collection defaults > Require a group for every managed collection refuses to save, take over or ungroup a managed collection without a group, and shows how many have none yet.
+- On Plex, Preview members suggests a smart or a regular collection when the criteria suit the other kind better, and Switch changes it.
+- Collections filter by art resolution, art source, aspect ratio and the metadata issues they have, and sort by poster or background width, Home order and group. Items and collections sort by poster or background aspect deviation, worst first.
+- The Database record shows the OvertureDB record of collections and of catalog entries too. The OvertureDB sidebar sorts by completeness, Has draft and In library.
+- Filters in the OvertureDB sidebar discard the drafts of every matching entry at once, and a successful export offers to discard the exported drafts.
+- Theme results have a Contribute button that saves the video as an OvertureDB draft for the title without selecting it, and offers to open the contribution issue.
+- OvertureDB can flag a title as having no theme. Such titles show No theme (OvertureDB), count as theme-complete, and theme runs skip them instead of falling back to ThemerrDB. No theme on the Themes page records it, as a catalog draft to contribute. Needs the matching OvertureDB catalog (schema version 2).
+- MEDIA_SERVER=none runs Overture without a media server, to curate OvertureDB: Sync, Audit and Collections are hidden and the sidebar opens on the catalog.
+- The OvertureDB contribute link warns when selected art comes from a host OvertureDB refuses, saving such art in a draft says why it is refused, and the export lists the art it leaves out in EXPORT-REPORT.txt.
+- Filters & operations clear the artwork or theme selections of every matching collection, as they do for items.
 
 ### Changed
 
@@ -78,6 +90,11 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Plex and Jellyfin collections and their members are stored locally and refreshed on full syncs. Set an explicit TMDB collection ID for franchise artwork and catalog theme suggestions.
 - Local artwork is cached under `<config>/cache/images/{originals,thumbs}` by BLAKE3 hash and served as AVIF display thumbnails across the UI, with cached originals used when opening posters at full size.
+- Applying a group's custom order skips its smart collections, which Plex orders, and says so, so groups can mix regular and smart collections.
+- Auto-advance has three modes: Off, Slots (stops after an item's last slot) and Slots and items. A setting that was on becomes Slots and items.
+- Filters show as one headed section each, in the same order for items and collections, with the media server last. Collections search by title or TMDB collection ID in one field.
+- Collection contributions and exports carry the selected poster and background, not just the theme.
+- The download queue names where each download comes from, after its kind.
 
 ### Removed
 
@@ -123,6 +140,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Assets runs that use only OvertureDB or ThemerrDB report artwork slots and themes the catalog has nothing for as No match, instead of skipping them as a saved selection that Replace existing would search again. Saved choices include the artwork URLs Sync copies from your media server, so this affected most items the catalog covers only partly.
 - Assets logs say exactly why the catalogs had nothing: no OvertureDB entry, no artwork of that kind or no theme in the entry, or a theme that failed to download before. They also say whether a skipped saved choice is already the catalog's or differs from it. While OvertureDB is disabled, its targets are reported as Skipped because OvertureDB is disabled, instead of as No match.
 - Failed theme downloads, YouTube searches and artwork downloads now say why, such as YouTube's own error or the HTTP status an artwork source returned, instead of a generic or truncated message.
+- Sync and Audit stop at once with the reason when the media server is down, instead of failing every item. Art downloads from the server give the same reason.
 
 ## [1.1.0] - 2026-10-22
 

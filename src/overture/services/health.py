@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 async def check_media_server_connection(provider_registry: ProviderRegistry) -> bool:
     """Check if the configured media server is reachable."""
+    if not provider_registry.configured:
+        return False
     try:
         return await provider_registry.provider.test_connection()
     except MediaServerError as e:

@@ -4,7 +4,7 @@
 
 export const DEFAULT_APP_SETTINGS = {
   aspect_ratio_tolerance: "strict",
-  auto_advance: false,
+  auto_advance: "off",
   auto_advance_skip_completed: true,
   auto_match_art: false,
   auto_unmonitor: "off",
@@ -18,6 +18,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_mode_default: "default",
   collection_order_default: "release.asc",
   collection_request_missing: false,
+  collection_require_group: false,
   collection_sort_title_format: "",
   collection_summary_format: "",
   collection_sync_enabled: true,
@@ -52,6 +53,9 @@ export const ART_SOURCE_LABELS = {"overturedb": "OvertureDB", "local_art_matchin
 export const THEME_SOURCE_LABELS = {"overturedb": "OvertureDB", "themerrdb": "ThemerrDB", "youtube_search": "YouTube search"} as const;
 export const CATALOG_SOURCES = ["overturedb", "themerrdb"] as const;
 export const ITEM_ART_TYPES = ["poster", "background"] as const;
+export const UNMANAGED_GROUP = "Unmanaged";
+export const ASPECT_RATIOS = {"poster": 0.6666666666666666, "background": 1.7777777777777777} as const;
+export const ASPECT_TOLERANCES = {"strict": 0.01, "lenient": 0.05} as const;
 export const SERVER_ASSETS = ["poster", "background", "season_poster", "theme"] as const;
 export const SEASON_ART_TYPES = ["season_poster"] as const;
 export const DEFAULT_ART_SOURCE_ORDER = ["overturedb", "local_art_matching"] as const;

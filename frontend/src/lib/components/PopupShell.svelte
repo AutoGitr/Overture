@@ -293,6 +293,11 @@
     min-height: 32px;
   }
 
+  /* Destructive and reset actions sit apart, at the start. */
+  .popup-footer :global(> .footer-start) {
+    margin-inline-end: auto;
+  }
+
   .popup-info {
     padding: var(--space-2) var(--popup-pad);
     font-size: var(--text-xs);

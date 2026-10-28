@@ -139,7 +139,13 @@ async def replace(
         seasons: list[dict[str, Any]] = []
         for key, entry in batch:
             values = {name: value for name, value in entry.items() if name != "seasons"}
-            row = {**values, "id": key, "catalog_synced_at": synced_at}
+            # Bulk inserts need every row to name the same columns.
+            row = {
+                **values,
+                "no_theme": bool(entry.get("no_theme")),
+                "id": key,
+                "catalog_synced_at": synced_at,
+            }
             if entry["media_type"] == CatalogMediaType.COLLECTION:
                 del row["media_type"]
                 collections.append(row)

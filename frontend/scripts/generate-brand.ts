@@ -1,7 +1,7 @@
 import { Resvg } from "@resvg/resvg-js";
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { format } from "prettier";
 
 const publicDir = new URL("../public/", import.meta.url);
 const designDir = new URL("../design/", import.meta.url);
@@ -55,7 +55,13 @@ function stackedLogo(themedMark: string, themedWordmark: string): string {
 }
 
 async function saveSvg(name: string, source: string): Promise<void> {
-  await writeFile(new URL(name, publicDir), await format(source, { parser: "html" }));
+  // The project's formatter keeps the exported markup in the repository's
+  // style; SVG is formatted as the HTML it is written as.
+  const formatted = execFileSync("bun", ["fmt", "--stdin-filepath", `${name}.html`], {
+    input: source,
+    encoding: "utf8",
+  });
+  await writeFile(new URL(name, publicDir), formatted);
 }
 
 async function savePng(name: string, source: string, size?: number): Promise<void> {

@@ -9,7 +9,7 @@ lazy from . import protocols
 lazy from .config import Settings
 lazy from .db.session import Database
 lazy from .integrations.tmdb import TMDBClient
-lazy from .media_servers.registry import ProviderRegistry
+lazy from .media_servers.registry import NO_MEDIA_SERVER, ProviderRegistry
 lazy from .runtime import RuntimeServices
 lazy from .services.art.service import ArtService
 lazy from .services.asset_manager.service import AssetManagerService
@@ -24,6 +24,7 @@ lazy from .services.stats.service import StatsService
 lazy from .services.sync.engine import SyncEngine
 lazy from .services.themes.service import ThemesService
 lazy from .services.tmdb_items import TmdbItemsService
+lazy from .utils.errors import PublicServiceError
 
 
 def get_runtime(connection: HTTPConnection) -> RuntimeServices:
@@ -152,3 +153,13 @@ StatsDep = Annotated[StatsService, Depends(get_stats)]
 ProviderRegistryDep = Annotated[ProviderRegistry, Depends(get_provider_registry)]
 TmdbDep = Annotated[TMDBClient, Depends(get_tmdb)]
 EventsDep = Annotated[protocols.EventPublisher, Depends(get_events)]
+
+
+def require_media_server(runtime: RuntimeDep) -> None:
+    """Refuse server-bound routes while MEDIA_SERVER=none.
+
+    Raises:
+        PublicServiceError: 409 when no media server is configured.
+    """
+    if not runtime.provider_registry.configured:
+        raise PublicServiceError(409, NO_MEDIA_SERVER)

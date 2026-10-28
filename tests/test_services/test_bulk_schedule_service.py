@@ -41,6 +41,7 @@ lazy from overture.services import assets as module
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
+lazy from overture.services.art.service import ArtService
 lazy from overture.services.assets import AssetsService
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.storage.assets import AssetStorage
@@ -123,7 +124,9 @@ def _bulk_schedule_service(
             image_clients=unused(ProxyClientManager),
             app_config=app_config,
             database=database,
+            compare_concurrency=2,
         ),
+        art=unused(ArtService),
         youtube_resolver=unused(YouTubeResolver),
         scheduler=SchedulerService(app_config=app_config),
         publisher=publisher,

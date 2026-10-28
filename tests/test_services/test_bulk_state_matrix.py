@@ -27,6 +27,7 @@ lazy from overture.domain import (
 )
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.services.art import bulk as art_bulk
+lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes import bulk as theme_bulk
@@ -172,6 +173,7 @@ async def test_dataset_only_state_matrix(
             ),
             downloads,
             matcher,
+            art=unused(ArtService),
             local_assets=local_assets,
             app_config=app_config,
             database=database,

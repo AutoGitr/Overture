@@ -133,7 +133,7 @@ class SyncEngine:
         issued them; on another server they would select nothing useful.
         """
         current_server = media_server_identity(
-            self._app_config.MEDIA_SERVER, self._app_config.MEDIA_SERVER_URL
+            self._app_config.MEDIA_SERVER or "", self._app_config.MEDIA_SERVER_URL
         )
         async with self._database.read_session() as session:
             saved = await load_schedule(session, SYNC_SERVER_SCHEDULE)

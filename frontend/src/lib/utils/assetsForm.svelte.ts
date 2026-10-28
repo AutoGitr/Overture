@@ -1,3 +1,4 @@
+import { SvelteSet } from "svelte/reactivity";
 import type {
   ArtType,
   BulkAssetsScheduleResponse,
@@ -22,6 +23,7 @@ import {
   selectedIncludesShowLibrary,
   type ArtAssetSource,
   type AssetsConfig,
+  type AssetsScope,
   type BulkAssetsRequest,
   type ThemeAssetSource,
 } from "./assetsPopup";
@@ -35,6 +37,7 @@ export interface AssetsFormSource {
   showLibraries(): LibrarySectionRead[];
   librariesLoaded(): boolean;
   publicDatasetEnabled(): boolean;
+  collectionGroups(): string[];
 }
 
 /**
@@ -45,6 +48,8 @@ export class AssetsForm {
   readonly config: AssetsConfig = persistedState("assetsPopup", {
     selectedLibraries: [] as string[],
     useSidebarItems: false,
+    scope: "libraries" as AssetsScope,
+    collectionGroups: [] as string[],
     includeCollections: false,
     includeUnmonitored: false,
     overwriteExisting: false,
@@ -101,21 +106,40 @@ export class AssetsForm {
     restoreLibrarySelection(this.movieLibraries, this.showLibraries, this.config.selectedLibraries),
   );
 
+  get collectionGroupOptions(): string[] {
+    return this.source.collectionGroups();
+  }
+
+  /** The saved group choice, less groups that no longer exist. */
+  readonly selectedCollectionGroups = $derived.by(() => {
+    const groups = new SvelteSet(this.collectionGroupOptions);
+    return this.config.collectionGroups.filter((group) => groups.has(group));
+  });
+
+  /** A Collections run chosen in the form, rather than sidebar collections. */
+  readonly collectionsChosen = $derived(
+    !this.config.useSidebarItems && this.config.scope === "collections",
+  );
+
   readonly collectionScope = $derived(
-    this.config.useSidebarItems && sidebarState.collections !== null,
+    this.collectionsChosen || (this.config.useSidebarItems && sidebarState.collections !== null),
   );
 
+  // Collections have no seasons, so a collection run has no season art.
   readonly hasShowLibraries = $derived.by(() =>
-    this.config.useSidebarItems
-      ? sidebarState.current?.type === "show"
-      : selectedIncludesShowLibrary(this.selectedLibraries, this.showLibraries),
+    this.collectionScope
+      ? false
+      : this.config.useSidebarItems
+        ? sidebarState.current?.type === "show"
+        : selectedIncludesShowLibrary(this.selectedLibraries, this.showLibraries),
   );
 
-  readonly hasSelectedLibraries = $derived.by(() =>
-    this.config.useSidebarItems
+  readonly hasSelectedLibraries = $derived.by(() => {
+    if (this.collectionsChosen) return true;
+    return this.config.useSidebarItems
       ? !!(sidebarState.current?.itemIds.length || sidebarState.collections?.collectionIds.length)
-      : this.source.librariesLoaded() && this.selectedLibraries.length > 0,
-  );
+      : this.source.librariesLoaded() && this.selectedLibraries.length > 0;
+  });
 
   readonly activeArtSources = $derived.by(() =>
     enabledSources(
@@ -146,16 +170,9 @@ export class AssetsForm {
   readonly canRun = $derived.by(() => {
     const { enableArt, enableThemes } = this.config;
     const artReady =
-      !enableArt ||
-      this.collectionScope ||
-      (this.artTypesToRun.length > 0 && this.activeArtSources.length > 0);
+      !enableArt || (this.artTypesToRun.length > 0 && this.activeArtSources.length > 0);
     const themesReady = !enableThemes || this.activeThemeSources.length > 0;
-    return (
-      this.hasSelectedLibraries &&
-      ((enableArt && !this.collectionScope) || enableThemes) &&
-      artReady &&
-      themesReady
-    );
+    return this.hasSelectedLibraries && (enableArt || enableThemes) && artReady && themesReady;
   });
 
   request(): BulkAssetsRequest {
@@ -166,7 +183,11 @@ export class AssetsForm {
         config.useSidebarItems && !this.collectionScope
           ? (sidebarState.current?.itemIds ?? [])
           : undefined,
-      collectionIds: this.collectionScope ? sidebarState.collections?.collectionIds : undefined,
+      collectionIds:
+        this.collectionScope && !this.collectionsChosen
+          ? sidebarState.collections?.collectionIds
+          : undefined,
+      collectionGroups: this.collectionsChosen ? this.selectedCollectionGroups : undefined,
       includeCollections: config.includeCollections,
       includeUnmonitored: config.includeUnmonitored,
       overwriteExisting: config.overwriteExisting,
@@ -195,6 +216,10 @@ export class AssetsForm {
       ? [id]
       : toggleSelectedValue(this.selectedLibraries, id);
     this.config.useSidebarItems = false;
+  }
+
+  toggleCollectionGroup(group: string): void {
+    this.config.collectionGroups = toggleSelectedValue(this.selectedCollectionGroups, group);
   }
 
   toggleArtType(type: ArtType): void {
@@ -227,6 +252,9 @@ export class AssetsForm {
     const { config } = this;
     const saved = schedule.config;
     config.useSidebarItems = false;
+    const collections = saved.all_collections || !!saved.collection_groups;
+    config.scope = collections ? "collections" : "libraries";
+    config.collectionGroups = saved.collection_groups ?? [];
     config.includeUnmonitored = saved.include_unmonitored;
     config.overwriteExisting = saved.overwrite_existing;
     config.scheduleCronExpression = schedule.cron_expression;

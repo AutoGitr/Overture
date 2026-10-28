@@ -416,6 +416,29 @@ describe("collection setup flow", () => {
     );
   });
 
+  it("suggests the collection kind the preview recommends, and switches to it", async () => {
+    mockPage({
+      "/api/collections/preview": {
+        member_count: 2,
+        members: ["First", "Second"],
+        recommendation: { kind: "smart", reason: "Plex keeps it current without syncs" },
+      },
+      "/api/collections/presets": presets,
+    });
+    await createPage();
+    await onlyLibrary(screen, "Movies");
+    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
+      target: { value: "field:year" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Preview members" }));
+
+    const hint = await screen.findByRole("note");
+    expect(hint).toHaveTextContent("A smart collection suits these criteria");
+    await fireEvent.click(within(hint).getByRole("button", { name: "Switch" }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
   it("previews members and saves the form as a preset", async () => {
     let preset: unknown = null;
     const { calls } = mockPage({

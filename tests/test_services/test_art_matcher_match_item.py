@@ -126,6 +126,7 @@ def _matcher(
         image_clients=unused(ProxyClientManager),
         app_config=app_config,
         database=database,
+        compare_concurrency=2,
     )
 
 

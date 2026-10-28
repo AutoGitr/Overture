@@ -2,6 +2,7 @@ import { fireEvent, waitFor, within } from "@testing-library/svelte";
 import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  listCatalogEntriesOptions,
   listCollectionsOptions,
   listItemsOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
@@ -14,6 +15,7 @@ import { defaultFilters, uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetch, mockFetchRoutes, mockFetchSequence } from "../../helpers/fetch";
 import {
   appSettings,
+  catalogRow,
   collection,
   collectionCapabilities,
   mediaItem,
@@ -156,7 +158,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
     await fireEvent.click(view.getByRole("radio", { name: "Missing" }));
     await fireEvent.click(
-      within(view.getByRole("radiogroup", { name: "ThemerrDB Status" })).getByRole("radio", {
+      within(view.getByRole("radiogroup", { name: "ThemerrDB" })).getByRole("radio", {
         name: "Complete",
       }),
     );
@@ -409,9 +411,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     });
     const view = renderWithQueryClient(FiltersPopup);
     // Plex offers smart collections, so the server's options have loaded.
-    await view.findByRole("radiogroup", { name: "Collection Kind" });
+    await view.findByRole("radiogroup", { name: "Kind" });
     await fireEvent.click(
-      within(view.getByRole("radiogroup", { name: "Collection Size" })).getByLabelText("Empty"),
+      within(view.getByRole("radiogroup", { name: "Size" })).getByLabelText("Empty"),
     );
     await fireEvent.change(view.getByLabelText("Operation"), { target: { value: operation } });
     if (operation === "set_group")
@@ -434,5 +436,79 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
     ).toEqual({ collection_ids: [1], media_type: "movie", operation, ...expected });
+  });
+
+  it("lays collection filters out as headed sections, art included and media server last", async () => {
+    await navigate("/movies/collections");
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    queryClient.setQueryData(
+      listCollectionsOptions({ query: { media_type: "movie" } }).queryKey,
+      [],
+    );
+    mockFetchRoutes({
+      "/api/library/libraries": [],
+      "/api/collections/capabilities": collectionCapabilities(),
+    });
+    const view = renderWithQueryClient(FiltersPopup);
+    await view.findByRole("radiogroup", { name: "Kind" });
+
+    const headings = view
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent?.trim());
+    expect(headings).toEqual(
+      expect.arrayContaining(["Art resolution", "Art source", "Members", "Kind", "Size"]),
+    );
+    expect(headings.indexOf("Media server")).toBe(headings.indexOf("Bulk operations") - 1);
+    expect(view.queryByRole("region", { name: "Collections" })).toBeNull();
+    expect(view.queryByRole("region", { name: "Theme source" })).toBeNull();
+  });
+
+  it("discards the drafts of the catalog entries the filters match", async () => {
+    await navigate("/overturedb/movies");
+    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    queryClient.setQueryData(
+      listCatalogEntriesOptions({ query: { media_type: "movie" } }).queryKey,
+      [
+        catalogRow({ entry_key: "tmdb-1", title: "Drafted", has_draft: true }),
+        catalogRow({ entry_key: "tmdb-2", title: "Clean" }),
+      ],
+    );
+    const { calls } = mockFetchRoutes({
+      "/api/public-dataset/catalog/movie/drafts": { discarded: 1 },
+    });
+    const view = renderWithQueryClient(FiltersPopup);
+
+    await fireEvent.click(view.getByRole("button", { name: "Discard drafts (1)" }));
+    await answerConfirmation(true);
+
+    await waitFor(() =>
+      expect(calls.find((call) => call.init.method === "DELETE")?.init.body).toBe(
+        JSON.stringify({ entry_keys: ["tmdb-1"] }),
+      ),
+    );
+  });
+
+  it("clears the artwork and theme choices of the matching collections", async () => {
+    await navigate("/movies/collections");
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+      collection({ id: 1, youtube_id: "abcdefghijk" }),
+      collection({ id: 2 }),
+    ]);
+    const { calls } = mockFetchRoutes({
+      "/api/library/libraries": [],
+      "/api/collections/capabilities": collectionCapabilities(),
+      "/api/collections/bulk-operation": { collection_ids: [1], errors: {}, skipped: {} },
+    });
+    const view = renderWithQueryClient(FiltersPopup);
+
+    await fireEvent.click(await view.findByRole("button", { name: /Clear theme selections 1/ }));
+    await answerConfirmation(true);
+    await waitFor(() =>
+      expect(
+        JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
+      ).toEqual({ collection_ids: [1], media_type: "movie", operation: "clear_themes" }),
+    );
+    expect(view.getByRole("button", { name: /Clear artwork selections 2/ })).toBeEnabled();
   });
 });

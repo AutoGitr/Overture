@@ -19,17 +19,20 @@ lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...repositories.public_dataset_drafts import PublicDatasetDraftRepository
 lazy from ...schemas.public_dataset import (
     CatalogCounts,
+    CatalogDraftsDiscard,
+    CatalogDraftsDiscarded,
     CatalogDraftUpdate,
     CatalogEntry,
     CatalogEntryDetail,
     CatalogEntryRow,
 )
-lazy from ...utils.art_urls import art_preview_url
+lazy from ...utils.art_urls import art_preview_url, refused_art_host
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from .schema.contract import (
     IDENTITY_FIELDS,
+    OPTIONAL_ENTRY_FIELDS,
     catalog_art_url,
     entry_fields,
     entry_file_stem,
@@ -59,6 +62,8 @@ def _item_entry(item: PublicDatasetItem, season_posters: dict[int, str]) -> Entr
         for name in entry_fields(item.media_type)
         if name != "seasons"
     }
+    if item.no_theme:
+        entry["no_theme"] = True
     if item.media_type is MediaType.SHOW:
         entry["seasons"] = [
             {"season_num": number, "poster_url": url}
@@ -69,12 +74,22 @@ def _item_entry(item: PublicDatasetItem, season_posters: dict[int, str]) -> Entr
 
 def _collection_entry(collection: PublicDatasetCollection) -> Entry:
     """Return a stored collection as the contract spells the entry."""
-    return {
+    entry: Entry = {
         name: CatalogMediaType.COLLECTION.value
         if name == "media_type"
         else getattr(collection, name)
         for name in entry_fields(CatalogMediaType.COLLECTION)
     }
+    if collection.no_theme:
+        entry["no_theme"] = True
+    return entry
+
+
+def _with_theme_flag(entry: Entry) -> Entry:
+    """Keep ``no_theme`` only while set; a theme of OvertureDB's clears it."""
+    if entry.get("youtube_id_overturedb") or not entry.get("no_theme"):
+        entry.pop("no_theme", None)
+    return entry
 
 
 def _identities(entry: Entry) -> list[tuple[str, int | str]]:
@@ -91,6 +106,9 @@ def _canonical_art(entry: Entry) -> Entry:
     Raises:
         PublicServiceError: When a link is not catalog artwork.
     """
+    for name in ("poster_url", "background_url"):
+        if reason := refused_art_host(entry.get(name)):
+            raise PublicServiceError(422, reason)
     try:
         for name in ("poster_url", "background_url"):
             if entry.get(name):
@@ -305,7 +323,9 @@ class CatalogBrowser:
             PublicServiceError: When the changed entry breaks the contract.
         """
         changes = body.model_dump(exclude_unset=True)
-        fields = entry_fields(media_type)
+        fields = (*entry_fields(media_type), *OPTIONAL_ENTRY_FIELDS)
+        if changes.get("no_theme"):
+            changes["youtube_id_overturedb"] = None
         if unknown := sorted(set(changes) - set(fields)):
             raise PublicServiceError(
                 422, f"A {media_type} entry has no {', '.join(unknown)}"
@@ -314,7 +334,9 @@ class CatalogBrowser:
             entry = await self._entry(session, media_type, entry_key)
             repository = PublicDatasetDraftRepository(session)
             draft = await repository.find(media_type, _identities(entry))
-            proposed = _canonical_art({**(draft.entry if draft else entry), **changes})
+            proposed = _with_theme_flag(
+                _canonical_art({**(draft.entry if draft else entry), **changes})
+            )
             try:
                 validate_entry(proposed)
             except ValueError as exc:
@@ -361,3 +383,22 @@ class CatalogBrowser:
                 await session.delete(draft)
                 await session.flush()
             return await self._detail(session, media_type, entry)
+
+    async def discard_drafts(
+        self, media_type: CatalogMediaType, body: CatalogDraftsDiscard
+    ) -> CatalogDraftsDiscarded:
+        """Remove the drafts of the named entries; names without one are skipped."""
+        discarded = 0
+        async with self._database.write_session() as session:
+            drafts = PublicDatasetDraftRepository(session)
+            for entry_key in dict.fromkeys(body.entry_keys):
+                try:
+                    entry = await self._entry(session, media_type, entry_key)
+                except PublicServiceError as exc:
+                    if exc.status_code != 404:
+                        raise
+                    continue
+                if draft := await drafts.find(media_type, _identities(entry)):
+                    await session.delete(draft)
+                    discarded += 1
+        return CatalogDraftsDiscarded(discarded=discarded)

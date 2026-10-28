@@ -8,6 +8,8 @@ import { syncState } from "../../../lib/stores/jobStates.svelte";
 import { matchState, themeJobState } from "../../../lib/stores/bulkJobState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { downloadState } from "../../../lib/stores/downloadState.svelte";
+import { settingsState } from "../../../lib/stores/settingsState.svelte";
+import { appSettings } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 vi.mock("../../../generated/rest/sdk.gen", () => ({
@@ -48,6 +50,16 @@ describe("OperationsPopup tab navigation", () => {
     assetManagerState.reset();
     serverAuditState.reset();
     downloadState.replaceSnapshot([]);
+  });
+
+  it("offers no server operations without a media server", () => {
+    settingsState.load(appSettings({ media_server: null }));
+    renderWithQueryClient(OperationsPopup);
+
+    expect(screen.getByRole("tab", { name: /Assets/ })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Sync/ })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Audit/ })).toBeNull();
+    settingsState.reset();
   });
 
   it("blocks full sync during independent downloads without a bulk spinner", async () => {

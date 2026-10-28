@@ -174,11 +174,14 @@ class RuntimeServices:
             getattr(os, "getgid", lambda: -1)(),
             config.TZ,
         )
-        logger.info(
-            "Media server: %s at %s",
-            config.MEDIA_SERVER.display_name,
-            config.MEDIA_SERVER_URL,
-        )
+        if config.MEDIA_SERVER is None:
+            logger.info("Media server: none; running on OvertureDB and TMDB")
+        else:
+            logger.info(
+                "Media server: %s at %s",
+                config.MEDIA_SERVER.display_name,
+                config.MEDIA_SERVER_URL,
+            )
         logger.info(
             "App URL: %s",
             config.APP_URL or "not set; using the request host and HTTP cookies",
@@ -357,12 +360,17 @@ class RuntimeServices:
         except Exception as exc:
             logger.warning("Connectivity check failed: %s", exc)
             return
-        services = {
-            config.MEDIA_SERVER.display_name: (
-                status.media_server,
-                "MEDIA_SERVER_URL and MEDIA_SERVER_API_KEY",
-            ),
-        }
+        # Without a media server, its health stays unknown and no notice shows.
+        services = (
+            {
+                config.MEDIA_SERVER.display_name: (
+                    status.media_server,
+                    "MEDIA_SERVER_URL and MEDIA_SERVER_API_KEY",
+                ),
+            }
+            if config.MEDIA_SERVER is not None
+            else {}
+        )
         if config.tmdb_configured:
             services["TMDB"] = (status.tmdb, "TMDB_API_KEY")
         for name, (reachable, settings) in services.items():
@@ -423,6 +431,9 @@ def build_runtime(
         provider_registry=provider_registry,
         candidates=candidates,
         image_clients=proxy_clients,
+        # Twice the hash workers keeps the process pool fed while one batch is
+        # still downloading, without flooding the image hosts.
+        compare_concurrency=max(2, app_config.PHASH_WORKERS * 2),
     )
     background_jobs = BackgroundJobRegistry(events, database=database)
     downloads = DownloadService(
@@ -573,6 +584,7 @@ def build_runtime(
             background_jobs=background_jobs,
             downloads=downloads,
             art_matcher=art_matcher,
+            art=art,
             youtube_resolver=youtube,
             scheduler=scheduler,
             publisher=events,

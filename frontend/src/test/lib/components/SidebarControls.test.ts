@@ -177,7 +177,7 @@ describe("SidebarControls menus", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Choose search field" }));
     expect(
       screen.getAllByRole("menuitemradio").map((option) => option.textContent?.trim()),
-    ).toEqual(["Title", "Group", "TMDB collection ID", "YouTube link, ID or title"]);
+    ).toEqual(["Title or TMDB collection ID", "Group", "YouTube link, ID or title"]);
     await fireEvent.keyDown(screen.getByRole("menu", { name: "Search by" }), { key: "Escape" });
     await fireEvent.click(screen.getByRole("button", { name: "Choose sort order" }));
     await fireEvent.click(screen.getByRole("menuitemradio", { name: "Number of items" }));

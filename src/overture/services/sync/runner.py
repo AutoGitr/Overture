@@ -38,6 +38,7 @@ async def run_sync(
         await job.started()
         if job.stop_requested():
             return
+        await provider_registry.require_reachable()
 
         async def sync() -> None:
             tmdb_items = await tmdb_seasons.targets()

@@ -24,6 +24,7 @@ lazy from ..schemas.common import Status, StatusResponse
 lazy from ..ws.state import BackgroundJobRegistry
 lazy from .art.bulk import run_bulk_art_match
 lazy from .art.matcher import ArtMatcher
+lazy from .art.service import ArtService
 lazy from .downloads.service import DownloadService
 lazy from .local_assets.service import LocalAssets
 lazy from .named_schedules import (
@@ -65,6 +66,7 @@ class AssetsService:
         background_jobs: BackgroundJobRegistry,
         downloads: DownloadService,
         art_matcher: ArtMatcher,
+        art: ArtService,
         youtube_resolver: YouTubeResolver,
         scheduler: SchedulerService,
         publisher: protocols.EventPublisher,
@@ -77,6 +79,7 @@ class AssetsService:
         self.background_jobs = background_jobs
         self.downloads = downloads
         self.art_matcher = art_matcher
+        self._art = art
         self.local_assets = local_assets
         self.youtube_resolver = youtube_resolver
         self.schedules = NamedSchedules(
@@ -212,6 +215,7 @@ class AssetsService:
             params,
             self.downloads,
             self.art_matcher,
+            art=self._art,
             local_assets=self.local_assets,
             app_config=self._app_config,
             database=self._database,

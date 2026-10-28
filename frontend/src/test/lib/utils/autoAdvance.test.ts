@@ -35,7 +35,7 @@ vi.mock("../../../lib/router/routes", () => {
 
 const baseSettings: AutoAdvanceSettings = {
   workflow: "art_and_themes",
-  auto_advance: true,
+  auto_advance: "slots_and_items",
   auto_advance_skip_completed: false,
 };
 const current = mediaItem({ id: 100 });
@@ -85,7 +85,7 @@ describe("artwork workflow", () => {
     expect(
       computeNextArtworkTarget({
         ...options,
-        settings: { ...baseSettings, auto_advance: false },
+        settings: { ...baseSettings, auto_advance: "off" },
       }),
     ).toBeNull();
   });
@@ -144,7 +144,7 @@ describe("artwork workflow", () => {
       computeNextArtworkTarget({
         ...showOptions,
         seasonId: s2.id,
-        settings: { ...baseSettings, auto_advance: false },
+        settings: { ...baseSettings, auto_advance: "off" },
       }),
     ).toBeNull();
   });
@@ -162,9 +162,32 @@ describe("artwork workflow", () => {
     ).toEqual({ type: "theme" });
   });
 
-  it("advances from Themes only when enabled", () => {
+  it("advances from Themes to the next item only in the item mode", () => {
     expect(computeNextThemeTarget(baseSettings)).toEqual({ type: "next_item" });
-    expect(computeNextThemeTarget({ ...baseSettings, auto_advance: false })).toBeNull();
+    expect(computeNextThemeTarget({ ...baseSettings, auto_advance: "slots" })).toBeNull();
+    expect(computeNextThemeTarget({ ...baseSettings, auto_advance: "off" })).toBeNull();
+  });
+
+  it("stops after the item's last slot in the slots mode", () => {
+    const slots = { ...baseSettings, auto_advance: "slots" as const };
+    expect(computeNextArtworkTarget({ ...options, settings: slots })).toEqual({
+      type: "art",
+      subtab: "background",
+    });
+    expect(
+      computeNextArtworkTarget({
+        ...options,
+        artType: "background",
+        settings: { ...slots, workflow: "art" },
+      }),
+    ).toBeNull();
+    expect(
+      computeNextArtworkTarget({
+        ...options,
+        artType: "background",
+        settings: { ...slots, workflow: "art_and_themes" },
+      }),
+    ).toEqual({ type: "theme" });
   });
 });
 
@@ -387,7 +410,7 @@ describe("next item preloading", () => {
 
   it("fetches nothing when auto-advance is off or there is no next item", () => {
     setLibrary([mediaItem({ id: 300 })]);
-    preloadNextItem(current, { ...baseSettings, auto_advance: false });
+    preloadNextItem(current, { ...baseSettings, auto_advance: "off" });
     sidebarState.current = { type: "movie", itemIds: [current.id] };
     preloadNextItem(current, baseSettings);
 

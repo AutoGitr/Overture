@@ -85,6 +85,9 @@ class DownloadArtHandler:
         except RemoteImageError as exc:
             raise DownloadError(str(exc)) from exc
         except httpx2.HTTPError as exc:
+            health = self.provider_registry.health.current
+            if trusted_media_server and health.down:
+                raise DownloadError(health.message) from exc
             detail = public_error_message(exc) or type(exc).__name__
             raise DownloadError(
                 f"Could not reach {urlsplit(target_url).hostname}: {detail}"

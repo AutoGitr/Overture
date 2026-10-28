@@ -8,7 +8,7 @@ export async function runBulkCollections(
   body: BulkCollectionOperation,
   execute: (body: BulkCollectionOperation) => Promise<BulkCollectionOperationResult>,
 ): Promise<BulkCollectionOperationResult> {
-  const result: BulkCollectionOperationResult = { collection_ids: [], errors: {} };
+  const result: BulkCollectionOperationResult = { collection_ids: [], errors: {}, skipped: {} };
   for (let offset = 0; offset < body.collection_ids.length; offset += 1000) {
     const batch = await execute({
       ...body,
@@ -16,6 +16,7 @@ export async function runBulkCollections(
     });
     result.collection_ids.push(...batch.collection_ids);
     Object.assign(result.errors, batch.errors);
+    Object.assign(result.skipped, batch.skipped);
   }
   return result;
 }

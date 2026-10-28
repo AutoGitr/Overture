@@ -2,7 +2,7 @@
 
 lazy from fastapi import APIRouter, Depends, status
 
-lazy from ..dependencies import SyncDep
+lazy from ..dependencies import SyncDep, require_media_server
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.sync import (
     SyncRunRequest,
@@ -13,7 +13,11 @@ lazy from ..schemas.sync import (
 lazy from .auth import require_auth
 lazy from .parameters import ScheduleIdPath
 
-router = APIRouter(prefix="/sync", tags=["sync"], dependencies=[Depends(require_auth)])
+router = APIRouter(
+    prefix="/sync",
+    tags=["sync"],
+    dependencies=[Depends(require_auth), Depends(require_media_server)],
+)
 
 
 @router.get("/status")

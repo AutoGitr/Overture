@@ -40,6 +40,11 @@ class SettingsState {
     return server ? SERVER_DISPLAY_NAMES[server] : "media server";
   }
 
+  /** Loaded settings say MEDIA_SERVER=none: no server to sync, audit or manage. */
+  get standalone() {
+    return this.current !== INITIAL_SETTINGS && this.current.media_server === null;
+  }
+
   /** Replace the complete response; form drafts never enter this adapter. */
   load(data: AppSettingsRead) {
     this.current = data;

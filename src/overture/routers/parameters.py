@@ -8,6 +8,7 @@ lazy from ..domain import ArtType, ImageSize, MediaType
 lazy from ..utils.http_security import SESSION_COOKIE
 
 ItemIdPath = Annotated[int, Path(description="Media item ID")]
+CollectionIdPath = Annotated[int, Path(gt=0, description="Collection ID")]
 SeasonIdPath = Annotated[int, Path(description="Season ID")]
 SeasonIdQuery = Annotated[
     int | None,

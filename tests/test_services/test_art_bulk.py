@@ -22,6 +22,7 @@ lazy from overture.schemas.bulk import BulkMatchArtRequest
 lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.bulk_work import BulkArtWork
 lazy from overture.services.art.matcher import ArtMatchOutcome
+lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.job_results import log_page
 lazy from overture.utils.time import utc_now
@@ -39,6 +40,7 @@ lazy from tests.bulk_helpers import (
 )
 lazy from tests.runtime_helpers import (
     make_local_assets,
+    unused,
 )
 
 
@@ -79,6 +81,7 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
         ),
         downloads,
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -134,6 +137,7 @@ async def test_bulk_art_uses_source_order_and_skips_local_when_overturedb_matche
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -166,6 +170,7 @@ async def test_bulk_art_overturedb_only_no_matches_when_source_unavailable(
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -216,6 +221,7 @@ async def test_bulk_art_targets_without_dataset_art_are_counted_in_one_step(
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=local_assets,
         app_config=app_config,
         database=database,
@@ -257,6 +263,7 @@ async def test_bulk_art_saved_incomplete_selection_queues_download_without_remat
         BulkMatchArtRequest(),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -304,6 +311,7 @@ async def test_bulk_art_complete_targets_are_skipped_without_download(
         BulkMatchArtRequest(),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -396,6 +404,7 @@ async def test_bulk_art_states_why_local_matching_produced_nothing(
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -429,6 +438,7 @@ async def test_bulk_art_says_a_recently_checked_target_was_skipped(
         BulkMatchArtRequest(skip_recent_val=1, skip_recent_unit=RecentUnit.DAYS),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=local_assets,
         app_config=app_config,
         database=database,
@@ -457,6 +467,7 @@ async def test_bulk_art_single_target_without_dataset_art_has_singular_plurality
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -516,6 +527,7 @@ async def test_local_match_queues_best_candidate_and_reports_incomplete_comparis
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -574,6 +586,7 @@ async def test_perfect_match_adoption_rechecks_the_file_before_saving_selection(
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -625,6 +638,7 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
@@ -669,6 +683,7 @@ async def test_slot_failure_does_not_abort_later_targets(
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
+        art=unused(ArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,

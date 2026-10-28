@@ -490,6 +490,23 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         )
 
     @override
+    async def smart_collection_filter(self, server_collection_id: str) -> str:
+        item = await self.client.get_metadata(server_collection_id)
+        content = str((item or {}).get("content") or "")
+        if not content:
+            raise MediaServerError("Plex returned no filter for the smart collection")
+        query = urllib.parse.urlsplit(content).query
+        # The section's item type is part of the URI Overture builds, not the filter.
+        return urllib.parse.urlencode(
+            [
+                pair
+                for pair in urllib.parse.parse_qsl(query, keep_blank_values=True)
+                if pair[0] != "type"
+            ],
+            quote_via=urllib.parse.quote,
+        )
+
+    @override
     async def filter_choices(
         self, section_key: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:

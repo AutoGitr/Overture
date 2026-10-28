@@ -22,6 +22,8 @@ export interface DownloadJob {
   job_type: string;
   art_type: ServerAsset | null;
   season_id: number | null;
+  /** Where the download comes from: the art's host, or YouTube. */
+  source: string | null;
   percent: number;
   stage: string;
   /** The step the download is on, counted from 1, while it reports one. */
@@ -49,6 +51,7 @@ function buildJob(data: DownloadJobEvent, status?: DownloadJob["status"]): Downl
     job_type: itemTarget?.job_type ?? target.target_type,
     art_type: itemTarget?.art_type ?? null,
     season_id: itemTarget?.season_id ?? null,
+    source: target.source ?? null,
     percent: data.percent ?? 0,
     stage: data.stage ?? "starting",
     step: data.step,
@@ -184,6 +187,7 @@ class DownloadState {
       step: null,
       steps: null,
       status: "running",
+      source: null,
       slot: -1,
     });
   }
@@ -202,6 +206,7 @@ class DownloadState {
       step: null,
       steps: null,
       status: "running",
+      source: null,
       slot: -1,
     });
   }

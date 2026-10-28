@@ -4,6 +4,7 @@ import RedirectToLibrary from "../../../../lib/router/pages/RedirectToLibrary.sv
 import { navigate, route } from "../../../../lib/router/routes";
 import { queryClient } from "../../../../lib/rest/queryClient";
 import { mockFetch, mockFetchRoutes, type FetchCall } from "../../../helpers/fetch";
+import { appSettings } from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
 describe("RedirectToLibrary", () => {
@@ -21,6 +22,7 @@ describe("RedirectToLibrary", () => {
     "selects $expected with movies=$movies and shows=$shows",
     async ({ movies, shows, expected }) => {
       mockFetchRoutes({
+        "/api/settings": appSettings({ media_server: "plex" }),
         "/api/library/libraries": ({ url }: FetchCall) =>
           Response.json(
             (url.includes("media_type=movie") ? movies : shows)
@@ -36,6 +38,17 @@ describe("RedirectToLibrary", () => {
       expect(pushState).not.toHaveBeenCalled();
     },
   );
+
+  it("opens the OvertureDB catalog without a media server", async () => {
+    mockFetchRoutes({
+      "/api/settings": appSettings({ media_server: null }),
+      "/api/library/libraries": [],
+    });
+
+    renderWithQueryClient(RedirectToLibrary);
+
+    await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/movies"));
+  });
 
   it("keeps the route on failure and offers a retry", async () => {
     mockFetch({ detail: "Unavailable" }, { status: 400 });

@@ -19,11 +19,13 @@
     createSyncScheduleMutation,
     deleteSyncScheduleMutation,
     getPublicDatasetStatusOptions,
+    listCollectionGroupsOptions,
     listServerLibrariesOptions,
     listSyncSchedulesOptions,
     runSyncMutation,
     runSyncScheduleMutation,
     stopSyncMutation,
+    syncCollectionGroupMutation,
     updateSyncScheduleMutation,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
   import { libraryGate } from "../../stores/libraryGate.svelte";
@@ -105,6 +107,25 @@
   );
 
   let includeCollections = $state(readJson<boolean>("syncPopup_includeCollections", true));
+
+  const groupQueries = (["movie", "show"] as const).map((mediaType) => ({
+    mediaType,
+    query: createQuery(() => ({
+      ...listCollectionGroupsOptions({ query: { media_type: mediaType } }),
+      enabled: isActive && settingsState.current.collections_supported,
+    })),
+  }));
+  let collectionGroups = $derived(
+    groupQueries.flatMap(({ mediaType, query }) =>
+      (query.data ?? []).map((name) => ({ mediaType, name, key: `${mediaType}:${name}` })),
+    ),
+  );
+  /** A group Run Now syncs on its own, instead of a full sync; empty for all. */
+  let collectionGroupKey = $state("");
+  let collectionGroup = $derived(
+    collectionGroups.find((group) => group.key === collectionGroupKey),
+  );
+  const syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
 
   let scheduleMode = $state<SyncScheduleMode>("full");
   let scheduleCronExpression = $state("0 * * * *");
@@ -202,7 +223,29 @@
     librarySelection = saved.library_ids.length ? saved.library_ids : null;
   }
 
+  async function syncGroup(group: { mediaType: "movie" | "show"; name: string }) {
+    if (syncGroupRequest.isPending) return;
+    feedback.clear();
+    try {
+      const result = await syncGroupRequest.mutateAsync({
+        query: { media_type: group.mediaType, name: group.name },
+      });
+      const failed = Object.keys(result.errors).length;
+      feedback.success(
+        `Synced ${result.synced} collections in ${group.name}` +
+          (failed ? `; ${failed} failed` : "") +
+          ".",
+      );
+    } catch (err) {
+      feedback.error(errorMessage(err, "Group sync failed"));
+    }
+  }
+
   async function runNow() {
+    if (collectionGroup) {
+      await syncGroup(collectionGroup);
+      return;
+    }
     if (!canRunSync || libraryGate.blocked("sync") || runSyncRequest.isPending) return;
     saveSelection();
     feedback.clear();
@@ -249,6 +292,20 @@
           : undefined}
         oncollectionschange={(checked) => (includeCollections = checked)}
       />
+      {#if settingsState.current.collections_supported && collectionGroups.length}
+        <label class="form-row">
+          <span>Collections</span>
+          <select bind:value={collectionGroupKey} aria-label="Collections to sync">
+            <option value="">All, with the libraries</option>
+            {#each collectionGroups as group (group.key)}
+              <option value={group.key}>Group: {group.name} ({group.mediaType})</option>
+            {/each}
+          </select>
+        </label>
+        {#if collectionGroup}
+          <p class="hint">Run Now syncs only this group's collections, not the libraries.</p>
+        {/if}
+      {/if}
     </div>
 
     <Schedules
@@ -385,8 +442,8 @@
       <PendingButton
         class="btn btn-primary"
         onclick={runNow}
-        disabled={!canRunSync || !!libraryGate.blocked("sync")}
-        pending={runSyncRequest.isPending}
+        disabled={collectionGroup ? false : !canRunSync || !!libraryGate.blocked("sync")}
+        pending={runSyncRequest.isPending || syncGroupRequest.isPending}
         pendingLabel="Starting..."
       >
         <RefreshCw size={15} />

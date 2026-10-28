@@ -239,7 +239,7 @@ def _scan_one_season_folder(
 ) -> Iterator[AssetIssue]:
     """Find a misnamed poster inside one season folder."""
     entries = _list(sub)
-    accepted = season_poster_candidates(app_config.MEDIA_SERVER, season_num)
+    accepted = season_poster_candidates(app_config.MEDIA_SERVER or "", season_num)
     candidates: list[_Candidate] = []
     for entry in entries:
         candidate = _Candidate(entry)
@@ -261,7 +261,7 @@ def _scan_one_season_folder(
         slot=ServerAsset.SEASON_POSTER,
         accepted=accepted,
         suggest=lambda candidate: season_poster_filename(
-            app_config.MEDIA_SERVER,
+            app_config.MEDIA_SERVER or "",
             season_num,
             _image_extension(candidate.entry.name),
         ),

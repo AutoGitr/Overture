@@ -74,6 +74,8 @@ class PublicDatasetSourcesItem(StrictBaseModel):
     background: list[ArtCandidate] = Field(default_factory=list[ArtCandidate])
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    #: The catalog entry's name, which its drafts are saved under.
+    entry_key: str | None = None
 
 
 class PublicDatasetSources(StrictBaseModel):
@@ -112,11 +114,25 @@ class PublicDatasetRecordSeason(StrictBaseModel):
     poster_url: str | None = None
 
 
+class PublicDatasetRecordCollection(StrictBaseModel):
+    """Persisted public dataset collection record."""
+
+    id: int | None = None
+    tmdb_id: int
+    title: str
+    poster_url: str | None = None
+    background_url: str | None = None
+    youtube_id_overturedb: str | None = None
+    youtube_id_themerrdb: str | None = None
+    catalog_synced_at: datetime | None = None
+
+
 class PublicDatasetRecord(StrictBaseModel):
     """Public dataset record response."""
 
     found: bool
     item: PublicDatasetRecordItem | None = None
+    collection: PublicDatasetRecordCollection | None = None
     seasons: list[PublicDatasetRecordSeason] = Field(
         default_factory=list[PublicDatasetRecordSeason]
     )
@@ -142,6 +158,8 @@ class CatalogEntry(StrictBaseModel):
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    #: OvertureDB says the title has no theme music.
+    no_theme: bool = False
     seasons: list[CatalogSeason] | None = None
 
 
@@ -161,6 +179,8 @@ class CatalogEntryRow(StrictBaseModel):
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    #: OvertureDB says the title has no theme music.
+    no_theme: bool = False
     #: Season posters the entry holds; shows only.
     season_posters: int = 0
     has_draft: bool = False
@@ -188,6 +208,21 @@ class CatalogCounts(StrictBaseModel):
     drafts: int
 
 
+class CatalogDraftsDiscard(StrictBaseModel):
+    """The entries whose drafts to discard, by entry name."""
+
+    entry_keys: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=100)]],
+        Field(min_length=1, max_length=5000),
+    ]
+
+
+class CatalogDraftsDiscarded(StrictBaseModel):
+    """How many of the named entries had a draft that is now gone."""
+
+    discarded: int
+
+
 class CatalogDraftUpdate(StrictBaseModel):
     """Changes to a catalog entry; only the fields sent are changed."""
 
@@ -199,4 +234,6 @@ class CatalogDraftUpdate(StrictBaseModel):
     poster_url: str | None = None
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
+    #: True flags the title as having no theme; False clears the flag.
+    no_theme: bool | None = None
     seasons: list[CatalogSeason] | None = None

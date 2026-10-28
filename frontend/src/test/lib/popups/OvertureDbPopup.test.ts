@@ -7,7 +7,8 @@ import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
 import { publicDatasetSyncState } from "../../../lib/stores/jobStates.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { publicDatasetStatus } from "../../helpers/fixtures";
+import { catalogRow, publicDatasetStatus } from "../../helpers/fixtures";
+import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
 const failure = (detail: string) => () => Response.json({ detail }, { status: 404 });
@@ -204,6 +205,42 @@ describe("OvertureDbPopup export", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:selections");
     const [[archive]] = vi.mocked(URL.createObjectURL).mock.calls as [[Blob]];
     expect(await archive.text()).toBe("zip");
+  });
+
+  it("offers to discard the exported drafts once the export succeeds", async () => {
+    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    queryClient.setQueryData(getCatalogCountsOptions().queryKey, {
+      movies: 2,
+      shows: 0,
+      collections: 0,
+      drafts: 1,
+    });
+    const { calls } = mockFetchRoutes({
+      "/api/public-dataset/export": () =>
+        new Response("zip", { headers: { "Content-Type": "application/zip" } }),
+      "/api/public-dataset/catalog": ({ url }: { url: string }) =>
+        Response.json(
+          url.includes("media_type=movie")
+            ? [
+                catalogRow({ entry_key: "tmdb-1", has_draft: true }),
+                catalogRow({ entry_key: "tmdb-2" }),
+              ]
+            : [],
+        ),
+      "/api/public-dataset/catalog/movie/drafts": { discarded: 1 },
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    renderWithQueryClient(OvertureDbPopup);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Export selections" }));
+    await answerConfirmation(true);
+
+    await waitFor(() =>
+      expect(calls.find((call) => call.init.method === "DELETE")?.init.body).toBe(
+        JSON.stringify({ entry_keys: ["tmdb-1"] }),
+      ),
+    );
+    expect(await screen.findByText("Discarded 1 drafts.")).toBeInTheDocument();
   });
 
   it("reports a failed export", async () => {

@@ -161,7 +161,7 @@ describe("ArtPanel request ownership", () => {
     settingsState.load(
       appSettings({
         auto_match_art: false,
-        auto_advance: true,
+        auto_advance: "slots_and_items",
       }),
     );
     renderArtTab();
@@ -178,7 +178,7 @@ describe("ArtPanel request ownership", () => {
     settingsState.load(
       appSettings({
         auto_match_art: false,
-        auto_advance: true,
+        auto_advance: "slots_and_items",
       }),
     );
     const pending = deferred<{ data: ReturnType<typeof selected> }>();

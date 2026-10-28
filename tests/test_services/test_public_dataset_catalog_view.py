@@ -15,12 +15,17 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    AssetStatus,
     CatalogMediaType,
     MediaType,
     ServerType,
     ThemeBulkSource,
 )
+lazy from overture.jobs.progress_log import JobOutcome
+lazy from overture.schemas.bulk import BulkThemeRequest
+lazy from overture.schemas.collections import collection_read
 lazy from overture.schemas.public_dataset import (
+    CatalogDraftsDiscard,
     CatalogDraftUpdate,
     CatalogSeason,
     PublicDatasetSyncStats,
@@ -28,6 +33,8 @@ lazy from overture.schemas.public_dataset import (
 lazy from overture.services.public_dataset import staging
 lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.public_dataset.export import export_selections
+lazy from overture.services.public_dataset.index import NO_THEME
+lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
@@ -325,3 +332,89 @@ async def test_export_preserves_themerrdb_attribution_after_the_catalog_is_clear
         assert not any(
             name.startswith("data/collections/") for name in archive.namelist()
         )
+
+
+async def test_bulk_discard_removes_the_named_drafts_and_skips_the_rest(
+    browser: CatalogBrowser,
+) -> None:
+    await browser.save_draft(
+        CatalogMediaType.SHOW,
+        "tmdb-1396",
+        CatalogDraftUpdate(poster_url="https://image.tmdb.org/t/p/original/new.jpg"),
+    )
+
+    result = await browser.discard_drafts(
+        CatalogMediaType.SHOW,
+        CatalogDraftsDiscard(entry_keys=["tmdb-1396", "tmdb-1396", "tmdb-949", "x"]),
+    )
+
+    assert result.discarded == 1
+    (row,) = await browser.list_entries(CatalogMediaType.SHOW)
+    assert row.has_draft is False
+
+
+async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    payload = catalog_payload()
+    payload["entries"].append(
+        {**COLLECTION, "youtube_id_themerrdb": None, "no_theme": True}
+    )
+    path, stage = tmp_path / "catalog.jsonl", tmp_path / "stage.sqlite"
+    path.write_bytes(catalog_jsonl(payload))
+    await staging.prepare(path, stage, app_config=app_config)
+    await staging.replace(db_session, stage, utc_now(), PublicDatasetSyncStats())
+    await enable_public_dataset(db_session)
+    db_session.add(
+        MediaCollection(
+            id=1,
+            server_item_id="saga",
+            media_type=MediaType.MOVIE,
+            server_type=ServerType.PLEX,
+            title="Star Wars",
+            tmdb_collection_id=10,
+            last_synced_at=utc_now(),
+        )
+    )
+    await db_session.commit()
+    browser = CatalogBrowser(database=database, app_config=app_config)
+
+    detail = await browser.get_entry(CatalogMediaType.COLLECTION, "tmdb-10")
+    assert detail.entry.no_theme is True
+    plan = await plan_collection_themes(
+        BulkThemeRequest(collection_ids=[1]), app_config=app_config, database=database
+    )
+    assert dict(plan.decided) == {(JobOutcome.SKIPPED, NO_THEME): 1}
+
+    drafted = await browser.save_draft(
+        CatalogMediaType.SHOW, "tmdb-1396", CatalogDraftUpdate(no_theme=True)
+    )
+    assert drafted.draft is not None
+    assert drafted.draft.no_theme is True
+    assert drafted.draft.youtube_id_overturedb is None
+    cleared = await browser.save_draft(
+        CatalogMediaType.SHOW, "tmdb-1396", CatalogDraftUpdate(no_theme=False)
+    )
+    assert cleared.draft is None or not cleared.draft.no_theme
+
+
+def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
+    row = MediaCollection(
+        id=1,
+        server_item_id="saga",
+        media_type=MediaType.MOVIE,
+        server_type=ServerType.PLEX,
+        title="Saga",
+        tmdb_collection_id=10,
+    )
+    flagged = collection_read(
+        row, PublicDatasetCollection(tmdb_id=10, title="Saga", no_theme=True)
+    )
+    assert flagged.theme_status is AssetStatus.COMPLETE
+    assert flagged.catalog_no_theme
+    assert flagged.public_dataset_complete
+    assert collection_read(row, None).theme_status is AssetStatus.MISSING

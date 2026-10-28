@@ -15,9 +15,8 @@
             "default": "strict"
           },
           "auto_advance": {
-            "default": false,
-            "title": "Auto Advance",
-            "type": "boolean"
+            "$ref": "#/components/schemas/AutoAdvance",
+            "default": "off"
           },
           "auto_advance_skip_completed": {
             "default": true,
@@ -80,6 +79,11 @@
           "collection_request_missing": {
             "default": false,
             "title": "Collection Request Missing",
+            "type": "boolean"
+          },
+          "collection_require_group": {
+            "default": false,
+            "title": "Collection Require Group",
             "type": "boolean"
           },
           "collection_sort_title_format": {
@@ -304,6 +308,7 @@
           "collection_sync_enabled",
           "collection_request_missing",
           "collection_import_unmanaged",
+          "collection_require_group",
           "tmdb_region",
           "radarr_root_folder",
           "radarr_quality_profile_id",
@@ -355,13 +360,12 @@
           "auto_advance": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoAdvance"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Advance"
+            ]
           },
           "auto_advance_skip_completed": {
             "anyOf": [
@@ -501,6 +505,17 @@
               }
             ],
             "title": "Collection Request Missing"
+          },
+          "collection_require_group": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Require Group"
           },
           "collection_sort_title_format": {
             "anyOf": [
@@ -1189,6 +1204,16 @@
         "title": "AuthConfig",
         "type": "object"
       },
+      "AutoAdvance": {
+        "description": "What the editor moves on to once a selection is saved.",
+        "enum": [
+          "off",
+          "slots",
+          "slots_and_items"
+        ],
+        "title": "AutoAdvance",
+        "type": "string"
+      },
       "AutoUnmonitor": {
         "description": "Completion condition that automatically stops monitoring an item.",
         "enum": [
@@ -1515,10 +1540,25 @@
         "additionalProperties": false,
         "description": "Validate the unified assets workflow request payload.",
         "properties": {
+          "all_collections": {
+            "default": false,
+            "title": "All Collections",
+            "type": "boolean"
+          },
           "art": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BulkAssetsArtConfig-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_groups": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UniqueList_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1_____"
               },
               {
                 "type": "null"
@@ -1588,10 +1628,25 @@
         "additionalProperties": false,
         "description": "Validate the unified assets workflow request payload.",
         "properties": {
+          "all_collections": {
+            "default": false,
+            "title": "All Collections",
+            "type": "boolean"
+          },
           "art": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BulkAssetsArtConfig-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_groups": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UniqueList_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1_____"
               },
               {
                 "type": "null"
@@ -1658,6 +1713,8 @@
           "library_ids",
           "item_ids",
           "collection_ids",
+          "collection_groups",
+          "all_collections",
           "include_unmonitored",
           "overwrite_existing",
           "skip_recent_val",
@@ -1929,14 +1986,12 @@
           "collection_group": {
             "anyOf": [
               {
-                "maxLength": 200,
-                "type": "string"
+                "$ref": "#/components/schemas/GroupName"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Collection Group"
+            ]
           },
           "collection_ids": {
             "items": {
@@ -1980,6 +2035,9 @@
               "set_group",
               "apply_sort_title_format",
               "trigger_sync",
+              "take_over",
+              "clear_artwork",
+              "clear_themes",
               "delete"
             ],
             "title": "Operation",
@@ -2064,11 +2122,19 @@
             },
             "title": "Errors",
             "type": "object"
+          },
+          "skipped": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "object"
           }
         },
         "required": [
           "collection_ids",
-          "errors"
+          "errors",
+          "skipped"
         ],
         "title": "BulkCollectionOperationResult",
         "type": "object"
@@ -2198,6 +2264,17 @@
             ],
             "title": "Imdb Id"
           },
+          "no_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Theme"
+          },
           "poster_url": {
             "anyOf": [
               {
@@ -2282,6 +2359,43 @@
         "title": "CatalogDraftUpdate",
         "type": "object"
       },
+      "CatalogDraftsDiscard": {
+        "additionalProperties": false,
+        "description": "The entries whose drafts to discard, by entry name.",
+        "properties": {
+          "entry_keys": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Entry Keys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_keys"
+        ],
+        "title": "CatalogDraftsDiscard",
+        "type": "object"
+      },
+      "CatalogDraftsDiscarded": {
+        "additionalProperties": false,
+        "description": "How many of the named entries had a draft that is now gone.",
+        "properties": {
+          "discarded": {
+            "title": "Discarded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "discarded"
+        ],
+        "title": "CatalogDraftsDiscarded",
+        "type": "object"
+      },
       "CatalogEntry": {
         "additionalProperties": false,
         "description": "A catalog entry; fields its media type does not carry are ``None``.",
@@ -2310,6 +2424,11 @@
           },
           "media_type": {
             "$ref": "#/components/schemas/CatalogMediaType"
+          },
+          "no_theme": {
+            "default": false,
+            "title": "No Theme",
+            "type": "boolean"
           },
           "poster_url": {
             "anyOf": [
@@ -2407,6 +2526,7 @@
           "background_url",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
+          "no_theme",
           "seasons"
         ],
         "title": "CatalogEntry",
@@ -2526,6 +2646,11 @@
           "media_type": {
             "$ref": "#/components/schemas/CatalogMediaType"
           },
+          "no_theme": {
+            "default": false,
+            "title": "No Theme",
+            "type": "boolean"
+          },
           "poster_preview_url": {
             "anyOf": [
               {
@@ -2626,6 +2751,7 @@
           "background_url",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
+          "no_theme",
           "season_posters",
           "has_draft",
           "library_item_id",
@@ -2699,6 +2825,27 @@
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
           },
+          "background_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Height"
+          },
+          "background_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "background_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -2714,6 +2861,45 @@
             ],
             "title": "Background Url"
           },
+          "background_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Width"
+          },
+          "contribution_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contribution Warnings",
+            "type": "array"
+          },
+          "poster_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Height"
+          },
+          "poster_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "poster_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -2728,11 +2914,29 @@
               }
             ],
             "title": "Poster Url"
+          },
+          "poster_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Width"
           }
         },
         "required": [
           "poster_url",
           "background_url",
+          "poster_source",
+          "background_source",
+          "poster_width",
+          "poster_height",
+          "background_width",
+          "background_height",
+          "contribution_warnings",
           "poster_status",
           "background_status",
           "art_status"
@@ -2859,14 +3063,12 @@
           "collection_group": {
             "anyOf": [
               {
-                "maxLength": 200,
-                "type": "string"
+                "$ref": "#/components/schemas/GroupName"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Collection Group"
+            ]
           },
           "collection_mode": {
             "anyOf": [
@@ -3048,6 +3250,27 @@
             ],
             "title": "Art Url"
           },
+          "background_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Height"
+          },
+          "background_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "background_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -3062,6 +3285,17 @@
               }
             ],
             "title": "Background Url"
+          },
+          "background_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Width"
           },
           "below_minimum": {
             "default": false,
@@ -3078,6 +3312,11 @@
               }
             ],
             "title": "Catalog Entry Key"
+          },
+          "catalog_no_theme": {
+            "default": false,
+            "title": "Catalog No Theme",
+            "type": "boolean"
           },
           "catalog_title": {
             "anyOf": [
@@ -3126,6 +3365,13 @@
               }
             ]
           },
+          "contribution_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contribution Warnings",
+            "type": "array"
+          },
           "delete_when_inactive": {
             "anyOf": [
               {
@@ -3152,10 +3398,26 @@
             ],
             "title": "Generated Value"
           },
+          "has_incorrect_aspect_ratio": {
+            "default": false,
+            "title": "Has Incorrect Aspect Ratio",
+            "type": "boolean"
+          },
           "has_theme": {
             "default": false,
             "title": "Has Theme",
             "type": "boolean"
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
           },
           "id": {
             "title": "Id",
@@ -3212,6 +3474,27 @@
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
           },
+          "poster_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Height"
+          },
+          "poster_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "poster_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -3226,6 +3509,17 @@
               }
             ],
             "title": "Poster Url"
+          },
+          "poster_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Width"
           },
           "public_dataset_complete": {
             "default": false,
@@ -3462,6 +3756,13 @@
         "required": [
           "poster_url",
           "background_url",
+          "poster_source",
+          "background_source",
+          "poster_width",
+          "poster_height",
+          "background_width",
+          "background_height",
+          "contribution_warnings",
           "poster_status",
           "background_status",
           "art_status",
@@ -3507,6 +3808,9 @@
           "tmdb_collection_id",
           "public_dataset_complete",
           "public_dataset_themerrdb",
+          "has_incorrect_aspect_ratio",
+          "catalog_no_theme",
+          "home_order",
           "effective_sync_mode",
           "members",
           "rule",
@@ -4589,10 +4893,8 @@
         "description": "A replacement group name, scoped by the request.",
         "properties": {
           "name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
+            "$ref": "#/components/schemas/GroupName",
+            "minLength": 1
           }
         },
         "required": [
@@ -4802,14 +5104,12 @@
           "collection_group": {
             "anyOf": [
               {
-                "maxLength": 200,
-                "type": "string"
+                "$ref": "#/components/schemas/GroupName"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Collection Group"
+            ]
           },
           "collection_mode": {
             "anyOf": [
@@ -5682,11 +5982,22 @@
             },
             "title": "Members",
             "type": "array"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KindRecommendation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "member_count",
-          "members"
+          "members",
+          "recommendation"
         ],
         "title": "CollectionPreview",
         "type": "object"
@@ -5757,6 +6068,27 @@
             ],
             "title": "Art Url"
           },
+          "background_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Height"
+          },
+          "background_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "background_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -5772,9 +6104,25 @@
             ],
             "title": "Background Url"
           },
+          "background_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Width"
+          },
           "below_minimum": {
             "default": false,
             "title": "Below Minimum",
+            "type": "boolean"
+          },
+          "catalog_no_theme": {
+            "default": false,
+            "title": "Catalog No Theme",
             "type": "boolean"
           },
           "child_count": {
@@ -5813,6 +6161,13 @@
               }
             ]
           },
+          "contribution_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contribution Warnings",
+            "type": "array"
+          },
           "delete_when_inactive": {
             "anyOf": [
               {
@@ -5835,10 +6190,26 @@
             ],
             "title": "Generated Value"
           },
+          "has_incorrect_aspect_ratio": {
+            "default": false,
+            "title": "Has Incorrect Aspect Ratio",
+            "type": "boolean"
+          },
           "has_theme": {
             "default": false,
             "title": "Has Theme",
             "type": "boolean"
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
           },
           "id": {
             "title": "Id",
@@ -5888,6 +6259,27 @@
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
           },
+          "poster_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Height"
+          },
+          "poster_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "poster_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -5902,6 +6294,17 @@
               }
             ],
             "title": "Poster Url"
+          },
+          "poster_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Width"
           },
           "public_dataset_complete": {
             "default": false,
@@ -6090,6 +6493,13 @@
         "required": [
           "poster_url",
           "background_url",
+          "poster_source",
+          "background_source",
+          "poster_width",
+          "poster_height",
+          "background_width",
+          "background_height",
+          "contribution_warnings",
           "poster_status",
           "background_status",
           "art_status",
@@ -6134,7 +6544,10 @@
           "monitored",
           "tmdb_collection_id",
           "public_dataset_complete",
-          "public_dataset_themerrdb"
+          "public_dataset_themerrdb",
+          "has_incorrect_aspect_ratio",
+          "catalog_no_theme",
+          "home_order"
         ],
         "title": "CollectionRead",
         "type": "object"
@@ -7316,6 +7729,24 @@
         "title": "CollectionSyncResponse",
         "type": "object"
       },
+      "CollectionTakeOver": {
+        "additionalProperties": false,
+        "description": "The group a collection joins when Overture takes it over.",
+        "properties": {
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CollectionTakeOver",
+        "type": "object"
+      },
       "CollectionThemeDownloadTarget": {
         "additionalProperties": false,
         "description": "Target for a media-server collection theme upload.",
@@ -7323,6 +7754,17 @@
           "collection_id": {
             "title": "Collection Id",
             "type": "integer"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "target_type": {
             "const": "collection_theme",
@@ -7337,7 +7779,8 @@
         "required": [
           "target_type",
           "collection_id",
-          "title"
+          "title",
+          "source"
         ],
         "title": "CollectionThemeDownloadTarget",
         "type": "object"
@@ -8155,6 +8598,10 @@
         "title": "FolderRootsResponse",
         "type": "object"
       },
+      "GroupName": {
+        "maxLength": 200,
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -8279,6 +8726,17 @@
             ],
             "title": "Season Id"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
           "target_type": {
             "const": "item",
             "title": "Target Type",
@@ -8302,7 +8760,8 @@
           "title",
           "season_id",
           "job_type",
-          "art_type"
+          "art_type",
+          "source"
         ],
         "title": "ItemDownloadTarget",
         "type": "object"
@@ -8511,6 +8970,25 @@
             "type": "null"
           }
         ]
+      },
+      "KindRecommendation": {
+        "additionalProperties": false,
+        "description": "The collection kind that suits the criteria, and why.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CollectionKind"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "reason"
+        ],
+        "title": "KindRecommendation",
+        "type": "object"
       },
       "LibraryIds": {
         "$ref": "#/components/schemas/UniqueList_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1___MaxLen_max_length_128______MaxLen_max_length_200_",
@@ -8855,6 +9333,18 @@
               }
             ],
             "title": "Background Width"
+          },
+          "catalog_no_theme": {
+            "default": false,
+            "title": "Catalog No Theme",
+            "type": "boolean"
+          },
+          "contribution_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contribution Warnings",
+            "type": "array"
           },
           "created_at": {
             "anyOf": [
@@ -9298,8 +9788,10 @@
           "background_width",
           "background_height",
           "has_incorrect_aspect_ratio",
+          "contribution_warnings",
           "youtube_id",
           "youtube_id_source",
+          "catalog_no_theme",
           "youtube_title",
           "youtube_duration",
           "theme_file_hash",
@@ -9427,6 +9919,16 @@
         "additionalProperties": false,
         "description": "Public dataset record response.",
         "properties": {
+          "collection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDatasetRecordCollection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "found": {
             "title": "Found",
             "type": "boolean"
@@ -9452,9 +9954,103 @@
         "required": [
           "found",
           "item",
+          "collection",
           "seasons"
         ],
         "title": "PublicDatasetRecord",
+        "type": "object"
+      },
+      "PublicDatasetRecordCollection": {
+        "additionalProperties": false,
+        "description": "Persisted public dataset collection record.",
+        "properties": {
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "catalog_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Synced At"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_id": {
+            "title": "Tmdb Id",
+            "type": "integer"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "id",
+          "tmdb_id",
+          "title",
+          "poster_url",
+          "background_url",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb",
+          "catalog_synced_at"
+        ],
+        "title": "PublicDatasetRecordCollection",
         "type": "object"
       },
       "PublicDatasetRecordItem": {
@@ -9729,6 +10325,17 @@
             "title": "Background",
             "type": "array"
           },
+          "entry_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Key"
+          },
           "poster": {
             "items": {
               "$ref": "#/components/schemas/ArtCandidate"
@@ -9763,7 +10370,8 @@
           "poster",
           "background",
           "youtube_id_overturedb",
-          "youtube_id_themerrdb"
+          "youtube_id_themerrdb",
+          "entry_key"
         ],
         "title": "PublicDatasetSourcesItem",
         "type": "object"
@@ -12180,6 +12788,13 @@
       "UniqueList_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1___MaxLen_max_length_128______MaxLen_max_length_200_": {
         "items": {
           "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "UniqueList_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1_____": {
+        "items": {
           "minLength": 1,
           "type": "string"
         },
@@ -16700,6 +17315,90 @@
         ]
       }
     },
+    "/api/collections/{collection_id}/take-over": {
+      "post": {
+        "description": "Let Overture manage a collection made outside it, keeping what it holds.",
+        "operationId": "take_over_collection",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionTakeOver"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Take Over Collection",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/theme": {
       "delete": {
         "description": "Remove the theme from a collection and clear its stored record.",
@@ -18283,6 +18982,78 @@
         ]
       }
     },
+    "/api/public-dataset/catalog/{media_type}/drafts": {
+      "delete": {
+        "description": "Discard the local drafts of the named entries.",
+        "operationId": "discard_catalog_drafts",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogDraftsDiscard"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogDraftsDiscarded"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Catalog Drafts",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
     "/api/public-dataset/catalog/{media_type}/{entry_key}": {
       "get": {
         "description": "Return one catalog entry with its local draft.",
@@ -18505,6 +19276,143 @@
           }
         },
         "summary": "Save Catalog Draft",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
+    "/api/public-dataset/catalog/{media_type}/{entry_key}/record": {
+      "get": {
+        "description": "Return the catalog record an entry name identifies.",
+        "operationId": "get_catalog_entry_record",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDatasetRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Entry Record",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
+    "/api/public-dataset/collections/{collection_id}/record": {
+      "get": {
+        "description": "Return the catalog record of a library collection.",
+        "operationId": "get_public_dataset_collection_record",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDatasetRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Dataset Collection Record",
         "tags": [
           "public-dataset"
         ]

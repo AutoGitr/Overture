@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
-import CollectionGroupSettings from "../../../lib/components/CollectionGroupSettings.svelte";
+import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import {
@@ -663,7 +663,7 @@ describe("collection management", () => {
       "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : policy),
     });
-    renderWithQueryClient(CollectionGroupSettings, { group: "Weekend", mediaType: "movie" });
+    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
     await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     await fireEvent.input(await screen.findByLabelText("Minimum members"), {
       target: { value: "2" },
@@ -697,7 +697,7 @@ describe("collection management", () => {
         ),
       "/api/collections/group-policy/apply": { collection_ids: [12, 13], errors: {} },
     });
-    renderWithQueryClient(CollectionGroupSettings, { group: "Weekend", mediaType: "movie" });
+    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
     await fireEvent.click(await screen.findByRole("button", { name: "Save and Apply" }));
     await waitFor(() => expect(calls.some((call) => call.url.includes("/apply"))).toBe(true));
     expect(
