@@ -658,3 +658,32 @@ async def test_search_skips_lines_that_are_not_videos(
     results = await YouTubeResolver(tmp_path).search("theme")
 
     assert [result.id for result in results] == ["abcDEF123_4"]
+
+
+async def test_youtube_requests_run_once_per_theme_download_worker(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    running = 0
+    peak = 0
+    three_running = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fake_run(*_args: object, **_kwargs: object) -> ProcessResult:
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        if running == 3:
+            three_running.set()
+        await release.wait()
+        running -= 1
+        return ProcessResult(0, b"", "")
+
+    monkeypatch.setattr(module, "run_process", fake_run)
+    resolver = YouTubeResolver(tmp_path, download_workers=3)
+    searches = [asyncio.create_task(resolver.search(f"theme {n}")) for n in range(5)]
+    await asyncio.wait_for(three_running.wait(), timeout=5)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert peak == 3
+    release.set()
+    assert await asyncio.gather(*searches) == [[]] * 5

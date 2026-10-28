@@ -43,14 +43,8 @@ logger = logging.getLogger(__name__)
 #: downloads or a yt-dlp search, so a few overlap without flooding providers.
 DECIDE_CONCURRENCY = 4
 
-#: Why targets with a saved selection were not visited.
-SAVED_SELECTION = (
-    "saved selection already set; Retry saved downloads restores missing files "
-    "and Overwrite existing searches again"
-)
-
-#: What Retry saved downloads would do for a kept saved selection.
-_RETRY_HINT = "Retry saved downloads restores a missing file"
+#: Why targets whose saved selection is on disk were not visited.
+SAVED_SELECTION = "saved selection already set; Replace existing searches again"
 
 #: Why planned targets could not be visited: their row left the library.
 LEFT_LIBRARY = "no longer in the library"
@@ -63,7 +57,6 @@ class AssetRunParams(Protocol):
     """The options of a bulk request that decide targets while planning."""
 
     overwrite_existing: bool
-    retry_saved_downloads: bool
     library_ids: list[str]
     item_ids: list[int] | None
     include_unmonitored: bool
@@ -75,6 +68,7 @@ def planned_outcome(
     params: AssetRunParams,
     *,
     saved: str | None,
+    file_missing: bool,
     last_checked: datetime | None,
     catalog: CatalogPick | None,
 ) -> PlannedOutcome | None:
@@ -82,12 +76,14 @@ def planned_outcome(
 
     This is the planning half of an Assets decision; a visit makes the half
     that needs the files on disk or a source. *saved* is the slot's saved
-    selection. *catalog* is ``None`` unless the run's sole sources are
-    catalogs, and then is what they offer the target.
+    selection, and *file_missing* says its file is not on disk where it
+    belongs. *catalog* is ``None`` unless the run's sole sources are catalogs,
+    and then is what they offer the target.
     The rules apply in order:
 
-    1. A saved selection Retry may restore is visited, whenever last checked,
-       since Retry downloads the saved choice rather than asking a source.
+    1. A saved selection whose file is missing is visited, whenever last
+       checked, since the visit downloads the saved choice rather than asking
+       a source.
     2. On a catalog-only run, a target no catalog serves is no match, or
        skipped when OvertureDB is disabled: no option would find it anything.
     3. A saved selection is skipped unless Overwrite is on.
@@ -95,7 +91,7 @@ def planned_outcome(
     5. Everything else is visited.
     """
     kept = bool(saved) and not params.overwrite_existing
-    if kept and params.retry_saved_downloads:
+    if kept and file_missing:
         return None
     if catalog is not None and catalog.value is None:
         outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
@@ -115,10 +111,10 @@ def _saved_reason(saved: str | None, catalog: CatalogPick | None) -> str:
     if catalog is None:
         return SAVED_SELECTION
     if saved == catalog.value:
-        return f"saved selection is already the {catalog.label}; {_RETRY_HINT}"
+        return f"saved selection is already the {catalog.label}"
     return (
         f"saved selection differs from the {catalog.label}; "
-        f"Overwrite existing would replace it and {_RETRY_HINT}"
+        "Replace existing would replace it"
     )
 
 

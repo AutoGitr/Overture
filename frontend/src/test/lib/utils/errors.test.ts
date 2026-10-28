@@ -3,10 +3,8 @@ import { ApiError } from "../../../lib/rest/transport";
 import { errorMessage, jobEventErrorMessage } from "../../../lib/utils/errors";
 
 describe("errorMessage", () => {
-  it("includes a safe support reference for API errors", () => {
-    expect(errorMessage(new ApiError("token=secret", 503, "request-123"), "fallback")).toBe(
-      "token=[REDACTED] (Request ID: request-123)",
-    );
+  it("shows a redacted API error without its request ID", () => {
+    expect(errorMessage(new ApiError("token=secret", 503), "fallback")).toBe("token=[REDACTED]");
   });
   it("uses redacted Error messages", () => {
     expect(errorMessage(new Error("token=secret"), "fallback")).toBe("token=[REDACTED]");
@@ -25,16 +23,6 @@ describe("errorMessage", () => {
     expect(
       jobEventErrorMessage({ job: { error: { message: "typed password=hunter2" } } }, "fallback"),
     ).toBe("typed password=[REDACTED]");
-  });
-
-  it("retains the job support reference without exposing sensitive error content", () => {
-    expect(
-      jobEventErrorMessage(
-        { job: { id: "download-123", error: { message: "token=secret" } } },
-        "failed",
-      ),
-    ).toBe("token=[REDACTED] (Job ID: download-123)");
-    expect(jobEventErrorMessage({ job: { id: "password=secret" } }, "failed")).toBe("failed");
   });
 
   it("falls back when job error is absent", () => {

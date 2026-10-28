@@ -119,13 +119,11 @@ describe("realtimeTransport", () => {
 
   it("exposes snapshot failures and clears them after a successful retry", async () => {
     vi.useFakeTimers();
-    bootstrap.loadRealtimeSnapshot.mockRejectedValueOnce(
-      new ApiError("Snapshot unavailable", 503, "snapshot-request"),
-    );
+    bootstrap.loadRealtimeSnapshot.mockRejectedValueOnce(new ApiError("Snapshot unavailable", 503));
     const transport = await loadTransport();
     transport.connect();
     await vi.advanceTimersByTimeAsync(0);
-    expect(realtimeConnectionState.error).toContain("snapshot-request");
+    expect(realtimeConnectionState.error).toContain("Snapshot unavailable");
     expect(realtimeConnectionState.lastSyncedAt).toBeNull();
     await transport.retry();
     expect(realtimeConnectionState.error).toBe("");

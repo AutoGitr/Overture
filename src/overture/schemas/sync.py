@@ -56,12 +56,9 @@ class SyncScheduleWrite(ScheduleWrite[SyncScheduleConfig]):
 
 
 class IncrementalSyncState(StrictBaseModel):
-    """Checkpoint and last-poll figures an incremental schedule keeps."""
+    """The checkpoint an incremental schedule polls from."""
 
     checkpoint: datetime | None = None
-    last_duration_seconds: float | None = None
-    last_items_added: int | None = None
-    last_downloads: int | None = None
 
 
 class SyncScheduleResponse(ScheduleResponseBase):

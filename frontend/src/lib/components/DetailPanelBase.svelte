@@ -165,6 +165,11 @@
               {/if}
             </div>
             <div class="detail-tab-row tab-bar">
+              {#if sectionLinks}
+                <nav class="section-links" aria-label="Configure sections">
+                  {@render sectionLinks()}
+                </nav>
+              {/if}
               <div
                 class="detail-subtabs"
                 role="tablist"
@@ -174,11 +179,6 @@
               >
                 {@render subtabs?.()}
               </div>
-              {#if sectionLinks}
-                <nav class="section-links" aria-label="Configure sections">
-                  {@render sectionLinks()}
-                </nav>
-              {/if}
               {#if subtabActions}
                 <div class="section-actions" role="group" aria-label="Section actions">
                   {@render subtabActions()}
@@ -411,8 +411,8 @@
   }
 
   .section-links {
-    padding-left: var(--space-1);
-    border-left: var(--border-subtle);
+    padding-right: var(--space-1);
+    border-right: var(--border-subtle);
   }
 
   .record-actions :global(.tab-item.danger) {

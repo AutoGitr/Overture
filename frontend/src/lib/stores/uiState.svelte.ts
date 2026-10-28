@@ -204,6 +204,11 @@ class UiState {
     this.collectionGroupChange?.(name, replacement);
   }
 
+  /** The groups popup was opened to pick a group for a collection form. */
+  get pickingCollectionGroup(): boolean {
+    return this.collectionGroupChange !== null;
+  }
+
   /**
    * Which popup overlay is open.
    *

@@ -276,7 +276,7 @@ class ArtService:
         """Record the choice; return its download job and whether it is new.
 
         The choice is saved before any download, so it survives a failed one
-        and Retry saved downloads can restore it. An item without a local
+        and the next Assets run can restore it. An item without a local
         folder downloads nothing: the choice is all it records.
 
         Raises:

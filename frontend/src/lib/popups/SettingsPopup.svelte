@@ -62,8 +62,10 @@
       const previousTolerance = settingsState.current.aspect_ratio_tolerance;
       const fresh = await updateSettingsRequest.mutateAsync({ body: draft });
       queryClient.setQueryData(getSettingsOptions().queryKey, fresh);
-      // Library items carry has_incorrect_aspect_ratio, computed for the tolerance.
-      await invalidateTags(
+      // Refetch in the background: art candidates come from remote sources, and
+      // waiting for them made saving slow. Library items carry
+      // has_incorrect_aspect_ratio, computed for the tolerance.
+      void invalidateTags(
         settingsState.current.aspect_ratio_tolerance === previousTolerance
           ? ["art", "collections"]
           : ["art", "library", "collections"],

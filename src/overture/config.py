@@ -276,8 +276,9 @@ class Settings(RuntimeSettings):
     # Standard IANA timezone used for logs and cron schedules.
     TZ: Annotated[str, AfterValidator(_timezone_name)] = "UTC"
     PHASH_WORKERS: Annotated[int, Field(ge=1, le=32)] = 1
-    ART_DOWNLOAD_WORKERS: Annotated[int, Field(ge=1, le=16)] = 1
-    THEME_DOWNLOAD_WORKERS: Annotated[int, Field(ge=1, le=16)] = 1
+    # Above these, image hosts and YouTube rate-limit or block the address.
+    ART_DOWNLOAD_WORKERS: Annotated[int, Field(ge=1, le=10)] = 1
+    THEME_DOWNLOAD_WORKERS: Annotated[int, Field(ge=1, le=4)] = 1
 
     _plex_secure_origin: str | None = PrivateAttr(default=None)
 

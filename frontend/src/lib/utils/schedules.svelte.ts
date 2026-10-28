@@ -2,12 +2,13 @@ import { SvelteSet } from "svelte/reactivity";
 import type {
   BulkAssetsScheduleResponse,
   BulkAssetsScheduleWrite,
+  ScheduleRunSummary,
   SyncScheduleResponse,
   SyncScheduleWrite,
 } from "../../generated/rest/types.gen";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
-import { formatDateInTimezone } from "./popupFormat";
+import { formatDateInTimezone, formatDuration } from "./popupFormat";
 
 /** One mutation handle, as returned by `createMutation`. */
 interface Mutation<TVariables> {
@@ -62,6 +63,18 @@ export function buildScheduleWrite<TConfig>(params: {
 /** Format a schedule date in the given timezone, or a placeholder when unset. */
 export function formatScheduleDate(value: string | null | undefined, timezone: string): string {
   return value ? formatDateInTimezone(value, timezone) : "Not scheduled";
+}
+
+/** What a schedule's last run did: "41s, 12 queued, 1 failed" or "Failed after 3s". */
+export function formatRunSummary(summary: ScheduleRunSummary): string {
+  const duration = formatDuration(summary.duration_seconds);
+  const counts = Object.entries(summary.counts ?? {}).map(([name, count]) => `${count} ${name}`);
+  const parts = [
+    summary.failed ? `failed${duration && ` after ${duration}`}` : duration,
+    ...counts,
+  ];
+  const text = parts.filter(Boolean).join(", ") || "nothing to do";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**

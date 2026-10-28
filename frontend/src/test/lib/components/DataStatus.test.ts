@@ -12,11 +12,11 @@ describe("DataStatus", () => {
     await view.rerender({
       label: "library",
       loading: false,
-      error: new ApiError("Unavailable", 503, "request-1"),
+      error: new ApiError("Unavailable", 503),
       onretry,
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Data is unavailable.");
-    expect(screen.getByRole("alert")).toHaveTextContent("request-1");
+    expect(screen.getByRole("alert")).toHaveTextContent("Unavailable");
     await fireEvent.click(screen.getByRole("button", { name: "Retry library" }));
     expect(onretry).toHaveBeenCalledOnce();
     await view.rerender({

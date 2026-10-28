@@ -12,7 +12,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_auto_match_theme: false,
   collection_delete_below_minimum: false,
   collection_delete_when_inactive: false,
-  collection_filtering_default: "admin",
+  collection_filtering_default: "user",
   collection_import_unmanaged: true,
   collection_minimum_items: 1,
   collection_mode_default: "default",
@@ -47,7 +47,7 @@ export type AppSettingsDefaults = typeof DEFAULT_APP_SETTINGS;
 
 // Shared constants, from overture.domain and overture.utils.http_security.
 export const SERVER_DISPLAY_NAMES = {"plex": "Plex", "jellyfin": "Jellyfin", "emby": "Emby"} as const;
-export const SELECTED_ART_SOURCE_LABELS = {"overturedb": "OvertureDB", "tmdb": "TMDB", "tpdb": "ThePosterDB", "fanart": "fanart.tv", "tvdb": "TheTVDB", "plex": "Plex"} as const;
+export const SELECTED_ART_SOURCE_LABELS = {"tmdb": "TMDB", "tpdb": "ThePosterDB", "fanart": "fanart.tv", "tvdb": "TheTVDB", "plex": "Plex"} as const;
 export const ART_SOURCE_LABELS = {"overturedb": "OvertureDB", "local_art_matching": "Local art matching"} as const;
 export const THEME_SOURCE_LABELS = {"overturedb": "OvertureDB", "themerrdb": "ThemerrDB", "youtube_search": "YouTube search"} as const;
 export const CATALOG_SOURCES = ["overturedb", "themerrdb"] as const;

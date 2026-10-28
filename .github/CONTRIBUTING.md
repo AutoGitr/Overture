@@ -51,8 +51,9 @@ bash scripts/pre-commit-check.sh
 
 It runs the checks CI runs on what changed: lockfiles, generated files,
 formatting, lint, types, tests with their coverage thresholds, and builds.
-`bash scripts/pre-commit-check.sh --fix` formats and
-regenerates contracts first. The Git hook runs the quick check of the staged
+`bash scripts/pre-commit-check.sh --fix` first updates `uv.lock` and
+`frontend/bun.lock` to match their manifests (it never upgrades anything),
+formats and regenerates contracts. The Git hook runs the quick check of the staged
 changes, without tests or builds.
 
 | Task | Command |

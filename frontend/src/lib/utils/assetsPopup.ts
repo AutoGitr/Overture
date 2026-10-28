@@ -28,7 +28,6 @@ export interface AssetsConfig {
   includeCollections: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
-  retrySavedDownloads: boolean;
   enableArt: boolean;
   enableThemes: boolean;
   artTypes: ArtType[];
@@ -151,7 +150,6 @@ export interface BulkAssetsRequestParams {
   includeCollections?: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
-  retrySavedDownloads: boolean;
   skipRecentVal: number;
   skipRecentUnit: RecentUnit;
   enableArt: boolean;
@@ -173,7 +171,6 @@ export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAss
     ...(params.collectionIds === undefined ? {} : { collection_ids: [...params.collectionIds] }),
     include_unmonitored: params.includeUnmonitored,
     overwrite_existing: params.overwriteExisting,
-    retry_saved_downloads: params.retrySavedDownloads,
     skip_recent_val: params.skipRecentVal,
     skip_recent_unit: params.skipRecentUnit,
     art:

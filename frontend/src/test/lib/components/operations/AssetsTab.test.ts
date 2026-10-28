@@ -130,7 +130,6 @@ describe("AssetsPopup", () => {
           item_ids: [7, 12, 25],
           include_unmonitored: false,
           overwrite_existing: false,
-          retry_saved_downloads: false,
         }),
       ),
     );
@@ -215,12 +214,10 @@ describe("AssetsPopup", () => {
 
   it("shows a failed stop request while retaining the running job for retry", async () => {
     matchState.handleStarted({});
-    stopBulkAssets.mockRejectedValueOnce(new ApiError("Stop unavailable", 503, "stop-assets"));
+    stopBulkAssets.mockRejectedValueOnce(new ApiError("Stop unavailable", 503));
     renderWithQueryClient(OperationsPopup);
     await fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Stop unavailable (Request ID: stop-assets)",
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Stop unavailable");
     expect(matchState.running).toBe(true);
     await fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
@@ -249,7 +246,6 @@ describe("AssetsPopup", () => {
           skip_recent_unit: "days",
           include_unmonitored: false,
           overwrite_existing: false,
-          retry_saved_downloads: false,
           art: expect.objectContaining({
             art_types: ["poster"],
             source_order: ["overturedb", "local_art_matching"],
@@ -318,9 +314,7 @@ describe("AssetsPopup", () => {
       target: { value: "Nightly" },
     });
     await fireEvent.click(screen.getByRole("checkbox", { name: "Include unmonitored items" }));
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Retry saved downloads" }));
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Overwrite existing" }));
-    expect(screen.getByRole("checkbox", { name: "Retry saved downloads" })).toBeDisabled();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Replace existing" }));
     await fireEvent.input(assetsPanel().getByPlaceholderText("0 3 * * *"), {
       target: { value: "0 5 * * *" },
     });
@@ -337,7 +331,6 @@ describe("AssetsPopup", () => {
             library_ids: ["1"],
             include_unmonitored: true,
             overwrite_existing: true,
-            retry_saved_downloads: true,
           }),
         }),
       );
@@ -376,9 +369,8 @@ describe("AssetsPopup", () => {
     expect(screen.queryByText(/Theme Search Query/)).not.toBeInTheDocument();
     expect(screen.getByText("Update Schedule")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Include unmonitored items" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Overwrite existing" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Retry saved downloads" })).toBeChecked();
-    expect(screen.getByText("Overwrite existing: Yes")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Replace existing" })).toBeChecked();
+    expect(screen.getByText("Replace existing: Yes")).toBeInTheDocument();
     await fireEvent.click(screen.getByText("Update Schedule"));
     await waitFor(() =>
       expect(updateBulkAssetsSchedule).toHaveBeenCalledWith(
@@ -387,7 +379,6 @@ describe("AssetsPopup", () => {
           config: expect.objectContaining({
             include_unmonitored: true,
             overwrite_existing: true,
-            retry_saved_downloads: true,
           }),
         }),
       ),
@@ -405,16 +396,14 @@ describe("AssetsPopup", () => {
       }),
     );
     await fireEvent.click(screen.getByRole("checkbox", { name: "Include unmonitored items" }));
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Retry saved downloads" }));
-    await waitFor(() =>
-      expect(localStorage.getItem("assetsPopup_retrySavedDownloads")).toBe("true"),
-    );
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Replace existing" }));
+    await waitFor(() => expect(localStorage.getItem("assetsPopup_overwriteExisting")).toBe("true"));
     popup.unmount();
     renderWithQueryClient(OperationsPopup);
     expect(
       await screen.findByRole("checkbox", { name: "Include unmonitored items" }),
     ).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Retry saved downloads" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Replace existing" })).toBeChecked();
     await waitFor(() => expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
     await waitFor(() =>
@@ -422,8 +411,7 @@ describe("AssetsPopup", () => {
         expect.objectContaining({
           item_ids: [7],
           include_unmonitored: true,
-          overwrite_existing: false,
-          retry_saved_downloads: true,
+          overwrite_existing: true,
         }),
       ),
     );

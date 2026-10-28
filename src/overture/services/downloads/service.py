@@ -762,6 +762,14 @@ class DownloadService:
         job.status = JobStatus.FAILED
         job.error_message = safe_msg
         job.completed_at = completed_at
+        # The interface names only the title, so the job's ID is here.
+        logger.warning(
+            "Download %s (%s of %s) failed: %s",
+            job.id,
+            job.art_type or job.job_type,
+            title or "an untitled target",
+            safe_msg,
+        )
         self._settle(job.id, safe_msg)
         await self._events.publish(
             job, DownloadStatus.FAILED, title=title, error=safe_msg

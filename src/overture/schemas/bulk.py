@@ -62,17 +62,10 @@ class _BulkSharedRunFields(StrictBaseModel):
     overwrite_existing: bool = Field(
         default=False,
         description=(
-            "Resolve sources again for saved selections and existing themes. "
-            "Takes precedence over retry_saved_downloads; "
-            "recent-check filtering still applies."
-        ),
-    )
-    retry_saved_downloads: bool = Field(
-        default=False,
-        description=(
-            "Restore missing files from saved artwork URLs or YouTube IDs "
-            "without choosing a new source. Existing files are retained; "
-            "recent-check filtering does not apply to these retries."
+            "Resolve sources again for saved selections and existing themes; "
+            "files identical to the local one are left untouched. Recent-check "
+            "filtering still applies. Without it, a saved selection whose file "
+            "is missing is downloaded again."
         ),
     )
     skip_recent_val: Annotated[int, Field(ge=0)] = 0

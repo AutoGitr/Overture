@@ -386,7 +386,9 @@ def build_runtime(
         publisher=events,
     )
     tmdb = TMDBClient(app_config=app_config)
-    youtube = YouTubeResolver(config_dir)
+    youtube = YouTubeResolver(
+        config_dir, download_workers=app_config.THEME_DOWNLOAD_WORKERS
+    )
     proxy_clients = ProxyClientManager(app_config=app_config)
     provider_registry = ProviderRegistry(app_config=app_config)
     candidates = ArtCandidates(

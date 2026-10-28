@@ -94,8 +94,10 @@
           mediaType={uiState.sidebarTab}
           libraries={libraries.data ?? []}
           onsave={() => {
-            if (unsaved) uiState.collectionGroupChanged("", name.trim());
+            if (!unsaved) return;
+            uiState.collectionGroupChanged("", name.trim());
             unsaved = false;
+            if (uiState.pickingCollectionGroup) uiState.closePopup();
           }}
         />{/key}
     </WorkflowSections>

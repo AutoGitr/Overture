@@ -59,7 +59,6 @@ CATALOG_URL = "https://public.test/image.jpg"
 SAVED_URL = "https://saved.test/image.jpg"
 LOCAL_URL = "https://local.test/image.jpg"
 RECENT = "checked within the last 1 hour"
-RETRY_HINT = "Retry saved downloads restores a missing file"
 
 #: A line planning wrote for several targets at once.
 PLANNED_LINE = re.compile(r"(Skipped|No match) (\d+) (?:items?|art slots?) - (.*)")
@@ -93,31 +92,21 @@ def planned(
     saved: str | None,
     recent: bool,
     overwrite: bool,
-    retry: bool,
     dataset_only: bool,
     offer: str | None,
-    label: str,
     misses: list[str],
     enabled: bool,
 ) -> Expected | None:
-    """Return what planning decides from the database, or ``None`` to visit."""
-    kept = saved is not None and not overwrite
-    if kept and retry:
+    """Return what planning decides from the database, or ``None`` to visit.
+
+    No case stores the facts of a file on disk, so planning takes every saved
+    selection's file as missing and visits it to restore the file.
+    """
+    if saved is not None and not overwrite:
         return None
     if dataset_only and offer is None:
         outcome = JobOutcome.NO_MATCH if enabled else JobOutcome.SKIPPED
         return Expected(outcome, "; ".join(misses), planned=True)
-    if kept:
-        if not dataset_only:
-            reason = SAVED_SELECTION
-        elif saved == offer:
-            reason = f"saved selection is already the {label}; {RETRY_HINT}"
-        else:
-            reason = (
-                f"saved selection differs from the {label}; "
-                f"Overwrite existing would replace it and {RETRY_HINT}"
-            )
-        return Expected(JobOutcome.SKIPPED, reason, planned=True)
     if recent:
         return Expected(JobOutcome.SKIPPED, RECENT, planned=True)
     return None
@@ -192,7 +181,6 @@ def expected_art(
     *,
     enabled: bool,
     overwrite: bool,
-    retry: bool,
 ) -> Expected:
     offer = CATALOG_URL if enabled and case.catalog == "served" else None
     if not enabled:
@@ -205,10 +193,8 @@ def expected_art(
         saved=case.saved,
         recent=case.recent,
         overwrite=overwrite,
-        retry=retry,
         dataset_only=order == (ArtBulkSource.OVERTUREDB,),
         offer=offer,
-        label="OvertureDB artwork",
         misses=[miss],
         enabled=enabled,
     )
@@ -217,9 +203,7 @@ def expected_art(
     on_disk = case.disk != "none"
     if case.saved is not None and not overwrite:
         if on_disk:
-            return Expected(
-                JobOutcome.SKIPPED, "saved selection kept; its local file is present"
-            )
+            return Expected(JobOutcome.SKIPPED, SAVED_SELECTION)
         return Expected(
             JobOutcome.QUEUED,
             "restores the saved selection; local file missing",
@@ -266,18 +250,17 @@ def visited_art(
     if declined:
         return Expected(
             JobOutcome.SKIPPED,
-            f"kept the local file: {notes} (Overwrite existing would replace it)",
+            f"kept the local file: {notes} (Replace existing would replace it)",
         )
     return Expected(JobOutcome.NO_MATCH, notes)
 
 
 @pytest.mark.parametrize("enabled", [True, False], ids=["enabled", "disabled"])
-@pytest.mark.parametrize(("overwrite", "retry"), list(product((False, True), repeat=2)))
+@pytest.mark.parametrize("overwrite", [False, True])
 @pytest.mark.parametrize("order", orders(tuple(ArtBulkSource)), ids=order_id)
 async def test_art_source_matrix(
     order: tuple[ArtBulkSource, ...],
     overwrite: bool,
-    retry: bool,
     enabled: bool,
     tmp_path: Path,
     db_session: AsyncSession,
@@ -294,7 +277,7 @@ async def test_art_source_matrix(
         title = f"Case {number:03d}"
         cases[number] = case
         expected[title] = expected_art(
-            case, order, enabled=enabled, overwrite=overwrite, retry=retry
+            case, order, enabled=enabled, overwrite=overwrite
         )
         folder = tmp_path / title
         folder.mkdir()
@@ -362,7 +345,6 @@ async def test_art_source_matrix(
             threshold=10,
             skip_recent_val=1,
             overwrite_existing=overwrite,
-            retry_saved_downloads=retry,
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         matcher,
@@ -448,25 +430,21 @@ def expected_theme(
     *,
     enabled: bool,
     overwrite: bool,
-    retry: bool,
 ) -> Expected:
     ids = theme_ids(number, case)
     offer: str | None = None
-    label = ""
     misses: list[str] = []
     for source in (source for source in order if source.catalog):
         if (miss := theme_miss(source, case, enabled=enabled)) is None:
-            offer, label = ids[source.value], f"{source.label} theme"
+            offer = ids[source.value]
             break
         misses.append(miss)
     decided = planned(
         saved=ids["saved"],
         recent=case.recent,
         overwrite=overwrite,
-        retry=retry,
         dataset_only=all(source.catalog for source in order),
         offer=offer,
-        label=label,
         misses=misses,
         enabled=enabled,
     )
@@ -474,10 +452,7 @@ def expected_theme(
         return decided
     if ids["saved"] is not None and not overwrite:
         if case.disk:
-            return Expected(
-                JobOutcome.SKIPPED,
-                "saved selection kept; its local theme file is present",
-            )
+            return Expected(JobOutcome.SKIPPED, SAVED_SELECTION)
         return Expected(
             JobOutcome.QUEUED,
             "restores the saved selection; local theme file missing",
@@ -486,7 +461,7 @@ def expected_theme(
     if case.disk and not overwrite:
         return Expected(
             JobOutcome.SKIPPED,
-            "kept the local theme file (Overwrite existing would replace it)",
+            "kept the local theme file (Replace existing would replace it)",
         )
     replaces = "; replaces the local theme file" if case.disk else ""
     notes: list[str] = []
@@ -527,12 +502,11 @@ class FakeSearch:
 
 
 @pytest.mark.parametrize("enabled", [True, False], ids=["enabled", "disabled"])
-@pytest.mark.parametrize(("overwrite", "retry"), list(product((False, True), repeat=2)))
+@pytest.mark.parametrize("overwrite", [False, True])
 @pytest.mark.parametrize("order", orders(tuple(ThemeBulkSource)), ids=order_id)
 async def test_theme_source_matrix(
     order: tuple[ThemeBulkSource, ...],
     overwrite: bool,
-    retry: bool,
     enabled: bool,
     tmp_path: Path,
     db_session: AsyncSession,
@@ -548,7 +522,7 @@ async def test_theme_source_matrix(
         title = f"Case {number:03d}"
         cases[number] = case
         expected[title] = expected_theme(
-            number, case, order, enabled=enabled, overwrite=overwrite, retry=retry
+            number, case, order, enabled=enabled, overwrite=overwrite
         )
         ids = theme_ids(number, case)
         folder = tmp_path / title
@@ -611,7 +585,6 @@ async def test_theme_source_matrix(
             source_order=list(order),
             skip_recent_val=1,
             overwrite_existing=overwrite,
-            retry_saved_downloads=retry,
         ),
         make_bulk_downloads(app_config=app_config, database=database),
         cast("Any", FakeSearch(cases)),

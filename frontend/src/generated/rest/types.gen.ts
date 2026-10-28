@@ -770,15 +770,9 @@ export type BulkAssetsRequestInput = {
     /**
      * Overwrite Existing
      *
-     * Resolve sources again for saved selections and existing themes. Takes precedence over retry_saved_downloads; recent-check filtering still applies.
+     * Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.
      */
     overwrite_existing?: boolean;
-    /**
-     * Retry Saved Downloads
-     *
-     * Restore missing files from saved artwork URLs or YouTube IDs without choosing a new source. Existing files are retained; recent-check filtering does not apply to these retries.
-     */
-    retry_saved_downloads?: boolean;
     skip_recent_unit?: RecentUnit;
     /**
      * Skip Recent Val
@@ -806,15 +800,9 @@ export type BulkAssetsRequestOutput = {
     /**
      * Overwrite Existing
      *
-     * Resolve sources again for saved selections and existing themes. Takes precedence over retry_saved_downloads; recent-check filtering still applies.
+     * Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.
      */
     overwrite_existing: boolean;
-    /**
-     * Retry Saved Downloads
-     *
-     * Restore missing files from saved artwork URLs or YouTube IDs without choosing a new source. Existing files are retained; recent-check filtering does not apply to these retries.
-     */
-    retry_saved_downloads: boolean;
     skip_recent_unit: RecentUnit;
     /**
      * Skip Recent Val
@@ -866,6 +854,7 @@ export type BulkAssetsScheduleResponse = {
      * Kind
      */
     kind: 'assets';
+    last_run: ScheduleRunSummary | null;
     /**
      * Last Run At
      */
@@ -3519,25 +3508,13 @@ export type ImageSize = 'display';
 /**
  * IncrementalSyncState
  *
- * Checkpoint and last-poll figures an incremental schedule keeps.
+ * The checkpoint an incremental schedule polls from.
  */
 export type IncrementalSyncState = {
     /**
      * Checkpoint
      */
     checkpoint: string | null;
-    /**
-     * Last Downloads
-     */
-    last_downloads: number | null;
-    /**
-     * Last Duration Seconds
-     */
-    last_duration_seconds: number | null;
-    /**
-     * Last Items Added
-     */
-    last_items_added: number | null;
 };
 
 /**
@@ -4573,6 +4550,28 @@ export type ScanRequest = {
 export type ScheduleRunStatus = 'idle' | 'queued' | 'waiting' | 'running';
 
 /**
+ * ScheduleRunSummary
+ *
+ * What a schedule's last run did: how long it took and what it counted.
+ */
+export type ScheduleRunSummary = {
+    /**
+     * Counts
+     */
+    counts: {
+        [key: string]: number;
+    };
+    /**
+     * Duration Seconds
+     */
+    duration_seconds: number | null;
+    /**
+     * Failed
+     */
+    failed: boolean;
+};
+
+/**
  * SeasonRead
  *
  * Public season response.
@@ -5027,6 +5026,7 @@ export type SyncScheduleResponse = {
      * Kind
      */
     kind: 'sync';
+    last_run: ScheduleRunSummary | null;
     /**
      * Last Run At
      */

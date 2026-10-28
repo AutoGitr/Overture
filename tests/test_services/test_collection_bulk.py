@@ -190,7 +190,7 @@ def test_collection_requests_reject_art_mixed_scopes_and_saved_sidebar_snapshots
 
 
 @pytest.mark.parametrize("existing_file", [False, True])
-async def test_jellyfin_retry_distinguishes_missing_and_replaced_files(
+async def test_jellyfin_restores_a_missing_theme_and_keeps_a_recorded_one(
     tmp_path: Path, *, app_config: Settings, database: Database, existing_file: bool
 ) -> None:
     await _seed(database, saved="savedTheme1")
@@ -204,14 +204,15 @@ async def test_jellyfin_retry_distinguishes_missing_and_replaced_files(
         assert row is not None
         row.server_type = ServerType.JELLYFIN
         row.server_path = "/config/collections/Saga [boxset]"
-        row.theme_file_hash = "previous-file"
+        # Planning trusts the recorded file facts: none recorded means missing.
+        row.theme_file_hash = "previous-file" if existing_file else None
         session.add(row)
     downloads = make_bulk_downloads(
         app_config=app_config,
         database=database,
         provider=JellyfinProvider(app_config=app_config),
     )
-    params = BulkThemeRequest(collection_ids=[1], retry_saved_downloads=True)
+    params = BulkThemeRequest(collection_ids=[1])
     plan = await plan_collection_themes(
         params, app_config=app_config, database=database
     )
@@ -235,7 +236,7 @@ async def test_jellyfin_retry_distinguishes_missing_and_replaced_files(
         row = await session.get(MediaCollection, 1)
         assert row is not None
         jobs = (await session.exec(select(DownloadJob))).all()
-        assert row.youtube_id == (None if existing_file else "savedTheme1")
+        assert row.youtube_id == "savedTheme1"
         assert [job.target_url for job in jobs] == (
             [] if existing_file else ["savedTheme1"]
         )

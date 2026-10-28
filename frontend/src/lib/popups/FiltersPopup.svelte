@@ -185,13 +185,6 @@
             bind:value={draft.monitored}
           />
 
-          <span class="form-label">Media server</span>
-          <SegmentedControl
-            label="Media Server"
-            options={MEDIA_SERVER_OPTIONS}
-            bind:value={draft.mediaServer}
-          />
-
           <span class="form-label">Art</span>
           <SegmentedControl label="Art Status" options={COMPLETE_OPTIONS} bind:value={draft.art} />
 
@@ -226,6 +219,13 @@
               bind:value={draft.themerrDb}
             />
           {/if}
+
+          <span class="form-label">Media server</span>
+          <SegmentedControl
+            label="Media Server"
+            options={MEDIA_SERVER_OPTIONS}
+            bind:value={draft.mediaServer}
+          />
         </div>
       </div>
 
@@ -306,9 +306,6 @@
               ontoggle={(source) =>
                 (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
             />
-            <p class="hint">
-              Artwork the OvertureDB entry lists counts as OvertureDB, whichever site hosts it.
-            </p>
           </div>
         </section>
       {/if}

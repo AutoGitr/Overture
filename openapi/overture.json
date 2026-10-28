@@ -55,7 +55,7 @@
           },
           "collection_filtering_default": {
             "$ref": "#/components/schemas/CollectionFiltering",
-            "default": "admin"
+            "default": "user"
           },
           "collection_import_unmanaged": {
             "default": true,
@@ -1556,14 +1556,8 @@
           },
           "overwrite_existing": {
             "default": false,
-            "description": "Resolve sources again for saved selections and existing themes. Takes precedence over retry_saved_downloads; recent-check filtering still applies.",
+            "description": "Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.",
             "title": "Overwrite Existing",
-            "type": "boolean"
-          },
-          "retry_saved_downloads": {
-            "default": false,
-            "description": "Restore missing files from saved artwork URLs or YouTube IDs without choosing a new source. Existing files are retained; recent-check filtering does not apply to these retries.",
-            "title": "Retry Saved Downloads",
             "type": "boolean"
           },
           "skip_recent_unit": {
@@ -1635,14 +1629,8 @@
           },
           "overwrite_existing": {
             "default": false,
-            "description": "Resolve sources again for saved selections and existing themes. Takes precedence over retry_saved_downloads; recent-check filtering still applies.",
+            "description": "Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.",
             "title": "Overwrite Existing",
-            "type": "boolean"
-          },
-          "retry_saved_downloads": {
-            "default": false,
-            "description": "Restore missing files from saved artwork URLs or YouTube IDs without choosing a new source. Existing files are retained; recent-check filtering does not apply to these retries.",
-            "title": "Retry Saved Downloads",
             "type": "boolean"
           },
           "skip_recent_unit": {
@@ -1672,7 +1660,6 @@
           "collection_ids",
           "include_unmonitored",
           "overwrite_existing",
-          "retry_saved_downloads",
           "skip_recent_val",
           "skip_recent_unit",
           "art",
@@ -1743,6 +1730,16 @@
             "title": "Kind",
             "type": "string"
           },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleRunSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "last_run_at": {
             "anyOf": [
               {
@@ -1806,6 +1803,7 @@
           "created_at",
           "updated_at",
           "last_run_at",
+          "last_run",
           "run_status",
           "waiting_for",
           "kind",
@@ -8206,7 +8204,7 @@
       },
       "IncrementalSyncState": {
         "additionalProperties": false,
-        "description": "Checkpoint and last-poll figures an incremental schedule keeps.",
+        "description": "The checkpoint an incremental schedule polls from.",
         "properties": {
           "checkpoint": {
             "anyOf": [
@@ -8219,46 +8217,10 @@
               }
             ],
             "title": "Checkpoint"
-          },
-          "last_downloads": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Downloads"
-          },
-          "last_duration_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Duration Seconds"
-          },
-          "last_items_added": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Items Added"
           }
         },
         "required": [
-          "checkpoint",
-          "last_duration_seconds",
-          "last_items_added",
-          "last_downloads"
+          "checkpoint"
         ],
         "title": "IncrementalSyncState",
         "type": "object"
@@ -10282,6 +10244,42 @@
         ],
         "type": "string"
       },
+      "ScheduleRunSummary": {
+        "additionalProperties": false,
+        "description": "What a schedule's last run did: how long it took and what it counted.",
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "failed": {
+            "default": false,
+            "title": "Failed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "duration_seconds",
+          "counts",
+          "failed"
+        ],
+        "title": "ScheduleRunSummary",
+        "type": "object"
+      },
       "SeasonRead": {
         "additionalProperties": false,
         "description": "Public season response.",
@@ -11085,6 +11083,16 @@
             "title": "Kind",
             "type": "string"
           },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleRunSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "last_run_at": {
             "anyOf": [
               {
@@ -11151,6 +11159,7 @@
           "created_at",
           "updated_at",
           "last_run_at",
+          "last_run",
           "run_status",
           "waiting_for",
           "kind",

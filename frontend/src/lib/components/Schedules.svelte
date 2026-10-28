@@ -10,6 +10,7 @@
   import CronScheduleField from "./CronScheduleField.svelte";
   import DataStatus from "./DataStatus.svelte";
   import {
+    formatRunSummary,
     formatScheduleDate,
     type SavedSchedule,
     type ScheduleController,
@@ -145,13 +146,19 @@
               <div class="schedule-meta">
                 <span>{schedule.cron_expression}</span>
                 <span>Next: {formatScheduleDate(schedule.next_run, schedule.timezone)}</span>
+                {#if schedule.last_run_at}
+                  <span>
+                    Last run: {formatScheduleDate(
+                      schedule.last_run_at,
+                      schedule.timezone,
+                    )}{#if schedule.last_run}
+                      &middot; {formatRunSummary(schedule.last_run)}{/if}
+                  </span>
+                {/if}
               </div>
               {#if expanded}
                 <div class="schedule-details">
                   {@render details(schedule)}
-                  <div>
-                    Last run: {formatScheduleDate(schedule.last_run_at, schedule.timezone)}
-                  </div>
                 </div>
               {/if}
             </div>

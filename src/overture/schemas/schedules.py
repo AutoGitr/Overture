@@ -31,6 +31,15 @@ class ScheduleWrite[ConfigT: BaseModel](StrictBaseModel):
     config: ConfigT
 
 
+class ScheduleRunSummary(StrictBaseModel):
+    """What a schedule's last run did: how long it took and what it counted."""
+
+    duration_seconds: float | None = None
+    #: Counter names and values in the order they are shown; zeros are left out.
+    counts: dict[str, int] = Field(default_factory=dict[str, int])
+    failed: bool = False
+
+
 class ScheduleResponseBase(StrictBaseModel):
     """Saved schedule fields shared by every schedule kind."""
 
@@ -43,6 +52,7 @@ class ScheduleResponseBase(StrictBaseModel):
     created_at: datetime
     updated_at: datetime
     last_run_at: datetime | None = None
+    last_run: ScheduleRunSummary | None = None
     run_status: ScheduleRunStatus = "idle"
     waiting_for: str | None = Field(
         default=None,

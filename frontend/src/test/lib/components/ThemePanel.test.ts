@@ -118,9 +118,9 @@ describe("ThemePanel search", () => {
   });
 
   it("announces a search failure and clears it when the next search succeeds", async () => {
-    searchYoutube.mockRejectedValueOnce(new ApiError("Bad search", 400, "search-request"));
+    searchYoutube.mockRejectedValueOnce(new ApiError("Bad search", 400));
     renderPanel();
-    expect(await screen.findByRole("alert")).toHaveTextContent("search-request");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Bad search");
     expect(screen.queryByText(/No themes found/)).not.toBeInTheDocument();
     await fireEvent.input(screen.getByLabelText("Search themes"), {
       target: { value: "Alien soundtrack" },
@@ -319,7 +319,7 @@ describe("ThemePanel search", () => {
       },
     });
     selectTheme
-      .mockRejectedValueOnce(new ApiError("Download unavailable", 503, "download-request"))
+      .mockRejectedValueOnce(new ApiError("Download unavailable", 503))
       .mockResolvedValueOnce({
         data: {
           selection: { job_id: "theme-job", status: "enqueued" },
@@ -330,7 +330,7 @@ describe("ThemePanel search", () => {
 
     const select = await screen.findByRole("button", { name: "Select" });
     await fireEvent.click(select);
-    expect(await screen.findByRole("alert")).toHaveTextContent("download-request");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Download unavailable");
     expect(screen.getByText("Alien Theme")).toBeVisible();
     expect(select).toBeEnabled();
 

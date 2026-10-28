@@ -30,6 +30,10 @@ class SavedScheduleBase(SQLModel):
     created_at: datetime = Field(nullable=False)
     updated_at: datetime = Field(nullable=False)
     last_run_at: datetime | None = None
+    #: The last run's :class:`~overture.schemas.schedules.ScheduleRunSummary`.
+    last_run_summary: dict[str, Any] | None = Field(
+        default=None, sa_type=JSON, sa_column_kwargs={"name": "last_run_json"}
+    )
 
 
 class SavedSchedule(SavedScheduleBase, table=True):

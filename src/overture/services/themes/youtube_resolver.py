@@ -1,5 +1,6 @@
 """YouTubeResolver - download and transcode YouTube audio to MP3."""
 
+lazy import asyncio
 lazy import importlib.util
 lazy import json
 lazy import logging
@@ -15,7 +16,7 @@ lazy from typing import Any, cast
 lazy from ...schemas.themes import ThemeSearchResult
 lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, ffprobe_duration
 lazy from ...utils.errors import public_error_message
-lazy from ...utils.process import PROBE_SLOTS, ProcessResult, run_process
+lazy from ...utils.process import ProcessResult, run_process
 lazy from ...utils.progress import ProgressCallback, ProgressUpdate, StepProgress
 lazy from ...utils.rate_limit import RateLimitPause
 lazy from ...utils.security import sanitise_error
@@ -169,9 +170,12 @@ def _parse_search_output(stdout: bytes) -> list[ThemeSearchResult]:
 class YouTubeResolver:
     """Downloads audio from YouTube and transcodes it to VBR MP3."""
 
-    def __init__(self, config_dir: Path) -> None:
+    def __init__(self, config_dir: Path, *, download_workers: int = 1) -> None:
         self._config_dir = config_dir
         self._pauses = RateLimitPause[str]()
+        # yt-dlp metadata requests at once, searches included: two, so a search
+        # need not wait behind a download, or one per theme download worker.
+        self._requests = asyncio.Semaphore(max(2, download_workers))
 
     async def _await_pause(self, *, wait: bool) -> None:
         """Hold a request while YouTube is rate-limiting this address.
@@ -232,7 +236,7 @@ class YouTubeResolver:
         ]
         try:
             await self._await_pause(wait=wait)
-            async with PROBE_SLOTS:
+            async with self._requests:
                 result = await run_process(cmd, deadline=_INFO_TIMEOUT)
             self._note_result(result)
             if result.returncode != 0:
@@ -321,7 +325,7 @@ class YouTubeResolver:
         """
         try:
             await self._await_pause(wait=True)
-            async with PROBE_SLOTS:
+            async with self._requests:
                 result = await run_process(
                     [*_YTDLP_COMMAND, "--dump-json", "--no-download", url],
                     deadline=_INFO_TIMEOUT,

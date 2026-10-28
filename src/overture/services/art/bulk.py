@@ -7,7 +7,7 @@ it is counted under:
 * ``Adopted`` - a source's image is byte-identical to the local file, so its
   URL is saved as the selection and nothing is downloaded.
 * ``Skipped`` - nothing to do under the run's options, or the local file was
-  kept because the source differs and Overwrite existing is off.
+  kept because the source differs and Replace existing is off.
 * ``No match`` - no enabled source had a candidate.
 * ``Error`` - no decision could be made.
 
@@ -280,15 +280,9 @@ class _Slot:
 
 
 async def _settle_saved(run: _ArtRun, slot: _Slot, saved_url: str) -> None:
-    """Act on a saved selection when Overwrite existing is off."""
-    if not run.params.retry_saved_downloads:
+    """Keep a saved selection when Replace existing is off, restoring its file."""
+    if slot.local is not None:
         await run.job.report(JobOutcome.SKIPPED, slot.target, SAVED_SELECTION)
-    elif slot.local is not None:
-        await run.job.report(
-            JobOutcome.SKIPPED,
-            slot.target,
-            "saved selection kept; its local file is present",
-        )
     else:
         await queue_and_report(
             run.job,
@@ -334,8 +328,7 @@ async def _report_undecided(run: _ArtRun, slot: _Slot, notes: _Notes) -> None:
         await run.job.report(
             JobOutcome.SKIPPED,
             slot.target,
-            f"kept the local file: {notes.text()} "
-            "(Overwrite existing would replace it)",
+            f"kept the local file: {notes.text()} (Replace existing would replace it)",
         )
     elif notes.errors:
         await run.job.report(JobOutcome.ERROR, slot.target, notes.text())

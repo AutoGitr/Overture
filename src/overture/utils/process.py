@@ -11,7 +11,8 @@ lazy from dataclasses import dataclass
 lazy from .windows_job import WindowsJob
 
 logger = logging.getLogger(__name__)
-PROBE_SLOTS = asyncio.Semaphore(2)
+#: ffprobe and audio fingerprint processes at once; they are CPU bound.
+PROBE_SLOTS = asyncio.Semaphore(os.process_cpu_count() or 2)
 _MAX_OUTPUT = 4 * 1024 * 1024
 _MAX_LINE = 1024 * 1024
 _TAIL_BYTES = 16 * 1024

@@ -64,17 +64,12 @@
       <input type="checkbox" bind:checked={config.includeUnmonitored} />
       <span>Include unmonitored items</span>
     </label>
-    <label class="checkbox-group" title="Search again and replace files">
+    <label
+      class="checkbox-group"
+      title="Search sources again and replace files; identical files are left untouched"
+    >
       <input type="checkbox" bind:checked={config.overwriteExisting} />
-      <span>Overwrite existing</span>
-    </label>
-    <label class="checkbox-group" title="Download saved selections whose files are missing">
-      <input
-        type="checkbox"
-        bind:checked={config.retrySavedDownloads}
-        disabled={config.overwriteExisting}
-      />
-      <span>Retry saved downloads</span>
+      <span>Replace existing</span>
     </label>
   </div>
   <div class="form-row skip-row" title="0 checks every item">

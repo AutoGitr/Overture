@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildFanartUrl,
   type DetailSubject,
   buildImdbUrl,
-  buildLetterboxdUrl,
   buildPosterDbUrl,
   buildTmdbUrl,
   buildTvdbUrl,
@@ -55,22 +53,8 @@ describe("site links", () => {
     tvdb_id: 169,
   });
 
-  it("opens fanart.tv on the section of the art being chosen", () => {
-    expect(buildFanartUrl(movie, "art", "background")).toBe(
-      "https://fanart.tv/movie/603/the-matrix/?section=wallpaper",
-    );
-    expect(buildFanartUrl(movie, "themes", "poster")).toBe(
-      "https://fanart.tv/movie/603/the-matrix/",
-    );
-    expect(buildFanartUrl(mediaItem({ media_type: "show", tvdb_id: null }), "art", "poster")).toBe(
-      null,
-    );
-  });
-
   it("names movies and shows the way each site does", () => {
     expect(buildTvdbUrl(movie)).toBe("https://thetvdb.com/movies/the-matrix");
-    expect(buildLetterboxdUrl(movie)).toBe("https://letterboxd.com/film/the-matrix/");
-    expect(buildLetterboxdUrl(item)).toBeNull();
     expect(buildPosterDbUrl(item)).toBe("https://theposterdb.com/search?term=Show&section=shows");
     expect(buildImdbUrl("tt0133093")).toBe("https://www.imdb.com/title/tt0133093/");
   });

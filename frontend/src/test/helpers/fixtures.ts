@@ -562,6 +562,7 @@ export function bulkAssetsSchedule(
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     last_run_at: null,
+    last_run: null,
     run_status: "idle",
     waiting_for: null,
     config: {
@@ -572,7 +573,6 @@ export function bulkAssetsSchedule(
       skip_recent_unit: "days",
       include_unmonitored: true,
       overwrite_existing: true,
-      retry_saved_downloads: true,
       art: { art_types: ["background"], source_order: ["overturedb"], threshold: 5 },
       themes: null,
     },

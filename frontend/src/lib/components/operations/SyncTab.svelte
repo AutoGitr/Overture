@@ -33,7 +33,7 @@
   import { librarySummary } from "../../utils/assetsPopup";
   import { errorMessage } from "../../utils/errors";
   import { createClearResults } from "../../utils/jobSnapshots";
-  import { formatDateInTimezone, formatDuration } from "../../utils/popupFormat";
+  import { formatDateInTimezone } from "../../utils/popupFormat";
   import {
     filterAvailableValues,
     selectedValuesForAll,
@@ -334,15 +334,6 @@
           {#if schedule.state.checkpoint}
             <div>
               Checkpoint: {formatDateInTimezone(schedule.state.checkpoint, schedule.timezone)}
-            </div>
-          {/if}
-          {#if schedule.state.last_duration_seconds !== null}
-            <div>
-              Last poll: {formatDuration(schedule.state.last_duration_seconds)},
-              {schedule.state.last_items_added ?? 0}
-              {schedule.state.last_items_added === 1 ? "item" : "items"} added,
-              {schedule.state.last_downloads ?? 0}
-              {schedule.state.last_downloads === 1 ? "download" : "downloads"}
             </div>
           {/if}
         {/if}

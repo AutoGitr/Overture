@@ -44,12 +44,16 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Error messages no longer end in a request or job ID, and a failed download names what failed, such as "Couldn't download the poster for Mufasa: The Lion King". The IDs remain in the log.
+- `ART_DOWNLOAD_WORKERS` now allows at most 10 and `THEME_DOWNLOAD_WORKERS` at most 4, since more only gets the address rate-limited or blocked. Lower a larger value before upgrading, or Overture will not start.
+- Saved Sync and Assets schedules show their last run's time, duration and totals without being expanded; an incremental schedule's Last poll is now its Last run.
+- Assets downloads a saved choice whose file is missing on every run, so the Retry saved downloads option is gone, and Overwrite existing is now called Replace existing. Saved choices include the artwork URLs Sync copies from your media server, so the first run can queue downloads for every item whose artwork is only on the server. Saved schedules are converted.
 - Collections sync on a schedule like Overture's other jobs: a cron expression at the collection, group or global level replaces the interval in hours, which is converted. Scheduled sync can now be inherited by a collection like its other settings.
 - Collection settings look the same everywhere: a collection's Settings and Schedule, a group's in the Collection groups popup and the global defaults under Settings use the same fields and names, and each Default names the value it inherits. One collection and One per value share Setup, Content, Settings and Schedule; a set's title template is in Setup.
 - Summary templates take {source_summary}, the description of the first list or a person's biography, which replaces the person condition's Biography as summary. Existing biography summaries are converted.
 - A set's collections are now removed when their value disappears only if the set says so, separately from Below minimum.
 - Collections save in Overture only with Save (or Enter); Save and Create or Save and Sync also updates the media server. Members edited in Members wait for the next sync, a library sync keeps changes not yet synced, and a collection or set never created waits for Save and Create instead of the scheduler. Unsynced collections show an Unsynced badge.
-- Collection pages keep both tab rows in every view: the art tabs always sit in the lower row next to links to Setup, Content, Members, Settings and Schedule, which open Configure at that section. A new collection has no tab rows and saves from the bottom of the form.
+- Collection pages keep both tab rows in every view: the lower row starts with icon links to Setup, Content, Members, Settings and Schedule, which open Configure at that section, followed by the art tabs. A new collection has no tab rows and saves from the bottom of the form.
 - Collection Display is now Settings and also holds Sort, Limit, Sync mode, the minimum and automatic art and theme; Content keeps only how members are chosen and the criteria. Groups are created in the Collection groups popup, which Create new group in the Group list opens; its buttons are Save, Save and Apply and Save and Sync.
 - Theme status moved from the tab row into the Themes view, and labels across collections and groups now match, such as Sync mode, Collection mode, Active from and Active until.
 - Appearance: Theme offers System, Light and Dark, and System (the new default) follows your device as it switches. The palette is rebuilt so text meets WCAG AA contrast in both modes and the accent looks the same in each; a new Increase contrast option strengthens secondary text and outlines. Controls, menus and cards share one modern style.
@@ -80,9 +84,15 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Legacy collection preset generator, single-source rules, separate builders, managed Plex labels and group TMDB discovery, in favor of criteria and collection sets.
 - Collection matching endpoints and automatic member voting. Set `tmdb_collection_id` through collection creation or update instead.
 - The Plex-only Enable Collections setting. Collection navigation follows the configured server's capability.
+- The Letterboxd and fanart.tv links on detail pages. fanart.tv remains an artwork source.
+- OvertureDB as an art source in the sidebar's art source filter: artwork now counts as the site that hosts it, and the OvertureDB filter shows whether it matches the catalog.
 
 ### Fixed
 
+- Artwork from hosts that send no content type, or a generic binary one, now downloads when the file is a JPG or PNG, instead of failing with "Unsupported content type: unknown".
+- `THEME_DOWNLOAD_WORKERS` above 2 now downloads that many themes at once; video lookups were limited to two at a time, shared with audio probing.
+- An incremental Sync schedule's poll no longer replaces the stored results of the last full Sync with an empty run.
+- Saving settings closes the popup right away instead of waiting for artwork candidates to reload.
 - Emby collection sort titles now apply; Emby ignored the field Overture sent.
 - Emby tags now sync, so Tag conditions on Emby match; run a full Sync to fetch them.
 - Plex smart collections with "is" or "is not" on text fields, such as Title is 12 Angry Men, now match exactly instead of matching titles containing "=12 Angry Men".
@@ -107,7 +117,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Catalog drafts stay editable after correcting their only identifier. Collection theme exports preserve ThemerrDB attribution, and catalog counts no longer require downloading the entire catalog.
 
 - When YouTube or an artwork source such as ThePosterDB rate-limits Overture, Overture pauses its requests to that service, for longer each time the limit repeats. Theme and artwork downloads and bulk runs wait the pause out; theme searches, artwork matching, choosing artwork and media-server previews in the UI say when to try again.
-- Assets runs that use only OvertureDB or ThemerrDB report artwork slots and themes the catalog has nothing for as No match, instead of skipping them as a saved selection that Overwrite existing would search again. Saved choices include the artwork URLs Sync copies from your media server, so this affected most items the catalog covers only partly.
+- Assets runs that use only OvertureDB or ThemerrDB report artwork slots and themes the catalog has nothing for as No match, instead of skipping them as a saved selection that Replace existing would search again. Saved choices include the artwork URLs Sync copies from your media server, so this affected most items the catalog covers only partly.
 - Assets logs say exactly why the catalogs had nothing: no OvertureDB entry, no artwork of that kind or no theme in the entry, or a theme that failed to download before. They also say whether a skipped saved choice is already the catalog's or differs from it. While OvertureDB is disabled, its targets are reported as Skipped because OvertureDB is disabled, instead of as No match.
 - Failed theme downloads, YouTube searches and artwork downloads now say why, such as YouTube's own error or the HTTP status an artwork source returned, instead of a generic or truncated message.
 

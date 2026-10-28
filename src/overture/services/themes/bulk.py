@@ -207,14 +207,8 @@ async def _settle_existing(run: _ThemeRun, item: MediaItem) -> None:
     """Handle a saved selection or local file when not overwriting."""
     target = item.title
     if saved_id := item.youtube_id:
-        if not run.params.retry_saved_downloads:
+        if item.theme_file_hash is not None:
             await run.job.report(JobOutcome.SKIPPED, target, SAVED_SELECTION)
-        elif item.theme_file_hash is not None:
-            await run.job.report(
-                JobOutcome.SKIPPED,
-                target,
-                "saved selection kept; its local theme file is present",
-            )
         else:
             await queue_and_report(
                 run.job,
@@ -226,7 +220,7 @@ async def _settle_existing(run: _ThemeRun, item: MediaItem) -> None:
     await run.job.report(
         JobOutcome.SKIPPED,
         target,
-        "kept the local theme file (Overwrite existing would replace it)",
+        "kept the local theme file (Replace existing would replace it)",
     )
 
 
@@ -373,6 +367,8 @@ async def plan_bulk_themes(
                 decided = planned_outcome(
                     params,
                     saved=item.youtube_id,
+                    file_missing=item.theme_file_hash is None
+                    and item.folder_path is not None,
                     last_checked=item.last_matched_at,
                     catalog=None
                     if index is None

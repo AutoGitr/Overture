@@ -61,19 +61,14 @@ def art_preview_url(url: str, art_type: ArtType) -> str | None:
     )
 
 
-def selected_art_source(
-    url: str | None, overturedb_url: str | None
-) -> ArtSource | None:
-    """Return where a slot's selected artwork comes from.
+def selected_art_source(url: str | None) -> ArtSource | None:
+    """Return the catalog art source whose host serves a slot's selected artwork.
 
-    Artwork the OvertureDB catalog holds for the slot counts as OvertureDB's,
-    whichever host serves it; links to hosts the catalog does not use have no
-    source.
+    Links to hosts the catalog does not use have no source. Whether the artwork
+    is OvertureDB's choice is the OvertureDB status, not a source.
     """
     if not url:
         return None
-    if url == overturedb_url:
-        return ArtSource.OVERTUREDB
     source = art_source(url)
     return ArtSource(source) if source in ArtSource else None
 

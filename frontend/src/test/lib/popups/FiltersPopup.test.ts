@@ -107,13 +107,14 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       }),
     );
     await fireEvent.click(view.getByRole("checkbox", { name: "ThePosterDB" }));
-    await fireEvent.click(view.getByRole("checkbox", { name: "OvertureDB" }));
+    await fireEvent.click(view.getByRole("checkbox", { name: "TMDB" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
     expect(uiState.movieFilters.artSource).toEqual({
       artType: "poster",
-      sources: ["overturedb", "tpdb"],
+      sources: ["tmdb", "tpdb"],
     });
+    expect(view.queryByRole("checkbox", { name: "OvertureDB" })).toBeNull();
   });
 
   it("offers the TVDB ID metadata filter for shows only", async () => {

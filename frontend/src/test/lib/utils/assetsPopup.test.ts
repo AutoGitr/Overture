@@ -109,7 +109,6 @@ describe("buildBulkAssetsRequest", () => {
       selectedLibraries: ["m1"],
       includeUnmonitored: false,
       overwriteExisting: false,
-      retrySavedDownloads: false,
       skipRecentVal: 0,
       skipRecentUnit: "hours",
       enableArt: false,
@@ -124,7 +123,6 @@ describe("buildBulkAssetsRequest", () => {
     expect(request.library_ids).toEqual(["m1"]);
     expect(request.include_unmonitored).toBe(false);
     expect(request.overwrite_existing).toBe(false);
-    expect(request.retry_saved_downloads).toBe(false);
   });
 
   it("includes art and themes configuration when enabled", () => {
@@ -132,7 +130,6 @@ describe("buildBulkAssetsRequest", () => {
       selectedLibraries: ["m1"],
       includeUnmonitored: true,
       overwriteExisting: true,
-      retrySavedDownloads: true,
       skipRecentVal: 12,
       skipRecentUnit: "hours",
       enableArt: true,
@@ -153,7 +150,6 @@ describe("buildBulkAssetsRequest", () => {
     });
     expect(request.include_unmonitored).toBe(true);
     expect(request.overwrite_existing).toBe(true);
-    expect(request.retry_saved_downloads).toBe(true);
   });
 });
 

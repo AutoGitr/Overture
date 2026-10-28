@@ -5,6 +5,7 @@ import { notificationState } from "../../../lib/stores/notificationState.svelte"
 import { formatDateInTimezone } from "../../../lib/utils/popupFormat";
 import {
   buildScheduleWrite,
+  formatRunSummary,
   formatScheduleDate,
   ScheduleController,
   type ScheduleControllerOptions,
@@ -34,15 +35,11 @@ function schedule(overrides: Partial<Schedule> = {}): Schedule {
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
     last_run_at: null,
+    last_run: null,
     run_status: "idle",
     waiting_for: null,
     config,
-    state: {
-      checkpoint: null,
-      last_duration_seconds: null,
-      last_items_added: null,
-      last_downloads: null,
-    },
+    state: { checkpoint: null },
     ...overrides,
   };
 }
@@ -88,6 +85,18 @@ describe("schedule writes and dates", () => {
 
     expect(formatScheduleDate(at, "UTC")).toBe(formatDateInTimezone(at, "UTC"));
     expect(formatScheduleDate(null, "UTC")).toBe("Not scheduled");
+  });
+
+  it("summarises a schedule's last run", () => {
+    expect(
+      formatRunSummary({ duration_seconds: 41, counts: { queued: 12, failed: 1 }, failed: false }),
+    ).toBe("41s, 12 queued, 1 failed");
+    expect(formatRunSummary({ duration_seconds: 3, counts: {}, failed: true })).toBe(
+      "Failed after 3s",
+    );
+    expect(formatRunSummary({ duration_seconds: null, counts: {}, failed: false })).toBe(
+      "Nothing to do",
+    );
   });
 });
 

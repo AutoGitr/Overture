@@ -179,7 +179,7 @@ async def test_bulk_theme_existing_youtube_id_without_file_queues_download(
     context = Context()
     await theme_bulk.run_bulk_themes(
         as_job_context(context),
-        BulkThemeRequest(retry_saved_downloads=True),
+        BulkThemeRequest(),
         make_bulk_downloads(app_config=app_config, database=database),
         unused(YouTubeResolver),
         app_config=app_config,
@@ -230,7 +230,7 @@ async def test_bulk_theme_queue_failure_does_not_abort_remaining_items(
     context = Context()
     await theme_bulk.run_bulk_themes(
         as_job_context(context),
-        BulkThemeRequest(retry_saved_downloads=True),
+        BulkThemeRequest(),
         make_bulk_downloads(app_config=app_config, database=database),
         unused(YouTubeResolver),
         app_config=app_config,
@@ -372,7 +372,7 @@ async def test_bulk_theme_says_why_an_item_with_a_theme_was_skipped(
     assert progress_logs(context) == [
         (
             "Skipped Movie - kept the local theme file "
-            "(Overwrite existing would replace it)"
+            "(Replace existing would replace it)"
         )
     ]
 
@@ -401,7 +401,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_id_was_already_downloaded
     context = Context()
     await theme_bulk.run_bulk_themes(
         as_job_context(context),
-        BulkThemeRequest(retry_saved_downloads=True),
+        BulkThemeRequest(),
         make_bulk_downloads(app_config=app_config, database=database),
         unused(YouTubeResolver),
         app_config=app_config,
@@ -410,7 +410,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_id_was_already_downloaded
     )
 
     assert progress_logs(context) == [
-        "Skipped Movie - saved selection kept; its local theme file is present"
+        "Skipped Movie - saved selection already set; Replace existing searches again"
     ]
 
 
@@ -449,7 +449,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_title_was_already_downloa
     assert progress_logs(context) == [
         (
             "Skipped Movie - kept the local theme file "
-            "(Overwrite existing would replace it)"
+            "(Replace existing would replace it)"
         )
     ]
 

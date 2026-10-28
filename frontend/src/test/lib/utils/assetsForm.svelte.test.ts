@@ -85,7 +85,6 @@ describe("AssetsForm", () => {
         collection_ids: null,
         include_unmonitored: true,
         overwrite_existing: true,
-        retry_saved_downloads: false,
         skip_recent_val: 3,
         skip_recent_unit: "days",
         art: { art_types: ["background"], source_order: ["local_art_matching"], threshold: 4 },

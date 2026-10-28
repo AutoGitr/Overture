@@ -254,7 +254,7 @@ async def test_bulk_art_saved_incomplete_selection_queues_download_without_remat
     context = Context()
     await art_bulk.run_bulk_art_match(
         as_job_context(context),
-        BulkMatchArtRequest(retry_saved_downloads=True),
+        BulkMatchArtRequest(),
         make_bulk_downloads(app_config=app_config, database=database),
         art_matcher(app_config=app_config, database=database),
         local_assets=make_local_assets(app_config=app_config, database=database),
@@ -277,7 +277,16 @@ async def test_bulk_art_complete_targets_are_skipped_without_download(
     app_config: Settings,
     database: Database,
 ) -> None:
-    item = movie_item(art={"poster": {"url": "https://x/poster.jpg", "file_hash": "h"}})
+    item = movie_item(
+        art={
+            "poster": {
+                "url": "https://x/poster.jpg",
+                "file_hash": "h",
+                "file_mtime_ns": 1,
+                "file_size": 14,
+            }
+        }
+    )
 
     item.folder_path = str(tmp_path)
     (tmp_path / "poster.jpg").write_bytes(b"existing asset")

@@ -175,11 +175,14 @@ describe("downloadState", () => {
     expect(downloadState.activeCount).toBe(1);
   });
 
-  it("shows a failure with its job ID briefly, then removes it", () => {
+  it("shows a failure briefly, then removes it", () => {
     vi.useFakeTimers();
     downloadState.handleFailed(itemEvent("job-2", 11, "failed"));
 
-    expect(downloadState.getJobsForItem(11)[0]?.stage).toBe("failed (Job ID: job-2)");
+    expect(downloadState.getJobsForItem(11)[0]?.stage).toBe("failed");
+    expect(notify.error).toHaveBeenLastCalledWith("failed", {
+      title: "Couldn't download the poster for Alien",
+    });
 
     vi.advanceTimersByTime(5000);
 
@@ -194,7 +197,7 @@ describe("downloadState", () => {
       }),
     );
 
-    expect(downloadState.getJobsForItem(12)[0]?.stage).toBe("typed failed (Job ID: job-typed)");
+    expect(downloadState.getJobsForItem(12)[0]?.stage).toBe("typed failed");
   });
 
   it("updates an item's downloads only when one of its own changes", () => {

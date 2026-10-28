@@ -48,12 +48,10 @@ describe("BackupPopup", () => {
   });
 
   it("keeps the schedule locked until a failed read is successfully retried", async () => {
-    getBackupSchedule.mockRejectedValue(
-      new ApiError("Schedule unavailable", 403, "schedule-request"),
-    );
+    getBackupSchedule.mockRejectedValue(new ApiError("Schedule unavailable", 403));
     renderWithQueryClient(BackupPopup);
     expect(screen.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
-    expect(await screen.findByRole("alert")).toHaveTextContent("schedule-request");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Schedule unavailable");
     expect(screen.getByLabelText("Cron expression")).toBeDisabled();
     getBackupSchedule.mockResolvedValue({ data: schedule });
     await fireEvent.click(screen.getByRole("button", { name: "Retry backup schedule" }));
@@ -123,12 +121,10 @@ describe("BackupPopup", () => {
   });
 
   it("reports a backup failure safely and permits an explicit retry", async () => {
-    createBackup.mockRejectedValueOnce(new ApiError("token=secret", 503, "backup-request"));
+    createBackup.mockRejectedValueOnce(new ApiError("token=secret", 503));
     renderWithQueryClient(BackupPopup);
     await fireEvent.click(screen.getByRole("button", { name: "Backup Now" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "token=[REDACTED] (Request ID: backup-request)",
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("token=[REDACTED]");
     await fireEvent.click(screen.getByRole("button", { name: "Backup Now" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Saved overture-backup.zip.");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

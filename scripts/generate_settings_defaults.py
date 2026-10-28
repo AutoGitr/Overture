@@ -54,10 +54,9 @@ def render_settings_defaults() -> str:
         (
             "SELECTED_ART_SOURCE_LABELS",
             {
-                source.value: "OvertureDB"
-                if source is ArtSource.OVERTUREDB
-                else ART_SOURCE_LABELS[source.value]
+                source.value: ART_SOURCE_LABELS[source.value]
                 for source in ArtSource
+                if source is not ArtSource.OVERTUREDB
             },
         ),
         ("ART_SOURCE_LABELS", {source.value: source.label for source in ArtBulkSource}),

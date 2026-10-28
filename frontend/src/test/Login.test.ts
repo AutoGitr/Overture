@@ -163,14 +163,12 @@ describe("Login", () => {
   });
 
   it("announces a server failure and lets the user try signing in again", async () => {
-    login.mockRejectedValueOnce(new ApiError("Server unavailable", 503, "login-request"));
+    login.mockRejectedValueOnce(new ApiError("Server unavailable", 503));
     const onLogin = vi.fn();
     renderWithQueryClient(Login, { onLogin });
     await fireEvent.input(screen.getByLabelText("Password"), { target: { value: "password" } });
     await fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Server unavailable (Request ID: login-request)",
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Server unavailable");
     expect(onLogin).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
     await waitFor(() => expect(onLogin).toHaveBeenCalledOnce());

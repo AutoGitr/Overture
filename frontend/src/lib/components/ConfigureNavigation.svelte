@@ -45,7 +45,9 @@
       goToCollectionView(collection, "configure", "poster", `${formId}-${section.key}`);
     }}
     aria-current={active === section.key ? "location" : undefined}
+    aria-label={section.label}
+    title={section.label}
   >
-    <section.icon size={16} /><span>{section.label}</span>
+    <section.icon size={16} />
   </a>
 {/each}

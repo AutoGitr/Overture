@@ -239,15 +239,14 @@ Every change that needs a migration must ship with one:
 
 ## Environment
 
-- The machine runs Windows with PowerShell: chain commands with `;`, not `&&`.
-  Run shell scripts with Git Bash
-  (`& "C:\Program Files\Git\bin\bash.exe" <script>`); bare `bash` is the WSL
-  stub, which cannot see `uv` or `bun`.
 - Always `uv run ...`; never activate `.venv`, run bare `python` or use `pip`.
   Change dependencies with `uv add` and `uv remove`.
 - Bun only; never `npm`, `npx`, `yarn` or `pnpm`.
 - Leave staging and commits to the user unless asked, and never push or
   otherwise publish to a remote.
+- End every finished task with a commit message for it in the final reply, in
+  the Conventional Commits format of
+  [CONTRIBUTING.md](.github/CONTRIBUTING.md), ready to pass to `git commit -F -`.
 
 ## Changelog
 

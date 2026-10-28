@@ -113,7 +113,8 @@ export function catalogStatus(entry: {
   };
 }
 export type ThemeSource = NonNullable<MediaItemRead["youtube_id_source"]>;
-export type ArtSource = NonNullable<MediaItemRead["poster_source"]>;
+/** The hosts a selected artwork is attributed to. */
+export type ArtSource = keyof typeof SELECTED_ART_SOURCE_LABELS;
 export type AssetStatus = MediaItemRead["art_status"];
 
 const titleCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });

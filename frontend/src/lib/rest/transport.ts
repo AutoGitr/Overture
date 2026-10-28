@@ -1,6 +1,6 @@
 import type { CreateClientConfig } from "../../generated/rest/client.gen";
 import { CSRF_COOKIE, CSRF_HEADER, MUTATING_METHODS } from "../../generated/settings";
-import { redactText, supportReference } from "../utils/redact";
+import { redactText } from "../utils/redact";
 
 const MUTATING = new Set<string>(MUTATING_METHODS);
 let sessionController = new AbortController();
@@ -22,13 +22,11 @@ export function resetTransportSession(): void {
 
 export class ApiError extends Error {
   readonly status: number;
-  readonly requestId: string | null;
 
-  constructor(message: string, status: number, requestId: string | null = null) {
+  constructor(message: string, status: number) {
     super(redactText(message));
     this.name = "ApiError";
     this.status = status;
-    this.requestId = supportReference(requestId);
   }
 
   get retryable(): boolean {
@@ -115,11 +113,10 @@ export async function overtureFetch(input: RequestInfo | URL, init: RequestInit 
     throw new ApiError("Could not reach Overture. Check your connection and try again.", 0);
   }
 
-  const requestId = response.headers.get("X-Request-ID");
   if (response.status === 401) {
     const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
     if (url.pathname !== "/api/auth/login") reportUnauthorized();
-    throw new ApiError("Your session has expired. Please sign in again.", 401, requestId);
+    throw new ApiError("Your session has expired. Please sign in again.", 401);
   }
   if (!response.ok) {
     const payload = await response
@@ -127,7 +124,7 @@ export async function overtureFetch(input: RequestInfo | URL, init: RequestInit 
       .json()
       .catch(() => null);
     signal.throwIfAborted();
-    throw new ApiError(responseErrorMessage(payload, response.status), response.status, requestId);
+    throw new ApiError(responseErrorMessage(payload, response.status), response.status);
   }
   return response;
 }

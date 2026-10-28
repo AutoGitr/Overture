@@ -356,9 +356,9 @@ async def test_list_items_reports_where_selected_artwork_comes_from(
 
     rows = {row.title: row for row in (await library_service.list_items()).items}
 
-    assert rows["Movie"].poster_source == "overturedb"
+    # Matching the OvertureDB entry does not change where the artwork comes from.
+    assert rows["Movie"].poster_source == "tpdb"
     assert rows["Movie"].background_source == "tmdb"
-    # The same link counts as OvertureDB's only for the item it is listed for.
     assert rows["Unlisted"].poster_source == "tpdb"
     assert rows["Unlisted"].background_source is None
 

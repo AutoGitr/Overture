@@ -67,8 +67,8 @@ async def request_logging_middleware(
 ) -> Response:
     """Log each request once, without its query string or body.
 
-    Every response carries an ``X-Request-ID``, which the web UI shows with an
-    error and the log line names for failed requests. As the outermost
+    Every response carries an ``X-Request-ID``, which the log line names for
+    failed requests. As the outermost
     middleware this is also the error boundary: an unhandled exception is
     logged here, once, with its traceback, and answered with a sanitised 500.
     """

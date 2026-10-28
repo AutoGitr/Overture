@@ -27,6 +27,8 @@ SUPPORTED_IMAGE_CONTENT_TYPES = {
     "image/jpg",
     "image/png",
 }
+#: Content types that say nothing about what the bytes are.
+_UNTYPED_CONTENT_TYPES = frozenset({"application/octet-stream", "binary/octet-stream"})
 REMOTE_IMAGE_REQUEST_HEADERS = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         "Accept": "image/jpeg,image/png,image/*;q=0.8,*/*;q=0.5",
@@ -376,8 +378,8 @@ def _response_size(
         content_type, allow_generic_image=allow_generic_image
     ):
         raise RemoteImageError(
-            "Unsupported content type: "
-            f"{normalise_content_type(content_type) or 'unknown'}"
+            "The server returned "
+            f"{normalise_content_type(content_type)} instead of a JPG or PNG image"
         )
     raw_length = response.headers.get("content-length")
     if raw_length is None:
@@ -439,10 +441,14 @@ def normalise_content_type(content_type: str) -> str:
 def is_supported_remote_image_type(
     content_type: str, *, allow_generic_image: bool = False
 ) -> bool:
-    """Return whether supported remote image type is present."""
+    """Return whether a response's declared type may be an image Overture takes.
+
+    A response that names no type, or only a generic binary one, passes: some
+    hosts serve images that way, and the bytes are checked once they arrive.
+    """
     mime = normalise_content_type(content_type)
-    if not mime:
-        return False
+    if not mime or mime in _UNTYPED_CONTENT_TYPES:
+        return True
     if mime in SUPPORTED_IMAGE_CONTENT_TYPES:
         return True
     return allow_generic_image and mime.startswith("image/")

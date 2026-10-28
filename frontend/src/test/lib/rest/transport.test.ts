@@ -47,18 +47,14 @@ describe("REST transport", () => {
     expect(new Headers(calls[0]?.init.headers).has("X-CSRF-Token")).toBe(false);
   });
 
-  it("reports session expiry and preserves the request ID for authenticated failures", async () => {
+  it("reports session expiry for authenticated failures", async () => {
     const expired = vi.fn();
     setUnauthorizedHandler(expired);
-    mockFetch(
-      { detail: "token expired" },
-      { status: 401, headers: { "X-Request-ID": "request-1" } },
-    );
+    mockFetch({ detail: "token expired" }, { status: 401 });
 
     await expect(overtureFetch("/api/auth/me")).rejects.toMatchObject({
       message: "Your session has expired. Please sign in again.",
       status: 401,
-      requestId: "request-1",
     });
     expect(expired).toHaveBeenCalledOnce();
   });
@@ -128,9 +124,8 @@ describe("REST transport", () => {
     });
   });
 
-  it("limits support references to bounded identifiers", () => {
-    expect(new ApiError("error", 500, "token=secret").requestId).toBeNull();
-    expect(new ApiError("error", 500, "x".repeat(65)).requestId).toBeNull();
+  it("retries only unreachable and server errors", () => {
+    expect(new ApiError("error", 500).retryable).toBe(true);
     expect(new ApiError("error", 403).retryable).toBe(false);
   });
 

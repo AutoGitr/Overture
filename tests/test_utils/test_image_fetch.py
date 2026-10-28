@@ -58,7 +58,7 @@ async def test_fetch_image_bytes_rejects_unsupported_content_type() -> None:
         )
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
-        with pytest.raises(RemoteImageError, match="Unsupported content type"):
+        with pytest.raises(RemoteImageError, match="text/html instead of a JPG or PNG"):
             await fetch_image_bytes("https://images.test/poster.jpg", client)
 
 
@@ -445,3 +445,20 @@ async def test_a_fetch_waiting_out_a_pause_holds_no_transfer_slot(
         assert await asyncio.wait_for(other, timeout=1) == PNG_DATA
         release.set()
         assert await paused == PNG_DATA
+
+
+@pytest.mark.parametrize("content_type", [None, "application/octet-stream"])
+async def test_an_untyped_response_is_judged_by_its_bytes(
+    content_type: str | None,
+) -> None:
+    png = BytesIO()
+    Image.new("RGB", (2, 3)).save(png, format="PNG")
+
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        headers = {} if content_type is None else {"content-type": content_type}
+        return httpx2.Response(200, headers=headers, content=png.getvalue())
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
+        fetched = await fetch_image("https://example.test/poster", client)
+
+    assert fetched.media_type == "image/png"

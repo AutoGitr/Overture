@@ -55,7 +55,7 @@ class AppSettingsBase(SQLModel):
         default=CollectionOrder.RELEASE_ASC, sa_type=enum_type(CollectionOrder)
     )
     collection_filtering_default: CollectionFiltering = Field(
-        default=CollectionFiltering.ADMIN, sa_type=enum_type(CollectionFiltering)
+        default=CollectionFiltering.USER, sa_type=enum_type(CollectionFiltering)
     )
     collection_visible_home: bool = False
     collection_visible_shared: bool = False

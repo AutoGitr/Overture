@@ -55,6 +55,7 @@ const SAVED_POLL = {
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
   last_run_at: "2026-09-19T10:00:00Z",
+  last_run: { duration_seconds: 1.25, counts: { added: 3, queued: 2 }, failed: false },
   run_status: "idle" as const,
   waiting_for: null,
   config: {
@@ -64,12 +65,7 @@ const SAVED_POLL = {
     download_overturedb_art: true,
     download_themes: "themerrdb_overturedb" as const,
   },
-  state: {
-    checkpoint: "2026-09-19T10:00:00Z",
-    last_duration_seconds: 1.25,
-    last_items_added: 3,
-    last_downloads: 2,
-  },
+  state: { checkpoint: "2026-09-19T10:00:00Z" },
 };
 
 async function renderSync() {
@@ -266,14 +262,15 @@ describe("Sync tab", () => {
     );
   });
 
-  it("lists saved schedules with their last poll and loads one for editing", async () => {
+  it("lists saved schedules with their last run and loads one for editing", async () => {
     schedules.mockResolvedValue([SAVED_POLL]);
     await renderSync();
 
     expect(await screen.findByText("New media")).toBeInTheDocument();
     expect(screen.getByText("New-media polling", { selector: ".badge" })).toBeInTheDocument();
+    // The last run is shown without expanding the schedule.
+    expect(screen.getByText(/Last run: .*1\.3s, 3 added, 2 queued/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "View schedule" }));
-    expect(screen.getByText(/1\.3s,\s+3 items added,\s+2 downloads/)).toBeInTheDocument();
     const hide = screen.getByRole("button", { name: "Hide schedule" });
     expect(hide).toHaveAttribute("aria-expanded", "true");
 

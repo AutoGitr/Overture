@@ -170,10 +170,10 @@ describe("StatsPopup", () => {
   });
 
   it("handles loading error and allows retry", async () => {
-    getStats.mockRejectedValue(new ApiError("Stats unavailable", 403, "stats-error"));
+    getStats.mockRejectedValue(new ApiError("Stats unavailable", 403));
     renderWithQueryClient(StatsPopup);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("stats-error");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Stats unavailable");
 
     getStats.mockResolvedValue({ data: mockStats });
     await fireEvent.click(screen.getByRole("button", { name: "Retry statistics" }));

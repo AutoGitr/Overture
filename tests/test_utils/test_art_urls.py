@@ -163,24 +163,21 @@ def test_art_sources_are_the_catalog_sources_and_overturedb() -> None:
 
 
 @pytest.mark.parametrize(
-    ("url", "overturedb_url", "expected"),
+    ("url", "expected"),
     [
-        (None, TMDB, None),
-        (TMDB, TMDB, ArtSource.OVERTUREDB),
-        (TMDB, None, ArtSource.TMDB),
-        (TMDB, "https://theposterdb.com/api/assets/1", ArtSource.TMDB),
-        ("https://theposterdb.com/api/assets/1", None, ArtSource.TPDB),
-        ("https://assets.fanart.tv/fanart/movies/1/a.jpg", None, ArtSource.FANART),
+        (None, None),
+        (TMDB, ArtSource.TMDB),
+        ("https://theposterdb.com/api/assets/1", ArtSource.TPDB),
+        ("https://assets.fanart.tv/fanart/movies/1/a.jpg", ArtSource.FANART),
         # Amazon serves artwork but is not a host the catalog links to.
-        ("https://m.media-amazon.com/images/M/abc.jpg", None, None),
-        ("https://img.test/poster.jpg", None, None),
-        ("https://img.test/poster.jpg", "https://img.test/poster.jpg", "overturedb"),
+        ("https://m.media-amazon.com/images/M/abc.jpg", None),
+        ("https://img.test/poster.jpg", None),
     ],
 )
-def test_selected_art_source_prefers_overturedb_then_catalog_hosts(
-    url: str | None, overturedb_url: str | None, expected: ArtSource | None
+def test_selected_art_source_is_the_catalog_host(
+    url: str | None, expected: ArtSource | None
 ) -> None:
-    assert selected_art_source(url, overturedb_url) == expected
+    assert selected_art_source(url) == expected
 
 
 def test_tmdb_candidates_are_canonical_and_skip_unusable_files(

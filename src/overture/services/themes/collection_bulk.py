@@ -60,6 +60,7 @@ async def plan_collection_themes(
             outcome = planned_outcome(
                 params,
                 saved=row.youtube_id,
+                file_missing=not (row.server_theme_id or row.theme_file_hash),
                 last_checked=row.last_matched_at,
                 catalog=index.theme(
                     row, params.source_order, failed=failed.get(row.id or 0, set())
@@ -171,9 +172,7 @@ async def run_collection_themes(
             )
             video = (
                 current.youtube_id
-                if current.youtube_id
-                and not params.overwrite_existing
-                and params.retry_saved_downloads
+                if current.youtube_id and not params.overwrite_existing
                 else pick.value
             )
             if not video:

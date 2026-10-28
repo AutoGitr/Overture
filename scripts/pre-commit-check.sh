@@ -3,7 +3,8 @@ set -euo pipefail
 
 # The full check runs what CI runs against the working tree, without rewriting
 # anything. --quick is the git pre-commit hook: it checks the staged changes
-# without tests or builds. --fix formats and regenerates contracts first.
+# without tests or builds. --fix brings the lockfiles in line with their
+# manifests (never upgrading anything), formats and regenerates contracts first.
 QUICK=false
 FIX=false
 case "${1:-}" in
@@ -14,10 +15,16 @@ case "${1:-}" in
 esac
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+if [ "$FIX" = true ]; then
+    echo "=== Updating the Lockfiles ==="
+    uv lock
+    (cd frontend && bun install)
+fi
 # Every uv command fails instead of silently rewriting a stale uv.lock.
 export UV_LOCKED=1
 
-cd "$ROOT_DIR"
 BACKEND_CHANGED=false
 FRONTEND_CHANGED=false
 CONTRACTS_CHANGED=false

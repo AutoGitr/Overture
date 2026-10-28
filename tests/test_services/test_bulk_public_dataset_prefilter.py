@@ -36,6 +36,8 @@ lazy from tests.runtime_helpers import make_local_assets, row_id
 
 NO_ENTRY = (JobOutcome.NO_MATCH, "OvertureDB has no entry for it")
 DISABLED = (JobOutcome.SKIPPED, "OvertureDB is disabled")
+#: The stored facts of a slot's file on disk.
+RECORDED = {"file_hash": "recorded", "file_mtime_ns": 1, "file_size": 1}
 
 
 def no_art(art_type: ArtType) -> tuple[JobOutcome, str]:
@@ -48,8 +50,8 @@ def differs(label: str) -> tuple[JobOutcome, str]:
     return (
         JobOutcome.SKIPPED,
         (
-            f"saved selection differs from the {label}; Overwrite existing would "
-            "replace it and Retry saved downloads restores a missing file"
+            f"saved selection differs from the {label}; Replace existing would "
+            "replace it"
         ),
     )
 
@@ -119,26 +121,29 @@ async def test_overturedb_only_drops_targets_the_dataset_cannot_serve(
     assert work.public_index.art_url(served, ArtType.POSTER) == "https://db.test/p.jpg"
 
 
-@pytest.mark.parametrize("retry", [False, True])
+@pytest.mark.parametrize("missing", [False, True])
 @pytest.mark.parametrize("served", [False, True])
-async def test_saved_url_is_skipped_unless_download_retry_requested(
+async def test_saved_url_is_skipped_unless_its_file_is_missing(
     db_session: AsyncSession,
     media_item_factory: MediaItemFactory,
     public_dataset_item_factory: PublicDatasetItemFactory,
     *,
     app_config: Settings,
     database: Database,
-    retry: bool,
+    missing: bool,
     served: bool,
 ) -> None:
-    """Only an explicit retry visits saved URLs; one the dataset lacks is no match."""
+    """Only a missing file visits a saved URL; one the dataset lacks is no match."""
     await enable_public_dataset(db_session)
 
     item = _movie(
         media_item_factory,
         "Saved",
         tmdb_id=4,
-        art={"poster": {"url": "https://saved.test/p.jpg"}},
+        art={
+            "poster": {"url": "https://saved.test/p.jpg"}
+            | ({} if missing else RECORDED)
+        },
     )
     db_session.add(item)
     if served:
@@ -153,15 +158,14 @@ async def test_saved_url_is_skipped_unless_download_retry_requested(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB],
-            retry_saved_downloads=retry,
         ),
         app_config=app_config,
         database=database,
     )
 
-    assert len(visits(plan)) == int(retry)
+    assert len(visits(plan)) == int(missing)
     skipped = differs("OvertureDB artwork") if served else NO_ENTRY
-    assert plan.decided == ({} if retry else {skipped: 1})
+    assert plan.decided == ({} if missing else {skipped: 1})
 
 
 async def test_partial_dataset_entry_drops_only_the_slots_it_lacks(
@@ -177,8 +181,8 @@ async def test_partial_dataset_entry_drops_only_the_slots_it_lacks(
     await enable_public_dataset(db_session)
 
     server_art = {
-        "poster": {"url": "https://server.test/p.jpg"},
-        "background": {"url": "https://server.test/b.jpg"},
+        "poster": {"url": "https://server.test/p.jpg", **RECORDED},
+        "background": {"url": "https://server.test/b.jpg", **RECORDED},
     }
     show = _movie(
         media_item_factory,
@@ -393,9 +397,19 @@ async def test_theme_run_drops_items_without_a_dataset_video_id(
 
     served = _movie(media_item_factory, "Served", tmdb_id=9)
     absent = _movie(media_item_factory, "Absent", tmdb_id=10)
-    saved = _movie(media_item_factory, "Saved", tmdb_id=11, youtube_id="already-known")
+    saved = _movie(
+        media_item_factory,
+        "Saved",
+        tmdb_id=11,
+        youtube_id="already-known",
+        theme_file_hash="recorded",
+    )
     saved_absent = _movie(
-        media_item_factory, "SavedAbsent", tmdb_id=14, youtube_id="already-known"
+        media_item_factory,
+        "SavedAbsent",
+        tmdb_id=14,
+        youtube_id="already-known",
+        theme_file_hash="recorded",
     )
     db_session.add_all([served, absent, saved, saved_absent])
     db_session.add_all(
@@ -479,7 +493,12 @@ async def test_saved_selection_that_is_the_catalog_choice_says_so(
 
     url = "https://db.test/p.jpg"
     db_session.add(
-        _movie(media_item_factory, "Same", tmdb_id=15, art={"poster": {"url": url}})
+        _movie(
+            media_item_factory,
+            "Same",
+            tmdb_id=15,
+            art={"poster": {"url": url, **RECORDED}},
+        )
     )
     db_session.add(public_dataset_item_factory(id=None, tmdb_id=15, poster_url=url))
     await db_session.commit()
@@ -495,15 +514,12 @@ async def test_saved_selection_that_is_the_catalog_choice_says_so(
     assert plan.decided == {
         (
             JobOutcome.SKIPPED,
-            (
-                "saved selection is already the OvertureDB artwork; "
-                "Retry saved downloads restores a missing file"
-            ),
+            "saved selection is already the OvertureDB artwork",
         ): 1
     }
 
 
-@pytest.mark.parametrize("mode", ["default", "retry", "overwrite"])
+@pytest.mark.parametrize("mode", ["default", "missing", "overwrite"])
 async def test_a_disabled_dataset_skips_all_but_saved_restores(
     db_session: AsyncSession,
     media_item_factory: MediaItemFactory,
@@ -513,13 +529,15 @@ async def test_a_disabled_dataset_skips_all_but_saved_restores(
     database: Database,
     mode: str,
 ) -> None:
-    """Nothing is a no match while the catalog is off; Retry needs no catalog."""
+    """Nothing is a no match while the catalog is off; restoring needs no catalog."""
+    recorded = {} if mode == "missing" else RECORDED
     saved = _movie(
         media_item_factory,
         "Saved",
         tmdb_id=16,
         youtube_id="saved-video",
-        art={"poster": {"url": "https://saved.test/p.jpg"}},
+        theme_file_hash=recorded.get("file_hash"),
+        art={"poster": {"url": "https://saved.test/p.jpg", **recorded}},
     )
     db_session.add_all([saved, _movie(media_item_factory, "Unsaved", tmdb_id=17)])
     db_session.add(
@@ -531,10 +549,7 @@ async def test_a_disabled_dataset_skips_all_but_saved_restores(
         )
     )
     await db_session.commit()
-    options: dict[str, Any] = {
-        "overwrite_existing": mode == "overwrite",
-        "retry_saved_downloads": mode == "retry",
-    }
+    options: dict[str, Any] = {"overwrite_existing": mode == "overwrite"}
 
     art = await bulk_work.plan_bulk_art(
         BulkMatchArtRequest(
@@ -551,7 +566,7 @@ async def test_a_disabled_dataset_skips_all_but_saved_restores(
         database=database,
     )
 
-    restored = mode == "retry"
+    restored = mode == "missing"
     assert visits(art) == (
         {row_id(saved): ((ArtType.POSTER, None),)} if restored else {}
     )

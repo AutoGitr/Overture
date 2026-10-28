@@ -75,4 +75,16 @@ it("reports a new group once it is saved, so the collection can take it", async 
   await fireEvent.click(screen.getByRole("button", { name: "Configure" }));
   await fireEvent.click(await screen.findByRole("button", { name: "Save" }));
   await waitFor(() => expect(changed).toHaveBeenCalledWith("", "Fresh"));
+  expect(uiState.openPopup).toBeNull();
+});
+
+it("stays open after creating a group when opened from the sidebar", async () => {
+  uiState.openCollectionGroups();
+  renderGroups();
+  await fireEvent.input(await screen.findByLabelText("Group name"), {
+    target: { value: "Fresh" },
+  });
+  await fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+  await fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+  await waitFor(() => expect(uiState.openPopup).toBe("collection-groups"));
 });

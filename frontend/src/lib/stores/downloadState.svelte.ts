@@ -1,5 +1,6 @@
 import { SvelteMap } from "svelte/reactivity";
-import type { DownloadJobEvent } from "../../generated/ws";
+import type { DownloadJobEvent, ServerAsset } from "../../generated/ws";
+import { ASSET_LABELS } from "../utils/artTypes";
 import { jobEventErrorMessage } from "../utils/errors";
 import { notify } from "./notificationState.svelte";
 
@@ -19,7 +20,7 @@ export interface DownloadJob {
   collection_id: number | null;
   title: string | null;
   job_type: string;
-  art_type: string | null;
+  art_type: ServerAsset | null;
   season_id: number | null;
   percent: number;
   stage: string;
@@ -155,8 +156,11 @@ class DownloadState {
       jobId,
       setTimeout(() => this.remove(jobId), FAILURE_DISPLAY_MS),
     );
+    const asset = ASSET_LABELS[failed.art_type ?? "theme"].toLowerCase();
     notify.error(failed.stage, {
-      title: failed.title ? `Download failed: ${failed.title}` : "Download failed",
+      title: failed.title
+        ? `Couldn't download the ${asset} for ${failed.title}`
+        : `Couldn't download the ${asset}`,
     });
   }
 
@@ -164,7 +168,7 @@ class DownloadState {
     jobId: string;
     mediaItemId: number;
     jobType: string;
-    artType?: string | null;
+    artType?: ServerAsset | null;
     seasonId?: number | null;
   }) {
     this.put({

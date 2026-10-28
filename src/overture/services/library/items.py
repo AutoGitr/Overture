@@ -139,7 +139,6 @@ async def media_item_reads_with_public_dataset_status(
         reads.append(
             media_item_read_from_model(
                 item,
-                public_item=public_item,
                 public_dataset_ids=PublicDatasetRepository.ids_agreement(
                     item, public_item
                 ),

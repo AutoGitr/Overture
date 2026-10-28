@@ -52,7 +52,7 @@ ACTION_LINES: frozendict[str, tuple[str, str]] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         "queued": ("Queued ", "OvertureDB"),
         "restored": ("Queued ", "restores the saved selection"),
-        "kept_saved": ("Skipped ", "saved selection kept"),
+        "kept_saved": ("Skipped ", "saved selection already set"),
         "kept_theme": ("Skipped ", "kept the local theme file"),
         "kept_art": ("Skipped ", "OvertureDB artwork differs from the local file"),
         "adopted": ("Adopted ", "identical to the local file"),
@@ -66,7 +66,7 @@ PLANNED_ACTIONS = frozenset({"set", "no_match", "recent"})
 
 @pytest.mark.parametrize("asset", ["theme", "poster", "background", "season_poster"])
 @pytest.mark.parametrize("server", ["plex", "jellyfin", "emby"])
-@pytest.mark.parametrize("mode", ["default", "retry", "overwrite"])
+@pytest.mark.parametrize("mode", ["default", "overwrite"])
 async def test_dataset_only_state_matrix(
     asset: str,
     server: str,
@@ -109,7 +109,9 @@ async def test_dataset_only_state_matrix(
         )
         on_disk[number] = disk
         cached_flags[number] = cached
-        action = expected_action(saved, disk, same, available, recent, asset, mode)
+        action = expected_action(
+            saved, disk, same, cached, available, recent, asset, mode
+        )
         expected[title] = action
         if action in {"restored", "queued"}:
             source = "saved" if action == "restored" else "public"
@@ -150,7 +152,6 @@ async def test_dataset_only_state_matrix(
                 source_order=[ThemeBulkSource.OVERTUREDB],
                 skip_recent_val=1,
                 overwrite_existing=mode == "overwrite",
-                retry_saved_downloads=mode != "default",
             ),
             downloads,
             unused(YouTubeResolver),
@@ -168,7 +169,6 @@ async def test_dataset_only_state_matrix(
                 art_types=[ArtType(asset)],
                 skip_recent_val=1,
                 overwrite_existing=mode == "overwrite",
-                retry_saved_downloads=mode != "default",
             ),
             downloads,
             matcher,
@@ -247,6 +247,8 @@ def seed_case(
             ArtType(asset),
             url="https://saved.test/image.jpg" if saved else None,
             file_hash="cached-hash" if cached else None,
+            file_mtime_ns=1 if cached else None,
+            file_size=1 if cached else None,
         )
     session.add(item)
     if season is not None:
@@ -281,18 +283,20 @@ def expected_action(
     saved: bool,
     disk: bool,
     same: bool,
+    cached: bool,
     available: bool,
     recent: bool,
     asset: str,
     mode: str,
 ) -> str:
-    if mode == "default" and saved:
-        return "set" if available else "no_match"
     if mode == "overwrite":
         if not available:
             return "no_match"
         return "recent" if recent else "queued"
     if saved:
+        # Planning trusts the stored file facts; a visit reads the disk.
+        if cached:
+            return "set" if available else "no_match"
         return "kept_saved" if disk else "restored"
     if not available:
         return "no_match"

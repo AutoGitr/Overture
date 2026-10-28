@@ -48,7 +48,6 @@ export class AssetsForm {
     includeCollections: false,
     includeUnmonitored: false,
     overwriteExisting: false,
-    retrySavedDownloads: false,
     enableArt: true,
     enableThemes: true,
     artTypes: [] as ArtType[],
@@ -171,7 +170,6 @@ export class AssetsForm {
       includeCollections: config.includeCollections,
       includeUnmonitored: config.includeUnmonitored,
       overwriteExisting: config.overwriteExisting,
-      retrySavedDownloads: config.retrySavedDownloads,
       skipRecentVal: config.skipRecentVal,
       skipRecentUnit: config.skipRecentUnit,
       enableArt: config.enableArt,
@@ -231,7 +229,6 @@ export class AssetsForm {
     config.useSidebarItems = false;
     config.includeUnmonitored = saved.include_unmonitored;
     config.overwriteExisting = saved.overwrite_existing;
-    config.retrySavedDownloads = saved.retry_saved_downloads;
     config.scheduleCronExpression = schedule.cron_expression;
     config.selectedLibraries = restoreLibrarySelection(
       this.movieLibraries,

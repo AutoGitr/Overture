@@ -1130,3 +1130,76 @@ def test_cron_schedules_member_effects_and_set_libraries_convert_both_ways() -> 
             )
     finally:
         engine.dispose()
+
+
+def test_assets_schedules_drop_retry_saved_downloads() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "e6a1c2d3f4b5")
+            connection.exec_driver_sql(
+                "INSERT INTO saved_schedules "
+                "(kind, name, enabled, cron_expression, payload_json, state_json, "
+                "created_at, updated_at) "
+                "VALUES ('assets', 'Nightly', 1, '0 2 * * *', ?, '{}', "
+                "'2026-10-25', '2026-10-25')",
+                (
+                    json.dumps(
+                        {
+                            "library_ids": ["1"],
+                            "retry_saved_downloads": True,
+                            "themes": {},
+                        }
+                    ),
+                ),
+            )
+            command.upgrade(config, "head")
+            payload = connection.exec_driver_sql(
+                "SELECT payload_json FROM saved_schedules"
+            ).scalar_one()
+            assert json.loads(payload) == {"library_ids": ["1"], "themes": {}}
+            command.downgrade(config, "e6a1c2d3f4b5")
+    finally:
+        engine.dispose()
+
+
+def test_incremental_poll_figures_move_to_the_last_run_and_back() -> None:
+    engine = create_engine("sqlite://")
+    state = {
+        "checkpoint": "2026-10-25T00:00:00Z",
+        "last_duration_seconds": 1.5,
+        "last_items_added": 2,
+        "last_downloads": 0,
+    }
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "f3c9a1d7e2b6")
+            connection.exec_driver_sql(
+                "INSERT INTO saved_schedules "
+                "(kind, name, enabled, cron_expression, payload_json, state_json, "
+                "created_at, updated_at) "
+                "VALUES ('sync', 'New media', 1, '*/15 * * * *', ?, ?, "
+                "'2026-10-25', '2026-10-25')",
+                (json.dumps({"mode": "incremental"}), json.dumps(state)),
+            )
+            command.upgrade(config, "head")
+            [(saved_state, summary)] = connection.exec_driver_sql(
+                "SELECT state_json, last_run_json FROM saved_schedules"
+            ).all()
+            assert json.loads(saved_state) == {"checkpoint": "2026-10-25T00:00:00Z"}
+            assert json.loads(summary) == {
+                "duration_seconds": 1.5,
+                "counts": {"added": 2},
+                "failed": False,
+            }
+            command.downgrade(config, "f3c9a1d7e2b6")
+            restored = connection.exec_driver_sql(
+                "SELECT state_json FROM saved_schedules"
+            ).scalar_one()
+            assert json.loads(restored) == state
+    finally:
+        engine.dispose()

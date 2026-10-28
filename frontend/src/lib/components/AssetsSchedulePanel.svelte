@@ -50,14 +50,7 @@
   {#snippet details(schedule)}
     <div>Libraries: {librarySummary(schedule.config.library_ids ?? [], libraries)}</div>
     <div>Include unmonitored: {schedule.config.include_unmonitored ? "Yes" : "No"}</div>
-    <div>Overwrite existing: {schedule.config.overwrite_existing ? "Yes" : "No"}</div>
-    <div>
-      Retry saved downloads: {schedule.config.overwrite_existing
-        ? "Overridden by overwrite"
-        : schedule.config.retry_saved_downloads
-          ? "Yes"
-          : "No"}
-    </div>
+    <div>Replace existing: {schedule.config.overwrite_existing ? "Yes" : "No"}</div>
     <div>
       Skip checked: {schedule.config.skip_recent_val ?? 0}
       {schedule.config.skip_recent_unit ?? "hours"}

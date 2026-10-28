@@ -13,6 +13,7 @@ lazy from pydantic import SecretStr
 lazy from sqlmodel import col, select
 
 lazy from overture.config import Settings
+lazy from overture.db.models.job_result import JobRun
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
@@ -895,9 +896,10 @@ async def test_incremental_sync_forwards_items_and_preserves_failed_checkpoints(
     [saved] = await engine.schedules.all()
     assert saved.state.checkpoint == (now if failure is None else checkpoint)
     if failure is None:
-        assert saved.state.last_duration_seconds is not None
-        assert saved.state.last_items_added == 2
-        assert saved.state.last_downloads == 1
+        assert saved.last_run is not None
+        assert saved.last_run.duration_seconds is not None
+        assert saved.last_run.counts == {"added": 2, "queued": 1}
+        assert not saved.last_run.failed
     await engine.schedules.stop()
 
 
@@ -933,8 +935,12 @@ async def test_first_incremental_poll_only_sets_the_checkpoint(
 
     [saved] = await engine.schedules.all()
     assert saved.state.checkpoint == now
-    assert saved.state.last_items_added is None
+    assert saved.last_run is not None
+    assert saved.last_run.counts == {}
     assert saved.last_run_at is not None
+    # The poll reports to its schedule; stored results stay the last full sync's.
+    async with database.read_session() as session:
+        assert (await session.exec(select(JobRun))).all() == []
     await engine.schedules.stop()
 
 

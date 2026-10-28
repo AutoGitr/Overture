@@ -208,7 +208,7 @@ describe("sidebar item filters", () => {
       mediaItem({
         id: 1,
         title: "Curated",
-        poster_source: "overturedb",
+        poster_source: "plex",
         background_source: "tmdb",
       }),
       mediaItem({ id: 2, title: "Fan Art", poster_source: "tmdb", background_source: "fanart" }),
@@ -226,7 +226,7 @@ describe("sidebar item filters", () => {
     expect(bySource("any", ["tmdb"])).toEqual(["Curated", "Fan Art"]);
     expect(bySource("poster", ["tmdb"])).toEqual(["Fan Art"]);
     expect(bySource("background", ["tmdb", "fanart"])).toEqual(["Curated", "Fan Art"]);
-    expect(bySource("poster", ["overturedb", "tpdb"])).toEqual(["Curated", "Poster DB"]);
+    expect(bySource("poster", ["plex", "tpdb"])).toEqual(["Curated", "Poster DB"]);
   });
 
   it("filters items by themerrdb status only while the public dataset is enabled", () => {

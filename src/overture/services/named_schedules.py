@@ -13,7 +13,7 @@ lists reload instead of going stale.
 lazy import asyncio
 lazy import contextlib
 lazy import logging
-lazy from collections.abc import Awaitable, Callable
+lazy from collections.abc import Awaitable, Callable, Iterable, Mapping
 lazy from dataclasses import dataclass
 lazy from datetime import datetime
 lazy from typing import Any
@@ -28,7 +28,11 @@ lazy from ..domain import ScheduleKind
 lazy from ..jobs.gate import WaitReporter
 lazy from ..repositories.saved_schedules import SavedScheduleRepository
 lazy from ..schemas.common import Status, StatusResponse
-lazy from ..schemas.schedules import ScheduleRunStatus, ScheduleWrite
+lazy from ..schemas.schedules import (
+    ScheduleRunStatus,
+    ScheduleRunSummary,
+    ScheduleWrite,
+)
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
 lazy from .scheduler import SchedulerService
@@ -52,16 +56,58 @@ class NamedSchedule[ConfigT: BaseModel]:
     created_at: datetime
     updated_at: datetime
     last_run_at: datetime | None
+    last_run: ScheduleRunSummary | None
     run_status: ScheduleRunStatus
     waiting_for: str | None
 
 
-#: Runs one schedule to completion and returns its new state, or ``None`` to
-#: keep the state it had. The reporter is told what the run waits for, and
-#: ``None`` once it runs.
+@dataclass(slots=True, frozen=True)
+class ScheduleRunResult:
+    """What one run of a schedule leaves behind."""
+
+    summary: ScheduleRunSummary
+    #: The schedule's new state, or ``None`` to keep the state it had.
+    state: dict[str, Any] | None = None
+
+
+#: Runs one schedule to completion. The reporter is told what the run waits
+#: for, and ``None`` once it runs.
 type ScheduleRunner[ConfigT: BaseModel] = Callable[
-    [NamedSchedule[ConfigT], WaitReporter], Awaitable[dict[str, Any] | None]
+    [NamedSchedule[ConfigT], WaitReporter], Awaitable[ScheduleRunResult]
 ]
+
+
+def job_run_summary(
+    payloads: Iterable[dict[str, Any] | None],
+    counters: Mapping[str, str],
+    *,
+    failed: bool = False,
+) -> ScheduleRunSummary:
+    """Summarise the terminal payloads of the jobs one scheduled run ran.
+
+    *counters* maps a payload field to the name it is shown under; the jobs'
+    values are added up and the run lasts from the first start to the last end.
+    """
+    finished = [payload for payload in payloads if payload]
+    starts = [p["started_at"] for p in finished if p.get("started_at")]
+    ends = [p["finished_at"] for p in finished if p.get("finished_at")]
+    duration = (
+        (
+            datetime.fromisoformat(max(ends)) - datetime.fromisoformat(min(starts))
+        ).total_seconds()
+        if starts and ends
+        else None
+    )
+    counts = {
+        name: total
+        for field, name in counters.items()
+        if (total := sum(int(p.get(field) or 0) for p in finished))
+    }
+    return ScheduleRunSummary(
+        duration_seconds=None if duration is None else round(duration, 2),
+        counts=counts,
+        failed=failed,
+    )
 
 
 @dataclass(slots=True, frozen=True)
@@ -350,13 +396,14 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
         self._active = _ActiveRun(schedule.id, schedule.name)
         self._announce()
         try:
-            state = await self._run(schedule, self._report)
+            result = await self._run(schedule, self._report)
             async with self._database.write_session() as session:
                 record = await SavedScheduleRepository(session).get(item.schedule_id)
                 if record is not None and record.kind == self.kind:
                     record.last_run_at = utc_now()
-                    if state is not None:
-                        record.state = state
+                    record.last_run_summary = result.summary.model_dump(mode="json")
+                    if result.state is not None:
+                        record.state = result.state
                     session.add(record)
         finally:
             self._active = None
@@ -380,6 +427,9 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
             created_at=record.created_at,
             updated_at=record.updated_at,
             last_run_at=record.last_run_at,
+            last_run=ScheduleRunSummary.model_validate(record.last_run_summary)
+            if record.last_run_summary
+            else None,
             run_status=run_status,
             waiting_for=waiting_for,
         )

@@ -33,27 +33,9 @@ export function buildTmdbUrl(
   return base;
 }
 
-export function buildFanartUrl(item: DetailSubject | null, mode: DetailMode, artType: string) {
-  if (!item || item.media_type === "collection") return null;
-  const id = item.media_type === "movie" ? item.tmdb_id : item.tvdb_id;
-  if (!id) return null;
-  const kind = item.media_type === "movie" ? "movie" : "series";
-  const base = `https://fanart.tv/${kind}/${id}/${slugify(item.title || "")}/`;
-  if (mode !== "art") return base;
-  if (artType === "poster") return `${base}?section=poster`;
-  if (artType === "background") return `${base}?section=wallpaper`;
-  return base;
-}
-
 export function buildTvdbUrl(item: DetailSubject | null) {
   if (!item?.tvdb_id || !item.title || item.media_type === "collection") return null;
   return `https://thetvdb.com/${item.media_type === "movie" ? "movies" : "series"}/${slugify(item.title)}`;
-}
-
-export function buildLetterboxdUrl(item: DetailSubject | null) {
-  return item?.media_type === "movie" && item.title
-    ? `https://letterboxd.com/film/${slugify(item.title)}/`
-    : null;
 }
 
 export function buildPosterDbUrl(item: DetailSubject | null) {

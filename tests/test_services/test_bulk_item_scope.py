@@ -154,8 +154,16 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
         id=None,
         server_item_id="complete",
         library_id="movies",
-        art={"poster": {"url": "https://saved.test/poster.jpg"}},
+        art={
+            "poster": {
+                "url": "https://saved.test/poster.jpg",
+                "file_hash": "recorded",
+                "file_mtime_ns": 1,
+                "file_size": 1,
+            }
+        },
         youtube_id="saved-video",
+        theme_file_hash="recorded",
     )
     missing = media_item_factory(
         id=None,
@@ -257,7 +265,6 @@ def test_shared_options_reach_both_workers() -> None:
         library_ids=["movies"],
         include_unmonitored=True,
         overwrite_existing=True,
-        retry_saved_downloads=True,
         art=BulkAssetsArtConfig(),
         themes=BulkAssetsThemeConfig(),
     )
@@ -265,7 +272,6 @@ def test_shared_options_reach_both_workers() -> None:
         assert worker is not None
         assert worker.include_unmonitored
         assert worker.overwrite_existing
-        assert worker.retry_saved_downloads
 
 
 async def test_bulk_targets_skip_items_without_a_folder(

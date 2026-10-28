@@ -26,10 +26,26 @@ lazy from .art.bulk import run_bulk_art_match
 lazy from .art.matcher import ArtMatcher
 lazy from .downloads.service import DownloadService
 lazy from .local_assets.service import LocalAssets
-lazy from .named_schedules import NamedSchedule, NamedSchedules
+lazy from .named_schedules import (
+    NamedSchedule,
+    NamedSchedules,
+    ScheduleRunResult,
+    job_run_summary,
+)
 lazy from .scheduler import SchedulerService
 lazy from .themes.bulk import run_bulk_themes
 lazy from .themes.youtube_resolver import YouTubeResolver
+
+#: The counters of an Assets run's jobs, as its schedule shows them.
+_ASSETS_COUNTERS = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        "queued": "queued",
+        "adopted": "adopted",
+        "skipped": "skipped",
+        "no_match": "unmatched",
+        "errors": "failed",
+    }
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -122,7 +138,7 @@ class AssetsService:
 
     async def _run_schedule(
         self, schedule: NamedSchedule[BulkAssetsRequest], report: WaitReporter
-    ) -> dict[str, Any] | None:
+    ) -> ScheduleRunResult:
         """Start the selected jobs once their slots are free, then await them.
 
         A scheduled run waits for a running full sync and for whatever is
@@ -149,7 +165,15 @@ class AssetsService:
                 for run in runs
             )
         )
-        return None
+        return ScheduleRunResult(
+            job_run_summary(
+                (run.job.last_payload for run in runs),
+                _ASSETS_COUNTERS,
+                failed=any(
+                    (run.job.last_event or "").endswith(".failed") for run in runs
+                ),
+            )
+        )
 
     def _selected_runs(self, config: BulkAssetsRequest) -> list[_AssetsJobRun]:
         runs: list[_AssetsJobRun] = []

@@ -10,10 +10,6 @@ const URL_USERINFO_RE = /\b([a-z][a-z0-9+.-]*:\/\/)([^/@\s]+)@/gi;
 const PLEX_DIRECT_URL_RE = /\b(https?:\/\/)[^\s/?#"'<]+\.plex\.direct(?::\d+)?[^\s"'<]*/gi;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
 
-export function supportReference(value: string | null | undefined): string | null {
-  return value && /^[\w-]{1,64}$/.test(value) ? value : null;
-}
-
 export function redactText(value: unknown): string {
   return String(value)
     .replace(SENSITIVE_PARAM_RE, `$1${REDACTED}`)

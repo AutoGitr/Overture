@@ -76,12 +76,10 @@ describe.each([
 
     it("shows a failed stop request without claiming the job stopped and permits retry", async () => {
       state.handleStarted({});
-      stop.mockRejectedValueOnce(new ApiError("Stop unavailable", 503, "stop-request"));
+      stop.mockRejectedValueOnce(new ApiError("Stop unavailable", 503));
       renderWithQueryClient(OperationsPopup);
       await fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
-      expect(await screen.findByRole("alert")).toHaveTextContent(
-        "Stop unavailable (Request ID: stop-request)",
-      );
+      expect(await screen.findByRole("alert")).toHaveTextContent("Stop unavailable");
       expect(state.running).toBe(true);
       await fireEvent.click(screen.getByRole("button", { name: "Stop" }));
       await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());

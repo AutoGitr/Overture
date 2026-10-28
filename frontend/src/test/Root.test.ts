@@ -5,12 +5,9 @@ import { mockFetch } from "./helpers/fetch";
 
 describe("application session screen", () => {
   it("shows the connection failure rather than the login form, then retries", async () => {
-    mockFetch(
-      { detail: "Service unavailable" },
-      { status: 503, headers: { "X-Request-ID": "boot-request" } },
-    );
+    mockFetch({ detail: "Service unavailable" }, { status: 503 });
     render(Root);
-    expect(await screen.findByRole("alert")).toHaveTextContent("boot-request");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Service unavailable");
     expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
     mockFetch({
       authenticated: false,

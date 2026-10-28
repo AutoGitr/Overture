@@ -51,6 +51,9 @@ media server's asset naming scheme.
   a sync finds their media folders.
 - **Keep the library tidy.** Use Renamer to standardize asset filenames and
   Audit to check whether your server displays and plays the files on disk.
+- **Installable app.** Overture is a full progressive web app: install it from
+  the browser on desktop or phone for its own window, with Movies and Shows
+  shortcuts and updates applied automatically.
 
 ## Use cases
 
@@ -251,9 +254,9 @@ its [settings file](#native-service-settings). Empty values count as unset.
 | `TZ`                      | No                 | `UTC`                     | IANA time zone for logs and schedules                                                                                      |
 | `LOG_LEVEL`               | No                 | `info`                    | `debug`, `info`, `warning`, `error` or `critical`                                                                          |
 | `LOG_COLOUR`              | No                 | `true` (service: `false`) | Colour log lines; set `false` for plain text                                                                               |
-| `PHASH_WORKERS`           | No                 | `1`                       | Image hashing processes (1-32); more use more memory                                                                       |
-| `ART_DOWNLOAD_WORKERS`    | No                 | `1`                       | Parallel artwork downloads (1-16); keep low to avoid rate limits and to be nice                                            |
-| `THEME_DOWNLOAD_WORKERS`  | No                 | `1`                       | Parallel theme downloads (1-16); keep low to avoid rate limits and to be nice                                              |
+| `PHASH_WORKERS`           | No                 | `1`                       | Image hashing processes (1-32); more use more memory, and more than the CPU count gains nothing                           |
+| `ART_DOWNLOAD_WORKERS`    | No                 | `1`                       | Parallel artwork downloads (1-10); keep low to avoid rate limits and to be nice                                            |
+| `THEME_DOWNLOAD_WORKERS`  | No                 | `1`                       | Parallel theme downloads (1-4); YouTube blocks addresses that download too fast                                            |
 
 </details>
 
@@ -417,6 +420,11 @@ For titles outside your library, switch the search field to **TMDB** (requires
 `TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
 finds their media folder.
 
+To install Overture as an app, open it in Chrome, Edge or Safari and choose
+**Install** in the address bar (on iOS: **Share > Add to Home Screen**).
+Browsers offer this only over HTTPS, so serve Overture through a
+[reverse proxy](#reverse-proxy) with a certificate, or open it on `localhost`.
+
 ### Collections
 
 Plex, Jellyfin and Emby collections appear under **Collections** in the library
@@ -543,21 +551,26 @@ an enabled incremental schedule covering their library.
 <summary><b>How Assets treats existing choices and files</b></summary>
 
 By default, Assets keeps every existing file and skips slots that already have
-a saved choice:
+a saved choice, downloading the saved choice again when its file is missing:
 
-| Saved choice | Local file | Default | Retry saved downloads     | Overwrite existing |
-| ------------ | ---------- | ------- | ------------------------- | ------------------ |
-| Yes          | Yes        | Skip    | Skip                      | Search again       |
-| Yes          | No         | Skip    | Download the saved choice | Search again       |
-| No           | Either     | Search  | Search                    | Search again       |
+| Saved choice | Local file | Default                   | Replace existing |
+| ------------ | ---------- | ------------------------- | ---------------- |
+| Yes          | Yes        | Skip                      | Search again     |
+| Yes          | No         | Download the saved choice | Search again     |
+| No           | Either     | Search                    | Search again     |
 
-**Overwrite existing** also replaces existing theme files. A source image
-identical to your file is adopted in place. Local-image matching
-defaults to identical files; a looser matching threshold can replace unsaved
-local artwork with a similar image.
+Saved choices include the artwork URLs Sync copies from your media server, so
+a run downloads those to the media folder when no local file exists yet.
+Assets knows a file is missing from what Overture last recorded on disk; a file
+deleted outside Overture is noticed after a Renamer scan or an Audit.
+
+**Replace existing** also replaces existing theme files; a downloaded file
+identical to yours is left untouched. A source image identical to your file is
+adopted in place. Local-image matching defaults to identical files; a looser
+matching threshold can replace unsaved local artwork with a similar image.
 
 **Skip recently checked** skips searches within the chosen time window, also
-with Overwrite existing. Retries of saved downloads always run.
+with Replace existing. Restoring a missing saved choice always runs.
 
 </details>
 

@@ -11,7 +11,6 @@ lazy from ..db.art_slots import read_art_slot
 lazy from ..db.completion import art_completion, slot_status, theme_status
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
-lazy from ..db.models.public_dataset import PublicDatasetItem
 lazy from ..db.models.season import Season
 lazy from ..domain import ArtSource, ArtType, AssetStatus, MediaType, ThemeIdSource
 lazy from ..utils.art_urls import art_preview_url, selected_art_source
@@ -173,7 +172,6 @@ def _preview_url(slot: ArtSlot, art_type: ArtType) -> str | None:
 def media_item_read_from_model(
     item: MediaItem,
     *,
-    public_item: PublicDatasetItem | None = None,
     public_dataset_complete: bool = False,
     public_dataset_themerrdb: bool = False,
     seasons: Sequence[Season],
@@ -183,9 +181,8 @@ def media_item_read_from_model(
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.
 
-    *public_item* is the item's OvertureDB entry, which artwork sources are
-    told against. *seasons* are the item's tracked seasons, which a show's
-    artwork status depends on; callers load both in bulk.
+    *seasons* are the item's tracked seasons, which a show's artwork status
+    depends on; callers load them in bulk.
     """
     poster = read_art_slot(item, ArtType.POSTER)
     background = read_art_slot(item, ArtType.BACKGROUND)
@@ -197,12 +194,8 @@ def media_item_read_from_model(
             **_art_slot_fields(background, "background"),
             # Only a remote poster is shown in place of a file, at preview size.
             "poster_preview_url": _preview_url(poster, ArtType.POSTER),
-            "poster_source": selected_art_source(
-                poster.url, public_item and public_item.poster_url
-            ),
-            "background_source": selected_art_source(
-                background.url, public_item and public_item.background_url
-            ),
+            "poster_source": selected_art_source(poster.url),
+            "background_source": selected_art_source(background.url),
             **asdict(art_completion(item, seasons)),
             "theme_duration": item.theme_file_duration or item.youtube_duration,
             "theme_status": theme_status(item),
