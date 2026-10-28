@@ -15,6 +15,8 @@
     total: number | null;
     started_at: string | null;
     finished_at: string | null;
+    /** The saved schedule that started the run; `null` when started by hand. */
+    schedule: string | null;
   }
 </script>
 
@@ -78,8 +80,11 @@
       <dd class={["stat-value", stat.tone && `text-${stat.tone}`]}>{stat.value}</dd>
     </div>
   {/each}
-  <div class="stat elapsed">
-    <dt>time</dt>
+  <div
+    class="stat elapsed"
+    title={job.schedule ? `Started by the schedule ${job.schedule}` : undefined}
+  >
+    <dt>{job.schedule ? `scheduled: ${job.schedule}` : "time"}</dt>
     <dd class="stat-value">{elapsed || "-"}</dd>
   </div>
 </dl>

@@ -21,8 +21,10 @@ lazy from .integrations.proxy import ProxyClientManager
 lazy from .integrations.tmdb import TMDBClient
 lazy from .jobs.kinds import JobKind
 lazy from .jobs.slot import ManagedBackgroundJob
+lazy from .media_servers.health import MediaServerHealth
 lazy from .media_servers.registry import ProviderRegistry
 lazy from .runtime_paths import database_path, database_url, image_cache_path
+lazy from .schemas.media_server import media_server_status
 lazy from .schemas.settings import ConnectivityStatusResponse
 lazy from .services.art.candidates import ArtCandidates
 lazy from .services.art.matcher import ArtMatcher
@@ -124,6 +126,9 @@ class RuntimeServices:
     _started: set[str] = field(default_factory=set[str], init=False)
     _shutdown_task: asyncio.Task[None] | None = field(default=None, init=False)
     _shutdown_errors: list[str] = field(default_factory=list[str], init=False)
+    _announcements: set[asyncio.Task[None]] = field(
+        default_factory=set[asyncio.Task[None]], init=False
+    )
 
     @property
     def job_slots(self) -> dict[JobKind, ManagedBackgroundJob]:
@@ -200,6 +205,7 @@ class RuntimeServices:
             result = service.start()
             if inspect.isawaitable(result):
                 await result
+        self.provider_registry.health.listen(self._announce_media_server)
         self._ping_task = asyncio.create_task(self.websockets.start_ping_loop())
         self._connectivity_task = asyncio.create_task(self._log_connectivity())
         self._ping_task.add_done_callback(self._observe_task)
@@ -220,6 +226,18 @@ class RuntimeServices:
             )
             raise TimeoutError("Application teardown incomplete")
         self._shutdown_task.result()
+
+    def _announce_media_server(self, health: MediaServerHealth) -> None:
+        """Tell clients the media server went down or came back."""
+        task = asyncio.create_task(
+            self.events.broadcast(
+                "media-server.status",
+                media_server_status(health).model_dump(mode="json"),
+            )
+        )
+        self._announcements.add(task)
+        task.add_done_callback(self._announcements.discard)
+        task.add_done_callback(self._observe_task)
 
     @staticmethod
     def _observe_task(task: asyncio.Task[None]) -> None:

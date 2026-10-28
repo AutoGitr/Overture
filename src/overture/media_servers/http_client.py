@@ -13,7 +13,7 @@ lazy import httpx2
 
 lazy from ..config import Settings
 lazy from ..db.models.media_item import MediaItem
-lazy from ..domain import ArtType
+lazy from ..domain import ArtType, MediaServerState
 lazy from ..integrations.http import (
     RETRYABLE_STATUS,
     LazyClient,
@@ -24,6 +24,7 @@ lazy from ..schemas.art import ArtCandidate
 lazy from ..utils.cache import AsyncMemoizer
 lazy from .adapters import ServerTheme
 lazy from .errors import MediaServerError
+lazy from .health import MediaServerHealthTracker
 lazy from .wire import Page
 
 logger = logging.getLogger(__name__)
@@ -99,12 +100,14 @@ class MediaServerHttpClient(ABC):
         *,
         app_config: Settings,
         client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        health: MediaServerHealthTracker | None = None,
     ) -> None:
         """Initialize the lazily created client and its response memoizer."""
         self._app_config = app_config
         self._client_factory = client_factory
         self._client = LazyClient(self._create_client, name="Media-server")
         self._cache: AsyncMemoizer[tuple[Hashable, ...]] = AsyncMemoizer()
+        self.health = health or MediaServerHealthTracker()
 
     @property
     @abstractmethod
@@ -157,22 +160,32 @@ class MediaServerHttpClient(ABC):
         except ValueError as exc:
             raise MediaServerError("Media server returned invalid JSON") from exc
 
-    @staticmethod
-    def _error(exc: httpx2.HTTPError) -> MediaServerError:
-        """Return the safe failure a failed request becomes."""
+    def _error(self, exc: httpx2.HTTPError) -> MediaServerError:
+        """Return the safe failure a failed request becomes, noting the health."""
         logger.warning("Media server request failed: %s", exc)
         if isinstance(exc, httpx2.HTTPStatusError):
             status = exc.response.status_code
             if status in {401, 403}:
-                return MediaServerError(
-                    "Media server rejected its configured credentials"
+                error = MediaServerError(
+                    "The media server rejected its credentials; "
+                    "check MEDIA_SERVER_API_KEY"
                 )
+                self.health.record(MediaServerState.REJECTED, error.message)
+                return error
             if status not in RETRYABLE_STATUS:
+                # The server answered: one request failed, not the server.
+                self.health.record(MediaServerState.REACHABLE)
                 return MediaServerError(
                     "Media server returned an unsuccessful response",
                     upstream_status_code=status,
                 )
-        return MediaServerError("Media server is unavailable", status_code=503)
+        error = MediaServerError(
+            "The media server is unavailable; check MEDIA_SERVER_URL and that "
+            "the server is running",
+            status_code=503,
+        )
+        self.health.record(MediaServerState.UNREACHABLE, error.message)
+        return error
 
     async def _request(
         self, method: str, path: str, *, allow_not_found: bool = False, **kwargs: Any
@@ -183,10 +196,12 @@ class MediaServerHttpClient(ABC):
             # never repeats them.
             response = await request_with_retry(client, method, path, **kwargs)
             if allow_not_found and response.status_code == 404:
+                self.health.record(MediaServerState.REACHABLE)
                 return response
             response.raise_for_status()
         except httpx2.HTTPError as exc:
             raise self._error(exc) from exc
+        self.health.record(MediaServerState.REACHABLE)
         if method not in {"GET", "HEAD"}:
             self._cache.invalidate()
         return response
@@ -198,6 +213,7 @@ class MediaServerHttpClient(ABC):
         try:
             async with client.stream("GET", path) as response:
                 response.raise_for_status()
+                self.health.record(MediaServerState.REACHABLE)
                 yield response
         except httpx2.HTTPError as exc:
             raise self._error(exc) from exc

@@ -62,6 +62,18 @@
     enabled: suggested && !!libraryId,
   }));
 
+  /** Suggestions shown at once; a library can hold thousands of values. */
+  const MAX_SUGGESTIONS = 50;
+  // Matching what is typed keeps the list short: rendering every value in a
+  // datalist made each condition slow to open and to type into.
+  let suggestions = $derived.by(() => {
+    const typed = condition.kind === "field" ? String(condition.value).toLocaleLowerCase() : "";
+    const matching = typed
+      ? (values.data ?? []).filter((entry) => entry.value.toLocaleLowerCase().includes(typed))
+      : (values.data ?? []);
+    return matching.slice(0, MAX_SUGGESTIONS);
+  });
+
   function choose(value: string) {
     const [kind, name] = value.split(":");
     const chosenField = fields.find((entry) => entry.field === name);
@@ -155,7 +167,7 @@
       />
       {#if suggested}
         <datalist id={listId}>
-          {#each values.data ?? [] as entry (entry.value)}
+          {#each suggestions as entry (entry.value)}
             <option value={entry.value}>{entry.count ? `${entry.count} titles` : ""}</option>
           {/each}
         </datalist>

@@ -3,7 +3,7 @@
 lazy import asyncio
 lazy import time
 lazy from collections import Counter
-lazy from collections.abc import AsyncGenerator, Callable, Mapping
+lazy from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping
 lazy from contextlib import asynccontextmanager
 lazy from dataclasses import dataclass, field, replace
 lazy from functools import partial
@@ -114,6 +114,8 @@ class JobContext:
     persistence: JobPersistence | None = None
     shutdown_event: asyncio.Event = field(default_factory=asyncio.Event)
     publication_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    #: The saved schedule that started the run, which its events name.
+    schedule: str | None = None
 
     def stop_requested(self) -> bool:
         """Return whether the run has been asked to stop."""
@@ -133,6 +135,8 @@ class JobContext:
         # Matching and download settlement share one numbered, buffered log.
         async with self.publication_lock:
             payload.setdefault("started_at", self.started_at)
+            if self.schedule is not None:
+                payload.setdefault("schedule", self.schedule)
             name = self.lifecycle.kind.label
             if status == "stopped" and self.shutdown_event.is_set():
                 if payload.get("error") is None:
@@ -277,6 +281,15 @@ class ManagedJob[TallyT: JobTally]:
             **extras,
         )
         await self._publish(status, payload, snapshot=True, exc=exc)
+
+
+#: The body of one run of a managed job.
+type JobBody = Callable[[JobContext], Coroutine[Any, Any, None]]
+
+
+def scheduled(body: JobBody, schedule: str) -> JobBody:
+    """Return *body* as a run that the saved schedule *schedule* started."""
+    return lambda context: body(replace(context, schedule=schedule))
 
 
 @asynccontextmanager

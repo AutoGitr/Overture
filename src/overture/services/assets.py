@@ -10,7 +10,7 @@ lazy from ..config import Settings
 lazy from ..db.session import Database
 lazy from ..domain import ScheduleKind
 lazy from ..jobs.gate import WaitReporter
-lazy from ..jobs.runner import JobContext
+lazy from ..jobs.runner import JobContext, scheduled
 lazy from ..jobs.slot import ManagedBackgroundJob
 lazy from ..schemas.bulk import (
     BulkAssetsRequest,
@@ -160,7 +160,10 @@ class AssetsService:
         await asyncio.gather(
             *(
                 self.background_jobs.library_gate.run(
-                    "assets", run.job, run.factory, report=reporter(run.job.name)
+                    "assets",
+                    run.job,
+                    scheduled(run.factory, schedule.name),
+                    report=reporter(run.job.name),
                 )
                 for run in runs
             )

@@ -8,6 +8,7 @@ import {
 } from "../../generated/ws";
 import { artPreviewState } from "../stores/artPreviewState.svelte";
 import { downloadState } from "../stores/downloadState.svelte";
+import { mediaServerState } from "../stores/mediaServerState.svelte";
 import { invalidateSchedules } from "../rest/cache";
 import { storePublicDatasetStatus } from "./cache";
 import { clearJobSnapshot, JOB_PROJECTION_HANDLERS, jobKindOf, resetJobStates } from "./jobs";
@@ -42,6 +43,7 @@ const PROJECTION_HANDLERS: WebSocketHandlerMap = {
     clearJobSnapshot(data.kind);
   },
   "schedules.changed": (data) => void invalidateSchedules(data.kind),
+  "media-server.status": (data) => mediaServerState.store(data),
 };
 
 export function projectRealtimeMessage(message: ServerWebSocketDataMessage): void {

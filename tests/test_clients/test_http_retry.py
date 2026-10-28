@@ -49,3 +49,27 @@ class TestClientRetry:
                 rate_limit=False,
                 retry_delays=(0,),
             )
+
+
+@pytest.mark.parametrize(("idempotent", "attempts"), [(False, 1), (True, 2)])
+async def test_writes_are_retried_only_when_idempotent(
+    idempotent: bool, attempts: int
+) -> None:
+    calls = 0
+
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        nonlocal calls
+        calls += 1
+        return httpx2.Response(503 if calls == 1 else 200)
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
+        response = await request_with_retry(
+            client,
+            "PUT",
+            "https://server.test/refresh",
+            retry_delays=(0,),
+            idempotent=idempotent,
+        )
+
+    assert calls == attempts
+    assert response.status_code == (503 if attempts == 1 else 200)

@@ -4041,6 +4041,26 @@ export type MediaServerErrorResponse = {
 };
 
 /**
+ * MediaServerState
+ *
+ * Whether the media server answered Overture's last request.
+ */
+export type MediaServerState = 'unknown' | 'reachable' | 'unreachable' | 'rejected';
+
+/**
+ * MediaServerStatus
+ *
+ * Whether the media server answered Overture's last request.
+ */
+export type MediaServerStatus = {
+    /**
+     * Message
+     */
+    message: string;
+    state: MediaServerState;
+};
+
+/**
  * MediaType
  *
  * Kind of library item Overture tracks.
@@ -4427,6 +4447,7 @@ export type RealtimeSnapshot = {
      * Jobs
      */
     jobs: Array<RealtimeJobSnapshot>;
+    media_server: MediaServerStatus;
     public_dataset_status: PublicDatasetStatus;
     /**
      * Sequence

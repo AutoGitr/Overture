@@ -6,6 +6,7 @@ lazy from typing import Any, cast
 
 lazy from ..jobs.slot import ManagedBackgroundJob
 lazy from ..runtime import RuntimeServices
+lazy from ..schemas.media_server import media_server_status
 lazy from ..schemas.realtime import RealtimeJobSnapshot, RealtimeSnapshot
 lazy from ..utils.security import sanitise_for_output
 lazy from ..utils.time import utc_now_iso
@@ -53,6 +54,9 @@ class RealtimeSnapshotBuilder:
         """Read process-local projections at the snapshot watermark."""
         return {
             "jobs": _job_snapshots(self.runtime),
+            "media_server": media_server_status(
+                self.runtime.provider_registry.health.current
+            ),
         }
 
     async def gather(self) -> Mapping[str, Any]:

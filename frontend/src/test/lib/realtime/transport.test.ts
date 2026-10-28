@@ -46,6 +46,7 @@ function snapshot(sequence = 0, currentEpoch = epoch) {
         repo_url: "https://example.invalid/repo",
         catalog_url: "https://example.invalid/catalog",
       },
+      media_server: { state: "reachable", message: "" },
     },
   };
 }

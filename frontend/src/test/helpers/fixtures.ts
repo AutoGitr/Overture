@@ -467,6 +467,7 @@ export function realtimeSnapshot(overrides: Partial<RealtimeSnapshot> = {}): Rea
     jobs: [],
     downloads: [],
     public_dataset_status: publicDatasetStatus(),
+    media_server: { state: "reachable", message: "" },
     ...overrides,
   };
 }

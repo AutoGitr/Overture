@@ -9,10 +9,11 @@ lazy import pytest
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
-lazy from overture.domain import ArtType
+lazy from overture.domain import ArtType, MediaServerState
 lazy from overture.integrations.http import request_with_retry
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.health import MediaServerHealth
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
@@ -307,5 +308,39 @@ async def test_plex_prefetch_rejects_a_short_page_before_the_end(
     try:
         with pytest.raises(MediaServerError, match="inconsistent page size"):
             await listing(client)
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize(
+    ("status", "state", "hint"),
+    [
+        (401, MediaServerState.REJECTED, "MEDIA_SERVER_API_KEY"),
+        (503, MediaServerState.UNREACHABLE, "MEDIA_SERVER_URL"),
+        (404, MediaServerState.REACHABLE, ""),
+    ],
+)
+async def test_each_request_records_whether_the_server_answers(
+    provider_factory: Callable[
+        [Callable[[httpx2.Request], httpx2.Response]], PlexClient | JellyfinClient
+    ],
+    status: int,
+    state: MediaServerState,
+    hint: str,
+) -> None:
+    client = provider_factory(lambda request: httpx2.Response(status))
+    changes: list[MediaServerHealth] = []
+    client.health.listen(changes.append)
+    try:
+        with pytest.raises(MediaServerError) as exc:
+            await listing(client)
+        assert hint in exc.value.message
+        assert client.health.current == MediaServerHealth(
+            state, hint and exc.value.message
+        )
+        # A repeated outcome is no change, so it is announced once.
+        with pytest.raises(MediaServerError):
+            await listing(client)
+        assert changes == [client.health.current]
     finally:
         await client.close()

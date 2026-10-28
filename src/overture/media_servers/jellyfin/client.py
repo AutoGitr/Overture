@@ -333,6 +333,7 @@ class JellyfinClient(MediaServerHttpClient):
             params=self.query_params(
                 metadataRefreshMode="FullRefresh", imageRefreshMode="FullRefresh"
             ),
+            idempotent=True,
         )
 
     async def get_item(self, item_id: str) -> MediaBrowserItem:

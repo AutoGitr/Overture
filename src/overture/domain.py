@@ -409,6 +409,18 @@ class JobStatus(StrEnum):
 ACTIVE_JOB_STATUSES: tuple[JobStatus, ...] = (JobStatus.PENDING, JobStatus.RUNNING)
 
 
+class MediaServerState(StrEnum):
+    """Whether the media server answered Overture's last request."""
+
+    #: No request has been made since Overture started.
+    UNKNOWN = "unknown"
+    REACHABLE = "reachable"
+    #: The server could not be reached, timed out or answered with a server error.
+    UNREACHABLE = "unreachable"
+    #: The server refused the configured credentials.
+    REJECTED = "rejected"
+
+
 class ScheduleKind(StrEnum):
     """Category of reusable named schedule."""
 

@@ -4,6 +4,7 @@ import { client } from "../../../generated/rest/client.gen";
 import { realtimeStream } from "../../../lib/realtime/stream";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { downloadState } from "../../../lib/stores/downloadState.svelte";
+import { mediaServerState } from "../../../lib/stores/mediaServerState.svelte";
 import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
   logEntry,
@@ -91,6 +92,20 @@ describe("realtime stream reconciliation", () => {
     expect(applied).toBe(true);
     expect(syncState.done).toBe(3);
     expect(loggedLines(syncState.log)).toEqual([logEntry("Added", "Alien", "still arriving")]);
+  });
+
+  it("follows the media server's state from snapshots and events", () => {
+    realtimeStream.applySnapshot(snapshot(1));
+    expect(mediaServerState.down).toBe(false);
+
+    realtimeStream.applyEvent(
+      wsMessage("media-server.status", { state: "rejected", message: "check the key" }, 2),
+    );
+    expect(mediaServerState.down).toBe(true);
+    expect(mediaServerState.current.message).toBe("check the key");
+
+    realtimeStream.applySnapshot(snapshot(3));
+    expect(mediaServerState.down).toBe(false);
   });
 
   it("rejects a snapshot that is strictly behind the applied sequence", () => {

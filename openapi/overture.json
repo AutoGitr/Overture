@@ -9332,6 +9332,38 @@
         "title": "MediaServerErrorResponse",
         "type": "object"
       },
+      "MediaServerState": {
+        "description": "Whether the media server answered Overture's last request.",
+        "enum": [
+          "unknown",
+          "reachable",
+          "unreachable",
+          "rejected"
+        ],
+        "title": "MediaServerState",
+        "type": "string"
+      },
+      "MediaServerStatus": {
+        "additionalProperties": false,
+        "description": "Whether the media server answered Overture's last request.",
+        "properties": {
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MediaServerState",
+            "default": "unknown"
+          }
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "title": "MediaServerStatus",
+        "type": "object"
+      },
       "MediaType": {
         "description": "Kind of library item Overture tracks.",
         "enum": [
@@ -10047,6 +10079,9 @@
             "title": "Jobs",
             "type": "array"
           },
+          "media_server": {
+            "$ref": "#/components/schemas/MediaServerStatus"
+          },
           "public_dataset_status": {
             "$ref": "#/components/schemas/PublicDatasetStatus"
           },
@@ -10065,7 +10100,8 @@
           "server_time",
           "jobs",
           "downloads",
-          "public_dataset_status"
+          "public_dataset_status",
+          "media_server"
         ],
         "title": "RealtimeSnapshot",
         "type": "object"

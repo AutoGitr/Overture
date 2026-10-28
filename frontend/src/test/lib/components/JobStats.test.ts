@@ -14,6 +14,7 @@ describe("JobStats", () => {
       total: 30,
       started_at: "2026-06-02T10:00:00Z",
       finished_at: null,
+      schedule: null,
     };
     const stats: JobStat[] = [{ label: "downloaded", value: 5, tone: "success" }];
 
@@ -25,6 +26,22 @@ describe("JobStats", () => {
     expect(screen.getByText("5")).toHaveClass("text-success");
   });
 
+  it("names the schedule that started the run", () => {
+    const job: JobProgressView = {
+      planning: false,
+      done: 1,
+      total: 1,
+      started_at: "2026-06-02T10:00:00Z",
+      finished_at: "2026-06-02T10:00:05Z",
+      schedule: "Nightly",
+    };
+
+    render(JobStats, { job, unit: "items", stats: [] });
+
+    expect(screen.getByText("scheduled: Nightly")).toBeInTheDocument();
+    expect(screen.queryByText("time")).toBeNull();
+  });
+
   it("shows planning text when planning holds", () => {
     const job: JobProgressView = {
       planning: true,
@@ -32,6 +49,7 @@ describe("JobStats", () => {
       total: null,
       started_at: "2026-06-02T10:00:00Z",
       finished_at: null,
+      schedule: null,
     };
 
     render(JobStats, { job, unit: "items", stats: [] });
@@ -48,6 +66,7 @@ describe("JobStats", () => {
       total: 10,
       started_at: "2026-06-02T10:00:00Z",
       finished_at: null,
+      schedule: null,
     };
 
     const { rerender } = render(JobStats, { job, unit: "items", stats: [] });

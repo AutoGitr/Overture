@@ -9,6 +9,7 @@
   } from "./generated/rest/@tanstack/svelte-query.gen";
   import { realtimeTransport } from "./lib/realtime/transport";
   import type { NoticeTone } from "./lib/stores/notificationState.svelte";
+  import { mediaServerState } from "./lib/stores/mediaServerState.svelte";
   import { realtimeConnectionState } from "./lib/stores/realtimeConnectionState.svelte";
   import { uiState } from "./lib/stores/uiState.svelte";
   import { delayedFlag } from "./lib/utils/delayedFlag.svelte";
@@ -136,6 +137,21 @@
         }}
       />
     {/each}
+    {#if mediaServerState.down}
+      <Notice
+        tone="error"
+        title={mediaServerState.current.state === "rejected"
+          ? "The media server refused Overture"
+          : "The media server is unreachable"}
+        message={`${mediaServerState.current.message}. Syncs, downloads and refreshes fail until it answers.`}
+        action={{
+          label: "Check again",
+          pendingLabel: "Checking...",
+          pending: mediaServerState.checking,
+          run: () => mediaServerState.check(),
+        }}
+      />
+    {/if}
     {#if liveNotice && showLiveNotice.current}
       <Notice
         {...liveNotice}

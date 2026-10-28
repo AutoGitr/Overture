@@ -30,6 +30,7 @@ lazy from ..adapters import (
 )
 lazy from ..base import BaseMediaServerProvider
 lazy from ..errors import MediaServerError
+lazy from ..health import MediaServerHealthTracker
 lazy from ..wire import PlexMetadata
 lazy from .client import (
     PLEX_COLLECTION_FILTERING,
@@ -146,10 +147,15 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     collections = UploadThemes()
 
     def __init__(
-        self, *, client: PlexClient | None = None, app_config: Settings
+        self,
+        *,
+        client: PlexClient | None = None,
+        app_config: Settings,
+        health: MediaServerHealthTracker | None = None,
     ) -> None:
         super().__init__(
-            client=client or PlexClient(app_config=app_config), app_config=app_config
+            client=client or PlexClient(app_config=app_config, health=health),
+            app_config=app_config,
         )
 
     def _item_link(self, rating_key: str, machine_id: str | None) -> str:

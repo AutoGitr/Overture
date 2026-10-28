@@ -1,3 +1,4 @@
+import { mediaServerState } from "../stores/mediaServerState.svelte";
 import type {
   DownloadJobEvent,
   RealtimeSnapshot,
@@ -58,6 +59,7 @@ class RealtimeStream {
     projectRealtimeSnapshot(snapshot, continuing);
     refreshRemovedDownloadTargets(previous, this.downloads);
     storePublicDatasetStatus(snapshot.public_dataset_status);
+    mediaServerState.store(snapshot.media_server);
     return true;
   }
 

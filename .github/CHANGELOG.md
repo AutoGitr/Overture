@@ -9,6 +9,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- A notice stays pinned while the media server is unreachable or refuses Overture's API key, says which setting to check, and offers Check again. It clears by itself once the server answers.
 - TMDB charts as collection lists: Popular, Top rated, Trending, In cinemas, Coming soon, Airing today and Airing this week, read for the new TMDB region setting.
 - Collection criteria test what TMDB says about each title: original language, origin country, TMDB rating and votes, TMDB keywords, production companies, streaming services in your region, and for shows their network, status and last air date. Full Sync reads them for every title with a TMDB ID, and again weekly. Plex can also test how many versions a movie has, and every server its folder.
 - Collection sets split by edition, network, original language, origin country or streaming service; on Plex, smart sets split by audio or subtitle language. Custom sets list their own collections, each with its own criteria, such as A to Z or Based on a book. Any set can rename or merge values, and can remove collections whose value disappears.
@@ -46,7 +47,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Error messages no longer end in a request or job ID, and a failed download names what failed, such as "Couldn't download the poster for Mufasa: The Lion King". The IDs remain in the log.
 - `ART_DOWNLOAD_WORKERS` now allows at most 10 and `THEME_DOWNLOAD_WORKERS` at most 4, since more only gets the address rate-limited or blocked. Lower a larger value before upgrading, or Overture will not start.
-- Saved Sync and Assets schedules show their last run's time, duration and totals without being expanded; an incremental schedule's Last poll is now its Last run.
+- Saved Sync and Assets schedules show their last run's time, duration and totals without being expanded; an incremental schedule's Last poll is now its Last run. A run a schedule started names the schedule in its results.
 - Assets downloads a saved choice whose file is missing on every run, so the Retry saved downloads option is gone, and Overwrite existing is now called Replace existing. Saved choices include the artwork URLs Sync copies from your media server, so the first run can queue downloads for every item whose artwork is only on the server. Saved schedules are converted.
 - Collections sync on a schedule like Overture's other jobs: a cron expression at the collection, group or global level replaces the interval in hours, which is converted. Scheduled sync can now be inherited by a collection like its other settings.
 - Collection settings look the same everywhere: a collection's Settings and Schedule, a group's in the Collection groups popup and the global defaults under Settings use the same fields and names, and each Default names the value it inherits. One collection and One per value share Setup, Content, Settings and Schedule; a set's title template is in Setup.
@@ -89,6 +90,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Collection criteria with text or tag values, such as Studio or Actor, no longer make the form slow on large libraries: suggestions show the 50 values that match what you type.
+- Asking the media server to refresh an item after a download or rename is retried when the server briefly fails, instead of leaving the item showing its old artwork.
 - Artwork from hosts that send no content type, or a generic binary one, now downloads when the file is a JPG or PNG, instead of failing with "Unsupported content type: unknown".
 - `THEME_DOWNLOAD_WORKERS` above 2 now downloads that many themes at once; video lookups were limited to two at a time, shared with audio probing.
 - An incremental Sync schedule's poll no longer replaces the stored results of the last full Sync with an empty run.

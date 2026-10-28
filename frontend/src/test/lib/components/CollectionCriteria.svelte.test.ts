@@ -121,6 +121,35 @@ describe("collection criteria", () => {
     expect(screen.getByText("No conditions yet.")).toBeInTheDocument();
   });
 
+  it("suggests at most 50 library values, narrowed to what is typed", async () => {
+    mockFetchRoutes({
+      "/api/collections/field-values": Array.from({ length: 300 }, (_, index) => ({
+        value: `Studio ${index}`,
+        count: 1,
+      })),
+    });
+    const group = $state<FilterGroupInput>(emptyGroup());
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: capabilities.fields.filter((field) => field.local),
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      label: "Criteria",
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
+      target: { value: "field:genre" },
+    });
+    const value = screen.getByLabelText("Criteria condition 1 value");
+    const options = () => document.querySelectorAll(`#${value.getAttribute("list")} option`);
+
+    await waitFor(() => expect(options()).toHaveLength(50));
+    await fireEvent.input(value, { target: { value: "studio 29" } });
+    // Studio 29 and Studio 290 to 299.
+    await waitFor(() => expect(options()).toHaveLength(11));
+  });
+
   it("edits person credits and offers the configured Radarr tags", async () => {
     mockFetchRoutes({ "/api/collections/tags/radarr": [{ id: 1, label: "criterion" }] });
     const person = $state<CollectionSourceInput>({

@@ -11,6 +11,7 @@ export interface JobLifecycleEvent extends JobLogEvent {
   errors?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
+  schedule?: string | null;
 }
 
 /** How one job's events are read. */
@@ -41,6 +42,8 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
   readonly log = new JobLogFeed();
   started_at = $state<string | null>(null);
   finished_at = $state<string | null>(null);
+  /** The saved schedule that started the run; `null` when started by hand. */
+  schedule = $state<string | null>(null);
   error = $state<string | null>(null);
   /** A stop was accepted and the run has not ended yet. */
   stopping = $state(false);
@@ -131,6 +134,7 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
     this.log.reset();
     this.started_at = null;
     this.finished_at = null;
+    this.schedule = null;
     this.error = null;
     this.stopping = false;
   }
@@ -149,6 +153,7 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
     this.total = data.total ?? this.total;
     this.errors = data.errors ?? this.errors;
     this.started_at = data.started_at || this.started_at;
+    this.schedule = data.schedule ?? this.schedule;
     const carried = data as Partial<Record<C, number | null>>;
     for (const name of this.config.counters ?? []) {
       this.counters[name] = carried[name] ?? this.counters[name];

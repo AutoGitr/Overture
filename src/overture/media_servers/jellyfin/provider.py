@@ -29,6 +29,7 @@ lazy from ..adapters import (
 )
 lazy from ..base import BaseMediaServerProvider
 lazy from ..errors import MediaServerError
+lazy from ..health import MediaServerHealthTracker
 lazy from ..wire import MediaBrowserItem, MediaBrowserPerson
 lazy from .client import (
     COLLECTION_TYPES,
@@ -440,9 +441,13 @@ class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
     collections = FolderThemes()
 
     def __init__(
-        self, *, client: JellyfinClient | None = None, app_config: Settings
+        self,
+        *,
+        client: JellyfinClient | None = None,
+        app_config: Settings,
+        health: MediaServerHealthTracker | None = None,
     ) -> None:
         super().__init__(
-            client=client or JellyfinClient(app_config=app_config),
+            client=client or JellyfinClient(app_config=app_config, health=health),
             app_config=app_config,
         )

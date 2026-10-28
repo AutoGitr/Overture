@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Main from "../Main.svelte";
 import { queryClient } from "../lib/rest/queryClient";
 import { navigate } from "../lib/router/routes";
+import { mediaServerState } from "../lib/stores/mediaServerState.svelte";
 import { realtimeConnectionState } from "../lib/stores/realtimeConnectionState.svelte";
 import { uiState } from "../lib/stores/uiState.svelte";
 import { type FetchCall, mockFetchRoutes } from "./helpers/fetch";
@@ -38,6 +39,7 @@ describe("Main", () => {
   beforeEach(async () => {
     queryClient.clear();
     realtimeConnectionState.reset();
+    mediaServerState.store({ state: "reachable", message: "" });
     uiState.closePopup();
     await navigate("/movies", { replace: true });
   });
@@ -57,6 +59,24 @@ describe("Main", () => {
     view.unmount();
 
     expect(realtimeTransport.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("pins a notice while the media server refuses Overture, and checks again", async () => {
+    const { calls } = backend({
+      "/api/settings/connectivity": { media_server: true, tmdb: true },
+    });
+    mediaServerState.store({ state: "rejected", message: "check MEDIA_SERVER_API_KEY" });
+    renderWithQueryClient(Main, { onLogout: vi.fn() });
+
+    const pinned = notice("The media server refused Overture");
+    expect(pinned).toHaveTextContent("check MEDIA_SERVER_API_KEY");
+    await fireEvent.click(within(pinned).getByRole("button", { name: "Check again" }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.url.endsWith("/api/settings/connectivity"))).toBe(true),
+    );
+
+    mediaServerState.store({ state: "reachable", message: "" });
+    await waitFor(() => expect(screen.queryByText("The media server refused Overture")).toBeNull());
   });
 
   it("reveals the app even when a first load fails, and offers that load a retry", async () => {

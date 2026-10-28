@@ -3,9 +3,9 @@
 // Models that also appear in openapi.json are imported from the REST bundle
 // rather than redeclared, so both generators describe one type universe.
 
-import type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaType, PublicDatasetStatus, PublicDatasetSyncOutcome, PublicDatasetSyncStats, PublicError, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+import type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicDatasetStatus, PublicDatasetSyncOutcome, PublicDatasetSyncStats, PublicError, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
-export type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaType, PublicDatasetStatus, PublicDatasetSyncOutcome, PublicDatasetSyncStats, PublicError, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+export type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicDatasetStatus, PublicDatasetSyncOutcome, PublicDatasetSyncStats, PublicError, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
 export type LifecycleStatus = "started" | "progress" | "completed" | "stopped" | "failed";
 
@@ -23,6 +23,7 @@ export interface SyncJobEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -42,6 +43,7 @@ export interface BulkArtJobEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -63,6 +65,7 @@ export interface BulkThemeJobEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -101,6 +104,7 @@ export interface AssetScanProgressEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -143,6 +147,7 @@ export interface ServerAuditProgressEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -161,6 +166,7 @@ export interface ServerAuditFixEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -192,6 +198,7 @@ export interface PublicDatasetSyncEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -205,6 +212,7 @@ export interface BackupJobEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
+  schedule?: string | null;
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
@@ -320,6 +328,7 @@ export interface WebSocketPayloadMap {
   'item.updated': ItemUpdatedEvent;
   'job.snapshot.cleared': JobSnapshotClearedEvent;
   'schedules.changed': SchedulesChangedEvent;
+  'media-server.status': MediaServerStatus;
 }
 
 export const WEBSOCKET_EVENTS = [
@@ -380,6 +389,7 @@ export const WEBSOCKET_EVENTS = [
   'item.updated',
   'job.snapshot.cleared',
   'schedules.changed',
+  'media-server.status',
 ] as const;
 
 export type WebSocketEventName = typeof WEBSOCKET_EVENTS[number];

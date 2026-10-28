@@ -5,6 +5,7 @@ lazy from pydantic import Field
 lazy from ..utils.types import JsonValue
 lazy from .base import StrictBaseModel
 lazy from .downloads import DownloadJobEvent
+lazy from .media_server import MediaServerStatus
 lazy from .public_dataset import PublicDatasetStatus
 
 
@@ -26,3 +27,4 @@ class RealtimeSnapshot(StrictBaseModel):
     #: Every queued and running download, in the order they were queued.
     downloads: list[DownloadJobEvent] = Field(default_factory=list[DownloadJobEvent])
     public_dataset_status: PublicDatasetStatus
+    media_server: MediaServerStatus

@@ -26,6 +26,7 @@ lazy from ...utils.ssrf import LOOPBACK_HOSTS
 lazy from ...version import APP_VERSION
 lazy from ..adapters import ServerTheme
 lazy from ..errors import MediaServerError
+lazy from ..health import MediaServerHealthTracker
 lazy from ..http_client import MediaServerHttpClient
 lazy from ..wire import (
     PlexMetadata,
@@ -210,9 +211,12 @@ class PlexClient(MediaServerHttpClient):
         *,
         app_config: Settings,
         client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        health: MediaServerHealthTracker | None = None,
     ) -> None:
         """Initialize instance state."""
-        super().__init__(app_config=app_config, client_factory=client_factory)
+        super().__init__(
+            app_config=app_config, client_factory=client_factory, health=health
+        )
         self._machine_identifier: str | None = None
 
         async def build_public() -> httpx2.AsyncClient:
@@ -583,7 +587,9 @@ class PlexClient(MediaServerHttpClient):
             "GET", f"/library/metadata/{rating_key}/posters", allow_not_found=True
         )
         await self.unlock_fields(rating_key, unlock)
-        await self._request("PUT", f"/library/metadata/{rating_key}/refresh")
+        await self._request(
+            "PUT", f"/library/metadata/{rating_key}/refresh", idempotent=True
+        )
 
     @override
     async def get_theme_songs(self, item_id: str) -> list[ServerTheme]:

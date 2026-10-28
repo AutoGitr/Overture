@@ -1118,3 +1118,29 @@ async def test_full_sync_collection_phase_respects_target(
     assert provider.calls == [{"library_ids": ["1"]}]
     assert collections.called is include_collections
     assert probe.names()[-1] == "sync.completed"
+
+
+async def test_a_scheduled_full_sync_names_its_schedule(
+    tmp_path: Path, app_config: Settings, database: Database
+) -> None:
+    engine = make_engine(
+        FakeProvider(), app_config=app_config, database=database, config_dir=tmp_path
+    )
+    schedule = await engine.schedules.create(
+        SyncScheduleWrite(
+            name="Nightly",
+            cron_expression="0 3 * * *",
+            config=SyncScheduleConfig(mode="full"),
+        )
+    )
+
+    await engine.schedules.run_now(schedule.id)
+    await asyncio.wait_for(engine.schedules.wait_for_pending_runs(), timeout=5)
+
+    _event, payload = engine.job.final_snapshot()
+    assert payload is not None
+    assert payload["schedule"] == "Nightly"
+    [saved] = await engine.schedules.all()
+    assert saved.last_run is not None
+    assert not saved.last_run.failed
+    await engine.schedules.stop()

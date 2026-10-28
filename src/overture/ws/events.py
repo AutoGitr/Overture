@@ -22,6 +22,7 @@ lazy from ..schemas.library import (
     LibraryItemRemovedEvent,
     LibraryItemUpsertedEvent,
 )
+lazy from ..schemas.media_server import MediaServerStatus
 lazy from ..schemas.public_dataset import PublicDatasetStatus, PublicDatasetSyncEvent
 lazy from ..schemas.realtime import RealtimeSnapshot
 lazy from ..schemas.schedules import SchedulesChangedEvent
@@ -123,6 +124,9 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         ),
         "schedules.changed": WebSocketEventDefinition(
             "schedules.changed", SchedulesChangedEvent
+        ),
+        "media-server.status": WebSocketEventDefinition(
+            "media-server.status", MediaServerStatus, exclude_none=False
         ),
     }
 )

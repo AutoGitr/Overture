@@ -136,6 +136,10 @@ class JobEnvelope(StrictBaseModel):
         default=None,
         description="The persisted run whose log and findings the job pages.",
     )
+    schedule: str | None = Field(
+        default=None,
+        description="The saved schedule that started the run; none if started by hand.",
+    )
     log_total: int | None = Field(
         default=None,
         description="Lines in the run's log, including the one this event adds.",

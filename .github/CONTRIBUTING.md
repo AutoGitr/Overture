@@ -64,6 +64,25 @@ changes, without tests or builds.
 | Frontend checks, in `frontend/` | `bun run format:fix`, `typecheck`, `lint`, `test:unit` |
 | End-to-end tests, in `frontend/` | `bun run test:e2e`, and `test:oidc` for sign-in |
 
+### Checking collections against real services
+
+Unit tests replace the media server, TMDB, MDBList, Radarr and Sonarr. To see
+how every collection criterion behaves against the real ones, point
+`scripts/verify_collections.py` at a synced instance:
+
+```sh
+uv run python -m scripts.verify_collections http://localhost:5885 --report collections.md
+```
+
+It previews one condition per field and operator, and per list source, in each
+library, and on Plex compares Overture's member count with Plex's for the same
+criteria. It is safe on a real library: its client refuses every request but
+reads, the sign-in and the preview endpoints, before sending it. Pass
+`--sources sources.json`, a list of source objects as the API takes them, to
+include TMDB lists, franchises, people and MDBList lists. Run it before each
+release and after changing `src/overture/services/collections/`, and turn each
+problem it reports into a test.
+
 ## Generated files
 
 - **API contracts.** After changing endpoints, schemas, WebSocket events or

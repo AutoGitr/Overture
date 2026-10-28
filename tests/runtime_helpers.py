@@ -33,6 +33,7 @@ lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.runner import JobContext
 lazy from overture.jobs.slot import ManagedBackgroundJob
+lazy from overture.media_servers.health import MediaServerHealthTracker
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import RuntimeServices
 lazy from overture.runtime_paths import database_path, image_cache_path
@@ -179,6 +180,7 @@ class NoopProviderRegistry(ProviderRegistry):
     ) -> None:
         self._provider = provider
         self._collections = collections
+        self.health = MediaServerHealthTracker()
 
     @property
     @override

@@ -9,6 +9,7 @@ lazy from ..domain import ArtType, ServerType
 lazy from .base import BaseMediaServerProvider
 lazy from .emby import EmbyProvider
 lazy from .errors import MediaServerError
+lazy from .health import MediaServerHealthTracker
 lazy from .jellyfin import JellyfinProvider
 lazy from .plex import PlexProvider
 
@@ -39,6 +40,8 @@ class ProviderRegistry:
     def __init__(self, *, app_config: Settings) -> None:
         self._app_config = app_config
         self._providers: dict[ServerType, BaseMediaServerProvider[Any]] = {}
+        #: Whether the media server answered its last request.
+        self.health = MediaServerHealthTracker()
 
     @property
     def provider(self) -> BaseMediaServerProvider[Any]:
@@ -46,7 +49,7 @@ class ProviderRegistry:
         server_type = self._app_config.MEDIA_SERVER
         if server_type not in self._providers:
             self._providers[server_type] = _PROVIDERS[server_type](
-                app_config=self._app_config
+                app_config=self._app_config, health=self.health
             )
         return self._providers[server_type]
 

@@ -18,7 +18,7 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...jobs.gate import LibraryGate, WaitReporter
 lazy from ...jobs.kinds import JobKind
 lazy from ...jobs.lifecycle import ManagedJobLifecycle
-lazy from ...jobs.runner import JobContext
+lazy from ...jobs.runner import JobContext, scheduled
 lazy from ...jobs.slot import ManagedBackgroundJob
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.registry import ProviderRegistry
@@ -178,8 +178,11 @@ class SyncEngine:
             await self._library_gate.run(
                 "sync",
                 self.job,
-                self._full_sync(
-                    library_ids, include_collections=config.include_collections
+                scheduled(
+                    self._full_sync(
+                        library_ids, include_collections=config.include_collections
+                    ),
+                    schedule.name,
                 ),
                 report=report,
             )

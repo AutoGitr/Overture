@@ -192,16 +192,21 @@ async def request_with_retry(
     limiter: RequestLimiter | None = None,
     retry_delays: tuple[float, ...] = _RETRY_DELAYS,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    idempotent: bool = False,
     **kwargs: Any,
 ) -> httpx2.Response:
-    """Make an HTTP request; reads are retried with backoff, writes never."""
+    """Make an HTTP request; reads are retried with backoff, writes never.
+
+    A write the caller marks *idempotent*, such as asking a server to refresh
+    an item, is retried like a read, since repeating it changes nothing.
+    """
 
     async def attempt() -> httpx2.Response:
         if limiter is not None:
             await limiter.wait(url)
         return await client.request(method, url, **kwargs)
 
-    if method.upper() not in {"GET", "HEAD"}:
+    if method.upper() not in {"GET", "HEAD"} and not idempotent:
         return await attempt()
     # Logged without its query string, which can carry credentials.
     endpoint = urlsplit(url)._replace(query="", fragment="").geturl()
