@@ -1,11 +1,21 @@
 <script lang="ts">
   import Folder from "@lucide/svelte/icons/folder";
+  import FolderLock from "@lucide/svelte/icons/folder-lock";
   let {
     title,
     count,
     style,
+    locked = false,
     onselect,
-  }: { title: string; count: number; style: string; onselect: () => void } = $props();
+  }: {
+    title: string;
+    count: number;
+    style: string;
+    /** The virtual group of collections Overture does not manage yet. */
+    locked?: boolean;
+    onselect: () => void;
+  } = $props();
+  let Icon = $derived(locked ? FolderLock : Folder);
 </script>
 
 <button
@@ -15,7 +25,7 @@
   aria-label={`Open group ${title}`}
   onclick={onselect}
 >
-  <Folder size={26} /><span><strong>{title}</strong><small>{count} collections</small></span>
+  <Icon size={26} /><span><strong>{title}</strong><small>{count} collections</small></span>
 </button>
 
 <style>

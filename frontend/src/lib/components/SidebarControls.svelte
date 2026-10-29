@@ -23,12 +23,13 @@
     placeholder,
     sortFields,
     filtersOpen,
-    hasActiveFilters,
+    activeFilters,
     searchQuery,
     searchField,
     sortField,
     sortDir,
     onOpenFilters,
+    onResetFilters,
     onSearchQueryChange,
     onSearchFieldChange,
     onSetSort,
@@ -41,12 +42,14 @@
     /** Sort fields to choose from; none hides the sort menu and the filters. */
     sortFields: MenuEntry<SidebarSortField>[];
     filtersOpen: boolean;
-    hasActiveFilters: boolean;
+    /** How many filters narrow the list; Reset filters clears them. */
+    activeFilters: number;
     searchQuery: string;
     searchField: SidebarSearchField;
     sortField: SidebarSortField;
     sortDir: SidebarSortDir;
     onOpenFilters: () => void;
+    onResetFilters: () => void;
     onSearchQueryChange: (value: string) => void;
     onSearchFieldChange: (field: SidebarSearchField) => void;
     onSetSort: (field: SidebarSortField, dir: SidebarSortDir) => void;
@@ -94,16 +97,26 @@
   {#if sortFields.length}
     <button
       type="button"
-      class={["btn btn-ghost btn-icon filter-btn", { "has-filter": hasActiveFilters }]}
+      class={["btn btn-ghost btn-icon filter-btn", { "has-filter": activeFilters > 0 }]}
       onclick={onOpenFilters}
       aria-label="Open filters"
       aria-haspopup="dialog"
       aria-expanded={filtersOpen}
-      title="Filters"
+      title={activeFilters ? `Filters (${activeFilters} active)` : "Filters"}
     >
-      <!-- A filled funnel marks active filters. -->
-      <Funnel size={16} fill={hasActiveFilters ? "currentColor" : "none"} />
+      <!-- A filled funnel marks active filters, with how many. -->
+      <Funnel size={16} fill={activeFilters ? "currentColor" : "none"} />
+      {#if activeFilters}<span class="filter-count" aria-hidden="true">{activeFilters}</span>{/if}
     </button>
+    {#if activeFilters}
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon"
+        onclick={onResetFilters}
+        aria-label="Reset filters"
+        title="Reset filters"><X size={14} /></button
+      >
+    {/if}
   {/if}
 
   <div class="search-wrapper">
@@ -235,6 +248,11 @@
     color: var(--accent);
     background: var(--accent-muted);
     box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .filter-count {
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
   }
 
   .sort-field-label {

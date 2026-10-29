@@ -1,4 +1,4 @@
-import { appSettings, collection } from "../../helpers/fixtures";
+import { appSettings } from "../../helpers/fixtures";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -194,26 +194,6 @@ describe("SettingsPopup", () => {
       expect(queryClient.getQueryState(collectionsKey)?.isInvalidated).toBe(true);
     },
   );
-
-  it("counts managed collections without a group once groups are required", async () => {
-    for (const [mediaType, rows] of [
-      ["movie", [collection({ managed: true, collection_group: null })]],
-      ["show", [collection({ managed: true, collection_group: "Shows" })]],
-    ] as const) {
-      queryClient.setQueryData(
-        listCollectionsOptions({ query: { media_type: mediaType } }).queryKey,
-        [...rows],
-      );
-    }
-    renderWithQueryClient(SettingsPopup);
-    await fireEvent.click(
-      screen.getByRole("checkbox", { name: "Require a group for every managed collection" }),
-    );
-
-    expect(await screen.findByText(/1 movie collection has no group yet/)).toBeInTheDocument();
-    expect(screen.queryByText(/show collection/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show them" })).toBeInTheDocument();
-  });
 
   it("redacts sensitive save errors in the visible footer", async () => {
     updateSettings.mockRejectedValue(new Error("token=secret"));

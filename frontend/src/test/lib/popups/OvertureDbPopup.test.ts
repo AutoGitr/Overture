@@ -7,7 +7,7 @@ import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
 import { publicDatasetSyncState } from "../../../lib/stores/jobStates.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { catalogRow, publicDatasetStatus } from "../../helpers/fixtures";
+import { appSettings, catalogRow, publicDatasetStatus } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -117,10 +117,27 @@ describe("OvertureDbPopup settings", () => {
     await fireEvent.click(screen.getByRole("checkbox", { name: "Enable OvertureDB" }));
     await fireEvent.click(save);
 
-    expect(await screen.findByText("OvertureDB enabled.")).toBeInTheDocument();
+    expect(await screen.findByText("OvertureDB settings saved.")).toBeInTheDocument();
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ enabled: true });
     expect(screen.getByRole("button", { name: "Sync OvertureDB Now" })).toBeEnabled();
     expect(save).toBeDisabled();
+  });
+
+  it("saves the No theme and sidebar settings with the app settings", async () => {
+    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    const { calls } = mockFetchRoutes({ "/api/settings": appSettings() });
+    renderWithQueryClient(OvertureDbPopup);
+
+    await fireEvent.click(
+      screen.getByRole("checkbox", { name: "Trust OvertureDB's No theme flag" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("OvertureDB settings saved.")).toBeInTheDocument();
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      overturedb_no_theme: false,
+      overturedb_browse: true,
+    });
   });
 
   it("restores the switch when saving fails", async () => {

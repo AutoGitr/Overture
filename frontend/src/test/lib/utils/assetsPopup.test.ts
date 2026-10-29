@@ -144,10 +144,7 @@ describe("buildBulkAssetsRequest", () => {
       source_order: ["local_art_matching"],
       threshold: 3,
     });
-    expect(request.themes).toEqual({
-      source_order: ["youtube_search"],
-      include_collections: false,
-    });
+    expect(request.themes).toEqual({ source_order: ["youtube_search"] });
     expect(request.include_unmonitored).toBe(true);
     expect(request.overwrite_existing).toBe(true);
   });

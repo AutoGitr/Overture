@@ -75,7 +75,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.input(view.getByLabelText("Min length (s)"), { target: { value: "30" } });
     await fireEvent.input(view.getByLabelText("Max length (s)"), { target: { value: "90" } });
     await fireEvent.click(
-      within(view.getByRole("radiogroup", { name: "Resolution Art Type" })).getByRole("radio", {
+      within(view.getByRole("radiogroup", { name: "Resolution art type" })).getByRole("radio", {
         name: "Background",
       }),
     );
@@ -104,7 +104,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const view = renderWithQueryClient(FiltersPopup);
 
     await fireEvent.click(
-      within(view.getByRole("radiogroup", { name: "Art Source Art Type" })).getByRole("radio", {
+      within(view.getByRole("radiogroup", { name: "Art source art type" })).getByRole("radio", {
         name: "Poster",
       }),
     );
@@ -438,7 +438,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     ).toEqual({ collection_ids: [1], media_type: "movie", operation, ...expected });
   });
 
-  it("lays collection filters out as headed sections, art included and media server last", async () => {
+  it("groups collection filters: status inline together, then art, theme and bulk operations", async () => {
     await navigate("/movies/collections");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     queryClient.setQueryData(
@@ -455,10 +455,22 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const headings = view
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent?.trim());
-    expect(headings).toEqual(
-      expect.arrayContaining(["Art resolution", "Art source", "Members", "Kind", "Size"]),
-    );
-    expect(headings.indexOf("Media server")).toBe(headings.indexOf("Bulk operations") - 1);
+    // Every one-choice filter shares Status, inline; art and theme refinements follow.
+    expect(headings).toEqual([
+      "Status",
+      "Art",
+      "Theme music",
+      "Metadata issues",
+      "Bulk operations",
+    ]);
+    const status = within(view.getByRole("region", { name: "Status" }));
+    for (const name of ["Management", "Kind", "Size", "Media server"])
+      expect(status.getByRole("group", { name })).toBeInTheDocument();
+    expect(
+      within(view.getByRole("region", { name: "Art" })).getByRole("group", {
+        name: "Art resolution",
+      }),
+    ).toBeInTheDocument();
     expect(view.queryByRole("region", { name: "Collections" })).toBeNull();
     expect(view.queryByRole("region", { name: "Theme source" })).toBeNull();
   });

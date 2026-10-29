@@ -36,6 +36,7 @@ globalThis.ResizeObserver = MockResizeObserver;
 // stub that logs to stderr. sv-router calls it on every navigation, which
 // buries real output under the notice - a no-op keeps the run readable.
 window.scrollTo = () => {};
+Element.prototype.scrollIntoView = () => {};
 
 // jsdom doesn't implement matchMedia, which the "system" theme and Svelte's
 // MediaQuery read. Tests run as a device that prefers dark mode and matches

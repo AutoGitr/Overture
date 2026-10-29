@@ -36,12 +36,8 @@ const {
   searchYoutube,
   selectTmdbTheme,
   trackQueuedItemJob,
-  saveCatalogDraft,
-  clearTheme,
   routed,
 } = vi.hoisted(() => ({
-  clearTheme: vi.fn(),
-  saveCatalogDraft: vi.fn(),
   selectTheme: vi.fn(),
   getPublicDatasetSources: vi.fn(),
   getTmdbPublicDatasetSources: vi.fn(),
@@ -58,8 +54,6 @@ vi.mock("../../../generated/rest/sdk.gen", () => ({
   getTmdbPublicDatasetSources,
   searchYoutube,
   selectTmdbTheme,
-  saveCatalogDraft,
-  clearTheme,
 }));
 vi.mock("../../../lib/utils/tmdbItems", () => ({ openPersistedItem }));
 vi.mock("../../../lib/rest/cache", () => ({ upsertLibraryItem }));
@@ -194,66 +188,17 @@ describe("ThemePanel search", () => {
     },
   );
 
-  it("shows a title OvertureDB flags as having no theme, and records No theme", async () => {
+  it("shows a title OvertureDB flags as having no theme, and leaves the flag to OvertureDB", async () => {
     showItem(mediaItem({ id: 7, title: "Alien", catalog_no_theme: true }));
     const { unmount } = renderPanel();
     expect(screen.getByRole("status", { name: "" })).toHaveTextContent("No theme (OvertureDB)");
     expect(screen.queryByRole("button", { name: "No theme" })).toBeNull();
     unmount();
 
+    // A library item cannot set the flag: only the OvertureDB view drafts it.
     showItem(mediaItem({ id: 8, title: "Heat", youtube_id: "abcdefghijk" }));
-    clearTheme.mockResolvedValue({ data: { status: "cleared" } });
     renderPanel();
-    await fireEvent.click(screen.getByRole("button", { name: "No theme" }));
-    await waitFor(() =>
-      expect(clearTheme).toHaveBeenCalledWith(expect.objectContaining({ path: { item_id: 8 } })),
-    );
-  });
-
-  it("drafts a found video for OvertureDB without selecting it, except ThemerrDB's", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
-    showItem(mediaItem({ id: 7, title: "Alien" }));
-    getPublicDatasetSources.mockResolvedValue({
-      data: {
-        found: true,
-        item: { youtube_id_themerrdb: "themerr_yt", entry_key: "tmdb-348" },
-        seasons: [],
-      },
-    });
-    searchYoutube.mockResolvedValue({
-      data: {
-        results: [
-          {
-            id: "search_yt",
-            title: "Found",
-            channel: null,
-            duration: 60,
-            thumbnail: null,
-            url: "",
-          },
-        ],
-      },
-    });
-    saveCatalogDraft.mockResolvedValue({ data: {} });
-
-    renderPanel();
-
-    const buttons = await screen.findAllByRole("button", { name: "Contribute to OvertureDB" });
-    expect(buttons).toHaveLength(2);
-    const [themerr, found] = buttons;
-    expect(themerr).toBeDisabled();
-    expect(themerr).toHaveAttribute("title", "Already provided by ThemerrDB");
-    await fireEvent.click(found!);
-    await waitFor(() =>
-      expect(saveCatalogDraft).toHaveBeenCalledWith(
-        expect.objectContaining({
-          path: { media_type: "movie", entry_key: "tmdb-348" },
-          body: { youtube_id_overturedb: "search_yt" },
-        }),
-      ),
-    );
-    expect(selectTheme).not.toHaveBeenCalled();
-    expect(await screen.findByRole("button", { name: "Open issue now" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "No theme" })).toBeNull();
   });
 
   it("loads currently selected video first, then OvertureDB, then ThemerrDB, then YouTube search with correct badges and deduplication", async () => {

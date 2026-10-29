@@ -137,30 +137,35 @@ describe("collection theme scope", () => {
     sidebarState.collections = null;
   });
 
-  it("persists the opt-in collection setting with a library theme run", () => {
+  it("runs libraries and every collection, or the chosen groups, together", () => {
     const assets = form();
     assets.toggleLibrary("1");
-    assets.config.enableArt = false;
-    assets.config.includeCollections = true;
-    expect(assets.request().themes?.include_collections).toBe(true);
-    expect(assets.request().collection_ids).toBeUndefined();
-  });
-
-  it("runs over every collection, or the chosen groups, with collection art", () => {
-    const assets = form();
-    assets.config.scope = "collections";
+    assets.toggleCollections(null);
     assets.config.artTypes = ["poster", "season_poster"];
 
     expect(assets.canRun).toBe(true);
+    expect(assets.request()).toMatchObject({
+      library_ids: ["1"],
+      all_collections: true,
+      // A movie library has no seasons, and collections have none either.
+      art: { art_types: ["poster"] },
+    });
+
+    assets.toggleCollections("Sagas");
+    expect(assets.request()).toMatchObject({ collection_groups: ["Sagas"] });
+    expect(assets.request()).not.toHaveProperty("all_collections");
+    expect(assets.request().themes).not.toHaveProperty("include_collections");
+  });
+
+  it("leaves season art out of a run over collections alone", () => {
+    const assets = form();
+    assets.toggleCollections(null);
+    assets.config.artTypes = ["poster", "season_poster"];
     expect(assets.request()).toMatchObject({
       library_ids: [],
       all_collections: true,
       art: { art_types: ["poster"] },
     });
-
-    assets.toggleCollectionGroup("Sagas");
-    expect(assets.request()).toMatchObject({ collection_groups: ["Sagas"] });
-    expect(assets.request()).not.toHaveProperty("all_collections");
   });
 
   it("loads a saved collection-group schedule into the Collections scope", () => {
@@ -175,7 +180,7 @@ describe("collection theme scope", () => {
       }),
     );
 
-    expect(assets.config.scope).toBe("collections");
+    expect(assets.config.allCollections).toBe(false);
     expect(assets.selectedCollectionGroups).toEqual(["Studios"]);
   });
 });

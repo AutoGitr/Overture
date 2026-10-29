@@ -49,7 +49,6 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
   return {
     art_status: "missing",
     catalog_no_theme: false,
-    contribution_warnings: [],
     background_status: "missing",
     background_hash: null,
     background_height: null,
@@ -129,7 +128,8 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     active_end_mmdd: null,
     active_start_mmdd: null,
     generated_value: null,
-    managed: false,
+    // Overture manages what it creates; only server imports start unmanaged.
+    managed: true,
     sync_failed: false,
     last_rule_sync: null,
     theme_duration: null,
@@ -157,7 +157,6 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     has_incorrect_aspect_ratio: false,
     home_order: null,
     catalog_no_theme: false,
-    contribution_warnings: [],
     poster_status: "missing",
     background_status: "missing",
     art_status: "missing",
@@ -216,8 +215,6 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     smart: false,
     sort_title_format: null,
     summary_format: null,
-    sync_schedule: null,
-    sync_enabled: null,
     request_missing: null,
     member_label: null,
     arr_tag: null,
@@ -335,7 +332,7 @@ export function collectionDetail(overrides: Partial<CollectionDetail> = {}): Col
   return {
     ...collection(),
     effective_sync_mode: "sync",
-    rule: null,
+    rule: collectionRule(),
     theme_duration: null,
     catalog_entry_key: null,
     theme_writable: true,
@@ -410,6 +407,7 @@ export function publicDatasetRecordItem(
     id: null,
     imdb_id: null,
     media_type: "movie",
+    no_theme: false,
     poster_url: null,
     title: null,
     tmdb_id: null,
@@ -521,6 +519,8 @@ export function itemDownload(
 export function appSettings(overrides: Partial<AppSettingsRead> = {}): AppSettingsRead {
   return {
     ...DEFAULT_APP_SETTINGS,
+    // Groups are optional unless a test is about requiring them.
+    collection_require_group: false,
     media_server: "plex",
     tmdb_configured: false,
     mdblist_configured: false,

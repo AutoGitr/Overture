@@ -146,12 +146,10 @@ def resolve_policy(
             defaults.collection_delete_when_inactive,
         ),
         sync_schedule=inherit(
-            rule.sync_schedule if rule else None,
             group.sync_schedule if group else None,
             defaults.collection_sync_schedule,
         ),
         sync_enabled=inherit(
-            rule.sync_enabled if rule else None,
             group.sync_enabled if group else None,
             defaults.collection_sync_enabled,
         ),

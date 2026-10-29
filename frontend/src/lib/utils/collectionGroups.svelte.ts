@@ -5,12 +5,17 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionGroupDelete, MediaType } from "../../generated/rest/types.gen";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+import { settingsState } from "../stores/settingsState.svelte";
 import { errorMessage } from "./errors";
 
 /** Actions for the selected group; the popup owns which group is selected. */
 export class CollectionGroupActions {
   name = $derived.by(() => this.group());
-  removal = $state<CollectionGroupDelete["collections"]>("keep");
+  removal = $derived<NonNullable<CollectionGroupDelete["collections"]>>(
+    settingsState.current.collection_require_group ? "move" : "keep",
+  );
+  /** The group a move puts the collections in. */
+  target = $state("");
   private readonly renameRequest = createMutation(() => renameCollectionGroupMutation());
   private readonly deleteRequest = createMutation(() => deleteCollectionGroupMutation());
   private readonly feedback = createNotifier();
@@ -36,15 +41,21 @@ export class CollectionGroupActions {
       return null;
     }
   }
+  /** Why the group cannot be deleted yet, or null when it can. */
+  get blocker(): string | null {
+    return this.removal === "move" && !this.target.trim()
+      ? "Choose the group its collections move to"
+      : null;
+  }
   async delete(): Promise<boolean> {
-    if (this.busy) return false;
-    const removal = this.removal ?? "keep";
+    if (this.busy || this.blocker) return false;
+    const removal = this.removal;
+    const target = this.target.trim();
     const descriptions = {
-      keep: "Keep all collections and remove their group assignment.",
+      keep: "Keep its collections without a group.",
+      move: `Move its collections to "${target}".`,
       overture:
-        "Remove its collections from Overture. Server collections are kept and can be imported again by a library sync.",
-      server:
-        "Remove its collections from the media server. Keep their Overture configuration with scheduled sync disabled.",
+        "Remove its collections from Overture. The server keeps them, and the next library sync lists them as Unmanaged.",
       both: "Remove its collections from both Overture and the media server.",
     };
     if (
@@ -59,7 +70,7 @@ export class CollectionGroupActions {
     try {
       const result = await this.deleteRequest.mutateAsync({
         query: { name: this.group(), media_type: this.mediaType() },
-        body: { collections: removal },
+        body: { collections: removal, group: removal === "move" ? target : null },
       });
       const errors = Object.values(result.errors);
       if (errors.length) {

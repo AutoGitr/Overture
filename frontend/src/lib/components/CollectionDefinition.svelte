@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import DetailForm from "./DetailForm.svelte";
+  import FieldRow from "./FieldRow.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
   import {
     CollectionDraft,
@@ -44,7 +46,7 @@
 >
   {#if draft}
     {@const form = draft}
-    <fieldset class="libraries form-wide">
+    <fieldset class="libraries">
       <legend class="form-label">Libraries</legend>
       {#each libraries as library (library.id)}
         <label class="form-row">
@@ -66,9 +68,13 @@
       {/if}
     </fieldset>
 
-    <label class="form-label">
-      Start from
+    <FieldRow
+      label="Start from"
+      for={`${id}-start`}
+      hint={preset?.description || "A preset fills in the form, which stays editable."}
+    >
       <select
+        id={`${id}-start`}
         value={form.presetKey}
         onchange={(event) =>
           form.applyPreset(presets.find((entry) => entry.key === event.currentTarget.value))}
@@ -92,10 +98,7 @@
           {/each}
         </optgroup>
       </select>
-      <span class="hint"
-        >{preset?.description || "A preset fills in the form, which stays editable."}</span
-      >
-    </label>
+    </FieldRow>
     {#if preset?.saved_id != null}
       {@const chosen = preset}
       <button
@@ -108,25 +111,22 @@
         }}>Delete preset</button
       >
     {/if}
-    <div class="form-label">
-      <span>Create</span>
+    <FieldRow label="Create">
       <SegmentedControl
-        --segmented-margin="0"
         label="Create"
         options={KINDS}
         bind:value={() => form.kind, (kind) => form.selectKind(kind)}
       />
-    </div>
+    </FieldRow>
   {:else}
-    <label class="form-label">
-      Library
-      <select value={editor.libraryId} disabled>
+    <FieldRow label="Library" for={`${id}-library`}>
+      <select id={`${id}-library`} value={editor.libraryId} disabled>
         <option value={editor.libraryId}
           >{libraries.find((library) => library.id === editor.libraryId)?.title ??
             editor.libraryId}</option
         >
       </select>
-    </label>
+    </FieldRow>
   {/if}
 
   {#if draft && creatingSet}
@@ -169,8 +169,13 @@
       />
     </label>
 
-    <div class="form-label">
-      <label for={`${id}-group`}>Group</label>
+    <FieldRow
+      label="Group"
+      for={`${id}-group`}
+      hint={editor.generated
+        ? "Its group's set titles this collection."
+        : "The collection inherits the group's defaults."}
+    >
       <select
         id={`${id}-group`}
         disabled={editor.generated}
@@ -187,22 +192,21 @@
           });
         }}
       >
-        <option value="">No group</option>
+        {#if settingsState.current.collection_require_group}
+          <option value="" disabled>Choose a group</option>
+        {:else}
+          <option value="">No group</option>
+        {/if}
         {#if editor.collectionGroup && !groups.includes(editor.collectionGroup)}
           <option value={editor.collectionGroup}>{editor.collectionGroup}</option>
         {/if}
         {#each groups as group (group)}<option value={group}>{group}</option>{/each}
         <option value={NEW_GROUP}>Create new group...</option>
       </select>
-      <span class="hint"
-        >{editor.generated
-          ? "Its group's set titles this collection."
-          : "The collection inherits the group's defaults."}</span
-      >
-    </div>
+    </FieldRow>
   {/if}
 
-  <div class="form-label form-wide">
+  <div class="form-label">
     <label for={`${id}-preset`}>Save as preset</label>
     <div class="preset-row">
       <input

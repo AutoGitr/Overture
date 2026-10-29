@@ -10,10 +10,11 @@ import {
   FILTERS,
   filterCatalogEntries,
   filterSections,
+  FILTER_GROUPS,
   filterSidebarCollections,
   filterSidebarItems,
   hasThemeAttributes,
-  hasVisibleActiveFilters,
+  activeFilterCount,
   inCollectionGroup,
   metadataIssuesFor,
   normalizeSortPreference,
@@ -108,9 +109,9 @@ describe("sidebar item filters", () => {
       }),
     ).toEqual(["Mismatch", "Uncatalogued"]);
     expect(filterItems(items, { filters })).toEqual(["Match", "Mismatch", "Uncatalogued"]);
-    expect(hasVisibleActiveFilters(filters, true, "items")).toBe(true);
-    expect(hasVisibleActiveFilters(filters, false, "items")).toBe(false);
-    expect(hasVisibleActiveFilters(filters, true, "collections")).toBe(false);
+    expect(activeFilterCount(filters, true, "items")).toBeGreaterThan(0);
+    expect(activeFilterCount(filters, false, "items")).toBe(0);
+    expect(activeFilterCount(filters, true, "collections")).toBe(0);
   });
 
   it("filters art and theme completion by the status the backend reports", () => {
@@ -520,7 +521,7 @@ describe("sidebar collections", () => {
 
   it("filters by members, kind, sync status and catalog themes", () => {
     const collections = [
-      collection({ id: 1, title: "Manual" }),
+      collection({ id: 1, title: "Manual", managed: false }),
       collection({ id: 2, title: "Smart", kind: "smart", managed: true }),
       collection({
         id: 3,
@@ -533,8 +534,8 @@ describe("sidebar collections", () => {
     const titles = (filters: Partial<FilterState>, publicDatasetEnabled = false) =>
       filterCollections(collections, { filters: withFilters(filters), publicDatasetEnabled });
 
-    expect(titles({ collectionMembers: "manual" })).toEqual(["Manual"]);
-    expect(titles({ collectionMembers: "criteria" })).toEqual(["Failing", "Smart"]);
+    expect(titles({ collectionMembers: "unmanaged" })).toEqual(["Manual"]);
+    expect(titles({ collectionMembers: "managed" })).toEqual(["Failing", "Smart"]);
     expect(titles({ collectionKind: "smart" })).toEqual(["Smart"]);
     expect(titles({ collectionSync: "failed" })).toEqual(["Failing"]);
     expect(titles({ collectionSync: "synced" })).toEqual(["Smart"]);
@@ -587,25 +588,21 @@ describe("sidebar collections", () => {
     const itemOnly = withFilters({ themeSources: ["download"] });
     const shared = withFilters({ themeLength: { min: 60, max: null } });
 
-    expect(hasVisibleActiveFilters(itemOnly, false, "items")).toBe(true);
-    expect(hasVisibleActiveFilters(itemOnly, false, "collections")).toBe(false);
+    expect(activeFilterCount(itemOnly, false, "items")).toBeGreaterThan(0);
+    expect(activeFilterCount(itemOnly, false, "collections")).toBe(0);
     expect(
-      hasVisibleActiveFilters(
+      activeFilterCount(
         withFilters({ artSource: { artType: "any", sources: ["tpdb"] } }),
         false,
         "items",
       ),
-    ).toBe(true);
-    expect(hasVisibleActiveFilters(shared, false, "collections")).toBe(true);
+    ).toBeGreaterThan(0);
+    expect(activeFilterCount(shared, false, "collections")).toBeGreaterThan(0);
     expect(
-      hasVisibleActiveFilters(withFilters({ collectionKind: "smart" }), false, "collections"),
-    ).toBe(true);
-    expect(hasVisibleActiveFilters(withFilters({ collectionKind: "smart" }), false, "items")).toBe(
-      false,
-    );
-    expect(hasVisibleActiveFilters(withFilters({ overtureDb: "complete" }), false, "items")).toBe(
-      false,
-    );
+      activeFilterCount(withFilters({ collectionKind: "smart" }), false, "collections"),
+    ).toBeGreaterThan(0);
+    expect(activeFilterCount(withFilters({ collectionKind: "smart" }), false, "items")).toBe(0);
+    expect(activeFilterCount(withFilters({ overtureDb: "complete" }), false, "items")).toBe(0);
   });
 });
 
@@ -723,11 +720,14 @@ describe("catalog filters", () => {
 });
 
 describe("sidebar registry", () => {
-  it("places every list's filters in order, with the media server last", () => {
+  it("places every list's filters in order, libraries first and status filters together", () => {
     const options = { tab: "movie", datasetEnabled: true, smart: true } as const;
+    const groups = Object.keys(FILTER_GROUPS);
     for (const mode of ["items", "collections"] as const) {
       const sections = filterSections(mode, options);
-      expect(sections.at(-1)).toBe("mediaServer");
+      expect(sections[0]).toBe("libraries");
+      const placed = sections.map((key) => groups.indexOf(FILTERS[key].group));
+      expect(placed).toEqual([...placed].sort((a, b) => a - b));
       expect(sections.map((key) => FILTERS[key].order)).toEqual(
         sections.map((key) => FILTERS[key].order).sort((a, b) => a - b),
       );
@@ -812,6 +812,13 @@ describe("inCollectionGroup", () => {
     const managed = { collection_group: "Weekend", managed: true };
     expect(inCollectionGroup(imported, "Unmanaged")).toBe(true);
     expect(inCollectionGroup(managed, "Unmanaged")).toBe(false);
-    expect(inCollectionGroup(imported, "Weekend")).toBe(true);
+    expect(inCollectionGroup(imported, "Weekend")).toBe(false);
+    expect(inCollectionGroup(managed, "Weekend")).toBe(true);
+  });
+
+  it("lists only managed collections without a group at the top level", () => {
+    expect(inCollectionGroup({ collection_group: null, managed: true }, null)).toBe(true);
+    expect(inCollectionGroup({ collection_group: null, managed: false }, null)).toBe(false);
+    expect(inCollectionGroup({ collection_group: "Weekend", managed: true }, null)).toBe(false);
   });
 });

@@ -38,6 +38,7 @@ lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.collection_helpers import managing_rule
 lazy from tests.test_services.test_public_dataset_edges import (
     catalog_jsonl,
     catalog_payload,
@@ -380,6 +381,8 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
             last_synced_at=utc_now(),
         )
     )
+    await db_session.flush()
+    db_session.add(managing_rule(1))
     await db_session.commit()
     browser = CatalogBrowser(database=database, app_config=app_config)
 

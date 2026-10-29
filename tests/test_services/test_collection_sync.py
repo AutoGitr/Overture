@@ -521,7 +521,7 @@ def test_boxset_marker_or_xml_is_required_and_theme_symlinks_cannot_escape(
         inspect_theme_file(plain)
 
 
-async def test_a_new_explicit_identity_queues_incremental_catalog_themes(
+async def test_a_newly_imported_collection_waits_for_take_over_before_themes(
     *, app_config: Settings, database: Database
 ) -> None:
     await _seed_movies(database)
@@ -538,10 +538,10 @@ async def test_a_new_explicit_identity_queues_incremental_catalog_themes(
         app_config,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
     )
+    # Imported collections are unmanaged, so incremental themes leave them alone.
     async with database.read_session() as session:
-        (job,) = (await session.exec(select(DownloadJob))).all()
-        assert job.collection_id == (await _rows(database))["saga"].id
-        assert job.target_url == "o" * 11
+        assert (await session.exec(select(DownloadJob))).all() == []
+    assert (await _rows(database))["saga"].tmdb_collection_id == 10
 
 
 async def test_disabling_unmanaged_import_skips_new_collections_and_refreshes_existing(

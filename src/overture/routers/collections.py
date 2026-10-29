@@ -412,16 +412,6 @@ async def save_collection_rule(
     return await collections.save_rule(collection_id, media_type, body)
 
 
-@router.delete("/{collection_id}/rule")
-async def delete_collection_rule(
-    collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
-    collections: CollectionsDep,
-) -> StatusResponse:
-    """Remove a rule while keeping current membership."""
-    return await collections.delete_rule(collection_id, media_type)
-
-
 @router.post("/{collection_id}/take-over")
 async def take_over_collection(
     collection_id: CollectionIdPath,
@@ -440,7 +430,7 @@ async def sync_collection(
     collections: CollectionsDep,
 ) -> CollectionSyncResponse:
     """Make the media server match the collection saved in Overture."""
-    return await collections.sync(collection_id, media_type)
+    return await collections.sync_rule(collection_id, media_type)
 
 
 @router.delete("/{collection_id}/art")

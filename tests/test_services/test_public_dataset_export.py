@@ -13,13 +13,13 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, ServerType, ThemeBulkSource
-lazy from overture.schemas.library import media_item_read_from_model
 lazy from overture.services.public_dataset.export import (
     REPORT_NAME,
     export_archive,
     export_selections,
 )
 lazy from overture.services.public_dataset.schema.contract import validate_entries
+lazy from overture.utils.art_urls import art_refusals
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 
@@ -205,19 +205,12 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
     assert entry["youtube_id_overturedb"] is None
 
 
-def test_items_warn_about_art_from_a_host_overturedb_refuses() -> None:
-    item = MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie", tmdb_id=1)
-    write_art_slot(
-        item, ArtType.POSTER, url="https://m.media-amazon.com/images/M/a.jpg"
-    )
-    write_art_slot(
-        item, ArtType.BACKGROUND, url="https://image.tmdb.org/t/p/original/b.jpg"
-    )
-
-    read = media_item_read_from_model(item, seasons=[])
-
+def test_export_names_art_from_a_host_overturedb_refuses() -> None:
     warning = (
         "Poster: OvertureDB won't accept art from m.media-amazon.com; it accepts "
         "TMDB, ThePosterDB, fanart.tv, TheTVDB and Plex"
     )
-    assert read.contribution_warnings == [warning]
+    assert art_refusals(
+        "https://m.media-amazon.com/images/M/a.jpg",
+        "https://image.tmdb.org/t/p/original/b.jpg",
+    ) == [warning]

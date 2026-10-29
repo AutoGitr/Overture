@@ -174,12 +174,18 @@
       (hasSelectedLibraries || (libraries.length === 0 && settingsState.current.tmdb_configured)),
   );
   // What a schedule may download depends on OvertureDB, so it waits for its status.
-  let canSaveSchedule = $derived(
-    hasSelectedLibraries &&
-      datasetStatusQuery.isSuccess &&
-      scheduleController.name.trim().length > 0 &&
-      scheduleCronExpression.trim().length > 0,
+  let scheduleBlocker = $derived(
+    !hasSelectedLibraries
+      ? "Choose a library"
+      : !datasetStatusQuery.isSuccess
+        ? "Waiting for the OvertureDB status"
+        : !scheduleController.name.trim()
+          ? "Name the schedule"
+          : !scheduleCronExpression.trim()
+            ? "Choose when it runs"
+            : null,
   );
+  let canSaveSchedule = $derived(scheduleBlocker === null);
 
   function saveSelection() {
     writeJson("syncPopup_selectedLibraries", selectedLibraryIds);
@@ -288,9 +294,10 @@
         ontoggle={toggleLibrary}
         ontoggleall={toggleAll}
         collections={settingsState.current.collections_supported && scheduleMode === "full"
-          ? includeCollections
+          ? [{ id: "collections", label: "Collections", checked: includeCollections }]
           : undefined}
-        oncollectionschange={(checked) => (includeCollections = checked)}
+        oncollectiontoggle={() => (includeCollections = !includeCollections)}
+        oncollectionsall={(checked) => (includeCollections = checked)}
       />
       {#if settingsState.current.collections_supported && collectionGroups.length}
         <label class="form-row">
@@ -430,9 +437,14 @@
     clear={clearResults}
   >
     {#snippet start()}
+      {#if !collectionGroup && !canRunSync && !loading}<span
+          class="popup-footer-note"
+          role="status">Choose a library</span
+        >{/if}
       <button
         class="btn btn-secondary"
         onclick={saveSchedule}
+        title={scheduleBlocker ?? undefined}
         disabled={!canSaveSchedule ||
           createScheduleRequest.isPending ||
           updateScheduleRequest.isPending}

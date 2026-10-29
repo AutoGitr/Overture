@@ -99,8 +99,6 @@ describe("AssetsPopup", () => {
   it("runs art and themes over chosen collection groups", async () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     renderWithQueryClient(OperationsPopup);
-    await fireEvent.click(assetsPanel().getByRole("radio", { name: "Collections" }));
-    expect(assetsPanel().getByText(/Every collection/)).toBeInTheDocument();
     await fireEvent.click(await assetsPanel().findByRole("checkbox", { name: "Sagas" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
     await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));

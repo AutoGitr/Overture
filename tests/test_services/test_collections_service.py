@@ -45,6 +45,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.collection_helpers import managing_rule
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 
 
@@ -154,6 +155,8 @@ async def _collection(
         **fields,
     )
     session.add(row)
+    await session.flush()
+    session.add(managing_rule(row.id or 0))
     await session.commit()
     return row
 
@@ -430,6 +433,8 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
                 last_synced_at=utc_now(),
             )
         )
+        await session.flush()
+        session.add(managing_rule(1))
     service = _service(
         app_config=app_config,
         database=database,

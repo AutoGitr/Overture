@@ -23,7 +23,6 @@ import {
   selectedIncludesShowLibrary,
   type ArtAssetSource,
   type AssetsConfig,
-  type AssetsScope,
   type BulkAssetsRequest,
   type ThemeAssetSource,
 } from "./assetsPopup";
@@ -48,9 +47,8 @@ export class AssetsForm {
   readonly config: AssetsConfig = persistedState("assetsPopup", {
     selectedLibraries: [] as string[],
     useSidebarItems: false,
-    scope: "libraries" as AssetsScope,
+    allCollections: false,
     collectionGroups: [] as string[],
-    includeCollections: false,
     includeUnmonitored: false,
     overwriteExisting: false,
     enableArt: true,
@@ -116,29 +114,32 @@ export class AssetsForm {
     return this.config.collectionGroups.filter((group) => groups.has(group));
   });
 
-  /** A Collections run chosen in the form, rather than sidebar collections. */
+  /** Collections chosen in the form, beside any libraries. */
   readonly collectionsChosen = $derived(
-    !this.config.useSidebarItems && this.config.scope === "collections",
+    !this.config.useSidebarItems &&
+      (this.config.allCollections || this.selectedCollectionGroups.length > 0),
   );
 
+  /** The run covers collections, from the form or the sidebar. */
   readonly collectionScope = $derived(
     this.collectionsChosen || (this.config.useSidebarItems && sidebarState.collections !== null),
   );
 
-  // Collections have no seasons, so a collection run has no season art.
+  // Collections have no seasons, so only a show library offers season art.
   readonly hasShowLibraries = $derived.by(() =>
-    this.collectionScope
-      ? false
-      : this.config.useSidebarItems
-        ? sidebarState.current?.type === "show"
-        : selectedIncludesShowLibrary(this.selectedLibraries, this.showLibraries),
+    this.config.useSidebarItems
+      ? sidebarState.collections === null && sidebarState.current?.type === "show"
+      : selectedIncludesShowLibrary(this.selectedLibraries, this.showLibraries),
   );
 
   readonly hasSelectedLibraries = $derived.by(() => {
-    if (this.collectionsChosen) return true;
-    return this.config.useSidebarItems
-      ? !!(sidebarState.current?.itemIds.length || sidebarState.collections?.collectionIds.length)
-      : this.source.librariesLoaded() && this.selectedLibraries.length > 0;
+    if (this.config.useSidebarItems)
+      return !!(
+        sidebarState.current?.itemIds.length || sidebarState.collections?.collectionIds.length
+      );
+    return (
+      this.collectionsChosen || (this.source.librariesLoaded() && this.selectedLibraries.length > 0)
+    );
   });
 
   readonly activeArtSources = $derived.by(() =>
@@ -167,13 +168,18 @@ export class AssetsForm {
     }),
   );
 
-  readonly canRun = $derived.by(() => {
+  /** Why the run cannot start yet, or null when it can. */
+  readonly blocker = $derived.by(() => {
     const { enableArt, enableThemes } = this.config;
-    const artReady =
-      !enableArt || (this.artTypesToRun.length > 0 && this.activeArtSources.length > 0);
-    const themesReady = !enableThemes || this.activeThemeSources.length > 0;
-    return this.hasSelectedLibraries && (enableArt || enableThemes) && artReady && themesReady;
+    if (!this.hasSelectedLibraries) return "Choose a library or collections";
+    if (!enableArt && !enableThemes) return "Turn on Art or Themes";
+    if (enableArt && !this.artTypesToRun.length) return "Choose an art type";
+    if (enableArt && !this.activeArtSources.length) return "Choose an art source";
+    if (enableThemes && !this.activeThemeSources.length) return "Choose a theme source";
+    return null;
   });
+
+  readonly canRun = $derived(this.blocker === null);
 
   request(): BulkAssetsRequest {
     const { config } = this;
@@ -184,11 +190,11 @@ export class AssetsForm {
           ? (sidebarState.current?.itemIds ?? [])
           : undefined,
       collectionIds:
-        this.collectionScope && !this.collectionsChosen
+        config.useSidebarItems && this.collectionScope
           ? sidebarState.collections?.collectionIds
           : undefined,
-      collectionGroups: this.collectionsChosen ? this.selectedCollectionGroups : undefined,
-      includeCollections: config.includeCollections,
+      collectionGroups: this.selectedCollectionGroups,
+      allCollections: config.allCollections,
       includeUnmonitored: config.includeUnmonitored,
       overwriteExisting: config.overwriteExisting,
       skipRecentVal: config.skipRecentVal,
@@ -218,7 +224,15 @@ export class AssetsForm {
     this.config.useSidebarItems = false;
   }
 
-  toggleCollectionGroup(group: string): void {
+  /** Every collection, or chosen groups: choosing one clears the other. */
+  toggleCollections(group: string | null): void {
+    this.config.useSidebarItems = false;
+    if (group === null) {
+      this.config.allCollections = !this.config.allCollections;
+      this.config.collectionGroups = [];
+      return;
+    }
+    this.config.allCollections = false;
     this.config.collectionGroups = toggleSelectedValue(this.selectedCollectionGroups, group);
   }
 
@@ -252,8 +266,7 @@ export class AssetsForm {
     const { config } = this;
     const saved = schedule.config;
     config.useSidebarItems = false;
-    const collections = saved.all_collections || !!saved.collection_groups;
-    config.scope = collections ? "collections" : "libraries";
+    config.allCollections = saved.all_collections;
     config.collectionGroups = saved.collection_groups ?? [];
     config.includeUnmonitored = saved.include_unmonitored;
     config.overwriteExisting = saved.overwrite_existing;
@@ -267,7 +280,6 @@ export class AssetsForm {
     config.skipRecentUnit = saved.skip_recent_unit;
     config.enableArt = !!saved.art;
     config.enableThemes = !!saved.themes;
-    config.includeCollections = saved.themes?.include_collections ?? false;
     if (saved.art) {
       config.artTypes = saved.art.art_types;
       config.artSourceOrder = normaliseSourceOrder(

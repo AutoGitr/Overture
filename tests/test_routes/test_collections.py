@@ -142,8 +142,7 @@ async def test_collection_routes_delegate_to_service() -> None:
             )
         )
     )
-    service.delete_rule = AsyncMock(return_value=StatusResponse(status=Status.OK))
-    service.sync = AsyncMock(return_value=CollectionSyncResponse(added=2))
+    service.sync_rule = AsyncMock(return_value=CollectionSyncResponse(added=2))
 
     art_service = MagicMock()
     art_service.clear_collection = AsyncMock(return_value=artwork)
@@ -174,7 +173,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     )
     service.rename_group.assert_awaited_once_with(MediaType.MOVIE, "Franchises", "Saga")
     service.delete_group = AsyncMock(return_value=BulkCollectionOperationResult())
-    removal = CollectionGroupDelete(collections="server")
+    removal = CollectionGroupDelete(collections="both")
     await collections_router.delete_collection_group(
         removal, service, MediaType.MOVIE, "Saga"
     )
@@ -280,11 +279,17 @@ async def test_collection_routes_delegate_to_service() -> None:
     )
     assert img_resp.body == b"img"
 
+    rule_write = CollectionRuleWrite(
+        criteria=FilterGroup(
+            conditions=[SourceCondition(source=TmdbCollectionSource(collection_id=10))]
+        )
+    )
     # Create, update, delete
     create = CollectionCreate(
         media_type=MediaType.MOVIE,
         library_id="lib1",
         title="Star Wars",
+        rule=rule_write,
     )
     assert (await collections_router.create_collection(create, service)).id == 1
     options = CollectionOptions(title="Star Wars Updated")
@@ -305,19 +310,10 @@ async def test_collection_routes_delegate_to_service() -> None:
     assert set_mem.id == 1
 
     # Rules
-    rule_write = CollectionRuleWrite(
-        criteria=FilterGroup(
-            conditions=[SourceCondition(source=TmdbCollectionSource(collection_id=10))]
-        )
-    )
     saved_rule = await collections_router.save_collection_rule(
         1, MediaType.MOVIE, rule_write, service
     )
     assert saved_rule.criteria.source_conditions()[0].source.type == "tmdb_collection"
-    del_rule = await collections_router.delete_collection_rule(
-        1, MediaType.MOVIE, service
-    )
-    assert del_rule.status == Status.OK
     sync_res = await collections_router.sync_collection(1, MediaType.MOVIE, service)
     assert sync_res.added == 2
 

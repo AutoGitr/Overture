@@ -34,7 +34,7 @@ lazy from ..domain import (
 )
 lazy from ..integrations.mdblist import mdblist_identifier
 lazy from ..services.collections.fields import FIELDS, OPERATORS
-lazy from ..utils.art_urls import art_refusals, selected_art_source
+lazy from ..utils.art_urls import selected_art_source
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
     MemberTagFormat,
@@ -281,8 +281,6 @@ class CollectionArtwork(StrictBaseModel):
     poster_height: int | None = None
     background_width: int | None = None
     background_height: int | None = None
-    #: Why OvertureDB would refuse the selected art, slot by slot.
-    contribution_warnings: list[str] = Field(default_factory=list[str])
     poster_status: AssetStatus = AssetStatus.MISSING
     background_status: AssetStatus = AssetStatus.MISSING
     art_status: AssetStatus = AssetStatus.MISSING
@@ -302,7 +300,6 @@ def collection_artwork(row: MediaCollection) -> CollectionArtwork:
         poster_height=poster.height,
         background_width=background.width,
         background_height=background.height,
-        contribution_warnings=art_refusals(poster.url, background.url),
         poster_status=completion.poster_status,
         background_status=completion.background_status,
         art_status=completion.art_status,
@@ -439,9 +436,15 @@ def collection_read(
     row: MediaCollection,
     catalog: PublicDatasetCollection | None,
     rule: CollectionRule | None = None,
+    *,
+    trust_no_theme: bool = True,
 ) -> CollectionRead:
-    """Map a stored collection, its catalog entry and its rule to public output."""
+    """Map a stored collection, its catalog entry and its rule to public output.
+
+    *trust_no_theme* lets the catalog's No theme flag count as a theme.
+    """
     has_theme = row.server_theme_id is not None or row.theme_file_hash is not None
+    no_theme = trust_no_theme and catalog is not None and catalog.no_theme
     return CollectionRead(
         **collection_artwork(row).model_dump(),
         id=row.id or 0,
@@ -483,15 +486,15 @@ def collection_read(
         youtube_duration=row.youtube_duration,
         theme_duration=row.theme_file_duration or row.youtube_duration,
         theme_status=AssetStatus.COMPLETE
-        if catalog and catalog.no_theme
+        if no_theme
         else collection_theme_status(
             server_has_theme=has_theme, youtube_id=row.youtube_id
         ),
-        catalog_no_theme=bool(catalog and catalog.no_theme),
+        catalog_no_theme=no_theme,
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
         public_dataset_complete=bool(
-            catalog and (catalog.youtube_id_overturedb or catalog.no_theme)
+            catalog and (catalog.youtube_id_overturedb or no_theme)
         ),
         public_dataset_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
@@ -549,9 +552,6 @@ class CollectionPolicyBase(StrictBaseModel):
     summary_format: SummaryFormat | None = None
     active_start_mmdd: SeasonalDate | None = None
     active_end_mmdd: SeasonalDate | None = None
-    #: When scheduled syncs run, as a cron expression.
-    sync_schedule: CronExpression | None = None
-    sync_enabled: bool | None = None
     #: Ask Radarr or Sonarr for list titles the library lacks after each sync.
     request_missing: bool | None = None
     #: A server label members get and other items lose; {title} and {group}.
@@ -620,14 +620,11 @@ class CollectionOptions(StrictBaseModel):
 
 
 class CollectionCreate(CollectionOptions):
-    """Create a collection in one selected library."""
+    """Create a collection in one selected library; its criteria decide its members."""
 
     media_type: MediaType
     library_id: Annotated[str, Field(min_length=1, max_length=200)]
-    member_ids: Annotated[
-        list[Annotated[int, Field(gt=0)]], Field(max_length=10000)
-    ] = Field(default_factory=list[int])
-    rule: CollectionRuleWrite | None = None
+    rule: CollectionRuleWrite
 
 
 class CollectionMembersUpdate(StrictBaseModel):
@@ -725,8 +722,6 @@ class CollectionGeneratorBase(StrictBaseModel):
     aliases: Annotated[list[SetValueAlias], Field(max_length=200)] = Field(
         default_factory=list[SetValueAlias]
     )
-    #: Remove the collections of values the library no longer holds.
-    remove_vanished: bool = False
 
     @model_validator(mode="after")
     def validate_values(self) -> Self:
@@ -753,7 +748,14 @@ class CollectionGenerator(CollectionGeneratorBase):
 
 
 class CollectionGroupPolicy(CollectionPolicyBase):
-    """Nullable group defaults; null inherits the application setting."""
+    """Nullable group defaults; null inherits the application setting.
+
+    Only groups and the application schedule syncs; a collection follows its group.
+    """
+
+    #: When scheduled syncs run, as a cron expression.
+    sync_schedule: CronExpression | None = None
+    sync_enabled: bool | None = None
 
     generator: CollectionGenerator | None = None
 
@@ -771,9 +773,22 @@ class CollectionGroupRename(StrictBaseModel):
 
 
 class CollectionGroupDelete(StrictBaseModel):
-    """Choose whether to keep collections or remove either copy."""
+    """What happens to a deleted group's collections.
 
-    collections: Literal["keep", "overture", "server", "both"] = "keep"
+    ``keep`` leaves them without a group, ``move`` puts them in *group*,
+    ``overture`` forgets them (the server copies return as Unmanaged on the
+    next import) and ``both`` deletes them from the server too.
+    """
+
+    collections: Literal["keep", "move", "overture", "both"] = "keep"
+    group: GroupName | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self) -> Self:
+        """Moving needs a group to move to, and only moving takes one."""
+        if (self.collections == "move") != bool(self.group and self.group.strip()):
+            raise ValueError("Name the group to move the collections to")
+        return self
 
 
 class CollectionSetPreview(StrictBaseModel):

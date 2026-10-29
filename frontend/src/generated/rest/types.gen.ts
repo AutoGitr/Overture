@@ -122,6 +122,14 @@ export type AppSettingsRead = {
      */
     normalize_theme_loudness: boolean;
     /**
+     * Overturedb Browse
+     */
+    overturedb_browse: boolean;
+    /**
+     * Overturedb No Theme
+     */
+    overturedb_no_theme: boolean;
+    /**
      * Radarr Configured
      */
     radarr_configured: boolean;
@@ -284,6 +292,14 @@ export type AppSettingsUpdate = {
      * Normalize Theme Loudness
      */
     normalize_theme_loudness?: boolean | null;
+    /**
+     * Overturedb Browse
+     */
+    overturedb_browse?: boolean | null;
+    /**
+     * Overturedb No Theme
+     */
+    overturedb_no_theme?: boolean | null;
     /**
      * Radarr Quality Profile Id
      */
@@ -943,10 +959,6 @@ export type BulkAssetsStopRequest = {
  * Theme-specific assets workflow configuration.
  */
 export type BulkAssetsThemeConfigInput = {
-    /**
-     * Include Collections
-     */
-    include_collections?: boolean;
     source_order?: SourceOrderThemeBulkSource;
 };
 
@@ -956,10 +968,6 @@ export type BulkAssetsThemeConfigInput = {
  * Theme-specific assets workflow configuration.
  */
 export type BulkAssetsThemeConfigOutput = {
-    /**
-     * Include Collections
-     */
-    include_collections: boolean;
     source_order: SourceOrderThemeBulkSource;
 };
 
@@ -1386,10 +1394,6 @@ export type CollectionArtwork = {
      */
     background_width: number | null;
     /**
-     * Contribution Warnings
-     */
-    contribution_warnings: Array<string>;
-    /**
      * Poster Height
      */
     poster_height: number | null;
@@ -1457,7 +1461,7 @@ export type CollectionCapabilities = {
 /**
  * CollectionCreate
  *
- * Create a collection in one selected library.
+ * Create a collection in one selected library; its criteria decide its members.
  */
 export type CollectionCreate = {
     active_end_mmdd?: SeasonalDate | null;
@@ -1474,12 +1478,8 @@ export type CollectionCreate = {
      */
     library_id: string;
     media_type: MediaType;
-    /**
-     * Member Ids
-     */
-    member_ids?: Array<number>;
     order_type?: CollectionOrder;
-    rule?: CollectionRuleWriteInput | null;
+    rule: CollectionRuleWriteInput;
     /**
      * Sort Title
      */
@@ -1571,10 +1571,6 @@ export type CollectionDetail = {
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
-    /**
-     * Contribution Warnings
-     */
-    contribution_warnings: Array<string>;
     /**
      * Delete When Inactive
      */
@@ -1841,10 +1837,6 @@ export type CollectionGeneratorInput = {
      */
     library_ids: Array<string>;
     /**
-     * Remove Vanished
-     */
-    remove_vanished?: boolean;
-    /**
      * Smart
      */
     smart?: boolean;
@@ -1892,10 +1884,6 @@ export type CollectionGeneratorOutput = {
      */
     library_ids: Array<string>;
     /**
-     * Remove Vanished
-     */
-    remove_vanished: boolean;
-    /**
      * Smart
      */
     smart: boolean;
@@ -1938,10 +1926,6 @@ export type CollectionGeneratorBaseInput = {
      * Include
      */
     include?: Array<string>;
-    /**
-     * Remove Vanished
-     */
-    remove_vanished?: boolean;
     /**
      * Smart
      */
@@ -1986,10 +1970,6 @@ export type CollectionGeneratorBaseOutput = {
      */
     include: Array<string>;
     /**
-     * Remove Vanished
-     */
-    remove_vanished: boolean;
-    /**
      * Smart
      */
     smart: boolean;
@@ -2011,19 +1991,26 @@ export type CollectionGeneratorBaseOutput = {
 /**
  * CollectionGroupDelete
  *
- * Choose whether to keep collections or remove either copy.
+ * What happens to a deleted group's collections.
+ *
+ * ``keep`` leaves them without a group, ``move`` puts them in *group*,
+ * ``overture`` forgets them (the server copies return as Unmanaged on the
+ * next import) and ``both`` deletes them from the server too.
  */
 export type CollectionGroupDelete = {
     /**
      * Collections
      */
-    collections?: 'keep' | 'overture' | 'server' | 'both';
+    collections?: 'keep' | 'move' | 'overture' | 'both';
+    group?: GroupName | null;
 };
 
 /**
  * CollectionGroupPolicy
  *
  * Nullable group defaults; null inherits the application setting.
+ *
+ * Only groups and the application schedule syncs; a collection follows its group.
  */
 export type CollectionGroupPolicyInput = {
     active_end_mmdd?: SeasonalDate | null;
@@ -2088,6 +2075,8 @@ export type CollectionGroupPolicyInput = {
  * CollectionGroupPolicy
  *
  * Nullable group defaults; null inherits the application setting.
+ *
+ * Only groups and the application schedule syncs; a collection follows its group.
  */
 export type CollectionGroupPolicyOutput = {
     active_end_mmdd: SeasonalDate | null;
@@ -2360,12 +2349,7 @@ export type CollectionPolicyBaseInput = {
     request_missing?: boolean | null;
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled?: boolean | null;
     sync_mode?: SyncMode | null;
-    sync_schedule?: CronExpression | null;
     /**
      * Visible Home
      */
@@ -2423,12 +2407,7 @@ export type CollectionPolicyBaseOutput = {
     request_missing: boolean | null;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled: boolean | null;
     sync_mode: SyncMode | null;
-    sync_schedule: CronExpression | null;
     /**
      * Visible Home
      */
@@ -2626,10 +2605,6 @@ export type CollectionRead = {
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
-    /**
-     * Contribution Warnings
-     */
-    contribution_warnings: Array<string>;
     /**
      * Delete When Inactive
      */
@@ -2871,12 +2846,7 @@ export type CollectionRuleRead = {
      */
     source_summary: string | null;
     summary_format: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled: boolean | null;
     sync_mode: SyncMode | null;
-    sync_schedule: CronExpression | null;
     /**
      * Visible Home
      */
@@ -2943,12 +2913,7 @@ export type CollectionRuleWriteInput = {
     smart?: boolean;
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled?: boolean | null;
     sync_mode?: SyncMode | null;
-    sync_schedule?: CronExpression | null;
     /**
      * Visible Home
      */
@@ -3015,12 +2980,7 @@ export type CollectionRuleWriteOutput = {
     smart: boolean;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled: boolean | null;
     sync_mode: SyncMode | null;
-    sync_schedule: CronExpression | null;
     /**
      * Visible Home
      */
@@ -4049,10 +4009,6 @@ export type MediaItemRead = {
      */
     catalog_no_theme: boolean;
     /**
-     * Contribution Warnings
-     */
-    contribution_warnings: Array<string>;
-    /**
      * Created At
      */
     created_at: string | null;
@@ -4322,6 +4278,10 @@ export type PublicDatasetRecordCollection = {
      */
     id: number | null;
     /**
+     * No Theme
+     */
+    no_theme: boolean;
+    /**
      * Poster Url
      */
     poster_url: string | null;
@@ -4366,6 +4326,10 @@ export type PublicDatasetRecordItem = {
      */
     imdb_id: string | null;
     media_type: MediaType;
+    /**
+     * No Theme
+     */
+    no_theme: boolean;
     /**
      * Poster Url
      */
@@ -7887,43 +7851,6 @@ export type SetCollectionMonitoredResponses = {
 };
 
 export type SetCollectionMonitoredResponse = SetCollectionMonitoredResponses[keyof SetCollectionMonitoredResponses];
-
-export type DeleteCollectionRuleData = {
-    body?: never;
-    path: {
-        /**
-         * Collection Id
-         *
-         * Collection ID
-         */
-        collection_id: number;
-    };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
-    url: '/api/collections/{collection_id}/rule';
-};
-
-export type DeleteCollectionRuleErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteCollectionRuleError = DeleteCollectionRuleErrors[keyof DeleteCollectionRuleErrors];
-
-export type DeleteCollectionRuleResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type DeleteCollectionRuleResponse = DeleteCollectionRuleResponses[keyof DeleteCollectionRuleResponses];
 
 export type SaveCollectionRuleData = {
     body: CollectionRuleWriteInput;

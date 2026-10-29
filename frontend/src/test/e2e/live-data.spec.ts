@@ -95,17 +95,16 @@ test("failed live-data bootstrap is visible and a manual retry recovers it", asy
         ? { json: realtimeSnapshot }
         : {
             status: 503,
-            headers: { "X-Request-ID": "snapshot-unavailable" },
             json: { detail: "Snapshot unavailable" },
           },
     );
   });
   await logIn(page);
-  await expect(page.getByRole("status").filter({ hasText: "snapshot-unavailable" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Snapshot unavailable" })).toBeVisible();
   available = true;
   await page.getByRole("button", { name: "Retry live updates" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Live connection interrupted" }),
   ).toContainText("Updates are being checked periodically.");
-  await expect(page.getByText("snapshot-unavailable", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("Snapshot unavailable", { exact: false })).toHaveCount(0);
 });

@@ -21,7 +21,14 @@ lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import ITEM_ART_TYPES, ArtType, ImageSize, JobType, MediaType
+lazy from ...domain import (
+    ITEM_ART_TYPES,
+    UNMANAGED_REFUSAL,
+    ArtType,
+    ImageSize,
+    JobType,
+    MediaType,
+)
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
@@ -451,7 +458,10 @@ class ArtService:
         collection_id: int,
         media_type: MediaType,
         art_type: ArtType,
+        *,
+        managed: bool = False,
     ) -> MediaCollection:
+        """Return a listed collection; with *managed*, one Overture may change."""
         if art_type.owned_by_season:
             raise PublicServiceError(
                 422, "Collections have posters and backgrounds only"
@@ -462,6 +472,8 @@ class ArtService:
             or row.server_type is not self._provider_registry.provider.server_type
         ):
             raise PublicServiceError(404, "Collection not found")
+        if managed and await CollectionRepository(db).rule(collection_id) is None:
+            raise PublicServiceError(409, UNMANAGED_REFUSAL)
         return row
 
     async def get_collection_sources(
@@ -487,7 +499,9 @@ class ArtService:
     ) -> StatusResponse:
         """Upload validated bytes and record their art slot."""
         async with self._database.read_session() as db:
-            await self._require_collection(db, collection_id, media_type, art_type)
+            await self._require_collection(
+                db, collection_id, media_type, art_type, managed=True
+            )
         selection = await self.prepare_selection(art_type, body)
         trusted = self._config.is_trusted_media_server_url(selection.target_url)
         fetched = await fetch_image(
@@ -576,7 +590,7 @@ class ArtService:
             self._database.write_session() as db,
         ):
             row = await self._require_collection(
-                db, collection_id, media_type, art_type or ArtType.POSTER
+                db, collection_id, media_type, art_type or ArtType.POSTER, managed=True
             )
             for slot_type in (art_type,) if art_type is not None else ITEM_ART_TYPES:
                 clear_art_selection(row, slot_type)

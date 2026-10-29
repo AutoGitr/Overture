@@ -316,7 +316,10 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Operations", exact: true });
   await dialog.getByRole("checkbox", { name: "Current sidebar items 1 collection" }).check();
-  await expect(dialog.getByRole("region", { name: "Art", exact: true })).toHaveCount(0);
+  await dialog
+    .getByRole("region", { name: "Art", exact: true })
+    .getByRole("checkbox", { name: "Enabled" })
+    .uncheck();
   await expect(dialog.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
   await dialog.getByRole("button", { name: "Run Now" }).click();
   await expect

@@ -111,7 +111,9 @@ describe("catalog sidebar", () => {
       getPublicDatasetStatusOptions().queryKey,
       publicDatasetStatus({ enabled: false }),
     );
-    expect(await screen.findByText("Enable OvertureDB to browse the catalog.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Enable OvertureDB and its sidebar browsing to browse the catalog."),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Sidebar source" })).toBeNull();
   });
 });

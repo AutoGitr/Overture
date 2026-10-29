@@ -1,22 +1,22 @@
 <script lang="ts">
+  // Whether a theme is complete shows in the theme tab's colour, so only its facts are listed.
   let {
-    status,
     duration,
     title,
   }: {
-    status: string;
     duration?: number | null;
     title?: string | null;
   } = $props();
 </script>
 
-<p class="theme-facts" title={title ?? undefined}>
-  Theme: {status}
-  {#if duration != null}<span
-      >{Math.floor(duration / 60)}:{String(duration % 60).padStart(2, "0")}</span
-    >{/if}
-  {#if title}<span>{title}</span>{/if}
-</p>
+{#if duration != null || title}
+  <p class="theme-facts" title={title ?? undefined}>
+    {#if duration != null}<span
+        >{Math.floor(duration / 60)}:{String(duration % 60).padStart(2, "0")}</span
+      >{/if}
+    {#if title}<span>{title}</span>{/if}
+  </p>
+{/if}
 
 <style>
   .theme-facts {

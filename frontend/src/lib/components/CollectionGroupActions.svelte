@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { createQuery } from "@tanstack/svelte-query";
+  import { listCollectionGroupsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { MediaType } from "../../generated/rest/types.gen";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { CollectionGroupActions } from "../utils/collectionGroups.svelte";
   import DetailForm from "./DetailForm.svelte";
+  import FieldRow from "./FieldRow.svelte";
 
   let {
     group,
@@ -18,6 +22,11 @@
     () => group,
     () => mediaType,
   );
+  const groups = createQuery(() =>
+    listCollectionGroupsOptions({ query: { media_type: mediaType } }),
+  );
+  const id = $props.id();
+  let others = $derived((groups.data ?? []).filter((name) => name !== group));
 </script>
 
 <DetailForm
@@ -39,18 +48,30 @@
       if (name) onrename(name);
     }}>Rename</button
   >
-  <label class="form-label">
-    On delete
-    <select bind:value={actions.removal}>
-      <option value="keep">Keep its collections</option>
+  <FieldRow label="On delete" for={`${id}-removal`}>
+    <select id={`${id}-removal`} bind:value={actions.removal}>
+      <!-- Groups are required, so its collections cannot be left without one. -->
+      {#if !settingsState.current.collection_require_group}
+        <option value="keep">Keep its collections without a group</option>
+      {/if}
+      <option value="move" disabled={!others.length}>Move its collections to another group</option>
       <option value="overture">Remove its collections from Overture</option>
-      <option value="server">Remove its collections from the server</option>
-      <option value="both">Remove its collections from both</option>
+      <option value="both">Remove its collections from Overture and the server</option>
     </select>
-  </label>
+  </FieldRow>
+  {#if actions.removal === "move"}
+    <FieldRow label="Move to" for={`${id}-target`}>
+      <select id={`${id}-target`} bind:value={actions.target}>
+        <option value="" disabled>Choose a group</option>
+        {#each others as name (name)}<option value={name}>{name}</option>{/each}
+      </select>
+    </FieldRow>
+  {/if}
   <button
     class="btn btn-danger"
     type="button"
+    disabled={!!actions.blocker}
+    title={actions.blocker ?? undefined}
     onclick={async () => {
       if (await actions.delete()) ondelete();
     }}>Delete group</button

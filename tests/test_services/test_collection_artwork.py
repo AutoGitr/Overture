@@ -42,6 +42,7 @@ lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.collection_helpers import managing_rule
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 lazy from tests.test_services.test_collection_management import Provider
 lazy from tests.test_services.test_collections_service import FakePublisher
@@ -161,6 +162,8 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
                 last_synced_at=utc_now(),
             )
         )
+        await session.flush()
+        session.add(managing_rule(1))
     service = ArtService(
         app_config=app_config,
         database=database,

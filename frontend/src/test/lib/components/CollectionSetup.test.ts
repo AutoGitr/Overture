@@ -46,8 +46,6 @@ const presets: CollectionPresetRead[] = [
         summary_format: null,
         active_start_mmdd: null,
         active_end_mmdd: null,
-        sync_schedule: null,
-        sync_enabled: null,
         request_missing: null,
         member_label: null,
         arr_tag: null,
@@ -65,7 +63,6 @@ const presets: CollectionPresetRead[] = [
         smart: false,
         custom_values: [],
         aliases: [],
-        remove_vanished: false,
       },
     },
     saved_id: null,
@@ -311,40 +308,37 @@ describe("collection setup flow", () => {
     );
   });
 
-  it("keeps an imported Plex filter until Overture is told to replace it", async () => {
-    const smart = { ...detail, kind: "smart" as const, rule: null };
+  it("offers an unmanaged collection only a take-over, with the group it joins", async () => {
+    const imported = { ...detail, kind: "smart" as const, managed: false, rule: null };
     const { calls } = mockPage({
-      "/api/collections/12": ({ init }: { init: RequestInit }) =>
-        Response.json(
-          init.method === "PUT" ? { ...smart, ...JSON.parse(String(init.body)) } : smart,
-        ),
+      "/api/collections/12": imported,
+      "/api/collections/12/take-over": { ...detail, collection_group: "Franchises" },
     });
-    goToCollectionView(smart, "configure");
+    settingsState.load(
+      appSettings({
+        media_server: "plex",
+        collections_supported: true,
+        collection_require_group: true,
+      }),
+    );
+    goToCollectionView(imported, "configure");
     renderWithQueryClient(CollectionPage);
-    const replace = await screen.findByLabelText("Replace the Plex filter with these criteria");
-    expect(replace).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Condition" })).toBeDisabled();
-    expect(screen.queryByLabelText("Add item")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Remove First from collection" })).toBeNull();
+    const takeOver = await screen.findByRole("button", { name: "Take over" });
+    expect(takeOver).toBeDisabled();
+    for (const name of ["Collection setup", "Collection content", "Collection settings"])
+      expect(screen.queryByRole("region", { name })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete collection" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Art/ })).toBeNull();
 
-    await fireEvent.input(screen.getByLabelText("Title"), {
-      target: { value: "Renamed smart collection" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
-    expect(calls.some((call) => call.url.includes("/rule"))).toBe(false);
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
-    await fireEvent.click(replace);
-    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.input(screen.getByLabelText("Criteria condition 1 value"), {
-      target: { value: "Saga" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("option", { name: "Franchises" });
+    await fireEvent.change(screen.getByLabelText("Group"), { target: { value: "Franchises" } });
+    expect(takeOver).toBeEnabled();
+    await fireEvent.click(takeOver);
     await waitFor(() =>
-      expect(calls.some((call) => call.url.includes("/rule") && call.init.method === "PUT")).toBe(
-        true,
-      ),
+      expect(postedBody(calls, "/api/collections/12/take-over")).toEqual({
+        group: "Franchises",
+      }),
     );
   });
 

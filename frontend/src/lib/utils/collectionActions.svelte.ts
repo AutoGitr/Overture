@@ -1,18 +1,16 @@
-import { createMutation, createQuery } from "@tanstack/svelte-query";
+import { createMutation } from "@tanstack/svelte-query";
 import {
   deleteCollectionThemeMutation,
   clearCollectionArtMutation,
   clearAllCollectionArtMutation,
   setCollectionThemeMutation,
   setCollectionMonitoredMutation,
-  getPublicDatasetStatusOptions,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionDetail } from "../../generated/rest/types.gen";
 import { patchCollection } from "../rest/cache";
 import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
-import { buildContributionIssueUrl } from "./publicDataset";
 
 /** Collection asset actions shared by the header and the active section. */
 export class CollectionActions {
@@ -22,43 +20,9 @@ export class CollectionActions {
   private readonly deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
   private readonly setThemeRequest = createMutation(() => setCollectionThemeMutation());
   private readonly setMonitoredRequest = createMutation(() => setCollectionMonitoredMutation());
-  private readonly datasetQuery;
   private chosen = $state<{ collectionId: number; videoId: string } | null>(null);
 
-  constructor(private readonly current: () => CollectionDetail) {
-    this.datasetQuery = createQuery(() => ({
-      ...getPublicDatasetStatusOptions(),
-      enabled: !!current().tmdb_collection_id,
-    }));
-  }
-
-  get contributionUrl() {
-    const coll = this.current();
-    const repoUrl = this.datasetQuery.data?.repo_url;
-    if (!coll.tmdb_collection_id || !repoUrl) return null;
-    // A theme the catalog already has is not a contribution.
-    const theme =
-      coll.youtube_id &&
-      coll.youtube_id !== coll.youtube_id_overturedb &&
-      coll.youtube_id !== coll.youtube_id_themerrdb
-        ? coll.youtube_id
-        : null;
-    if (!theme && !coll.poster_url && !coll.background_url) return null;
-    return buildContributionIssueUrl(repoUrl, {
-      media_type: "collection",
-      title: coll.title,
-      tmdb_id: coll.tmdb_collection_id,
-      tvdb_id: null,
-      imdb_id: null,
-      year: null,
-      poster_url: coll.poster_url,
-      background_url: coll.background_url,
-      seasons: null,
-      youtube_id_overturedb: theme,
-      youtube_id_themerrdb: null,
-      no_theme: false,
-    });
-  }
+  constructor(private readonly current: () => CollectionDetail) {}
 
   private get themeJob() {
     return downloadState.getCollectionJob(this.current().id);

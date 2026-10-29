@@ -649,8 +649,22 @@ type Row = MediaItemRead | CollectionRead;
  * One filter section: its heading, its place, and the predicate it adds for
  * each list it applies to, or ``null`` while it is left at All.
  */
+/**
+ * Where the filters popup places a filter: libraries first, then every
+ * one-choice status filter together, then the art and theme refinements.
+ */
+export const FILTER_GROUPS = {
+  libraries: null,
+  status: "Status",
+  art: "Art",
+  theme: "Theme music",
+  metadata: null,
+} as const;
+export type FilterGroup = keyof typeof FILTER_GROUPS;
+
 interface FilterDef {
   label: string;
+  group: FilterGroup;
   order: number;
   mediaTypes?: readonly SidebarTab[];
   /** Shown only while OvertureDB is enabled. */
@@ -696,10 +710,11 @@ function issuesPredicate<T>(
     : (row) => checks.every((applies) => applies(row));
 }
 
-/** Every filter section, placed by ``order``; the media server always comes last. */
+/** Every filter section, placed by ``order``, which follows ``FILTER_GROUPS``. */
 export const FILTERS = {
   libraries: {
     label: "Libraries",
+    group: "libraries",
     order: 10,
     library: (filters) =>
       filters.libraryIds.length
@@ -712,12 +727,14 @@ export const FILTERS = {
   },
   monitored: {
     label: "Monitor status",
+    group: "status",
     order: 20,
     library: (filters) => triState(filters.monitored, "monitored", (item) => item.monitored),
     collections: (filters) => triState(filters.monitored, "monitored", (row) => row.monitored),
   },
   art: {
-    label: "Art",
+    label: "Art complete",
+    group: "status",
     order: 30,
     library: (filters) =>
       triState(filters.art, "complete", (item) => item.art_status === "complete"),
@@ -726,6 +743,7 @@ export const FILTERS = {
   },
   aspectRatio: {
     label: "Aspect ratio",
+    group: "status",
     order: 40,
     library: (filters) =>
       triState(filters.aspectRatio, "incorrect", (item) => item.has_incorrect_aspect_ratio),
@@ -734,19 +752,22 @@ export const FILTERS = {
   },
   resolution: {
     label: "Art resolution",
-    order: 50,
+    group: "art",
+    order: 200,
     library: resolutionPredicate,
     collections: resolutionPredicate,
   },
   artSource: {
     label: "Art source",
-    order: 60,
+    group: "art",
+    order: 210,
     library: artSourcePredicate,
     collections: artSourcePredicate,
   },
   theme: {
-    label: "Theme music",
-    order: 70,
+    label: "Theme complete",
+    group: "status",
+    order: 50,
     library: (filters) =>
       triState(filters.theme, "complete", (item) => item.theme_status === "complete"),
     collections: (filters) =>
@@ -754,7 +775,8 @@ export const FILTERS = {
   },
   themeLength: {
     label: "Theme length",
-    order: 80,
+    group: "theme",
+    order: 300,
     library: (filters) =>
       isRangeActive(filters.themeLength)
         ? (item) => inRange(item.theme_duration, filters.themeLength)
@@ -766,7 +788,8 @@ export const FILTERS = {
   },
   themeSources: {
     label: "Theme source",
-    order: 90,
+    group: "theme",
+    order: 310,
     library: (filters) => {
       if (!filters.themeSources.length) return null;
       const sources = new Set(filters.themeSources);
@@ -775,7 +798,8 @@ export const FILTERS = {
   },
   overtureDb: {
     label: "OvertureDB",
-    order: 100,
+    group: "status",
+    order: 60,
     needsDataset: true,
     library: (filters, datasetEnabled) =>
       datasetEnabled
@@ -788,7 +812,8 @@ export const FILTERS = {
   },
   themerrDb: {
     label: "ThemerrDB",
-    order: 110,
+    group: "status",
+    order: 70,
     needsDataset: true,
     library: (filters, datasetEnabled) =>
       datasetEnabled
@@ -801,27 +826,31 @@ export const FILTERS = {
   },
   metadataIssues: {
     label: "Metadata issues",
-    order: 120,
+    group: "metadata",
+    order: 400,
     library: (filters, datasetEnabled) =>
       issuesPredicate(filters, datasetEnabled, (check) => check.library),
     collections: (filters, datasetEnabled) =>
       issuesPredicate(filters, datasetEnabled, (check) => check.collections),
   },
   collectionMembers: {
-    label: "Members",
-    order: 130,
-    collections: (filters) => triState(filters.collectionMembers, "criteria", (row) => row.managed),
+    label: "Management",
+    group: "status",
+    order: 80,
+    collections: (filters) => triState(filters.collectionMembers, "managed", (row) => row.managed),
   },
   collectionKind: {
     label: "Kind",
-    order: 140,
+    group: "status",
+    order: 90,
     needsSmart: true,
     collections: (filters) =>
       triState(filters.collectionKind, "smart", (row) => row.kind === "smart"),
   },
   collectionSync: {
     label: "Last sync",
-    order: 150,
+    group: "status",
+    order: 100,
     // Only collections with criteria sync.
     collections: (filters) =>
       filters.collectionSync === "all"
@@ -831,7 +860,8 @@ export const FILTERS = {
   },
   collectionSize: {
     label: "Size",
-    order: 160,
+    group: "status",
+    order: 110,
     collections: (filters) =>
       filters.collectionSize === "empty"
         ? (row) => row.child_count === 0
@@ -841,7 +871,8 @@ export const FILTERS = {
   },
   mediaServer: {
     label: "Media server",
-    order: 1000,
+    group: "status",
+    order: 120,
     // Items the server removed are not listed, so only unlinked ones are missing.
     library: (filters) => triState(filters.mediaServer, "missing", (item) => !item.server_item_id),
     collections: (filters) => triState(filters.mediaServer, "missing", (row) => row.withheld),
@@ -888,14 +919,15 @@ function collectionPredicates(
   });
 }
 
-export function hasVisibleActiveFilters(
+/** How many of the list's filters narrow it now. */
+export function activeFilterCount(
   filters: FilterState,
   publicDatasetEnabled: boolean,
   mode: SidebarMode,
-): boolean {
+): number {
   return mode === "collections"
-    ? collectionPredicates(filters, publicDatasetEnabled).length > 0
-    : libraryPredicates(filters, publicDatasetEnabled).length > 0;
+    ? collectionPredicates(filters, publicDatasetEnabled).length
+    : libraryPredicates(filters, publicDatasetEnabled).length;
 }
 
 export function filterSidebarItems(options: {
@@ -971,10 +1003,15 @@ export function preloadRowIndexes(first: number, end: number, count: number): nu
   ];
 }
 
-/** Whether a collection belongs to *group*; the virtual Unmanaged group holds those without rules. */
+/**
+ * Whether a collection is listed under *group*, or at the top level for null.
+ * The virtual Unmanaged group holds every collection without a rule, so those
+ * appear nowhere else.
+ */
 export function inCollectionGroup(
   collection: Pick<CollectionRead, "collection_group" | "managed">,
   group: string | null,
 ): boolean {
-  return group === UNMANAGED_GROUP ? !collection.managed : collection.collection_group === group;
+  if (!collection.managed) return group === UNMANAGED_GROUP;
+  return group !== UNMANAGED_GROUP && (collection.collection_group ?? null) === group;
 }

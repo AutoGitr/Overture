@@ -510,8 +510,6 @@ describe("collection criteria", () => {
     expect(generator.smart).toBe(true);
     expect(generator.custom_values).toEqual([]);
     expect(screen.getByText("Only Plex knows these values.")).toBeInTheDocument();
-    await fireEvent.click(screen.getByLabelText(/Remove collections whose value/));
-    expect(generator.remove_vanished).toBe(true);
   });
 
   it("edits the global defaults under their own names and where requests go", async () => {

@@ -21,7 +21,6 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.main import create_app
-lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import MonitoredResponse
 lazy from overture.services.art.phash import PhashService
@@ -154,11 +153,12 @@ async def test_http_services_use_bound_database_events_and_queue(
             **queued_selection,
             "status": "existing",
         }
+        # The seeded collection came from the server, so it waits to be taken over.
         collection = await client.patch(
             "/api/collections/1/monitored?media_type=movie",
             json={"monitored": False},
         )
-        assert collection.json() == {"monitored": False}
+        assert collection.status_code == 409
         record = await client.get("/api/public-dataset/items/1/record")
         assert record.status_code == 200
         assert record.json()["item"]["title"] == "Curated movie"
@@ -178,9 +178,6 @@ async def test_http_services_use_bound_database_events_and_queue(
         job = await session.get(DownloadJob, queued_selection["job_id"])
         assert job is not None
         assert job.media_item_id == 1
-        row = await CollectionRepository(session).get(1, MediaType.MOVIE)
-        assert row is not None
-        assert row.monitored is False
     updates = events.payloads("library.item.upserted")
     assert [update["source"] for update in updates] == [
         "art.clear",

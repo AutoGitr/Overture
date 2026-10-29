@@ -17,7 +17,10 @@
     /** Opening or closing a collapsible section. */
     ontoggle?: (open: boolean) => void;
   } = $props();
-  let open = $derived(expanded);
+  // Memoised, so only a change of the value itself overrides what the user chose:
+  // an expression such as `!!form.generator` re-runs on every edit of its source.
+  let initiallyOpen = $derived(expanded);
+  let open = $derived(initiallyOpen);
   const bodyId = $props.id();
 </script>
 

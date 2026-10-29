@@ -82,7 +82,7 @@
             "type": "boolean"
           },
           "collection_require_group": {
-            "default": false,
+            "default": true,
             "title": "Collection Require Group",
             "type": "boolean"
           },
@@ -181,6 +181,16 @@
           "normalize_theme_loudness": {
             "default": true,
             "title": "Normalize Theme Loudness",
+            "type": "boolean"
+          },
+          "overturedb_browse": {
+            "default": true,
+            "title": "Overturedb Browse",
+            "type": "boolean"
+          },
+          "overturedb_no_theme": {
+            "default": true,
+            "title": "Overturedb No Theme",
             "type": "boolean"
           },
           "radarr_configured": {
@@ -309,6 +319,8 @@
           "collection_request_missing",
           "collection_import_unmanaged",
           "collection_require_group",
+          "overturedb_no_theme",
+          "overturedb_browse",
           "tmdb_region",
           "radarr_root_folder",
           "radarr_quality_profile_id",
@@ -647,6 +659,28 @@
               }
             ],
             "title": "Normalize Theme Loudness"
+          },
+          "overturedb_browse": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overturedb Browse"
+          },
+          "overturedb_no_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overturedb No Theme"
           },
           "radarr_quality_profile_id": {
             "anyOf": [
@@ -1920,11 +1954,6 @@
         "additionalProperties": false,
         "description": "Theme-specific assets workflow configuration.",
         "properties": {
-          "include_collections": {
-            "default": false,
-            "title": "Include Collections",
-            "type": "boolean"
-          },
           "source_order": {
             "$ref": "#/components/schemas/SourceOrder_ThemeBulkSource_"
           }
@@ -1936,18 +1965,12 @@
         "additionalProperties": false,
         "description": "Theme-specific assets workflow configuration.",
         "properties": {
-          "include_collections": {
-            "default": false,
-            "title": "Include Collections",
-            "type": "boolean"
-          },
           "source_order": {
             "$ref": "#/components/schemas/SourceOrder_ThemeBulkSource_"
           }
         },
         "required": [
-          "source_order",
-          "include_collections"
+          "source_order"
         ],
         "title": "BulkAssetsThemeConfig",
         "type": "object"
@@ -2872,13 +2895,6 @@
             ],
             "title": "Background Width"
           },
-          "contribution_warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Contribution Warnings",
-            "type": "array"
-          },
           "poster_height": {
             "anyOf": [
               {
@@ -2936,7 +2952,6 @@
           "poster_height",
           "background_width",
           "background_height",
-          "contribution_warnings",
           "poster_status",
           "background_status",
           "art_status"
@@ -3028,7 +3043,7 @@
       },
       "CollectionCreate": {
         "additionalProperties": false,
-        "description": "Create a collection in one selected library.",
+        "description": "Create a collection in one selected library; its criteria decide its members.",
         "properties": {
           "active_end_mmdd": {
             "anyOf": [
@@ -3100,28 +3115,12 @@
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
           },
-          "member_ids": {
-            "items": {
-              "exclusiveMinimum": 0.0,
-              "type": "integer"
-            },
-            "maxItems": 10000,
-            "title": "Member Ids",
-            "type": "array"
-          },
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
           },
           "rule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionRuleWrite-Input"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/CollectionRuleWrite-Input"
           },
           "sort_title": {
             "anyOf": [
@@ -3204,7 +3203,8 @@
         "required": [
           "title",
           "media_type",
-          "library_id"
+          "library_id",
+          "rule"
         ],
         "title": "CollectionCreate",
         "type": "object"
@@ -3364,13 +3364,6 @@
                 "type": "null"
               }
             ]
-          },
-          "contribution_warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Contribution Warnings",
-            "type": "array"
           },
           "delete_when_inactive": {
             "anyOf": [
@@ -3762,7 +3755,6 @@
           "poster_height",
           "background_width",
           "background_height",
-          "contribution_warnings",
           "poster_status",
           "background_status",
           "art_status",
@@ -3981,11 +3973,6 @@
             "title": "Library Ids",
             "type": "array"
           },
-          "remove_vanished": {
-            "default": false,
-            "title": "Remove Vanished",
-            "type": "boolean"
-          },
           "smart": {
             "default": false,
             "title": "Smart",
@@ -4085,11 +4072,6 @@
             "title": "Library Ids",
             "type": "array"
           },
-          "remove_vanished": {
-            "default": false,
-            "title": "Remove Vanished",
-            "type": "boolean"
-          },
           "smart": {
             "default": false,
             "title": "Smart",
@@ -4137,7 +4119,6 @@
           "smart",
           "custom_values",
           "aliases",
-          "remove_vanished",
           "library_ids"
         ],
         "title": "CollectionGenerator",
@@ -4188,11 +4169,6 @@
             "maxItems": 500,
             "title": "Include",
             "type": "array"
-          },
-          "remove_vanished": {
-            "default": false,
-            "title": "Remove Vanished",
-            "type": "boolean"
           },
           "smart": {
             "default": false,
@@ -4281,11 +4257,6 @@
             "title": "Include",
             "type": "array"
           },
-          "remove_vanished": {
-            "default": false,
-            "title": "Remove Vanished",
-            "type": "boolean"
-          },
           "smart": {
             "default": false,
             "title": "Smart",
@@ -4332,26 +4303,35 @@
           "criteria",
           "smart",
           "custom_values",
-          "aliases",
-          "remove_vanished"
+          "aliases"
         ],
         "title": "CollectionGeneratorBase",
         "type": "object"
       },
       "CollectionGroupDelete": {
         "additionalProperties": false,
-        "description": "Choose whether to keep collections or remove either copy.",
+        "description": "What happens to a deleted group's collections.\n\n``keep`` leaves them without a group, ``move`` puts them in *group*,\n``overture`` forgets them (the server copies return as Unmanaged on the\nnext import) and ``both`` deletes them from the server too.",
         "properties": {
           "collections": {
             "default": "keep",
             "enum": [
               "keep",
+              "move",
               "overture",
-              "server",
               "both"
             ],
             "title": "Collections",
             "type": "string"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupName"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "CollectionGroupDelete",
@@ -4359,7 +4339,7 @@
       },
       "CollectionGroupPolicy-Input": {
         "additionalProperties": false,
-        "description": "Nullable group defaults; null inherits the application setting.",
+        "description": "Nullable group defaults; null inherits the application setting.\n\nOnly groups and the application schedule syncs; a collection follows its group.",
         "properties": {
           "active_end_mmdd": {
             "anyOf": [
@@ -4612,7 +4592,7 @@
       },
       "CollectionGroupPolicy-Output": {
         "additionalProperties": false,
-        "description": "Nullable group defaults; null inherits the application setting.",
+        "description": "Nullable group defaults; null inherits the application setting.\n\nOnly groups and the application schedule syncs; a collection follows its group.",
         "properties": {
           "active_end_mmdd": {
             "anyOf": [
@@ -4877,12 +4857,12 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "sync_schedule",
-          "sync_enabled",
           "request_missing",
           "member_label",
           "arr_tag",
           "home_order",
+          "sync_schedule",
+          "sync_enabled",
           "generator"
         ],
         "title": "CollectionGroupPolicy",
@@ -5422,31 +5402,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5665,31 +5624,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5747,8 +5685,6 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "sync_schedule",
-          "sync_enabled",
           "request_missing",
           "member_label",
           "arr_tag",
@@ -6161,13 +6097,6 @@
               }
             ]
           },
-          "contribution_warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Contribution Warnings",
-            "type": "array"
-          },
           "delete_when_inactive": {
             "anyOf": [
               {
@@ -6499,7 +6428,6 @@
           "poster_height",
           "background_width",
           "background_height",
-          "contribution_warnings",
           "poster_status",
           "background_status",
           "art_status",
@@ -6836,31 +6764,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -6918,8 +6825,6 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "sync_schedule",
-          "sync_enabled",
           "request_missing",
           "member_label",
           "arr_tag",
@@ -7130,31 +7035,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -7397,31 +7281,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -7479,8 +7342,6 @@
           "summary_format",
           "active_start_mmdd",
           "active_end_mmdd",
-          "sync_schedule",
-          "sync_enabled",
           "request_missing",
           "member_label",
           "arr_tag",
@@ -9339,13 +9200,6 @@
             "title": "Catalog No Theme",
             "type": "boolean"
           },
-          "contribution_warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Contribution Warnings",
-            "type": "array"
-          },
           "created_at": {
             "anyOf": [
               {
@@ -9788,7 +9642,6 @@
           "background_width",
           "background_height",
           "has_incorrect_aspect_ratio",
-          "contribution_warnings",
           "youtube_id",
           "youtube_id_source",
           "catalog_no_theme",
@@ -9998,6 +9851,11 @@
             ],
             "title": "Id"
           },
+          "no_theme": {
+            "default": false,
+            "title": "No Theme",
+            "type": "boolean"
+          },
           "poster_url": {
             "anyOf": [
               {
@@ -10048,6 +9906,7 @@
           "background_url",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
+          "no_theme",
           "catalog_synced_at"
         ],
         "title": "PublicDatasetRecordCollection",
@@ -10104,6 +9963,11 @@
           },
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
+          },
+          "no_theme": {
+            "default": false,
+            "title": "No Theme",
+            "type": "boolean"
           },
           "poster_url": {
             "anyOf": [
@@ -10195,6 +10059,7 @@
           "background_url",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
+          "no_theme",
           "catalog_synced_at"
         ],
         "title": "PublicDatasetRecordItem",
@@ -17012,78 +16877,6 @@
       }
     },
     "/api/collections/{collection_id}/rule": {
-      "delete": {
-        "description": "Remove a rule while keeping current membership.",
-        "operationId": "delete_collection_rule",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Media type ('movie' or 'show')",
-            "in": "query",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/MediaType",
-              "description": "Media type ('movie' or 'show')"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Collection Rule",
-        "tags": [
-          "collections"
-        ]
-      },
       "put": {
         "description": "Save a collection's criteria and inheritance overrides.",
         "operationId": "save_collection_rule",

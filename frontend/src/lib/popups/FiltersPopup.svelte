@@ -8,6 +8,8 @@
     getPublicDatasetStatusOptions,
     listCatalogEntriesOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { UNMANAGED_GROUP } from "../../generated/settings";
+  import { openSidebarGroup, sidebarGroup } from "../router/routes";
   import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
   import { filterAvailableValues, toggleSelectedValue } from "../utils/popupSelection";
@@ -16,12 +18,15 @@
   import CardColumn from "../components/CardColumn.svelte";
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
   import CheckboxList from "../components/CheckboxList.svelte";
+  import CollectionGroupActions from "../components/CollectionGroupActions.svelte";
+  import FieldRow from "../components/FieldRow.svelte";
   import FilterSection from "../components/FilterSection.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import RangeFields from "../components/RangeFields.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
 
   const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
+  let openGroup = $derived(sidebarGroup());
   let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
 
   let draft = $state<FilterState>($state.snapshot(uiState.currentFilters));
@@ -57,8 +62,8 @@
   ] as const;
   const MEMBERS_OPTIONS = [
     ["all", "All"],
-    ["criteria", "Criteria"],
-    ["manual", "Manual"],
+    ["managed", "Overture"],
+    ["unmanaged", "Unmanaged"],
   ] as const;
   const KIND_OPTIONS = [
     ["all", "All"],
@@ -108,13 +113,17 @@
   let metadataIssueOptions = $derived(
     sidebarDomain.metadataIssuesFor(uiState.sidebarTab, datasetEnabled, uiState.sidebarMode),
   );
-  let sections = $derived(
-    sidebarDomain.filterSections(uiState.sidebarMode, {
+  /** The shown filters by popup section, in order. */
+  let groupedSections = $derived.by(() => {
+    const shown = sidebarDomain.filterSections(uiState.sidebarMode, {
       tab: uiState.sidebarTab,
       datasetEnabled,
       smart: !!capabilities.data?.smart,
-    }),
-  );
+    });
+    return (Object.keys(sidebarDomain.FILTER_GROUPS) as sidebarDomain.FilterGroup[])
+      .map((group) => [group, shown.filter((key) => sidebarDomain.FILTERS[key].group === group)] as const)
+      .filter(([, keys]) => keys.length > 0);
+  });
 
   /** The draft without selections for libraries that no longer exist. */
   let filters = $derived<FilterState>({
@@ -153,6 +162,13 @@
     }),
   );
 
+  /** Nothing differs from the filters in use, so Apply would change nothing. */
+  let unchanged = $derived(
+    uiState.sidebarSource === "overturedb"
+      ? JSON.stringify(catalogDraft) === JSON.stringify(uiState.catalogFilters)
+      : JSON.stringify(filters) === JSON.stringify(uiState.currentFilters),
+  );
+
   function apply() {
     if (uiState.sidebarSource === "overturedb") {
       uiState.catalogFilters = $state.snapshot(catalogDraft);
@@ -173,36 +189,122 @@
   }
 </script>
 
+{#snippet filter(key: sidebarDomain.FilterKey)}
+  {@const label = sidebarDomain.FILTERS[key].label}
+  {#if key === "resolution"}
+    <FieldRow {label}>
+      <SegmentedControl
+        label="Resolution art type"
+        options={RESOLUTION_ART_OPTIONS}
+        bind:value={draft.resolution.artType}
+      />
+    </FieldRow>
+    <RangeFields
+      minLabel="Min width (px)"
+      maxLabel="Max width (px)"
+      bind:min={draft.resolution.min}
+      bind:max={draft.resolution.max}
+    />
+    <p class="hint">Artwork without a known width is hidden while a limit is set.</p>
+  {:else if key === "artSource"}
+    <FieldRow {label}>
+      <SegmentedControl
+        label="Art source art type"
+        options={ART_SOURCE_ART_OPTIONS}
+        bind:value={draft.artSource.artType}
+      />
+    </FieldRow>
+    <CheckboxList
+      options={sidebarDomain.ART_SOURCES.map((source) => ({
+        value: source,
+        label: sidebarDomain.ART_SOURCE_LABELS[source],
+      }))}
+      selected={draft.artSource.sources}
+      ontoggle={(source) =>
+        (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
+    />
+  {:else if key === "themeLength"}
+    <FieldRow {label} />
+    <RangeFields
+      minLabel="Min length (s)"
+      maxLabel="Max length (s)"
+      bind:min={draft.themeLength.min}
+      bind:max={draft.themeLength.max}
+    />
+    <p class="hint">Themes without a known length are hidden while a limit is set.</p>
+  {:else if key === "themeSources"}
+    <FieldRow {label} />
+    <CheckboxList
+      options={sidebarDomain.THEME_SOURCES.map((source) => ({
+        value: source,
+        label: sidebarDomain.THEME_SOURCE_LABELS[source],
+      }))}
+      selected={draft.themeSources}
+      ontoggle={(source) => (draft.themeSources = toggleSelectedValue(draft.themeSources, source))}
+    />
+  {:else if key === "metadataIssues"}
+    <FieldRow label="Match">
+      <SegmentedControl
+        label="Metadata issues match mode"
+        options={MATCH_MODE_OPTIONS}
+        bind:value={draft.metadataIssues.mode}
+      />
+    </FieldRow>
+    <CheckboxList
+      options={metadataIssueOptions.map((flag) => ({
+        value: flag,
+        label: sidebarDomain.METADATA_ISSUE_CHECKS[flag].label,
+      }))}
+      selected={draft.metadataIssues.flags}
+      ontoggle={(flag) =>
+        (draft.metadataIssues.flags = toggleSelectedValue(draft.metadataIssues.flags, flag))}
+    />
+  {:else if key !== "libraries"}
+    <FieldRow {label}>
+      <SegmentedControl
+        {label}
+        options={CHOICES[key].options}
+        bind:value={() => draft[key], (value) => Object.assign(draft, { [key]: value })}
+      />
+    </FieldRow>
+  {/if}
+{/snippet}
+
 <PopupShell title="Filters & operations" onclose={() => uiState.closePopup()}>
   <CardColumn>
     {#if uiState.sidebarSource === "overturedb"}
-      {#each sidebarDomain.CATALOG_FILTER_KEYS as key (key)}
-        {#if key !== "seasonPosters" || uiState.sidebarTab === "show"}
-          <FilterSection label={sidebarDomain.CATALOG_FILTER_LABELS[key]}>
-            <SegmentedControl
-              label={sidebarDomain.CATALOG_FILTER_LABELS[key]}
-              options={MEDIA_SERVER_OPTIONS}
-              bind:value={catalogDraft[key]}
-            />
-          </FilterSection>
-        {/if}
-      {/each}
+      <FilterSection label={sidebarDomain.FILTER_GROUPS.status}>
+        {#each sidebarDomain.CATALOG_FILTER_KEYS as key (key)}
+          {#if key !== "seasonPosters" || uiState.sidebarTab === "show"}
+            <FieldRow label={sidebarDomain.CATALOG_FILTER_LABELS[key]}>
+              <SegmentedControl
+                label={sidebarDomain.CATALOG_FILTER_LABELS[key]}
+                options={MEDIA_SERVER_OPTIONS}
+                bind:value={catalogDraft[key]}
+              />
+            </FieldRow>
+          {/if}
+        {/each}
+      </FilterSection>
       <CatalogDraftsCard entries={catalogEntries} />
     {:else}
-      {#each sections as key (key)}
-        {@const label = sidebarDomain.FILTERS[key].label}
-        {#if key === "libraries"}
+      {#each groupedSections as [group, keys] (group)}
+        {@const title = sidebarDomain.FILTER_GROUPS[group]}
+        {#if group === "libraries"}
+          {@const label = sidebarDomain.FILTERS.libraries.label}
           {#if librariesQuery.isError}
             <FilterSection {label}>
               <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
             </FilterSection>
           {:else if libraries.length > 1}
             <FilterSection {label}>
-              <p class="hint">
-                {filters.libraryIds.length === 0
-                  ? "Showing all libraries"
-                  : `${filters.libraryIds.length} of ${libraries.length} selected`}
-              </p>
+              {#snippet control()}
+                <span class="hint"
+                  >{filters.libraryIds.length === 0
+                    ? "All libraries"
+                    : `${filters.libraryIds.length} of ${libraries.length} selected`}</span
+                >
+              {/snippet}
               <CheckboxList
                 options={libraries.map((library) => ({
                   value: library.id,
@@ -214,100 +316,37 @@
               />
             </FilterSection>
           {/if}
-        {:else if key === "resolution"}
-          <FilterSection {label}>
-            {#snippet control()}
-              <SegmentedControl
-                --segmented-width="auto"
-                label="Resolution Art Type"
-                options={RESOLUTION_ART_OPTIONS}
-                bind:value={draft.resolution.artType}
-              />
-            {/snippet}
-            <RangeFields
-              minLabel="Min width (px)"
-              maxLabel="Max width (px)"
-              bind:min={draft.resolution.min}
-              bind:max={draft.resolution.max}
-            />
-            <p class="hint">Artwork without a known width is hidden while a limit is set.</p>
-          </FilterSection>
-        {:else if key === "artSource"}
-          <FilterSection {label}>
-            {#snippet control()}
-              <SegmentedControl
-                --segmented-width="auto"
-                label="Art Source Art Type"
-                options={ART_SOURCE_ART_OPTIONS}
-                bind:value={draft.artSource.artType}
-              />
-            {/snippet}
-            <CheckboxList
-              options={sidebarDomain.ART_SOURCES.map((source) => ({
-                value: source,
-                label: sidebarDomain.ART_SOURCE_LABELS[source],
-              }))}
-              selected={draft.artSource.sources}
-              ontoggle={(source) =>
-                (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
-            />
-          </FilterSection>
-        {:else if key === "themeLength"}
-          <FilterSection {label}>
-            <RangeFields
-              minLabel="Min length (s)"
-              maxLabel="Max length (s)"
-              bind:min={draft.themeLength.min}
-              bind:max={draft.themeLength.max}
-            />
-            <p class="hint">Themes without a known length are hidden while a limit is set.</p>
-          </FilterSection>
-        {:else if key === "themeSources"}
-          <FilterSection {label}>
-            <CheckboxList
-              options={sidebarDomain.THEME_SOURCES.map((source) => ({
-                value: source,
-                label: sidebarDomain.THEME_SOURCE_LABELS[source],
-              }))}
-              selected={draft.themeSources}
-              ontoggle={(source) =>
-                (draft.themeSources = toggleSelectedValue(draft.themeSources, source))}
-            />
-          </FilterSection>
-        {:else if key === "metadataIssues"}
-          <FilterSection {label}>
-            {#snippet control()}
-              <SegmentedControl
-                --segmented-width="auto"
-                label="Metadata Issues Match Mode"
-                options={MATCH_MODE_OPTIONS}
-                bind:value={draft.metadataIssues.mode}
-              />
-            {/snippet}
-            <CheckboxList
-              options={metadataIssueOptions.map((flag) => ({
-                value: flag,
-                label: sidebarDomain.METADATA_ISSUE_CHECKS[flag].label,
-              }))}
-              selected={draft.metadataIssues.flags}
-              ontoggle={(flag) =>
-                (draft.metadataIssues.flags = toggleSelectedValue(
-                  draft.metadataIssues.flags,
-                  flag,
-                ))}
-            />
+        {:else if title}
+          <FilterSection label={title}>
+            {#each keys as key (key)}
+              {@render filter(key)}
+            {/each}
           </FilterSection>
         {:else}
-          {@const choice = CHOICES[key]}
-          <FilterSection {label}>
-            <SegmentedControl
-              {label}
-              options={choice.options}
-              bind:value={() => draft[key], (value) => Object.assign(draft, { [key]: value })}
-            />
-          </FilterSection>
+          {#each keys as key (key)}
+            <FilterSection label={sidebarDomain.FILTERS[key].label}>
+              {@render filter(key)}
+            </FilterSection>
+          {/each}
         {/if}
       {/each}
+
+      {#if uiState.sidebarMode === "collections" && openGroup && openGroup !== UNMANAGED_GROUP}
+        {@const group = openGroup}
+        <CollectionGroupActions
+          {group}
+          mediaType={uiState.sidebarTab}
+          onrename={(replacement) => {
+            uiState.collectionGroupChanged(group, replacement);
+            openSidebarGroup(replacement);
+          }}
+          ondelete={() => {
+            uiState.collectionGroupChanged(group, "");
+            openSidebarGroup(null);
+            uiState.closePopup();
+          }}
+        />
+      {/if}
 
       <BulkOperationsCard
         {filters}
@@ -323,6 +362,11 @@
       >Reset filters</button
     >
     <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
-    <button class="btn btn-primary" onclick={apply} disabled={bulkActionBusy}>Apply filters</button>
+    <button
+      class="btn btn-primary"
+      onclick={apply}
+      disabled={bulkActionBusy || unchanged}
+      title={unchanged ? "These are the filters in use" : undefined}>Apply filters</button
+    >
   {/snippet}
 </PopupShell>

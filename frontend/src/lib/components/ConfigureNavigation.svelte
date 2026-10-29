@@ -17,6 +17,7 @@
 <script lang="ts">
   import type { CollectionDetail } from "../../generated/rest/types.gen";
   import { goToCollectionView, route } from "../router/routes";
+  import { revealSection } from "../utils/revealSection";
 
   let {
     formId,
@@ -42,7 +43,10 @@
     href={`#${formId}-${section.key}`}
     onclick={(event) => {
       event.preventDefault();
-      goToCollectionView(collection, "configure", "poster", `${formId}-${section.key}`);
+      const target = `${formId}-${section.key}`;
+      // The URL already names it, so no navigation follows: jump again directly.
+      if (configuring && route.hash === `#${target}`) revealSection(target);
+      else goToCollectionView(collection, "configure", "poster", target);
     }}
     aria-current={active === section.key ? "location" : undefined}
     aria-label={section.label}

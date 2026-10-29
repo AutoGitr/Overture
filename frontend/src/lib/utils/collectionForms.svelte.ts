@@ -4,7 +4,6 @@ import {
   createCollectionMutation,
   deleteCollectionMutation,
   deleteCollectionPresetMutation,
-  deleteCollectionRuleMutation,
   getCollectionCapabilitiesOptions,
   getCollectionDefaultsOptions,
   getCollectionGroupPolicyOptions,
@@ -54,8 +53,6 @@ import {
 } from "./collectionCriteria";
 import { errorMessage } from "./errors";
 
-/** Whether a collection's members are chosen by hand or by criteria. */
-export type CollectionContent = "manual" | "criteria";
 /** What a new collection form creates. */
 export type DraftKind = "collection" | "set";
 
@@ -80,8 +77,6 @@ export function defaultRule(): CollectionRuleWriteInput {
     active_start_mmdd: null,
     active_end_mmdd: null,
     delete_when_inactive: null,
-    sync_schedule: null,
-    sync_enabled: null,
     request_missing: null,
     member_label: null,
     arr_tag: null,
@@ -108,7 +103,6 @@ export function defaultGenerator(libraryIds: string[] = []): SetGenerator {
     smart: false,
     custom_values: [],
     aliases: [],
-    remove_vanished: false,
   };
 }
 
@@ -224,9 +218,6 @@ export class CollectionEditor {
     this.current().rule ? (this.current().rule?.order_type ?? null) : this.current().order_type,
   );
   orderType = $derived<CollectionOrder | null>(this.savedOrder);
-  /** A smart collection made in Plex keeps its filter until Overture takes it over. */
-  manageServerFilter = $state(false);
-  content = $state<CollectionContent>("manual");
   rule = $state<CollectionRuleWriteInput>(defaultRule());
 
   memberSearch = $state("");
@@ -236,11 +227,11 @@ export class CollectionEditor {
   private readonly updateRequest = createMutation(() => updateCollectionMutation());
   private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
   private readonly ruleRequest = createMutation(() => saveCollectionRuleMutation());
-  private readonly removeRuleRequest = createMutation(() => deleteCollectionRuleMutation());
   private readonly syncRequest = createMutation(() => syncCollectionMutation());
   private readonly deleteRequest = createMutation(() => deleteCollectionMutation());
   private readonly feedback = createNotifier();
 
+  /** Edits a collection Overture manages; an unmanaged one is only taken over. */
   constructor(private readonly current: () => CollectionDetail) {
     this.defaults = createQuery(() =>
       getCollectionDefaultsOptions({
@@ -256,11 +247,7 @@ export class CollectionEditor {
         source_summary: _summary,
         ...rest
       } = saved;
-      this.content = "criteria";
       this.rule = structuredClone(rest);
-    } else if (this.current().kind === "smart") {
-      this.content = "criteria";
-      this.rule.smart = true;
     }
   }
 
@@ -278,7 +265,7 @@ export class CollectionEditor {
     return this.collection.generated_value !== null;
   }
   get smart() {
-    return this.content === "criteria" && !!this.rule.smart;
+    return !!this.rule.smart;
   }
   get fields() {
     return availableFields(this.capabilities.data, this.smart);
@@ -286,20 +273,11 @@ export class CollectionEditor {
   get orders() {
     return availableOrders(this.capabilities.data, this.smart);
   }
-  /** Saving rewrites the criteria unless Plex keeps a filter Overture never saw. */
-  get criteriaEditable() {
-    return (
-      this.content !== "criteria" ||
-      this.collection.rule !== null ||
-      this.collection.kind !== "smart" ||
-      this.manageServerFilter
-    );
-  }
+  /** Append keeps members a sync no longer matches, so members can be added by hand too. */
   get manualMembersAllowed() {
-    const rule = this.collection.rule;
     return (
       this.collection.kind !== "smart" &&
-      (!rule || (rule.sync_mode ?? this.collection.effective_sync_mode) === "append")
+      (this.collection.rule?.sync_mode ?? this.collection.effective_sync_mode) === "append"
     );
   }
 
@@ -317,14 +295,25 @@ export class CollectionEditor {
     );
   }
 
+  /** Why the form cannot be saved yet, or null when it can. */
+  get blocker(): string | null {
+    if (!this.title.trim()) return "Enter a title";
+    if (
+      settingsState.current.collection_require_group &&
+      !this.generated &&
+      !this.collectionGroup.trim()
+    )
+      return "Choose a group: every collection needs one";
+    return null;
+  }
+
   get busy() {
     return (
       this.updateRequest.isPending ||
       this.membersRequest.isPending ||
       this.ruleRequest.isPending ||
       this.syncRequest.isPending ||
-      this.deleteRequest.isPending ||
-      this.removeRuleRequest.isPending
+      this.deleteRequest.isPending
     );
   }
 
@@ -373,14 +362,9 @@ export class CollectionEditor {
     });
   }
 
-  /** Save, remove or keep the rule; `undefined` when nothing changed. */
+  /** Save the rule; its set decides a generated collection's, so that one is kept. */
   private async persistRule() {
-    if (this.generated || !this.criteriaEditable) return undefined;
-    if (this.content === "manual") {
-      if (!this.collection.rule) return undefined;
-      await this.removeRuleRequest.mutateAsync(this.target);
-      return null;
-    }
+    if (this.generated) return undefined;
     return this.ruleRequest.mutateAsync({ ...this.target, body: ruleBody(this) });
   }
 
@@ -445,7 +429,6 @@ export class CollectionDraft {
   readonly creating = true;
   readonly manualMembersAllowed = false;
   readonly generated = false;
-  readonly criteriaEditable = true;
   kind = $state<DraftKind>("collection");
   presetKey = $state("");
   title = $derived.by(() => this.seed()?.title ?? "");
@@ -462,7 +445,6 @@ export class CollectionDraft {
   visibleShared = $state<boolean | null>(null);
   visibleLibrary = $state<boolean | null>(null);
   orderType = $state<CollectionOrder | null>(null);
-  content = $state<CollectionContent>("criteria");
   rule = $derived.by(() => {
     const seed = this.seed();
     const rule = $state({
@@ -534,10 +516,14 @@ export class CollectionDraft {
   get linked() {
     return this.kind === "collection" && this.libraryIds.length > 1;
   }
-  get canSubmit() {
-    if (!this.libraryIds.length) return false;
-    if (this.kind === "set") return !!this.setGroup;
-    return !!this.title.trim();
+  /** Why the form cannot be saved yet, or null when it can. */
+  get blocker(): string | null {
+    if (!this.libraryIds.length) return "Choose a library";
+    if (this.kind === "set") return this.setGroup ? null : "Name the set's group";
+    if (!this.title.trim()) return "Enter a title";
+    if (settingsState.current.collection_require_group && !this.collectionGroup.trim())
+      return "Choose a group: every collection needs one";
+    return null;
   }
 
   selectKind(kind: DraftKind) {
@@ -601,7 +587,6 @@ export class CollectionDraft {
           ...optionsBody(this),
           media_type: this.mediaType,
           library_id: this.libraryId,
-          member_ids: [],
           rule: ruleBody(this),
         },
       });
@@ -774,8 +759,6 @@ const RULE_POLICY = [
   "member_label",
   "arr_tag",
   "home_order",
-  "sync_schedule",
-  "sync_enabled",
 ] as const satisfies readonly (keyof CollectionRuleWriteInput)[];
 type RulePolicy = Pick<CollectionRuleWriteInput, (typeof RULE_POLICY)[number]>;
 

@@ -10,6 +10,8 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { goToCatalogEntry, goToItem, navigate, route } from "../../../lib/router/routes";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
+  catalogDetail,
+  catalogEntry,
   collection,
   mediaItem,
   publicDatasetRecord,
@@ -189,11 +191,17 @@ describe("DbRecordPopup", () => {
     await waitFor(() => expect(route.params.entrySlug).toBe("tmdb-348"));
     mockFetchRoutes({
       "/api/public-dataset/catalog/movie/tmdb-348/record": publicDatasetRecord(),
+      "/api/public-dataset/catalog/movie/tmdb-348": catalogDetail({
+        draft: catalogEntry({ poster_url: "https://image.test/draft.jpg" }),
+      }),
     });
 
     await renderPopup();
 
     expect(await screen.findByRole("heading", { name: "OvertureDB Item" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Media Item" })).not.toBeInTheDocument();
+    // A local draft is inspectable beside the synced catalog row.
+    const draft = await screen.findByRole("heading", { name: "Local draft" });
+    expect(draft.closest("section")).toHaveTextContent("https://image.test/draft.jpg");
   });
 });

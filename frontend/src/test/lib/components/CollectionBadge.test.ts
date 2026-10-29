@@ -33,11 +33,9 @@ describe("item collection badge", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Collection: Star Wars" }));
     await waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections/tmdb-10"));
   });
-  it("falls back to TMDB when the catalog is disabled", () => {
+  it("links nowhere outside Overture when the catalog is disabled", () => {
     renderWithQueryClient(CollectionBadge, { tmdbId: 10, datasetEnabled: false });
-    expect(screen.getByRole("link", { name: "TMDB collection 10" })).toHaveAttribute(
-      "href",
-      "https://www.themoviedb.org/collection/10",
-    );
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

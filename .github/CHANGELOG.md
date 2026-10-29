@@ -9,12 +9,16 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- The sidebar's filter button counts active filters, with Reset filters beside it.
+- The database record of an OvertureDB entry also lists its local draft.
+- Settings has Reset to defaults, which fills the form with every default; Save keeps them.
+- The OvertureDB menu can stop trusting OvertureDB's No theme flag and hide OvertureDB browsing from the sidebar.
 - A notice stays pinned while the media server is unreachable or refuses Overture's API key, says which setting to check, and offers Check again. It clears by itself once the server answers.
 - TMDB charts as collection lists: Popular, Top rated, Trending, In cinemas, Coming soon, Airing today and Airing this week, read for the new TMDB region setting.
 - Collection criteria test what TMDB says about each title: original language, origin country, TMDB rating and votes, TMDB keywords, production companies, streaming services in your region, and for shows their network, status and last air date. Full Sync reads them for every title with a TMDB ID, and again weekly. Plex can also test how many versions a movie has, and every server its folder.
-- Collection sets split by edition, network, original language, origin country or streaming service; on Plex, smart sets split by audio or subtitle language. Custom sets list their own collections, each with its own criteria, such as A to Z or Based on a book. Any set can rename or merge values, and can remove collections whose value disappears.
+- Collection sets split by edition, network, original language, origin country or streaming service; on Plex, smart sets split by audio or subtitle language. Custom sets list their own collections, each with its own criteria, such as A to Z or Based on a book. Any set can rename or merge values.
 - A collection in several libraries: choose more than one library in Setup and it is kept alike in each.
-- A Missing panel lists the titles a collection's lists hold that the library lacks, and requests them from Radarr or Sonarr. Request missing does this after each sync; choose the root folder and quality profile under Settings > Collection defaults.
+- A Missing panel lists the titles a collection's lists hold that the library lacks, and requests them from Radarr or Sonarr. Request missing does this after each sync; choose the root folder and quality profile under Settings > Collections.
 - Member label and Radarr/Sonarr tag give a collection's members a label or tag and remove it from others. Home order arranges promoted collections on Plex's Home.
 - Preview members shows what a collection's criteria select before you save. Save as preset keeps any collection or set as a starting point under Start from.
 - Presets for TMDB charts, Most played, Returning series, Christmas, Halloween, Thanksgiving, Valentine's Day, the Marvel and DC universes, and sets for streaming services, languages, origin countries, networks, editions, Based on and A to Z.
@@ -44,7 +48,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Assets can include collection themes for selected libraries or the current collection sidebar, using the configured catalog source order. Newly identified collections can receive catalog themes automatically from an enabled incremental sync policy.
 - Assets can run over collections: every collection or chosen groups, for posters, backgrounds and themes, now or on a schedule. Sync can sync a single collection group from the Sync tab.
 - Collections made outside Overture are listed under a virtual Unmanaged group. Take over one, many, or all of them to give them criteria that keep what they hold; a Plex smart collection keeps its filter. The group name Unmanaged is reserved.
-- Settings > Collection defaults > Require a group for every managed collection refuses to save, take over or ungroup a managed collection without a group, and shows how many have none yet.
+- Settings > Collections > Require a group for every managed collection refuses to save, take over or ungroup a managed collection without a group, and shows how many have none yet.
 - On Plex, Preview members suggests a smart or a regular collection when the criteria suit the other kind better, and Switch changes it.
 - Collections filter by art resolution, art source, aspect ratio and the metadata issues they have, and sort by poster or background width, Home order and group. Items and collections sort by poster or background aspect deviation, worst first.
 - The Database record shows the OvertureDB record of collections and of catalog entries too. The OvertureDB sidebar sorts by completeness, Has draft and In library.
@@ -57,6 +61,20 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Assets runs over libraries and collections together: the library checklist lists All collections and each group, replacing the Collections mode and the Themes-only collections checkbox. Asset runs and incremental theme downloads leave unmanaged collections alone.
+- Sync schedules belong to groups and the global defaults; a collection keeps only its active dates. Existing per-collection schedules are dropped.
+- Deleting a group can move its collections to another group; keeping them without a group is offered only while groups are optional, and removing only the server copy is gone.
+- Settings everywhere put each label on the same line as its control, and forms are a single column.
+- Run, Save schedule, Apply filters and group Save and Apply or Save and Sync are unavailable, and say why, until they would do something.
+- Every collection Overture creates is criteria-based, and a collection made outside Overture can only be taken over: its page shows just Take over, and Overture changes nothing else about it until then. Unmanaged collections appear only in the Unmanaged group, which has its own icon.
+- Require group membership for every collection is on for new installs, and the sidebar lists a collection at the top level only while it has no group.
+- Filters list libraries first, then every status filter together on one line each, then art and theme refinements and bulk operations; renaming and deleting the open group moved there from Collection groups.
+- Save buttons stay unavailable, and say why, until a collection can be saved; sections that need a library are dimmed until one is chosen.
+- No theme is set only in the OvertureDB view and reaches the library with the next OvertureDB sync.
+- A set now removes collections whose value disappears exactly when it deletes those below the minimum; the separate setting is gone.
+- Collection links name where they go: the collection icon for your library, OvertureDB's for its entry, and never an outside site.
+- Radarr and Sonarr add only the lookup result whose TMDB or TVDB ID matches the requested title.
+- Dropdowns in popups open faster, Paste Art is an icon, and collection runs no longer offer season posters.
 - OvertureDB has a distinct hexagonal mark, and links between the catalog and library show the destination's icon. Brand assets have consistent colours, tighter bounds and smooth small-size variants; the tagline now reads "Artwork, collections & themes".
 - Error messages no longer end in a request or job ID, and a failed download names what failed, such as "Couldn't download the poster for Mufasa: The Lion King". The IDs remain in the log.
 - `ART_DOWNLOAD_WORKERS` now allows at most 10 and `THEME_DOWNLOAD_WORKERS` at most 4, since more only gets the address rate-limited or blocked. Lower a larger value before upgrading, or Overture will not start.
@@ -99,6 +117,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed
 
+- Contribute to OvertureDB links and buttons; contribute with Export selections and a bulk issue instead.
+- Manual collections and the Theme: missing or complete line; the theme tab's colour shows completeness.
 - The Background Color appearance setting; each mode now has one tuned background. A saved background colour is ignored.
 - Legacy collection preset generator, single-source rules, separate builders, managed Plex labels and group TMDB discovery, in favor of criteria and collection sets.
 - Collection matching endpoints and automatic member voting. Set `tmdb_collection_id` through collection creation or update instead.
@@ -108,6 +128,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Collapsible sections no longer close by themselves while editing, and section links open and scroll to their section every time.
 - Collection criteria with text or tag values, such as Studio or Actor, no longer make the form slow on large libraries: suggestions show the 50 values that match what you type.
 - Asking the media server to refresh an item after a download or rename is retried when the server briefly fails, instead of leaving the item showing its old artwork.
 - Artwork from hosts that send no content type, or a generic binary one, now downloads when the file is a JPG or PNG, instead of failing with "Unsupported content type: unknown".

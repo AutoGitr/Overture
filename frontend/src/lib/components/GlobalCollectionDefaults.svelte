@@ -3,15 +3,13 @@
   import {
     getCollectionArrOptionsOptions,
     getCollectionCapabilitiesOptions,
-    listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { AppSettingsUpdate, MediaType } from "../../generated/rest/types.gen";
-  import { goToCollectionsList } from "../router/routes";
   import { settingsState } from "../stores/settingsState.svelte";
-  import { uiState } from "../stores/uiState.svelte";
   import CollectionPolicyFields, { type PolicyData } from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields, { type ScheduleData } from "./CollectionScheduleFields.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import FieldRow from "./FieldRow.svelte";
 
   let { draft }: { draft: AppSettingsUpdate } = $props();
   const id = $props.id();
@@ -67,71 +65,44 @@
   }));
   let plex = $derived(settingsState.current.media_server === "plex");
 
-  // Collections that turning the requirement on would leave without a valid group.
-  const ungroupedQueries = (["movie", "show"] as const).map((mediaType) => ({
-    mediaType,
-    query: createQuery(() => ({
-      ...listCollectionsOptions({ query: { media_type: mediaType } }),
-      enabled: !!draft.collection_require_group,
-    })),
-  }));
-  let ungrouped = $derived(
-    ungroupedQueries.map(({ mediaType, query }) => ({
-      mediaType,
-      count: (query.data ?? []).filter((row) => row.managed && !row.collection_group).length,
-    })),
-  );
   let anyArr = $derived(
     settingsState.current.radarr_configured || settingsState.current.sonarr_configured,
   );
 </script>
 
-<label class="form-row">
-  <input type="checkbox" bind:checked={draft.collection_import_unmanaged} />Import new unmanaged
-  collections during Sync
+<h4 class="caps-label">Management</h4>
+<label class="form-row justify-between">
+  <span>Import new server collections as unmanaged</span>
+  <input type="checkbox" bind:checked={draft.collection_import_unmanaged} />
 </label>
 <p class="hint">
-  Off leaves new server collections outside Overture; existing imports are kept. Groups and
-  collections can override everything below.
+  Off leaves new server collections out of Overture; ones already imported are kept. Either way,
+  Overture changes a collection only once it is taken over.
 </p>
-<label class="form-row">
-  <input type="checkbox" bind:checked={draft.collection_require_group} />Require a group for every
-  managed collection
+<label class="form-row justify-between">
+  <span>Require group membership for every collection</span>
+  <input type="checkbox" bind:checked={draft.collection_require_group} />
 </label>
-{#if draft.collection_require_group}
-  {#each ungrouped.filter((entry) => entry.count > 0) as entry (entry.mediaType)}
-    <p class="hint">
-      {entry.count}
-      {entry.mediaType === "movie" ? "movie" : "show"}
-      {entry.count === 1 ? "collection has" : "collections have"} no group yet and cannot be saved until
-      it has one.
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm"
-        onclick={() => {
-          uiState.closePopup();
-          goToCollectionsList(entry.mediaType);
-        }}>Show them</button
-      >
-    </p>
-  {/each}
-{/if}
 {#if settingsState.current.tmdb_configured}
-  <div class="form-label">
-    <label for={`${id}-region`}>TMDB region</label>
+  <h4 class="caps-label">Sources</h4>
+  <FieldRow
+    label="TMDB region"
+    for={`${id}-region`}
+    hint="Two-letter country code for TMDB charts and streaming services."
+  >
     <input
       id={`${id}-region`}
       maxlength="2"
+      size="4"
       required
       bind:value={draft.tmdb_region}
       placeholder="US"
       class="text-input-mono"
     />
-    <span class="hint">Two-letter country code for TMDB charts and streaming services.</span>
-  </div>
+  </FieldRow>
 {/if}
 
-<span class="form-label">Settings</span>
+<p class="hint">Groups and collections can override every default below.</p>
 <div class="options-col">
   <CollectionPolicyFields
     {policy}
@@ -141,13 +112,13 @@
     arr={anyArr ? "Radarr or Sonarr" : null}
   />
 </div>
-<span class="form-label">Schedule</span>
+<h4 class="caps-label">Schedule</h4>
 <div class="options-col">
   <CollectionScheduleFields {policy} level="global" />
 </div>
 
 {#if anyArr}
-  <span class="form-label">Requests</span>
+  <h4 class="caps-label">Requests</h4>
   <p class="hint">Where Request missing adds titles, and whether it searches for them.</p>
   {#each ARR as [mediaType, name, key] (key)}
     {@const options = mediaType === "movie" ? radarr : sonarr}
@@ -160,28 +131,33 @@
         onretry={() => options.refetch()}
       />
       <div class="options-col">
-        <label class="form-label">
-          {name} root folder
-          <select bind:value={draft[`${key}_root_folder`]}>
+        <FieldRow label={`${name} root folder`} for={`${id}-${key}-folder`}>
+          <select id={`${id}-${key}-folder`} bind:value={draft[`${key}_root_folder`]}>
             <option value="">Choose a folder</option>
             {#each options.data?.root_folders ?? [] as folder (folder)}
               <option value={folder}>{folder}</option>
             {/each}
           </select>
-        </label>
-        <label class="form-label">
-          {name} quality profile
-          <select bind:value={draft[`${key}_quality_profile_id`]}>
+        </FieldRow>
+        <FieldRow label={`${name} quality profile`} for={`${id}-${key}-profile`}>
+          <select id={`${id}-${key}-profile`} bind:value={draft[`${key}_quality_profile_id`]}>
             <option value={null}>Choose a profile</option>
             {#each options.data?.quality_profiles ?? [] as profile (profile.id)}
               <option value={profile.id}>{profile.label}</option>
             {/each}
           </select>
-        </label>
-        <label class="form-row">
-          <input type="checkbox" bind:checked={draft[`${key}_search`]} />Search when added
+        </FieldRow>
+        <label class="form-row justify-between">
+          <span>Search when added</span>
+          <input type="checkbox" bind:checked={draft[`${key}_search`]} />
         </label>
       </div>
     {/if}
   {/each}
 {/if}
+
+<style>
+  h4 {
+    margin: var(--space-2) 0 0;
+  }
+</style>

@@ -38,9 +38,12 @@
       {#each ITEM_ART_TYPES as artType (artType)}
         {@render typeOption(artType, hasSelectedLibraries)}
       {/each}
-      {#each SEASON_ART_TYPES as artType (artType)}
-        {@render typeOption(artType, seasonTypesEnabled, SEASON_ONLY)}
-      {/each}
+      <!-- Collections have no seasons, so only a show library offers season art. -->
+      {#if !form.collectionScope || form.hasShowLibraries}
+        {#each SEASON_ART_TYPES as artType (artType)}
+          {@render typeOption(artType, seasonTypesEnabled, SEASON_ONLY)}
+        {/each}
+      {/if}
     </div>
   </WorkflowSection>
 

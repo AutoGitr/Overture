@@ -4,6 +4,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
   import {
+    getCatalogEntryOptions,
     getCatalogEntryRecordOptions,
     getItemOptions,
     getPublicDatasetCollectionRecordOptions,
@@ -61,6 +62,14 @@
     }),
     enabled: catalogEntry !== null,
   }));
+  // The open entry's detail, shared with its page, holds any local draft.
+  const catalogDetailQuery = createQuery(() => ({
+    ...getCatalogEntryOptions({
+      path: catalogEntry ?? { media_type: "movie", entry_key: "" },
+    }),
+    enabled: catalogEntry !== null,
+  }));
+  let draft = $derived(catalogEntry ? (catalogDetailQuery.data?.draft ?? null) : null);
   let publicDatasetRecordQuery = $derived(
     catalogEntry
       ? catalogRecordQuery
@@ -183,6 +192,12 @@
       />
       {#if publicDatasetRecordQuery.data && !publicDatasetRecord}
         <p class="hint">OvertureDB has no entry for this.</p>
+      {/if}
+      {#if draft}
+        <section class="option-card">
+          <h3 class="form-label">Local draft</h3>
+          {@render fieldTable(getFields(draft))}
+        </section>
       {/if}
       {#if publicDatasetRecord?.collection}
         <section class="option-card">

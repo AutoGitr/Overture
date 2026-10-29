@@ -15,7 +15,6 @@ describe("database record field formatting", () => {
 
     expect(fields).toEqual(
       expect.arrayContaining([
-        { key: "art_status", value: "partial" },
         { key: "poster_url", value: "https://image.test/poster.jpg" },
         { key: "youtube_id", value: "abc123_DEF0" },
       ]),
@@ -29,8 +28,9 @@ describe("database record field formatting", () => {
       "poster_phash",
       "poster_width",
       "poster_height",
-      "poster_status",
     ]);
+    // The tabs show completeness by colour; the record lists only what is stored.
+    expect(fields.some((field) => field.key.endsWith("_status"))).toBe(false);
     expect(fields.some((field) => field.value === "[object Object]")).toBe(false);
   });
 

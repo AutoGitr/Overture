@@ -76,7 +76,7 @@
         })
       : [],
   );
-  let collections: CollectionRead[] = $derived(
+  let matchedCollections: CollectionRead[] = $derived(
     uiState.sidebarMode === "collections"
       ? filterSidebarCollections({
           collections: collectionsQuery.data ?? [],
@@ -90,6 +90,11 @@
           (collection) => sidebarGroup() === null || inCollectionGroup(collection, sidebarGroup()),
         )
       : [],
+  );
+  // Only take-over applies to collections Overture does not manage; everything else skips them.
+  let collections = $derived(matchedCollections.filter((collection) => collection.managed));
+  let unmanagedCollections = $derived(
+    matchedCollections.filter((collection) => !collection.managed),
   );
   let noun = $derived(
     uiState.sidebarMode === "items"
@@ -255,6 +260,9 @@
   }
 
   let collectionOperation = $state<BulkCollectionOperation["operation"]>("trigger_sync");
+  let operationTargets = $derived(
+    collectionOperation === "take_over" ? unmanagedCollections : collections,
+  );
   let targetGroup = $state("");
   let template = $state("{title}");
   let visibility = $state<CollectionMode | null>(null);
@@ -262,9 +270,9 @@
   let order = $state<CollectionOrder>("release.asc");
 
   async function runCollectionOperation() {
-    if (busy || !resultsReady || !collections.length) return;
+    if (busy || !resultsReady || !operationTargets.length) return;
     const operation = collectionOperation;
-    const ids = collections.map((collection) => collection.id);
+    const ids = operationTargets.map((collection) => collection.id);
     if (
       !(await confirmAction({
         title: `Apply to ${ids.length} filtered collections?`,
@@ -385,19 +393,25 @@
     {/if}
   </div>
   {#if !forItems}
-    <fieldset class="options-col" disabled={busy || !resultsReady || matchCount === 0}>
+    <fieldset class="options-col" disabled={busy || !resultsReady || !matchedCollections.length}>
       <legend>Collection operations</legend>
       <label class="form-label"
         >Operation
         <select bind:value={collectionOperation}>
-          <option value="trigger_sync">Sync criteria collections</option>
-          <option value="set_group">Assign group</option>
-          <option value="take_over">Take over</option>
-          <option value="set_order">Set sort</option>
-          <option value="apply_sort_title_format">Format sort titles</option>
-          {#if capabilities.data?.visibility}<option value="set_visibility">Set visibility</option
+          <option value="take_over" disabled={!unmanagedCollections.length}
+            >Take over unmanaged</option
+          >
+          <option value="trigger_sync" disabled={!collections.length}>Sync</option>
+          <option value="set_group" disabled={!collections.length}>Assign group</option>
+          <option value="set_order" disabled={!collections.length}>Set sort</option>
+          <option value="apply_sort_title_format" disabled={!collections.length}
+            >Format sort titles</option
+          >
+          {#if capabilities.data?.visibility}<option
+              value="set_visibility"
+              disabled={!collections.length}>Set visibility</option
             >{/if}
-          <option value="delete">Delete collections</option>
+          <option value="delete" disabled={!collections.length}>Delete collections</option>
         </select>
       </label>
       {#if collectionOperation === "set_group" || collectionOperation === "take_over"}<label
@@ -435,7 +449,9 @@
       <button
         type="button"
         class={["btn", collectionOperation === "delete" ? "btn-danger" : "btn-secondary"]}
-        onclick={() => void runCollectionOperation()}>Apply to {matchCount} collections</button
+        disabled={!operationTargets.length}
+        onclick={() => void runCollectionOperation()}
+        >Apply to {operationTargets.length} collections</button
       >
     </fieldset>
   {/if}

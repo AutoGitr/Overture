@@ -124,12 +124,20 @@
     run: runScheduleRequest,
   });
 
-  let canSaveSchedule = $derived(
-    !config.useSidebarItems &&
-      form.canRun &&
-      scheduleController.name.trim().length > 0 &&
-      config.scheduleCronExpression.trim().length > 0,
+  /** Why Run Now cannot start, or null when it can. */
+  let runBlocker = $derived(libraryGate.blocked("assets") ?? form.blocker);
+  /** Why the schedule cannot be saved, or null when it can. */
+  let scheduleBlocker = $derived(
+    config.useSidebarItems
+      ? "A schedule runs over libraries or collections, not the sidebar's items"
+      : (form.blocker ??
+          (!scheduleController.name.trim()
+            ? "Name the schedule"
+            : !config.scheduleCronExpression.trim()
+              ? "Choose when it runs"
+              : null)),
   );
+  let canSaveSchedule = $derived(scheduleBlocker === null);
 
   $effect(() => {
     if (!librariesLoaded) return;
@@ -225,9 +233,11 @@
     clear={clearResults}
   >
     {#snippet start()}
+      {#if form.blocker}<span class="popup-footer-note" role="status">{form.blocker}</span>{/if}
       <button
         class="btn btn-secondary"
         onclick={saveSchedule}
+        title={scheduleBlocker ?? undefined}
         disabled={!canSaveSchedule ||
           createScheduleRequest.isPending ||
           updateScheduleRequest.isPending}
@@ -237,7 +247,8 @@
       <PendingButton
         class="btn btn-primary"
         onclick={startJob}
-        disabled={!form.canRun || !!libraryGate.blocked("assets")}
+        title={runBlocker ?? undefined}
+        disabled={!!runBlocker}
         pending={startJobRequest.isPending}
         pendingLabel="Starting..."
       >

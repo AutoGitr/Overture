@@ -71,8 +71,7 @@ media server's asset naming scheme.
   artwork you already have, Renamer to standardize filenames, and Audit to
   check that your server uses your local assets.
 - **Contribute to OvertureDB.** Use the catalog coverage filters to find gaps,
-  choose artwork and themes, and open prefilled contribution issues or export
-  a batch. TMDB search lets you curate titles outside your library too; setup
+  choose artwork and themes as drafts, and export them as a batch. TMDB search lets you curate titles outside your library too; setup
   still needs a media server connection.
 
 ## Installation
@@ -454,8 +453,8 @@ Both kinds share the same sections, in the same order:
    title template, where `{value}s` turns 1990 into 1990s) and the group. One
    collection in several libraries becomes a set with that collection in each,
    kept alike. **Save as preset** keeps the form for later.
-2. **Content**: whether members are chosen by hand or by criteria, who
-   evaluates them, and the criteria, with **Preview members**. A set instead
+2. **Content**: who evaluates the criteria, and the criteria themselves, with
+   **Preview members**. A set instead
    chooses what it **Splits by**, its values and the conditions every
    collection needs, with **Preview collections**.
 3. **Members** (a saved collection): its members, and **Missing**, the titles
@@ -466,26 +465,29 @@ Both kinds share the same sections, in the same order:
    missing, Member label, Radarr or Sonarr tag, Plex's collection mode,
    filtering, Home and recommended promotion and Home order, sort title and
    summary templates, and the TMDB collection ID.
-5. **Schedule**: Scheduled sync, the sync schedule (a cron expression with
-   presets), the active dates, which repeat yearly and can cross New Year, and
-   whether an inactive collection leaves the server.
+5. **Schedule**: the active dates, which repeat yearly and can cross New Year,
+   and whether an inactive collection leaves the server. When a collection
+   syncs is its group's choice: Scheduled sync and the sync schedule (a cron
+   expression with presets) are set per group and in the global defaults.
 
 A group's settings in **Collection groups** and the global defaults under
-**Settings > Collection defaults** use the same fields and names. **Default**
+**Settings > Collections** use the same fields and names. **Default**
 inherits, from the group and then the global default, and names the value it
 inherits. A group can hold regular and smart collections; a custom order applies
 to its regular ones only.
 
-Collections made outside Overture, without criteria, are also listed under the
-virtual **Unmanaged** group. **Take over all** there, or **Take over** in Bulk
-operations, gives each criteria that keep what it holds today: a regular
-collection keeps its members, and a Plex smart collection keeps its filter when
-every Plex filter has an equivalent condition. Otherwise Overture lists the
-filters it cannot read; edit the criteria and choose **Replace the Plex filter
-with these criteria**. Saving criteria on an unmanaged collection also takes it
-over. `Unmanaged` cannot name a group. Turn on **Require a group for every
-managed collection** under **Settings > Collection defaults** to keep every
-managed collection in one.
+Every collection Overture creates has criteria. Collections made outside
+Overture are listed only under the virtual **Unmanaged** group, and Overture
+changes nothing about them, not even their group, art or theme, until it takes
+them over. Their page offers only **Take over**, with the group to join; **Take over
+unmanaged** in Bulk operations does the same for many. Taking over gives a collection criteria that
+keep what it holds today: a regular collection keeps its members, and a Plex
+smart collection keeps its filter when every Plex filter has an equivalent
+condition; otherwise Overture lists the filters it cannot read. `Unmanaged`
+cannot name a group. **Require group membership for every collection** under
+**Settings > Collections** is on for new installs; the sidebar then lists only
+groups, and a collection without a group appears at the top level only while
+the setting is off.
 
 **Criteria** decide a collection's members. A condition tests item metadata,
 such as Genre is Action or Date added in the last 30 days, or a list: a TMDB
@@ -532,7 +534,7 @@ offer that person's photos as poster candidates.
 Set `TMDB_API_KEY` for TMDB lists, charts, titles, people, franchises and facts,
 `MDBLIST_API_KEY` for MDBList, and the Radarr or Sonarr URL and API key for
 their tags, requests and member tags. Choose where requested titles go under
-**Settings > Collection defaults**. Imported Plex smart collections keep their
+**Settings > Collections**. Imported Plex smart collections keep their
 Plex filter until you choose **Replace the Plex filter with these criteria**.
 Failed list lookups keep existing members.
 
@@ -541,9 +543,12 @@ Failed list lookups keep existing members.
 collection set, Settings and Schedule; Setup only assigns a group. **Save**
 takes effect on the next sync, **Save and Apply** sends display settings to the
 server at once while keeping members and explicit overrides, and **Save and
-Sync** runs the set and syncs the group's collections. A group can be renamed
-or deleted; deleting can keep its collections or remove them from Overture, the
-media server or both. Media files are always kept.
+Sync** runs the set and syncs the group's collections; both need the group to
+hold a collection or a set first. The open group is renamed or deleted under
+**Filters & operations**. Deleting moves its collections to another group,
+removes them from Overture (the next library sync lists the server's copies as
+Unmanaged) or from Overture and the server; keeping them without a group is
+offered only while groups are optional. Media files are always kept.
 
 ### Operations
 
@@ -565,14 +570,13 @@ your existing library.
 
 Assets can use OvertureDB and local-image matching for artwork; theme sources
 are OvertureDB, ThemerrDB and YouTube search. Local-image matching finds a source
-for artwork already on disk. The library checklist in **Assets** and full **Sync**
-includes a single **Collections** checkbox below Movies and Shows. In Sync it
+for artwork already on disk. In full **Sync**, the library checklist's **Collections** checkbox
 refreshes collection metadata and memberships for the selected libraries; pick a
-collection group under **Collections** to sync only that group. In Assets it
-fills collection themes in those libraries. Switch Assets to **Collections** to
-run art and themes over every collection or the groups you tick, now or on a
-schedule, or use **Current sidebar items** from the collection list to target
-its filtered rows. Collection posters and backgrounds come from OvertureDB, or
+collection group under **Collections** to sync only that group. In **Assets**,
+the same checklist lists **All collections** and each group below Movies and
+Shows, so one run, now or on a schedule, covers the libraries and collections
+you tick; or use **Current sidebar items** from the collection list to target
+its filtered rows. Only collections Overture manages are touched. Collection posters and backgrounds come from OvertureDB, or
 local-image matching against the server's current image, and are uploaded to the
 media server. Collection themes use OvertureDB and ThemerrDB in the configured
 order; YouTube search applies to movies and shows.
@@ -649,18 +653,15 @@ the catalog, with drafts overriding it everywhere. Missing images show a
 placeholder, even when TMDB or your library has artwork. TMDB still supplies
 editing candidates, season details and collection membership.
 **Discard draft** restores the catalog entry; the Overture icon opens a linked
-item or collection in your library. The GitHub icon appears when a draft differs
-from the catalog and opens an issue with those choices. **Export selections** includes
-all local drafts along with library selections and matched collection themes.
-The OvertureDB popup shows collection and draft counts.
+item or collection in your library. **No theme** in this view drafts that a
+title has no theme music; once the catalog carries the flag, the next
+OvertureDB sync brings it to your library, where the title's theme counts as
+complete and theme runs skip it. **Export selections** includes all local
+drafts along with library selections and matched collection themes. The
+OvertureDB popup shows collection and draft counts, and holds two settings:
+**Trust OvertureDB's No theme flag** and **Browse OvertureDB in the sidebar**.
 
-To contribute one title, select the GitHub icon on its page, shown when your
-choices differ from the catalog's. It opens a
-[movie](https://github.com/AutoGitr/OvertureDB/issues/new?template=movie.yml) or
-[show](https://github.com/AutoGitr/OvertureDB/issues/new?template=show.yml), or
-[collection](https://github.com/AutoGitr/OvertureDB/issues/new?template=collection.yml)
-issue filled in with the title's IDs and your choices. For many titles, use
-**OvertureDB -> Export selections** and attach the ZIP to a
+To contribute, use **OvertureDB -> Export selections** and attach the ZIP to a
 [bulk contribution](https://github.com/AutoGitr/OvertureDB/issues/new?template=bulk.yml).
 
 Review and submit the issue on GitHub; a maintainer approves it before it joins

@@ -41,7 +41,7 @@ export interface FilterState {
   monitored: "all" | "monitored" | "unmonitored";
   collectionSize: "all" | "empty" | "below_minimum";
   collectionKind: "all" | "regular" | "smart";
-  collectionMembers: "all" | "criteria" | "manual";
+  collectionMembers: "all" | "managed" | "unmanaged";
   collectionSync: "all" | "synced" | "failed";
   art: Completeness;
   theme: Completeness;
@@ -144,7 +144,7 @@ function normalizeFilters(value: unknown): FilterState {
     ),
     collectionMembers: stringOption(
       source.collectionMembers,
-      ["all", "criteria", "manual"] as const,
+      ["all", "managed", "unmanaged"] as const,
       defaults.collectionMembers,
     ),
     collectionSync: stringOption(

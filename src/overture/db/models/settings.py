@@ -72,8 +72,12 @@ class AppSettingsBase(SQLModel):
     collection_sync_enabled: bool = True
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
-    #: Every managed collection must belong to a group.
-    collection_require_group: bool = False
+    #: Every collection Overture manages must belong to a group.
+    collection_require_group: bool = True
+    #: OvertureDB's No theme flag counts a title's theme as complete.
+    overturedb_no_theme: bool = True
+    #: The sidebar offers browsing the OvertureDB catalog.
+    overturedb_browse: bool = True
     #: The country whose charts and streaming services TMDB reports.
     tmdb_region: str = Field(default="US", min_length=2, max_length=2)
     radarr_root_folder: str = Field(default="", max_length=500)

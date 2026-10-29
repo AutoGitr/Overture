@@ -5,8 +5,6 @@
     getPublicDatasetSourcesOptions,
     getPublicDatasetStatusOptions,
     getTmdbPublicDatasetSourcesOptions,
-    clearThemeMutation,
-    saveCatalogDraftMutation,
     selectThemeMutation,
     selectTmdbThemeMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -28,8 +26,6 @@
     mergeThemeResults,
   } from "../utils/themeSearch";
   import { openPersistedItem } from "../utils/tmdbItems";
-  import { buildContributionIssueUrl } from "../utils/publicDataset";
-  import type { ThemeSearchResultItem } from "../utils/themeSearch";
   import DataStatus from "./DataStatus.svelte";
   import ThemeSearch from "./ThemeSearch.svelte";
 
@@ -156,83 +152,10 @@
     }
   }
 
-  // A library item with a catalog entry can draft a theme for it without selecting it.
-  let contributionEntry = $derived(
-    item && !catalog && datasetEnabled ? (itemSourcesQuery.data?.item?.entry_key ?? null) : null,
-  );
-  const contributeRequest = createMutation(() => saveCatalogDraftMutation());
-
-  function contributeBlocked(video: ThemeSearchResultItem): string | null {
-    // The contract requires the OvertureDB theme to differ from ThemerrDB's.
-    return video.id === datasetSource?.youtube_id_themerrdb
-      ? "Already provided by ThemerrDB"
-      : null;
-  }
-
-  async function contribute(video: ThemeSearchResultItem) {
-    if (!item || !contributionEntry || contributeRequest.isPending) return;
-    const target = item;
-    feedback.clear();
-    try {
-      await contributeRequest.mutateAsync({
-        path: { media_type: target.media_type, entry_key: contributionEntry },
-        body: { youtube_id_overturedb: video.id },
-      });
-      const repoUrl = datasetQuery.data?.repo_url;
-      // Without art in the workflow, only the theme is contributed.
-      const withArt = settingsState.current.workflow === "art_and_themes";
-      feedback.success("Saved as an OvertureDB draft.", {
-        action: repoUrl
-          ? {
-              label: "Open issue now",
-              run: () =>
-                window.open(
-                  buildContributionIssueUrl(repoUrl, {
-                    ...target,
-                    youtube_id: video.id,
-                    poster_url: withArt ? target.poster_url : null,
-                    background_url: withArt ? target.background_url : null,
-                  }),
-                  "_blank",
-                  "noopener",
-                ),
-            }
-          : undefined,
-      });
-    } catch (err) {
-      feedback.error(errorMessage(err, "Could not save the draft"));
-    }
-  }
-
   // OvertureDB says the title has no theme music; a library item then lacks none.
   let flaggedNoTheme = $derived(
     catalog ? catalog.entry.no_theme : (item?.catalog_no_theme ?? false),
   );
-  const clearThemeRequest = createMutation(() => clearThemeMutation());
-
-  /** Record that the title has no theme: a catalog draft, or no local choice. */
-  async function chooseNoTheme() {
-    feedback.clear();
-    try {
-      if (catalog) {
-        await catalog.draft.save({ no_theme: true });
-        return;
-      }
-      if (!item) return;
-      await clearThemeRequest.mutateAsync({ path: { item_id: item.id } });
-      if (contributionEntry) {
-        await contributeRequest.mutateAsync({
-          path: { media_type: item.media_type, entry_key: contributionEntry },
-          body: { no_theme: true },
-        });
-        feedback.success("Cleared the theme and drafted No theme for OvertureDB.");
-      } else {
-        feedback.success("Cleared the theme selection.");
-      }
-    } catch (err) {
-      feedback.error(errorMessage(err, "Could not record No theme"));
-    }
-  }
 
   /** Store a TMDB title with its first theme, then show the item it became. */
   async function selectTmdbTheme(
@@ -287,12 +210,14 @@
 
   {#if flaggedNoTheme}
     <p class="text-muted" role="status">No theme (OvertureDB)</p>
-  {:else if item || catalog}
+  {:else if catalog}
+    {@const context = catalog}
+    <!-- The flag belongs to OvertureDB; a library item takes it on the next catalog sync. -->
     <button
       type="button"
       class="btn btn-secondary btn-sm no-theme"
-      disabled={themeBusy || clearThemeRequest.isPending || (catalog?.draft.busy ?? false)}
-      onclick={() => void chooseNoTheme()}>No theme</button
+      disabled={context.draft.busy}
+      onclick={() => void context.draft.save({ no_theme: true })}>No theme</button
     >
   {/if}
 
@@ -316,8 +241,6 @@
         busyVideoId={downloadingId}
         busy={themeBusy || (catalog?.draft.busy ?? false)}
         onselect={selectTheme}
-        oncontribute={contributionEntry ? contribute : undefined}
-        {contributeBlocked}
       />
     {/key}
   {/if}

@@ -33,10 +33,13 @@
 <button
   type="button"
   class={["tab-item", { danger: !monitored }]}
-  onclick={ontoggle}
+  onclick={() => {
+    // The toggle settles too quickly for a disabled state to help, so a repeat click is ignored.
+    if (!monitoring) ontoggle();
+  }}
   title={monitored ? "Monitored - click to unmonitor" : "Unmonitored - click to monitor"}
   aria-pressed={monitored}
-  disabled={monitoring}
+  aria-busy={monitoring}
 >
   {#if monitored}<Eye size={16} />{:else}<EyeOff size={16} />{/if}
 </button>

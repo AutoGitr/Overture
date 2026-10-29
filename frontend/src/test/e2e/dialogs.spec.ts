@@ -80,7 +80,8 @@ test("dialogs isolate keyboard focus and restore the opener", async ({ page }) =
   const close = dialog.getByRole("button", { name: "Close popup" });
   await expect(close).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(dialog.getByLabel("Aspect ratio control")).toBeFocused();
+  // Workflow comes first, as the setting the rest depend on.
+  await expect(dialog.getByRole("combobox").first()).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(close).toBeFocused();
   // Native dialogs allow access to browser controls, but not background content.

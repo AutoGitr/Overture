@@ -22,6 +22,7 @@ function renderControls(props: Partial<ComponentProps<typeof SidebarControls>> &
   const searchField = rest.searchField ?? "title";
   const handlers = {
     onOpenFilters: vi.fn(),
+    onResetFilters: vi.fn(),
     onSearchQueryChange: vi.fn(),
     onSearchFieldChange: vi.fn(),
     onSetSort: vi.fn(),
@@ -34,7 +35,7 @@ function renderControls(props: Partial<ComponentProps<typeof SidebarControls>> &
       sortFields:
         searchField === "tmdb" ? [] : sortMenu(mode === "collections" ? "collections" : "library"),
       filtersOpen: false,
-      hasActiveFilters: false,
+      activeFilters: 0,
       searchQuery: "",
       searchField,
       sortField: "title",
@@ -144,8 +145,18 @@ describe("SidebarControls menus", () => {
     expect(within(tmdb).getByRole("menuitemradio", { name: "Title or ID" })).toHaveFocus();
   });
 
+  it("counts active filters and resets them in one click", async () => {
+    const { onResetFilters } = renderControls({ activeFilters: 2 });
+    expect(screen.getByRole("button", { name: "Open filters" })).toHaveAttribute(
+      "title",
+      "Filters (2 active)",
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
+    expect(onResetFilters).toHaveBeenCalledOnce();
+  });
+
   it("hides the filters and sort while searching TMDB", () => {
-    renderControls({ tmdbConfigured: true, searchField: "tmdb", hasActiveFilters: true });
+    renderControls({ tmdbConfigured: true, searchField: "tmdb", activeFilters: 1 });
 
     expect(screen.queryByRole("button", { name: "Open filters" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Choose sort order" })).toBeNull();

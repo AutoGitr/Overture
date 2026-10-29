@@ -3,8 +3,18 @@ export type DisplayField = {
   value: string;
 };
 
-/** Display renditions the API derives from a link: no record of their own. */
-const DERIVED_FIELDS = new Set(["poster_preview_url"]);
+/**
+ * What the API derives rather than stores: a display rendition of a link, and
+ * the completeness the art and theme tabs already show by colour.
+ */
+const DERIVED_FIELDS = new Set([
+  "poster_preview_url",
+  "art_status",
+  "poster_status",
+  "background_status",
+  "season_posters_status",
+  "theme_status",
+]);
 
 const TOP_LEVEL_ORDER = [
   "id",
@@ -43,11 +53,7 @@ const TOP_LEVEL_ORDER = [
   "theme_duration",
   "youtube_id_overturedb",
   "youtube_id_themerrdb",
-  "art_status",
-  "poster_status",
-  "background_status",
-  "season_posters_status",
-  "theme_status",
+  "no_theme",
   "has_incorrect_aspect_ratio",
   "director",
   "studio",

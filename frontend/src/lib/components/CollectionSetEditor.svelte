@@ -105,7 +105,7 @@
 {/if}
 
 {#if custom}
-  <div class="form-wide custom-values">
+  <div class="custom-values">
     <span class="form-label">Collections</span>
     {#each generator.custom_values ?? [] as value, index (index)}
       <fieldset class="custom-value">
@@ -195,7 +195,7 @@
     </div>
     <span class="hint">For example, The Matrix Collection becomes Matrix.</span>
   </div>
-  <div class="form-wide aliases">
+  <div class="aliases">
     <span class="form-label">Rename or merge values</span>
     {#each generator.aliases ?? [] as alias, index (index)}
       <div class="pair">
@@ -244,7 +244,7 @@
     />
   </div>
 {/if}
-<div class="form-wide">
+<div>
   <CriteriaEditor
     group={generator.criteria}
     {fields}
@@ -254,11 +254,7 @@
     label="Every collection also needs"
   />
 </div>
-<label class="form-row form-wide">
-  <input type="checkbox" bind:checked={generator.remove_vanished} />
-  Remove collections whose value disappears or is skipped
-</label>
-<div class="form-wide preview">
+<div class="preview">
   <PendingButton
     type="button"
     class="btn btn-secondary"

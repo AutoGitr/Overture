@@ -255,24 +255,31 @@ class ArrClient:
         ]
 
     async def add(self, external_id: int, request: ArrRequest) -> None:
-        """Add a movie by TMDB ID, or a series by TVDB ID, and maybe search for it."""
+        """Add a movie by TMDB ID, or a series by TVDB ID, and maybe search for it.
+
+        Only a lookup result with exactly that ID is added: a search can rank
+        another title first, and adding it would request the wrong one.
+        """
         if self._kind == "radarr":
-            found = await self._request(
-                "GET", "/api/v3/movie/lookup/tmdb", params={"tmdbId": external_id}
-            )
-            options = {"searchForMovie": request.search}
+            id_field = "tmdbId"
+            options: dict[str, Any] = {"searchForMovie": request.search}
         else:
-            results: list[Any] = (
-                await self._request(
-                    "GET",
-                    "/api/v3/series/lookup",
-                    params={"term": f"tvdb:{external_id}"},
-                )
-                or []
-            )
-            found = results[0] if results else None
+            id_field = "tvdbId"
             options = {"monitor": "all", "searchForMissingEpisodes": request.search}
-        if not isinstance(found, dict):
+        prefix = "tmdb" if self._kind == "radarr" else "tvdb"
+        results: list[dict[str, Any]] = (
+            await self._request(
+                "GET",
+                f"{self._endpoint}/lookup",
+                params={"term": f"{prefix}:{external_id}"},
+            )
+            or []
+        )
+        found = next(
+            (result for result in results if result.get(id_field) == external_id),
+            None,
+        )
+        if found is None:
             raise PublicServiceError(404, f"{self._label} does not know this title")
         body: dict[str, Any] = {
             **found,

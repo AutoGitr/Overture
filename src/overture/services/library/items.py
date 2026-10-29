@@ -28,9 +28,9 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
 
 
-def _public_dataset_complete(item: PublicDatasetItem) -> bool:
-    # A title flagged as having no theme lacks no theme.
-    themed = item.youtube_id_overturedb or item.no_theme
+def _public_dataset_complete(item: PublicDatasetItem, *, trust_no_theme: bool) -> bool:
+    # A title flagged as having no theme lacks no theme, when the user trusts the flag.
+    themed = item.youtube_id_overturedb or (trust_no_theme and item.no_theme)
     return bool(item.poster_url and item.background_url and themed)
 
 
@@ -38,6 +38,8 @@ async def _public_dataset_status_item_ids(
     db: AsyncSession,
     items: Sequence[MediaItem],
     public_items: dict[int, PublicDatasetItem],
+    *,
+    trust_no_theme: bool,
 ) -> tuple[set[int], set[int]]:
     themerrdb_item_ids = {
         item.id
@@ -68,7 +70,9 @@ async def _public_dataset_status_item_ids(
         if item.id is None:
             continue
         public_item = public_items.get(item.id)
-        if not public_item or not _public_dataset_complete(public_item):
+        if not public_item or not _public_dataset_complete(
+            public_item, trust_no_theme=trust_no_theme
+        ):
             continue
         if item.media_type == MediaType.SHOW:
             required_seasons = local_seasons_by_item_id.get(item.id, set())
@@ -124,8 +128,9 @@ async def media_item_reads_with_public_dataset_status(
             seasons_by_item[season.media_item_id].append(season)
 
     public_items = await PublicDatasetRepository(db).items_by_media_item_id(items)
+    trust_no_theme = settings_row.overturedb_no_theme
     complete_item_ids, themerrdb_item_ids = await _public_dataset_status_item_ids(
-        db, items, public_items
+        db, items, public_items, trust_no_theme=trust_no_theme
     )
 
     collections = await CollectionRepository(db).collection_ids_by_item(
@@ -151,7 +156,9 @@ async def media_item_reads_with_public_dataset_status(
                 has_incorrect_aspect_ratio=_has_incorrect_aspect_ratio(
                     item, seasons, tolerance
                 ),
-                catalog_no_theme=bool(public_item and public_item.no_theme),
+                catalog_no_theme=bool(
+                    trust_no_theme and public_item and public_item.no_theme
+                ),
             )
         )
 

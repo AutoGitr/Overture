@@ -7,21 +7,17 @@ import type {
 import {
   appSettings,
   collectionCapabilities,
-  publicDatasetStatus as datasetStatus,
+  realtimeSnapshot as snapshotFixture,
 } from "../helpers/fixtures";
 
 export { expect };
 
 export const epoch = "e2e";
-const publicDatasetStatus = datasetStatus();
-export const realtimeSnapshot = {
+export const realtimeSnapshot = snapshotFixture({
   epoch,
-  sequence: 0,
   server_time: new Date().toISOString(),
-  jobs: [],
-  downloads: [],
-  public_dataset_status: publicDatasetStatus,
-};
+});
+const publicDatasetStatus = realtimeSnapshot.public_dataset_status;
 
 /** The app's live connection, driven from the test. */
 export interface Realtime {

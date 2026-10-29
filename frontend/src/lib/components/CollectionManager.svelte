@@ -1,7 +1,6 @@
 <script lang="ts">
   import Layers from "@lucide/svelte/icons/layers";
   import Settings from "@lucide/svelte/icons/settings";
-  import githubIcon from "../../assets/icons/github.svg";
   import { SERVER_DISPLAY_NAMES } from "../../generated/settings";
   import type {
     CollectionDetail,
@@ -24,6 +23,7 @@
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
+  import CollectionTakeOver from "./CollectionTakeOver.svelte";
   import ThemeStatus from "./ThemeStatus.svelte";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
@@ -54,18 +54,22 @@
     if (!collection) throw new Error("The saved collection must remain mounted");
     return collection;
   }
-  const editor = untrack(() => collection)
-    ? new CollectionEditor(currentCollection)
-    : new CollectionDraft(
-        uiState.sidebarTab,
-        () => libraries,
-        () => seed,
-      );
+  // The page remounts this when a take-over makes Overture manage the collection.
+  const unmanaged = untrack(() => !!collection && !collection.managed);
+  const editor = unmanaged
+    ? null
+    : untrack(() => collection)
+      ? new CollectionEditor(currentCollection)
+      : new CollectionDraft(
+          uiState.sidebarTab,
+          () => libraries,
+          () => seed,
+        );
   const actions =
     editor instanceof CollectionEditor ? new CollectionActions(currentCollection) : null;
   let view = $derived(routedCollectionView());
   let artType = $derived(routedCollectionArtType());
-  let managing = $derived(editor.creating || view === "configure");
+  let managing = $derived(!!editor && (editor.creating || view === "configure"));
   const panelId = $props.id();
   const formId = `${panelId}-configure`;
 </script>
@@ -77,13 +81,13 @@
   title={collection?.title ?? "New collection"}
   summary={collection?.summary}
   posterUrl={collectionImageUrl(collection?.thumb_url ?? null)}
-  showPoster={!editor.creating}
+  showPoster={!!collection}
   backgroundUrl={collectionImageUrl(collection?.art_url ?? null)}
   posterHref={collection?.server_link}
   posterLinkTitle={collection?.server_link
     ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
     : null}
-  tabs={collection ? tabs : undefined}
+  tabs={collection && actions ? tabs : undefined}
 >
   {#snippet emptyIcon()}<Layers size={64} />{/snippet}
   {#snippet posterIcon()}<Layers size={48} />{/snippet}
@@ -109,7 +113,7 @@
     {/if}
   {/snippet}
   {#snippet badges()}
-    {#if collection && actions}
+    {#if collection}
       <ExternalLinkBadges
         subject={{
           title: collection.title,
@@ -135,14 +139,6 @@
                 entry_key: collection.catalog_entry_key,
               });
           }}
-        />
-      {/if}
-      {#if actions.contributionUrl}
-        <IdBadge
-          href={actions.contributionUrl}
-          title={["Contribute to OvertureDB", ...collection.contribution_warnings].join("\n")}
-          icon={githubIcon}
-          alt="GitHub"
         />
       {/if}
     {/if}
@@ -179,11 +175,17 @@
     {/if}
   {/snippet}
   {#snippet sectionLinks()}
-    {#if collection}<ConfigureNavigation {formId} {collection} configuring={managing} />{/if}
+    {#if collection && actions}<ConfigureNavigation
+        {formId}
+        {collection}
+        configuring={managing}
+      />{/if}
   {/snippet}
-  {#snippet subtabActions()}<PasteArtButton />{/snippet}
+  {#snippet subtabActions()}{#if actions && view === "art"}<PasteArtButton />{/if}{/snippet}
   {#snippet content()}
-    {#if managing}
+    {#if collection && !editor}
+      <CollectionTakeOver {collection} {groups} />
+    {:else if managing && editor}
       {#if editor instanceof CollectionDraft && editor.request.error}<DataStatus
           label="collection creation"
           error={editor.request.error}
@@ -201,7 +203,6 @@
       />
     {:else if collection && actions && view === "themes"}
       {#if !collection.theme_unavailable}<ThemeStatus
-          status={collection.theme_status}
           duration={collection.theme_status === "missing" ? null : collection.theme_duration}
           title={collection.youtube_title}
         />{/if}

@@ -38,8 +38,11 @@
   }));
   const groupsQuery = createQuery(() => ({
     ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled: creating || (collection !== null && routedCollectionView() === "configure"),
+    enabled:
+      creating ||
+      (collection !== null && (!collection.managed || routedCollectionView() === "configure")),
   }));
+  let groups = $derived(groupsQuery.data ?? []);
   $effect(() => {
     uiState.mobileShowDetail = creating || collectionId !== null;
   });
@@ -85,11 +88,13 @@
       onretry={() => groupsQuery.refetch()}
     />
   {/if}
-  {#key creating ? `${uiState.sidebarTab}:${route.search.draft ?? ""}` : collectionId}<CollectionManager
+  {#key creating
+    ? `${uiState.sidebarTab}:${route.search.draft ?? ""}`
+    : `${collectionId}:${collection?.managed}`}<CollectionManager
       {collection}
       seed={creating ? (seed.data ?? null) : null}
       libraries={libraries.data ?? []}
-      groups={groupsQuery.data ?? []}
+      {groups}
       libraryItems={itemsQuery.data?.items ?? []}
     />{/key}
 {:else}<p class="text-muted">Select a collection from the sidebar</p>{/if}

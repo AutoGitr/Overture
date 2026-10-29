@@ -29,14 +29,17 @@ const members = [
   mediaItem({ id: 2, title: "Second", library_id: "movies", server_item_id: "m2" }),
 ];
 const third = mediaItem({ id: 3, title: "Third", library_id: "other", server_item_id: "m3" });
+// Append keeps members chosen by hand as well as what the criteria match.
+const rule = collectionRule({ sync_mode: "append" });
 const detail = collectionDetail({
   id: 12,
   title: "Saga",
   library_id: "movies",
   members,
   child_count: 2,
+  rule,
+  effective_sync_mode: "append",
 });
-const rule = collectionRule();
 const capabilities = collectionCapabilities();
 
 /** Add a source condition to the criteria and fill in its one input. */
@@ -73,6 +76,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, withheld: true },
     });
@@ -87,6 +91,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: 2 },
@@ -113,6 +118,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": ({ init }: { init: RequestInit }) => {
         if (init.method === "PUT") {
@@ -173,6 +179,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": ["default-decades", "Weekend"],
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? { ...detail, collection_group: "Weekend" } : detail),
@@ -184,7 +191,12 @@ describe("collection management", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     expect(
-      JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
+      JSON.parse(
+        String(
+          calls.find((call) => call.init.method === "PUT" && !call.url.includes("/rule"))?.init
+            .body,
+        ),
+      ),
     ).toMatchObject({ collection_group: "Weekend" });
   });
 
@@ -192,6 +204,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": ["Weekend"],
       "/api/collections/12": detail,
     });
@@ -211,6 +224,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, rule: { ...rule, sync_mode: "sync" } },
     });
     renderWithQueryClient(CollectionPage);
@@ -224,6 +238,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/collections/12/art/poster/sources": { sources: {}, current_url: null },
@@ -242,6 +257,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/groups": [],
@@ -255,6 +271,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/library/libraries": [
         { id: "movies", title: "Movies", count: 2 },
         { id: "other", title: "Other", count: 1 },
@@ -272,6 +289,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
       "/api/collections/groups": [],
     });
@@ -283,7 +301,12 @@ describe("collection management", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
     expect(
-      JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
+      JSON.parse(
+        String(
+          calls.find((call) => call.init.method === "PUT" && !call.url.includes("/rule"))?.init
+            .body,
+        ),
+      ),
     ).toMatchObject({ tmdb_collection_id: 99 });
   });
 
@@ -297,6 +320,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/12": selected,
       "/api/collections/12/art/poster": {
         poster_url: null,
@@ -321,6 +345,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
@@ -339,7 +364,6 @@ describe("collection management", () => {
     ).toMatchObject({
       title: "Saga",
       library_id: "movies",
-      member_ids: [],
       rule: {
         criteria: {
           mode: "all",
@@ -358,6 +382,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: members.length },
@@ -384,6 +409,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, members: all },
       "/api/library/items": { items: all, total: all.length },
@@ -411,6 +437,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, members: [members[0]] },
       "/api/library/items": { items: members, total: 2 },
@@ -430,6 +457,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", count: 2 },
@@ -458,7 +486,6 @@ describe("collection management", () => {
     ).toMatchObject({
       title: "Saga",
       library_id: "other",
-      member_ids: [],
       rule: {
         criteria: {
           mode: "all",
@@ -475,6 +502,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
@@ -504,13 +532,13 @@ describe("collection management", () => {
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
-      "/api/collections/12/rule": ({ init }: { init: RequestInit }) =>
-        Response.json(init.method === "DELETE" ? { status: "deleted" } : rule),
+      "/api/collections/12/rule": rule,
     });
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
-    await fireEvent.click(await screen.findByLabelText("Criteria"));
-    await addSource("mdblist", "Criteria condition 1 MDBList lists", "user/list");
+    await fireEvent.input(await screen.findByLabelText("Criteria condition 1 MDBList lists"), {
+      target: { value: "user/other" },
+    });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Save and Sync" })).toBeEnabled(),
@@ -522,6 +550,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
       "/api/collections/12/art/background/sources": { sources: {}, current_url: null },
@@ -541,6 +570,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: members.length },
@@ -605,6 +635,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
@@ -619,8 +650,9 @@ describe("collection management", () => {
     await fireEvent.input(screen.getByLabelText("Summary"), {
       target: { value: "Unsaved summary" },
     });
-    await fireEvent.click(screen.getByLabelText("Criteria"));
-    await addSource("mdblist", "Criteria condition 1 MDBList lists", "draft/list");
+    await fireEvent.input(screen.getByLabelText("Criteria condition 1 MDBList lists"), {
+      target: { value: "draft/list" },
+    });
     await fireEvent.click(screen.getByTitle("Unmonitored - click to monitor"));
     await screen.findByTitle("Monitored - click to unmonitor");
     expect(screen.getByLabelText("Criteria condition 1 MDBList lists")).toHaveValue("draft/list");
@@ -632,6 +664,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/12": detail,
       "/api/collections/groups": [],
       "/api/library/libraries": [],
@@ -656,6 +689,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, collection_group: "Weekend" },
       "/api/collections/groups": ["Weekend"],
       "/api/library/libraries": [],
@@ -689,6 +723,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
         Response.json(
           init.method === "PUT"
@@ -711,6 +746,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, rule },
       "/api/collections/groups": [],
       "/api/library/libraries": [],

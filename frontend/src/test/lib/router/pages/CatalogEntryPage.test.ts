@@ -179,7 +179,6 @@ describe("catalog detail drafts", () => {
       renderWithQueryClient(CatalogEntryPage);
       await screen.findByRole("heading", { name: "TMDB" });
       expect(screen.queryByRole("heading", { name: "OVERTUREDB" })).toBeNull();
-      expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
       expect(screen.getByRole("link", { name: "TMDb" })).toContainElement(
         screen.getByAltText("TMDb"),
       );
@@ -191,17 +190,12 @@ describe("catalog detail drafts", () => {
       expect(await screen.findAllByRole("heading", { name: "OVERTUREDB" })).toHaveLength(1);
       expect(screen.queryByRole("heading", { name: "CATALOG" })).toBeNull();
       expect(screen.queryByRole("heading", { name: "DRAFT" })).toBeNull();
-      expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
-        "title",
-        "Contribute to OvertureDB",
-      );
       await fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
       await waitFor(() => expect(screen.queryByRole("heading", { name: "OVERTUREDB" })).toBeNull());
-      expect(screen.queryByRole("link", { name: "GitHub" })).toBeNull();
     },
   );
 
-  it("saves a poster draft, contributes it, and discards it without changing the library", async () => {
+  it("saves a poster draft and discards it without changing the library", async () => {
     settingsState.load(appSettings({ tmdb_configured: true }));
     const { calls } = server(catalogDetail({ library_item_id: 9 }));
     renderWithQueryClient(CatalogEntryPage);
@@ -209,8 +203,6 @@ describe("catalog detail drafts", () => {
       await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
     );
     expect(await screen.findByText("Draft", { selector: ".badge" })).toBeInTheDocument();
-    const issue = new URL(screen.getByRole("link", { name: "GitHub" }).getAttribute("href") ?? "");
-    expect(issue.searchParams.get("poster_url")).toBe(poster);
     expect(
       calls
         .filter((call) => call.init.method === "PUT")

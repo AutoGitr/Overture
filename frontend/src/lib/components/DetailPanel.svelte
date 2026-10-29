@@ -5,14 +5,10 @@
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
-  import githubIcon from "../../assets/icons/github.svg";
   import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { createSeasonsQuery } from "../rest/queries";
-  import {
-    getPublicDatasetRecordOptions,
-    getPublicDatasetStatusOptions,
-  } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { getPublicDatasetStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import {
     goToItemView,
     goToCatalogEntry,
@@ -28,11 +24,6 @@
   import { uiState } from "../stores/uiState.svelte";
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
-  import {
-    buildContributionIssueUrl,
-    hasContributionValues,
-    selectionMatchesPublicDataset,
-  } from "../utils/publicDataset";
   import { catalogStatus, hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
   import CollectionBadge from "./CollectionBadge.svelte";
   import ArtPanel from "./ArtPanel.svelte";
@@ -46,7 +37,6 @@
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import ThemePanel from "./ThemePanel.svelte";
   import ThemeStatus from "./ThemeStatus.svelte";
-  import DataStatus from "./DataStatus.svelte";
 
   let {
     item = null,
@@ -77,44 +67,12 @@
   let drillSeason = $derived(
     view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
   );
-  const publicDatasetRecordQuery = createQuery(() => ({
-    ...getPublicDatasetRecordOptions({ path: { item_id: item?.id ?? 0 } }),
-    enabled: datasetEnabled && !!item?.id,
-  }));
-  let publicDatasetRecord = $derived(
-    publicDatasetRecordQuery.data?.found ? publicDatasetRecordQuery.data : null,
-  );
-  let publicDatasetRecordLoaded = $derived(
-    !datasetEnabled || !item?.id || publicDatasetRecordQuery.isSuccess,
-  );
   /** Which art tabs hold a saved selection to forget. */
   let savedArt = $derived({
     poster: !!(catalogEntry ?? item)?.poster_url,
     background: !!(catalogEntry ?? item)?.background_url,
     seasons: (catalogEntry?.seasons ?? seasons).some((season) => !!season.poster_url),
   });
-
-  let repoUrl = $derived(datasetQuery.data?.repo_url ?? "");
-  let contributionUrl = $derived.by(() => {
-    const selection = catalogEntry ?? item;
-    return repoUrl && selection ? buildContributionIssueUrl(repoUrl, selection, seasons) : "";
-  });
-  let contributionMatchesOvertureDb = $derived(
-    selectionMatchesPublicDataset(item, seasons, publicDatasetRecord),
-  );
-  let showContributionLink = $derived(
-    !!contributionUrl &&
-      (detail
-        ? !!detail.draft
-        : hasContributionValues(item, seasons) &&
-          publicDatasetRecordLoaded &&
-          !contributionMatchesOvertureDb),
-  );
-
-  function openContributionIssue(event: MouseEvent) {
-    event.preventDefault();
-    window.open(contributionUrl, "_blank", "noopener,noreferrer");
-  }
 
   let artStatuses = $derived(
     Object.fromEntries(
@@ -261,15 +219,6 @@
         libraryCollectionId={item.library_collection_id}
         {datasetEnabled}
       />{/if}
-    {#if showContributionLink}
-      <IdBadge
-        href={contributionUrl}
-        title={["Contribute to OvertureDB", ...(item?.contribution_warnings ?? [])].join("\n")}
-        icon={githubIcon}
-        alt="GitHub"
-        onclick={openContributionIssue}
-      />
-    {/if}
   {/snippet}
 
   {#snippet tabs()}
@@ -316,15 +265,6 @@
   {#snippet subtabActions()}<PasteArtButton />{/snippet}
 
   {#snippet content()}
-    {#if datasetEnabled && item}
-      <DataStatus
-        label="OvertureDB record"
-        error={publicDatasetRecordQuery.error}
-        hasData={publicDatasetRecordQuery.data !== undefined}
-        loading={publicDatasetRecordQuery.isFetching}
-        onretry={() => publicDatasetRecordQuery.refetch()}
-      />
-    {/if}
     {#if view.mode === "art"}
       {#if view.artSubTab === "seasons" && view.drillSeasonNum === null}
         <SeasonGrid {item} {preview} {catalog} />
@@ -332,13 +272,7 @@
         <ArtPanel {item} {preview} {catalog} {artType} drillSeasonNum={view.drillSeasonNum} />
       {/if}
     {:else}
-      <ThemeStatus
-        status={catalogEntry?.youtube_id_overturedb
-          ? "selected"
-          : (item?.theme_status ?? "missing")}
-        duration={item?.theme_duration}
-        title={item?.youtube_title}
-      />
+      <ThemeStatus duration={item?.theme_duration} title={item?.youtube_title} />
       {#key subjectKey}
         <ThemePanel {item} {preview} {catalog} />
       {/key}

@@ -6,9 +6,13 @@
   import {
     getPublicDatasetStatusOptions,
     getCatalogCountsOptions,
+    getSettingsOptions,
     setPublicDatasetEnabledMutation,
     syncPublicDatasetNowMutation,
+    updateSettingsMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { invalidateTags } from "../rest/cache";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { discardDrafts, draftedEntries } from "../utils/catalogDrafts";
   import { publicDatasetSyncState } from "../stores/jobStates.svelte";
@@ -31,6 +35,14 @@
   const queryClient = useQueryClient();
 
   let publicDatasetEnabled = $state(false);
+  /** The OvertureDB settings the app settings hold, edited here. */
+  let noTheme = $state(settingsState.current.overturedb_no_theme);
+  let browse = $state(settingsState.current.overturedb_browse);
+  let settingsDirty = $derived(
+    noTheme !== settingsState.current.overturedb_no_theme ||
+      browse !== settingsState.current.overturedb_browse,
+  );
+  const saveSettingsRequest = createMutation(() => updateSettingsMutation());
   const feedback = createNotifier();
   const exportRequest = createMutation(() => ({
     mutationFn: async () => (await exportPublicDatasetSelections({ throwOnError: true })).data,
@@ -75,9 +87,10 @@
   let draftInitialised = false;
   let publicDatasetStatus = $derived<PublicDatasetStatus | null>(datasetQuery.data ?? null);
   let savedEnabled = $derived(!!publicDatasetStatus?.enabled);
-  let dirty = $derived(publicDatasetEnabled !== savedEnabled);
+  let enabledDirty = $derived(publicDatasetEnabled !== savedEnabled);
   let stats = $derived(publicDatasetStatus?.last_stats ?? null);
   const saveEnabledRequest = createMutation(() => setPublicDatasetEnabledMutation());
+  let saving = $derived(saveEnabledRequest.isPending || saveSettingsRequest.isPending);
   const syncRequest = createMutation(() => syncPublicDatasetNowMutation());
   // A sync always runs for a while, so show it from the click instead of after a settle delay.
   let publicDatasetBusy = $derived(syncRequest.isPending || publicDatasetSyncState.running);
@@ -94,17 +107,27 @@
   }
 
   async function save() {
-    if (saveEnabledRequest.isPending || !publicDatasetStatus || datasetQuery.error) return;
+    if (saving || !publicDatasetStatus || datasetQuery.error) return;
     feedback.clear();
     try {
-      const status = await saveEnabledRequest.mutateAsync({
-        body: { enabled: publicDatasetEnabled },
-      });
-      queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, status);
-      publicDatasetEnabled = status.enabled;
-      feedback.success(status.enabled ? "OvertureDB enabled." : "OvertureDB disabled.");
+      if (settingsDirty) {
+        const fresh = await saveSettingsRequest.mutateAsync({
+          body: { overturedb_no_theme: noTheme, overturedb_browse: browse },
+        });
+        queryClient.setQueryData(getSettingsOptions().queryKey, fresh);
+        // Theme completeness of titles and collections follows the flag setting.
+        void invalidateTags(["library", "collections"]);
+      }
+      if (enabledDirty) {
+        const status = await saveEnabledRequest.mutateAsync({
+          body: { enabled: publicDatasetEnabled },
+        });
+        queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, status);
+        publicDatasetEnabled = status.enabled;
+      }
+      feedback.success("OvertureDB settings saved.");
     } catch (err) {
-      publicDatasetEnabled = !!publicDatasetStatus?.enabled;
+      publicDatasetEnabled = savedEnabled;
       feedback.error(errorMessage(err, "Failed to save OvertureDB settings"));
     }
   }
@@ -136,15 +159,27 @@
     />
     {#if publicDatasetStatus}
       <div class="option-card">
-        <span class="form-label">Dataset</span>
+        <span class="form-label">Settings</span>
         <div class="options-col">
           <label class="form-row justify-between">
             <span>Enable OvertureDB</span>
             <input
               type="checkbox"
               bind:checked={publicDatasetEnabled}
-              disabled={saveEnabledRequest.isPending || publicDatasetBusy || !!datasetQuery.error}
+              disabled={saving || publicDatasetBusy || !!datasetQuery.error}
             />
+          </label>
+          <label class="form-row justify-between">
+            <span>Trust OvertureDB's No theme flag</span>
+            <input type="checkbox" bind:checked={noTheme} disabled={saving || !publicDatasetEnabled} />
+          </label>
+          <span class="hint"
+            >A title OvertureDB marks as having no theme music counts as complete, and theme runs
+            skip it.</span
+          >
+          <label class="form-row justify-between">
+            <span>Browse OvertureDB in the sidebar</span>
+            <input type="checkbox" bind:checked={browse} disabled={saving || !publicDatasetEnabled} />
           </label>
         </div>
       </div>
@@ -190,7 +225,7 @@
           <button
             class="btn btn-secondary btn-sm self-start"
             onclick={syncPublicDatasetNow}
-            disabled={!savedEnabled || publicDatasetBusy || dirty || !!datasetQuery.error}
+            disabled={!savedEnabled || publicDatasetBusy || enabledDirty || !!datasetQuery.error}
           >
             {publicDatasetBusy ? "Syncing..." : "Sync OvertureDB Now"}
           </button>
@@ -280,9 +315,9 @@
     <PendingButton
       class="btn btn-primary"
       onclick={save}
-      pending={saveEnabledRequest.isPending}
+      pending={saving}
       pendingLabel="Saving..."
-      disabled={!dirty || !publicDatasetStatus || !!datasetQuery.error}
+      disabled={!(enabledDirty || settingsDirty) || !publicDatasetStatus || !!datasetQuery.error}
     >
       Save
     </PendingButton>

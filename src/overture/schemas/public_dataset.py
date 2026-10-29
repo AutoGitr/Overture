@@ -102,6 +102,7 @@ class PublicDatasetRecordItem(StrictBaseModel):
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    no_theme: bool = False
     catalog_synced_at: datetime | None = None
 
 
@@ -124,6 +125,7 @@ class PublicDatasetRecordCollection(StrictBaseModel):
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
+    no_theme: bool = False
     catalog_synced_at: datetime | None = None
 
 

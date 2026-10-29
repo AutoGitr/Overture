@@ -1,5 +1,5 @@
 import { expect, logIn, test } from "./fixtures";
-import { appSettings, collectionDetail, mediaItem } from "../helpers/fixtures";
+import { appSettings, collectionDetail, collectionRule, mediaItem } from "../helpers/fixtures";
 
 const first = mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" });
 const second = mediaItem({ id: 2, title: "Second", library_id: "movies", server_item_id: "m2" });
@@ -60,22 +60,26 @@ test("a collection set previews and creates its collections without horizontal o
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   await page
-    .getByRole("group", { name: "Collection form actions" })
-    .getByRole("button", { name: "Create", exact: true })
+    .getByRole("group", { name: "Save", exact: true })
+    .getByRole("button", { name: "Save and Create", exact: true })
     .click();
   await expect
     .poll(() => saved)
-    .toMatchObject({ generator: { dimension: "decade", library_id: "movies" } });
+    .toMatchObject({ generator: { dimension: "decade", library_ids: ["movies"] } });
   await expect(page).toHaveURL(/movies\/collections(\?|$)/);
 });
 
 test("collection members, metadata and rule views work on desktop and mobile", async ({ page }) => {
+  // Append keeps members chosen by hand next to what the criteria match.
+  const rule = collectionRule({ sync_mode: "append" });
   let detail = collectionDetail({
     id: 12,
     title: "Saga",
     library_id: "movies",
     child_count: 2,
     members: [first, second],
+    rule,
+    effective_sync_mode: "append",
   });
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
@@ -92,6 +96,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await page.route("**/api/collections/groups?*", (route) =>
     route.fulfill({ json: ["default-decades", "Weekend"] }),
   );
+  await page.route("**/api/collections/12/rule?*", (route) => route.fulfill({ json: rule }));
   await page.route("**/api/collections/12/art/*/sources?*", (route) =>
     route.fulfill({ json: { sources: {}, current_url: null } }),
   );
@@ -109,9 +114,9 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await page.goto("/movies/collections/12-saga");
   const title = page.getByLabel("Title", { exact: true });
   await title.fill("");
-  await page.getByRole("button", { name: "Setup", exact: true }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(title).toBeFocused();
+  // Save stays unavailable, and says why, until the form can be saved.
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(page.getByRole("status").filter({ hasText: "Enter a title" })).toBeVisible();
   await title.fill("Saga");
   await page.getByRole("link", { name: "Members", exact: true }).click();
   await page.getByRole("button", { name: "Move First down", exact: true }).click();
@@ -133,14 +138,10 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     .click();
   await expect(page.getByRole("heading", { name: "Curated saga", exact: true })).toBeVisible();
   await views.getByRole("link", { name: "Content", exact: true }).click();
-  await page
-    .getByRole("radiogroup", { name: "Members", exact: true })
-    .getByText("Criteria", { exact: true })
-    .click();
-  await expect(page.getByLabel("Sync mode", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Sync mode", { exact: true })).toHaveValue("append");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
-  await page.getByLabel("Criteria condition 1 field", { exact: true }).selectOption("field:year");
-  await page.getByLabel("Criteria condition 1 value", { exact: true }).fill("1990");
+  await page.getByLabel("Criteria condition 2 field", { exact: true }).selectOption("field:year");
+  await page.getByLabel("Criteria condition 2 value", { exact: true }).fill("1990");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
   const actions = page.getByRole("group", { name: "Record actions", exact: true });
@@ -168,7 +169,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(actions.getByRole("button")).toHaveCount(3);
   await modes.getByRole("tab", { name: "Configure", exact: true }).click();
   await views.getByRole("link", { name: "Content", exact: true }).click();
-  await expect(page.getByLabel("Criteria condition 1 value", { exact: true })).toHaveValue("1990");
+  await expect(page.getByLabel("Criteria condition 2 value", { exact: true })).toHaveValue("1990");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
@@ -198,7 +199,6 @@ test("collection creation uses the selected library and TMDB list sources", asyn
       expect(route.request().postDataJSON()).toMatchObject({
         title: "New collection",
         library_id: "movies",
-        member_ids: [],
         rule: {
           criteria: {
             conditions: [
@@ -216,7 +216,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   });
   await logIn(page);
   await page.goto("/movies/collections");
-  await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
+  await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Movies", exact: true })).toBeChecked();
@@ -358,12 +358,12 @@ test("creating again opens a fresh draft and multiple libraries require a choice
   );
   await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
   await logIn(page, "/movies/collections");
-  await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
+  await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Other", exact: true })).not.toBeChecked();
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
   if (await page.getByRole("button", { name: "Toggle sidebar" }).isVisible())
     await page.getByRole("button", { name: "Toggle sidebar" }).click();
-  await page.getByRole("button", { name: "+ Create collection", exact: true }).click();
+  await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
   await expect(page.getByRole("checkbox", { name: "Other", exact: true })).not.toBeChecked();
 });
@@ -410,7 +410,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await logIn(page, "/movies/collections/new");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
-  await setup.getByRole("checkbox", { name: "Other", exact: true }).check();
+  await setup.getByRole("checkbox", { name: "Other movies", exact: true }).check();
   await setup.getByText("One per value", { exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Configure sections" })).toHaveCount(0);
   const submit = page.getByRole("button", { name: "Save and Create", exact: true });
@@ -453,12 +453,12 @@ test("smart collections combine list sources and live criteria", async ({ page }
     kind: "smart",
   });
   let created = false;
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/collections", (route) => {
+  // Creating posts to the list's own URL, with ?to_server.
+  await page.route("**/api/collections?*", (route) => {
+    if (route.request().method() !== "POST") return route.fulfill({ json: [] });
     expect(route.request().postDataJSON()).toMatchObject({
       title: "Unwatched favorites",
       library_id: "movies",
-      member_ids: [],
       collection_filtering: "user",
       active_start_mmdd: "12-01",
       active_end_mmdd: "01-05",
@@ -536,7 +536,10 @@ test("group management saves and applies defaults separately from an unsaved col
     applied = true;
     return route.fulfill({ json: { collection_ids: [12], errors: {} } });
   });
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  // Save and Apply needs the group to hold a collection.
+  await page.route("**/api/collections?*", (route) =>
+    route.fulfill({ json: [collectionDetail({ id: 12, collection_group: "Weekend" })] }),
+  );
   await logIn(page, "/movies/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });

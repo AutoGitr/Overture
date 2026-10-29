@@ -184,12 +184,10 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   await expect(page.getByRole("heading", { name: "TMDB", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /^(CATALOG|DRAFT)$/ })).toHaveCount(0);
-  await expect(page.getByTitle("Contribute to OvertureDB", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open in library", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Use artwork 1000x1500 from tmdb" }).click();
   await expect(page.getByRole("button", { name: "Discard draft" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toBeVisible();
-  await expect(page.getByTitle("Contribute to OvertureDB", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear poster", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear artwork", exact: true })).toHaveCount(0);
   if (isMobile) await page.getByLabel("Toggle sidebar").click();
@@ -209,7 +207,6 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   await page.getByRole("button", { name: "Discard draft" }).click();
   await expect(page.getByRole("button", { name: "Discard draft" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toHaveCount(0);
-  await expect(page.getByTitle("Contribute to OvertureDB", { exact: true })).toHaveCount(0);
   if (isMobile) await page.getByLabel("Toggle sidebar").click();
   await expect(page.getByText("No catalog entries found", { exact: true })).toBeVisible();
   await page

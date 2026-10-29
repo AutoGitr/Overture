@@ -85,6 +85,8 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_request_missing: bool | None = None
     collection_import_unmanaged: bool | None = None
     collection_require_group: bool | None = None
+    overturedb_no_theme: bool | None = None
+    overturedb_browse: bool | None = None
     tmdb_region: str | None = None
     radarr_root_folder: str | None = None
     radarr_quality_profile_id: int | None = None

@@ -11,6 +11,7 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.public_dataset import PublicDatasetCollection, PublicDatasetItem
 lazy from ...db.models.season import Season
+lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ArtType, ThemeBulkSource
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
@@ -82,6 +83,8 @@ class PublicDatasetIndex:
     collections: dict[int, PublicDatasetCollection] = field(
         default_factory=dict[int, PublicDatasetCollection]
     )
+    #: Whether the user lets OvertureDB's No theme flag count as a theme.
+    trust_no_theme: bool = True
 
     @classmethod
     async def build_collections(
@@ -104,7 +107,12 @@ class PublicDatasetIndex:
                 if row.tmdb_collection_id is not None
             }
         )
-        return cls({}, {}, collections=entries)
+        return cls(
+            {},
+            {},
+            collections=entries,
+            trust_no_theme=(await get_app_settings(session)).overturedb_no_theme,
+        )
 
     @classmethod
     def empty(cls, *, enabled: bool = True) -> Self:
@@ -131,7 +139,11 @@ class PublicDatasetIndex:
                 if public_item.id is not None
             }
         )
-        return cls(matched, season_posters)
+        return cls(
+            matched,
+            season_posters,
+            trust_no_theme=(await get_app_settings(session)).overturedb_no_theme,
+        )
 
     def art_url(
         self,
@@ -170,7 +182,12 @@ class PublicDatasetIndex:
             if isinstance(item, MediaCollection)
             else self.items.get(item.id or 0)
         )
-        return self.enabled and public_item is not None and public_item.no_theme
+        return (
+            self.enabled
+            and self.trust_no_theme
+            and public_item is not None
+            and public_item.no_theme
+        )
 
     def theme(
         self,

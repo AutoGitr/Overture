@@ -165,10 +165,10 @@
     display: flex;
   }
 
+  /* A plain scrim: a blur behind the popup is recomputed on every repaint
+     inside it, which made its dropdowns slow to open. */
   .popup-overlay::backdrop {
     background: var(--surface-overlay);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
   }
 
   .popup-content {

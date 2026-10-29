@@ -13,7 +13,7 @@ lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..domain import ArtSource, ArtType, AssetStatus, MediaType, ThemeIdSource
-lazy from ..utils.art_urls import art_preview_url, art_refusals, selected_art_source
+lazy from ..utils.art_urls import art_preview_url, selected_art_source
 lazy from ..utils.security import strip_sensitive_url
 lazy from .base import StrictBaseModel
 lazy from .common import SaveSelectionResponse
@@ -60,8 +60,6 @@ class MediaItemRead(StrictBaseModel):
     background_width: int | None = None
     background_height: int | None = None
     has_incorrect_aspect_ratio: bool = False
-    #: Why OvertureDB would refuse the selected art, slot by slot.
-    contribution_warnings: list[str] = Field(default_factory=list[str])
 
     # Theme
     youtube_id: str | None = None
@@ -200,7 +198,6 @@ def media_item_read_from_model(
             # Only a remote poster is shown in place of a file, at preview size.
             "poster_preview_url": _preview_url(poster, ArtType.POSTER),
             "poster_source": selected_art_source(poster.url),
-            "contribution_warnings": art_refusals(poster.url, background.url),
             "background_source": selected_art_source(background.url),
             **asdict(art_completion(item, seasons)),
             "theme_duration": item.theme_file_duration or item.youtube_duration,

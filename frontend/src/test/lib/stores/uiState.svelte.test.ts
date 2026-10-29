@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { hasVisibleActiveFilters } from "../../../lib/utils/sidebarDomain";
+import { activeFilterCount } from "../../../lib/utils/sidebarDomain";
 
 describe("uiState popups", () => {
   it("never reflects the open popup in the URL (path, hash, or search params)", async () => {
@@ -74,7 +74,7 @@ describe("uiState persisted filters", () => {
       resolution: { artType: "poster", min: null, max: null },
       themeLength: { min: 30, max: null },
     });
-    expect(hasVisibleActiveFilters(uiState.currentFilters, true, "items")).toBe(true);
+    expect(activeFilterCount(uiState.currentFilters, true, "items")).toBeGreaterThan(0);
   });
 
   it("persists filters for the next session", async () => {

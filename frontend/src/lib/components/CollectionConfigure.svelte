@@ -5,6 +5,7 @@
     LibrarySectionRead,
   } from "../../generated/rest/types.gen";
   import { route } from "../router/routes";
+  import { revealSection } from "../utils/revealSection";
   import { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
   import CollectionDefinition from "./CollectionDefinition.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
@@ -44,11 +45,7 @@
 
   // A section link may open this view, so show the section it names once it renders.
   $effect(() => {
-    const section = route.hash.startsWith(`#${formId}-`)
-      ? document.getElementById(route.hash.slice(1))
-      : null;
-    section?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click();
-    section?.focus();
+    if (route.hash.startsWith(`#${formId}-`)) revealSection(route.hash.slice(1));
   });
 </script>
 
@@ -73,6 +70,7 @@
     onsubmit={(event) => {
       event.preventDefault();
       // Enter submits with the first button, Save.
+      if (editor.blocker) return;
       syncing = event.submitter instanceof HTMLButtonElement && event.submitter.value === "sync";
       void editor.save(syncing);
     }}
@@ -89,6 +87,7 @@
           title="Content"
           description="What the set makes a collection for, and what every one needs."
           busy={set.busy}
+          disabled={!set.libraryIds.length}
         >
           <CollectionSetEditor
             generator={set.generator}
@@ -119,6 +118,7 @@
           title="Settings"
           description="The set's group defaults, which each of its collections inherits."
           busy={set.busy}
+          disabled={!set.libraryIds.length}
         >
           <CollectionPolicyFields
             policy={set.setPolicy}
@@ -146,6 +146,7 @@
           title="Schedule"
           description="When the set syncs, and when its collections are active each year."
           busy={set.busy}
+          disabled={!set.libraryIds.length}
         >
           <CollectionScheduleFields
             policy={set.setPolicy}
@@ -161,10 +162,10 @@
       <PendingButton
         type="submit"
         class="btn btn-primary"
-        title="Save in Overture without changing the server"
+        title={editor.blocker ?? "Save in Overture without changing the server"}
         pending={editor.busy}
         pendingLabel={syncing ? undefined : "Saving..."}
-        disabled={editor instanceof CollectionDraft && !editor.canSubmit}
+        disabled={!!editor.blocker}
       >
         Save
       </PendingButton>
@@ -172,12 +173,14 @@
         type="submit"
         value="sync"
         class="btn btn-secondary"
+        title={editor.blocker ?? undefined}
         pending={editor.busy}
         pendingLabel={syncing ? (onServer ? "Syncing..." : "Creating...") : undefined}
-        disabled={editor instanceof CollectionDraft && !editor.canSubmit}
+        disabled={!!editor.blocker}
       >
         {onServer ? "Save and Sync" : "Save and Create"}
       </PendingButton>
+      {#if editor.blocker}<span class="hint" role="status">{editor.blocker}</span>{/if}
     </div>
   </form>
 </WorkflowSections>

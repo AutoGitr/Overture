@@ -58,7 +58,7 @@
   </button>
 {/snippet}
 
-{#if datasetEnabled}
+{#if datasetEnabled && settingsState.current.overturedb_browse}
   <SegmentedControl
     label="Sidebar source"
     options={[

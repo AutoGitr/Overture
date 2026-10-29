@@ -35,9 +35,7 @@ async def plan_collection_themes(
 ) -> AssetPlan[None]:
     """Plan bounded collection pages using the same skip rules as item themes."""
     plan = AssetPlan[None]()
-    if not params.collection_scope and (
-        not params.include_collections or params.item_ids is not None
-    ):
+    if not params.collection_scope:
         return plan
     after = 0
     while True:
@@ -46,7 +44,6 @@ async def plan_collection_themes(
                 after=after,
                 collection_ids=params.collection_ids,
                 collection_groups=params.collection_groups,
-                library_ids=params.library_ids,
                 include_unmonitored=params.include_unmonitored,
             )
             index = await PublicDatasetIndex.build_collections(

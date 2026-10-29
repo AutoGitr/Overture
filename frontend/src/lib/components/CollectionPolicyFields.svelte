@@ -65,6 +65,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
+  import FieldRow from "./FieldRow.svelte";
   import InheritedSelect from "./InheritedSelect.svelte";
 
   let {
@@ -94,7 +95,7 @@
     arr?: string | null;
     /** The server takes labels Overture puts on members. */
     memberLabels?: boolean;
-    /** Fields placed right after Sort. */
+    /** Fields placed right after Sort, under Display. */
     children?: Snippet;
   } = $props();
 
@@ -103,18 +104,8 @@
   let sorts = $derived(sortedOrders(orders).map((order) => [order, ORDER_LABELS[order]] as const));
 </script>
 
-<InheritedSelect
-  label="Sort"
-  {inherits}
-  bind:value={policy.order_type}
-  inherited={defaults?.order_type}
-  options={sorts}
-  hint={sortHint}
-/>
-
-{@render children?.()}
-
 {#if sync}
+  <h4 class="caps-label">Sync</h4>
   <InheritedSelect
     label="Sync mode"
     {inherits}
@@ -124,9 +115,9 @@
     hint="Sync removes members that stop matching; Append keeps them."
   />
 
-  <label class="form-label">
-    Minimum members
+  <FieldRow label="Minimum members" for={`${id}-minimum`}>
     <input
+      id={`${id}-minimum`}
       type="number"
       min="1"
       max="100"
@@ -138,7 +129,7 @@
           ? event.currentTarget.valueAsNumber
           : null)}
     />
-  </label>
+  </FieldRow>
 
   <InheritedSelect
     label="Below minimum"
@@ -147,6 +138,7 @@
     inherited={defaults?.delete_below_minimum}
     options={DELETE_KEEP}
   />
+  <h4 class="caps-label">Automation</h4>
   <InheritedSelect
     label="Automatic art"
     {inherits}
@@ -206,6 +198,16 @@
   {/if}
 {/if}
 
+<h4 class="caps-label">Display</h4>
+<InheritedSelect
+  label="Sort"
+  {inherits}
+  bind:value={policy.order_type}
+  inherited={defaults?.order_type}
+  options={sorts}
+  hint={sortHint}
+/>
+{@render children?.()}
 {#if plex}
   <InheritedSelect
     label="Collection mode"
@@ -244,8 +246,11 @@
     options={SHOW_HIDE}
   />
   {#if inherits && sync}
-    <div class="form-label">
-      <label for={`${id}-home-order`}>Home order</label>
+    <FieldRow
+      label="Home order"
+      for={`${id}-home-order`}
+      hint="Promoted rows with a lower number come first."
+    >
       <input
         id={`${id}-home-order`}
         type="number"
@@ -258,11 +263,11 @@
             ? event.currentTarget.valueAsNumber
             : null)}
       />
-      <span class="hint">Promoted rows with a lower number come first.</span>
-    </div>
+    </FieldRow>
   {/if}
 {/if}
 
+<h4 class="caps-label">Titles</h4>
 <div class="form-label">
   <label for={`${id}-sort-title`}>Sort title</label>
   <input
@@ -276,7 +281,7 @@
     >Text or a template with &#123;title&#125; and &#123;group&#125;, such as 01_&#123;title&#125;.</span
   >
 </div>
-<div class="form-label form-wide">
+<div class="form-label">
   <label for={`${id}-summary`}>Summary</label>
   <textarea
     id={`${id}-summary`}
@@ -291,3 +296,9 @@
     first list's description or person's biography).</span
   >
 </div>
+
+<style>
+  h4 {
+    margin: 0;
+  }
+</style>

@@ -26,10 +26,9 @@
     disabled={target.busy}
   >
     {#if target.busy}
-      <LoaderCircle size={18} class="animate-spin" />
+      <LoaderCircle size={16} class="animate-spin" />
     {:else}
-      <ClipboardPaste size={18} />
+      <ClipboardPaste size={16} />
     {/if}
-    <span>Paste Art</span>
   </button>
 {/if}

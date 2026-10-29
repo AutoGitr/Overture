@@ -22,16 +22,13 @@ export type ArtAssetSource = ArtBulkSource;
 export type ThemeAssetSource = ThemeBulkSource;
 
 /** The persisted assets-workflow configuration shared by the popup's panels. */
-/** What an Assets run targets when it does not use the sidebar's items. */
-export type AssetsScope = "libraries" | "collections";
-
 export interface AssetsConfig {
   selectedLibraries: string[];
   useSidebarItems: boolean;
-  scope: AssetsScope;
-  /** Collection groups a Collections run covers; none means every collection. */
+  /** Every collection Overture manages joins the run. */
+  allCollections: boolean;
+  /** Collection groups that join the run, when not every collection does. */
   collectionGroups: string[];
-  includeCollections: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
   enableArt: boolean;
@@ -153,9 +150,9 @@ export interface BulkAssetsRequestParams {
   selectedLibraries: string[];
   itemIds?: number[];
   collectionIds?: number[];
-  /** Groups for a Collections run; an empty list means every collection. */
+  /** Collection groups beside the libraries; ignored with every collection. */
   collectionGroups?: string[];
-  includeCollections?: boolean;
+  allCollections?: boolean;
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
   skipRecentVal: number;
@@ -170,20 +167,15 @@ export interface BulkAssetsRequestParams {
 
 /** Build the bulk-assets start request from the current popup configuration. */
 export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAssetsRequest {
-  const { collectionGroups } = params;
-  const libraries =
-    params.itemIds === undefined &&
-    params.collectionIds === undefined &&
-    collectionGroups === undefined;
+  // A sidebar snapshot runs alone; otherwise libraries and collections combine.
+  const snapshot = params.itemIds !== undefined || params.collectionIds !== undefined;
+  const groups = snapshot || params.allCollections ? [] : (params.collectionGroups ?? []);
   return {
-    library_ids: libraries ? params.selectedLibraries : [],
+    library_ids: snapshot ? [] : params.selectedLibraries,
     ...(params.itemIds === undefined ? {} : { item_ids: [...params.itemIds] }),
     ...(params.collectionIds === undefined ? {} : { collection_ids: [...params.collectionIds] }),
-    ...(collectionGroups === undefined
-      ? {}
-      : collectionGroups.length
-        ? { collection_groups: [...collectionGroups] }
-        : { all_collections: true }),
+    ...(!snapshot && params.allCollections ? { all_collections: true } : {}),
+    ...(groups.length ? { collection_groups: [...groups] } : {}),
     include_unmonitored: params.includeUnmonitored,
     overwrite_existing: params.overwriteExisting,
     skip_recent_val: params.skipRecentVal,
@@ -195,12 +187,7 @@ export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAss
           threshold: params.threshold,
         }
       : null,
-    themes: params.enableThemes
-      ? {
-          source_order: params.activeThemeSources,
-          include_collections: params.includeCollections ?? false,
-        }
-      : null,
+    themes: params.enableThemes ? { source_order: params.activeThemeSources } : null,
   };
 }
 

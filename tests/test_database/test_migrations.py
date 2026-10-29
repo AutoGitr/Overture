@@ -1087,7 +1087,7 @@ def test_cron_schedules_member_effects_and_set_libraries_convert_both_ways() -> 
                     )
                 },
             )
-            command.upgrade(config, "head")
+            command.upgrade(config, "e6a1c2d3f4b5")
             assert conn.exec_driver_sql(
                 "SELECT collection_sync_schedule, tmdb_region FROM app_settings"
             ).one() == ("0 */6 * * *", "US")
@@ -1230,7 +1230,7 @@ def test_auto_advance_becomes_a_mode_and_require_group_defaults_off(
                     **_previous_settings(settings, id=1, auto_advance=enabled)
                 )
             )
-            command.upgrade(config, "head")
+            command.upgrade(config, "b4e8c2d6a9f1")
             assert connection.exec_driver_sql(
                 "SELECT auto_advance, collection_require_group FROM app_settings"
             ).all() == [(mode, 0)]
@@ -1265,5 +1265,146 @@ def test_catalog_rows_gain_an_unset_no_theme_flag_and_lose_it_again() -> None:
                 )
             }
             assert "no_theme" not in columns
+    finally:
+        engine.dispose()
+
+
+def test_overturedb_settings_start_on_and_sets_fold_removal_into_minimum() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "c5f9d3e7b1a2")
+            settings = Table("app_settings", MetaData(), autoload_with=connection)
+            connection.execute(
+                settings.insert().values(**_previous_settings(settings, id=1))
+            )
+            generator = {"dimension": "decade", "library_ids": ["movies"]}
+            connection.exec_driver_sql(
+                "INSERT INTO collection_groups "
+                "(id, server_type, media_type, name, generator_json) VALUES "
+                "(1, 'plex', 'movie', 'Decades', ?), (2, 'plex', 'movie', 'Genres', ?)",
+                (
+                    json.dumps({**generator, "remove_vanished": True}),
+                    json.dumps({**generator, "remove_vanished": False}),
+                ),
+            )
+            preset = {
+                "media_type": "movie",
+                "label": "Decades",
+                "set": {
+                    "group": "Decades",
+                    "policy": {},
+                    "generator": {"dimension": "decade", "remove_vanished": True},
+                },
+            }
+            connection.exec_driver_sql(
+                "INSERT INTO collection_presets "
+                "(id, media_type, label, description, payload_json) "
+                "VALUES (1, 'movie', 'Decades', '', ?)",
+                (json.dumps(preset),),
+            )
+            command.upgrade(config, "d8b3f6a2c9e4")
+            assert connection.exec_driver_sql(
+                "SELECT overturedb_no_theme, overturedb_browse FROM app_settings"
+            ).all() == [(1, 1)]
+            groups = connection.exec_driver_sql(
+                "SELECT delete_below_minimum, generator_json FROM collection_groups "
+                "ORDER BY id"
+            ).all()
+            assert [(row[0], json.loads(row[1])) for row in groups] == [
+                (1, generator),
+                (None, generator),
+            ]
+            saved = json.loads(
+                connection.exec_driver_sql(
+                    "SELECT payload_json FROM collection_presets"
+                ).scalar_one()
+            )
+            assert saved["set"]["policy"] == {"delete_below_minimum": True}
+            assert "remove_vanished" not in saved["set"]["generator"]
+
+            command.downgrade(config, "c5f9d3e7b1a2")
+            restored = [
+                json.loads(row[0])["remove_vanished"]
+                for row in connection.exec_driver_sql(
+                    "SELECT generator_json FROM collection_groups ORDER BY id"
+                )
+            ]
+            assert restored == [True, False]
+    finally:
+        engine.dispose()
+
+
+def test_rules_lose_their_schedule_and_assets_runs_combine_collections() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "d8b3f6a2c9e4")
+            settings = Table("app_settings", MetaData(), autoload_with=connection)
+            connection.execute(
+                settings.insert().values(
+                    **_previous_settings(settings, id=1, collection_require_group=False)
+                )
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO media_collections "
+                "(id, server_item_id, media_type, server_type, kind, title, "
+                "child_count, monitored, order_type, visible_home, visible_shared, "
+                "visible_library, unsynced) "
+                "VALUES (1, 'saga', 'movie', 'plex', 'regular', 'Saga', 0, 1, "
+                "'release.asc', 0, 0, 0, 0)"
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO collection_rules "
+                "(id, collection_id, criteria_json, smart, sync_schedule, "
+                "sync_enabled) "
+                "VALUES (1, 1, '{}', 0, '0 3 * * 0', 0)"
+            )
+            run = {
+                "library_ids": ["movies"],
+                "themes": {"source_order": ["overturedb"], "include_collections": True},
+            }
+            connection.exec_driver_sql(
+                "INSERT INTO saved_schedules "
+                "(id, kind, name, enabled, cron_expression, payload_json, state_json, "
+                "created_at, updated_at) "
+                "VALUES (1, 'assets', 'Nightly', 1, '0 2 * * *', ?, '{}', "
+                "'2026-01-01', '2026-01-01')",
+                (json.dumps(run),),
+            )
+            command.upgrade(config, "e9c4a7b1d3f5")
+            columns = {
+                row[1]
+                for row in connection.exec_driver_sql(
+                    "PRAGMA table_info(collection_rules)"
+                )
+            }
+            assert not {"sync_schedule", "sync_enabled"} & columns
+            assert json.loads(
+                connection.exec_driver_sql(
+                    "SELECT payload_json FROM saved_schedules"
+                ).scalar_one()
+            ) == {
+                "library_ids": ["movies"],
+                "all_collections": True,
+                "themes": {"source_order": ["overturedb"]},
+            }
+            assert connection.exec_driver_sql(
+                "SELECT collection_require_group FROM app_settings"
+            ).scalar_one()
+
+            command.downgrade(config, "d8b3f6a2c9e4")
+            assert (
+                json.loads(
+                    connection.exec_driver_sql(
+                        "SELECT payload_json FROM saved_schedules"
+                    ).scalar_one()
+                )
+                == run
+            )
     finally:
         engine.dispose()

@@ -40,6 +40,7 @@ lazy from overture.services.themes.collection_bulk import (
 )
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
+lazy from tests.collection_helpers import managing_rule
 lazy from tests.runtime_helpers import JobProbe
 
 
@@ -58,6 +59,8 @@ async def _seed(database: Database, *, saved: str | None = None) -> None:
                 last_synced_at=utc_now(),
             )
         )
+        await session.flush()
+        session.add(managing_rule(1))
         session.add(
             PublicDatasetCollection(
                 tmdb_id=10,
@@ -119,15 +122,15 @@ async def test_bulk_collection_scope_uses_catalog_order_and_never_searches_youtu
         assert jobs[0].media_item_id is None
 
 
-async def test_library_and_item_scopes_keep_collections_opt_in(
+async def test_collections_run_beside_libraries_only_when_chosen(
     *, app_config: Settings, database: Database
 ) -> None:
     await _seed(database)
     for params, total in [
         (BulkThemeRequest(library_ids=["movies"]), 0),
-        (BulkThemeRequest(library_ids=["movies"], include_collections=True), 1),
-        (BulkThemeRequest(library_ids=["elsewhere"], include_collections=True), 0),
-        (BulkThemeRequest(item_ids=[1], include_collections=True), 0),
+        (BulkThemeRequest(library_ids=["movies"], all_collections=True), 1),
+        (BulkThemeRequest(library_ids=["elsewhere"], all_collections=True), 1),
+        (BulkThemeRequest(item_ids=[1]), 0),
     ]:
         plan = await plan_collection_themes(
             params, app_config=app_config, database=database
@@ -250,3 +253,16 @@ async def test_jellyfin_restores_a_missing_theme_and_keeps_a_recorded_one(
         assert [job.target_url for job in jobs] == (
             [] if existing_file else ["savedTheme1"]
         )
+
+
+async def test_runs_leave_unmanaged_collections_alone(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed(database)
+    async with database.write_session() as session:
+        rule = await CollectionRepository(session).rule(1)
+        await session.delete(rule)
+    plan = await plan_collection_themes(
+        BulkThemeRequest(all_collections=True), app_config=app_config, database=database
+    )
+    assert plan.total == 0

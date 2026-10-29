@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Folders from "@lucide/svelte/icons/folders";
+  import LayersPlus from "@lucide/svelte/icons/layers-plus";
   import { createQuery } from "@tanstack/svelte-query";
   import { untrack } from "svelte";
   import type {
@@ -28,7 +30,7 @@
   import { downloadState } from "../stores/downloadState.svelte";
   import { sidebarState } from "../stores/sidebarState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
-  import { uiState } from "../stores/uiState.svelte";
+  import { defaultFilters, uiState } from "../stores/uiState.svelte";
   import { collectionImageUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import type {
     SidebarSortPreference,
@@ -67,6 +69,7 @@
 
   const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
   let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
+  let catalogBrowsable = $derived(datasetEnabled && settingsState.current.overturedb_browse);
 
   const collectionsQuery = createQuery(() => ({
     ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
@@ -79,16 +82,16 @@
 
   const catalogMovies = createQuery(() => ({
     ...listCatalogEntriesOptions({ query: { media_type: "movie" } }),
-    enabled: datasetEnabled && uiState.sidebarSource === "overturedb",
+    enabled: catalogBrowsable && uiState.sidebarSource === "overturedb",
   }));
   const catalogShows = createQuery(() => ({
     ...listCatalogEntriesOptions({ query: { media_type: "show" } }),
-    enabled: datasetEnabled && uiState.sidebarSource === "overturedb",
+    enabled: catalogBrowsable && uiState.sidebarSource === "overturedb",
   }));
   const catalogCollections = createQuery(() => ({
     ...listCatalogEntriesOptions({ query: { media_type: "collection" } }),
     enabled:
-      datasetEnabled &&
+      catalogBrowsable &&
       uiState.sidebarSource === "overturedb" &&
       uiState.sidebarMode === "collections",
   }));
@@ -232,7 +235,9 @@
   let collectionGroups = $derived([
     ...[
       ...new Set(
-        filteredCollections.flatMap((row) => (row.collection_group ? [row.collection_group] : [])),
+        filteredCollections.flatMap((row) =>
+          row.managed && row.collection_group ? [row.collection_group] : [],
+        ),
       ),
     ].sort(),
     ...(filteredCollections.some((row) => !row.managed) ? [UNMANAGED_GROUP] : []),
@@ -328,6 +333,7 @@
     title={group}
     count={filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, group)).length}
     {style}
+    locked={group === UNMANAGED_GROUP}
     onselect={() => openSidebarGroup(group)}
   />
 {/snippet}
@@ -363,17 +369,22 @@
     )}
     sortFields={searchingTmdb ? [] : sidebarDomain.sortMenu(sortScope)}
     filtersOpen={uiState.openPopup === "filters"}
-    hasActiveFilters={uiState.sidebarSource === "overturedb"
-      ? sidebarDomain.CATALOG_FILTER_KEYS.some(
+    activeFilters={uiState.sidebarSource === "overturedb"
+      ? sidebarDomain.CATALOG_FILTER_KEYS.filter(
           (key) =>
             (key !== "seasonPosters" || uiState.sidebarTab === "show") &&
             uiState.catalogFilters[key] !== "all",
-        )
-      : sidebarDomain.hasVisibleActiveFilters(
+        ).length
+      : sidebarDomain.activeFilterCount(
           uiState.currentFilters,
           datasetEnabled,
           uiState.sidebarMode,
         )}
+    onResetFilters={() => {
+      if (uiState.sidebarSource === "overturedb")
+        uiState.catalogFilters = sidebarDomain.defaultCatalogFilters();
+      else uiState.setFilters(defaultFilters());
+    }}
     searchQuery={uiState.searchQuery}
     searchField={uiState.searchField}
     sortField={sort.field}
@@ -392,12 +403,15 @@
   {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && settingsState.current.collections_supported}
     <div class="collection-actions">
       <button
-        class="btn btn-ghost btn-sm"
+        type="button"
+        class="btn btn-secondary btn-sm"
         onclick={() => openDetail(() => goToNewCollection(uiState.sidebarTab))}
-        >+ Create collection</button
+        ><LayersPlus size={14} />Create collection</button
       >
-      <button class="btn btn-ghost btn-sm" onclick={() => uiState.openCollectionGroups()}
-        >Groups</button
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        onclick={() => uiState.openCollectionGroups()}><Folders size={14} />Groups</button
       >
     </div>
   {/if}
@@ -419,8 +433,10 @@
   >
     {#key scrollKey}
       {#if uiState.sidebarSource === "overturedb"}
-        {#if !datasetEnabled}
-          <p class="text-muted">Enable OvertureDB to browse the catalog.</p>
+        {#if !catalogBrowsable}
+          <p class="text-muted">
+            Enable OvertureDB and its sidebar browsing to browse the catalog.
+          </p>
         {:else}
           <DataStatus
             label="catalog"
@@ -485,10 +501,13 @@
 
 <style>
   .collection-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: var(--space-2);
     padding: var(--space-2);
+  }
+  .collection-actions .btn {
+    min-width: 0;
   }
   .sidebar {
     width: var(--sidebar-width);

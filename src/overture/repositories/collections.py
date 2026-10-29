@@ -133,14 +133,17 @@ class CollectionRepository:
         after: int = 0,
         collection_ids: list[int] | None = None,
         collection_groups: list[str] | None = None,
-        library_ids: list[str] | None = None,
         include_unmonitored: bool = False,
         limit: int = CHUNK_SIZE,
     ) -> list[MediaCollection]:
-        """Return a bounded page of listed collections in the requested scope."""
+        """Return a bounded page of listed, managed collections in the scope.
+
+        Asset runs leave collections Overture does not manage as they are.
+        """
         stmt = select(MediaCollection).where(
             col(MediaCollection.id) > after,
             col(MediaCollection.last_synced_at).is_not(None),
+            col(MediaCollection.id).in_(select(CollectionRule.collection_id)),
         )
         if collection_ids is not None:
             stmt = stmt.where(col(MediaCollection.id).in_(collection_ids))
@@ -148,8 +151,6 @@ class CollectionRepository:
             stmt = stmt.where(
                 col(MediaCollection.collection_group).in_(collection_groups)
             )
-        if library_ids:
-            stmt = stmt.where(col(MediaCollection.library_id).in_(library_ids))
         if not include_unmonitored:
             stmt = stmt.where(col(MediaCollection.monitored).is_(True))
         return list(
@@ -242,7 +243,7 @@ class CollectionRepository:
         *,
         timestamp: datetime,
     ) -> int:
-        """Set the monitored flag of listed collections; return how many matched."""
+        """Set the monitored flag of listed, managed collections; count the matches."""
         updated = 0
         for batch in batched(set(collection_ids), CHUNK_SIZE, strict=False):
             result = await self.session.exec(
@@ -251,6 +252,8 @@ class CollectionRepository:
                     col(MediaCollection.id).in_(batch),
                     col(MediaCollection.media_type) == media_type,
                     col(MediaCollection.last_synced_at).is_not(None),
+                    # Collections Overture does not manage stay as they are.
+                    col(MediaCollection.id).in_(select(CollectionRule.collection_id)),
                 )
                 .values(monitored=monitored, updated_at=timestamp)
             )
@@ -296,6 +299,21 @@ class CollectionRepository:
         for item_id, title in await self.session.exec(stmt):
             titles.setdefault(item_id, []).append(title)
         return titles
+
+    async def managed_ids(self, collection_ids: list[int]) -> set[int]:
+        """The given collections Overture manages, which are those with a rule."""
+        managed: set[int] = set()
+        for batch in batched(set(collection_ids), CHUNK_SIZE, strict=False):
+            managed.update(
+                (
+                    await self.session.exec(
+                        select(CollectionRule.collection_id).where(
+                            col(CollectionRule.collection_id).in_(batch)
+                        )
+                    )
+                ).all()
+            )
+        return managed
 
     async def rule(self, collection_id: int) -> CollectionRule | None:
         """Return the collection's sole rule."""

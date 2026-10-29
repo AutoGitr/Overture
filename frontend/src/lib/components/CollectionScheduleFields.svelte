@@ -21,6 +21,7 @@
 <script lang="ts">
   import { ROUTINE_CRON_PRESETS } from "../utils/cronPresets";
   import CronScheduleField from "./CronScheduleField.svelte";
+  import FieldRow from "./FieldRow.svelte";
   import InheritedSelect from "./InheritedSelect.svelte";
   import type { PolicyLevel } from "./CollectionPolicyFields.svelte";
 
@@ -28,20 +29,18 @@
     policy,
     level,
     defaults,
-    sync = true,
   }: {
     policy: ScheduleData;
     level: PolicyLevel;
     defaults?: ScheduleData;
-    /** Show when criteria sync; hand-picked collections never do. */
-    sync?: boolean;
   } = $props();
 
   const id = $props.id();
   let inherits = $derived(level !== "global");
 </script>
 
-{#if sync}
+<!-- Groups and the global defaults schedule syncs; a collection follows its group. -->
+{#if level !== "collection"}
   <InheritedSelect
     label="Scheduled sync"
     {inherits}
@@ -49,7 +48,7 @@
     inherited={defaults?.sync_enabled}
     options={ON_OFF}
   />
-  <div class="form-wide">
+  <div>
     <CronScheduleField
       label="Sync schedule"
       value={policy.sync_schedule ?? ""}
@@ -60,26 +59,30 @@
   </div>
 {/if}
 {#if level !== "global"}
-  <div class="form-label">
-    <label for={`${id}-from`}>Active from (MM-DD)</label>
+  <FieldRow
+    label="Active from (MM-DD)"
+    for={`${id}-from`}
+    hint="Blank for all year. A range can cross New Year."
+  >
     <input
       id={`${id}-from`}
       maxlength="5"
+      size="8"
       placeholder={defaults?.active_start_mmdd ?? "All year"}
       value={policy.active_start_mmdd ?? ""}
       oninput={(event) => (policy.active_start_mmdd = event.currentTarget.value.trim() || null)}
     />
-    <span class="hint">Blank for all year. A range can cross New Year.</span>
-  </div>
-  <label class="form-label">
-    Active until (MM-DD)
+  </FieldRow>
+  <FieldRow label="Active until (MM-DD)" for={`${id}-until`}>
     <input
+      id={`${id}-until`}
       maxlength="5"
+      size="8"
       placeholder={defaults?.active_end_mmdd ?? "All year"}
       value={policy.active_end_mmdd ?? ""}
       oninput={(event) => (policy.active_end_mmdd = event.currentTarget.value.trim() || null)}
     />
-  </label>
+  </FieldRow>
 {/if}
 <InheritedSelect
   label="When inactive"

@@ -33,6 +33,7 @@ lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import managing_rule
 lazy from tests.runtime_helpers import JobProbe, unused
 
 CATALOG_URL = "https://image.tmdb.org/t/p/original/catalog.jpg"
@@ -52,6 +53,8 @@ async def _seed(database: Database) -> None:
                 last_synced_at=utc_now(),
             )
             session.add(row)
+            await session.flush()
+            session.add(managing_rule(collection_id))
 
 
 async def test_group_scope_resolves_to_the_groups_collections(

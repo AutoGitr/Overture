@@ -47,7 +47,6 @@ class BulkAssetsThemeConfig(StrictBaseModel):
     source_order: SourceOrder[ThemeBulkSource] = Field(
         default_factory=lambda: list(DEFAULT_THEME_SOURCE_ORDER)
     )
-    include_collections: bool = False
 
 
 class _BulkSharedRunFields(StrictBaseModel):
@@ -75,7 +74,7 @@ class _BulkSharedRunFields(StrictBaseModel):
 
     @property
     def collection_scope(self) -> bool:
-        """Whether the run targets collections instead of library items."""
+        """Whether the run targets collections, alone or beside libraries."""
         return (
             self.all_collections
             or self.collection_ids is not None
@@ -84,19 +83,24 @@ class _BulkSharedRunFields(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_target_selection(self) -> Self:
-        """Exactly one scope; an empty list never means everything."""
+        """Libraries may run beside chosen groups or every collection.
+
+        Sidebar snapshots (items or collections) run alone, and an empty list
+        never means everything.
+        """
         if self.collection_ids == []:
             raise ValueError("collection_ids must include at least one collection")
         if self.collection_groups == []:
             raise ValueError("collection_groups must include at least one group")
-        scopes = (
+        if self.collection_groups is not None and self.all_collections:
+            raise ValueError("Select collection groups or every collection")
+        snapshots = (self.item_ids is not None, self.collection_ids is not None)
+        others = (
             bool(self.library_ids),
-            self.item_ids is not None,
-            self.collection_ids is not None,
             self.collection_groups is not None,
             self.all_collections,
         )
-        if sum(scopes) > 1:
+        if sum(snapshots) > 1 or (any(snapshots) and any(others)):
             raise ValueError("Select collections, items, or libraries")
         if self.item_ids is not None:
             if self.library_ids:

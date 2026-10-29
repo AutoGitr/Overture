@@ -5,7 +5,6 @@
   import type { AssetsForm } from "../utils/assetsForm.svelte";
   import ArtWorkflowCard from "./ArtWorkflowCard.svelte";
   import LibraryChecklist from "./LibraryChecklist.svelte";
-  import SegmentedControl from "./SegmentedControl.svelte";
   import SidebarItemsOption from "./SidebarItemsOption.svelte";
   import SourceOrderList from "./SourceOrderList.svelte";
   import WorkflowCard from "./WorkflowCard.svelte";
@@ -26,69 +25,43 @@
   } = $props();
 
   let config = $derived(form.config);
+  /** The checklist entry for every collection, apart from the group names. */
+  const ALL_COLLECTIONS = "\u0000all";
 </script>
 
 <div class="option-card">
-  {#if settingsState.current.collections_supported}
-    <SegmentedControl
-      label="Run over"
-      options={[
-        ["libraries", "Libraries"],
-        ["collections", "Collections"],
-      ]}
-      bind:value={
-        () => config.scope,
-        (scope) => {
-          config.scope = scope;
-          config.useSidebarItems = false;
-        }
-      }
+  <div class={{ muted: config.useSidebarItems }}>
+    <LibraryChecklist
+      movieLibraries={form.movieLibraries}
+      showLibraries={form.showLibraries}
+      selectedIds={config.useSidebarItems ? [] : config.selectedLibraries}
+      loading={librariesLoading}
+      error={librariesError}
+      onretry={onretrylibraries}
+      emptyMessage="No synced libraries found. Run Sync first."
+      ontoggle={(id) => form.toggleLibrary(id)}
+      ontoggleall={(checked) => form.toggleAll(checked)}
+      collections={settingsState.current.collections_supported
+        ? [
+            {
+              id: ALL_COLLECTIONS,
+              label: "All collections",
+              checked: !config.useSidebarItems && config.allCollections,
+            },
+            ...form.collectionGroupOptions.map((group) => ({
+              id: group,
+              label: group,
+              checked:
+                !config.useSidebarItems && form.selectedCollectionGroups.includes(group),
+            })),
+          ]
+        : undefined}
+      oncollectiontoggle={(id) => form.toggleCollections(id === ALL_COLLECTIONS ? null : id)}
+      oncollectionsall={(checked) => {
+        if (checked !== config.allCollections) form.toggleCollections(null);
+      }}
     />
-  {/if}
-  {#if config.scope === "collections"}
-    <fieldset class={["group-list", { muted: config.useSidebarItems }]}>
-      <legend class="form-label">Collection groups</legend>
-      <p class="hint">
-        {form.selectedCollectionGroups.length
-          ? "Collections in the chosen groups."
-          : "Every collection. Choose groups to narrow the run."}
-      </p>
-      {#each form.collectionGroupOptions as group (group)}
-        <label class="checkbox-group">
-          <input
-            type="checkbox"
-            checked={form.selectedCollectionGroups.includes(group)}
-            onchange={() => {
-              form.toggleCollectionGroup(group);
-              config.useSidebarItems = false;
-            }}
-          />
-          <span>{group}</span>
-        </label>
-      {/each}
-    </fieldset>
-  {:else}
-    <div class={{ muted: config.useSidebarItems }}>
-      <LibraryChecklist
-        movieLibraries={form.movieLibraries}
-        showLibraries={form.showLibraries}
-        selectedIds={config.useSidebarItems ? [] : config.selectedLibraries}
-        loading={librariesLoading}
-        error={librariesError}
-        onretry={onretrylibraries}
-        emptyMessage="No synced libraries found. Run Sync first."
-        ontoggle={(id) => form.toggleLibrary(id)}
-        ontoggleall={(checked) => form.toggleAll(checked)}
-        collections={settingsState.current.collections_supported && config.enableThemes
-          ? config.includeCollections
-          : undefined}
-        oncollectionschange={(checked) => {
-          config.includeCollections = checked;
-          config.useSidebarItems = false;
-        }}
-      />
-    </div>
-  {/if}
+  </div>
   <SidebarItemsOption
     checked={config.useSidebarItems}
     sidebarItems={sidebarState.current}
@@ -133,7 +106,7 @@
 <ArtWorkflowCard {form} />
 
 <WorkflowCard title="Themes" kind="theme" bind:enabled={config.enableThemes}>
-  {#if form.collectionScope || config.includeCollections}
+  {#if form.collectionScope}
     <p class="hint">Collection themes use OvertureDB and ThemerrDB, never a YouTube search.</p>
   {/if}
   <WorkflowSection label="Sources" note="First match wins, top to bottom.">
@@ -156,15 +129,6 @@
 <style>
   .muted {
     opacity: 0.5;
-  }
-
-  .group-list {
-    border: 0;
-    margin: var(--space-2) 0 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
   }
 
   .skip-row {

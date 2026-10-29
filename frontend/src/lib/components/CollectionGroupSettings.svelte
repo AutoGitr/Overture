@@ -7,6 +7,7 @@
     getCollectionCapabilitiesOptions,
     getCollectionDefaultsOptions,
     getCollectionGroupPolicyOptions,
+    listCollectionsOptions,
     saveCollectionGroupPolicyMutation,
     syncCollectionGroupMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -70,6 +71,16 @@
     return value;
   });
   let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
+  const collections = createQuery(() =>
+    listCollectionsOptions({ query: { media_type: mediaType } }),
+  );
+  let hasMembers = $derived(
+    (collections.data ?? []).some((row) => row.managed && row.collection_group === group),
+  );
+  /** Why the group has nothing to send to the server yet, or null when it has. */
+  let serverBlocker = $derived(
+    hasMembers || draft?.generator ? null : "The group has no collections yet",
+  );
 
   /** Save in Overture; `then` applies the defaults or syncs the group on the server. */
   async function save(then?: "apply" | "sync") {
@@ -149,7 +160,7 @@
     description="One collection in this group per value in a library, such as each decade, kept up to date."
     {busy}
   >
-    <label class="form-row form-wide">
+    <label class="form-row">
       <input
         type="checkbox"
         checked={!!form.generator}
@@ -162,7 +173,7 @@
     </label>
     {#if form.generator}
       {@const generator = form.generator}
-      <fieldset class="libraries form-wide">
+      <fieldset class="libraries">
         <legend class="form-label">Libraries</legend>
         {#each libraries as library (library.id)}
           <label class="form-row">
@@ -221,14 +232,17 @@
     <button
       type="button"
       class="btn btn-secondary"
-      title="Send the defaults to the server without changing members"
-      disabled={busy}
+      title={hasMembers
+        ? "Send the defaults to the server without changing members"
+        : "The group has no collections yet"}
+      disabled={busy || !hasMembers}
       onclick={() => void save("apply")}>Save and Apply</button
     >
     <button
       type="button"
       class="btn btn-secondary"
-      disabled={busy}
+      title={serverBlocker ?? undefined}
+      disabled={busy || !!serverBlocker}
       onclick={() => void save("sync")}
     >
       <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />

@@ -24,13 +24,12 @@ test("an unavailable session shows a retry screen instead of a password prompt",
         ? { json: { authenticated: false } }
         : {
             status: 503,
-            headers: { "X-Request-ID": "auth-unavailable" },
             json: { detail: "Service unavailable" },
           },
     );
   });
   await page.goto("/");
-  await expect(page.getByRole("alert")).toContainText("auth-unavailable");
+  await expect(page.getByRole("alert")).toContainText("Service unavailable");
   await expect(page.getByLabel("Password")).toHaveCount(0);
   available = true;
   await page.getByRole("button", { name: "Retry connection" }).click();
@@ -84,14 +83,13 @@ test("failed logout checks the server before restoring the session and allows re
     if (!fail) return route.fallback();
     await route.fulfill({
       status: 503,
-      headers: { "X-Request-ID": "logout-unavailable" },
       json: { detail: "Service unavailable" },
     });
   });
   await logIn(page);
   await page.getByLabel("Open menu").click();
   await page.getByRole("button", { name: "Logout", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("logout-unavailable");
+  await expect(page.getByRole("alert")).toContainText("Service unavailable");
   await expect(page.getByLabel("Password")).toHaveCount(0);
   fail = false;
   await page.getByRole("button", { name: "Retry connection" }).click();

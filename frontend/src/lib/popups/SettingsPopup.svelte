@@ -81,6 +81,15 @@
     saving = false;
   }
 
+  /** Put every setting back to its default in the form; only Save keeps it. */
+  function resetToDefaults() {
+    for (const key of Object.keys(draft) as (keyof typeof draft)[]) {
+      if (key in DEFAULT_APP_SETTINGS)
+        Object.assign(draft, { [key]: DEFAULT_APP_SETTINGS[key as keyof typeof DEFAULT_APP_SETTINGS] });
+    }
+    appearance = { ...DEFAULT_APPEARANCE };
+  }
+
   function percent(fraction: number): string {
     return `${Number((fraction * 100).toFixed(1))}%`;
   }
@@ -101,6 +110,56 @@
     aria-label="Application settings"
   >
     <CardColumn>
+      <div class="option-card">
+        <span class="form-label">Workflow</span>
+        <div class="options-col">
+          <label class="form-row justify-between">
+            <span>Workflow</span>
+            <select bind:value={draft.workflow} class="select-compact">
+              <option value="art">Art</option>
+              <option value="art_and_themes">Art + themes</option>
+              <option value="themes">Themes</option>
+            </select>
+          </label>
+          <div class="form-row justify-between">
+            <span>Auto-advance</span>
+            <SegmentedControl
+              --segmented-width="auto"
+              --segmented-margin="0"
+              label="Auto-advance"
+              options={[
+                ["off", "Off"],
+                ["slots", "Slots"],
+                ["slots_and_items", "Slots and items"],
+              ]}
+              bind:value={() => draft.auto_advance ?? "off", (mode) => (draft.auto_advance = mode)}
+            />
+          </div>
+          <span class="hint"
+            >After a selection, open the next slot, and with Slots and items the next item. The
+            Themes workflow has one slot, so there Slots behaves like Off.</span
+          >
+          <label class="form-row justify-between">
+            <span>Skip completed slots and items</span>
+            <input
+              type="checkbox"
+              bind:checked={draft.auto_advance_skip_completed}
+              disabled={draft.auto_advance === "off"}
+            />
+          </label>
+          <label class="form-row justify-between">
+            <span>Auto-unmonitor</span>
+            <select bind:value={draft.auto_unmonitor} class="select-compact">
+              <option value="off">Off</option>
+              <option value="art">Art complete</option>
+              <option value="theme">Theme complete</option>
+              <option value="art_or_theme">Art or theme complete</option>
+              <option value="art_and_theme">Art and theme complete</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
       <div class="option-card">
         <span class="form-label">Artwork</span>
         <div class="options-col">
@@ -187,51 +246,8 @@
       </div>
 
       <div class="option-card">
-        <span class="form-label">Workflow</span>
-        <div class="options-col">
-          <label class="form-row justify-between">
-            <span>Workflow</span>
-            <select bind:value={draft.workflow} class="select-compact">
-              <option value="art">Art</option>
-              <option value="art_and_themes">Art + themes</option>
-              <option value="themes">Themes</option>
-            </select>
-          </label>
-          <div class="form-label">
-            Auto-advance
-            <SegmentedControl
-              label="Auto-advance"
-              options={[
-                ["off", "Off"],
-                ["slots", "Slots"],
-                ["slots_and_items", "Slots and items"],
-              ]}
-              bind:value={() => draft.auto_advance ?? "off", (mode) => (draft.auto_advance = mode)}
-            />
-            <span class="hint"
-              >After a selection, open the next slot, and with Slots and items the next item. The
-              Themes workflow has one slot, so there Slots behaves like Off.</span
-            >
-          </div>
-          <label class="form-row justify-between">
-            <span>Skip completed slots and items</span>
-            <input
-              type="checkbox"
-              bind:checked={draft.auto_advance_skip_completed}
-              disabled={draft.auto_advance === "off"}
-            />
-          </label>
-          <label class="form-row justify-between">
-            <span>Auto-unmonitor</span>
-            <select bind:value={draft.auto_unmonitor} class="select-compact">
-              <option value="off">Off</option>
-              <option value="art">Art complete</option>
-              <option value="theme">Theme complete</option>
-              <option value="art_or_theme">Art or theme complete</option>
-              <option value="art_and_theme">Art and theme complete</option>
-            </select>
-          </label>
-        </div>
+        <span class="form-label">Collections</span>
+        <GlobalCollectionDefaults {draft} />
       </div>
 
       <div class="option-card">
@@ -269,19 +285,17 @@
             <span>Show background image</span>
             <input type="checkbox" bind:checked={appearance.showBackgroundImage} />
           </label>
-          <button
-            class="btn btn-ghost btn-sm self-start reset-defaults-btn"
-            onclick={() => (appearance = { ...DEFAULT_APPEARANCE })}>Reset Defaults</button
-          >
         </div>
-      </div>
-      <div class="option-card">
-        <span class="form-label">Collection defaults</span>
-        <GlobalCollectionDefaults {draft} />
       </div>
     </CardColumn>
   </fieldset>
   {#snippet footer()}
+    <button
+      type="button"
+      class="btn btn-secondary footer-start"
+      onclick={resetToDefaults}
+      disabled={showSaving.current || !canEdit}>Reset to defaults</button
+    >
     <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
     <button class="btn btn-primary" onclick={save} disabled={showSaving.current || !canEdit}>
       {showSaving.current ? "Saving..." : "Save"}
@@ -295,10 +309,6 @@
     margin: 0;
     padding: 0;
     min-width: 0;
-  }
-
-  .reset-defaults-btn {
-    margin-left: -8px;
   }
 
   .duration-range {

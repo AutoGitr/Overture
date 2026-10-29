@@ -92,8 +92,6 @@ describe("REST cache helpers", () => {
     patchCollectionRule(1, rule);
     expect(queryClient.getQueryData(firstKey)).toEqual({ ...first, rule });
     expect(queryClient.getQueryData(otherKey)).toBe(other);
-    patchCollectionRule(1, null);
-    expect(queryClient.getQueryData(firstKey)).toEqual(first);
   });
 
   /** Open *item* as the detail view, the way a click in the sidebar does. */

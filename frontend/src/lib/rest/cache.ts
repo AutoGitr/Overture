@@ -12,6 +12,7 @@ import type {
   CatalogEntryRow,
   CollectionDetail,
   CollectionRead,
+  CollectionRuleRead,
   MediaItemListResponse,
   MediaItemRead,
 } from "../../generated/rest/types.gen";
@@ -171,7 +172,7 @@ export function patchCollection(collectionId: number, update: Partial<Collection
 }
 
 /** Apply a rule response without overwriting newer collection metadata. */
-export function patchCollectionRule(collectionId: number, rule: CollectionDetail["rule"]): void {
+export function patchCollectionRule(collectionId: number, rule: CollectionRuleRead): void {
   queryClient.setQueriesData<CollectionDetail>(
     { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "getCollection") },
     (collection) => (collection?.id === collectionId ? { ...collection, rule } : collection),

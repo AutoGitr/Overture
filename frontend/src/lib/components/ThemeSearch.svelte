@@ -25,8 +25,6 @@
     busy = false,
     selectLabel,
     onselect,
-    oncontribute,
-    contributeBlocked,
   }: {
     label: string;
     initialQuery: string;
@@ -41,8 +39,6 @@
     selectLabel?: (video: ThemeSearchResultItem) => string;
     /** Select a video; resolves whether it was selected. */
     onselect: (youtubeId: string) => Promise<boolean>;
-    oncontribute?: (video: ThemeSearchResultItem) => void;
-    contributeBlocked?: (video: ThemeSearchResultItem) => string | null;
   } = $props();
 
   let text = $state(untrack(() => initialQuery));
@@ -113,8 +109,6 @@
     {busyVideoId}
     disabled={busy}
     {selectLabel}
-    {oncontribute}
-    {contributeBlocked}
     onSelect={(video) => {
       void onselect(video.id);
     }}

@@ -1,4 +1,6 @@
 <script lang="ts" generics="T extends string | boolean">
+  import FieldRow from "./FieldRow.svelte";
+
   let {
     label,
     inherits,
@@ -20,8 +22,7 @@
   let inheritedLabel = $derived(options.find(([option]) => option === inherited)?.[1]);
 </script>
 
-<div class="form-label">
-  <label for={id}>{label}</label>
+<FieldRow {label} for={id} {hint}>
   <select
     {id}
     value={value == null ? "" : String(value)}
@@ -37,5 +38,4 @@
       <option value={String(option)}>{name}</option>
     {/each}
   </select>
-  {#if hint}<span class="hint">{hint}</span>{/if}
-</div>
+</FieldRow>
