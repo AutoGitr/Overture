@@ -1,7 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="7.85 7.85 48.3 48.3">
-  <g fill="none" stroke-width="2.3">
-    <rect x="9" y="9" width="46" height="46" rx="8.8" stroke="#626a76" />
-    <rect x="14" y="14" width="36" height="36" rx="7" stroke="#746e62" />
-    <rect x="19" y="19" width="26" height="26" rx="5.2" stroke="#806844" />
+<svg xmlns="http://www.w3.org/2000/svg" width="48.3" height="48.3" viewBox="0 0 48.3 48.3">
+  <g
+    transform="translate(24.15 24.15)"
+    fill="none"
+    stroke-width="2.3"
+    stroke-linejoin="round"
+    shape-rendering="geometricPrecision"
+  >
+    <rect x="-23" y="-23" width="46" height="46" rx="8.8" stroke="#626a76" />
+    <rect x="-18" y="-18" width="36" height="36" rx="7" stroke="#746e62" />
+    <rect x="-13" y="-13" width="26" height="26" rx="5.2" stroke="#806844" />
   </g>
 </svg>

@@ -1,1 +1,1 @@
-"""Overture: artwork and theme manager for Plex, Jellyfin and Emby."""
+"""Overture: artwork, collections & themes for Plex, Jellyfin and Emby."""

@@ -13,7 +13,7 @@ overture = "overture.cli:main"
 [project]
 name = "overture"
 version = "1.1.0"
-description = "Artwork and theme manager for Plex, Jellyfin and Emby"
+description = "Artwork, collections & themes for Plex, Jellyfin and Emby"
 readme = ".github/README.md"
 license = "AGPL-3.0-only"
 authors = [{name = "Overture"}]

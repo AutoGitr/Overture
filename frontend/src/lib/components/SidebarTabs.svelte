@@ -66,7 +66,11 @@
       ["overturedb", "OvertureDB"],
     ] as const}
     bind:value={() => uiState.sidebarSource, switchSource}
-  />
+  >
+    {#snippet icon(source)}
+      <img src={source === "overturedb" ? "/brand/overturedb-tab.svg" : "/brand/overture-tab.svg"} width="16" height="16" alt="" />
+    {/snippet}
+  </SegmentedControl>
 {/if}
 
 <div class="tabs">

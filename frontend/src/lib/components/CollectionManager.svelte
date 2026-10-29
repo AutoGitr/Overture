@@ -126,7 +126,7 @@
       {#if collection.catalog_entry_key}
         <IdBadge
           title="Open in OvertureDB"
-          icon="/favicon.svg"
+          icon="/brand/overturedb-logo.svg"
           alt="OvertureDB"
           onselect={() => {
             if (collection.catalog_entry_key)

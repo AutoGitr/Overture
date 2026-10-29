@@ -119,7 +119,7 @@ ARG BUILD_DATE=unknown
 ARG VCS_REF=unknown
 
 LABEL org.opencontainers.image.title="Overture" \
-      org.opencontainers.image.description="Artwork and theme manager for Plex, Jellyfin and Emby" \
+      org.opencontainers.image.description="Artwork, collections & themes for Plex, Jellyfin and Emby" \
       org.opencontainers.image.source="https://github.com/AutoGitr/Overture" \
       org.opencontainers.image.url="https://github.com/AutoGitr/Overture" \
       org.opencontainers.image.documentation="https://github.com/AutoGitr/Overture#readme" \

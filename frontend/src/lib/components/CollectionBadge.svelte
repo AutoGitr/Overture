@@ -27,14 +27,14 @@
     onclick={() => {
       if (libraryCollectionId !== null)
         goToCollection({ id: libraryCollectionId, title: "Collection", media_type: "movie" });
-    }}>Collection</button
+    }}><img src="/brand/overture-tab.svg" width="16" height="16" alt="" />Collection</button
   >
 {:else if entry}
   <button
     class="btn btn-ghost btn-sm"
     onclick={() => {
       if (entry) goToCatalogEntry({ media_type: "collection", entry_key: entry.entry_key });
-    }}>Collection: {entry.entry.title}</button
+    }}><img src="/brand/overturedb-tab.svg" width="16" height="16" alt="" />Collection: {entry.entry.title}</button
   >
 {:else}
   <a

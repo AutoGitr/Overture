@@ -32,24 +32,29 @@
     y="0"
     width="128"
     height="128"
-    preserveAspectRatio="xMinYMid"
+    preserveAspectRatio="xMidYMid meet"
     xmlns="http://www.w3.org/2000/svg"
-    viewBox="7.85 7.85 48.3 48.3"
+    viewBox="0 0 48.3 48.3"
   >
-    <g fill="none" stroke-width="2.3">
-      <rect x="9" y="9" width="46" height="46" rx="8.8" class="tone-0" />
-      <rect x="14" y="14" width="36" height="36" rx="7" class="tone-1" />
-      <rect x="19" y="19" width="26" height="26" rx="5.2" class="tone-2" />
-    </g>
-  </svg>
-  <svg
+    <g
+      transform="translate(24.15 24.15)"
+      fill="none"
+      stroke-width="2.3"
+      stroke-linejoin="round"
+      shape-rendering="geometricPrecision"
+    >
+      <rect x="-23" y="-23" width="46" height="46" rx="8.8" class="tone-0" />
+      <rect x="-18" y="-18" width="36" height="36" rx="7" class="tone-1" />
+      <rect x="-13" y="-13" width="26" height="26" rx="5.2" class="tone-2" />
+    </g></svg
+  ><svg
     x="160"
-    y="19.17709118311982"
+    y="19.177091"
     width="480"
-    height="89.64581763376036"
-    preserveAspectRatio="xMinYMid"
+    height="89.645818"
+    preserveAspectRatio="xMidYMid meet"
     xmlns="http://www.w3.org/2000/svg"
-    viewBox="5.859375 53.5791015625 583.154296875 108.9111328125"
+    viewBox="5.859375 53.579102 583.154297 108.911133"
   >
     <path
       fill="currentColor"

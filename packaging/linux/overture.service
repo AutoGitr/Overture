@@ -1,5 +1,5 @@
 [Unit]
-Description=Overture artwork, collection and theme manager
+Description=Overture artwork, collections & themes
 After=network-online.target
 Wants=network-online.target
 

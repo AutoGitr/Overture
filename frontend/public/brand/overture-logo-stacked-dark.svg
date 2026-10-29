@@ -1,27 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="480" height="344" viewBox="0 0 480 344">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="480"
+  height="329.645818"
+  viewBox="0 0 480 329.645818"
+>
   <svg
     x="144"
-    y="7.1770911831198205"
+    y="0"
     width="192"
     height="192"
-    preserveAspectRatio="xMinYMid"
+    preserveAspectRatio="xMidYMid meet"
     xmlns="http://www.w3.org/2000/svg"
-    viewBox="7.85 7.85 48.3 48.3"
+    viewBox="0 0 48.3 48.3"
   >
-    <g fill="none" stroke-width="2.3">
-      <rect x="9" y="9" width="46" height="46" rx="8.8" stroke="#9ca1aa" />
-      <rect x="14" y="14" width="36" height="36" rx="7" stroke="#bdb7ab" />
-      <rect x="19" y="19" width="26" height="26" rx="5.2" stroke="#d8c7a3" />
-    </g>
-  </svg>
-  <svg
+    <g
+      transform="translate(24.15 24.15)"
+      fill="none"
+      stroke-width="2.3"
+      stroke-linejoin="round"
+      shape-rendering="geometricPrecision"
+    >
+      <rect x="-23" y="-23" width="46" height="46" rx="8.8" stroke="#9ca1aa" />
+      <rect x="-18" y="-18" width="36" height="36" rx="7" stroke="#bdb7ab" />
+      <rect x="-13" y="-13" width="26" height="26" rx="5.2" stroke="#d8c7a3" />
+    </g></svg
+  ><svg
     x="0"
-    y="247.1770911831198"
+    y="240"
     width="480"
-    height="89.64581763376036"
-    preserveAspectRatio="xMinYMid"
+    height="89.645818"
+    preserveAspectRatio="xMidYMid meet"
     xmlns="http://www.w3.org/2000/svg"
-    viewBox="5.859375 53.5791015625 583.154296875 108.9111328125"
+    viewBox="5.859375 53.579102 583.154297 108.911133"
   >
     <path
       fill="#d8c7a3"

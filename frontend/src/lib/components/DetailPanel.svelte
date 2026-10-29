@@ -246,7 +246,7 @@
     {#if detail?.library_item_id || detail?.library_collection_id}
       <IdBadge
         title="Open in library"
-        icon="/favicon.svg"
+        icon="/brand/overture-logo.svg"
         alt="Open in library"
         onselect={openLibrary}
       />

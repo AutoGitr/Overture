@@ -14,11 +14,18 @@ export default defineConfig(({ mode }) => ({
     svelte(),
     VitePWA({
       registerType: "autoUpdate",
+      includeAssets: [
+        "brand/overture-logo-inline.svg",
+        "brand/overture-logo.svg",
+        "brand/overturedb-logo.svg",
+        "brand/overture-tab.svg",
+        "brand/overturedb-tab.svg",
+      ],
       manifest: {
         id: "/",
         name: "Overture",
         short_name: "Overture",
-        description: "Artwork and theme manager for Plex, Jellyfin and Emby",
+        description: "Artwork, collections & themes for Plex, Jellyfin and Emby",
         start_url: "/",
         scope: "/",
         display: "standalone",
@@ -70,7 +77,7 @@ export default defineConfig(({ mode }) => ({
         // Workbox matches pathname + search; reserve query-bearing roots too.
         navigateFallbackDenylist: [new RegExp(BACKEND_PATHS, "i")],
         globPatterns: ["**/*.{html,js,css,svg,png,woff2}"],
-        globIgnores: ["brand/*-dark.*", "brand/*-light.*", "og.png"],
+        globIgnores: ["brand/**", "og.png"],
       },
     }),
   ],

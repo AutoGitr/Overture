@@ -2,6 +2,7 @@
 
 lazy import re
 lazy import tomllib
+lazy from html import unescape
 lazy from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,4 +23,6 @@ def test_image_readme_and_web_app_use_the_project_description() -> None:
         in (ROOT / "frontend/vite.config.ts").read_text()
     )
     index = (ROOT / "frontend/index.html").read_text()
-    assert _META_DESCRIPTION.findall(index) == [description] * 3
+    assert [unescape(value) for value in _META_DESCRIPTION.findall(index)] == [
+        description
+    ] * 3

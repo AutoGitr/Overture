@@ -57,6 +57,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- OvertureDB has a distinct hexagonal mark, and links between the catalog and library show the destination's icon. Brand assets have consistent colours, tighter bounds and smooth small-size variants; the tagline now reads "Artwork, collections & themes".
 - Error messages no longer end in a request or job ID, and a failed download names what failed, such as "Couldn't download the poster for Mufasa: The Lion King". The IDs remain in the log.
 - `ART_DOWNLOAD_WORKERS` now allows at most 10 and `THEME_DOWNLOAD_WORKERS` at most 4, since more only gets the address rate-limited or blocked. Lower a larger value before upgrading, or Overture will not start.
 - Saved Sync and Assets schedules show their last run's time, duration and totals without being expanded; an incremental schedule's Last poll is now its Last run. A run a schedule started names the schedule in its results.

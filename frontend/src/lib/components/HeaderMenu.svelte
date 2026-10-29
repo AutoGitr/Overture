@@ -1,6 +1,5 @@
 <script lang="ts">
   import ChartColumn from "@lucide/svelte/icons/chart-column";
-  import Database from "@lucide/svelte/icons/database";
   import DatabaseBackup from "@lucide/svelte/icons/database-backup";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import LogOut from "@lucide/svelte/icons/log-out";
@@ -142,7 +141,7 @@
         <span class="menu-label">Backup</span>
       </button>
       <button type="button" class="menu-item" onclick={() => openPopup("overturedb")}>
-        <Database size={16} />
+        <img src="/brand/overturedb-tab.svg" width="16" height="16" alt="" />
         <span class="menu-label">OvertureDB</span>
       </button>
       <button

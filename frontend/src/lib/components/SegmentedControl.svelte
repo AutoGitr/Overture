@@ -1,12 +1,16 @@
 <script lang="ts" generics="T extends string">
+  import type { Snippet } from "svelte";
+
   let {
     label,
     options,
+    icon,
     value = $bindable(),
   }: {
     /** Accessible name of the radio group. */
     label: string;
     options: readonly (readonly [T, string])[];
+    icon?: Snippet<[T]>;
     value: T;
   } = $props();
 
@@ -17,6 +21,7 @@
   {#each options as [optionValue, optionLabel] (optionValue)}
     <label class={["segment-btn", { active: value === optionValue }]}>
       <input type="radio" {name} value={optionValue} bind:group={value} class="sr-only" />
+      {@render icon?.(optionValue)}
       <span>{optionLabel}</span>
     </label>
   {/each}
@@ -41,6 +46,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: var(--space-2);
     text-align: center;
     padding: var(--space-1) var(--space-2);
     border-radius: calc(var(--radius-sm) - 2px);
