@@ -17,7 +17,7 @@ description = "Artwork, collections & themes for Plex, Jellyfin and Emby"
 readme = ".github/README.md"
 license = "AGPL-3.0-only"
 authors = [{name = "Overture"}]
-requires-python = "==3.15.1"
+requires-python = "==3.15.2"
 
 dependencies = [
     "aiosqlite==0.22.1",
