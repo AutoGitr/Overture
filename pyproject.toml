@@ -53,7 +53,7 @@ dev = [
 script_location = "%(here)s/src/overture/migrations"
 
 [tool.uv]
-required-version = "0.13.5"
+required-version = "0.13.6"
 # brotli publishes no CPython 3.15 wheels yet and the slim image has no compiler;
 # yt-dlp prefers brotlicffi, whose abi3 wheels cover 3.15.
 override-dependencies = [
