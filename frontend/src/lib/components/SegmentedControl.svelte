@@ -30,7 +30,7 @@
 <style>
   .segmented-control {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     background: var(--track-bg);
     border: var(--border-subtle);
     border-radius: var(--radius-sm);
@@ -42,6 +42,9 @@
   }
 
   .segment-btn {
+    min-width: 0;
+    min-height: var(--control-height);
+    box-sizing: border-box;
     flex: 1 1 0;
     display: flex;
     align-items: center;
@@ -50,11 +53,11 @@
     text-align: center;
     padding: var(--space-1) var(--space-2);
     border-radius: calc(var(--radius-sm) - 2px);
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--text-secondary);
     cursor: pointer;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .segment-btn:hover {

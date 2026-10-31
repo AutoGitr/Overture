@@ -72,8 +72,6 @@ class AppSettingsBase(SQLModel):
     collection_sync_enabled: bool = True
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
-    #: Every collection Overture manages must belong to a group.
-    collection_require_group: bool = True
     #: OvertureDB's No theme flag counts a title's theme as complete.
     overturedb_no_theme: bool = True
     #: The sidebar offers browsing the OvertureDB catalog.

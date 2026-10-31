@@ -17,6 +17,7 @@ lazy from ..schemas.collections import (
     CollectionArtwork,
     CollectionCapabilities,
     CollectionCreate,
+    CollectionDeleteTarget,
     CollectionDetail,
     CollectionFieldValue,
     CollectionGroupDelete,
@@ -382,9 +383,10 @@ async def delete_collection(
     collection_id: CollectionIdPath,
     media_type: MediaTypeQuery,
     collections: CollectionsDep,
+    target: CollectionDeleteTarget = "both",
 ) -> StatusResponse:
     """Delete the collection while preserving its media."""
-    return await collections.delete(collection_id, media_type)
+    return await collections.delete(collection_id, media_type, target=target)
 
 
 @router.put("/{collection_id}/members")

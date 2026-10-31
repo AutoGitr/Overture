@@ -60,10 +60,6 @@ export type AppSettingsRead = {
      */
     collection_request_missing: boolean;
     /**
-     * Collection Require Group
-     */
-    collection_require_group: boolean;
-    /**
      * Collection Sort Title Format
      */
     collection_sort_title_format: string;
@@ -243,10 +239,6 @@ export type AppSettingsUpdate = {
      * Collection Request Missing
      */
     collection_request_missing?: boolean | null;
-    /**
-     * Collection Require Group
-     */
-    collection_require_group?: boolean | null;
     /**
      * Collection Sort Title Format
      */
@@ -1993,7 +1985,7 @@ export type CollectionGeneratorBaseOutput = {
  *
  * What happens to a deleted group's collections.
  *
- * ``keep`` leaves them without a group, ``move`` puts them in *group*,
+ * ``keep`` moves them to Ungrouped, ``move`` puts them in *group*,
  * ``overture`` forgets them (the server copies return as Unmanaged on the
  * next import) and ``both`` deletes them from the server too.
  */
@@ -7350,6 +7342,10 @@ export type DeleteCollectionData = {
          * Media type ('movie' or 'show')
          */
         media_type: MediaType;
+        /**
+         * Target
+         */
+        target?: 'server' | 'both';
     };
     url: '/api/collections/{collection_id}';
 };

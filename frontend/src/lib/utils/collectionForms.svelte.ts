@@ -1,4 +1,5 @@
 import { createMutation, createQuery } from "@tanstack/svelte-query";
+import { UNGROUPED_GROUP } from "../../generated/settings";
 import { SvelteSet } from "svelte/reactivity";
 import {
   createCollectionMutation,
@@ -19,6 +20,7 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
+  DeleteCollectionData,
   CollectionFiltering,
   CollectionGeneratorInput,
   CollectionMode,
@@ -134,7 +136,7 @@ function optionsBody(form: CollectionForm): CollectionOptions {
     active_end_mmdd: form.activeEndMmdd || null,
     delete_when_inactive: form.deleteWhenInactive,
     collection_filtering: form.collectionFiltering,
-    collection_group: form.collectionGroup || null,
+    collection_group: form.collectionGroup || UNGROUPED_GROUP,
     tmdb_collection_id: form.tmdbCollectionId ?? null,
     collection_mode: form.collectionMode,
     ...(form.orderType === null ? {} : { order_type: form.orderType }),
@@ -160,31 +162,17 @@ export class CollectionEditor {
   private savedTitle = $derived.by(() => this.current().title);
   title = $derived(this.savedTitle);
   private savedSortExpression = $derived.by(
-    () =>
-      this.current().sort_title_format ??
-      (this.current().rule
-        ? (this.current().rule?.sort_title_format ?? "")
-        : (this.current().sort_title ?? "")),
+    () => this.current().sort_title_format ?? this.current().rule?.sort_title_format ?? "",
   );
   sortTitleFormat = $derived(this.savedSortExpression);
   private savedGroup = $derived.by(() => this.current().collection_group);
-  collectionGroup = $derived(this.savedGroup ?? "");
-  private savedCollectionMode = $derived.by(() =>
-    this.current().rule
-      ? (this.current().rule?.collection_mode ?? null)
-      : this.current().collection_mode,
-  );
+  collectionGroup = $derived(this.savedGroup ?? UNGROUPED_GROUP);
+  private savedCollectionMode = $derived.by(() => this.current().rule?.collection_mode ?? null);
   collectionMode = $derived(this.savedCollectionMode);
-  private savedVisibleHome = $derived.by(() =>
-    this.current().rule ? (this.current().rule?.visible_home ?? null) : this.current().visible_home,
-  );
+  private savedVisibleHome = $derived.by(() => this.current().rule?.visible_home ?? null);
   visibleHome = $derived<boolean | null>(this.savedVisibleHome);
   private savedSummaryExpression = $derived.by(
-    () =>
-      this.current().summary_format ??
-      (this.current().rule
-        ? (this.current().rule?.summary_format ?? "")
-        : (this.current().summary ?? "")),
+    () => this.current().summary_format ?? this.current().rule?.summary_format ?? "",
   );
   summaryFormat = $derived(this.savedSummaryExpression);
   private savedActiveStart = $derived.by(() => this.current().active_start_mmdd);
@@ -193,30 +181,18 @@ export class CollectionEditor {
   activeEndMmdd = $derived(this.savedActiveEnd ?? "");
   private savedDeleteWhenInactive = $derived.by(() => this.current().delete_when_inactive);
   deleteWhenInactive = $derived(this.savedDeleteWhenInactive);
-  private savedCollectionFiltering = $derived.by(() =>
-    this.current().rule
-      ? (this.current().rule?.collection_filtering ?? null)
-      : this.current().collection_filtering,
+  private savedCollectionFiltering = $derived.by(
+    () => this.current().rule?.collection_filtering ?? null,
   );
   collectionFiltering = $derived(this.savedCollectionFiltering);
-  private savedVisibleShared = $derived.by(() =>
-    this.current().rule
-      ? (this.current().rule?.visible_shared ?? null)
-      : this.current().visible_shared,
-  );
+  private savedVisibleShared = $derived.by(() => this.current().rule?.visible_shared ?? null);
   visibleShared = $derived<boolean | null>(this.savedVisibleShared);
-  private savedVisibleLibrary = $derived.by(() =>
-    this.current().rule
-      ? (this.current().rule?.visible_library ?? null)
-      : this.current().visible_library,
-  );
+  private savedVisibleLibrary = $derived.by(() => this.current().rule?.visible_library ?? null);
   visibleLibrary = $derived<boolean | null>(this.savedVisibleLibrary);
   libraryId = $derived.by(() => this.current().library_id ?? "");
   private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
   tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
-  private savedOrder = $derived.by(() =>
-    this.current().rule ? (this.current().rule?.order_type ?? null) : this.current().order_type,
-  );
+  private savedOrder = $derived.by(() => this.current().rule?.order_type ?? null);
   orderType = $derived<CollectionOrder | null>(this.savedOrder);
   rule = $state<CollectionRuleWriteInput>(defaultRule());
 
@@ -298,12 +274,6 @@ export class CollectionEditor {
   /** Why the form cannot be saved yet, or null when it can. */
   get blocker(): string | null {
     if (!this.title.trim()) return "Enter a title";
-    if (
-      settingsState.current.collection_require_group &&
-      !this.generated &&
-      !this.collectionGroup.trim()
-    )
-      return "Choose a group: every collection needs one";
     return null;
   }
 
@@ -404,19 +374,25 @@ export class CollectionEditor {
     return this.setMembers(ids, "custom");
   }
 
-  async delete() {
+  async delete(target: NonNullable<DeleteCollectionData["query"]["target"]> = "both") {
     if (
       !(await confirmAction({
         title: "Delete collection?",
-        message: `Delete ${this.collection.title} from the media server? Its media files are kept.`,
+        message:
+          target === "server"
+            ? `Delete ${this.collection.title} from the media server and keep its Overture configuration? A later manual or scheduled sync can recreate it. Media files are kept.`
+            : `Delete ${this.collection.title} from both Overture and the media server? Media files are kept.`,
         confirmLabel: "Delete",
         destructive: true,
       }))
     )
       return;
     await this.perform(async () => {
-      await this.deleteRequest.mutateAsync(this.target);
-      goToCollectionsList(this.collection.media_type);
+      await this.deleteRequest.mutateAsync({
+        ...this.target,
+        query: { ...this.target.query, target },
+      });
+      if (target === "both") goToCollectionsList(this.collection.media_type);
     });
   }
 }
@@ -521,8 +497,6 @@ export class CollectionDraft {
     if (!this.libraryIds.length) return "Choose a library";
     if (this.kind === "set") return this.setGroup ? null : "Name the set's group";
     if (!this.title.trim()) return "Enter a title";
-    if (settingsState.current.collection_require_group && !this.collectionGroup.trim())
-      return "Choose a group: every collection needs one";
     return null;
   }
 

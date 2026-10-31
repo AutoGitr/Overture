@@ -2,7 +2,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { listCollectionGroupsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { MediaType } from "../../generated/rest/types.gen";
-  import { settingsState } from "../stores/settingsState.svelte";
+
   import { CollectionGroupActions } from "../utils/collectionGroups.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
@@ -50,10 +50,7 @@
   >
   <FieldRow label="On delete" for={`${id}-removal`}>
     <select id={`${id}-removal`} bind:value={actions.removal}>
-      <!-- Groups are required, so its collections cannot be left without one. -->
-      {#if !settingsState.current.collection_require_group}
-        <option value="keep">Keep its collections without a group</option>
-      {/if}
+      <option value="keep">Move its collections to Ungrouped</option>
       <option value="move" disabled={!others.length}>Move its collections to another group</option>
       <option value="overture">Remove its collections from Overture</option>
       <option value="both">Remove its collections from Overture and the server</option>

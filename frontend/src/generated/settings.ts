@@ -18,7 +18,6 @@ export const DEFAULT_APP_SETTINGS = {
   collection_mode_default: "default",
   collection_order_default: "release.asc",
   collection_request_missing: false,
-  collection_require_group: true,
   collection_sort_title_format: "",
   collection_summary_format: "",
   collection_sync_enabled: true,
@@ -56,6 +55,7 @@ export const THEME_SOURCE_LABELS = {"overturedb": "OvertureDB", "themerrdb": "Th
 export const CATALOG_SOURCES = ["overturedb", "themerrdb"] as const;
 export const ITEM_ART_TYPES = ["poster", "background"] as const;
 export const UNMANAGED_GROUP = "Unmanaged";
+export const UNGROUPED_GROUP = "Ungrouped";
 export const ASPECT_RATIOS = {"poster": 0.6666666666666666, "background": 1.7777777777777777} as const;
 export const ASPECT_TOLERANCES = {"strict": 0.01, "lenient": 0.05} as const;
 export const SERVER_ASSETS = ["poster", "background", "season_poster", "theme"] as const;

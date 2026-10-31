@@ -520,7 +520,6 @@ export function appSettings(overrides: Partial<AppSettingsRead> = {}): AppSettin
   return {
     ...DEFAULT_APP_SETTINGS,
     // Groups are optional unless a test is about requiring them.
-    collection_require_group: false,
     media_server: "plex",
     tmdb_configured: false,
     mdblist_configured: false,

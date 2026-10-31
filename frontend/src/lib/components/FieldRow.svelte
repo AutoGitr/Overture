@@ -24,7 +24,7 @@
     {:else}
       <span class="row-label">{label}</span>
     {/if}
-    {@render children?.()}
+    <div class="control">{@render children?.()}</div>
   </div>
   {#if hint}<span class="hint">{hint}</span>{/if}
 </div>
@@ -39,18 +39,30 @@
 
   .field-row {
     --segmented-margin: 0;
-    --segmented-width: auto;
-    display: flex;
-    flex-wrap: wrap;
+    --segmented-width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     align-items: center;
-    justify-content: space-between;
     gap: var(--space-2) var(--space-3);
     min-height: var(--control-height);
+
+    @media (max-width: 480px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .row-label {
     font-size: var(--text-sm);
     color: var(--text-secondary);
+  }
+
+  .control {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    min-width: 0;
   }
 
   .field-row :global(select),

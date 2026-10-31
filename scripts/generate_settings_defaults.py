@@ -11,6 +11,7 @@ lazy from overture.domain import (
     MATCH_THRESHOLD_DEFAULT,
     MATCH_THRESHOLD_MAX,
     PERFECT_MATCH_ONLY,
+    UNGROUPED_GROUP,
     UNMANAGED_GROUP,
     ArtBulkSource,
     ArtSource,
@@ -78,6 +79,7 @@ def render_settings_defaults() -> str:
         ),
         ("ITEM_ART_TYPES", list(ITEM_ART_TYPES)),
         ("UNMANAGED_GROUP", UNMANAGED_GROUP),
+        ("UNGROUPED_GROUP", UNGROUPED_GROUP),
         ("ASPECT_RATIOS", dict(ASPECT_RATIOS)),
         (
             "ASPECT_TOLERANCES",

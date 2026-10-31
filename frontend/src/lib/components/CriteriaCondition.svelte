@@ -16,6 +16,7 @@
     sourceCondition,
   } from "../utils/collectionCriteria";
   import SourceFields from "./SourceFields.svelte";
+  import DataStatus from "./DataStatus.svelte";
 
   let {
     condition,
@@ -64,6 +65,13 @@
 
   /** Suggestions shown at once; a library can hold thousands of values. */
   const MAX_SUGGESTIONS = 50;
+  let choices = $derived(
+    field?.kind === "tag" &&
+      values.data?.length &&
+      values.data.length <= MAX_SUGGESTIONS
+      ? values.data
+      : null,
+  );
   // Matching what is typed keeps the list short: rendering every value in a
   // datalist made each condition slow to open and to type into.
   let suggestions = $derived.by(() => {
@@ -157,6 +165,23 @@
         value={condition.value}
         oninput={(event) => (condition.value = event.currentTarget.valueAsNumber || 0)}
       />
+    {:else if choices}
+      <select
+        required
+        aria-label={`${label} value`}
+        value={String(condition.value)}
+        onchange={(event) => (condition.value = event.currentTarget.value)}
+      >
+        <option value="" disabled>Choose a value</option>
+        {#if condition.value && !choices.some((entry) => entry.value === String(condition.value))}
+          <option value={String(condition.value)}>{condition.value} (not in this library)</option>
+        {/if}
+        {#each choices as entry (entry.value)}
+          <option value={entry.value}>
+            {entry.value}{entry.count ? ` (${entry.count} titles)` : ""}
+          </option>
+        {/each}
+      </select>
     {:else}
       <input
         required
@@ -184,6 +209,17 @@
     title="Remove condition"
     onclick={onremove}><X size={14} /></button
   >
+  {#if suggested && values.error}
+    <div class="value-status">
+      <DataStatus
+        label="available values"
+        error={values.error}
+        loading={values.isFetching}
+        hasData={values.data !== undefined}
+        onretry={() => values.refetch()}
+      />
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -195,6 +231,10 @@
     @media (max-width: 640px) {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
     }
+  }
+
+  .value-status {
+    grid-column: 1 / -1;
   }
 
   .condition > :global(.source-fields),

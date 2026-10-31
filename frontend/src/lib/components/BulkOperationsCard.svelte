@@ -3,6 +3,7 @@
   import {
     getCollectionCapabilitiesOptions,
     listCollectionsOptions,
+    listCollectionGroupsOptions,
     listItemsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
@@ -22,6 +23,8 @@
   import { runBulkCollections } from "../utils/bulkCollections";
   import { ORDER_LABELS } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
+  import { UNGROUPED_GROUP } from "../../generated/settings";
+  import DataStatus from "./DataStatus.svelte";
   import {
     filterSidebarCollections,
     filterSidebarItems,
@@ -60,6 +63,10 @@
   }));
   const capabilities = createQuery(() => ({
     ...getCollectionCapabilitiesOptions({ query: { media_type: uiState.sidebarTab } }),
+    enabled: uiState.sidebarMode === "collections",
+  }));
+  const groupsQuery = createQuery(() => ({
+    ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
     enabled: uiState.sidebarMode === "collections",
   }));
 
@@ -263,7 +270,7 @@
   let operationTargets = $derived(
     collectionOperation === "take_over" ? unmanagedCollections : collections,
   );
-  let targetGroup = $state("");
+  let targetGroup = $state(UNGROUPED_GROUP);
   let template = $state("{title}");
   let visibility = $state<CollectionMode | null>(null);
   let home = $state(false);
@@ -416,12 +423,20 @@
       </label>
       {#if collectionOperation === "set_group" || collectionOperation === "take_over"}<label
           class="form-label"
-          >Target group<input
-            maxlength="200"
-            bind:value={targetGroup}
-            placeholder="Ungrouped"
-          /></label
+          >Target group<select bind:value={targetGroup}>
+            {#if !groupsQuery.data?.includes(UNGROUPED_GROUP)}
+              <option value={UNGROUPED_GROUP}>{UNGROUPED_GROUP}</option>
+            {/if}
+            {#each groupsQuery.data ?? [] as group (group)}<option value={group}>{group}</option>{/each}
+          </select></label
         >
+        <DataStatus
+          label="collection groups"
+          error={groupsQuery.error}
+          loading={groupsQuery.isFetching}
+          hasData={groupsQuery.data !== undefined}
+          onretry={() => groupsQuery.refetch()}
+        />
       {:else if collectionOperation === "apply_sort_title_format"}<label class="form-label"
           >Sort title template<input maxlength="200" bind:value={template} /><span class="hint"
             >Use &#123;title&#125; and &#123;group&#125;.</span

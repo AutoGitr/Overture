@@ -466,9 +466,7 @@ def where(
 
 def settings_row(**values: object) -> AppSettings:
     """The settings row, with groups optional unless a test asks for them."""
-    return AppSettings.model_validate(
-        {"id": 1, "collection_require_group": False, **values}
-    )
+    return AppSettings.model_validate({"id": 1, **values})
 
 
 #: Criteria no title matches, for a collection that starts empty.
@@ -611,6 +609,27 @@ async def test_delete_handles_only_an_already_absent_server_collection(
         )
 
 
+async def test_delete_from_server_preserves_configuration(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    await manager.service.delete(identity, MediaType.MOVIE, target="server")
+    assert manager.provider.deleted == ["1"]
+    async with database.read_session() as session:
+        repo = CollectionRepository(session)
+        row = await repo.get(identity)
+        assert row is not None
+        assert row.server_item_id is None
+        assert row.child_count == 0
+        assert await repo.rule(identity) is not None
+        assert len(await repo.library_items(MediaType.MOVIE, "movies")) == 3
+    await manager.service.sync_rule(identity, MediaType.MOVIE)
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(identity)
+        assert row is not None
+        assert row.server_item_id is not None
+
+
 @pytest.mark.parametrize("target", ["keep", "move", "overture", "both"])
 async def test_group_deletion_targets(
     manager: Manager, database: Database, target: str
@@ -634,7 +653,7 @@ async def test_group_deletion_targets(
     assert not result.errors
     assert manager.provider.deleted == (["1"] if target == "both" else [])
     assert await manager.service.groups(MediaType.MOVIE) == (
-        ["Evenings"] if target == "move" else []
+        ["Evenings", "Ungrouped"] if target == "move" else ["Ungrouped"]
     )
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -642,7 +661,7 @@ async def test_group_deletion_targets(
         assert row is None
     else:
         assert row is not None
-        assert row.collection_group == ("Evenings" if target == "move" else None)
+        assert row.collection_group == ("Evenings" if target == "move" else "Ungrouped")
 
 
 async def test_group_deletion_never_leaves_collections_without_a_required_group(
@@ -654,12 +673,17 @@ async def test_group_deletion_never_leaves_collections_without_a_required_group(
         MediaType.MOVIE,
         CollectionOptions(title="Saga", collection_group="Weekend"),
     )
-    async with database.write_session() as session:
-        await session.merge(settings_row(collection_require_group=True))
-    with pytest.raises(PublicServiceError, match="Choose a group"):
+    await manager.service.delete_group(
+        MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="keep")
+    )
+    detail = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert detail.collection_group == "Ungrouped"
+    with pytest.raises(PublicServiceError, match="cannot be deleted"):
         await manager.service.delete_group(
-            MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="keep")
+            MediaType.MOVIE, "Ungrouped", CollectionGroupDelete()
         )
+    with pytest.raises(PublicServiceError, match="cannot be renamed"):
+        await manager.service.rename_group(MediaType.MOVIE, "Ungrouped", "Other")
     with pytest.raises(PublicServiceError, match="another group"):
         await manager.service.delete_group(
             MediaType.MOVIE,
@@ -688,7 +712,7 @@ async def test_group_delete_failure_preserves_group_for_retry(
         MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="both")
     )
     assert identity in result.errors
-    assert await manager.service.groups(MediaType.MOVIE) == ["Weekend"]
+    assert await manager.service.groups(MediaType.MOVIE) == ["Ungrouped", "Weekend"]
 
 
 async def test_group_rename_preserves_defaults_and_rejects_collisions(
@@ -1231,7 +1255,7 @@ async def test_custom_group_round_trips_and_joins_group_choices(
     )
     assert detail.collection_group == "Weekend"
     groups = await manager.service.groups(MediaType.MOVIE)
-    assert groups == ["Weekend"]
+    assert groups == ["Ungrouped", "Weekend"]
     listed = await manager.service.list_collections(MediaType.MOVIE)
     assert listed[0].collection_group == "Weekend"
     detail = await manager.service.update(
@@ -1239,7 +1263,7 @@ async def test_custom_group_round_trips_and_joins_group_choices(
         MediaType.MOVIE,
         CollectionOptions(title="Saga", collection_group=" "),
     )
-    assert detail.collection_group is None
+    assert detail.collection_group == "Ungrouped"
 
 
 async def test_explicit_identity_survives_membership_changes(manager: Manager) -> None:
@@ -2887,16 +2911,16 @@ def test_tmdb_facts_are_tested_like_other_metadata() -> None:
 async def test_take_over_puts_an_unmanaged_collection_in_its_group(
     manager: Manager, database: Database
 ) -> None:
-    assert await manager.service.groups(MediaType.MOVIE) == []
+    assert await manager.service.groups(MediaType.MOVIE) == ["Ungrouped"]
     identity = await create_unmanaged(manager, database)
     # An unmanaged collection is in no stored group, even if it names one.
-    assert await manager.service.groups(MediaType.MOVIE) == []
+    assert await manager.service.groups(MediaType.MOVIE) == ["Ungrouped"]
 
     detail = await manager.service.take_over(
         identity, MediaType.MOVIE, CollectionTakeOver(group="Sagas")
     )
 
-    assert await manager.service.groups(MediaType.MOVIE) == ["Sagas"]
+    assert await manager.service.groups(MediaType.MOVIE) == ["Sagas", "Ungrouped"]
     assert detail.collection_group == "Sagas"
     assert detail.rule is not None
     assert detail.rule.criteria == sources(
@@ -2959,45 +2983,22 @@ async def test_group_apply_skips_smart_members_under_a_custom_order(
     assert result.skipped == {smart.id: SMART_CUSTOM_ORDER}
 
 
-async def test_required_groups_refuse_managed_collections_without_one(
+async def test_missing_group_membership_uses_reserved_fallback(
     manager: Manager, database: Database
 ) -> None:
-    unmanaged = await create_unmanaged(manager, database)
-    async with database.write_session() as session:
-        await session.merge(settings_row(collection_require_group=True))
-    rule = CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11])))
-
-    with pytest.raises(PublicServiceError, match="Choose a group"):
-        await manager.service.create(
-            CollectionCreate(
-                title="Ungrouped",
-                library_id="movies",
-                media_type=MediaType.MOVIE,
-                rule=rule,
-            )
-        )
-    with pytest.raises(PublicServiceError, match="Choose a group"):
-        await manager.service.take_over(
-            unmanaged, MediaType.MOVIE, CollectionTakeOver()
-        )
-    with pytest.raises(PublicServiceError, match="Choose a group"):
-        await manager.service.bulk_operation(
-            BulkCollectionOperation(
-                collection_ids=[unmanaged],
-                media_type=MediaType.MOVIE,
-                operation="set_group",
-            )
-        )
-    grouped = await manager.service.create(
-        CollectionCreate(
-            title="Grouped",
-            library_id="movies",
-            media_type=MediaType.MOVIE,
-            collection_group="Sagas",
-            rule=rule,
+    identity = await create_unmanaged(manager, database)
+    detail = await manager.service.take_over(
+        identity, MediaType.MOVIE, CollectionTakeOver()
+    )
+    assert detail.collection_group == "Ungrouped"
+    result = await manager.service.bulk_operation(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="set_group"
         )
     )
-    assert grouped.collection_group == "Sagas"
+    assert not result.errors
+    detail = await manager.service.get_collection(identity, MediaType.MOVIE)
+    assert detail.collection_group == "Ungrouped"
 
 
 @pytest.mark.parametrize(

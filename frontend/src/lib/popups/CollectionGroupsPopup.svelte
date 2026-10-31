@@ -5,9 +5,11 @@
     getLibrariesOptions,
     listCollectionGroupsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { UNGROUPED_GROUP } from "../../generated/settings";
   import { uiState } from "../stores/uiState.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import CollectionGroupSettings from "../components/CollectionGroupSettings.svelte";
+  import CollectionGroupActions from "../components/CollectionGroupActions.svelte";
   import WorkflowSections from "../components/WorkflowSections.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   let name = $state(uiState.collectionGroupToEdit);
@@ -72,6 +74,21 @@
   {/if}
   {#if name.trim()}
     <WorkflowSections>
+      {#if groups.data?.includes(name) && !unsaved && name !== UNGROUPED_GROUP}
+        <CollectionGroupActions
+          group={name}
+          mediaType={uiState.sidebarTab}
+          onrename={(replacement) => {
+            uiState.collectionGroupChanged(name, replacement);
+            name = replacement;
+          }}
+          ondelete={() => {
+            uiState.collectionGroupChanged(name, "");
+            name = "";
+            newName = "";
+          }}
+        />
+      {/if}
       {#key `${uiState.sidebarTab}:${name.trim()}`}<CollectionGroupSettings
           group={name.trim()}
           mediaType={uiState.sidebarTab}

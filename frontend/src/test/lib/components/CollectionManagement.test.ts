@@ -151,7 +151,11 @@ describe("collection management", () => {
       target: { value: "append" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
     await waitFor(() =>
       expect(calls.some((call) => call.url.includes("/rule") && call.init.method === "PUT")).toBe(
         true,
@@ -189,7 +193,11 @@ describe("collection management", () => {
     await screen.findByRole("option", { name: "Weekend" });
     await fireEvent.change(group, { target: { value: "Weekend" } });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
     expect(
       JSON.parse(
         String(
@@ -214,7 +222,7 @@ describe("collection management", () => {
     expect(screen.queryByRole("button", { name: "Manage groups" })).toBeNull();
     await fireEvent.change(group, { target: { value: "__new__" } });
     expect(uiState.openPopup).toBe("collection-groups");
-    expect(group).toHaveValue("");
+    expect(group).toHaveValue("Ungrouped");
     uiState.collectionGroupChanged("", "Fresh");
     await waitFor(() => expect(group).toHaveValue("Fresh"));
     uiState.closePopup();
@@ -299,7 +307,11 @@ describe("collection management", () => {
     expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
     await fireEvent.input(input, { target: { value: "99" } });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
     expect(
       JSON.parse(
         String(
@@ -397,7 +409,11 @@ describe("collection management", () => {
     expect(await screen.findByRole("button", { name: "Move First up" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move Second down" })).toBeDisabled();
     await fireEvent.click(screen.getByRole("button", { name: button }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
     expect(JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body))).toEqual(
       { member_ids: expected, order_type: "custom" },
     );
@@ -427,7 +443,11 @@ describe("collection management", () => {
       .find((row) => within(row).queryByRole("button", { name: "Remove Third from collection" }));
     if (!target) throw new Error("Third collection member is missing");
     await fireEvent.drop(target);
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
     expect(JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body))).toEqual(
       { member_ids: [2, 3, 1], order_type: "custom" },
     );
@@ -660,7 +680,7 @@ describe("collection management", () => {
     expect(await screen.findByLabelText("Title")).toHaveValue("Unsaved title");
     expect(screen.getByLabelText("Summary")).toHaveValue("Unsaved summary");
   });
-  it("offers only the header delete action and no separate danger zone", async () => {
+  it("offers a choice of deletion scope in a collapsed section", async () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
@@ -673,7 +693,83 @@ describe("collection management", () => {
     renderWithQueryClient(CollectionPage);
     expect(await screen.findByRole("region", { name: "Collection setup" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Danger Zone" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Delete collection" })).toHaveLength(1);
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Delete collection", expanded: false }),
+    );
+    expect(screen.getByRole("button", { name: "Delete from server only" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Delete from Overture and server" })).toBeEnabled();
+  });
+
+  it.each([
+    ["server", "Delete from server only"],
+    ["both", "Delete from Overture and server"],
+  ] as const)("confirms the %s collection deletion target", async (target, label) => {
+    const { calls } = mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/groups": ["Ungrouped"],
+      "/api/collections/12": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "DELETE" ? { status: "deleted" } : detail),
+      "/api/library/libraries": [],
+      "/api/library/items": { items: members, total: 2 },
+    });
+    renderWithQueryClient(CollectionPage);
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "Delete collection", expanded: false }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
+    await answerConfirmation(true);
+    await waitFor(() => {
+      const request = calls.find((call) => call.init.method === "DELETE");
+      expect(request).toBeDefined();
+      expect(new URL(request!.url, "http://localhost").searchParams.get("target")).toBe(target);
+    });
+  });
+
+  it("can return explicit collection settings to inherited group defaults", async () => {
+    const { calls } = mockFetchRoutes({
+      "/api/collections/defaults": { visible_home: true, visible_library: true },
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/groups": ["Ungrouped"],
+      "/api/collections/12": detail,
+      "/api/collections/12/rule": rule,
+    });
+    renderWithQueryClient(CollectionPage);
+    await screen.findByLabelText("Title");
+    await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
+    for (const [label, explicit] of [
+      ["Sort", "title.asc"],
+      ["Collection mode", "hide"],
+      ["Collection filtering", "user"],
+      ["Library recommended", "true"],
+      ["Home", "false"],
+      ["Shared users' home", "true"],
+    ] as const) {
+      const select = screen.getByLabelText(label);
+      await fireEvent.change(select, { target: { value: explicit } });
+      await fireEvent.change(select, { target: { value: "" } });
+      expect(select).toHaveValue("");
+    }
+    for (const label of ["Sort title", "Summary"]) {
+      const input = screen.getByLabelText(label);
+      await fireEvent.input(input, { target: { value: "Custom" } });
+      await fireEvent.input(input, { target: { value: "" } });
+    }
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      const saved = calls.find((call) => call.init.method === "PUT" && call.url.includes("/rule"));
+      expect(JSON.parse(String(saved?.init.body))).toMatchObject({
+        order_type: null,
+        collection_mode: null,
+        collection_filtering: null,
+        visible_library: null,
+        visible_home: null,
+        visible_shared: null,
+        sort_title_format: null,
+        summary_format: null,
+      });
+    });
   });
 
   it("loads and saves group defaults without submitting the collection", async () => {
@@ -709,7 +805,11 @@ describe("collection management", () => {
       target: { value: "+{title}" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
     const saved = calls.find((call) => call.init.method === "PUT");
     expect(saved?.url).toContain("/api/collections/group-policy?");
     expect(JSON.parse(String(saved?.init.body))).toMatchObject({

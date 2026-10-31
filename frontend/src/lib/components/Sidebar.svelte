@@ -40,7 +40,7 @@
     SidebarSortField as SortField,
   } from "../utils/sidebarDomain";
   import * as sidebarDomain from "../utils/sidebarDomain";
-  import { UNMANAGED_GROUP } from "../../generated/settings";
+  import { UNMANAGED_GROUP, UNGROUPED_GROUP } from "../../generated/settings";
   import { readJson, writeJson } from "../utils/storage";
   import DataStatus from "./DataStatus.svelte";
   import SidebarControls from "./SidebarControls.svelte";
@@ -333,7 +333,7 @@
     title={group}
     count={filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, group)).length}
     {style}
-    locked={group === UNMANAGED_GROUP}
+    locked={group === UNMANAGED_GROUP || group === UNGROUPED_GROUP}
     onselect={() => openSidebarGroup(group)}
   />
 {/snippet}

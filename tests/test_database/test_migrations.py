@@ -40,6 +40,11 @@ def _previous_settings(settings: Table, **values: object) -> dict[str, object]:
             if "collection_sync_interval_hours" in settings.c
             else {}
         ),
+        **(
+            {"collection_require_group": False}
+            if "collection_require_group" in settings.c
+            else {}
+        ),
         # Auto-advance was a flag before it had modes.
         **(
             {"auto_advance": False}
@@ -1406,5 +1411,51 @@ def test_rules_lose_their_schedule_and_assets_runs_combine_collections() -> None
                 )
                 == run
             )
+    finally:
+        engine.dispose()
+
+
+def test_managed_collections_gain_required_group_membership() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as connection:
+            config = alembic_config()
+            config.attributes["connection"] = connection
+            command.upgrade(config, "e9c4a7b1d3f5")
+            settings = Table("app_settings", MetaData(), autoload_with=connection)
+            connection.execute(
+                settings.insert().values(**_previous_settings(settings, id=1))
+            )
+            collections = Table(
+                "media_collections", MetaData(), autoload_with=connection
+            )
+            for identity, name in enumerate([None, "  ", "Weekend", None], 1):
+                row = MediaCollection(
+                    id=identity,
+                    media_type=MediaType.MOVIE,
+                    server_type=ServerType.PLEX,
+                    collection_group=name,
+                )
+                connection.execute(
+                    collections.insert().values(**row.model_dump(exclude={"art_slots"}))
+                )
+                if identity < 4:
+                    connection.exec_driver_sql(
+                        "INSERT INTO collection_rules "
+                        "(collection_id, criteria_json, smart) VALUES (?, '{}', 0)",
+                        (identity,),
+                    )
+            command.upgrade(config, "head")
+            assert connection.exec_driver_sql(
+                "SELECT collection_group FROM media_collections ORDER BY id"
+            ).scalars().all() == ["Ungrouped", "Ungrouped", "Weekend", None]
+            assert "collection_require_group" not in {
+                column["name"]
+                for column in inspect(connection).get_columns("app_settings")
+            }
+            command.downgrade(config, "e9c4a7b1d3f5")
+            assert connection.exec_driver_sql(
+                "SELECT collection_require_group FROM app_settings"
+            ).scalar_one()
     finally:
         engine.dispose()

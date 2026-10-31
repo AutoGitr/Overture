@@ -772,10 +772,13 @@ class CollectionGroupRename(StrictBaseModel):
     name: Annotated[GroupName, Field(min_length=1)]
 
 
+type CollectionDeleteTarget = Literal["server", "both"]
+
+
 class CollectionGroupDelete(StrictBaseModel):
     """What happens to a deleted group's collections.
 
-    ``keep`` leaves them without a group, ``move`` puts them in *group*,
+    ``keep`` moves them to Ungrouped, ``move`` puts them in *group*,
     ``overture`` forgets them (the server copies return as Unmanaged on the
     next import) and ``both`` deletes them from the server too.
     """

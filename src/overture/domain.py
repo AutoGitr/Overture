@@ -93,6 +93,7 @@ SMART_CUSTOM_ORDER = "Smart collections are ordered by Plex; choose a sort"
 
 #: The virtual group of collections without rules; no stored group may use it.
 UNMANAGED_GROUP = "Unmanaged"
+UNGROUPED_GROUP = "Ungrouped"
 #: Why a collection Overture does not manage refuses every change but take-over.
 UNMANAGED_REFUSAL = "Take the collection over before changing it"
 

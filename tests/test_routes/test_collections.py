@@ -299,6 +299,9 @@ async def test_collection_routes_delegate_to_service() -> None:
     assert updated.id == 1
     deleted = await collections_router.delete_collection(1, MediaType.MOVIE, service)
     assert deleted.status == Status.OK
+    service.delete.assert_awaited_with(1, MediaType.MOVIE, target="both")
+    await collections_router.delete_collection(1, MediaType.MOVIE, service, "server")
+    service.delete.assert_awaited_with(1, MediaType.MOVIE, target="server")
 
     # Members
     members = CollectionMembersUpdate(

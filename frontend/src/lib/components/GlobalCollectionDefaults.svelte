@@ -79,10 +79,6 @@
   Off leaves new server collections out of Overture; ones already imported are kept. Either way,
   Overture changes a collection only once it is taken over.
 </p>
-<label class="form-row justify-between">
-  <span>Require group membership for every collection</span>
-  <input type="checkbox" bind:checked={draft.collection_require_group} />
-</label>
 {#if settingsState.current.tmdb_configured}
   <h4 class="caps-label">Sources</h4>
   <FieldRow

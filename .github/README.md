@@ -484,10 +484,9 @@ unmanaged** in Bulk operations does the same for many. Taking over gives a colle
 keep what it holds today: a regular collection keeps its members, and a Plex
 smart collection keeps its filter when every Plex filter has an equivalent
 condition; otherwise Overture lists the filters it cannot read. `Unmanaged`
-cannot name a group. **Require group membership for every collection** under
-**Settings > Collections** is on for new installs; the sidebar then lists only
-groups, and a collection without a group appears at the top level only while
-the setting is off.
+cannot name a custom group. Every managed collection belongs to a group;
+missing membership uses **Ungrouped**. The sidebar organises collections by
+these groups and keeps unmanaged server collections separate.
 
 **Criteria** decide a collection's members. A condition tests item metadata,
 such as Genre is Action or Date added in the last 30 days, or a list: a TMDB
@@ -544,11 +543,26 @@ collection set, Settings and Schedule; Setup only assigns a group. **Save**
 takes effect on the next sync, **Save and Apply** sends display settings to the
 server at once while keeping members and explicit overrides, and **Save and
 Sync** runs the set and syncs the group's collections; both need the group to
-hold a collection or a set first. The open group is renamed or deleted under
-**Filters & operations**. Deleting moves its collections to another group,
-removes them from Overture (the next library sync lists the server's copies as
-Unmanaged) or from Overture and the server; keeping them without a group is
-offered only while groups are optional. Media files are always kept.
+hold a collection or a set first. Rename or delete a custom group in
+**Collection groups** or **Filters & operations**. Every managed collection
+belongs to a group. Deleting a group moves its collections to the reserved
+**Ungrouped** group by default; you can instead move them to another group,
+remove them from Overture (the next library sync lists the server's copies as
+Unmanaged), or delete them from both Overture and the server. Ungrouped cannot
+be renamed or deleted. Existing managed collections without a group move there
+when Overture upgrades.
+
+Under a collection's **Configure > Delete collection**, choose **Delete from
+server only** to keep its Overture configuration, or **Delete from Overture and
+server** to remove both. The header's delete action removes both. A retained
+configuration can recreate the server collection on a manual or scheduled sync.
+Media files are always kept.
+
+Criteria offer a dropdown for small lists of exact-match tag values available
+in the library. Larger lists and open-ended text use searchable suggestions;
+values come from synced metadata or the media server where appropriate. Bulk
+group assignment offers the existing groups. Status filters use aligned,
+full-width controls and stack their labels above the controls on small screens.
 
 ### Operations
 

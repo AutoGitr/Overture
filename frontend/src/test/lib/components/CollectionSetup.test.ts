@@ -318,13 +318,12 @@ describe("collection setup flow", () => {
       appSettings({
         media_server: "plex",
         collections_supported: true,
-        collection_require_group: true,
       }),
     );
     goToCollectionView(imported, "configure");
     renderWithQueryClient(CollectionPage);
     const takeOver = await screen.findByRole("button", { name: "Take over" });
-    expect(takeOver).toBeDisabled();
+    expect(takeOver).toBeEnabled();
     for (const name of ["Collection setup", "Collection content", "Collection settings"])
       expect(screen.queryByRole("region", { name })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
@@ -431,6 +430,50 @@ describe("collection setup flow", () => {
     expect(hint).toHaveTextContent("A smart collection suits these criteria");
     await fireEvent.click(within(hint).getByRole("button", { name: "Switch" }));
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("loads and deletes a saved preset while keeping its filled collection draft", async () => {
+    const saved: CollectionPresetRead = {
+      ...presets[1]!,
+      key: "saved:1",
+      label: "Seasonal",
+      saved_id: 1,
+      collection: {
+        title: "Seasonal",
+        collection_filtering: "admin",
+        rule: collectionRule({
+          sort_title_format: "01_{title}",
+          summary_format: "{title}",
+          active_start_mmdd: "12-01",
+          active_end_mmdd: "12-31",
+          delete_when_inactive: true,
+        }),
+      },
+    };
+    let available = [...presets, saved];
+    const { calls } = mockPage({
+      "/api/collections/presets": () => Response.json(available),
+      "/api/collections/presets/1": () => {
+        available = presets;
+        return Response.json({ status: "deleted" });
+      },
+    });
+    await createPage();
+    await screen.findByRole("option", { name: "Seasonal" });
+    await fireEvent.change(screen.getByLabelText("Start from"), { target: { value: "saved:1" } });
+    expect(screen.getByLabelText("Title")).toHaveValue("Seasonal");
+    expect(screen.getByLabelText("Sort title")).toHaveValue("01_{title}");
+    await fireEvent.click(screen.getByRole("button", { name: "Delete preset" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("option", { name: "Seasonal" })).not.toBeInTheDocument(),
+    );
+    expect(
+      calls.some(
+        (call) => call.url === "/api/collections/presets/1" && call.init.method === "DELETE",
+      ),
+    ).toBe(true);
+    expect(screen.getByLabelText("Title")).toHaveValue("Seasonal");
+    await waitFor(() => expect(screen.getByLabelText("Start from")).toHaveValue(""));
   });
 
   it("previews members and saves the form as a preset", async () => {

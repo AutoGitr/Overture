@@ -137,6 +137,19 @@ test("filters dialog stays inside the viewport and scrolls its body", async ({ p
   const footer = dialog.locator(".popup-footer");
   const body = dialog.locator(".popup-body");
 
+  const statusControls = await Promise.all(
+    ["Monitor status", "Art complete", "Theme complete"].map((name) =>
+      dialog.getByRole("radiogroup", { name, exact: true }).boundingBox(),
+    ),
+  );
+  for (const control of statusControls) {
+    expect(control).not.toBeNull();
+    expect(control!.width).toBeCloseTo(statusControls[0]!.width, 0);
+    expect(control!.x).toBeCloseTo(statusControls[0]!.x, 0);
+    expect(control!.height).toBeGreaterThanOrEqual(36);
+  }
+  await expect(body).toHaveJSProperty("scrollWidth", await body.evaluate((el) => el.clientWidth));
+
   // Initial bounds check: whole popup, header and footer must fit inside viewport
   let box = await content.boundingBox();
   let headerBox = await header.boundingBox();

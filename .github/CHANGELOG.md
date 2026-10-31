@@ -9,6 +9,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Collection configuration offers deletion from the media server alone or from both Overture and the server, while keeping media files.
+- Rename and delete custom groups directly in Collection groups.
+- Small lists of exact-match criteria values and bulk group assignments offer dropdown choices; status filters have larger, aligned controls that adapt to narrow screens.
+
 - The sidebar's filter button counts active filters, with Reset filters beside it.
 - The database record of an OvertureDB entry also lists its local draft.
 - Settings has Reset to defaults, which fills the form with every default; Save keeps them.
@@ -63,12 +67,12 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Assets runs over libraries and collections together: the library checklist lists All collections and each group, replacing the Collections mode and the Themes-only collections checkbox. Asset runs and incremental theme downloads leave unmanaged collections alone.
 - Sync schedules belong to groups and the global defaults; a collection keeps only its active dates. Existing per-collection schedules are dropped.
-- Deleting a group can move its collections to another group; keeping them without a group is offered only while groups are optional, and removing only the server copy is gone.
-- Settings everywhere put each label on the same line as its control, and forms are a single column.
+- Deleting a group moves its collections to Ungrouped by default; you can instead choose another group or remove its collections from Overture or from both Overture and the server.
+- Settings align labels beside their controls and stack them on narrow screens; forms are a single column.
 - Run, Save schedule, Apply filters and group Save and Apply or Save and Sync are unavailable, and say why, until they would do something.
 - Every collection Overture creates is criteria-based, and a collection made outside Overture can only be taken over: its page shows just Take over, and Overture changes nothing else about it until then. Unmanaged collections appear only in the Unmanaged group, which has its own icon.
-- Require group membership for every collection is on for new installs, and the sidebar lists a collection at the top level only while it has no group.
-- Filters list libraries first, then every status filter together on one line each, then art and theme refinements and bulk operations; renaming and deleting the open group moved there from Collection groups.
+- Managed collections always belong to a group; the optional-group setting is removed, and existing collections without membership move into the protected Ungrouped group.
+- Filters list libraries first, then status filters, art and theme refinements and bulk operations; the open group can also be renamed or deleted there.
 - Save buttons stay unavailable, and say why, until a collection can be saved; sections that need a library are dimmed until one is chosen.
 - No theme is set only in the OvertureDB view and reaches the library with the next OvertureDB sync.
 - A set now removes collections whose value disappears exactly when it deletes those below the minimum; the separate setting is gone.

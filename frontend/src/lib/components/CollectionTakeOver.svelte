@@ -4,7 +4,7 @@
   import type { CollectionDetail } from "../../generated/rest/types.gen";
   import { storeCollectionDetail } from "../rest/cache";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { settingsState } from "../stores/settingsState.svelte";
+  import { UNGROUPED_GROUP } from "../../generated/settings";
   import { errorMessage } from "../utils/errors";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
@@ -15,9 +15,7 @@
   const id = $props.id();
   const request = createMutation(() => takeOverCollectionMutation());
   const feedback = createNotifier();
-  let group = $state("");
-  let required = $derived(settingsState.current.collection_require_group);
-  let blocker = $derived(required && !group ? "Choose a group: every collection needs one" : null);
+  let group = $state(UNGROUPED_GROUP);
 
   async function takeOver() {
     feedback.clear();
@@ -45,9 +43,9 @@
     Taking it over gives it criteria that keep what it holds today; a Plex smart collection keeps
     its filter. It can then be edited, synced and given art and a theme like any other.
   </p>
-  <FieldRow label="Group" for={`${id}-group`} hint={blocker ?? undefined}>
+  <FieldRow label="Group" for={`${id}-group`}>
     <select id={`${id}-group`} bind:value={group}>
-      <option value="" disabled={required}>{required ? "Choose a group" : "No group"}</option>
+      {#if !groups.includes(UNGROUPED_GROUP)}<option value={UNGROUPED_GROUP}>{UNGROUPED_GROUP}</option>{/if}
       {#each groups as name (name)}<option value={name}>{name}</option>{/each}
     </select>
   </FieldRow>
@@ -57,8 +55,6 @@
       class="btn btn-primary"
       pending={request.isPending}
       pendingLabel="Taking over..."
-      disabled={!!blocker}
-      title={blocker ?? undefined}
       onclick={() => void takeOver()}>Take over</PendingButton
     >
   </div>

@@ -27,6 +27,7 @@ lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import (
     ITEM_ART_TYPES,
     SMART_CUSTOM_ORDER,
+    UNGROUPED_GROUP,
     UNMANAGED_REFUSAL,
     ArtType,
     CollectionFiltering,
@@ -61,6 +62,7 @@ lazy from ...schemas.collections import (
     CollectionArrOptions,
     CollectionCapabilities,
     CollectionCreate,
+    CollectionDeleteTarget,
     CollectionDetail,
     CollectionDimensionRead,
     CollectionFieldRead,
@@ -118,6 +120,7 @@ lazy from ...utils.collection_formats import (
     is_within_active_window,
     literal_template,
 )
+lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.cron import next_run_after
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
@@ -929,7 +932,9 @@ class CollectionsService:
         rule = body.rule
         smart = rule.smart
         self._validate_display(body, body.media_type, smart=smart)
-        await self._require_group(body.collection_group)
+        body = body.model_copy(
+            update={"collection_group": collection_group(body.collection_group)}
+        )
         if (
             body.tmdb_collection_id is not None
             and body.media_type is not MediaType.MOVIE
@@ -1138,7 +1143,9 @@ class CollectionsService:
         async with self._database.read_session() as session:
             rule = await CollectionRepository(session).rule(row.id or 0)
         if rule is not None:
-            await self._require_group(body.collection_group)
+            body = body.model_copy(
+                update={"collection_group": collection_group(body.collection_group)}
+            )
             rule.sqlmodel_update(display)
         effective = await self._push_options(row, body, rule, push=push)
         summary_source = row.summary_source
@@ -1198,7 +1205,13 @@ class CollectionsService:
             await CollectionRepository(session).replace_members(collection_id, [])
         await self._publisher.broadcast("collections.changed")
 
-    async def delete(self, collection_id: int, media_type: MediaType) -> StatusResponse:
+    async def delete(
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        *,
+        target: CollectionDeleteTarget = "both",
+    ) -> StatusResponse:
         """Delete a collection and cancel its assets, preserving all media."""
         async with (
             self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
@@ -1206,7 +1219,10 @@ class CollectionsService:
         ):
             async with self._database.read_session() as session:
                 row = await self._require_managed(session, collection_id, media_type)
-            await self._delete_locked(row)
+            if target == "server":
+                await self._withhold_locked(row)
+            else:
+                await self._delete_locked(row)
         return StatusResponse(status=Status.DELETED)
 
     async def _set_members_locked(
@@ -1329,7 +1345,6 @@ class CollectionsService:
         self, row: MediaCollection, body: CollectionRuleWrite
     ) -> CollectionRuleRead:
         collection_id = row.id or 0
-        await self._require_group(row.collection_group)
         async with self._database.read_session() as session:
             existing = await CollectionRepository(session).rule(collection_id)
             policy = await self._policy(
@@ -2324,6 +2339,10 @@ class CollectionsService:
     ) -> StatusResponse:
         """Rename defaults and every member atomically, including unlisted rows."""
         name, replacement = name.strip(), _group_name(replacement)
+        if UNGROUPED_GROUP.casefold() in {name.casefold(), replacement.casefold()}:
+            raise PublicServiceError(
+                422, "The Ungrouped group cannot be renamed or replaced"
+            )
         server = self._provider().server_type
         async with (
             self._downloads.asset_locks.acquire(COLLECTIONS_LOCK),
@@ -2357,15 +2376,14 @@ class CollectionsService:
         """Remove a group only after each selected collection operation succeeds.
 
         Raises:
-            PublicServiceError: 422 when its collections would be left without
-                a group while groups are required, or would move into itself.
+            PublicServiceError: 422 for the reserved fallback or a move into itself.
         """
         name = name.strip()
-        target = body.group.strip() if body.group else None
-        if target is not None and target.casefold() == name.casefold():
+        if name.casefold() == UNGROUPED_GROUP.casefold():
+            raise PublicServiceError(422, "The Ungrouped group cannot be deleted")
+        target = collection_group(body.group)
+        if target.casefold() == name.casefold():
             raise PublicServiceError(422, "Move the collections to another group")
-        if body.collections == "keep":
-            await self._require_group(None)
         server = self._provider().server_type
         result = BulkCollectionOperationResult()
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
@@ -2562,9 +2580,7 @@ class CollectionsService:
     ) -> CollectionOptions:
         options = CollectionsService._saved_options(row, rule)
         if body.operation == "set_group":
-            options.collection_group = (
-                body.collection_group.strip() or None if body.collection_group else None
-            )
+            options.collection_group = body.collection_group
         elif body.operation == "set_order" and body.order_type is not None:
             options.order_type = body.order_type
         elif body.operation == "set_visibility":
@@ -2585,8 +2601,6 @@ class CollectionsService:
         self, body: BulkCollectionOperation
     ) -> BulkCollectionOperationResult:
         """Use the single-collection workflows, committing each target independently."""
-        if body.operation in {"set_group", "take_over"}:
-            await self._require_group(body.collection_group)
         result = BulkCollectionOperationResult()
         async with self._database.read_session() as session:
             managed = await CollectionRepository(session).managed_ids(
@@ -2756,7 +2770,8 @@ class CollectionsService:
             policies = await repo.group_policies(provider.server_type, media_type)
             managed = {rule.collection_id for rule in await repo.rules()}
         return sorted(
-            {group.name for group in policies}
+            {UNGROUPED_GROUP}
+            | {group.name for group in policies}
             | {
                 row.collection_group
                 for row in rows
@@ -2787,23 +2802,6 @@ class CollectionsService:
             "collection.updated", {"collection_id": collection_id}
         )
 
-    async def _require_group(self, group: str | None) -> None:
-        """Refuse a managed collection without a group while the setting asks.
-
-        Raises:
-            PublicServiceError: 422 when *group* is empty and groups are required.
-        """
-        if group and group.strip():
-            return
-        async with self._database.read_session() as session:
-            required = (await get_app_settings(session)).collection_require_group
-        if required:
-            raise PublicServiceError(
-                422,
-                "Choose a group: Settings require group membership "
-                "for every collection",
-            )
-
     async def take_over(
         self, collection_id: int, media_type: MediaType, body: CollectionTakeOver
     ) -> CollectionDetail:
@@ -2822,7 +2820,7 @@ class CollectionsService:
             if await repo.rule(collection_id) is not None:
                 raise PublicServiceError(409, "Overture already manages it")
             members = await repo.members(collection_id)
-        await self._require_group(body.group)
+        body = body.model_copy(update={"group": collection_group(body.group)})
         if row.kind is CollectionKind.SMART:
             rule = await self._smart_takeover_rule(row)
         else:

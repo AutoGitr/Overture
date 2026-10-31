@@ -408,6 +408,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
       "/api/collections/bulk-operation": { collection_ids: [1], errors: {} },
+      "/api/collections/groups": ["Ungrouped", "Weekend"],
     });
     const view = renderWithQueryClient(FiltersPopup);
     // Plex offers smart collections, so the server's options have loaded.
@@ -417,7 +418,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     );
     await fireEvent.change(view.getByLabelText("Operation"), { target: { value: operation } });
     if (operation === "set_group")
-      await fireEvent.input(view.getByLabelText("Target group"), { target: { value: "Weekend" } });
+      await fireEvent.change(view.getByLabelText("Target group"), { target: { value: "Weekend" } });
     if (operation === "set_order")
       await fireEvent.change(await view.findByLabelText(/^Sort/), {
         target: { value: "title.asc" },

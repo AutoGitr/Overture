@@ -5,15 +5,12 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionGroupDelete, MediaType } from "../../generated/rest/types.gen";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
-import { settingsState } from "../stores/settingsState.svelte";
 import { errorMessage } from "./errors";
 
 /** Actions for the selected group; the popup owns which group is selected. */
 export class CollectionGroupActions {
   name = $derived.by(() => this.group());
-  removal = $derived<NonNullable<CollectionGroupDelete["collections"]>>(
-    settingsState.current.collection_require_group ? "move" : "keep",
-  );
+  removal = $state<NonNullable<CollectionGroupDelete["collections"]>>("keep");
   /** The group a move puts the collections in. */
   target = $state("");
   private readonly renameRequest = createMutation(() => renameCollectionGroupMutation());
@@ -52,7 +49,7 @@ export class CollectionGroupActions {
     const removal = this.removal;
     const target = this.target.trim();
     const descriptions = {
-      keep: "Keep its collections without a group.",
+      keep: "Move its collections to Ungrouped.",
       move: `Move its collections to "${target}".`,
       overture:
         "Remove its collections from Overture. The server keeps them, and the next library sync lists them as Unmanaged.",

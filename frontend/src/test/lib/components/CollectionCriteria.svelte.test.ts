@@ -4,6 +4,7 @@ import type {
   CollectionGroupPolicyOutput,
   CollectionSourceInput,
   FilterGroupInput,
+  FieldConditionInput,
 } from "../../../generated/rest/types.gen";
 import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
 import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
@@ -65,12 +66,10 @@ describe("collection criteria", () => {
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:genre" },
     });
-    const value = screen.getByLabelText("Criteria condition 1 value");
-    await fireEvent.input(value, { target: { value: "Action" } });
-    // Tag values are suggested from the library.
-    await waitFor(() =>
-      expect(document.querySelector(`#${value.getAttribute("list")} option`)).toHaveValue("Action"),
-    );
+    await screen.findByRole("option", { name: "Action (3 titles)" });
+    const value = screen.getByRole("combobox", { name: "Criteria condition 1 value" });
+    await fireEvent.change(value, { target: { value: "Action" } });
+    expect(within(value).getByRole("option", { name: "Action (3 titles)" })).toHaveValue("Action");
 
     await fireEvent.click(screen.getByRole("button", { name: "Group" }));
     const nested = within(screen.getByRole("group", { name: "Criteria group 1" }));
@@ -121,6 +120,36 @@ describe("collection criteria", () => {
     expect(screen.getByText("No conditions yet.")).toBeInTheDocument();
   });
 
+  it("keeps a saved tag missing from the library and allows text for partial matches", async () => {
+    mockFetchRoutes({
+      "/api/collections/field-values": [{ value: "Action", count: 3 }],
+    });
+    const group = $state<FilterGroupInput>({
+      ...emptyGroup(),
+      conditions: [{ kind: "field", field: "genre", operator: "is", value: "Future genre" }],
+    });
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: capabilities.fields,
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      label: "Criteria",
+    });
+    await screen.findByRole("option", { name: "Future genre (not in this library)" });
+    expect(screen.getByLabelText("Criteria condition 1 value")).toHaveValue("Future genre");
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
+      target: { value: "field:title" },
+    });
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 operator"), {
+      target: { value: "contains" },
+    });
+    const input = screen.getByLabelText("Criteria condition 1 value");
+    expect(input.tagName).toBe("INPUT");
+    await fireEvent.input(input, { target: { value: "Future" } });
+    expect(group.conditions?.[0]).toMatchObject({ operator: "contains", value: "Future" });
+  });
+
   it("suggests at most 50 library values, narrowed to what is typed", async () => {
     mockFetchRoutes({
       "/api/collections/field-values": Array.from({ length: 300 }, (_, index) => ({
@@ -148,6 +177,91 @@ describe("collection criteria", () => {
     await fireEvent.input(value, { target: { value: "studio 29" } });
     // Studio 29 and Studio 290 to 299.
     await waitFor(() => expect(options()).toHaveLength(11));
+  });
+
+  it.each([
+    { kind: "field", field: "unplayed", operator: "is", value: true },
+    { kind: "field", field: "year", operator: "gte", value: 2020 },
+    { kind: "field", field: "added", operator: "in_last", value: 7 },
+  ] satisfies FieldConditionInput[])(
+    "keeps $field values typed while editing",
+    async (condition) => {
+      const group = $state<FilterGroupInput>({ ...emptyGroup(), conditions: [condition] });
+      renderWithQueryClient(CriteriaEditor, {
+        group,
+        fields: capabilities.fields,
+        sources: capabilities.sources,
+        mediaType: "movie",
+        libraryId: "movies",
+        label: "Criteria",
+      });
+      const input = screen.getByLabelText("Criteria condition 1 value");
+      if (condition.field === "unplayed") {
+        await fireEvent.change(input, { target: { value: "false" } });
+        expect(group.conditions?.[0]).toMatchObject({ value: false });
+        await fireEvent.change(input, { target: { value: "true" } });
+        expect(group.conditions?.[0]).toMatchObject({ value: true });
+      } else {
+        await fireEvent.input(input, { target: { value: "0" } });
+        expect(group.conditions?.[0]).toMatchObject({ value: 0 });
+        await fireEvent.input(input, { target: { value: "12" } });
+        expect(group.conditions?.[0]).toMatchObject({ value: 12 });
+      }
+    },
+  );
+
+  it("can replace a saved field that this server no longer offers", async () => {
+    mockFetchRoutes({ "/api/collections/field-values": [] });
+    const group = $state<FilterGroupInput>({
+      ...emptyGroup(),
+      conditions: [{ kind: "field", field: "studio", operator: "is", value: "Studio" }],
+    });
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: capabilities.fields,
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      label: "Criteria",
+    });
+    expect(screen.getByRole("option", { name: "Unavailable field" })).toBeDisabled();
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
+      target: { value: "field:title" },
+    });
+    await fireEvent.input(screen.getByLabelText("Criteria condition 1 value"), {
+      target: { value: "Saga" },
+    });
+    expect(group.conditions?.[0]).toMatchObject({ field: "title", value: "Saga" });
+  });
+
+  it("retries unavailable choices and displays server choices without invented counts", async () => {
+    let failed = true;
+    mockFetchRoutes({
+      "/api/collections/field-values": () =>
+        failed
+          ? Response.json({ detail: "Unavailable" }, { status: 422 })
+          : Response.json([{ value: "English", count: 0 }]),
+    });
+    const group = $state<FilterGroupInput>({
+      ...emptyGroup(),
+      conditions: [{ kind: "field", field: "genre", operator: "is", value: "" }],
+    });
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: capabilities.fields,
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      label: "Criteria",
+    });
+    const retry = await screen.findByRole("button", { name: "Retry available values" });
+    failed = false;
+    await fireEvent.click(retry);
+    await screen.findByRole("option", { name: "English" });
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 value"), {
+      target: { value: "English" },
+    });
+    expect(group.conditions?.[0]).toMatchObject({ value: "English" });
   });
 
   it("edits person credits and offers the configured Radarr tags", async () => {

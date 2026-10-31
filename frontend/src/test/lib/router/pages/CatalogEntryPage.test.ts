@@ -377,9 +377,11 @@ describe("catalog detail drafts", () => {
     await fireEvent.click(
       await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
     );
-    await waitFor(() => expect(finish).toBeDefined());
-    expect(screen.getByRole("button", { name: "Discard draft" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Clear poster" })).toBeDisabled();
+    await waitFor(() => {
+      expect(finish).toBeDefined();
+      expect(screen.getByRole("button", { name: "Discard draft" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Clear poster" })).toBeDisabled();
+    });
     finish?.(Response.json(initial));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Discard draft" })).toBeEnabled(),

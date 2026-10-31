@@ -183,6 +183,31 @@
       {#if editor.blocker}<span class="hint" role="status">{editor.blocker}</span>{/if}
     </div>
   </form>
+  {#if collection && editor instanceof CollectionEditor}
+    {@const savedEditor = editor}
+    <DetailForm
+      title="Delete collection"
+      description="Choose where to remove the collection. Media files are always kept."
+      busy={editor.busy}
+      collapsible
+    >
+      <p class="hint">
+        Keeping the Overture configuration lets a later manual or scheduled sync recreate the
+        server collection.
+      </p>
+      <button
+        type="button"
+        class="btn btn-danger"
+        disabled={!onServer}
+        onclick={() => void savedEditor.delete("server")}>Delete from server only</button
+      >
+      <button
+        type="button"
+        class="btn btn-danger"
+        onclick={() => void savedEditor.delete("both")}>Delete from Overture and server</button
+      >
+    </DetailForm>
+  {/if}
 </WorkflowSections>
 
 <style>

@@ -81,11 +81,6 @@
             "title": "Collection Request Missing",
             "type": "boolean"
           },
-          "collection_require_group": {
-            "default": true,
-            "title": "Collection Require Group",
-            "type": "boolean"
-          },
           "collection_sort_title_format": {
             "default": "",
             "maxLength": 200,
@@ -318,7 +313,6 @@
           "collection_sync_enabled",
           "collection_request_missing",
           "collection_import_unmanaged",
-          "collection_require_group",
           "overturedb_no_theme",
           "overturedb_browse",
           "tmdb_region",
@@ -517,17 +511,6 @@
               }
             ],
             "title": "Collection Request Missing"
-          },
-          "collection_require_group": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Require Group"
           },
           "collection_sort_title_format": {
             "anyOf": [
@@ -4310,7 +4293,7 @@
       },
       "CollectionGroupDelete": {
         "additionalProperties": false,
-        "description": "What happens to a deleted group's collections.\n\n``keep`` leaves them without a group, ``move`` puts them in *group*,\n``overture`` forgets them (the server copies return as Unmanaged on the\nnext import) and ``both`` deletes them from the server too.",
+        "description": "What happens to a deleted group's collections.\n\n``keep`` moves them to Ungrouped, ``move`` puts them in *group*,\n``overture`` forgets them (the server copies return as Unmanaged on the\nnext import) and ``both`` deletes them from the server too.",
         "properties": {
           "collections": {
             "default": "keep",
@@ -15808,6 +15791,20 @@
             "schema": {
               "$ref": "#/components/schemas/MediaType",
               "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "default": "both",
+              "enum": [
+                "server",
+                "both"
+              ],
+              "title": "Target",
+              "type": "string"
             }
           },
           {

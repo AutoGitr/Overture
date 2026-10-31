@@ -8,7 +8,7 @@
     getPublicDatasetStatusOptions,
     listCatalogEntriesOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { UNMANAGED_GROUP } from "../../generated/settings";
+  import { UNMANAGED_GROUP, UNGROUPED_GROUP } from "../../generated/settings";
   import { openSidebarGroup, sidebarGroup } from "../router/routes";
   import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
@@ -331,7 +331,7 @@
         {/if}
       {/each}
 
-      {#if uiState.sidebarMode === "collections" && openGroup && openGroup !== UNMANAGED_GROUP}
+      {#if uiState.sidebarMode === "collections" && openGroup && openGroup !== UNMANAGED_GROUP && openGroup !== UNGROUPED_GROUP}
         {@const group = openGroup}
         <CollectionGroupActions
           {group}

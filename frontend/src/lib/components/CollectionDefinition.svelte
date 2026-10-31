@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { settingsState } from "../stores/settingsState.svelte";
+  import { UNGROUPED_GROUP } from "../../generated/settings";
+
   import { uiState } from "../stores/uiState.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
@@ -179,26 +180,22 @@
       <select
         id={`${id}-group`}
         disabled={editor.generated}
-        value={editor.collectionGroup}
+        value={editor.collectionGroup || UNGROUPED_GROUP}
         onchange={(event) => {
           if (event.currentTarget.value !== NEW_GROUP) {
             editor.collectionGroup = event.currentTarget.value;
             return;
           }
           // The select keeps showing the current group until the popup creates one.
-          event.currentTarget.value = editor.collectionGroup;
+          event.currentTarget.value = editor.collectionGroup || UNGROUPED_GROUP;
           uiState.openCollectionGroups("", (name, replacement) => {
             if (!name || editor.collectionGroup === name) editor.collectionGroup = replacement;
           });
         }}
       >
-        {#if settingsState.current.collection_require_group}
-          <option value="" disabled>Choose a group</option>
-        {:else}
-          <option value="">No group</option>
-        {/if}
-        {#if editor.collectionGroup && !groups.includes(editor.collectionGroup)}
-          <option value={editor.collectionGroup}>{editor.collectionGroup}</option>
+        {#if !groups.includes(UNGROUPED_GROUP)}<option value={UNGROUPED_GROUP}>{UNGROUPED_GROUP}</option>{/if}
+        {#if editor.collectionGroup && editor.collectionGroup !== UNGROUPED_GROUP && !groups.includes(editor.collectionGroup)}
+          <option value={editor.collectionGroup || UNGROUPED_GROUP}>{editor.collectionGroup}</option>
         {/if}
         {#each groups as group (group)}<option value={group}>{group}</option>{/each}
         <option value={NEW_GROUP}>Create new group...</option>
