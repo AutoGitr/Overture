@@ -1,16 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    "abandonments:recommended",
-    ":configMigration"
-  ],
+  "extends": ["config:recommended", "abandonments:recommended", ":configMigration"],
   "pinDigests": true,
   "dependencyDashboard": true,
   "rangeStrategy": "pin",
   "labels": ["deps"],
-  "prConcurrentLimit": 2,
-  "prHourlyLimit": 2,
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
   "minimumReleaseAge": "3 days",
   "schedule": ["* 5 * * 2"],
   "internalChecksFilter": "strict",
