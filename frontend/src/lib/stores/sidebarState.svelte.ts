@@ -1,0 +1,28 @@
+import type { AdvanceRecord } from "../utils/recordAdvance";
+import type { SidebarTab } from "../utils/sidebarDomain";
+
+/** A row auto-advance can move to: a stored item, or a TMDB title not yet stored. */
+export type AdvanceEntry =
+  | { kind: "item"; id: number }
+  | { kind: "tmdb"; tmdb_id: number; title: string; media_type: SidebarTab };
+
+export const sidebarState = $state<{
+  /**
+   * The complete rendered library result set, including rows outside the
+   * virtual viewport. "Current sidebar items" operations act on it.
+   */
+  current: { type: SidebarTab; itemIds: number[] } | null;
+  collections: { type: SidebarTab; collectionIds: number[] } | null;
+  /** The TMDB results shown, in order, while the sidebar searches TMDB. */
+  tmdbResults: AdvanceEntry[] | null;
+  /** The collections or catalog entries shown, in order, for auto-advance. */
+  records: AdvanceRecord[] | null;
+}>({ current: null, collections: null, tmdbResults: null, records: null });
+
+/** The rows auto-advance moves through: the TMDB results, else the library's. */
+export function advanceOrder(): AdvanceEntry[] {
+  return (
+    sidebarState.tmdbResults ??
+    (sidebarState.current?.itemIds ?? []).map((id) => ({ kind: "item" as const, id }))
+  );
+}

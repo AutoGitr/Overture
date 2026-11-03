@@ -1,0 +1,135 @@
+"""Running one operation over many collections, each committed on its own."""
+
+lazy from collections.abc import Awaitable, Callable, Mapping
+
+lazy from ...db.models.collection_rule import CollectionRule
+lazy from ...db.models.media_collection import MediaCollection
+lazy from ...domain import UNMANAGED_REFUSAL
+lazy from ...repositories.collections import CollectionRepository
+lazy from ...schemas.collections import (
+    BulkCollectionOperation,
+    BulkCollectionOperationResult,
+    CollectionAdoption,
+    CollectionOptions,
+)
+lazy from .access import CollectionAccess
+lazy from .display import saved_options
+lazy from .editor import CollectionEditor
+lazy from .rule_sync import RuleSync
+
+type BulkHandler = Callable[[int, BulkCollectionOperation], Awaitable[object]]
+type OptionEdit = Callable[[CollectionOptions, BulkCollectionOperation], None]
+
+
+def _set_group(options: CollectionOptions, body: BulkCollectionOperation) -> None:
+    options.collection_group = body.collection_group
+
+
+def _set_order(options: CollectionOptions, body: BulkCollectionOperation) -> None:
+    if body.order_type is not None:
+        options.order_type = body.order_type
+
+
+def _set_visibility(options: CollectionOptions, body: BulkCollectionOperation) -> None:
+    if "collection_mode" in body.model_fields_set:
+        options.collection_mode = body.collection_mode
+    if body.visible_home is not None:
+        options.visible_home = body.visible_home
+    if body.visible_shared is not None:
+        options.visible_shared = body.visible_shared
+    if body.visible_library is not None:
+        options.visible_library = body.visible_library
+
+
+def _apply_sort_title_format(
+    options: CollectionOptions, body: BulkCollectionOperation
+) -> None:
+    if body.sort_title_format is not None:
+        options.sort_title = None
+        options.sort_title_format = body.sort_title_format
+
+
+#: Bulk operations that change one display option of each collection.
+OPTION_EDITS: Mapping[str, OptionEdit] = {
+    "set_group": _set_group,
+    "set_order": _set_order,
+    "set_visibility": _set_visibility,
+    "apply_sort_title_format": _apply_sort_title_format,
+}
+
+
+def bulk_options(
+    row: MediaCollection, body: BulkCollectionOperation, rule: CollectionRule | None
+) -> CollectionOptions:
+    """A collection's saved options with the bulk operation's change applied."""
+    options = saved_options(row, rule)
+    OPTION_EDITS[body.operation](options, body)
+    return options
+
+
+class CollectionBulk:
+    """Apply one operation to many collections, one collection at a time."""
+
+    def __init__(
+        self, *, access: CollectionAccess, editor: CollectionEditor, rules: RuleSync
+    ) -> None:
+        self._access = access
+        self._editor = editor
+        self._rules = rules
+        self._handlers: Mapping[str, BulkHandler] = {
+            "delete": lambda i, body: editor.delete(
+                i, body.media_type, target=body.delete_target
+            ),
+            "trigger_sync": lambda i, body: rules.sync(i, body.media_type),
+            "clear_artwork": lambda i, body: editor.forget_selections(
+                i, body.media_type, artwork=True
+            ),
+            "clear_themes": lambda i, body: editor.forget_selections(
+                i, body.media_type, artwork=False
+            ),
+            "adopt": lambda i, body: editor.adopt(
+                i, body.media_type, CollectionAdoption(group=body.collection_group)
+            ),
+            "orphan": lambda i, body: editor.orphan(i, body.media_type),
+            "set_monitored": lambda i, body: editor.set_monitored(
+                i, body.media_type, bool(body.monitored)
+            ),
+            **dict.fromkeys(OPTION_EDITS, self._edit_options),
+        }
+
+    async def run(self, body: BulkCollectionOperation) -> BulkCollectionOperationResult:
+        """Use the single-collection workflows, committing each target independently."""
+        handler = self._handlers[body.operation]
+        result = BulkCollectionOperationResult()
+        async with self._access.database.read_session() as session:
+            managed = await CollectionRepository(session).managed_ids(
+                body.collection_ids
+            )
+        for collection_id in body.collection_ids:
+            # Adoption is the one change a collection Overture does not manage accepts.
+            if (collection_id in managed) == (body.operation == "adopt"):
+                result.errors[collection_id] = (
+                    "Overture already manages it"
+                    if body.operation == "adopt"
+                    else UNMANAGED_REFUSAL
+                )
+                continue
+            try:
+                await handler(collection_id, body)
+                result.collection_ids.append(collection_id)
+            except Exception as exc:
+                result.errors[collection_id] = str(exc)
+        return result
+
+    async def _edit_options(
+        self, collection_id: int, body: BulkCollectionOperation
+    ) -> None:
+        # Keep the read and update under the same asset locks.
+        async with self._access.locked(collection_id):
+            async with self._access.database.read_session() as session:
+                row = await self._access.require(
+                    session, collection_id, body.media_type
+                )
+                rule = await CollectionRepository(session).rule(collection_id)
+            await self._editor.update_locked(row, bulk_options(row, body, rule))
+        await self._access.updated(collection_id)

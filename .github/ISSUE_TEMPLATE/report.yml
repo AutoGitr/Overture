@@ -1,0 +1,42 @@
+name: Bug report or suggestion
+description: Report a bug or suggest an improvement to Overture.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Leave out API keys, password hashes and private URLs.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened and the steps to reproduce it, or what you suggest.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Overture version
+      description: "`overture --version`, or `docker exec overture overture --version` for Docker."
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation
+      options:
+        - Docker
+        - Linux service
+
+  - type: input
+    id: environment
+    attributes:
+      label: Media server and browser
+      placeholder: Plex 1.42.1, Chrome 141
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Redacted log lines around the problem.
+      render: text

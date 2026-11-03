@@ -1,0 +1,60 @@
+<script lang="ts">
+  import { countOf } from "../utils/plural";
+  import Folder from "@lucide/svelte/icons/folder";
+  import FolderLock from "@lucide/svelte/icons/folder-lock";
+  let {
+    title,
+    count,
+    style,
+    locked = false,
+    onselect,
+  }: {
+    title: string;
+    count: number;
+    style: string;
+    /** The virtual group of collections Overture does not manage yet. */
+    locked?: boolean;
+    onselect: () => void;
+  } = $props();
+  let Icon = $derived(locked ? FolderLock : Folder);
+</script>
+
+<button
+  type="button"
+  class="group-row"
+  {style}
+  aria-label={`Open group ${title}`}
+  onclick={onselect}
+>
+  <Icon size={26} /><span><strong>{title}</strong><small>{countOf(count, "collection")}</small></span>
+</button>
+
+<style>
+  .group-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    width: 100%;
+    text-align: left;
+    border-radius: var(--radius-sm);
+  }
+  .group-row:hover {
+    background: var(--bg-hover);
+  }
+  span {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  strong {
+    font-size: var(--text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  small {
+    color: var(--text-tertiary);
+  }
+</style>

@@ -1,0 +1,93 @@
+name: Trivy
+
+# Renovate keeps declared dependency and base-image versions current, but it
+# can't see: (a) CVEs disclosed after a version was pinned but before a fix
+# is available, or (b) vulnerabilities in OS packages resolved transitively
+# inside the built image (e.g. apt packages, or whatever the python/bun
+# base images pull in). Trivy covers both and blocks fixed High or Critical
+# findings while still uploading the complete result to the Security tab.
+# CI audits locked dependencies and scans every image it builds whenever they
+# change; this weekly run catches what was disclosed since, in the repository
+# and in the image users run.
+
+on:
+  schedule:
+    - cron: "43 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: trivy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-fs:
+    name: Filesystem & dependency scan
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Trivy (filesystem)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Upload results
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always()
+        with:
+          sarif_file: trivy-fs-results.sarif
+          category: trivy-fs
+
+  trivy-image:
+    name: Container image scan
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: image
+          image-ref: ghcr.io/autogitr/overture:latest
+          scanners: vuln
+          format: sarif
+          output: trivy-image-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Upload results
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always()
+        with:
+          sarif_file: trivy-image-results.sarif
+          category: trivy-image

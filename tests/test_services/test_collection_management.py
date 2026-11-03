@@ -1,0 +1,3377 @@
+"""Collection lifecycle and rule runs against the real database."""
+
+lazy from collections.abc import Mapping, Sequence
+lazy from dataclasses import dataclass, field
+lazy from datetime import timedelta
+lazy from typing import ClassVar, override
+lazy from unittest.mock import AsyncMock
+
+lazy import pytest
+lazy from pydantic import SecretStr, ValidationError
+
+lazy from overture.config import Settings
+lazy from overture.db.art_slots import ArtFileFacts, record_art_file, select_art
+lazy from overture.db.models.media_collection import MediaCollection
+lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.public_dataset import PublicDatasetCollection
+lazy from overture.db.models.settings import AppSettings
+lazy from overture.db.session import Database
+lazy from overture.domain import (
+    SMART_CUSTOM_ORDER,
+    ArtType,
+    CollectionFiltering,
+    CollectionKind,
+    CollectionMode,
+    CollectionOrder,
+    FilterField,
+    FilterOperator,
+    MediaType,
+    ServerType,
+    SetDimension,
+    SourceType,
+    SyncMode,
+    TmdbChart,
+    TmdbPersonRole,
+)
+lazy from overture.integrations.arr import (
+    ArrClient,
+    ArrOptions,
+    ArrRequest,
+    ArrTag,
+    ArrTagMatches,
+    ArrTitle,
+)
+lazy from overture.integrations.mdblist import MDBListClient
+lazy from overture.integrations.proxy import ProxyClientManager
+lazy from overture.integrations.tmdb import (
+    TMDBClient,
+    TmdbCollection,
+    TmdbDetails,
+    TmdbPerson,
+    TmdbTitle,
+)
+lazy from overture.media_servers.adapters import ServerCollection, ServerSection
+lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.plex.provider import PlexProvider
+lazy from overture.repositories.collections import CollectionRepository
+lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtRequest
+lazy from overture.schemas.collections import (
+    BulkCollectionOperation,
+    CollectionAdoption,
+    CollectionCreate,
+    CollectionGenerator,
+    CollectionGroupDelete,
+    CollectionGroupPolicy,
+    CollectionGroupRename,
+    CollectionMembersUpdate,
+    CollectionOptions,
+    CollectionPresetCollection,
+    CollectionPresetSave,
+    CollectionPreviewRequest,
+    CollectionRequest,
+    CollectionRuleWrite,
+    CollectionSetPreview,
+    CollectionSource,
+    CustomSetValue,
+    FieldCondition,
+    FilterGroup,
+    MdblistSource,
+    RadarrTagSource,
+    SetValueAlias,
+    SonarrTagSource,
+    SourceCondition,
+    TmdbChartSource,
+    TmdbCollectionSource,
+    TmdbItemSource,
+    TmdbListSource,
+    TmdbPersonSource,
+)
+lazy from overture.schemas.common import Status, StatusResponse
+lazy from overture.services.art.collection_art import CollectionArtService
+lazy from overture.services.collections.criteria import CriteriaContext, evaluate
+lazy from overture.services.collections.fields import FIELDS
+lazy from overture.services.collections.recommend import recommend_kind
+lazy from overture.services.collections.service import CollectionsService
+lazy from overture.services.collections.sources import source_label
+lazy from overture.services.scheduler import SchedulerService
+lazy from overture.utils.art_urls import PublicArtUrl
+lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.time import utc_now
+lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.runtime_helpers import NoopProviderRegistry, unused
+lazy from tests.test_services.test_collections_service import (
+    FakeDownloads,
+    FakePublisher,
+)
+
+
+class Provider(PlexProvider):
+    def __init__(self, app_config: Settings) -> None:
+        super().__init__(app_config=app_config)
+        self.created: list[str] = []
+        self.deleted: list[str] = []
+        self.members: dict[str, list[str]] = {}
+        self.options: dict[str, tuple[str, CollectionMode, CollectionOrder, bool]] = {}
+        self.sort_titles: dict[str, str | None] = {}
+        self.summaries: dict[str, str | None] = {}
+        self.smart_filters: dict[str, str] = {}
+        self.synced_labels: list[tuple[str, list[str], list[str]]] = []
+        self.choices: dict[str, list[tuple[str, str]]] = {}
+        self.fail = False
+        self.rejected_updates: set[str] = set()
+        self.queries: list[str] = []
+        self.hub_orders: list[list[str]] = []
+
+    @override
+    async def _list_sections(self) -> list[ServerSection]:
+        return [
+            ServerSection("movies", "Movies", MediaType.MOVIE),
+            ServerSection("extra", "Extra movies", MediaType.MOVIE),
+            ServerSection("shows", "Shows", MediaType.SHOW),
+        ]
+
+    @override
+    async def create_collection(
+        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+    ) -> ServerCollection:
+        if self.fail:
+            raise MediaServerError("Create failed")
+        self.created.append(title)
+        identity = str(len(self.created))
+        self.members[identity] = member_ids
+        return ServerCollection(
+            identity,
+            title,
+            tuple(member_ids),
+            "https://server.test/collection",
+            media_type=media_type,
+            library_id=section_key,
+        )
+
+    @override
+    async def create_smart_collection(
+        self, section_key: str, title: str, media_type: MediaType, filter_query: str
+    ) -> ServerCollection:
+        if self.fail:
+            raise MediaServerError("Smart create failed")
+        self.created.append(title)
+        identity = str(len(self.created))
+        self.members[identity] = []
+        self.smart_filters[identity] = filter_query
+        return ServerCollection(
+            identity,
+            title,
+            (),
+            "https://server.test/collection",
+            media_type=media_type,
+            library_id=section_key,
+            smart=True,
+        )
+
+    @override
+    async def update_smart_collection_filter(
+        self,
+        server_collection_id: str,
+        section_key: str,
+        media_type: MediaType,
+        filter_query: str,
+    ) -> None:
+        self.smart_filters[server_collection_id] = filter_query
+
+    @override
+    async def filter_choices(
+        self, section_key: str, media_type: MediaType, field: str
+    ) -> list[tuple[str, str]]:
+        return self.choices.get(field, [])
+
+    @override
+    async def find_matching(
+        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+    ) -> tuple[int, list[str]]:
+        self.queries.append(filter_query)
+        return (3 if "eng" in filter_query else 1), ["m0", "m1"][:size]
+
+    @override
+    async def order_collection_hubs(
+        self, section_key: str, server_collection_ids: Sequence[str]
+    ) -> None:
+        self.hub_orders.append(list(server_collection_ids))
+
+    @override
+    async def sync_item_labels(
+        self,
+        section_key: str,
+        media_type: MediaType,
+        label: str,
+        *,
+        add: Mapping[str, Sequence[str]],
+        remove_ids: list[str],
+    ) -> None:
+        self.synced_labels.append((label, sorted(add), remove_ids))
+
+    @override
+    async def update_collection_details(
+        self,
+        server_collection_id: str,
+        *,
+        title: str,
+        summary: str | None,
+        sort_title: str | None,
+        mode: CollectionMode,
+        order: CollectionOrder,
+        smart: bool,
+        visible_home: bool,
+        visible_shared: bool = False,
+        visible_library: bool = False,
+        filtering: CollectionFiltering | None = None,
+    ) -> None:
+        if server_collection_id in self.rejected_updates:
+            raise ValueError("Server refused this update")
+        self.options[server_collection_id] = title, mode, order, visible_home
+        self.sort_titles[server_collection_id] = sort_title
+        self.summaries[server_collection_id] = summary
+
+    @override
+    async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
+        return self.members[server_collection_id].copy()
+
+    @override
+    async def set_collection_members(
+        self,
+        server_collection_id: str,
+        server_item_ids: list[str],
+        *,
+        order: CollectionOrder,
+        append: bool = False,
+    ) -> list[str]:
+        if self.fail:
+            raise MediaServerError("Write failed")
+        if append:
+            wanted = set(server_item_ids)
+            server_item_ids = [
+                *server_item_ids,
+                *(
+                    identity
+                    for identity in self.members[server_collection_id]
+                    if identity not in wanted
+                ),
+            ]
+        self.members[server_collection_id] = server_item_ids
+        return server_item_ids
+
+    @override
+    async def delete_collection(self, server_collection_id: str) -> None:
+        self.deleted.append(server_collection_id)
+
+
+class JellyfinProvider(Provider):
+    server_type: ClassVar[ServerType] = ServerType.JELLYFIN
+
+
+class Lists(MDBListClient):
+    def __init__(self) -> None:
+        self.ids = [12, 11, 900]
+        self.failure = False
+        self.closed = False
+
+    @override
+    async def tmdb_ids(self, identifier: str, media_type: MediaType) -> list[int]:
+        if self.failure:
+            raise PublicServiceError(502, "Source unavailable")
+        return self.ids
+
+    @override
+    async def close(self) -> None:
+        self.closed = True
+
+
+class Tmdb(TMDBClient):
+    def __init__(self) -> None:
+        self.found = True
+        self.error: Exception | None = None
+        self.chart_requests: list[tuple[TmdbChart, int, str]] = []
+        self.keyword_queries: list[str] = []
+
+    @override
+    async def search_keywords(self, query: str) -> tuple[str, ...]:
+        self.keyword_queries.append(query)
+        return ("christmas", "Christmas Eve")
+
+    @override
+    async def get_collection(self, collection_id: int) -> TmdbCollection | None:
+        if self.error is not None:
+            raise self.error
+        if not self.found:
+            return None
+        return TmdbCollection(
+            collection_id,
+            "Saga",
+            "Collection overview",
+            (
+                TmdbTitle(12, "Second", 2005, "2005-01-01", None),
+                TmdbTitle(11, "First", 1995, "1995-01-01", None),
+            ),
+        )
+
+    @override
+    async def get_list_ids(
+        self, list_id: int, media_type: MediaType
+    ) -> tuple[int, ...]:
+        if self.error is not None:
+            raise self.error
+        return (13, 11) if list_id == 1 else (11, 12)
+
+    @override
+    async def get_list_description(self, list_id: int) -> str | None:
+        return f"List {list_id}"
+
+    @override
+    async def get_chart_ids(
+        self, media_type: MediaType, chart: TmdbChart, limit: int, region: str
+    ) -> tuple[int, ...]:
+        self.chart_requests.append((chart, limit, region))
+        return (13, 12, 99)[:limit]
+
+    @override
+    async def get_details(
+        self, media_type: MediaType, tmdb_id: int
+    ) -> TmdbDetails | None:
+        return TmdbDetails(
+            media_type,
+            tmdb_id,
+            f"Missing {tmdb_id}",
+            2020,
+            7000 + tmdb_id,
+            None,
+            None,
+            None,
+            (),
+        )
+
+    @override
+    async def get_person(self, person_id: int) -> TmdbPerson | None:
+        if not self.found:
+            return None
+        return TmdbPerson(
+            person_id, "Director Name", "Directing", None, "Person biography"
+        )
+
+    @override
+    async def get_person_credits(
+        self,
+        person_id: int,
+        media_type: MediaType,
+        roles: frozenset[TmdbPersonRole] | set[TmdbPersonRole],
+    ) -> tuple[int, ...]:
+        if not self.found:
+            return ()
+        return (11, 13)
+
+
+class Art(CollectionArtService):
+    def __init__(self) -> None:
+        self.selections: list[ArtType] = []
+        self.fail = False
+
+    @override
+    async def sources(
+        self, collection_id: int, media_type: MediaType, art_type: ArtType
+    ) -> ArtSourcesResponse:
+        if self.fail:
+            raise PublicServiceError(502, "Artwork source unavailable")
+        return ArtSourcesResponse(
+            sources={"tmdb": [ArtCandidate(url="https://example.test/poster.jpg")]}
+        )
+
+    @override
+    async def save(
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        art_type: ArtType,
+        body: SaveArtRequest,
+    ) -> StatusResponse:
+        self.selections.append(art_type)
+        return StatusResponse(status=Status.OK)
+
+
+class FakeArrClient(ArrClient):
+    def __init__(self, tag_id: int, label: str) -> None:
+        self._tag = ArrTag(id=tag_id, label=label)
+        self._configured = True
+        self.closed = False
+        self.held = [ArrTitle(id=1, tmdb_id=11, tvdb_id=None, tags=frozenset({77}))]
+        self.added: list[tuple[int, ArrRequest]] = []
+        self.tag_edits: list[tuple[int, list[int], bool]] = []
+
+    @override
+    async def titles(self) -> list[ArrTitle]:
+        return self.held
+
+    @override
+    async def add(self, external_id: int, request: ArrRequest) -> None:
+        self.added.append((external_id, request))
+
+    @override
+    async def tag_id(self, label: str) -> int:
+        return 77
+
+    @override
+    async def edit_tag(
+        self, tag_id: int, title_ids: Sequence[int], *, add: bool
+    ) -> None:
+        self.tag_edits.append((tag_id, list(title_ids), add))
+
+    @override
+    async def options(self) -> ArrOptions:
+        return ArrOptions(("/movies",), (ArrTag(id=4, label="HD"),))
+
+    @override
+    async def list_tags(self) -> list[ArrTag]:
+        return [self._tag]
+
+    @override
+    async def external_ids_for_tags(self, tag_names: Sequence[str]) -> ArrTagMatches:
+        return ArrTagMatches(
+            tmdb_ids=(11, 12),
+            tvdb_ids=(201,),
+            imdb_ids=("tt9999999",),
+        )
+
+    @override
+    async def close(self) -> None:
+        self.closed = True
+
+
+@dataclass(slots=True)
+class Manager:
+    service: CollectionsService
+    provider: Provider
+    lists: Lists
+    tmdb: Tmdb
+    publisher: FakePublisher
+    art: Art
+    downloads: FakeDownloads
+    radarr: FakeArrClient
+    ids: list[int] = field(default_factory=list[int])
+
+
+def sources(*selected: CollectionSource) -> FilterGroup:
+    """Criteria matching what any of the sources holds."""
+    return FilterGroup(
+        mode="any", conditions=[SourceCondition(source=source) for source in selected]
+    )
+
+
+def where(
+    field: FilterField, operator: FilterOperator, value: str | float | bool
+) -> FilterGroup:
+    return FilterGroup(
+        conditions=[FieldCondition(field=field, operator=operator, value=value)]
+    )
+
+
+def settings_row(**values: object) -> AppSettings:
+    """The settings row, with groups optional unless a test asks for them."""
+    return AppSettings.model_validate({"id": 1, **values})
+
+
+#: Criteria no title matches, for a collection that starts empty.
+NOTHING_MATCHES = CollectionRuleWrite(
+    criteria=where(FilterField.TITLE, FilterOperator.IS, "No title has this name"),
+    sync_mode=SyncMode.APPEND,
+)
+
+
+def chosen(manager: Manager, ids: list[int] | None = None) -> CollectionRuleWrite:
+    """Criteria naming exactly these fixture movies, by their TMDB IDs, in Append."""
+    picked = manager.ids if ids is None else ids
+    return CollectionRuleWrite(
+        criteria=sources(
+            TmdbItemSource(tmdb_ids=[11 + manager.ids.index(item) for item in picked])
+        ),
+        sync_mode=SyncMode.APPEND,
+    )
+
+
+@pytest.fixture
+def app_config(app_config: Settings) -> Settings:
+    """TMDB and MDBList sources need their keys."""
+    return app_config.model_copy(
+        update={
+            "TMDB_API_KEY": SecretStr("tmdb"),
+            "MDBLIST_API_KEY": SecretStr("mdblist"),
+        }
+    )
+
+
+@pytest.fixture
+async def manager(database: Database, app_config: Settings) -> Manager:
+    provider = Provider(app_config)
+    lists = Lists()
+    tmdb = Tmdb()
+    publisher = FakePublisher()
+    art = Art()
+    downloads = FakeDownloads()
+    radarr = FakeArrClient(1, "4k")
+    async with database.write_session() as session:
+        # Groups are optional here; the tests about requiring one turn it on.
+        await session.merge(settings_row())
+        items = [
+            MediaItem(
+                media_type=MediaType.MOVIE,
+                title=title,
+                year=year,
+                tmdb_id=11 + index,
+                server_item_id=f"m{index}",
+                library_id="movies",
+                studio="Studio",
+                genres=["Action"],
+                tmdb_collection_id=10,
+            )
+            for index, (title, year) in enumerate(
+                (("First", 1995), ("Second", 2005), ("Manual", 2006))
+            )
+        ]
+        session.add_all(items)
+        session.add(
+            MediaItem(
+                media_type=MediaType.SHOW,
+                title="Anime Series",
+                year=2020,
+                tmdb_id=11,
+                server_item_id="s1",
+                library_id="shows",
+                studio="Studio",
+                genres=["Animation"],
+            )
+        )
+        await session.flush()
+        ids = [item.id or 0 for item in items]
+    service = CollectionsService(
+        database=database,
+        provider_registry=NoopProviderRegistry(provider),
+        publisher=publisher,
+        downloads=downloads,
+        proxy_clients=unused(ProxyClientManager),
+        app_config=app_config,
+        tmdb=tmdb,
+        mdblist=lists,
+        scheduler=SchedulerService(app_config=app_config),
+        art=art,
+        radarr=radarr,
+        sonarr=FakeArrClient(2, "anime"),
+    )
+    return Manager(
+        service, provider, lists, tmdb, publisher, art, downloads, radarr, ids
+    )
+
+
+async def create_unmanaged(manager: Manager, database: Database) -> int:
+    """A collection as a server sync imports one: listed, with no rule."""
+    identity = await create(manager)
+    async with database.write_session() as session:
+        rule = await CollectionRepository(session).rule(identity)
+        await session.delete(rule)
+    return identity
+
+
+async def create(manager: Manager, ids: list[int] | None = None) -> int:
+    result = await manager.service.editor.create(
+        CollectionCreate(
+            title="Saga",
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=chosen(manager, ids),
+        )
+    )
+    return result.id
+
+
+@pytest.mark.parametrize("status", [404, 403, 500])
+async def test_delete_handles_only_an_already_absent_server_collection(
+    manager: Manager, database: Database, monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    identity = await create(manager)
+    request = AsyncMock(
+        side_effect=MediaServerError("Unavailable", upstream_status_code=status)
+    )
+    monkeypatch.setattr(manager.provider, "delete_collection", request)
+    if status == 404:
+        await manager.service.editor.delete(identity, MediaType.MOVIE)
+    else:
+        with pytest.raises(MediaServerError):
+            await manager.service.editor.delete(identity, MediaType.MOVIE)
+    async with database.read_session() as session:
+        assert (await CollectionRepository(session).get(identity) is None) is (
+            status == 404
+        )
+        assert (
+            len(
+                await CollectionRepository(session).library_items(
+                    MediaType.MOVIE, "movies"
+                )
+            )
+            == 3
+        )
+
+
+async def test_delete_from_server_preserves_configuration(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.delete(identity, MediaType.MOVIE, target="server")
+    assert manager.provider.deleted == ["1"]
+    async with database.read_session() as session:
+        repo = CollectionRepository(session)
+        row = await repo.get(identity)
+        assert row is not None
+        assert row.server_item_id is None
+        assert row.child_count == 0
+        assert await repo.rule(identity) is not None
+        assert len(await repo.library_items(MediaType.MOVIE, "movies")) == 3
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(identity)
+        assert row is not None
+        assert row.server_item_id is not None
+
+
+@pytest.mark.parametrize("target", ["keep", "move", "overture", "both"])
+async def test_group_deletion_targets(
+    manager: Manager, database: Database, target: str
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE, "Weekend", CollectionGroupPolicy(minimum_items=1)
+    )
+    result = await manager.service.groups.delete(
+        MediaType.MOVIE,
+        "Weekend",
+        CollectionGroupDelete.model_validate(
+            {"collections": target, "group": "Evenings" if target == "move" else None}
+        ),
+    )
+    assert not result.errors
+    assert manager.provider.deleted == (["1"] if target == "both" else [])
+    assert await manager.service.groups.names(MediaType.MOVIE) == (
+        ["Evenings", "Ungrouped"] if target == "move" else ["Ungrouped"]
+    )
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(identity)
+    if target in {"both", "overture"}:
+        assert row is None
+    else:
+        assert row is not None
+        assert row.collection_group == ("Evenings" if target == "move" else "Ungrouped")
+
+
+async def test_group_deletion_never_leaves_collections_without_a_required_group(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    await manager.service.groups.delete(
+        MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="keep")
+    )
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.collection_group == "Ungrouped"
+    with pytest.raises(PublicServiceError, match="cannot be deleted"):
+        await manager.service.groups.delete(
+            MediaType.MOVIE, "Ungrouped", CollectionGroupDelete()
+        )
+    with pytest.raises(PublicServiceError, match="cannot be renamed"):
+        await manager.service.groups.rename(MediaType.MOVIE, "Ungrouped", "Other")
+    with pytest.raises(PublicServiceError, match="another group"):
+        await manager.service.groups.delete(
+            MediaType.MOVIE,
+            "Weekend",
+            CollectionGroupDelete(collections="move", group="weekend"),
+        )
+    with pytest.raises(ValidationError, match="Name the group"):
+        CollectionGroupDelete(collections="move")
+
+
+async def test_group_delete_failure_preserves_group_for_retry(
+    manager: Manager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    monkeypatch.setattr(
+        manager.provider,
+        "delete_collection",
+        AsyncMock(side_effect=MediaServerError("Offline")),
+    )
+    result = await manager.service.groups.delete(
+        MediaType.MOVIE, "Weekend", CollectionGroupDelete(collections="both")
+    )
+    assert identity in result.errors
+    assert await manager.service.groups.names(MediaType.MOVIE) == [
+        "Ungrouped",
+        "Weekend",
+    ]
+
+
+async def test_group_rename_preserves_defaults_and_rejects_collisions(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Weekend",
+        CollectionGroupPolicy(sort_title_format="01_{title}"),
+    )
+    await manager.service.groups.rename(MediaType.MOVIE, "Weekend", "Evenings")
+    assert (
+        await manager.service.reader.get(identity, MediaType.MOVIE)
+    ).collection_group == "Evenings"
+    assert (
+        await manager.service.groups.policy(MediaType.MOVIE, "Evenings")
+    ).sort_title_format == "01_{title}"
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE, "Other", CollectionGroupPolicy()
+    )
+    with pytest.raises(PublicServiceError, match="already exists"):
+        await manager.service.groups.rename(MediaType.MOVIE, "Evenings", "Other")
+    with pytest.raises(PublicServiceError, match="not found"):
+        await manager.service.groups.rename(MediaType.SHOW, "Evenings", "Shows")
+
+
+async def test_sets_create_update_and_remove_their_collections(
+    manager: Manager,
+) -> None:
+    decades = CollectionGenerator(
+        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+    )
+    preview = await manager.service.sets.preview(
+        CollectionSetPreview(
+            media_type=MediaType.MOVIE, generator=decades, group="Decades"
+        )
+    )
+    assert [
+        (entry.title, entry.member_count, entry.collection_id) for entry in preview
+    ] == [
+        ("1990s", 1, None),
+        ("2000s", 2, None),
+    ]
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Decades",
+        CollectionGroupPolicy(
+            minimum_items=1,
+            delete_below_minimum=True,
+            sort_title_format="01_{title}",
+            generator=decades,
+        ),
+    )
+    result = await manager.service.groups.sync(MediaType.MOVIE, "Decades")
+    assert not result.errors
+    first, second = result.created
+    detail = await manager.service.reader.get(first, MediaType.MOVIE)
+    assert (detail.title, detail.sort_title, detail.generated_value) == (
+        "1990s",
+        "01_1990s",
+        "1990",
+    )
+    assert detail.rule is not None
+    assert detail.rule.criteria == where(FilterField.DECADE, FilterOperator.IS, 1990)
+    assert [member.title for member in detail.members] == ["First"]
+
+    repeated = await manager.service.groups.sync(MediaType.MOVIE, "Decades")
+    assert (repeated.created, repeated.synced) == ([], 2)
+
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Decades",
+        CollectionGroupPolicy(
+            minimum_items=1,
+            delete_below_minimum=True,
+            generator=decades.model_copy(
+                update={
+                    "title_format": "The {value}s",
+                    "exclude": ["the 1990s"],
+                }
+            ),
+        ),
+    )
+    edited = await manager.service.groups.sync(MediaType.MOVIE, "Decades")
+    assert edited.removed == [first]
+    assert (
+        await manager.service.reader.get(second, MediaType.MOVIE)
+    ).title == "The 2000s"
+    with pytest.raises(PublicServiceError, match="edit the set"):
+        await manager.service.editor.save_rule(
+            second,
+            MediaType.MOVIE,
+            CollectionRuleWrite(criteria=where(FilterField.YEAR, FilterOperator.IS, 1)),
+        )
+    with pytest.raises(PublicServiceError, match="edit the set"):
+        await manager.service.editor.update(
+            second, MediaType.MOVIE, CollectionOptions(title="Renamed")
+        )
+    kept = await manager.service.sets.preview(
+        CollectionSetPreview(
+            media_type=MediaType.MOVIE, generator=decades, group="Decades"
+        )
+    )
+    assert [entry.collection_id for entry in kept] == [None, second]
+    genres = await manager.service.sets.preview(
+        CollectionSetPreview(
+            media_type=MediaType.SHOW,
+            generator=CollectionGenerator(
+                dimension=SetDimension.GENRE, library_ids=["shows"]
+            ),
+            minimum_items=2,
+        )
+    )
+    assert [(entry.title, entry.below_minimum) for entry in genres] == [
+        ("Animation", True)
+    ]
+
+
+async def test_sets_skip_titles_other_collections_hold(manager: Manager) -> None:
+    await manager.service.editor.create(
+        CollectionCreate(
+            title="Action",
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=chosen(manager),
+        )
+    )
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Genres",
+        CollectionGroupPolicy(
+            generator=CollectionGenerator(
+                dimension=SetDimension.GENRE, library_ids=["movies"]
+            )
+        ),
+    )
+    result = await manager.service.groups.sync(MediaType.MOVIE, "Genres")
+    assert result.created == []
+    assert result.errors == {
+        "Action": "A collection with this title already exists in this library"
+    }
+
+
+async def test_inherited_placeholders_resolve_group_before_global(
+    manager: Manager,
+) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Weekend",
+        CollectionGroupPolicy(sort_title_format="", minimum_items=4),
+    )
+    defaults = await manager.service.reader.inherited_policy(MediaType.MOVIE, "Weekend")
+    assert defaults.sort_title_format == ""
+    assert defaults.minimum_items == 4
+    # A group's schedule inherits the global one, which its form names.
+    global_defaults = await manager.service.reader.inherited_policy(MediaType.MOVIE)
+    assert (global_defaults.sync_schedule, global_defaults.sync_enabled) == (
+        "0 3 * * *",
+        True,
+    )
+
+
+def make_jellyfin_service(
+    manager: Manager, app_config: Settings, database: Database
+) -> CollectionsService:
+    provider = JellyfinProvider(app_config)
+    return CollectionsService(
+        database=database,
+        provider_registry=NoopProviderRegistry(provider),
+        publisher=manager.publisher,
+        downloads=manager.downloads,
+        proxy_clients=unused(ProxyClientManager),
+        app_config=app_config,
+        tmdb=manager.tmdb,
+        mdblist=manager.lists,
+        scheduler=SchedulerService(app_config=app_config),
+        art=manager.art,
+        radarr=FakeArrClient(1, "4k"),
+        sonarr=FakeArrClient(2, "anime"),
+    )
+
+
+async def test_create_edit_order_and_delete_preserve_media(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    detail = await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Renamed",
+            sort_title="!Saga",
+            summary="Summary",
+            collection_mode=CollectionMode.HIDE_ITEMS,
+            visible_home=True,
+        ),
+    )
+    assert (detail.title, detail.sort_title, detail.summary) == (
+        "Renamed",
+        "!Saga",
+        "Summary",
+    )
+    detail = await manager.service.editor.set_members(
+        identity,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(
+            member_ids=list(reversed(manager.ids)), order_type=CollectionOrder.CUSTOM
+        ),
+    )
+    assert [member.id for member in detail.members] == list(reversed(manager.ids))
+    assert manager.provider.members["1"] == ["m2", "m1", "m0"]
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(TmdbCollectionSource(collection_id=10))),
+    )
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, identity)
+        assert row is not None
+        select_art(row, ArtType.POSTER, PublicArtUrl("https://example.test/poster.jpg"))
+        session.add(row)
+    await manager.service.editor.delete(identity, MediaType.MOVIE)
+    assert manager.provider.deleted == ["1"]
+    async with database.read_session() as session:
+        assert await session.get(MediaCollection, identity) is None
+        assert await CollectionRepository(session).rule(identity) is None
+        assert (
+            len(
+                await CollectionRepository(session).library_items(
+                    MediaType.MOVIE, "movies"
+                )
+            )
+            == 3
+        )
+    assert manager.publisher.broadcasts[-1][0] == "collections.changed"
+
+
+@pytest.mark.parametrize("ids", [[999], [1, 1]])
+async def test_invalid_members_never_reach_the_server(
+    manager: Manager, ids: list[int]
+) -> None:
+    identity = await create(manager)
+    before = list(manager.provider.members["1"])
+    with pytest.raises(PublicServiceError, match="distinct active"):
+        await manager.service.editor.set_members(
+            identity,
+            MediaType.MOVIE,
+            CollectionMembersUpdate(member_ids=ids, order_type=CollectionOrder.CUSTOM),
+        )
+    assert manager.provider.members["1"] == before
+
+
+async def test_create_validates_library_and_duplicate_titles(manager: Manager) -> None:
+    with pytest.raises(PublicServiceError, match="Select a library"):
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="Saga",
+                library_id="other",
+                media_type=MediaType.MOVIE,
+                rule=chosen(manager),
+            )
+        )
+    await create(manager)
+    with pytest.raises(PublicServiceError, match="already exists"):
+        await create(manager)
+    assert manager.provider.created == ["Saga"]
+
+
+async def test_failed_server_membership_keeps_committed_members(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    manager.provider.fail = True
+    with pytest.raises(MediaServerError):
+        await manager.service.editor.set_members(
+            identity,
+            MediaType.MOVIE,
+            CollectionMembersUpdate(
+                member_ids=[manager.ids[0]], order_type=CollectionOrder.RELEASE_ASC
+            ),
+        )
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert len(detail.members) == 3
+
+
+@pytest.mark.parametrize(
+    ("global_mode", "override", "expected"),
+    [
+        (SyncMode.SYNC, None, 2),
+        (SyncMode.APPEND, None, 3),
+        (SyncMode.APPEND, SyncMode.SYNC, 2),
+        (SyncMode.SYNC, SyncMode.APPEND, 3),
+    ],
+)
+async def test_rule_sync_uses_global_defaults_and_nullable_overrides(
+    manager: Manager,
+    database: Database,
+    global_mode: SyncMode,
+    override: SyncMode | None,
+    expected: int,
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(settings_row(collection_sync_mode=global_mode))
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=sources(MdblistSource(identifiers=["person/list"])),
+            order_type=CollectionOrder.CUSTOM,
+            sync_mode=override,
+        ),
+    )
+    result = await manager.service.rules.sync(identity, MediaType.MOVIE)
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert len(detail.members) == expected
+    assert result.removed == 3 - expected
+    assert detail.rule is not None
+    assert detail.rule.last_synced_at is not None
+    assert manager.provider.members["1"] == (
+        ["m1", "m0"] if expected == 2 else ["m1", "m0", "m2"]
+    )
+
+
+@pytest.mark.parametrize("delete", [False, True])
+async def test_below_minimum_keeps_or_deletes_collection(
+    manager: Manager, database: Database, *, delete: bool
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_minimum_items=3, collection_delete_below_minimum=delete
+            )
+        )
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(MdblistSource(identifiers=["42"]))),
+    )
+    result = await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert result.deleted is delete
+    assert result.skipped is not delete
+    if not delete:
+        assert (
+            len((await manager.service.reader.get(identity, MediaType.MOVIE)).members)
+            == 3
+        )
+
+
+async def test_failed_source_preserves_members_and_records_safe_error(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(MdblistSource(identifiers=["42"]))),
+    )
+    manager.lists.failure = True
+    with pytest.raises(PublicServiceError, match="Source unavailable"):
+        await manager.service.rules.sync(identity, MediaType.MOVIE)
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert len(detail.members) == 3
+    assert detail.rule
+    assert detail.rule.last_error == "Source unavailable"
+
+
+async def test_tmdb_and_intersected_filters_resolve_only_library_members(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(TmdbCollectionSource(collection_id=10))),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert manager.provider.members["1"] == ["m0", "m1"]
+    manager.tmdb.found = False
+    with pytest.raises(PublicServiceError, match="membership was kept"):
+        await manager.service.rules.sync(identity, MediaType.MOVIE)
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=FilterGroup(
+                conditions=[
+                    FieldCondition(
+                        field=FilterField.DECADE, operator=FilterOperator.IS, value=2000
+                    ),
+                    FieldCondition(
+                        field=FilterField.STUDIO,
+                        operator=FilterOperator.IS,
+                        value="studio",
+                    ),
+                    FieldCondition(
+                        field=FilterField.GENRE,
+                        operator=FilterOperator.IS,
+                        value="action",
+                    ),
+                ],
+            )
+        ),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert manager.provider.members["1"] == ["m1", "m2"]
+
+
+async def test_scheduler_honors_due_times_and_stops_its_client(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(MdblistSource(identifiers=["42"]))),
+    )
+    await manager.service.start()
+    await manager.service.schedule.sync_due()
+    count = len(manager.publisher.broadcasts)
+    await manager.service.schedule.sync_due()
+    assert len(manager.publisher.broadcasts) == count
+    await manager.service.stop()
+    assert manager.lists.closed
+
+
+async def test_rule_sync_uses_shared_automatic_art_and_theme_pipelines(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_auto_match_art=True, collection_auto_match_theme=True
+            )
+        )
+        session.add(
+            PublicDatasetCollection(
+                tmdb_id=10, title="Saga", youtube_id_overturedb="a" * 11
+            )
+        )
+    async with database.write_session() as session:
+        await enable_public_dataset(session)
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(TmdbCollectionSource(collection_id=10))),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert manager.art.selections == [ArtType.POSTER, ArtType.BACKGROUND]
+    assert manager.downloads.targets[0].collection_id == identity
+
+
+async def test_auto_asset_failure_keeps_synced_members_and_records_the_failure(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(settings_row(collection_auto_match_art=True))
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(TmdbCollectionSource(collection_id=10))),
+    )
+    manager.art.fail = True
+    with pytest.raises(
+        PublicServiceError, match="Members synced; Automatic assets failed"
+    ):
+        await manager.service.rules.sync(identity, MediaType.MOVIE)
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert len(detail.members) == 2
+    assert detail.rule is not None
+    assert detail.rule.last_error is not None
+    assert "Artwork source unavailable" in detail.rule.last_error
+
+
+async def test_append_keeps_new_server_members_and_counts_them_for_minimum(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager, manager.ids[:2])
+    manager.provider.members["1"].extend(["m2", "unimported"])
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_minimum_items=4, collection_delete_below_minimum=True
+            )
+        )
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=sources(MdblistSource(identifiers=["42"])),
+            order_type=CollectionOrder.CUSTOM,
+            sync_mode=SyncMode.APPEND,
+        ),
+    )
+    result = await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert not result.skipped
+    assert not result.deleted
+    assert manager.provider.members["1"] == ["m1", "m0", "m2", "unimported"]
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.child_count == 4
+    assert len(detail.members) == 3
+
+
+async def test_append_does_not_restore_a_manual_member_removed_on_the_server(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    manager.provider.members["1"] = ["m0", "m1"]
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=sources(MdblistSource(identifiers=["42"])),
+            order_type=CollectionOrder.CUSTOM,
+            sync_mode=SyncMode.APPEND,
+        ),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert manager.provider.members["1"] == ["m1", "m0"]
+    assert (
+        await manager.service.reader.get(identity, MediaType.MOVIE)
+    ).child_count == 2
+
+
+async def test_custom_group_round_trips_and_joins_group_choices(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    detail = await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="  Weekend  "),
+    )
+    assert detail.collection_group == "Weekend"
+    groups = await manager.service.groups.names(MediaType.MOVIE)
+    assert groups == ["Ungrouped", "Weekend"]
+    listed = await manager.service.reader.listed(MediaType.MOVIE)
+    assert listed[0].collection_group == "Weekend"
+    detail = await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group=" "),
+    )
+    assert detail.collection_group == "Ungrouped"
+
+
+async def test_explicit_identity_survives_membership_changes(manager: Manager) -> None:
+    identity = await create(manager)
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.tmdb_collection_id is None
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", tmdb_collection_id=99),
+    )
+    detail = await manager.service.editor.set_members(
+        identity,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(
+            member_ids=manager.ids, order_type=CollectionOrder.RELEASE_ASC
+        ),
+    )
+    assert detail.tmdb_collection_id == 99
+    detail = await manager.service.editor.update(
+        identity, MediaType.MOVIE, CollectionOptions(title="Renamed")
+    )
+    assert detail.tmdb_collection_id == 99
+    detail = await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Renamed", tmdb_collection_id=None),
+    )
+    assert detail.tmdb_collection_id is None
+
+
+async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Dynamic",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbCollectionSource(collection_id=10))
+            ),
+        )
+    )
+    assert detail.tmdb_collection_id == 10
+    assert [member.tmdb_id for member in detail.members] == [11, 12]
+    assert detail.rule is not None
+    assert detail.rule.criteria == sources(TmdbCollectionSource(collection_id=10))
+
+
+async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_minimum_items=3,
+                collection_delete_below_minimum=True,
+                collection_auto_match_art=True,
+            )
+        )
+    policy = CollectionGroupPolicy(
+        sync_mode=SyncMode.SYNC,
+        minimum_items=2,
+        delete_below_minimum=False,
+        auto_match_art=False,
+        collection_mode=CollectionMode.HIDE,
+        sort_title_format="+{group} - {title}",
+    )
+    await manager.service.groups.save_policy(MediaType.MOVIE, "Weekend", policy)
+    assert await manager.service.groups.policy(MediaType.MOVIE, "Weekend") == policy
+    assert (
+        await manager.service.groups.policy(MediaType.SHOW, "Weekend")
+        == CollectionGroupPolicy()
+    )
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    assert manager.provider.options["1"][1] is CollectionMode.HIDE
+    assert manager.provider.sort_titles["1"] == "+Weekend - Saga"
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(MdblistSource(identifiers=["42"]))),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert len(detail.members) == 2
+    assert not detail.below_minimum
+    assert manager.art.selections == []
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=sources(MdblistSource(identifiers=["42"])),
+            minimum_items=3,
+            delete_below_minimum=False,
+        ),
+    )
+    result = await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert result.skipped
+    assert not result.deleted
+    listed = await manager.service.reader.listed(MediaType.MOVIE)
+    assert listed[0].below_minimum
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=sources(MdblistSource(identifiers=["42"])),
+            minimum_items=1,
+            sync_mode=SyncMode.APPEND,
+        ),
+    )
+    assert (
+        await manager.service.reader.get(identity, MediaType.MOVIE)
+    ).effective_sync_mode is SyncMode.APPEND
+
+
+async def test_bulk_operations_commit_successes_and_report_invalid_targets(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[999, identity],
+            media_type=MediaType.MOVIE,
+            operation="set_group",
+            collection_group=" Weekend ",
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert set(result.errors) == {999}
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.collection_group == "Weekend"
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity],
+            media_type=MediaType.MOVIE,
+            operation="apply_sort_title_format",
+            sort_title_format="+{group}: {title}",
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert manager.provider.sort_titles["1"] == "+Weekend: Saga"
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity],
+            media_type=MediaType.MOVIE,
+            operation="set_monitored",
+            monitored=False,
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert not (await manager.service.reader.get(identity, MediaType.MOVIE)).monitored
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="delete"
+        )
+    )
+    assert result.collection_ids == [identity]
+    assert manager.provider.deleted == ["1"]
+    async with database.read_session() as session:
+        assert await session.get(MediaItem, manager.ids[0]) is not None
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["{title.__class__}", "{0}", "{index}", "{title!r}", "{title:>1000}", "{"],
+)
+async def test_sort_title_templates_reject_attribute_access_and_unbounded_formats(
+    template: str,
+) -> None:
+    with pytest.raises(ValueError, match="sort_title_format"):
+        CollectionGroupPolicy(sort_title_format=template)
+
+
+async def test_composable_builders_and_person_biography_summary(
+    manager: Manager,
+) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Directors",
+        CollectionGroupPolicy(summary_format="Famous director. {source_summary}"),
+    )
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Director Spotlight",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Directors",
+            order_type=CollectionOrder.CUSTOM,
+            rule=CollectionRuleWrite(
+                criteria=sources(
+                    TmdbPersonSource(
+                        person_id=500,
+                        roles=[TmdbPersonRole.DIRECTOR],
+                    ),
+                    TmdbItemSource(tmdb_ids=[12]),
+                )
+            ),
+        )
+    )
+    assert [m.tmdb_id for m in detail.members] == [11, 13, 12]
+    assert detail.summary == "Famous director. Person biography"
+    assert manager.provider.summaries["1"] == "Famous director. Person biography"
+
+
+async def test_smart_collections_label_sources_and_filter_by_plex_keys(
+    manager: Manager, database: Database
+) -> None:
+    requested = SourceCondition(source=MdblistSource(identifiers=["user/requests"]))
+    label = source_label(requested)
+    manager.provider.choices = {"label": [("5", label)]}
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Requests",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_filtering=CollectionFiltering.USER,
+            rule=CollectionRuleWrite(
+                smart=True,
+                order_type=CollectionOrder.ADDED_DESC,
+                criteria=FilterGroup(
+                    conditions=[
+                        FieldCondition(
+                            field=FilterField.YEAR,
+                            operator=FilterOperator.GTE,
+                            value=2000,
+                        ),
+                        requested,
+                        FieldCondition(
+                            field=FilterField.UNPLAYED,
+                            operator=FilterOperator.IS,
+                            value=True,
+                        ),
+                    ],
+                ),
+            ),
+        )
+    )
+    assert detail.kind is CollectionKind.SMART
+    assert manager.provider.synced_labels == [(label, ["m0", "m1"], [])]
+    assert manager.provider.smart_filters["1"] == (
+        "sort=addedAt%3Adesc&year%3E=2000&and=1&label=5&and=1&unwatched=1"
+    )
+    async with database.read_session() as session:
+        labelled = await CollectionRepository(session).library_items(
+            MediaType.MOVIE, "movies"
+        )
+    assert [label in item.labels for item in labelled] == [True, True, False]
+
+    manager.lists.ids = [13]
+    result = await manager.service.rules.sync(detail.id, MediaType.MOVIE)
+    assert result.added == 0
+    assert manager.provider.synced_labels[-1] == (label, ["m2"], ["m0", "m1"])
+
+    # Without a smart collection filtering on it, Overture removes the label.
+    await manager.service.editor.delete(detail.id, MediaType.MOVIE)
+    assert manager.provider.synced_labels[-1] == (label, [], ["m2"])
+
+
+async def test_regular_and_smart_kinds_replace_the_server_collection(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            smart=True,
+            order_type=CollectionOrder.TITLE_ASC,
+            criteria=where(FilterField.GENRE, FilterOperator.IS, "Action"),
+        ),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert manager.provider.deleted == ["1"]
+    assert manager.provider.smart_filters["2"] == "sort=titleSort&genre=-1"
+    smart = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert smart.kind is CollectionKind.SMART
+    with pytest.raises(PublicServiceError, match="controlled by their criteria"):
+        await manager.service.editor.set_members(
+            identity,
+            MediaType.MOVIE,
+            CollectionMembersUpdate(
+                member_ids=manager.ids, order_type=CollectionOrder.CUSTOM
+            ),
+        )
+    await manager.service.editor.save_rule(
+        identity,
+        MediaType.MOVIE,
+        CollectionRuleWrite(
+            criteria=where(FilterField.GENRE, FilterOperator.IS, "Action")
+        ),
+    )
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    assert manager.provider.deleted == ["1", "2"]
+    regular = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert regular.kind is CollectionKind.REGULAR
+    assert len(regular.members) == 3
+
+
+async def test_seasonal_inactive_withholds_and_deletes_server_collection(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Holiday",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11, 12])),
+                delete_when_inactive=True,
+            ),
+        )
+    )
+    assert detail.withheld
+    assert manager.provider.created == []
+
+    # Active collection transitions to inactive and deletes server copy
+    active = await manager.service.editor.create(
+        CollectionCreate(
+            title="Active Seasonal",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11, 12])),
+                delete_when_inactive=True,
+            ),
+        )
+    )
+    assert not active.withheld
+    assert active.title in manager.provider.created
+
+    await manager.service.editor.update(
+        active.id,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Active Seasonal",
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+        ),
+    )
+    await manager.service.rules.sync(active.id, MediaType.MOVIE)
+    refreshed = await manager.service.reader.get(active.id, MediaType.MOVIE)
+    assert refreshed.withheld is True
+    assert refreshed.child_count == 0
+
+
+async def test_franchise_sets_name_collections_after_tmdb(manager: Manager) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Franchises",
+        CollectionGroupPolicy(
+            minimum_items=2,
+            sort_title_format="+1_{title}",
+            generator=CollectionGenerator(
+                dimension=SetDimension.FRANCHISE,
+                library_ids=["movies"],
+                strip_suffix=" Collection",
+            ),
+        ),
+    )
+    await manager.service.groups.sync(MediaType.MOVIE, "Franchises")
+    listed = await manager.service.reader.listed(MediaType.MOVIE)
+    assert [
+        (row.title, row.collection_group, row.sort_title, row.generated_value)
+        for row in listed
+    ] == [("Saga", "Franchises", "+1_Saga", "10")]
+    assert listed[0].tmdb_collection_id == 10
+
+
+async def test_non_plex_option_validation(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    jellyfin_service = make_jellyfin_service(manager, app_config, database)
+    identity = (
+        await jellyfin_service.editor.create(
+            CollectionCreate(
+                title="Box set",
+                media_type=MediaType.MOVIE,
+                library_id="movies",
+                rule=chosen(manager),
+            )
+        )
+    ).id
+
+    with pytest.raises(PublicServiceError, match="cannot order collections"):
+        await jellyfin_service.editor.set_members(
+            identity,
+            MediaType.MOVIE,
+            CollectionMembersUpdate(member_ids=[1], order_type=CollectionOrder.CUSTOM),
+        )
+
+    with pytest.raises(PublicServiceError, match="cannot order collections"):
+        await jellyfin_service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Rated", order_type=CollectionOrder.PLAYS_DESC),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Home", visible_home=True),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Shared", visible_shared=True),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Lib", visible_library=True),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(title="Mode", collection_mode=CollectionMode.HIDE),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="Filter", collection_filtering=CollectionFiltering.ADMIN
+            ),
+        )
+
+
+async def test_rules_accept_only_what_the_server_and_library_offer(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    movies = await create(manager)
+    shows = (
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="Anime",
+                media_type=MediaType.SHOW,
+                library_id="shows",
+                rule=CollectionRuleWrite(
+                    criteria=sources(TmdbItemSource(tmdb_ids=[11]))
+                ),
+            )
+        )
+    ).id
+    for collection, media_type, source, message in (
+        (shows, MediaType.SHOW, RadarrTagSource(tags=["4k"]), "movies only"),
+        (shows, MediaType.SHOW, TmdbCollectionSource(collection_id=10), "movies only"),
+        (movies, MediaType.MOVIE, SonarrTagSource(tags=["anime"]), "shows only"),
+    ):
+        with pytest.raises(PublicServiceError, match=message):
+            await manager.service.editor.save_rule(
+                collection, media_type, CollectionRuleWrite(criteria=sources(source))
+            )
+    with pytest.raises(PublicServiceError, match="only available in Plex smart"):
+        await manager.service.editor.save_rule(
+            movies,
+            MediaType.MOVIE,
+            CollectionRuleWrite(
+                criteria=where(FilterField.HDR, FilterOperator.IS, True)
+            ),
+        )
+    with pytest.raises(PublicServiceError, match="not available for this library"):
+        await manager.service.editor.save_rule(
+            shows,
+            MediaType.SHOW,
+            CollectionRuleWrite(
+                criteria=where(FilterField.DIRECTOR, FilterOperator.IS, "Someone")
+            ),
+        )
+
+    jellyfin = make_jellyfin_service(manager, app_config, database)
+    box_set = (
+        await jellyfin.editor.create(
+            CollectionCreate(
+                title="Box set",
+                media_type=MediaType.MOVIE,
+                library_id="movies",
+                rule=chosen(manager),
+            )
+        )
+    ).id
+    genre = where(FilterField.GENRE, FilterOperator.IS, "Action")
+    with pytest.raises(PublicServiceError, match="only supported by Plex"):
+        await jellyfin.editor.save_rule(
+            box_set,
+            MediaType.MOVIE,
+            CollectionRuleWrite(
+                criteria=genre, smart=True, order_type=CollectionOrder.TITLE_ASC
+            ),
+        )
+    with pytest.raises(PublicServiceError, match="not available for this library"):
+        await jellyfin.editor.save_rule(
+            box_set,
+            MediaType.MOVIE,
+            CollectionRuleWrite(
+                criteria=where(FilterField.UNPLAYED, FilterOperator.IS, True)
+            ),
+        )
+
+
+async def test_capabilities_and_presets_follow_the_server(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    plex = manager.service.discovery.capabilities(MediaType.MOVIE)
+    assert plex.smart
+    assert CollectionOrder.CUSTOM in plex.orders
+    assert CollectionOrder.CUSTOM not in plex.smart_orders
+    fields = {field.field: field for field in plex.fields}
+    assert (fields[FilterField.HDR].local, fields[FilterField.HDR].smart) == (
+        False,
+        True,
+    )
+    assert FilterField.NETWORK not in fields
+    sources = {source.type: source.unavailable for source in plex.sources}
+    # Only sources that can hold movies are offered for movie collections.
+    assert SourceType.SONARR_TAG not in sources
+    assert SourceType.RADARR_TAG in sources
+    assert sources[SourceType.MDBLIST] is None
+    shows = {
+        source.type
+        for source in manager.service.discovery.capabilities(MediaType.SHOW).sources
+    }
+    assert SourceType.SONARR_TAG in shows
+    assert not shows & {SourceType.RADARR_TAG, SourceType.TMDB_COLLECTION}
+    assert SetDimension.FRANCHISE in {entry.dimension for entry in plex.dimensions}
+
+    jellyfin = make_jellyfin_service(manager, app_config, database)
+    capabilities = jellyfin.discovery.capabilities(MediaType.MOVIE)
+    assert not capabilities.smart
+    assert capabilities.smart_orders == []
+    labels = {field.field: field.label for field in capabilities.fields}
+    assert labels[FilterField.LABEL] == "Tag"
+    assert FilterField.UNPLAYED not in labels
+    assert "unplayed" not in {
+        preset.key for preset in await jellyfin.presets.available(MediaType.MOVIE)
+    }
+
+
+async def test_field_values_count_library_metadata_or_ask_plex(
+    manager: Manager,
+) -> None:
+    genres = await manager.service.discovery.field_values(
+        MediaType.MOVIE, "movies", FilterField.GENRE
+    )
+    assert [(entry.value, entry.count) for entry in genres] == [("Action", 3)]
+    manager.provider.choices = {"audioLanguage": [("eng", "English")]}
+    languages = await manager.service.discovery.field_values(
+        MediaType.MOVIE, "movies", FilterField.AUDIO_LANGUAGE
+    )
+    assert [entry.value for entry in languages] == ["English"]
+    await create(manager)
+    collections = await manager.service.discovery.field_values(
+        MediaType.MOVIE, "movies", FilterField.COLLECTION
+    )
+    assert [(entry.value, entry.count) for entry in collections] == [("Saga", 3)]
+
+
+async def test_keyword_values_list_the_common_first_and_add_tmdb_matches(
+    manager: Manager, database: Database
+) -> None:
+    async with database.write_session() as session:
+        for index, item_id in enumerate(manager.ids):
+            item = await session.get(MediaItem, item_id)
+            assert item is not None
+            item.tmdb_keywords = ["christmas eve", *(["sequel"] if index else [])]
+            session.add(item)
+
+    every = await manager.service.discovery.field_values(
+        MediaType.MOVIE, "movies", FilterField.TMDB_KEYWORD
+    )
+    typed = await manager.service.discovery.field_values(
+        MediaType.MOVIE, "movies", FilterField.TMDB_KEYWORD, " Christ "
+    )
+
+    assert [(entry.value, entry.count) for entry in every] == [
+        ("christmas eve", 3),
+        ("sequel", 2),
+    ]
+    # TMDB adds keywords no title has yet, after those titles have.
+    assert [(entry.value, entry.count) for entry in typed] == [
+        ("christmas eve", 3),
+        ("christmas", 0),
+    ]
+    assert manager.tmdb.keyword_queries == ["christ"]
+
+
+async def test_list_arr_tags(manager: Manager) -> None:
+    radarr_tags = await manager.service.arr.radarr_tags()
+    assert len(radarr_tags) == 1
+    assert radarr_tags[0].id == 1
+    assert radarr_tags[0].label == "4k"
+
+    sonarr_tags = await manager.service.arr.sonarr_tags()
+    assert len(sonarr_tags) == 1
+    assert sonarr_tags[0].id == 2
+    assert sonarr_tags[0].label == "anime"
+
+
+async def test_formatted_options(manager: Manager) -> None:
+    identity = await create(manager)
+
+    # Valid sort_title_format
+    updated = await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Star Wars",
+            collection_group="Sci-Fi",
+            sort_title_format="+1_{title}",
+        ),
+    )
+    assert updated.sort_title == "+1_Star Wars"
+
+    # Too long sort_title_format raises PublicServiceError(422)
+    with pytest.raises(PublicServiceError):
+        await manager.service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="A" * 150,
+                collection_group="B" * 60,
+                sort_title_format="{title}_{group}",
+            ),
+        )
+
+    # Valid summary_format
+    updated_summary = await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Star Wars",
+            summary_format="{title} complete saga",
+        ),
+    )
+    assert updated_summary.summary == "Star Wars complete saga"
+
+    # Too long summary_format raises PublicServiceError(422)
+    with pytest.raises(PublicServiceError):
+        await manager.service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="A" * 200,
+                summary_format="X" * 9900 + "{title}",
+            ),
+        )
+
+
+async def test_sync_due_runs_due_sets_and_rules(
+    manager: Manager, database: Database
+) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Franchises",
+        CollectionGroupPolicy(
+            minimum_items=2,
+            sync_schedule="0 0 1 1 *",
+            generator=CollectionGenerator(
+                dimension=SetDimension.FRANCHISE, library_ids=["movies"]
+            ),
+        ),
+    )
+    # A collection syncs on its group's schedule: yearly, so never due twice.
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE, "Yearly", CollectionGroupPolicy(sync_schedule="0 0 1 1 *")
+    )
+    created = await manager.service.editor.create(
+        CollectionCreate(
+            title="Due Collection",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Yearly",
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11, 12]))
+            ),
+        )
+    )
+    await manager.service.schedule.sync_due()
+    detail = await manager.service.reader.get(created.id, MediaType.MOVIE)
+    assert detail.rule is not None
+    assert detail.rule.last_synced_at is not None
+    # A set first runs by hand; the scheduler then keeps it current.
+    assert {
+        row.title for row in await manager.service.reader.listed(MediaType.MOVIE)
+    } == {"Due Collection"}
+    async with database.write_session() as session:
+        group = await CollectionRepository(session).group_policy(
+            ServerType.PLEX, MediaType.MOVIE, "Franchises"
+        )
+        assert group is not None
+        # A New Year has passed since, so the yearly schedule is due.
+        group.generated_at = utc_now() - timedelta(days=400)
+        session.add(group)
+    await manager.service.schedule.sync_due()
+    assert {
+        row.title for row in await manager.service.reader.listed(MediaType.MOVIE)
+    } == {"Saga", "Due Collection"}
+
+    # Neither the set nor the rule is due again yet.
+    count = len(manager.provider.created)
+    synced = detail.rule.last_synced_at
+    await manager.service.schedule.sync_due()
+    assert len(manager.provider.created) == count
+    again = await manager.service.reader.get(created.id, MediaType.MOVIE)
+    assert again.rule is not None
+    assert again.rule.last_synced_at == synced
+
+
+async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
+    # RadarrTagSource sync
+    radarr_col = await manager.service.editor.create(
+        CollectionCreate(
+            title="4K Movies",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                criteria=sources(RadarrTagSource(tags=["4k"])),
+            ),
+        )
+    )
+    assert radarr_col.child_count == 2
+    res = await manager.service.rules.sync(radarr_col.id, MediaType.MOVIE)
+    assert res.added == 0
+
+    # SonarrTagSource sync
+    sonarr_col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Anime Shows",
+            library_id="shows",
+            media_type=MediaType.SHOW,
+            rule=CollectionRuleWrite(
+                criteria=sources(SonarrTagSource(tags=["anime"])),
+                minimum_items=1,
+            ),
+        )
+    )
+    assert sonarr_col.child_count == 1
+    show_res = await manager.service.rules.sync(sonarr_col.id, MediaType.SHOW)
+    assert show_res.added == 0
+
+
+async def test_create_collection_custom_order(manager: Manager) -> None:
+    col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Custom Order",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.CUSTOM,
+            rule=chosen(manager),
+        )
+    )
+    assert col.order_type is CollectionOrder.CUSTOM
+
+
+async def test_create_removes_the_server_copy_when_setup_fails(
+    manager: Manager,
+) -> None:
+    manager.provider.rejected_updates.add("1")
+    with pytest.raises(ValueError, match="refused"):
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="Half made",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                rule=chosen(manager),
+            )
+        )
+    assert manager.provider.deleted == ["1"]
+    assert await manager.service.reader.listed(MediaType.MOVIE) == []
+
+
+def test_source_labels_name_stable_identifiers() -> None:
+    def label(source: CollectionSource) -> str:
+        return source_label(SourceCondition(source=source))
+
+    assert (
+        label(TmdbPersonSource(person_id=5292, roles=[TmdbPersonRole.DIRECTOR]))
+        == "overture:tmdb_person:5292:director"
+    )
+    assert label(MdblistSource(identifiers=["user/list"])) == (
+        "overture:mdblist:user/list"
+    )
+    many = label(TmdbItemSource(tmdb_ids=[1, 2]))
+    assert many.startswith("overture:tmdb_item:")
+    assert many == label(TmdbItemSource(tmdb_ids=[1, 2]))
+
+
+async def test_seasonal_smart_collection_sync_creates_server_copy(
+    manager: Manager,
+) -> None:
+    # Inactive smart collection starts withheld with no server_item_id
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Seasonal Smart",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+            rule=CollectionRuleWrite(
+                criteria=where(FilterField.GENRE, FilterOperator.IS, "Action"),
+                delete_when_inactive=True,
+                smart=True,
+                order_type=CollectionOrder.RELEASE_DESC,
+            ),
+        )
+    )
+    assert detail.withheld
+
+    # Make it active and sync, which invokes create_smart_collection
+    await manager.service.editor.update(
+        detail.id,
+        MediaType.MOVIE,
+        CollectionOptions(
+            title="Seasonal Smart",
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+        ),
+    )
+    res = await manager.service.rules.sync(detail.id, MediaType.MOVIE)
+    assert res.skipped is False
+    refreshed = await manager.service.reader.get(detail.id, MediaType.MOVIE)
+    assert not refreshed.withheld
+
+
+async def test_inherited_format_overflow_raises_422(manager: Manager) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "LongGroup",
+        CollectionGroupPolicy(
+            sort_title_format="Prefix_" + ("A" * 60) + "_{title}",
+            summary_format="SummaryPrefix_" + ("B" * 50) + "_{summary}",
+        ),
+    )
+    with pytest.raises(PublicServiceError, match="at most 200 characters"):
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="T" * 150,
+                collection_group="LongGroup",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                rule=chosen(manager),
+            )
+        )
+    with pytest.raises(PublicServiceError, match="at most 10000 characters"):
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="Normal",
+                summary="S" * 9960,
+                collection_group="LongGroup",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                rule=chosen(manager),
+            )
+        )
+
+
+async def test_group_policy_validation_errors(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    with pytest.raises(PublicServiceError, match="A group needs a name"):
+        await manager.service.groups.save_policy(
+            MediaType.MOVIE, "   ", CollectionGroupPolicy()
+        )
+    with pytest.raises(PublicServiceError, match="TMDB franchises are not available"):
+        await manager.service.groups.save_policy(
+            MediaType.SHOW,
+            "ShowFranchises",
+            CollectionGroupPolicy(
+                generator=CollectionGenerator(
+                    dimension=SetDimension.FRANCHISE, library_ids=["shows"]
+                )
+            ),
+        )
+    with pytest.raises(PublicServiceError, match="ordered by Plex"):
+        await manager.service.groups.save_policy(
+            MediaType.MOVIE,
+            "SmartGenres",
+            CollectionGroupPolicy(
+                order_type=CollectionOrder.CUSTOM,
+                generator=CollectionGenerator(
+                    dimension=SetDimension.GENRE, library_ids=["movies"], smart=True
+                ),
+            ),
+        )
+    jellyfin_service = make_jellyfin_service(manager, app_config, database)
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.groups.save_policy(
+            MediaType.MOVIE,
+            "NonPlexGroup",
+            CollectionGroupPolicy(visible_home=True),
+        )
+    with pytest.raises(PublicServiceError, match="only supported by Plex"):
+        await jellyfin_service.groups.save_policy(
+            MediaType.MOVIE,
+            "SmartJellyfin",
+            CollectionGroupPolicy(
+                generator=CollectionGenerator(
+                    dimension=SetDimension.GENRE, library_ids=["movies"], smart=True
+                )
+            ),
+        )
+
+
+async def test_sync_due_survives_a_failing_set(manager: Manager) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "FaultyFranchises",
+        CollectionGroupPolicy(
+            generator=CollectionGenerator(
+                dimension=SetDimension.FRANCHISE, library_ids=["movies"]
+            ),
+        ),
+    )
+    manager.tmdb.error = RuntimeError("TMDB upstream connection reset")
+    await manager.service.schedule.sync_due()
+    assert manager.provider.created == []
+
+
+async def test_franchise_sets_skip_franchises_other_collections_hold(
+    manager: Manager,
+) -> None:
+    await manager.service.editor.create(
+        CollectionCreate(
+            title="External Franchise",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="OtherGroup",
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbCollectionSource(collection_id=10)),
+            ),
+        )
+    )
+    generator = CollectionGenerator(
+        dimension=SetDimension.FRANCHISE, library_ids=["movies"]
+    )
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Franchises",
+        CollectionGroupPolicy(minimum_items=1, generator=generator),
+    )
+    res = await manager.service.groups.sync(MediaType.MOVIE, "Franchises")
+    assert res.created == []
+    assert (
+        await manager.service.sets.preview(
+            CollectionSetPreview(
+                media_type=MediaType.MOVIE, generator=generator, group="OtherGroup"
+            )
+        )
+    )[0].title == "Saga"
+
+
+async def test_bulk_operation_trigger_sync(manager: Manager) -> None:
+    col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Bulk Target",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        )
+    )
+    res = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            operation="trigger_sync",
+            collection_ids=[col.id],
+            media_type=MediaType.MOVIE,
+        )
+    )
+    assert res.collection_ids == [col.id]
+    assert res.errors == {}
+    refreshed = await manager.service.reader.get(col.id, MediaType.MOVIE)
+    assert refreshed.rule is not None
+    assert refreshed.rule.last_synced_at is not None
+
+
+async def test_get_collection_theme_status(manager: Manager) -> None:
+    col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Theme Target",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=chosen(manager),
+        )
+    )
+    theme = await manager.service.themes.status(col.id, MediaType.MOVIE)
+    assert theme.has_theme is False
+
+
+async def test_sync_group_records_rule_errors(manager: Manager) -> None:
+    await manager.service.editor.create(
+        CollectionCreate(
+            title="Will Fail",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="ErrorGroup",
+            rule=CollectionRuleWrite(
+                criteria=sources(MdblistSource(identifiers=["1234"]))
+            ),
+        )
+    )
+    manager.lists.failure = True
+    res = await manager.service.groups.sync(MediaType.MOVIE, "ErrorGroup")
+    assert "Will Fail" in res.errors
+
+
+async def test_create_collection_below_minimum_raises_422(manager: Manager) -> None:
+    with pytest.raises(
+        PublicServiceError, match="fewer members than the effective minimum"
+    ):
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="Empty",
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                rule=NOTHING_MATCHES,
+            )
+        )
+
+
+async def test_scheduled_sync_rule_skips_when_not_due(manager: Manager) -> None:
+    col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Scheduled Skip",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11])),
+            ),
+        )
+    )
+    # First sync runs
+    first = await manager.service.rules.sync(col.id, MediaType.MOVIE, scheduled=False)
+    assert first.skipped is False
+
+    # Second scheduled sync skips because not enough time elapsed
+    second = await manager.service.rules.sync(col.id, MediaType.MOVIE, scheduled=True)
+    assert second.skipped is True
+
+
+async def test_inactive_rule_without_delete_skips_sync(manager: Manager) -> None:
+    col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Inactive Seasonal",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            active_start_mmdd="01-01",
+            active_end_mmdd="01-02",
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11])),
+                delete_when_inactive=False,
+            ),
+        )
+    )
+    res = await manager.service.rules.sync(col.id, MediaType.MOVIE)
+    assert res.skipped is True
+
+
+async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
+    col = await manager.service.editor.create(
+        CollectionCreate(
+            title="Bulk Config",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=chosen(manager),
+        )
+    )
+    # set_order
+    res_order = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            operation="set_order",
+            collection_ids=[col.id],
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.RELEASE_ASC,
+        )
+    )
+    assert res_order.collection_ids == [col.id]
+
+    # set_visibility
+    res_vis = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            operation="set_visibility",
+            collection_ids=[col.id],
+            media_type=MediaType.MOVIE,
+            collection_mode=CollectionMode.HIDE,
+            visible_home=True,
+            visible_shared=True,
+            visible_library=True,
+        )
+    )
+    assert res_vis.collection_ids == [col.id]
+    refreshed = await manager.service.reader.get(col.id, MediaType.MOVIE)
+    assert refreshed.order_type is CollectionOrder.RELEASE_ASC
+    assert refreshed.collection_mode is CollectionMode.HIDE
+    assert refreshed.visible_home is True
+    assert refreshed.visible_shared is True
+    assert refreshed.visible_library is True
+
+
+async def test_tmdb_lists_merge_in_order_and_failures_keep_members(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Lists",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.CUSTOM,
+            rule=CollectionRuleWrite(criteria=sources(TmdbListSource(list_ids=[1, 2]))),
+        )
+    )
+    assert [item.tmdb_id for item in detail.members] == [13, 11, 12]
+    manager.tmdb.error = ValueError("List temporarily unavailable")
+    with pytest.raises(ValueError, match="temporarily unavailable"):
+        await manager.service.rules.sync(detail.id, MediaType.MOVIE)
+    refreshed = await manager.service.reader.get(detail.id, MediaType.MOVIE)
+    assert [item.tmdb_id for item in refreshed.members] == [13, 11, 12]
+
+
+async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
+    manager: Manager,
+) -> None:
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Charts",
+        CollectionGroupPolicy(
+            sort_title_format="01_{title}",
+            summary_format="About {title}",
+            visible_home=True,
+        ),
+    )
+    inherited = await manager.service.editor.create(
+        CollectionCreate(
+            title="Inherited",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Charts",
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        )
+    )
+    explicit = await manager.service.editor.create(
+        CollectionCreate(
+            title="Override",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Charts",
+            sort_title_format="Custom sort",
+            summary_format="Custom summary",
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[12])), visible_home=False
+            ),
+        )
+    )
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Charts",
+        CollectionGroupPolicy(
+            sort_title_format="02_{title}",
+            summary_format="Updated {title}",
+            visible_home=True,
+        ),
+    )
+    for _ in range(2):
+        result = await manager.service.groups.apply_policy(MediaType.MOVIE, "Charts")
+        assert not result.errors
+        assert set(result.collection_ids) == {inherited.id, explicit.id}
+        refreshed = await manager.service.reader.get(inherited.id, MediaType.MOVIE)
+        assert refreshed.sort_title == "02_Inherited"
+        assert refreshed.summary == "Updated Inherited"
+        assert refreshed.visible_home is True
+        override = await manager.service.reader.get(explicit.id, MediaType.MOVIE)
+        assert override.sort_title == "Custom sort"
+        assert override.summary == "Custom summary"
+        assert override.visible_home is False
+        assert [item.id for item in refreshed.members] == [manager.ids[0]]
+
+
+async def test_summary_source_is_not_replaced_by_its_rendered_template(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", summary="Original overview"),
+    )
+    for _ in range(2):
+        result = await manager.service.editor.update(
+            identity,
+            MediaType.MOVIE,
+            CollectionOptions(
+                title="Saga",
+                summary_format="{title}: {summary}",
+            ),
+        )
+        assert result.summary == "Saga: Original overview"
+
+
+async def test_rule_sync_resolves_changed_group_defaults_without_freezing_them(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Inherited",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Shared",
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        )
+    )
+    assert detail.visible_home is False
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Shared",
+        CollectionGroupPolicy(visible_home=True, order_type=CollectionOrder.TITLE_ASC),
+    )
+    await manager.service.rules.sync(detail.id, MediaType.MOVIE)
+    refreshed = await manager.service.reader.get(detail.id, MediaType.MOVIE)
+    assert refreshed.visible_home is True
+    assert refreshed.order_type is CollectionOrder.TITLE_ASC
+    assert refreshed.rule is not None
+    assert refreshed.rule.visible_home is None
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE, "Shared", CollectionGroupPolicy(visible_home=False)
+    )
+    await manager.service.rules.sync(detail.id, MediaType.MOVIE)
+    refreshed = await manager.service.reader.get(detail.id, MediaType.MOVIE)
+    assert refreshed.visible_home is False
+
+
+async def test_group_apply_commits_successful_collections_and_reports_failures(
+    manager: Manager,
+) -> None:
+    created = [
+        await manager.service.editor.create(
+            CollectionCreate(
+                title=title,
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                collection_group="Shared",
+                rule=CollectionRuleWrite(
+                    criteria=sources(TmdbItemSource(tmdb_ids=[11]))
+                ),
+            )
+        )
+        for title in ("First", "Second")
+    ]
+    manager.provider.rejected_updates.add("1")
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE, "Shared", CollectionGroupPolicy(sort_title_format="01_{title}")
+    )
+    result = await manager.service.groups.apply_policy(MediaType.MOVIE, "Shared")
+    assert result.collection_ids == [created[1].id]
+    assert result.errors == {created[0].id: "Server refused this update"}
+    first = await manager.service.reader.get(created[0].id, MediaType.MOVIE)
+    second = await manager.service.reader.get(created[1].id, MediaType.MOVIE)
+    assert first.sort_title is None
+    assert second.sort_title == "01_Second"
+
+
+async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="First",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            summary="Original",
+            summary_format="{title}: {summary}",
+            active_start_mmdd="01-01",
+            active_end_mmdd="12-31",
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        )
+    )
+    for operation in (
+        BulkCollectionOperation(
+            operation="set_visibility",
+            collection_ids=[detail.id],
+            media_type=MediaType.MOVIE,
+            visible_shared=True,
+        ),
+        BulkCollectionOperation(
+            operation="apply_sort_title_format",
+            collection_ids=[detail.id],
+            media_type=MediaType.MOVIE,
+            sort_title_format="01_{title}",
+        ),
+    ):
+        result = await manager.service.bulk.run(operation)
+        assert not result.errors
+    refreshed = await manager.service.reader.get(detail.id, MediaType.MOVIE)
+    assert refreshed.summary == "First: Original"
+    assert refreshed.summary_format == "{title}: {summary}"
+    assert refreshed.sort_title == "01_First"
+    assert refreshed.sort_title_format == "01_{title}"
+    assert refreshed.active_start_mmdd == "01-01"
+    assert refreshed.rule is not None
+    assert refreshed.rule.visible_home is None
+    assert refreshed.rule.visible_shared is True
+    assert refreshed.rule.order_type is None
+
+
+async def test_saved_only_collection_stays_off_the_server_until_synced(
+    manager: Manager,
+) -> None:
+    saved = await manager.service.editor.create(
+        CollectionCreate(
+            title="Draft",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        ),
+        sync=False,
+    )
+    assert (saved.withheld, saved.unsynced) == (True, True)
+    await manager.service.schedule.sync_due()
+    assert manager.provider.created == []
+
+    await manager.service.rules.sync(saved.id, MediaType.MOVIE)
+    synced = await manager.service.reader.get(saved.id, MediaType.MOVIE)
+    assert manager.provider.created == ["Draft"]
+    assert (synced.withheld, synced.unsynced) == (False, False)
+
+
+async def test_saved_only_edits_wait_for_sync(manager: Manager) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity, MediaType.MOVIE, CollectionOptions(title="Renamed"), sync=False
+    )
+    detail = await manager.service.editor.set_members(
+        identity,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(
+            member_ids=list(reversed(manager.ids)), order_type=CollectionOrder.CUSTOM
+        ),
+        sync=False,
+    )
+    assert (detail.title, detail.unsynced) == ("Renamed", True)
+    assert [member.id for member in detail.members] == list(reversed(manager.ids))
+    assert manager.provider.members["1"] == ["m0", "m1", "m2"]
+    assert manager.provider.options["1"][0] == "Saga"
+
+    await manager.service.rules.sync(identity, MediaType.MOVIE)
+    synced = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert sorted(manager.provider.members["1"]) == ["m0", "m1", "m2"]
+    assert manager.provider.options["1"][0] == "Renamed"
+    assert synced.unsynced is False
+
+
+async def test_append_sync_sends_members_chosen_since_the_last_sync(
+    manager: Manager,
+) -> None:
+    created = await manager.service.editor.create(
+        CollectionCreate(
+            title="Append",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11])),
+                sync_mode=SyncMode.APPEND,
+            ),
+        )
+    )
+    picked = [*[member.id for member in created.members], manager.ids[2]]
+    await manager.service.editor.set_members(
+        created.id,
+        MediaType.MOVIE,
+        CollectionMembersUpdate(member_ids=picked, order_type=CollectionOrder.CUSTOM),
+        sync=False,
+    )
+    await manager.service.rules.sync(created.id, MediaType.MOVIE)
+    detail = await manager.service.reader.get(created.id, MediaType.MOVIE)
+    assert {member.id for member in detail.members} == set(picked)
+    assert detail.unsynced is False
+
+
+def _chart(limit: int = 3) -> FilterGroup:
+    return sources(TmdbChartSource(chart=TmdbChart.POPULAR, limit=limit))
+
+
+async def _set_requests(database: Database, *, folder: str = "/movies") -> None:
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(radarr_root_folder=folder, radarr_quality_profile_id=4)
+        )
+
+
+async def test_a_chart_keeps_its_order_for_its_region(manager: Manager) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Popular",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            order_type=CollectionOrder.CUSTOM,
+            rule=CollectionRuleWrite(criteria=_chart()),
+        )
+    )
+    assert [member.title for member in detail.members] == ["Manual", "Second"]
+    assert manager.tmdb.chart_requests == [(TmdbChart.POPULAR, 3, "US")]
+
+
+async def test_missing_titles_list_and_request_what_the_library_lacks(
+    manager: Manager, database: Database
+) -> None:
+    created = await manager.service.editor.create(
+        CollectionCreate(
+            title="Popular",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(criteria=_chart()),
+        )
+    )
+    missing = await manager.service.arr.missing(created.id, MediaType.MOVIE)
+    assert [
+        (title.tmdb_id, title.title, title.requested) for title in missing.titles
+    ] == [(99, "Missing 99", False)]
+    assert missing.requestable
+    with pytest.raises(PublicServiceError, match="root folder"):
+        await manager.service.arr.request_missing(
+            created.id, MediaType.MOVIE, CollectionRequest()
+        )
+    await _set_requests(database)
+    result = await manager.service.arr.request_missing(
+        created.id, MediaType.MOVIE, CollectionRequest()
+    )
+    assert (result.requested, result.present) == (1, 0)
+    radarr = manager.radarr
+    assert [(tmdb_id, request.root_folder) for tmdb_id, request in radarr.added] == [
+        (99, "/movies")
+    ]
+    already = await manager.service.arr.request_missing(
+        created.id, MediaType.MOVIE, CollectionRequest(tmdb_ids=[11])
+    )
+    assert (already.requested, already.present) == (0, 1)
+
+
+async def test_a_sync_labels_tags_requests_and_orders_home(
+    manager: Manager, database: Database
+) -> None:
+    await _set_requests(database)
+    created = await manager.service.editor.create(
+        CollectionCreate(
+            title="Popular",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            collection_group="Charts",
+            visible_home=True,
+            rule=CollectionRuleWrite(
+                criteria=_chart(),
+                member_label="{title} members",
+                arr_tag="{group}",
+                request_missing=True,
+                home_order=1,
+            ),
+        )
+    )
+    await manager.service.rules.sync(created.id, MediaType.MOVIE)
+    assert any(
+        label == "Popular members" for label, _, _ in manager.provider.synced_labels
+    )
+    radarr = manager.radarr
+    assert [tmdb_id for tmdb_id, _ in radarr.added] == [99]
+    # Members Radarr holds get the tag; the fake holds only First.
+    assert radarr.tag_edits == [(77, [], True), (77, [1], False)]
+    assert manager.provider.hub_orders[-1] == ["1"]
+
+
+async def test_a_failed_effect_is_recorded_after_members_sync(
+    manager: Manager,
+) -> None:
+    created = await manager.service.editor.create(
+        CollectionCreate(
+            title="Popular",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(criteria=_chart(), request_missing=True),
+        )
+    )
+    with pytest.raises(PublicServiceError, match="Request missing failed"):
+        await manager.service.rules.sync(created.id, MediaType.MOVIE)
+    detail = await manager.service.reader.get(created.id, MediaType.MOVIE)
+    assert [member.title for member in detail.members] == ["Second", "Manual"]
+    assert detail.rule is not None
+    assert detail.rule.last_error is not None
+
+
+async def test_custom_sets_list_their_collections_across_libraries(
+    manager: Manager, database: Database
+) -> None:
+    async with database.write_session() as session:
+        session.add(
+            MediaItem(
+                media_type=MediaType.MOVIE,
+                title="Spare",
+                tmdb_id=40,
+                server_item_id="x0",
+                library_id="extra",
+            )
+        )
+    starts = FilterOperator.STARTS_WITH
+    generator = CollectionGenerator(
+        dimension=SetDimension.CUSTOM,
+        library_ids=["movies", "extra"],
+        custom_values=[
+            CustomSetValue(name="S", criteria=where(FilterField.TITLE, starts, "S")),
+            CustomSetValue(name="F", criteria=where(FilterField.TITLE, starts, "F")),
+        ],
+    )
+    preview = await manager.service.sets.preview(
+        CollectionSetPreview(
+            media_type=MediaType.MOVIE, generator=generator, minimum_items=1
+        )
+    )
+    assert [
+        (entry.library_id, entry.title, entry.member_count) for entry in preview
+    ] == [
+        ("movies", "S", 1),
+        ("movies", "F", 1),
+        ("extra", "S", 1),
+        ("extra", "F", 0),
+    ]
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Letters",
+        CollectionGroupPolicy(minimum_items=1, generator=generator),
+    )
+    result = await manager.service.groups.sync(MediaType.MOVIE, "Letters")
+    assert len(result.created) == 3
+
+
+async def test_aliases_rename_and_merge_values(manager: Manager) -> None:
+    generator = CollectionGenerator(
+        dimension=SetDimension.DECADE,
+        library_ids=["movies"],
+        title_format="{value}s",
+        aliases=[SetValueAlias(values=["1990", "2000"], name="Turn of the century")],
+    )
+    preview = await manager.service.sets.preview(
+        CollectionSetPreview(
+            media_type=MediaType.MOVIE, generator=generator, minimum_items=1
+        )
+    )
+    assert [(entry.value, entry.title, entry.member_count) for entry in preview] == [
+        ("1990|2000", "Turn of the century", 3)
+    ]
+
+
+async def test_plex_counts_a_dimension_only_it_knows(manager: Manager) -> None:
+    manager.provider.choices = {
+        "audioLanguage": [("eng", "English"), ("fra", "French")]
+    }
+    generator = CollectionGenerator(
+        dimension=SetDimension.AUDIO_LANGUAGE, library_ids=["movies"], smart=True
+    )
+    preview = await manager.service.sets.preview(
+        CollectionSetPreview(
+            media_type=MediaType.MOVIE, generator=generator, minimum_items=2
+        )
+    )
+    assert [
+        (entry.title, entry.member_count, entry.below_minimum) for entry in preview
+    ] == [
+        ("English", 3, False),
+        ("French", 1, True),
+    ]
+    with pytest.raises(PublicServiceError, match="smart collections"):
+        await manager.service.sets.preview(
+            CollectionSetPreview(
+                media_type=MediaType.MOVIE,
+                generator=generator.model_copy(update={"smart": False}),
+            )
+        )
+
+
+async def test_previews_count_members_before_saving(manager: Manager) -> None:
+    local = await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=CollectionRuleWrite(
+                criteria=where(FilterField.YEAR, FilterOperator.GTE, 2000),
+                order_type=CollectionOrder.TITLE_ASC,
+            ),
+        )
+    )
+    assert (local.member_count, local.members) == (2, ["Manual", "Second"])
+    smart = await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=CollectionRuleWrite(
+                criteria=where(FilterField.HDR, FilterOperator.IS, value=True),
+                smart=True,
+            ),
+        )
+    )
+    assert (smart.member_count, smart.members) == (1, ["First", "Second"])
+    # Plex answers for a smart collection even where Overture knows the field.
+    await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=CollectionRuleWrite(
+                criteria=where(FilterField.YEAR, FilterOperator.GTE, 2000),
+                order_type=CollectionOrder.ADDED_DESC,
+                smart=True,
+            ),
+        )
+    )
+    assert manager.provider.queries[-1] == "sort=addedAt%3Adesc&year%3E=2000"
+
+
+async def test_saved_presets_are_listed_first_replaced_and_deleted(
+    manager: Manager,
+) -> None:
+    body = CollectionPresetSave(
+        media_type=MediaType.MOVIE,
+        label="Mine",
+        collection=CollectionPresetCollection(
+            title="Mine", rule=CollectionRuleWrite(criteria=_chart())
+        ),
+    )
+    first = await manager.service.presets.save(body)
+    again = await manager.service.presets.save(
+        body.model_copy(update={"description": "New"})
+    )
+    assert first.saved_id == again.saved_id
+    listed = await manager.service.presets.available(MediaType.MOVIE)
+    assert (listed[0].label, listed[0].description) == ("Mine", "New")
+    assert first.saved_id is not None
+    await manager.service.presets.delete(first.saved_id)
+    assert all(
+        preset.saved_id is None
+        for preset in await manager.service.presets.available(MediaType.MOVIE)
+    )
+
+
+async def test_source_summary_follows_the_first_list(manager: Manager) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Listed",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            summary_format="From TMDB: {source_summary}",
+            rule=CollectionRuleWrite(criteria=sources(TmdbListSource(list_ids=[1]))),
+        )
+    )
+    assert detail.summary == "From TMDB: List 1"
+
+
+def test_tmdb_facts_are_tested_like_other_metadata() -> None:
+    item = MediaItem(
+        media_type=MediaType.SHOW,
+        title="Show",
+        tmdb_keywords=["christmas"],
+        original_language="Japanese",
+        tmdb_votes=500,
+        last_aired=utc_now().date().isoformat(),
+        streaming=["Netflix"],
+    )
+    context = CriteriaContext(sources={}, collections={}, now=utc_now())
+    for tested, operator, value in (
+        (FilterField.TMDB_KEYWORD, FilterOperator.IS, "Christmas"),
+        (FilterField.ORIGINAL_LANGUAGE, FilterOperator.IS, "japanese"),
+        (FilterField.TMDB_VOTES, FilterOperator.GTE, 100),
+        (FilterField.LAST_AIRED, FilterOperator.IN_LAST, 7),
+        (FilterField.STREAMING, FilterOperator.IS_NOT, "Hulu"),
+    ):
+        assert FIELDS[tested].tmdb
+        criteria = FilterGroup(
+            conditions=[FieldCondition(field=tested, operator=operator, value=value)]
+        )
+        assert evaluate([item], criteria, context) == [item], tested
+    assert FIELDS[FilterField.VERSIONS].plex is None
+
+
+async def test_adoption_puts_an_unmanaged_collection_in_its_group(
+    manager: Manager, database: Database
+) -> None:
+    assert await manager.service.groups.names(MediaType.MOVIE) == ["Ungrouped"]
+    identity = await create_unmanaged(manager, database)
+    unmanaged = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert unmanaged.tmdb_collection_id is None
+    # An unmanaged collection is in no stored group, even if it names one.
+    assert await manager.service.groups.names(MediaType.MOVIE) == ["Ungrouped"]
+
+    detail = await manager.service.editor.adopt(
+        identity, MediaType.MOVIE, CollectionAdoption(group="Sagas")
+    )
+
+    assert await manager.service.groups.names(MediaType.MOVIE) == ["Sagas", "Ungrouped"]
+    assert detail.collection_group == "Sagas"
+    assert detail.rule is not None
+    # Every member belongs to TMDB collection 10, which becomes its source.
+    assert detail.rule.criteria == FilterGroup(
+        mode="all",
+        conditions=[SourceCondition(source=TmdbCollectionSource(collection_id=10))],
+    )
+    assert [member.id for member in detail.members] == manager.ids
+    assert detail.tmdb_collection_id == 10
+    with pytest.raises(PublicServiceError, match="already manages"):
+        await manager.service.editor.adopt(
+            identity, MediaType.MOVIE, CollectionAdoption()
+        )
+
+
+async def test_adoption_names_members_that_share_no_franchise(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create_unmanaged(manager, database)
+    async with database.write_session() as session:
+        item = await session.get(MediaItem, manager.ids[-1])
+        assert item is not None
+        item.tmdb_collection_id = 20
+        session.add(item)
+
+    detail = await manager.service.editor.adopt(
+        identity, MediaType.MOVIE, CollectionAdoption()
+    )
+
+    assert detail.rule is not None
+    assert detail.rule.criteria == sources(
+        TmdbItemSource(tmdb_ids=[11 + index for index in range(len(manager.ids))])
+    )
+    assert detail.tmdb_collection_id is None
+
+
+async def test_orphan_reverses_adoption_keeping_the_server_copy(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Sagas"),
+    )
+
+    detail = await manager.service.editor.orphan(identity, MediaType.MOVIE)
+
+    assert not detail.managed
+    assert detail.rule is None
+    assert detail.collection_group is None
+    assert not detail.withheld
+    assert [member.id for member in detail.members] == manager.ids
+    assert await manager.service.groups.names(MediaType.MOVIE) == ["Ungrouped"]
+    with pytest.raises(PublicServiceError, match="does not manage"):
+        await manager.service.editor.orphan(identity, MediaType.MOVIE)
+    refused = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="orphan"
+        )
+    )
+    assert refused.errors == {identity: "Adopt the collection before changing it"}
+
+    adopted = await manager.service.editor.adopt(
+        identity, MediaType.MOVIE, CollectionAdoption(group="Sagas")
+    )
+    assert adopted.managed
+    orphaned = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="orphan"
+        )
+    )
+    assert orphaned.collection_ids == [identity]
+
+
+async def test_orphan_refuses_a_collection_without_a_server_copy(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.delete(identity, MediaType.MOVIE, target="server")
+
+    with pytest.raises(PublicServiceError, match="not on the media server"):
+        await manager.service.editor.orphan(identity, MediaType.MOVIE)
+    assert (await manager.service.reader.get(identity, MediaType.MOVIE)).managed
+
+
+async def test_bulk_delete_removes_only_the_server_copy_when_asked(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity],
+            media_type=MediaType.MOVIE,
+            operation="delete",
+            delete_target="server",
+        )
+    )
+
+    assert result.collection_ids == [identity]
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.withheld
+    assert detail.managed
+
+
+async def test_ungrouped_cannot_be_a_set(manager: Manager) -> None:
+    decades = CollectionGenerator(
+        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+    )
+    with pytest.raises(PublicServiceError, match="cannot be a set"):
+        await manager.service.groups.save_policy(
+            MediaType.MOVIE, "ungrouped", CollectionGroupPolicy(generator=decades)
+        )
+    saved = await manager.service.groups.save_policy(
+        MediaType.MOVIE, "Ungrouped", CollectionGroupPolicy(minimum_items=2)
+    )
+    assert saved.generator is None
+
+
+async def test_the_unmanaged_name_is_reserved(manager: Manager) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity,
+        MediaType.MOVIE,
+        CollectionOptions(title="Saga", collection_group="Weekend"),
+    )
+    with pytest.raises(PublicServiceError, match="reserved"):
+        await manager.service.groups.save_policy(
+            MediaType.MOVIE, "unmanaged", CollectionGroupPolicy()
+        )
+    with pytest.raises(PublicServiceError, match="reserved"):
+        await manager.service.groups.rename(MediaType.MOVIE, "Weekend", " UNMANAGED ")
+    for invalid in (
+        lambda: CollectionOptions(title="Saga", collection_group="Unmanaged"),
+        lambda: CollectionGroupRename(name="unmanaged"),
+        lambda: CollectionAdoption(group="Unmanaged"),
+    ):
+        with pytest.raises(ValidationError, match="reserved"):
+            invalid()
+
+
+async def test_group_apply_skips_smart_members_under_a_custom_order(
+    manager: Manager,
+) -> None:
+    regular, smart = [
+        await manager.service.editor.create(
+            CollectionCreate(
+                title=title,
+                library_id="movies",
+                media_type=MediaType.MOVIE,
+                collection_group="Mixed",
+                rule=CollectionRuleWrite(
+                    criteria=where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
+                    smart=title == "Smart",
+                ),
+            )
+        )
+        for title in ("Regular", "Smart")
+    ]
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Mixed",
+        CollectionGroupPolicy(order_type=CollectionOrder.CUSTOM),
+    )
+
+    result = await manager.service.groups.apply_policy(MediaType.MOVIE, "Mixed")
+
+    assert result.collection_ids == [regular.id]
+    assert result.skipped == {smart.id: SMART_CUSTOM_ORDER}
+
+
+async def test_missing_group_membership_uses_reserved_fallback(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create_unmanaged(manager, database)
+    detail = await manager.service.editor.adopt(
+        identity, MediaType.MOVIE, CollectionAdoption()
+    )
+    assert detail.collection_group == "Ungrouped"
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="set_group"
+        )
+    )
+    assert not result.errors
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.collection_group == "Ungrouped"
+
+
+@pytest.mark.parametrize(
+    ("criteria", "order", "expected"),
+    [
+        # Either kind serves fields both evaluate, so nothing is suggested.
+        (
+            where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
+            CollectionOrder.TITLE_ASC,
+            None,
+        ),
+        (
+            where(FilterField.HDR, FilterOperator.IS, True),
+            CollectionOrder.TITLE_ASC,
+            (CollectionKind.SMART, "only Plex can test HDR"),
+        ),
+        (
+            sources(TmdbItemSource(tmdb_ids=[11])),
+            CollectionOrder.TITLE_ASC,
+            (
+                CollectionKind.REGULAR,
+                "lists and tags have no Plex filter, so Overture syncs their members",
+            ),
+        ),
+        (
+            where(FilterField.TMDB_RATING, FilterOperator.GTE, 7),
+            CollectionOrder.TITLE_ASC,
+            (CollectionKind.REGULAR, "Plex cannot test TMDB rating"),
+        ),
+        (
+            FilterGroup(
+                conditions=[
+                    FieldCondition(field=FilterField.HDR, value=True),
+                    FieldCondition(
+                        field=FilterField.TMDB_RATING,
+                        operator=FilterOperator.GTE,
+                        value=7,
+                    ),
+                ]
+            ),
+            CollectionOrder.TITLE_ASC,
+            None,
+        ),
+        (
+            where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
+            CollectionOrder.CUSTOM,
+            (CollectionKind.REGULAR, "Plex cannot keep a custom order"),
+        ),
+    ],
+)
+def test_kind_recommendation_follows_what_plex_can_evaluate(
+    manager: Manager,
+    criteria: FilterGroup,
+    order: CollectionOrder,
+    expected: tuple[CollectionKind, str] | None,
+) -> None:
+    capabilities = manager.service.discovery.capabilities(MediaType.MOVIE)
+    rule = CollectionRuleWrite(criteria=criteria)
+
+    assert (
+        recommend_kind(rule, capabilities, media_type=MediaType.MOVIE, order=order)
+        == expected
+    )
+    assert (
+        recommend_kind(
+            rule,
+            capabilities.model_copy(update={"smart": False}),
+            media_type=MediaType.MOVIE,
+            order=order,
+        )
+        is None
+    )
+
+
+async def test_preview_counts_titles_tmdb_has_not_described_yet(
+    manager: Manager, database: Database
+) -> None:
+    async with database.write_session() as session:
+        item = await session.get(MediaItem, manager.ids[0])
+        assert item is not None
+        item.tmdb_checked_id = item.tmdb_id
+        session.add(item)
+
+    def preview(field: FilterField, value: str) -> CollectionPreviewRequest:
+        return CollectionPreviewRequest(
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=CollectionRuleWrite(criteria=where(field, FilterOperator.IS, value)),
+        )
+
+    keyword = await manager.service.discovery.preview(
+        preview(FilterField.TMDB_KEYWORD, "christmas")
+    )
+    studio = await manager.service.discovery.preview(
+        preview(FilterField.STUDIO, "Studio")
+    )
+
+    assert (keyword.member_count, keyword.tmdb_unread) == (0, 2)
+    assert studio.tmdb_unread == 0
+
+
+async def test_preview_carries_the_kind_recommendation(manager: Manager) -> None:
+    preview = await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            media_type=MediaType.MOVIE,
+            library_id="movies",
+            rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        )
+    )
+    assert preview.recommendation is not None
+    assert preview.recommendation.kind is CollectionKind.REGULAR
+
+
+async def test_collection_rows_report_art_size_source_and_shape(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, identity)
+        assert row is not None
+        select_art(
+            row,
+            ArtType.POSTER,
+            PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
+        )
+        record_art_file(
+            row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1000, 1, 1)
+        )
+        session.add(row)
+
+    [listed] = await manager.service.reader.listed(MediaType.MOVIE)
+
+    assert (listed.poster_width, listed.poster_height) == (1000, 1000)
+    assert listed.poster_source == "tmdb"
+    assert listed.background_width is None
+    assert listed.has_incorrect_aspect_ratio
+
+
+async def test_bulk_clears_forget_collection_art_and_theme_choices(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, identity)
+        assert row is not None
+        select_art(
+            row,
+            ArtType.POSTER,
+            PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
+        )
+        row.youtube_id = "abcdefghijk"
+        session.add(row)
+
+    for operation in ("clear_artwork", "clear_themes"):
+        result = await manager.service.bulk.run(
+            BulkCollectionOperation(
+                collection_ids=[identity],
+                media_type=MediaType.MOVIE,
+                operation=operation,
+            )
+        )
+        assert result.collection_ids == [identity]
+
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert (detail.poster_url, detail.youtube_id) == (None, None)
+
+
+async def test_unmanaged_collections_accept_only_adoption(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create_unmanaged(manager, database)
+    for change in (
+        manager.service.editor.update(
+            identity, MediaType.MOVIE, CollectionOptions(title="X")
+        ),
+        manager.service.rules.sync(identity, MediaType.MOVIE),
+        manager.service.editor.delete(identity, MediaType.MOVIE),
+        manager.service.editor.set_monitored(identity, MediaType.MOVIE, False),
+        manager.service.editor.save_rule(
+            identity,
+            MediaType.MOVIE,
+            CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
+        ),
+    ):
+        with pytest.raises(PublicServiceError, match="Adopt the collection"):
+            await change
+    refused = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity],
+            media_type=MediaType.MOVIE,
+            operation="set_group",
+            collection_group="Sagas",
+        )
+    )
+    assert refused.errors == {identity: "Adopt the collection before changing it"}
+
+    await manager.service.editor.adopt(identity, MediaType.MOVIE, CollectionAdoption())
+    await manager.service.editor.set_monitored(identity, MediaType.MOVIE, False)
+    again = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            collection_ids=[identity], media_type=MediaType.MOVIE, operation="adopt"
+        )
+    )
+    assert again.errors == {identity: "Overture already manages it"}

@@ -1,0 +1,184 @@
+"""Collection policy resolution, from explicit choices to global defaults."""
+
+lazy from dataclasses import dataclass
+lazy from datetime import datetime
+
+lazy from ...db.models.collection_group import CollectionGroup
+lazy from ...db.models.collection_rule import CollectionRule
+lazy from ...db.models.settings import AppSettings
+lazy from ...domain import (
+    CollectionFiltering,
+    CollectionMode,
+    CollectionOrder,
+    SyncMode,
+)
+lazy from ...schemas.collections import CollectionGroupPolicy, CollectionRuleWrite
+lazy from ...utils.cron import next_run_after
+lazy from ...utils.time import utc_now
+
+type RuleOrPolicy = CollectionRule | CollectionRuleWrite | None
+
+
+def inherit[T](*values: T | None) -> T:
+    """Preserve false and empty-string overrides while walking the tiers."""
+    for value in values:
+        if value is not None:
+            return value
+    raise ValueError("A policy must have a global default")
+
+
+def inherit_optional[T](*values: T | None) -> T | None:
+    """Return the first non-null value across the tiers, or ``None``."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+@dataclass(slots=True, frozen=True)
+class CollectionPolicy:
+    """Effective values for one collection workflow."""
+
+    sync_mode: SyncMode
+    minimum_items: int
+    delete_below_minimum: bool
+    auto_match_art: bool
+    auto_match_theme: bool
+    collection_mode: CollectionMode
+    order_type: CollectionOrder
+    collection_filtering: CollectionFiltering
+    visible_home: bool
+    visible_shared: bool
+    visible_library: bool
+    sort_title_format: str
+    summary_format: str
+    active_start_mmdd: str | None = None
+    active_end_mmdd: str | None = None
+    delete_when_inactive: bool = False
+    sync_schedule: str = "0 3 * * *"
+    sync_enabled: bool = True
+    request_missing: bool = False
+    member_label: str | None = None
+    arr_tag: str | None = None
+    home_order: int | None = None
+
+
+def resolve_policy(
+    defaults: AppSettings,
+    group: CollectionGroup | CollectionGroupPolicy | None = None,
+    rule: RuleOrPolicy = None,
+) -> CollectionPolicy:
+    """Resolve nullable rule, group and application defaults in that order."""
+    return CollectionPolicy(
+        sync_mode=inherit(
+            rule.sync_mode if rule else None,
+            group.sync_mode if group else None,
+            defaults.collection_sync_mode,
+        ),
+        minimum_items=inherit(
+            rule.minimum_items if rule else None,
+            group.minimum_items if group else None,
+            defaults.collection_minimum_items,
+        ),
+        delete_below_minimum=inherit(
+            rule.delete_below_minimum if rule else None,
+            group.delete_below_minimum if group else None,
+            defaults.collection_delete_below_minimum,
+        ),
+        auto_match_art=inherit(
+            rule.auto_match_art if rule else None,
+            group.auto_match_art if group else None,
+            defaults.collection_auto_match_art,
+        ),
+        auto_match_theme=inherit(
+            rule.auto_match_theme if rule else None,
+            group.auto_match_theme if group else None,
+            defaults.collection_auto_match_theme,
+        ),
+        collection_mode=inherit(
+            rule.collection_mode if rule else None,
+            group.collection_mode if group else None,
+            defaults.collection_mode_default,
+        ),
+        order_type=inherit(
+            rule.order_type if rule else None,
+            group.order_type if group else None,
+            defaults.collection_order_default,
+        ),
+        collection_filtering=inherit(
+            rule.collection_filtering if rule else None,
+            group.collection_filtering if group else None,
+            defaults.collection_filtering_default,
+        ),
+        visible_home=inherit(
+            rule.visible_home if rule else None,
+            group.visible_home if group else None,
+            defaults.collection_visible_home,
+        ),
+        visible_shared=inherit(
+            rule.visible_shared if rule else None,
+            group.visible_shared if group else None,
+            defaults.collection_visible_shared,
+        ),
+        visible_library=inherit(
+            rule.visible_library if rule else None,
+            group.visible_library if group else None,
+            defaults.collection_visible_library,
+        ),
+        sort_title_format=inherit(
+            rule.sort_title_format if rule else None,
+            group.sort_title_format if group else None,
+            defaults.collection_sort_title_format,
+        ),
+        summary_format=inherit(
+            rule.summary_format if rule else None,
+            group.summary_format if group else None,
+            defaults.collection_summary_format,
+        ),
+        active_start_mmdd=inherit_optional(
+            rule.active_start_mmdd if rule else None,
+            group.active_start_mmdd if group else None,
+        ),
+        active_end_mmdd=inherit_optional(
+            rule.active_end_mmdd if rule else None,
+            group.active_end_mmdd if group else None,
+        ),
+        delete_when_inactive=inherit(
+            rule.delete_when_inactive if rule else None,
+            group.delete_when_inactive if group else None,
+            defaults.collection_delete_when_inactive,
+        ),
+        sync_schedule=inherit(
+            group.sync_schedule if group else None,
+            defaults.collection_sync_schedule,
+        ),
+        sync_enabled=inherit(
+            group.sync_enabled if group else None,
+            defaults.collection_sync_enabled,
+        ),
+        request_missing=inherit(
+            rule.request_missing if rule else None,
+            group.request_missing if group else None,
+            defaults.collection_request_missing,
+        ),
+        member_label=inherit_optional(
+            rule.member_label if rule else None,
+            group.member_label if group else None,
+        ),
+        arr_tag=inherit_optional(
+            rule.arr_tag if rule else None,
+            group.arr_tag if group else None,
+        ),
+        home_order=inherit_optional(
+            rule.home_order if rule else None,
+            group.home_order if group else None,
+        ),
+    )
+
+
+def is_due(last_synced_at: datetime | None, policy: CollectionPolicy) -> bool:
+    """Whether the schedule has come round since the last sync."""
+    return policy.sync_enabled and (
+        last_synced_at is None
+        or utc_now() >= next_run_after(policy.sync_schedule, last_synced_at)
+    )

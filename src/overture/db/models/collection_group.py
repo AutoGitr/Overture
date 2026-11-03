@@ -1,0 +1,63 @@
+"""Nullable defaults for collections in one group on one media server."""
+
+lazy from datetime import datetime
+lazy from typing import Any, ClassVar
+
+lazy from sqlmodel import Field, SQLModel, UniqueConstraint
+
+lazy from ...domain import (
+    CollectionFiltering,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+    ServerType,
+    SyncMode,
+)
+lazy from ..columns import enum_columns, enum_type
+
+
+class CollectionGroup(SQLModel, table=True):
+    """Keep group policy separate from a collection's explicit choices."""
+
+    __tablename__: ClassVar[Any] = "collection_groups"
+    __table_args__ = (UniqueConstraint("server_type", "media_type", "name"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    server_type: ServerType = Field(sa_type=enum_type(ServerType))
+    media_type: MediaType = Field(sa_type=enum_type(MediaType))
+    name: str
+    sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
+    minimum_items: int | None = None
+    delete_below_minimum: bool | None = None
+    collection_mode: CollectionMode | None = Field(
+        default=None, sa_type=enum_type(CollectionMode)
+    )
+    order_type: CollectionOrder | None = Field(
+        default=None, sa_type=enum_type(CollectionOrder)
+    )
+    collection_filtering: CollectionFiltering | None = Field(
+        default=None, sa_type=enum_type(CollectionFiltering)
+    )
+    visible_home: bool | None = None
+    visible_shared: bool | None = None
+    visible_library: bool | None = None
+    sort_title_format: str | None = None
+    summary_format: str | None = None
+    active_start_mmdd: str | None = None
+    active_end_mmdd: str | None = None
+    delete_when_inactive: bool | None = None
+    auto_match_art: bool | None = None
+    auto_match_theme: bool | None = None
+    sync_schedule: str | None = None
+    sync_enabled: bool | None = None
+    request_missing: bool | None = None
+    member_label: str | None = None
+    arr_tag: str | None = None
+    home_order: int | None = None
+    #: A ``CollectionGenerator`` that makes the group a collection set.
+    generator_json: str | None = None
+    #: When the set last created and updated its collections.
+    generated_at: datetime | None = None
+
+
+enum_columns(CollectionGroup)

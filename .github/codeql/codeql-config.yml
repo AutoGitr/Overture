@@ -1,0 +1,10 @@
+name: "Overture CodeQL config"
+
+paths-ignore:
+  - tests/**
+  - frontend/src/test/**
+  - src/overture/frontend/**
+  - frontend/node_modules/**
+  - frontend/src/generated/**
+  - "**/*.gen.ts"
+  - .venv/**
