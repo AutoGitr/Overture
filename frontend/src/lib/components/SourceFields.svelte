@@ -16,7 +16,7 @@
   import TmdbSourcePicker from "./TmdbSourcePicker.svelte";
 
   let {
-    source,
+    source = $bindable(),
     mediaType,
     label,
   }: {

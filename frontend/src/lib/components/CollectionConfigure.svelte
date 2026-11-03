@@ -90,7 +90,7 @@
           disabled={!set.libraryIds.length}
         >
           <CollectionSetEditor
-            generator={set.generator}
+            bind:generator={set.generator}
             libraryIds={set.libraryIds}
             {libraries}
             mediaType={set.mediaType}
@@ -121,7 +121,7 @@
           disabled={!set.libraryIds.length}
         >
           <CollectionPolicyFields
-            policy={set.setPolicy}
+            bind:policy={set.setPolicy}
             level="group"
             defaults={set.defaults.data}
             plex={set.capabilities.data?.visibility ?? false}
@@ -149,7 +149,7 @@
           disabled={!set.libraryIds.length}
         >
           <CollectionScheduleFields
-            policy={set.setPolicy}
+            bind:policy={set.setPolicy}
             level="group"
             defaults={set.defaults.data}
           />

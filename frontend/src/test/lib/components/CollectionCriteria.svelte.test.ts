@@ -7,7 +7,9 @@ import type {
   FieldConditionInput,
 } from "../../../generated/rest/types.gen";
 import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
-import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
+import CollectionPolicyFields, {
+  type PolicyData,
+} from "../../../lib/components/CollectionPolicyFields.svelte";
 import CollectionSetEditor from "../../../lib/components/CollectionSetEditor.svelte";
 import GlobalCollectionDefaults from "../../../lib/components/GlobalCollectionDefaults.svelte";
 import CriteriaEditor from "../../../lib/components/CriteriaEditor.svelte";
@@ -424,8 +426,9 @@ describe("collection criteria", () => {
   });
 
   it("names inherited values and keeps member effects off the global level", () => {
+    const collectionPolicy = $state<PolicyData>({ sync_mode: null });
     const collection = renderWithQueryClient(CollectionPolicyFields, {
-      policy: { sync_mode: null },
+      policy: collectionPolicy,
       level: "collection",
       defaults: { sync_mode: "append" },
       arr: "Radarr",
@@ -436,8 +439,9 @@ describe("collection criteria", () => {
     expect(screen.getByLabelText("Radarr tag")).toBeInTheDocument();
     collection.unmount();
 
+    const globalPolicy = $state<PolicyData>({ sync_mode: "sync" });
     renderWithQueryClient(CollectionPolicyFields, {
-      policy: { sync_mode: "sync" },
+      policy: globalPolicy,
       level: "global",
       arr: "Radarr",
       memberLabels: true,
@@ -449,8 +453,9 @@ describe("collection criteria", () => {
   });
 
   it("offers the sorts the server supports", () => {
+    const policy = $state<PolicyData>({ order_type: null });
     renderWithQueryClient(CollectionPolicyFields, {
-      policy: { order_type: null },
+      policy,
       level: "collection",
       orders: ["custom", "critic_rating.desc"],
     });

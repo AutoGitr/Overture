@@ -26,7 +26,7 @@
   import type { PolicyLevel } from "./CollectionPolicyFields.svelte";
 
   let {
-    policy,
+    policy = $bindable(),
     level,
     defaults,
   }: {

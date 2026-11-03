@@ -34,7 +34,7 @@
 
   const queryClient = useQueryClient();
 
-  const draft = $state(settingsState.toUpdatePayload());
+  let draft = $state(settingsState.toUpdatePayload());
   const settingsQuery = createQuery(() => getSettingsOptions());
   let draftInitialised = $state(false);
   let canEdit = $derived(draftInitialised && !settingsQuery.isError);
@@ -247,7 +247,7 @@
 
       <div class="option-card">
         <span class="form-label">Collections</span>
-        <GlobalCollectionDefaults {draft} />
+        <GlobalCollectionDefaults bind:draft />
       </div>
 
       <div class="option-card">

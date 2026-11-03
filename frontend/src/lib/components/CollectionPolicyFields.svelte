@@ -69,7 +69,7 @@
   import InheritedSelect from "./InheritedSelect.svelte";
 
   let {
-    policy,
+    policy = $bindable(),
     level,
     defaults,
     plex = false,

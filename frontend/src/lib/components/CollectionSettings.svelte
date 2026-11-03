@@ -25,7 +25,7 @@
   disabled={!editor.libraryId}
 >
   <CollectionPolicyFields
-    {policy}
+    bind:policy
     level="collection"
     defaults={editor.defaults.data}
     plex={capabilities?.visibility ?? false}

@@ -20,6 +20,8 @@
     ["smart", "Smart"],
   ] as const;
   let capabilities = $derived(editor.capabilities.data);
+  // The editor owns its rule, so its criteria are bound here rather than through `editor`.
+  let rule = $derived(editor.rule);
   let recommendation = $derived(editor.preview.result?.recommendation ?? null);
   /** A kind the criteria need that the collection is not, which the preview found. */
   let suggested = $derived(
@@ -75,7 +77,7 @@
     <fieldset class="criteria" disabled={editor.generated}>
       <legend class="sr-only">Criteria</legend>
       <CriteriaEditor
-        group={editor.rule.criteria}
+        bind:group={rule.criteria}
         fields={editor.fields}
         sources={capabilities?.sources ?? []}
         mediaType={editor.mediaType}

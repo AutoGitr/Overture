@@ -19,7 +19,7 @@
   disabled={!editor.libraryId}
 >
   <CollectionScheduleFields
-    {policy}
+    bind:policy
     level="collection"
     defaults={editor.defaults.data}
   />

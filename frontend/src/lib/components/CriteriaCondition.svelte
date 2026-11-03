@@ -22,7 +22,7 @@
   import DataStatus from "./DataStatus.svelte";
 
   let {
-    condition,
+    condition = $bindable(),
     fields,
     sources,
     mediaType,
@@ -135,7 +135,7 @@
         <option value={operator}>{operatorLabel}</option>
       {/each}
     </select>
-    <SourceFields source={condition.source} {mediaType} {label} />
+    <SourceFields bind:source={condition.source} {mediaType} {label} />
   {:else if field}
     {@const kind = field.kind}
     <select

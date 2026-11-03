@@ -11,7 +11,7 @@
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
 
-  let { draft }: { draft: AppSettingsUpdate } = $props();
+  let { draft = $bindable() }: { draft: AppSettingsUpdate } = $props();
   const id = $props.id();
 
   /** Each setting's global name; groups and collections use the policy's. */

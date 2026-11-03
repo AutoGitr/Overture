@@ -40,12 +40,13 @@
     libraries?: LibrarySectionRead[];
     /** The group is saved, so it exists from now on. */
     onsave?: () => void;
-    /** Hand the popup the save actions, which belong in its footer. */
-    onfooterchange?: (footer: Snippet) => void;
+    /** Hand the popup the save actions, which belong in its footer, until unmounted. */
+    onfooterchange?: (footer: Snippet | null) => void;
   } = $props();
 
   onMount(() => {
     onfooterchange?.(actions);
+    return () => onfooterchange?.(null);
   });
 
   const client = useQueryClient();
@@ -193,7 +194,7 @@
         {/each}
       </fieldset>
       <CollectionSetEditor
-        {generator}
+        bind:generator={draft.generator!}
         libraryIds={generator.library_ids}
         {libraries}
         {mediaType}
@@ -211,7 +212,7 @@
     {busy}
   >
     <CollectionPolicyFields
-      policy={form}
+      bind:policy={draft}
       level="group"
       defaults={defaults.data}
       plex={capabilities.data?.visibility ?? false}
@@ -226,7 +227,7 @@
     description="When the group's collections sync, and when they are active each year."
     {busy}
   >
-    <CollectionScheduleFields policy={form} level="group" defaults={defaults.data} />
+    <CollectionScheduleFields bind:policy={draft} level="group" defaults={defaults.data} />
   </DetailForm>
 {/if}
 

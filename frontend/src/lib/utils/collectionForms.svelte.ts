@@ -319,20 +319,20 @@ export class CollectionEditor {
 
   /** Save in Overture; with `sync`, then make the server match. */
   save(sync = false) {
+    // Read the form as it is now: the saved rule resets drafts, and saving can remount the view.
+    const { target, mediaType } = this;
+    const options = { ...this.localTarget, body: optionsBody(this) };
     return this.perform(async () => {
       const rule = await this.persistRule();
-      const saved = await this.updateRequest.mutateAsync({
-        ...this.localTarget,
-        body: optionsBody(this),
-      });
+      const saved = await this.updateRequest.mutateAsync(options);
       storeCollectionDetail(saved);
       if (rule !== undefined) patchCollectionRule(saved.id, rule);
       if (!sync) {
         this.feedback.success("Saved.");
         return;
       }
-      const result = await this.syncRequest.mutateAsync(this.target);
-      if (result.deleted) goToCollectionsList(this.collection.media_type);
+      const result = await this.syncRequest.mutateAsync(target);
+      if (result.deleted) goToCollectionsList(mediaType);
       this.feedback.success(
         result.skipped
           ? "Saved. Below minimum or out of season, so the server is unchanged."
@@ -401,9 +401,11 @@ export class CollectionEditor {
       }))
     )
       return;
+    // Storing the orphaned collection remounts the view that owns this editor.
+    const { title } = this.collection;
     await this.perform(async () => {
       storeCollectionDetail(await this.orphanRequest.mutateAsync(this.target));
-      this.feedback.success(`${this.collection.title} is no longer managed by Overture.`);
+      this.feedback.success(`${title} is no longer managed by Overture.`);
     });
   }
 
@@ -425,12 +427,13 @@ export class CollectionEditor {
       ],
     });
     if (!target) return;
+    const { mediaType } = this;
     await this.perform(async () => {
       await this.deleteRequest.mutateAsync({
         ...this.target,
         query: { ...this.target.query, target },
       });
-      if (target === "both") goToCollectionsList(this.collection.media_type);
+      if (target === "both") goToCollectionsList(mediaType);
     });
   }
 }

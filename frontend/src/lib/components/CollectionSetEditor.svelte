@@ -16,7 +16,7 @@
   import SegmentedControl from "./SegmentedControl.svelte";
 
   let {
-    generator,
+    generator = $bindable(),
     libraryIds,
     libraries,
     mediaType,
@@ -210,7 +210,7 @@
           >
         </div>
         <CriteriaEditor
-          group={value.criteria}
+          bind:group={value.criteria}
           {fields}
           sources={capabilities?.sources ?? []}
           {mediaType}
@@ -266,7 +266,7 @@
 {/if}
 <div>
   <CriteriaEditor
-    group={generator.criteria}
+    bind:group={generator.criteria}
     {fields}
     sources={capabilities?.sources ?? []}
     {mediaType}

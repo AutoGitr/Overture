@@ -16,7 +16,7 @@
   import CriteriaEditor from "./CriteriaEditor.svelte";
 
   let {
-    group,
+    group = $bindable(),
     fields,
     sources,
     mediaType,
@@ -98,7 +98,7 @@
   </div>
   {#each group.conditions ?? [] as condition, index (condition)}
     <CriteriaCondition
-      {condition}
+      bind:condition={group.conditions![index]!}
       {fields}
       {sources}
       {mediaType}
@@ -113,7 +113,7 @@
   {/each}
   {#each group.groups ?? [] as nested, index (nested)}
     <CriteriaEditor
-      group={nested}
+      bind:group={group.groups![index]!}
       {fields}
       {sources}
       {mediaType}
