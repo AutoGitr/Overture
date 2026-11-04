@@ -12,9 +12,12 @@ lazy from ..domain import MediaType
 lazy from ..utils.errors import PublicServiceError
 lazy from .http import LazyClient, RequestLimiter, create_client, request_with_retry
 
+#: The MDBList user whose lists back the site's franchise pages.
+_FRANCHISE_OWNER = "system"
+
 
 def mdblist_identifier(value: str) -> str:
-    """Normalize a list ID or MDBList list URL to a fixed-origin API path."""
+    """Normalize a list ID, list URL or franchise URL to a fixed-origin API path."""
     value = value.strip()
     if "://" in value:
         parsed = urlsplit(value)
@@ -25,9 +28,17 @@ def mdblist_identifier(value: str) -> str:
             or parsed.fragment
         ):
             raise ValueError(
-                "Use an MDBList list ID or an HTTPS mdblist.com/lists/user/list URL"
+                "Use an MDBList list ID or an HTTPS mdblist.com list or franchise URL"
             )
-        value = parsed.path.removeprefix("/lists/").strip("/")
+        path = parsed.path.strip("/")
+        if path.startswith("lists/official"):
+            raise ValueError(
+                "MDBList's API does not serve its official lists; "
+                "use a user list or franchise"
+            )
+        if path.startswith("franchises/"):
+            path = f"lists/{_FRANCHISE_OWNER}/{path.removeprefix('franchises/')}"
+        value = path.removeprefix("lists/")
     if not re.fullmatch(r"[1-9][0-9]*|[A-Za-z0-9_-]+/[A-Za-z0-9_-]+", value):
         raise ValueError("Use an MDBList list ID or user/list identifier")
     return value

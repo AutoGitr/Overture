@@ -49,7 +49,7 @@
       {#each groups as name (name)}<option value={name}>{name}</option>{/each}
     </select>
   </FieldRow>
-  <div>
+  <div class="actions-row">
     <PendingButton
       type="button"
       class="btn btn-primary"

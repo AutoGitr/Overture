@@ -14,7 +14,6 @@ lazy import httpx2
 lazy from ..config import Settings
 lazy from ..domain import ArtType, MediaServerState
 lazy from ..integrations.http import (
-    RETRYABLE_STATUS,
     LazyClient,
     create_client,
     request_with_retry,
@@ -27,6 +26,9 @@ lazy from .health import MediaServerHealthTracker
 lazy from .wire import Page
 
 logger = logging.getLogger(__name__)
+#: Statuses a proxy or a server that is down answers with; any other status
+#: is the server itself refusing one request.
+_UNAVAILABLE_STATUS = frozenset({502, 503, 504})
 
 
 @dataclass(slots=True)
@@ -171,7 +173,7 @@ class MediaServerHttpClient(ABC):
                 )
                 self.health.record(MediaServerState.REJECTED, error.message)
                 return error
-            if status not in RETRYABLE_STATUS:
+            if status not in _UNAVAILABLE_STATUS:
                 # The server answered: one request failed, not the server.
                 self.health.record(MediaServerState.REACHABLE)
                 return MediaServerError(

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { flushSync, type Snippet } from "svelte";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
-  import { sectionState } from "../stores/sectionState.svelte";
+  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
   let {
     title,
     description,
@@ -16,12 +16,13 @@
     /** Whether it starts open, until the user opens or closes it. */
     expanded?: boolean;
   } = $props();
+  const view = getSectionView();
   // The store owns the choice, so neither a remount nor a new default undoes it.
-  let open = $derived(!collapsible || sectionState.isOpen(title, expanded));
+  let open = $derived(!collapsible || sectionState.isOpen(view, title, expanded));
   const bodyId = $props.id();
 
   function setOpen(value: boolean) {
-    sectionState.setOpen(title, value);
+    sectionState.setOpen(view, title, value);
   }
 </script>
 

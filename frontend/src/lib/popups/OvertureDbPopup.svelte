@@ -318,6 +318,7 @@
     </div>
   </CardColumn>
   {#snippet footer()}
+    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
     <PendingButton
       class="btn btn-primary"
       onclick={save}
@@ -327,7 +328,6 @@
     >
       Save
     </PendingButton>
-    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
   {/snippet}
 </PopupShell>
 

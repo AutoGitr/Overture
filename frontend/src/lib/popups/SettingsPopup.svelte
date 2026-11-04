@@ -117,7 +117,7 @@
             <span>Workflow</span>
             <select bind:value={draft.workflow} class="select-compact">
               <option value="art">Art</option>
-              <option value="art_and_themes">Art + themes</option>
+              <option value="art_and_themes">Art &amp; Themes</option>
               <option value="themes">Themes</option>
             </select>
           </label>
@@ -291,16 +291,16 @@
     </CardColumn>
   </fieldset>
   {#snippet footer()}
-    <button class="btn btn-primary" onclick={save} disabled={showSaving.current || !canEdit}>
-      {showSaving.current ? "Saving..." : "Save"}
-    </button>
-    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
     <button
       type="button"
-      class="btn btn-secondary footer-end"
+      class="btn btn-secondary actions-start"
       onclick={resetToDefaults}
       disabled={showSaving.current || !canEdit}>Reset to defaults</button
     >
+    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
+    <button class="btn btn-primary" onclick={save} disabled={showSaving.current || !canEdit}>
+      {showSaving.current ? "Saving..." : "Save"}
+    </button>
   {/snippet}
 </PopupShell>
 

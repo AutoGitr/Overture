@@ -1,5 +1,7 @@
 """Which items criteria select, and the labels and queries Plex evaluates them by."""
 
+lazy from collections.abc import Sequence
+
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import CollectionOrder, FilterField, FilterOperator, MediaType
@@ -54,12 +56,14 @@ class Membership:
         self,
         media_type: MediaType,
         library_id: str,
-        criteria: FilterGroup,
+        criteria: Sequence[FilterGroup],
         items: list[MediaItem],
     ) -> tuple[CriteriaContext, dict[str, list[int]]]:
         """Resolve each source once, and the collections the criteria test."""
         resolved: dict[str, list[int]] = {}
-        for condition in criteria.source_conditions():
+        for condition in (
+            found for group in criteria for found in group.source_conditions()
+        ):
             if condition.key not in resolved:
                 resolved[condition.key] = await self._sources.resolve(
                     condition.source,
@@ -71,7 +75,8 @@ class Membership:
             await self._access.collection_titles(media_type, library_id)
             if any(
                 condition.field is FilterField.COLLECTION
-                for condition in criteria.field_conditions()
+                for group in criteria
+                for condition in group.field_conditions()
             )
             else {}
         )
@@ -96,7 +101,9 @@ class Membership:
 
         A custom order follows the first source the criteria include.
         """
-        context, resolved = await self.context(media_type, library_id, criteria, items)
+        context, resolved = await self.context(
+            media_type, library_id, [criteria], items
+        )
         source_order = next(
             (
                 resolved[condition.key]
@@ -190,7 +197,7 @@ class Membership:
         labels: dict[str, str] = {}
         if sources := rule.criteria.source_conditions():
             _, resolved = await self.context(
-                row.media_type, library_id, rule.criteria, items
+                row.media_type, library_id, [rule.criteria], items
             )
             for condition in sources:
                 labels[condition.key] = source_label(condition)

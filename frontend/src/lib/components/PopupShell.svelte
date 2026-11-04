@@ -277,7 +277,7 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: flex-end;
     gap: var(--space-3);
     padding: var(--space-3) var(--popup-pad);
     flex-shrink: 0;
@@ -292,11 +292,6 @@
 
   .popup-footer :global(> .btn) {
     min-height: 32px;
-  }
-
-  /* Actions start at the lower left, the primary one first; resets sit apart, at the end. */
-  .popup-footer :global(> .footer-end) {
-    margin-inline-start: auto;
   }
 
   .popup-info {

@@ -86,14 +86,16 @@
       />
     </fieldset>
     <div class="preview">
-      <PendingButton
-        type="button"
-        class="btn btn-secondary"
-        pending={editor.preview.pending}
-        pendingLabel="Previewing..."
-        disabled={!editor.libraryId}
-        onclick={() => editor.preview.run()}>Preview members</PendingButton
-      >
+      <div class="actions-row">
+        <PendingButton
+          type="button"
+          class="btn btn-secondary"
+          pending={editor.preview.pending}
+          pendingLabel="Previewing..."
+          disabled={!editor.libraryId}
+          onclick={() => editor.preview.run()}>Preview members</PendingButton
+        >
+      </div>
       {#if editor.preview.error}
         <p role="alert">{errorMessage(editor.preview.error, "Could not preview the members")}</p>
       {:else if editor.preview.result}

@@ -37,6 +37,7 @@
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
+  import { setSectionView } from "../stores/sectionState.svelte";
 
   let {
     collection,
@@ -51,6 +52,7 @@
     groups: string[];
     libraries: LibrarySectionRead[];
   } = $props();
+  setSectionView("collection");
 
   function currentCollection(): CollectionDetail {
     if (!collection) throw new Error("The saved collection must remain mounted");

@@ -30,29 +30,29 @@
     runningNote?: Snippet;
     /** The buttons that save or start a run. */
     start: Snippet;
-    /** Actions on the finished run's results, after Clear Results. */
+    /** Actions on the finished run's results. */
     finished?: Snippet;
   } = $props();
 </script>
 
 {#if !hasResults}
-  {@render start()}
   {#if blocked}
     <span class="popup-footer-note" role="status">{blocked}</span>
   {/if}
+  {@render start()}
 {:else if running}
+  {@render runningNote?.()}
   <PendingButton class="btn btn-danger" onclick={onstop} pending={stopping}>
     {stopping ? "Stopping..." : "Stop"}
   </PendingButton>
-  {@render runningNote?.()}
 {:else}
-  {@render finished?.()}
   <PendingButton
-    class="btn btn-ghost"
+    class="btn btn-ghost actions-start"
     onclick={() => clear.mutate()}
     pending={clear.isPending}
     pendingLabel="Clearing..."
   >
     Clear Results
   </PendingButton>
+  {@render finished?.()}
 {/if}

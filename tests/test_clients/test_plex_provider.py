@@ -27,7 +27,9 @@ class FakePlexClient:
     ) -> None:
         self.auth_headers = {"X-Plex-Token": "token"}
         self.pages = pages or {}
-        self.details = details or []
+        #: Full metadata, which defaults to the listed rows themselves.
+        self.details = details
+        self.in_progress: set[str] = set()
         self.art_fields: list[tuple[str, str]] = []
 
     async def get_machine_identifier(self) -> str:
@@ -47,10 +49,18 @@ class FakePlexClient:
         if section_key in self.pages:
             yield self.pages[section_key]
 
-    async def get_shows_with_seasons(
-        self, show_keys: list[str]
+    async def get_full_metadata(
+        self, rating_keys: list[str], *, children: bool
     ) -> list[dict[str, Any]]:
-        return [row for row in self.details if str(row["ratingKey"]) in show_keys]
+        rows = (
+            self.details
+            if self.details is not None
+            else [row for page in self.pages.values() for row in page]
+        )
+        return [row for row in rows if str(row["ratingKey"]) in rating_keys]
+
+    async def get_in_progress_shows(self, section_key: str) -> set[str]:
+        return self.in_progress
 
     async def get_collections(self, section_key: str) -> list[dict[str, Any]]:
         return [
@@ -162,8 +172,46 @@ async def test_a_show_gets_its_folder_and_ordered_seasons(app_config: Settings) 
     ]
 
 
+async def test_tags_come_from_the_full_metadata_not_the_listing(
+    app_config: Settings,
+) -> None:
+    client = FakePlexClient(
+        pages={"1": [{"ratingKey": "10", "Genre": [{"tag": "Drama"}]}]},
+        details=[
+            {
+                "ratingKey": "10",
+                "title": "Alien",
+                "Genre": [{"tag": "Drama"}, {"tag": "Horror"}, {"tag": "Sci-Fi"}],
+                "Producer": [{"tag": "Walter Hill"}],
+                "Label": [{"tag": "Requests"}],
+            }
+        ],
+    )
+
+    [alien] = await _items(_provider(app_config, client))
+
+    assert alien.title == "Alien"
+    assert alien.genres == ("Drama", "Horror", "Sci-Fi")
+    assert (alien.producers, alien.labels) == (("Walter Hill",), ("Requests",))
+
+
+async def test_a_show_is_in_progress_with_an_episode_partly_played(
+    app_config: Settings,
+) -> None:
+    rows = [
+        {"ratingKey": key, "childCount": 0, "leafCount": 4, "viewedLeafCount": 2}
+        for key in ("20", "30")
+    ]
+    client = FakePlexClient(pages={"2": rows})
+    client.in_progress = {"30"}
+
+    started, midway = await _items(_provider(app_config, client))
+
+    assert (started.in_progress, midway.in_progress) == (False, True)
+
+
 INCOMPLETE_SHOWS: list[tuple[list[dict[str, Any]], str]] = [
-    ([], "did not return a listed show"),
+    ([], "did not return a listed item"),
     (
         [{"ratingKey": "20", "childCount": 2, "Children": {"Metadata": []}}],
         "incomplete season list",

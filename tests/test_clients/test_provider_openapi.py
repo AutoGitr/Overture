@@ -283,7 +283,7 @@ async def test_plex_consumed_operations(
             "1",
             "2",
         ]
-        shows = await client.get_shows_with_seasons(["1", "2"])
+        shows = await client.get_full_metadata(["1", "2"], children=True)
         assert [show.get("Location") for show in shows] == [
             [{"path": "/media/Show 1"}],
             [{"path": "/media/Show 2"}],

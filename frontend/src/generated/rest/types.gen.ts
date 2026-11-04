@@ -1915,6 +1915,10 @@ export type CollectionFieldRead = {
      * Smart
      */
     smart: boolean;
+    /**
+     * Smart Operators
+     */
+    smart_operators: Array<FilterOperator>;
 };
 
 /**

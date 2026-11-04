@@ -223,6 +223,17 @@
     clear={clearResults}
   >
     {#snippet start()}
+      {#if form.blocker}<span class="popup-footer-note" role="status">{form.blocker}</span>{/if}
+      <button
+        class="btn btn-secondary"
+        onclick={saveSchedule}
+        title={scheduleBlocker ?? undefined}
+        disabled={!canSaveSchedule ||
+          createScheduleRequest.isPending ||
+          updateScheduleRequest.isPending}
+      >
+        {scheduleController.isEditing ? "Update Schedule" : "Save Schedule"}
+      </button>
       <PendingButton
         class="btn btn-primary"
         onclick={startJob}
@@ -234,17 +245,6 @@
         <Image size={15} />
         Run Now
       </PendingButton>
-      <button
-        class="btn btn-secondary"
-        onclick={saveSchedule}
-        title={scheduleBlocker ?? undefined}
-        disabled={!canSaveSchedule ||
-          createScheduleRequest.isPending ||
-          updateScheduleRequest.isPending}
-      >
-        {scheduleController.isEditing ? "Update Schedule" : "Save Schedule"}
-      </button>
-      {#if form.blocker}<span class="popup-footer-note" role="status">{form.blocker}</span>{/if}
     {/snippet}
   </JobFooter>
 {/snippet}

@@ -16,6 +16,11 @@ code users run:
   server holds; each unmanaged one is planned for adoption, which must read
   back into criteria whose values the editor offers and that select the
   members the server holds.
+- **Plex's own fields** (with ``--plex``): every filter, field and sort Plex
+  lists for a section must be one Overture offers.
+
+Where Plex itself answers a condition differently from what it means
+elsewhere, the difference is noted with the reason rather than reported.
 
 The script cannot change anything: it signs in with API keys, which Overture
 lets read and preview but never change. Create one per instance under API keys
@@ -28,7 +33,8 @@ in the menu and pass them in the same order as the addresses:
 
 One key without commas is used for every instance. Pass --sources with a JSON
 file of source objects (as the API takes them) to test TMDB, MDBList and
-person sources.
+person sources. Pass --plex with Plex's address and PLEX_TOKEN set to compare
+the fields Plex offers with Overture's; it only reads from Plex.
 """
 
 lazy import argparse
@@ -43,6 +49,9 @@ lazy from typing import Any
 
 lazy import httpx2
 
+lazy from overture.domain import CollectionOrder, MediaType
+lazy from overture.schemas.collections import CollectionRuleWrite
+lazy from overture.services.collections.plex_query import plex_field_keys, plex_sort
 lazy from overture.utils.http_security import API_KEY_HEADER
 
 #: Operands for operators that compare numbers, days or dates.
@@ -55,6 +64,19 @@ EVERYTHING = {"kind": "field", "field": "year", "operator": "gt", "value": 0}
 ORDER_DEPTH = 5
 #: Values each set dimension enumerates.
 SET_TOP = 3
+#: Conditions Plex answers by rules of its own, which no evaluator can share.
+PLEX_DIFFERS: dict[tuple[str, str], str] = {
+    ("title", "contains"): (
+        "Plex's title contains matches words starting with the text, in the "
+        "title and original title, while its does not contain matches any part"
+    ),
+    ("plays", "is_not"): (
+        "Plex keeps no play count for titles never played, rated or resumed, "
+        "so is not leaves them out"
+    ),
+}
+#: Plex's metadata type numbers, and the scope its fields take in a section.
+PLEX_SCOPES = {"1": "movie", "2": "show", "3": "season", "4": "episode"}
 
 
 @dataclass(slots=True)
@@ -73,6 +95,8 @@ class Case:
     error: str = ""
     #: Worth a look, but not necessarily wrong.
     note: str = ""
+    #: Why the counts may differ, where Plex answers by rules of its own.
+    differs: str = ""
 
     @property
     def mismatch(self) -> bool:
@@ -81,7 +105,9 @@ class Case:
 
     @property
     def problem(self) -> str:
-        return self.error or ("counts differ" if self.mismatch else "")
+        if self.error:
+            return self.error
+        return "counts differ" if self.mismatch and not self.differs else ""
 
 
 class ApiError(RuntimeError):
@@ -168,6 +194,7 @@ class Library:
         capabilities: dict[str, Any],
         media_type: str,
         library: dict[str, Any],
+        regular: set[str],
     ) -> None:
         self.overture = overture
         self.server = server
@@ -177,6 +204,8 @@ class Library:
         self.name = f"{library['title']} ({media_type})"
         self.plex_smart = bool(capabilities["smart"])
         self.fields = {entry["field"]: entry for entry in capabilities["fields"]}
+        #: Regular collections' titles: Plex tests membership of these only.
+        self.regular = regular
         self._values: dict[str, list[dict[str, Any]] | ApiError] = {}
         self.cases: list[Case] = []
 
@@ -235,7 +264,11 @@ class Library:
                     case.error = str(exc)
                     continue
                 case.note = f"{len(values)} values"
-            for operator in entry["operators"]:
+            if entry["field"] == "collection" and self.plex_smart and entry["smart"]:
+                values = [row for row in values if row["value"] in self.regular]
+            local = entry["operators"] if entry["local"] else []
+            smart = entry["smart_operators"] if self.plex_smart else []
+            for operator in dict.fromkeys([*local, *smart]):
                 value = field_value(entry["kind"], operator, values)
                 case = self.case("field", f"{entry['label']} {operator} {value!r}")
                 if value is None:
@@ -247,10 +280,13 @@ class Library:
                     "operator": operator,
                     "value": value,
                 }
-                if entry["local"]:
+                if operator in local:
                     await self.preview(case, single(condition))
-                if self.plex_smart and entry["smart"]:
+                if operator in smart:
                     await self.preview(case, single(condition, smart=True))
+                    case.differs = PLEX_DIFFERS.get((entry["field"], operator), "")
+                    if case.mismatch and case.differs:
+                        case.note = case.differs
 
     async def check_orders(self) -> None:
         """Preview every order; compare Overture's and Plex's first members."""
@@ -357,9 +393,14 @@ class Library:
         path = f"/api/collections/{collection['id']}"
         try:
             if managed:
-                rule = (await self.overture.get(path, media_type=self.media_type))[
+                saved = (await self.overture.get(path, media_type=self.media_type))[
                     "rule"
                 ]
+                rule = saved and {
+                    key: value
+                    for key, value in saved.items()
+                    if key in CollectionRuleWrite.model_fields
+                }
             else:
                 plan = await self.overture.get(
                     f"{path}/adopt", media_type=self.media_type
@@ -412,9 +453,20 @@ async def verify_instance(
                 "/api/collections/capabilities", media_type=media_type
             )
             server = capabilities["server_type"]
+            collections = await overture.get("/api/collections", media_type=media_type)
             libraries = {
                 library["id"]: Library(
-                    overture, server, capabilities, media_type, library
+                    overture,
+                    server,
+                    capabilities,
+                    media_type,
+                    library,
+                    {
+                        collection["title"]
+                        for collection in collections
+                        if collection["library_id"] == library["id"]
+                        and collection["kind"] == "regular"
+                    },
                 )
                 for library in await overture.get(
                     "/api/library/libraries", media_type=media_type
@@ -423,7 +475,6 @@ async def verify_instance(
             for library in libraries.values():
                 print(f"Checking {server}: {library.name}...", flush=True)
                 await library.check(extra_sources)
-            collections = await overture.get("/api/collections", media_type=media_type)
             for collection in collections:
                 if (library := libraries.get(collection["library_id"])) is not None:
                     await library.check_collection(collection)
@@ -433,6 +484,77 @@ async def verify_instance(
         cases.append(Case(url, "", "instance", "reach the API", error=str(exc)))
     finally:
         await overture.client.aclose()
+    return cases
+
+
+def _plex_sorts() -> set[str]:
+    """The Plex sort keys Overture's orders use."""
+    keys: set[str] = set()
+    for order in CollectionOrder:
+        try:
+            keys.add(plex_sort(order).removesuffix(":desc"))
+        except ValueError:
+            continue
+    return keys
+
+
+async def verify_plex_fields(url: str, token: str) -> list[Case]:
+    """Report each filter, field and sort a Plex section offers that Overture lacks."""
+    cases: list[Case] = []
+    sorts = _plex_sorts()
+    async with httpx2.AsyncClient(
+        base_url=url,
+        timeout=60,
+        headers={"X-Plex-Token": token, "Accept": "application/json"},
+    ) as client:
+        response = await client.get("/library/sections")
+        response.raise_for_status()
+        for section in response.json()["MediaContainer"].get("Directory", []):
+            if section["type"] not in {"movie", "show"}:
+                continue
+            media_type = MediaType(section["type"])
+            known = set(plex_field_keys(media_type))
+            name = f"{section['title']} ({media_type})"
+            details = await client.get(
+                f"/library/sections/{section['key']}", params={"includeDetails": 1}
+            )
+            details.raise_for_status()
+            for kind in details.json()["MediaContainer"].get("Directory", []):
+                scope = PLEX_SCOPES.get(str(kind.get("type")))
+                if scope is None:
+                    continue
+                prefix = "" if scope == section["type"] else f"{scope}."
+                offered = {
+                    *(entry["filter"] for entry in kind.get("Filter", [])),
+                    *(entry["key"] for entry in kind.get("Field", [])),
+                }
+                for key in sorted(offered):
+                    scoped = (key if "." in key else f"{prefix}{key}").removeprefix(
+                        f"{section['type']}."
+                    )
+                    if scoped not in known:
+                        cases.append(
+                            Case(
+                                "plex",
+                                name,
+                                "plex field",
+                                scoped,
+                                error="Overture cannot test this Plex field",
+                            )
+                        )
+                if prefix:
+                    continue
+                cases.extend(
+                    Case(
+                        "plex",
+                        name,
+                        "plex sort",
+                        entry["key"],
+                        error="Overture cannot order by this Plex sort",
+                    )
+                    for entry in kind.get("Sort", [])
+                    if entry["key"] not in sorts
+                )
     return cases
 
 
@@ -502,6 +624,11 @@ async def run(args: argparse.Namespace) -> int:
     cases: list[Case] = []
     for url, key in zip(args.urls, api_keys(len(args.urls)), strict=True):
         cases.extend(await verify_instance(url, key, extra))
+    if args.plex:
+        token = os.environ.get("PLEX_TOKEN", "")
+        if not token:
+            raise SystemExit("Set PLEX_TOKEN to read Plex's fields with --plex")
+        cases.extend(await verify_plex_fields(args.plex, token))
     text = report(cases)
     if args.report:
         args.report.write_text(text)
@@ -522,6 +649,9 @@ def main() -> None:
     parser.add_argument("--report", type=Path, help="Write the Markdown report here")
     parser.add_argument(
         "--sources", type=Path, help="A JSON list of extra source objects to test"
+    )
+    parser.add_argument(
+        "--plex", help="Plex's address, to compare its fields with Overture's"
     )
     sys.exit(asyncio.run(run(parser.parse_args())))
 

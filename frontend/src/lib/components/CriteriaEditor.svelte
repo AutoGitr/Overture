@@ -75,16 +75,16 @@
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-icon"
-          aria-label={`Duplicate ${label}`}
-          title="Duplicate group"
-          onclick={onduplicate}><CopyPlus size={14} /></button
+          aria-label={`Copy ${label}`}
+          title="Copy group, to paste into any criteria"
+          onclick={() => criteriaClipboard.copyGroup(mediaType, group)}><Copy size={14} /></button
         >
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-icon"
-          aria-label={`Copy ${label}`}
-          title="Copy group, to paste into any criteria"
-          onclick={() => criteriaClipboard.copyGroup(mediaType, group)}><Copy size={14} /></button
+          aria-label={`Duplicate ${label}`}
+          title="Duplicate group"
+          onclick={onduplicate}><CopyPlus size={14} /></button
         >
         <button
           type="button"

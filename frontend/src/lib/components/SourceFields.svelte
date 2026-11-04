@@ -166,7 +166,7 @@
     <input
       required
       aria-label={`${label} MDBList lists`}
-      placeholder="MDBList URLs or user/list, separated by commas"
+      placeholder="MDBList list or franchise URLs, or user/list, separated by commas"
       value={source.identifiers.join(", ")}
       onchange={(event) => {
         if (source.type === "mdblist") source.identifiers = splitList(event.currentTarget.value);

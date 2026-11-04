@@ -6,7 +6,7 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { CollectionDetail } from "../../generated/rest/types.gen";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { sectionState } from "../stores/sectionState.svelte";
+  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
   import { errorMessage } from "../utils/errors";
   import DataStatus from "./DataStatus.svelte";
   import DetailSection from "./DetailSection.svelte";
@@ -15,7 +15,8 @@
   let { collection }: { collection: CollectionDetail } = $props();
 
   const TITLE = "Missing";
-  let expanded = $derived(sectionState.isOpen(TITLE, false));
+  const view = getSectionView();
+  let expanded = $derived(sectionState.isOpen(view, TITLE, false));
   const target = $derived({
     path: { collection_id: collection.id },
     query: { media_type: collection.media_type },
@@ -77,13 +78,15 @@
       </ul>
       {#if data.truncated}<p class="hint">Only the first 100 are listed.</p>{/if}
       {#if data.requestable}
-        <PendingButton
-          type="button"
-          class="btn btn-secondary"
-          pending={request.isPending}
-          pendingLabel="Requesting..."
-          onclick={() => void requestTitles(null)}>Request all from {arr}</PendingButton
-        >
+        <div class="actions-row">
+          <PendingButton
+            type="button"
+            class="btn btn-secondary"
+            pending={request.isPending}
+            pendingLabel="Requesting..."
+            onclick={() => void requestTitles(null)}>Request all from {arr}</PendingButton
+          >
+        </div>
       {/if}
     {:else}
       <p class="text-muted">The library holds every title the lists do.</p>

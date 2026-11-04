@@ -54,7 +54,7 @@ def _item(item_id: int = 1, **kwargs: object) -> MediaItem:
         "year": 1977,
         "release_date": "1977-05-25",
         "critic_rating": 8.6,
-        "duration_minutes": 121,
+        "duration_seconds": 121 * 60 + 59,
         "studio": "Lucasfilm",
         "director": "George Lucas",
         "content_rating": "PG",
@@ -110,13 +110,17 @@ def _matches(item: MediaItem, *conditions: FieldCondition, mode: str = "all") ->
         (_field(FilterField.YEAR, FilterOperator.GT, 1977), False),
         (_field(FilterField.DECADE, FilterOperator.IS, 1970), True),
         (_field(FilterField.CRITIC_RATING, FilterOperator.LT, 9), True),
-        (_field(FilterField.AUDIENCE_RATING, FilterOperator.IS_NOT, 5), True),
+        (_field(FilterField.CRITIC_RATING, FilterOperator.IS_NOT, 5), True),
+        (_field(FilterField.AUDIENCE_RATING, FilterOperator.IS_NOT, 5), False),
         (_field(FilterField.DURATION, FilterOperator.LTE, 120), False),
+        (_field(FilterField.DURATION, FilterOperator.IS, 121), True),
         (_field(FilterField.ADDED, FilterOperator.IN_LAST, 30), True),
         (_field(FilterField.ADDED, FilterOperator.NOT_IN_LAST, 30), False),
         (_field(FilterField.RELEASED, FilterOperator.BEFORE, "1980-01-01"), True),
         (_field(FilterField.RELEASED, FilterOperator.AFTER, "1977-05-25"), False),
         (_field(FilterField.LAST_PLAYED, FilterOperator.IN_LAST, 30), False),
+        (_field(FilterField.LAST_PLAYED, FilterOperator.NOT_IN_LAST, 30), True),
+        (_field(FilterField.LAST_PLAYED, FilterOperator.BEFORE, "2000-01-01"), True),
         (_field(FilterField.UNPLAYED, FilterOperator.IS, True), True),
         (_field(FilterField.IN_PROGRESS, FilterOperator.IS_NOT, True), True),
     ],
@@ -154,7 +158,7 @@ def test_groups_combine_conditions_sources_and_collections() -> None:
     assert evaluate([first], FilterGroup(), context) == []
 
 
-def test_order_items_sorts_unknown_values_last_and_limits() -> None:
+def test_order_items_sorts_unknown_values_lowest_and_limits() -> None:
     items = [
         _item(1, title="B", critic_rating=7.0),
         _item(2, title="A", critic_rating=None),
@@ -164,16 +168,53 @@ def test_order_items_sorts_unknown_values_last_and_limits() -> None:
     ordered = order_items(items, CollectionOrder.CRITIC_RATING_DESC)
     assert [item.id for item in ordered] == [3, 1, 4, 2]
     ascending = order_items(items, CollectionOrder.CRITIC_RATING_ASC, limit=2)
-    assert [item.id for item in ascending] == [1, 4]
+    assert [item.id for item in ascending] == [2, 1]
     custom = order_items(items, CollectionOrder.CUSTOM, source_order=[4, 2])
     assert [item.id for item in custom] == [4, 2, 1, 3]
     assert sorted(
         item.id or 0 for item in order_items(items, CollectionOrder.RANDOM)
     ) == [1, 2, 3, 4]
     released = order_items(
-        [_item(1, release_date=None, year=1980), _item(2)], CollectionOrder.RELEASE_ASC
+        [_item(1), _item(2, release_date=None, year=1970)], CollectionOrder.RELEASE_ASC
     )
     assert [item.id for item in released] == [2, 1]
+
+
+def test_titles_sort_as_plex_sorts_them() -> None:
+    titles = [
+        "Zulu",
+        "'71",
+        "À Nous la Liberté",
+        "3-Iron",
+        "3 Women",
+        "1",
+        "The Godfather",
+        "11.22.63",
+        "9/11",
+    ]
+    items = [
+        _item(
+            index, title=title, sort_title="Godfather" if "Godfather" in title else None
+        )
+        for index, title in enumerate(titles)
+    ]
+    ordered = order_items(items, CollectionOrder.TITLE_ASC)
+    assert [item.title for item in ordered] == [
+        "1",
+        "3 Women",
+        "3-Iron",
+        "9/11",
+        "11.22.63",
+        "'71",
+        "À Nous la Liberté",
+        "The Godfather",
+        "Zulu",
+    ]
+    by_duration = order_items(
+        [_item(1, duration_seconds=61), _item(2, title="A", duration_seconds=60)],
+        CollectionOrder.DURATION_ASC,
+    )
+    assert [item.id for item in by_duration] == [2, 1]
 
 
 @pytest.mark.parametrize(

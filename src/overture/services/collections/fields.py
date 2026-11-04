@@ -50,6 +50,10 @@ class PlexField:
     #: Sync stores the key Plex lists (``4k``), not its name (``4K``).
     keyed: bool = False
 
+    def value_of(self, key: str, title: str) -> str:
+        """The value criteria hold for a value Plex lists as *key* and *title*."""
+        return key if self.keyed else title
+
     def key_for(self, media_type: MediaType) -> str:
         """The field's name in a section of *media_type*."""
         return (
@@ -404,6 +408,16 @@ OPERATORS: frozendict[FieldKind, tuple[FilterOperator, ...]] = frozendict(
         FieldKind.BOOLEAN: (FilterOperator.IS, FilterOperator.IS_NOT),
     }
 )
+
+
+def field_operators(field: FilterField, *, smart: bool) -> tuple[FilterOperator, ...]:
+    """The operators a collection evaluated by Overture, or by Plex if smart, takes."""
+    spec = FIELDS[field]
+    operators = OPERATORS[spec.kind]
+    if smart and spec.plex is not None and not spec.plex.negatable:
+        return tuple(op for op in operators if op is not FilterOperator.IS_NOT)
+    return operators
+
 
 #: Jellyfin and Emby call Plex's labels tags.
 _SERVER_LABELS: frozendict[tuple[ServerType, FilterField], str] = frozendict(

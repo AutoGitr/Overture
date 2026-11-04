@@ -408,18 +408,33 @@ class PlexClient(MediaServerHttpClient):
         ):
             yield page
 
-    async def get_shows_with_seasons(self, show_keys: list[str]) -> list[PlexMetadata]:
-        """Return shows with their folders and season rows in one request.
+    async def get_full_metadata(
+        self, rating_keys: list[str], *, children: bool
+    ) -> list[PlexMetadata]:
+        """Return the full metadata of up to a page of items in one request.
 
-        Plex lists shows without folders or season episode counts; the
-        metadata of up to a page of shows carries both.
+        Section listings shorten tag lists (genres, countries, cast) and leave
+        out producers, labels and show folders; the metadata carries them all
+        with the item's GUIDs, and with *children* a show's season rows too.
         """
         return plex_items(
             await self._get(
-                f"/library/metadata/{','.join(show_keys)}",
-                params={"includeChildren": 1},
+                f"/library/metadata/{','.join(rating_keys)}",
+                params={"includeChildren": 1} if children else None,
             )
         )
+
+    async def get_in_progress_shows(self, section_key: str) -> set[str]:
+        """Return the shows of a section with an episode partly played."""
+        data = await self._get(
+            f"/library/sections/{section_key}/all",
+            params={"type": _EPISODE_TYPE, "inProgress": 1},
+        )
+        return {
+            str(key)
+            for row in plex_items(data)
+            if (key := row.get("grandparentRatingKey")) is not None
+        }
 
     async def get_metadata(
         self, rating_key: str, *, include_fields: str | None = None

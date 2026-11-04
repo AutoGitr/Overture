@@ -159,7 +159,6 @@
   <!-- Ungrouped holds collections without a group, so it never creates any. -->
   {#if group !== UNGROUPED_GROUP}<DetailForm
     collapsible
-    expanded={!!form.generator}
     title="Collection set"
     description="One collection in this group per value in a library, such as each decade, kept up to date."
     {busy}
@@ -233,8 +232,14 @@
 
 {#snippet actions()}
   {#if draft}
-    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
-      >Save</button
+    <button
+      type="button"
+      class="btn btn-secondary"
+      title={hasMembers
+        ? "Send the defaults to the server without changing members"
+        : "The group has no collections yet"}
+      disabled={busy || !hasMembers}
+      onclick={() => void save("apply")}>Save and Apply</button
     >
     <button
       type="button"
@@ -246,14 +251,8 @@
       <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />
       Save and Sync
     </button>
-    <button
-      type="button"
-      class="btn btn-secondary"
-      title={hasMembers
-        ? "Send the defaults to the server without changing members"
-        : "The group has no collections yet"}
-      disabled={busy || !hasMembers}
-      onclick={() => void save("apply")}>Save and Apply</button
+    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
+      >Save</button
     >
   {/if}
 {/snippet}

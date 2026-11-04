@@ -175,12 +175,10 @@ class CollectionSets:
             context, _ = await self._membership.context(
                 media_type,
                 library_id,
-                FilterGroup(
-                    groups=[
-                        generator.criteria,
-                        *(value.criteria for value in generator.custom_values),
-                    ]
-                ),
+                [
+                    generator.criteria,
+                    *(value.criteria for value in generator.custom_values),
+                ],
                 items,
             )
             counts = count_values(generator, items, context)
@@ -213,8 +211,8 @@ class CollectionSets:
         provider = self._access.provider()
         titles = sorted(
             {
-                title
-                for _, title in await provider.filter_choices(
+                plex.value_of(key, title)
+                for key, title in await provider.filter_choices(
                     library_id, media_type, plex.key_for(media_type)
                 )
             },

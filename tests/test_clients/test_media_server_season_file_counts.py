@@ -61,6 +61,14 @@ def _plex_handler(
             "Children": {"size": 2, "Metadata": seasons},
         }
 
+    movie = {
+        "ratingKey": "50",
+        "title": "Movie",
+        "Guid": [],
+        "addedAt": 1_000,
+        "Media": [{"Part": [{"file": "/media/movies/Movie/Movie.mkv"}]}],
+    }
+
     def handler(request: httpx2.Request) -> httpx2.Response:
         path = request.url.path
         params = request.url.params
@@ -84,28 +92,9 @@ def _plex_handler(
                 },
             )
         if path == "/library/sections/2/all":
-            return httpx2.Response(
-                200,
-                json={
-                    "MediaContainer": {
-                        "Metadata": [
-                            {
-                                "ratingKey": "50",
-                                "title": "Movie",
-                                "Guid": [],
-                                "addedAt": 1_000,
-                                "Media": [
-                                    {
-                                        "Part": [
-                                            {"file": ("/media/movies/Movie/Movie.mkv")}
-                                        ]
-                                    }
-                                ],
-                            }
-                        ]
-                    }
-                },
-            )
+            return httpx2.Response(200, json={"MediaContainer": {"Metadata": [movie]}})
+        if path == "/library/sections/1/all" and params.get("type") == "4":
+            return httpx2.Response(200, json={"MediaContainer": {"size": 0}})
         if path == "/library/sections/1/all":
             return httpx2.Response(
                 200,
@@ -124,6 +113,9 @@ def _plex_handler(
                     }
                 },
             )
+        if path == "/library/metadata/50":
+            assert "includeChildren" not in params
+            return httpx2.Response(200, json={"MediaContainer": {"Metadata": [movie]}})
         if path.startswith("/library/metadata/"):
             assert params.get("includeChildren") == "1"
             keys = path.removeprefix("/library/metadata/").split(",")
@@ -169,7 +161,7 @@ async def test_plex_reads_show_folders_and_seasons_in_one_request_per_page(
     assert empty.folder_path is None
     assert empty.seasons == []
     details = [r.url.path for r in requests if r.url.path.startswith("/library/meta")]
-    assert details == ["/library/metadata/100,101"]
+    assert details == ["/library/metadata/50", "/library/metadata/100,101"]
 
 
 async def test_plex_rejects_a_shortened_season_list(
@@ -291,12 +283,12 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
             if include_types == "Movie":
                 assert params.get("fields") == (
                     "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
-                    "Tags,ProductionLocations,Width,Etag"
+                    "Tags,ProductionLocations,Width,SortName,Etag"
                 )
             else:
                 assert params.get("fields") == (
                     "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
-                    "Tags,ProductionLocations,Width"
+                    "Tags,ProductionLocations,Width,SortName"
                 )
             assert params.get("enableUserData") == "false"
             if params.get("parentId") == "lib2":
@@ -491,11 +483,12 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
             if include_types == "Movie":
                 assert params.get("Fields") == (
                     "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags,"
-                    "Etag"
+                    "SortName,Etag"
                 )
             else:
                 assert params.get("Fields") == (
-                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags"
+                    "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags,"
+                    "SortName"
                 )
             assert params.get("EnableUserData") == "false"
             assert params.get("EnableImages") == "true"

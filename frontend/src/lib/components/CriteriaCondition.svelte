@@ -120,7 +120,7 @@
         <option value={`field:${entry.field}`}>{entry.label}</option>
       {/each}
     </optgroup>
-    <optgroup label="Lists and tags">
+    <optgroup label="External">
       {#each sources as entry (entry.type)}
         <option value={`source:${entry.type}`} disabled={!!entry.unavailable}
           >{entry.label}{entry.unavailable ? ` (${entry.unavailable})` : ""}</option
@@ -210,16 +210,16 @@
     <button
       type="button"
       class="btn btn-ghost btn-sm btn-icon"
-      aria-label={`Duplicate ${label}`}
-      title="Duplicate condition"
-      onclick={onduplicate}><CopyPlus size={14} /></button
+      aria-label={`Copy ${label}`}
+      title="Copy condition, to paste into any criteria"
+      onclick={oncopy}><Copy size={14} /></button
     >
     <button
       type="button"
       class="btn btn-ghost btn-sm btn-icon"
-      aria-label={`Copy ${label}`}
-      title="Copy condition, to paste into any criteria"
-      onclick={oncopy}><Copy size={14} /></button
+      aria-label={`Duplicate ${label}`}
+      title="Duplicate condition"
+      onclick={onduplicate}><CopyPlus size={14} /></button
     >
     <button
       type="button"

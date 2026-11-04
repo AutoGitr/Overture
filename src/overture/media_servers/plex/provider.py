@@ -3,6 +3,7 @@
 lazy import urllib.parse
 lazy from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 lazy from datetime import datetime
+lazy from functools import partial
 lazy from typing import ClassVar, Literal, override
 
 lazy from ...config import Settings
@@ -176,32 +177,23 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             if (media_type := _PLEX_MEDIA_TYPES.get(section["type"]))
         ]
 
-    async def _fill_show_details(self, shows: list[ServerItem], plex_base: str) -> None:
-        """Fill the folders and seasons of a page of shows in one request.
+    @staticmethod
+    def _fill_show_details(show: ServerItem, row: PlexMetadata, plex_base: str) -> None:
+        """Fill a show's folder and seasons from its full metadata.
 
         A show's season rows must number its ``childCount``, so a shortened
         list fails the sync instead of dropping seasons.
         """
-        details = {
-            str(row["ratingKey"]): row
-            for row in await self.client.get_shows_with_seasons(
-                [show.id for show in shows]
-            )
-        }
-        for show in shows:
-            row = details.get(show.id)
-            if row is None:
-                raise MediaServerError("Plex did not return a listed show")
-            seasons = (row.get("Children") or {}).get("Metadata", [])
-            if len(seasons) != (row.get("childCount") or 0):
-                raise MediaServerError("Plex returned an incomplete season list")
-            if len(seasons) > MAX_SEASONS_PER_SHOW:
-                raise MediaServerError("Media server returned too many seasons")
-            show.folder_path = _plex_location_path(row)
-            show.seasons = [
-                _plex_season(season, plex_base)
-                for season in sorted(seasons, key=lambda season: season.get("index", 0))
-            ]
+        seasons = (row.get("Children") or {}).get("Metadata", [])
+        if len(seasons) != (row.get("childCount") or 0):
+            raise MediaServerError("Plex returned an incomplete season list")
+        if len(seasons) > MAX_SEASONS_PER_SHOW:
+            raise MediaServerError("Media server returned too many seasons")
+        show.folder_path = _plex_location_path(row)
+        show.seasons = [
+            _plex_season(season, plex_base)
+            for season in sorted(seasons, key=lambda season: season.get("index", 0))
+        ]
 
     def _to_server_item(
         self,
@@ -211,8 +203,12 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         section_key: str,
         plex_base: str,
         machine_id: str | None,
+        in_progress: Collection[str],
     ) -> ServerItem:
-        """Normalize one Plex row, without a show's folder or seasons."""
+        """Normalize one Plex row, without a show's folder or seasons.
+
+        *in_progress* holds the shows with a partly played episode.
+        """
         rating_key = str(metadata.get("ratingKey", ""))
         movie = media_type is MediaType.MOVIE
         directors = metadata.get("Director") or []
@@ -225,6 +221,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         return ServerItem(
             id=rating_key,
             title=metadata.get("title", ""),
+            sort_title=metadata.get("titleSort") or None,
             year=metadata.get("year"),
             media_type=media_type,
             guids=_plex_guids(metadata),
@@ -266,7 +263,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             critic_rating=_rating(metadata.get("rating")),
             audience_rating=_rating(metadata.get("audienceRating")),
             user_rating=_rating(metadata.get("userRating")),
-            duration_minutes=int(duration_ms // 60000)
+            duration_seconds=int(duration_ms // 1000)
             if isinstance(duration_ms, int) and duration_ms > 0
             else None,
             plays=plays,
@@ -277,7 +274,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             else (metadata.get("viewedLeafCount") or 0) < leaves,
             in_progress=(metadata.get("viewOffset") or 0) > 0
             if movie
-            else 0 < (metadata.get("viewedLeafCount") or 0) < leaves,
+            else rating_key in in_progress,
             release_date=metadata.get("originallyAvailableAt") or None,
             versions=(len(metadata.get("Media") or ()) or None) if movie else None,
             server_added_at=parse_utc_datetime(metadata.get("addedAt")),
@@ -288,33 +285,51 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     async def _iter_items(
         self, library_ids: list[str] | None, since: datetime | None
     ) -> AsyncIterator[list[ServerItem]]:
-        """Normalize bounded pages; shows get details in one request per page.
+        """Normalize bounded pages from the full metadata of their items.
 
-        A poll drops unchanged items first, so it reads the details of the
-        shows it reports and no others.
+        A poll drops unchanged items first, so it reads the metadata of the
+        items it reports and no others.
         """
         machine_id = await self.client.get_machine_identifier()
         plex_base = await self.client.base_url()
         for section in await self.select_sections(library_ids):
+            show = section.media_type is MediaType.SHOW
+            in_progress = (
+                await self.client.get_in_progress_shows(section.key)
+                if show
+                else set[str]()
+            )
+
+            item = partial(
+                self._to_server_item,
+                media_type=section.media_type,
+                section_key=section.key,
+                plex_base=plex_base,
+                machine_id=machine_id,
+                in_progress=in_progress,
+            )
+
             async for page in self.client.iter_section_items(section.key):
-                batch = [
-                    item
-                    for item in (
-                        self._to_server_item(
-                            metadata,
-                            media_type=section.media_type,
-                            section_key=section.key,
-                            plex_base=plex_base,
-                            machine_id=machine_id,
-                        )
-                        for metadata in page
-                    )
-                    if self.changed_since(item, since)
+                keys = [
+                    listed.id
+                    for listed in map(item, page)
+                    if self.changed_since(listed, since)
                 ]
-                if not batch:
+                if not keys:
                     continue
-                if section.media_type is MediaType.SHOW:
-                    await self._fill_show_details(batch, plex_base)
+                rows = {
+                    str(row["ratingKey"]): row
+                    for row in await self.client.get_full_metadata(keys, children=show)
+                }
+                batch: list[ServerItem] = []
+                for key in keys:
+                    row = rows.get(key)
+                    if row is None:
+                        raise MediaServerError("Plex did not return a listed item")
+                    full = item(row)
+                    if show:
+                        self._fill_show_details(full, row, plex_base)
+                    batch.append(full)
                 yield batch
 
     @override

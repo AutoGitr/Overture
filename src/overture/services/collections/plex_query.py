@@ -141,6 +141,30 @@ def _decade(operator: FilterOperator, value: float) -> list[Pair]:
             return [_op("year", "<=", end)]
 
 
+def _whole_units(
+    key: str, operator: FilterOperator, value: float, scale: int
+) -> list[Pair]:
+    """Test a field Overture counts in whole units, such as minutes, as Plex's.
+
+    Overture's 5 minutes is any duration from 5:00 up to 6:00, so each
+    comparison becomes a bound in Plex's unit at the edge of that range.
+    """
+    start, end = int(value) * scale, (int(value) + 1) * scale
+    match operator:
+        case FilterOperator.IS:
+            return _nested([[_op(key, ">=", start)], [_op(key, "<<=", end)]], "and")
+        case FilterOperator.IS_NOT:
+            return _nested([[_op(key, "<<=", start)], [_op(key, ">=", end)]], "or")
+        case FilterOperator.GT:
+            return [_op(key, ">=", end)]
+        case FilterOperator.GTE:
+            return [_op(key, ">=", start)]
+        case FilterOperator.LT:
+            return [_op(key, "<<=", start)]
+        case _:
+            return [_op(key, "<<=", end)]
+
+
 def _tag(key: str, operator: FilterOperator, keys: tuple[str, ...]) -> list[Pair]:
     """A comma joins keys Plex tests together; a negation tests each one."""
     if operator is FilterOperator.IS:
@@ -165,6 +189,8 @@ def _field_pairs(
         case "boolean":
             flag = bool(value) is (operator is FilterOperator.IS)
             return [(key, "1" if flag else "0")]
+        case "integer" | "float" if plex.scale != 1:
+            return _whole_units(key, operator, float(value), plex.scale)
         case "integer" | "float":
             return [_op(key, _NUMBER_OPERATORS[operator], _number(float(value), plex))]
         case "date":
@@ -280,6 +306,15 @@ def plex_field_keys(media_type: MediaType) -> dict[str, FilterField]:
     return keys
 
 
+def plex_term_key(name: str, media_type: MediaType) -> str:
+    """The field key of a filter term, as Overture names it.
+
+    Plex Web prefixes the fields of a section's own type (``show.title``),
+    which Plex reads the same as the bare key Overture writes.
+    """
+    return name.rstrip("!<>=").removeprefix(f"{media_type.value}.")
+
+
 def _order(sort: str) -> CollectionOrder | None:
     for order in CollectionOrder:
         try:
@@ -297,13 +332,14 @@ def _from_epoch(value: str, offset: int = 0) -> str:
 
 class _Decompiler:
     def __init__(self, media_type: MediaType, names: PlexNames) -> None:
+        self._media_type = media_type
         self._fields = plex_field_keys(media_type)
         self._names = names
         self.unmappable: list[str] = []
 
     def condition(self, name: str, value: str) -> FieldCondition | None:
-        key = name.rstrip("!<>=")
-        operator = f"{name[len(key) :]}="
+        key = plex_term_key(name, self._media_type)
+        operator = f"{name[len(name.rstrip('!<>=')) :]}="
         field = self._fields.get(key)
         plex = FIELDS[field].plex if field is not None else None
         try:
@@ -393,6 +429,17 @@ _DECADES: frozendict[tuple[str, FilterOperator, FilterOperator], FilterOperator]
 )
 
 
+#: The ranges a whole-unit "is" and "is not" compile to, read back the same way.
+_UNIT_RANGES: frozendict[tuple[str, FilterOperator, FilterOperator], FilterOperator] = (
+    frozendict(
+        {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+            ("all", FilterOperator.GTE, FilterOperator.LT): FilterOperator.IS,
+            ("any", FilterOperator.LT, FilterOperator.GTE): FilterOperator.IS_NOT,
+        }
+    )
+)
+
+
 def _collapse(group: FilterGroup) -> _Term:
     """Read back the groups the compiler emits for one decade or negated tag."""
     conditions = [c for c in group.conditions if isinstance(c, FieldCondition)]
@@ -408,12 +455,18 @@ def _collapse(group: FilterGroup) -> _Term:
         if decade is not None and decade_start:
             return FieldCondition(field=FilterField.DECADE, operator=decade, value=low)
     (field, *others) = fields
+    plex = plex_field(field)
+    if not others and plex.scale != 1 and len(conditions) == 2:
+        low, high = values
+        unit = _UNIT_RANGES.get((group.mode, operators[0], operators[1]))
+        if unit is not None and isinstance(low, int) and high == low + 1:
+            return FieldCondition(field=field, operator=unit, value=low)
     if (
         not others
         and group.mode == "all"
         and set(operators) == {FilterOperator.IS_NOT}
         and len(set(values)) == 1
-        and plex_field(field).type == "tag"
+        and plex.type == "tag"
     ):
         return conditions[0]
     return group

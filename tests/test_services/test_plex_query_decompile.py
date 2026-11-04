@@ -137,3 +137,78 @@ def test_resolutions_read_back_as_the_keys_sync_stores() -> None:
     assert decompiled.criteria.conditions == [
         FieldCondition(field=FilterField.RESOLUTION, value="4k")
     ]
+
+
+@pytest.mark.parametrize(
+    "operator",
+    [
+        FilterOperator.IS,
+        FilterOperator.IS_NOT,
+        FilterOperator.GT,
+        FilterOperator.GTE,
+        FilterOperator.LT,
+        FilterOperator.LTE,
+    ],
+)
+def test_whole_minutes_compile_to_plex_milliseconds_and_back(
+    operator: FilterOperator,
+) -> None:
+    criteria = FilterGroup(
+        conditions=[
+            FieldCondition(field=FilterField.DURATION, operator=operator, value=5)
+        ]
+    )
+
+    decompiled = _round_trip(criteria, MediaType.MOVIE)
+
+    # "Greater than 5" is "at least 6" in whole minutes, and so on.
+    shifted = {
+        FilterOperator.GT: (FilterOperator.GTE, 6),
+        FilterOperator.LTE: (FilterOperator.LT, 6),
+    }
+    expected_operator, expected_value = shifted.get(operator, (operator, 5))
+    assert decompiled.conditions == [
+        FieldCondition(
+            field=FilterField.DURATION, operator=expected_operator, value=expected_value
+        )
+    ]
+
+
+def test_five_minutes_is_any_duration_up_to_six() -> None:
+    query = compile_plex_query(
+        FilterGroup(
+            conditions=[
+                FieldCondition(
+                    field=FilterField.DURATION, operator=FilterOperator.IS, value=5
+                )
+            ]
+        ),
+        media_type=MediaType.MOVIE,
+        order=CollectionOrder.TITLE_ASC,
+        limit=None,
+        choices={},
+        labels={},
+    )
+
+    assert query.endswith("push=1&duration%3E=300000&and=1&duration%3C%3C=360000&pop=1")
+
+
+def test_show_filters_plex_web_scopes_to_the_show_read_back() -> None:
+    decompiled = decompile_plex_query(
+        "show.title=War&show.unwatchedLeaves=1&show.actor=337778&show.title%21=Staged",
+        media_type=MediaType.SHOW,
+        names={"actor": {"337778": "Michael Palin"}},
+    )
+
+    assert decompiled.criteria.conditions == [
+        FieldCondition(
+            field=FilterField.TITLE, operator=FilterOperator.CONTAINS, value="War"
+        ),
+        FieldCondition(field=FilterField.UNPLAYED, value=True),
+        FieldCondition(field=FilterField.ACTOR, value="Michael Palin"),
+        FieldCondition(
+            field=FilterField.TITLE,
+            operator=FilterOperator.DOES_NOT_CONTAIN,
+            value="Staged",
+        ),
+    ]

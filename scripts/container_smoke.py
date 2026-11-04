@@ -261,7 +261,7 @@ def main() -> None:
         type=Path,
         default=database_path(load_configuration(RuntimeSettings).OVERTURE_CONFIG_DIR),
     )
-    parser.add_argument("--expected-tab", default="art")
+    parser.add_argument("--expected-tab", default="art_and_themes")
     parser.add_argument("--expected-version")
     parser.add_argument("--set-tab")
     args = parser.parse_args()

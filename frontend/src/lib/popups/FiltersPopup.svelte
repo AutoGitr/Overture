@@ -24,7 +24,9 @@
   import PopupShell from "../components/PopupShell.svelte";
   import RangeFields from "../components/RangeFields.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
+  import { setSectionView } from "../stores/sectionState.svelte";
 
+  setSectionView("filters");
   const catalogBrowsing = new CatalogBrowsing();
   let openGroup = $derived(sidebarGroup());
   let datasetEnabled = $derived(catalogBrowsing.enabled);
@@ -364,15 +366,15 @@
   </CardColumn>
 
   {#snippet footer()}
+    <button class="btn btn-secondary actions-start" onclick={clear} disabled={bulkActionBusy}
+      >Reset filters</button
+    >
+    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
     <button
       class="btn btn-primary"
       onclick={apply}
       disabled={bulkActionBusy || unchanged}
       title={unchanged ? "These are the filters in use" : undefined}>Apply filters</button
-    >
-    <button class="btn btn-secondary" onclick={() => uiState.closePopup()}>Cancel</button>
-    <button class="btn btn-secondary footer-end" onclick={clear} disabled={bulkActionBusy}
-      >Reset filters</button
     >
   {/snippet}
 </PopupShell>

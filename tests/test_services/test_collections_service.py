@@ -222,14 +222,21 @@ async def test_get_collection_lists_members_and_catalog_candidates(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     row = await _collection(db_session, tmdb_collection_id=10)
-    newer = MediaItem(media_type=MediaType.MOVIE, title="Empire", year=1980)
+    newer = MediaItem(
+        media_type=MediaType.MOVIE, title="Empire", year=1980, release_date="1980-05-21"
+    )
     select_art(
         newer,
         ArtType.POSTER,
         PublicArtUrl("https://image.tmdb.org/t/p/original/empire.jpg"),
     )
     seed_art_slot(newer, ArtType.POSTER, file_hash="poster-hash")
-    older = MediaItem(media_type=MediaType.MOVIE, title="Star Wars", year=1977)
+    older = MediaItem(
+        media_type=MediaType.MOVIE,
+        title="Star Wars",
+        year=1977,
+        release_date="1977-05-25",
+    )
     db_session.add_all([newer, older])
     await db_session.flush()
     db_session.add_all(

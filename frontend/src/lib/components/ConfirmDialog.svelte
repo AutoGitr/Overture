@@ -61,20 +61,21 @@
   {#snippet footer()}
     <button
       type="button"
-      class={["btn", request.destructive ? "btn-danger" : "btn-primary"]}
-      bind:this={confirmButton}
-      disabled={!!request.choices && chosen === null}
-      onclick={() => notificationState.settleConfirm(request.choices ? chosen : "confirm")}
-    >
-      {request.confirmLabel ?? "Confirm"}
-    </button>
-    <button
-      type="button"
       class="btn btn-secondary"
       bind:this={cancelButton}
       onclick={() => notificationState.settleConfirm(null)}
     >
       Cancel
+    </button>
+    <button
+      type="button"
+      class={["btn", request.destructive ? "btn-danger" : "btn-primary"]}
+      bind:this={confirmButton}
+      disabled={!!request.choices && chosen === null}
+      title={request.choices && chosen === null ? "Choose one of the options first" : undefined}
+      onclick={() => notificationState.settleConfirm(request.choices ? chosen : "confirm")}
+    >
+      {request.confirmLabel ?? "Confirm"}
     </button>
   {/snippet}
 </PopupShell>

@@ -39,7 +39,7 @@
       <p class="hint">
         Backups are saved to <code>/config/backups/</code>.
       </p>
-      <div class="backup-now-row">
+      <div class="actions-row backup-now-row">
         <button
           class="btn btn-primary"
           onclick={backupNow}
@@ -65,13 +65,6 @@
 </PopupShell>
 
 <style>
-  .backup-now-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-  }
-
   .backup-now-row .btn {
     display: flex;
     align-items: center;

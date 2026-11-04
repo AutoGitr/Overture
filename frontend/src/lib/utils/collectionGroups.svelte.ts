@@ -23,6 +23,9 @@ export class CollectionGroupActions {
   get busy() {
     return this.renameRequest.isPending || this.deleteRequest.isPending;
   }
+  get deleting() {
+    return this.deleteRequest.isPending;
+  }
   async rename(): Promise<string | null> {
     if (this.busy || !this.name.trim()) return null;
     const name = this.name.trim();

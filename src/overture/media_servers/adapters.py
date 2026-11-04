@@ -122,6 +122,7 @@ class ServerItem:
     #: Metadata version of a movie listed without its director; the sync
     #: fetches the director only when this differs from the stored version.
     director_etag: str | None = None
+    sort_title: str | None = None
     studio: str | None = None
     genres: tuple[str, ...] = ()
     actors: tuple[str, ...] = ()
@@ -135,7 +136,7 @@ class ServerItem:
     critic_rating: float | None = None
     audience_rating: float | None = None
     user_rating: float | None = None
-    duration_minutes: int | None = None
+    duration_seconds: int | None = None
     plays: int | None = None
     last_played_at: datetime | None = None
     unplayed: bool | None = None

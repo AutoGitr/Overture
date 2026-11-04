@@ -44,6 +44,8 @@ describe("SettingsPopup", () => {
         min_duration_seconds: 30,
         max_duration_seconds: 300,
         aspect_ratio_tolerance: "strict",
+        auto_advance: "off",
+        auto_unmonitor: "off",
       }),
     );
     queryClient.setQueryData(getSettingsOptions().queryKey, storedSettings());

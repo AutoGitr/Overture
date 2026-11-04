@@ -86,12 +86,21 @@ async def test_get_settings_creates_default_row(
     )
 
     assert result.auto_match_art is False
-    assert result.theme_search_format == "{title} {year} main theme music ost"
+    assert result.workflow is Workflow.ART_AND_THEMES
+    assert result.theme_search_format == "{title} {year} main theme music"
+    assert (result.min_duration_seconds, result.max_duration_seconds) == (20, 600)
     # No TMDB key configured in the test environment, so the default stays False.
     assert result.skip_media_server_tmdb_urls is False
-    assert result.auto_advance is AutoAdvance.OFF
-    assert result.auto_unmonitor == "off"
+    assert result.auto_advance is AutoAdvance.SLOTS_AND_ITEMS
+    assert result.auto_unmonitor is AutoUnmonitor.ART_AND_THEME
     assert result.auto_advance_skip_completed is True
+    assert (
+        result.collection_minimum_items,
+        result.collection_delete_below_minimum,
+        result.collection_sync_enabled,
+        result.collection_delete_when_inactive,
+    ) == (2, True, False, True)
+    assert (result.radarr_search, result.sonarr_search) == (False, False)
 
 
 async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_configured(
@@ -123,7 +132,7 @@ async def test_get_settings_returns_existing_row_without_recreating(
         provider_registry=ProviderRegistry(app_config=app_config),
     )
 
-    assert first.workflow == second.workflow == "art"
+    assert first.workflow == second.workflow == "art_and_themes"
 
 
 async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
@@ -140,8 +149,8 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
         disable_media_server_art=True,
         aspect_ratio_tolerance=AspectRatioTolerance.LENIENT,
         tmdb_language_filter=TmdbLanguageFilter.ALL,
-        auto_advance=AutoAdvance.SLOTS_AND_ITEMS,
-        auto_unmonitor=AutoUnmonitor.ART_AND_THEME,
+        auto_advance=AutoAdvance.SLOTS,
+        auto_unmonitor=AutoUnmonitor.ART,
         auto_advance_skip_completed=False,
     )
 
@@ -161,8 +170,8 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
     assert result.disable_media_server_art is True
     assert result.aspect_ratio_tolerance == "lenient"
     assert result.tmdb_language_filter == "all"
-    assert result.auto_advance is AutoAdvance.SLOTS_AND_ITEMS
-    assert result.auto_unmonitor == "art_and_theme"
+    assert result.auto_advance is AutoAdvance.SLOTS
+    assert result.auto_unmonitor == "art"
     assert result.auto_advance_skip_completed is False
     assert result.updated_at is not None
 
@@ -184,7 +193,7 @@ async def test_update_settings_with_no_fields_preserves_existing_row(
         provider_registry=ProviderRegistry(app_config=app_config),
     )
 
-    assert result.workflow == "art"
+    assert result.workflow == "art_and_themes"
     assert result.auto_match_art is False
 
 
@@ -276,4 +285,4 @@ async def test_get_app_settings_returns_defaults_when_unsaved(
     assert settings.skip_media_server_tmdb_urls is False
     assert settings.auto_match_art is False
     assert settings.disable_media_server_art is False
-    assert settings.workflow == "art"
+    assert settings.workflow == "art_and_themes"

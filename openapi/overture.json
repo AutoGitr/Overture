@@ -91,7 +91,7 @@
           },
           "auto_advance": {
             "$ref": "#/components/schemas/AutoAdvance",
-            "default": "off"
+            "default": "slots_and_items"
           },
           "auto_advance_skip_completed": {
             "default": true,
@@ -105,7 +105,7 @@
           },
           "auto_unmonitor": {
             "$ref": "#/components/schemas/AutoUnmonitor",
-            "default": "off"
+            "default": "art_and_theme"
           },
           "collection_auto_match_art": {
             "default": false,
@@ -118,12 +118,12 @@
             "type": "boolean"
           },
           "collection_delete_below_minimum": {
-            "default": false,
+            "default": true,
             "title": "Collection Delete Below Minimum",
             "type": "boolean"
           },
           "collection_delete_when_inactive": {
-            "default": false,
+            "default": true,
             "title": "Collection Delete When Inactive",
             "type": "boolean"
           },
@@ -137,7 +137,7 @@
             "type": "boolean"
           },
           "collection_minimum_items": {
-            "default": 1,
+            "default": 2,
             "maximum": 100.0,
             "minimum": 1.0,
             "title": "Collection Minimum Items",
@@ -169,7 +169,7 @@
             "type": "string"
           },
           "collection_sync_enabled": {
-            "default": true,
+            "default": false,
             "title": "Collection Sync Enabled",
             "type": "boolean"
           },
@@ -220,7 +220,7 @@
             "type": "boolean"
           },
           "max_duration_seconds": {
-            "default": 300,
+            "default": 600,
             "maximum": 3600.0,
             "minimum": 0.0,
             "title": "Max Duration Seconds",
@@ -242,7 +242,7 @@
             ]
           },
           "min_duration_seconds": {
-            "default": 30,
+            "default": 20,
             "maximum": 3600.0,
             "minimum": 0.0,
             "title": "Min Duration Seconds",
@@ -287,7 +287,7 @@
             "type": "string"
           },
           "radarr_search": {
-            "default": true,
+            "default": false,
             "title": "Radarr Search",
             "type": "boolean"
           },
@@ -320,7 +320,7 @@
             "type": "string"
           },
           "sonarr_search": {
-            "default": true,
+            "default": false,
             "title": "Sonarr Search",
             "type": "boolean"
           },
@@ -330,7 +330,7 @@
             "type": "integer"
           },
           "theme_search_format": {
-            "default": "{title} {year} main theme music ost",
+            "default": "{title} {year} main theme music",
             "maxLength": 200,
             "minLength": 1,
             "title": "Theme Search Format",
@@ -366,7 +366,7 @@
           },
           "workflow": {
             "$ref": "#/components/schemas/Workflow",
-            "default": "art"
+            "default": "art_and_themes"
           }
         },
         "required": [
@@ -4239,6 +4239,13 @@
           "smart": {
             "title": "Smart",
             "type": "boolean"
+          },
+          "smart_operators": {
+            "items": {
+              "$ref": "#/components/schemas/FilterOperator"
+            },
+            "title": "Smart Operators",
+            "type": "array"
           }
         },
         "required": [
@@ -4246,6 +4253,7 @@
           "label",
           "kind",
           "operators",
+          "smart_operators",
           "local",
           "smart"
         ],

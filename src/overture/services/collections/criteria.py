@@ -1,6 +1,8 @@
 """Criteria evaluation and member ordering against synced library metadata."""
 
 lazy import random
+lazy import re
+lazy import unicodedata
 lazy from collections.abc import Callable, Mapping, Sequence
 lazy from dataclasses import dataclass
 lazy from datetime import date, datetime, timedelta
@@ -24,15 +26,6 @@ class CriteriaContext:
     now: datetime
 
 
-def _release(item: MediaItem) -> date | None:
-    if item.release_date:
-        try:
-            return date.fromisoformat(item.release_date[:10])
-        except ValueError:
-            pass
-    return date(item.year, 1, 1) if item.year else None
-
-
 def _iso_day(value: str | None) -> date | None:
     try:
         return date.fromisoformat(value[:10]) if value else None
@@ -42,6 +35,16 @@ def _iso_day(value: str | None) -> date | None:
 
 def _day(value: datetime | None) -> date | None:
     return value.date() if value else None
+
+
+def _last_played(item: MediaItem) -> date:
+    """A title never played was last played before any date."""
+    return item.last_played_at.date() if item.last_played_at else date.min
+
+
+def _minutes(item: MediaItem) -> int | None:
+    seconds = item.duration_seconds
+    return seconds // 60 if seconds is not None else None
 
 
 def _one(value: str | None) -> list[str]:
@@ -69,11 +72,11 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.CRITIC_RATING: lambda item: item.critic_rating,
     FilterField.AUDIENCE_RATING: lambda item: item.audience_rating,
     FilterField.USER_RATING: lambda item: item.user_rating,
-    FilterField.DURATION: lambda item: item.duration_minutes,
+    FilterField.DURATION: _minutes,
     FilterField.PLAYS: lambda item: item.plays,
     FilterField.ADDED: lambda item: _day(item.server_added_at),
-    FilterField.RELEASED: _release,
-    FilterField.LAST_PLAYED: lambda item: _day(item.last_played_at),
+    FilterField.RELEASED: lambda item: _iso_day(item.release_date),
+    FilterField.LAST_PLAYED: _last_played,
     FilterField.UNPLAYED: lambda item: item.unplayed,
     FilterField.IN_PROGRESS: lambda item: item.in_progress,
     FilterField.VERSIONS: lambda item: item.versions,
@@ -123,7 +126,7 @@ def _text(candidate: str, operator: FilterOperator, target: str) -> bool:
 
 def _number(candidate: float | None, operator: FilterOperator, target: float) -> bool:
     if candidate is None:
-        return operator is FilterOperator.IS_NOT
+        return False
     match operator:
         case FilterOperator.IS:
             return candidate == target
@@ -221,9 +224,31 @@ def evaluate(
     return [item for item in items if _matches(item, criteria, context)]
 
 
-def _sort_key(value: FieldValue) -> str | float | date | None:
-    if isinstance(value, str):
-        return value.casefold()
+_DIGITS = re.compile(r"(\d+)", re.ASCII)
+_LEADING_PUNCTUATION = re.compile(r"^\W+")
+
+
+def title_key(item: MediaItem) -> tuple[str | int, ...]:
+    """Order titles by sort title, numbers by their value.
+
+    Case, accents and leading punctuation are ignored, so ``'71`` sorts
+    among the numbers and ``À Nous la Liberté`` among the A's.
+    """
+    text = unicodedata.normalize("NFKD", item.sort_title or item.title)
+    folded = "".join(char for char in text if not unicodedata.combining(char))
+    parts = _DIGITS.split(_LEADING_PUNCTUATION.sub("", folded.casefold()))
+    return tuple(int(part) if index % 2 else part for index, part in enumerate(parts))
+
+
+type _SortKey = tuple[str | int, ...] | float | date
+
+
+def _sort_key(item: MediaItem, field: FilterField) -> _SortKey | None:
+    if field is FilterField.TITLE:
+        return title_key(item)
+    if field is FilterField.DURATION:
+        return item.duration_seconds
+    value = field_value(item, field)
     if isinstance(value, bool) or not isinstance(value, float | int | date):
         return None
     return value
@@ -239,8 +264,8 @@ def order_items(
     """Order members, then keep the first *limit* of them.
 
     ``custom`` keeps the source's order and then the given order. Items without
-    a value for the sort field come last in either direction, and titles break
-    ties, as in the sidebar.
+    a value sort lowest (first ascending, last descending) and titles break ties
+    in ascending order.
     """
     if order is CollectionOrder.RANDOM:
         ordered = random.sample(list(items), len(items))
@@ -252,15 +277,12 @@ def order_items(
         if field is None:
             raise ValueError(f"No sort field for {order}")
         descending = order.value.endswith(".desc")
-        by_title = sorted(items, key=lambda item: (item.title.casefold(), item.id or 0))
-        known = [
-            (key, item)
-            for item in by_title
-            if (key := _sort_key(field_value(item, field))) is not None
-        ]
-        unknown = [
-            item for item in by_title if _sort_key(field_value(item, field)) is None
-        ]
+        by_title = sorted(items, key=lambda item: (title_key(item), item.id or 0))
+        keyed = [(_sort_key(item, field), item) for item in by_title]
+        known = [(key, item) for key, item in keyed if key is not None]
+        unknown = [item for key, item in keyed if key is None]
+        # A stable sort keeps the title order among equal values either way.
         known.sort(key=lambda pair: pair[0], reverse=descending)
-        ordered = [item for _, item in known] + unknown
+        ranked = [item for _, item in known]
+        ordered = ranked + unknown if descending else unknown + ranked
     return ordered[:limit] if limit is not None else ordered

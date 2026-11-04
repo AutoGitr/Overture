@@ -61,15 +61,15 @@ class AppSettingsBase(SQLModel):
     collection_visible_home: bool = False
     collection_visible_shared: bool = False
     collection_visible_library: bool = False
-    collection_minimum_items: int = Field(default=1, ge=1, le=100)
-    collection_delete_below_minimum: bool = False
+    collection_minimum_items: int = Field(default=2, ge=1, le=100)
+    collection_delete_below_minimum: bool = True
     collection_auto_match_art: bool = False
     collection_auto_match_theme: bool = False
     collection_sort_title_format: str = Field(default="", max_length=200)
     collection_summary_format: str = Field(default="", max_length=2000)
-    collection_delete_when_inactive: bool = False
+    collection_delete_when_inactive: bool = True
     collection_sync_schedule: str = Field(default="0 3 * * *", max_length=100)
-    collection_sync_enabled: bool = True
+    collection_sync_enabled: bool = False
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
     #: OvertureDB's No theme flag counts a title's theme as complete.
@@ -80,19 +80,21 @@ class AppSettingsBase(SQLModel):
     tmdb_region: str = Field(default="US", min_length=2, max_length=2)
     radarr_root_folder: str = Field(default="", max_length=500)
     radarr_quality_profile_id: int | None = Field(default=None, ge=1)
-    radarr_search: bool = True
+    radarr_search: bool = False
     sonarr_root_folder: str = Field(default="", max_length=500)
     sonarr_quality_profile_id: int | None = Field(default=None, ge=1)
-    sonarr_search: bool = True
+    sonarr_search: bool = False
     auto_match_art: bool = False
-    workflow: Workflow = Field(default=Workflow.ART, sa_type=enum_type(Workflow))
+    workflow: Workflow = Field(
+        default=Workflow.ART_AND_THEMES, sa_type=enum_type(Workflow)
+    )
     theme_search_format: str = Field(
-        default="{title} {year} main theme music ost",
+        default="{title} {year} main theme music",
         min_length=1,
         max_length=MAX_THEME_FORMAT_LENGTH,
     )
-    min_duration_seconds: int = Field(default=30, ge=0, le=3600)
-    max_duration_seconds: int = Field(default=300, ge=0, le=3600)
+    min_duration_seconds: int = Field(default=20, ge=0, le=3600)
+    max_duration_seconds: int = Field(default=600, ge=0, le=3600)
     normalize_theme_loudness: bool = True
     skip_media_server_tmdb_urls: bool = False
     disable_media_server_art: bool = False
@@ -103,11 +105,11 @@ class AppSettingsBase(SQLModel):
         default=TmdbLanguageFilter.EN_NULL, sa_type=enum_type(TmdbLanguageFilter)
     )
     auto_advance: AutoAdvance = Field(
-        default=AutoAdvance.OFF, sa_type=enum_type(AutoAdvance)
+        default=AutoAdvance.SLOTS_AND_ITEMS, sa_type=enum_type(AutoAdvance)
     )
     auto_advance_skip_completed: bool = True
     auto_unmonitor: AutoUnmonitor = Field(
-        default=AutoUnmonitor.OFF, sa_type=enum_type(AutoUnmonitor)
+        default=AutoUnmonitor.ART_AND_THEME, sa_type=enum_type(AutoUnmonitor)
     )
 
     @field_validator("collection_sort_title_format")

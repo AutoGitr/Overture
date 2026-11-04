@@ -29,6 +29,18 @@ describe("collection criteria helpers", () => {
     expect(availableFields(undefined, true)).toEqual([]);
   });
 
+  it("offers only the operators the chosen evaluation tests", () => {
+    const resolution = {
+      ...field("genre"),
+      field: "resolution" as const,
+      operators: ["is" as const, "is_not" as const],
+      smart_operators: ["is" as const],
+    };
+    const fields = { ...capabilities, fields: [resolution] };
+    expect(availableFields(fields, false)[0]?.operators).toEqual(["is", "is_not"]);
+    expect(availableFields(fields, true)[0]?.operators).toEqual(["is"]);
+  });
+
   it("starts each condition with a value of its kind", () => {
     expect(fieldCondition(field("genre"))).toEqual({
       kind: "field",

@@ -6,6 +6,7 @@
   import { CollectionGroupActions } from "../utils/collectionGroups.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import PendingButton from "./PendingButton.svelte";
 
   let {
     group,
@@ -39,7 +40,15 @@
   <FieldRow label="Group name" for={`${id}-name`}>
     <input id={`${id}-name`} maxlength="200" bind:value={actions.name} />
   </FieldRow>
-  <div class="form-row">
+  <div class="actions-row">
+    <PendingButton
+      class="btn btn-danger actions-start"
+      pending={actions.deleting}
+      pendingLabel="Deleting..."
+      onclick={async () => {
+        if (await actions.delete()) ondelete();
+      }}>Delete group</PendingButton
+    >
     <button
       class="btn btn-secondary"
       type="button"
@@ -48,13 +57,6 @@
         const name = await actions.rename();
         if (name) onrename(name);
       }}>Rename</button
-    >
-    <button
-      class="btn btn-danger"
-      type="button"
-      onclick={async () => {
-        if (await actions.delete()) ondelete();
-      }}>Delete group</button
     >
   </div>
 </DetailForm>

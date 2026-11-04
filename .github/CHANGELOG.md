@@ -7,6 +7,29 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Collections:** MDBList conditions take franchise URLs (`mdblist.com/franchises/...`) besides lists; official-list URLs are refused, since MDBList's API does not serve them.
+- **Collections:** `verify_collections.py --plex` reports every filter, field and sort Plex offers that Overture's criteria cannot use.
+
+### Changed
+
+- **Settings:** new installs start with the Art & Themes workflow, auto-advance through slots and items, auto-unmonitor once art and theme are complete, the theme search `{title} {year} main theme music`, theme durations of 20 to 600 seconds, collections of at least 2 members that are deleted below it and removed from the server when inactive, no scheduled collection sync, and Radarr and Sonarr searches off when titles are added. Saved settings are kept.
+- **Collections:** regular collections now evaluate and order criteria as Plex does: an unknown number or release date matches no condition (`is not` included), a title never played counts as last played before any date, durations compare whole minutes on both sides, titles sort by the server's sort title with numbers by value, and items without a value sort lowest.
+- **Collections:** a show is in progress when one of its episodes is partly played, as Plex's filter tests.
+- **Interface:** save, run and create buttons sit at the lower right of their row or popup, with resets at the left; Copy comes before Duplicate; each view remembers its own open sections, and only Setup and Content start open; Rename or delete is the last section of a group.
+- **Interface:** the criteria field list calls its list and tag sources External.
+
+### Fixed
+
+- **Sync:** Plex titles keep every genre, country, cast member, producer and label; the section listing Overture read shortened or left them out, so criteria on them missed titles.
+- **Collections:** the A to Z set preset previews and saves instead of failing.
+- **Collections:** Plex show smart collections made in Plex Web (`show.title`, `show.actor`, `show.unwatchedLeaves` and the like) can be adopted, and show resolutions are offered as the values sync stores.
+- **Collections:** Plex smart collections no longer offer operators Plex ignores, such as Resolution is not.
+- **Interface:** a long summary no longer stretches the poster in the detail header.
+- **Interface:** posters link to the media server only while the server holds the item or collection.
+- **Media server:** an error answer to one request no longer marks the server unreachable.
+
 ## [0.1.0] - 2026-11-03
 
 The first public release of Overture: artwork, collections and theme songs for

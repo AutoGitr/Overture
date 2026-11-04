@@ -435,6 +435,7 @@
   /* -- Summary ------------------------------------------------------------ */
   .detail-summary {
     max-width: 80ch;
+    overflow-wrap: anywhere;
     font-size: var(--text-sm);
     color: var(--text-secondary);
     line-height: 1.6;
@@ -462,12 +463,13 @@
       .detail-header {
         --header-align: flex-start;
         flex-direction: row;
-        align-items: stretch;
+        align-items: flex-start;
         gap: var(--space-5);
       }
 
       .detail-header-main {
         flex: 1;
+        align-self: stretch;
         justify-content: space-between;
         text-align: start;
       }

@@ -125,7 +125,7 @@
       </div>
     {/if}
 
-    <div class="schedule-save-row">
+    <div class="actions-row">
       <PendingButton
         class="btn btn-primary btn-sm"
         onclick={saveSchedule}
@@ -189,10 +189,4 @@
     margin-bottom: var(--space-3);
   }
 
-  .schedule-save-row {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: var(--space-3);
-  }
 </style>

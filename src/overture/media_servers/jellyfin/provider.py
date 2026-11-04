@@ -153,6 +153,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         return ServerItem(
             id=item_id,
             title=metadata.get("Name") or "",
+            sort_title=metadata.get("SortName") or None,
             year=metadata.get("ProductionYear"),
             media_type=media_type,
             guids=provider_ids(metadata),
@@ -204,7 +205,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             audience_rating=float(community_rating)
             if isinstance(community_rating, int | float)
             else None,
-            duration_minutes=int(runtime_ticks // 600_000_000)
+            duration_seconds=int(runtime_ticks // 10_000_000)
             if isinstance(runtime_ticks, int) and runtime_ticks > 0
             else None,
             release_date=(metadata.get("PremiereDate") or "")[:10] or None,

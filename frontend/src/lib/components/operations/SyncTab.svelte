@@ -441,16 +441,10 @@
     clear={clearResults}
   >
     {#snippet start()}
-      <PendingButton
-        class="btn btn-primary"
-        onclick={runNow}
-        disabled={!canRunSync || !!libraryGate.blocked("sync")}
-        pending={runSyncRequest.isPending}
-        pendingLabel="Starting..."
-      >
-        <RefreshCw size={15} />
-        Run Now
-      </PendingButton>
+      {#if !canRunSync && !loading}<span
+          class="popup-footer-note"
+          role="status">Choose a library or collections</span
+        >{/if}
       <button
         class="btn btn-secondary"
         onclick={saveSchedule}
@@ -461,10 +455,16 @@
       >
         {scheduleController.isEditing ? "Update Schedule" : "Save Schedule"}
       </button>
-      {#if !canRunSync && !loading}<span
-          class="popup-footer-note"
-          role="status">Choose a library or collections</span
-        >{/if}
+      <PendingButton
+        class="btn btn-primary"
+        onclick={runNow}
+        disabled={!canRunSync || !!libraryGate.blocked("sync")}
+        pending={runSyncRequest.isPending}
+        pendingLabel="Starting..."
+      >
+        <RefreshCw size={15} />
+        Run Now
+      </PendingButton>
     {/snippet}
   </JobFooter>
 {/snippet}

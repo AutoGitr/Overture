@@ -70,12 +70,14 @@ export function groupIsEmpty(group: FilterGroupInput): boolean {
   return !group.conditions?.length && (group.groups ?? []).every(groupIsEmpty);
 }
 
-/** The fields a collection can test, as Overture or as Plex evaluates it. */
+/** The fields a collection can test, with the operators of Overture or of Plex. */
 export function availableFields(
   capabilities: CollectionCapabilities | undefined,
   smart: boolean,
 ): CollectionFieldRead[] {
-  return (capabilities?.fields ?? []).filter((field) => (smart ? field.smart : field.local));
+  return (capabilities?.fields ?? [])
+    .filter((field) => (smart ? field.smart : field.local))
+    .map((field) => (smart ? { ...field, operators: field.smart_operators } : field));
 }
 
 export function availableOrders(

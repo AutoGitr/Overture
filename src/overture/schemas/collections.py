@@ -344,6 +344,7 @@ class CollectionRead(CollectionArtwork):
     library_id: str | None = None
     server_added_at: str | None = None
     server_type: ServerType
+    #: Opens the server's copy; none while the server holds no copy.
     server_link: str | None = None
     #: The media server holds a theme for the collection.
     has_theme: bool = False
@@ -479,7 +480,7 @@ def collection_read(
         if row.server_added_at
         else None,
         server_type=row.server_type,
-        server_link=row.server_link,
+        server_link=row.server_link if row.server_item_id is not None else None,
         has_theme=has_theme,
         youtube_id=row.youtube_id,
         youtube_title=row.youtube_title,
@@ -962,7 +963,9 @@ class CollectionFieldRead(StrictBaseModel):
     field: FilterField
     label: str
     kind: FieldKind
+    #: The operators Overture evaluates, and those Plex smart collections test.
     operators: list[FilterOperator]
+    smart_operators: list[FilterOperator]
     #: Overture can evaluate it from synced metadata.
     local: bool
     #: Plex smart collections can test it.

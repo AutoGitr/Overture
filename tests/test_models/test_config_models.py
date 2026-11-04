@@ -150,7 +150,7 @@ class TestAppSettingsModel:
         row = AppSettings()
 
         assert row.id == SETTINGS_ROW_ID
-        assert row.workflow == Workflow.ART
+        assert row.workflow == Workflow.ART_AND_THEMES
         assert row.aspect_ratio_tolerance == AspectRatioTolerance.STRICT
         assert row.auto_match_art is False
         assert row.auto_advance_skip_completed is True

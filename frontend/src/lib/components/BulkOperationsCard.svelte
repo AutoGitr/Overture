@@ -526,7 +526,7 @@
     {/if}
     <button
       type="button"
-      class={["btn btn-sm self-start", collectionOperation === "delete" ? "btn-danger" : "btn-secondary"]}
+      class={["btn btn-sm self-end", collectionOperation === "delete" ? "btn-danger" : "btn-secondary"]}
       disabled={busy || !resultsReady || !operationTargets.length}
       onclick={() => void runCollectionOperation()}
       >Apply to <span class="operation-count">{operationTargets.length}</span> collections</button

@@ -4,7 +4,6 @@ lazy from ...domain import (
     SMART_CUSTOM_ORDER,
     CollectionMode,
     CollectionOrder,
-    FilterOperator,
     MediaType,
     ServerType,
     SetDimension,
@@ -24,11 +23,11 @@ lazy from ...utils.errors import PublicServiceError
 lazy from .access import CollectionAccess
 lazy from .fields import (
     DIMENSIONS,
-    FIELDS,
     available_orders,
     dimension_available,
     field_available,
     field_label,
+    field_operators,
     smart_only_dimension,
 )
 lazy from .policy import CollectionPolicy
@@ -89,17 +88,12 @@ class CollectionValidator:
                     if field_available(condition.field, server, media_type, smart=True)
                     else f"{label} is not available for this library",
                 )
-            plex = FIELDS[condition.field].plex
-            if (
-                smart
-                and condition.operator is FilterOperator.IS_NOT
-                and plex is not None
-                and not plex.negatable
-            ):
+            if condition.operator not in field_operators(condition.field, smart=smart):
                 raise PublicServiceError(
                     422,
-                    f"Plex smart collections cannot test that "
-                    f"{field_label(condition.field, server)} is not a value",
+                    f"{field_label(condition.field, server)} cannot be tested with "
+                    f"{condition.operator.value.replace('_', ' ')}"
+                    + (" in Plex smart collections" if smart else ""),
                 )
         for condition in criteria.source_conditions():
             self._sources.require(condition.source.type, media_type)

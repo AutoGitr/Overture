@@ -416,7 +416,7 @@ jobs:
           start
           curl --fail --silent http://127.0.0.1:5885/ | grep -q '<title>Overture</title>'
           docker exec "$container" overture check
-          verify --expected-tab art --set-tab themes
+          verify --expected-tab art_and_themes --set-tab themes
           docker stop --time 30 "$container" >/dev/null
           docker rm "$container" >/dev/null
 

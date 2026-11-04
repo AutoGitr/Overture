@@ -199,6 +199,9 @@ def media_item_read_from_model(
             "public_dataset_complete": public_dataset_complete,
             "public_dataset_themerrdb": public_dataset_themerrdb,
             "library_collection_id": library_collection_id,
+            "server_link": item.server_link
+            if item.server_item_id is not None and item.server_removed_at is None
+            else None,
             "public_dataset_ids": public_dataset_ids,
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }

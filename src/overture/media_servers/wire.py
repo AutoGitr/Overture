@@ -60,6 +60,7 @@ class PlexDirector(TypedDict, total=False):
 
 class PlexMetadata(TypedDict, total=False):
     ratingKey: Required[Identifier | int]
+    grandparentRatingKey: Identifier | int | None
     title: str
     titleSort: str | None
     smart: bool | str | int | None
@@ -119,6 +120,7 @@ class MediaBrowserNamed(TypedDict, total=False):
 class MediaBrowserItem(TypedDict, total=False):
     Id: Required[Identifier]
     Name: str | None
+    SortName: str | None
     Overview: str | None
     Path: str | None
     IsFolder: bool

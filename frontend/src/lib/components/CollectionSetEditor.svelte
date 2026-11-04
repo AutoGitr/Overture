@@ -275,14 +275,16 @@
   />
 </div>
 <div class="preview">
-  <PendingButton
-    type="button"
-    class="btn btn-secondary"
-    pending={preview.isPending}
-    pendingLabel="Previewing..."
-    disabled={!libraryIds.length}
-    onclick={runPreview}>Preview collections</PendingButton
-  >
+  <div class="actions-row">
+    <PendingButton
+      type="button"
+      class="btn btn-secondary"
+      pending={preview.isPending}
+      pendingLabel="Previewing..."
+      disabled={!libraryIds.length}
+      onclick={runPreview}>Preview collections</PendingButton
+    >
+  </div>
   {#if preview.error}
     <p role="alert">{errorMessage(preview.error, "Could not preview the set")}</p>
   {:else if entries}

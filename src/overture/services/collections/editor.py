@@ -48,6 +48,7 @@ lazy from .plex_query import (
     decompile_plex_query,
     plex_field,
     plex_field_keys,
+    plex_term_key,
 )
 lazy from .reader import CollectionReader
 lazy from .rules import (
@@ -687,7 +688,7 @@ class CollectionEditor:
         fields = plex_field_keys(row.media_type)
         names: dict[str, dict[str, str]] = {}
         for name, _ in urllib.parse.parse_qsl(query):
-            key = name.rstrip("!<>=")
+            key = plex_term_key(name, row.media_type)
             field = fields.get(key)
             if field is None or key in names or plex_field(field).type != "tag":
                 continue

@@ -158,10 +158,12 @@
         <CollectionSchedule {editor} />
       {/if}
     </section>
-    <div class="form-row" role="group" aria-label="Save">
+    <div class="actions-row" role="group" aria-label="Save">
+      {#if editor.blocker}<span class="hint actions-start" role="status">{editor.blocker}</span
+        >{/if}
       <PendingButton
         type="submit"
-        class="btn btn-primary"
+        class="btn btn-primary default-submit"
         title={editor.blocker ?? "Save in Overture without changing the server"}
         pending={editor.busy}
         pendingLabel={syncing ? undefined : "Saving..."}
@@ -180,12 +182,15 @@
       >
         {onServer ? "Save and Sync" : "Save and Create"}
       </PendingButton>
-      {#if editor.blocker}<span class="hint" role="status">{editor.blocker}</span>{/if}
     </div>
   </form>
 </WorkflowSections>
 
 <style>
+  /* Enter submits with the first button, so Save comes first and sits last, in the corner. */
+  .actions-row :global(.default-submit) {
+    order: 1;
+  }
   form {
     display: flex;
     flex-direction: column;

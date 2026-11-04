@@ -306,6 +306,7 @@ class ItemReconciler:
 def apply_server_metadata(item: MediaItem, server_item: ServerItem) -> None:
     """Copy the metadata the server owns, which collection criteria evaluate."""
     item.server_added_at = server_item.server_added_at
+    item.sort_title = server_item.sort_title
     item.studio = server_item.studio
     item.genres = list(server_item.genres)
     item.actors = list(server_item.actors)
@@ -319,7 +320,7 @@ def apply_server_metadata(item: MediaItem, server_item: ServerItem) -> None:
     item.critic_rating = server_item.critic_rating
     item.audience_rating = server_item.audience_rating
     item.user_rating = server_item.user_rating
-    item.duration_minutes = server_item.duration_minutes
+    item.duration_seconds = server_item.duration_seconds
     item.plays = server_item.plays
     item.last_played_at = server_item.last_played_at
     item.unplayed = server_item.unplayed

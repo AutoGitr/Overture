@@ -39,7 +39,7 @@ media server's asset naming scheme.
   a duration limit, or paste a YouTube link. Save as MP3 with optional loudness
   normalization.
 - **Collections that maintain themselves.** Build Plex, Jellyfin and Emby
-  collections from criteria, TMDB franchises and lists, MDBList lists, people
+  collections from criteria, TMDB franchises and lists, MDBList lists and franchises, people
   and presets, or one per decade, genre or studio. Overture keeps them in sync
   on a schedule and can request missing titles from Radarr or Sonarr.
 - **Everything on one page.** The library, artwork, themes and every tool share

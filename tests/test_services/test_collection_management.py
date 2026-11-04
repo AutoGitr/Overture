@@ -471,9 +471,18 @@ def where(
     )
 
 
+#: The collection policy these tests are written against.
+_POLICY = {
+    "collection_minimum_items": 1,
+    "collection_delete_below_minimum": False,
+    "collection_delete_when_inactive": False,
+    "collection_sync_enabled": True,
+}
+
+
 def settings_row(**values: object) -> AppSettings:
     """The settings row, with groups optional unless a test asks for them."""
-    return AppSettings.model_validate({"id": 1, **values})
+    return AppSettings.model_validate({"id": 1, **_POLICY, **values})
 
 
 #: Criteria no title matches, for a collection that starts empty.
@@ -522,6 +531,7 @@ async def manager(database: Database, app_config: Settings) -> Manager:
                 media_type=MediaType.MOVIE,
                 title=title,
                 year=year,
+                release_date=f"{year}-06-01",
                 tmdb_id=11 + index,
                 server_item_id=f"m{index}",
                 library_id="movies",
@@ -3375,3 +3385,25 @@ async def test_unmanaged_collections_accept_only_adoption(
         )
     )
     assert again.errors == {identity: "Overture already manages it"}
+
+
+async def test_every_set_preset_previews(manager: Manager) -> None:
+    for preset in await manager.service.presets.available(MediaType.MOVIE):
+        if preset.set is None:
+            continue
+        generator = CollectionGenerator.model_validate(
+            {**preset.set.generator.model_dump(), "library_ids": ["movies"]}
+        )
+        await manager.service.sets.preview(
+            CollectionSetPreview(media_type=MediaType.MOVIE, generator=generator)
+        )
+
+
+async def test_plex_lists_resolutions_as_the_keys_sync_stores(manager: Manager) -> None:
+    manager.provider.choices = {"episode.resolution": [("4k", "4K"), ("1080", "1080p")]}
+
+    values = await manager.service.discovery.field_values(
+        MediaType.SHOW, "shows", FilterField.RESOLUTION
+    )
+
+    assert [value.value for value in values] == ["1080", "4k"]

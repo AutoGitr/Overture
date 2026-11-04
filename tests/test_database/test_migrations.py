@@ -228,3 +228,32 @@ def test_every_model_check_constraint_exists_at_head() -> None:
         if isinstance(constraint, CheckConstraint)
     }
     assert declared == migrated
+
+
+def test_stored_minutes_become_seconds_and_back() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "d55c703635bb")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "genres, actors, writers, producers, countries, labels, "
+                "origin_countries, tmdb_keywords, companies, networks, streaming, "
+                "theme_provenance_cleared, duration_minutes) VALUES (1, 'movie', "
+                "'Movie', 1, '[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', "
+                "'[]', '[]', 0, 117)"
+            )
+
+            command.upgrade(config, "7fc9ce3c2813")
+            assert conn.exec_driver_sql(
+                "SELECT duration_seconds, sort_title FROM media_items"
+            ).all() == [(7020, None)]
+
+            command.downgrade(config, "d55c703635bb")
+            assert conn.exec_driver_sql(
+                "SELECT duration_minutes FROM media_items"
+            ).all() == [(117,)]
+    finally:
+        engine.dispose()

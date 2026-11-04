@@ -21,11 +21,11 @@ lazy from .criteria import field_value
 lazy from .fields import (
     DIMENSIONS,
     FIELDS,
-    OPERATORS,
     available_orders,
     dimension_available,
     field_available,
     field_label,
+    field_operators,
     smart_only_dimension,
 )
 lazy from .membership import Membership
@@ -88,7 +88,10 @@ class CollectionDiscovery:
                         field=field,
                         label=field_label(field, server),
                         kind=spec.kind,
-                        operators=list(OPERATORS[spec.kind]),
+                        operators=list(field_operators(field, smart=False)),
+                        smart_operators=list(field_operators(field, smart=True))
+                        if smart
+                        else [],
                         local=local,
                         smart=smart,
                     )
@@ -174,8 +177,8 @@ class CollectionDiscovery:
             counts.update(
                 dict.fromkeys(
                     (
-                        title
-                        for _, title in await self._access.provider().filter_choices(
+                        plex.value_of(key, title)
+                        for key, title in await self._access.provider().filter_choices(
                             library_id, media_type, plex.key_for(media_type)
                         )
                     ),

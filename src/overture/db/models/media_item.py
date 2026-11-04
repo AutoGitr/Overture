@@ -17,6 +17,8 @@ class MediaItemBase(SQLModel):
 
     media_type: MediaType = Field(sa_type=enum_type(MediaType), index=True)
     title: str = Field(nullable=False, index=True)
+    #: The server's sort title, which orders titles as the server does.
+    sort_title: str | None = None
     year: int | None = None
     tmdb_id: int | None = Field(default=None, index=True)
     tvdb_id: int | None = None
@@ -59,7 +61,7 @@ class MediaItemBase(SQLModel):
     critic_rating: float | None = None
     audience_rating: float | None = None
     user_rating: float | None = None
-    duration_minutes: int | None = None
+    duration_seconds: int | None = None
     #: Play state of the account Overture uses on the media server.
     plays: int | None = None
     last_played_at: datetime | None = None

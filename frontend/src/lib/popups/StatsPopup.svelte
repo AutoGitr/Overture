@@ -138,14 +138,14 @@
   {/if}
 
   {#snippet footer()}
-    <button type="button" class="btn btn-secondary" onclick={() => uiState.closePopup()}>
-      Close
-    </button>
     {#if data}
-      <span class="stats-timestamp">
+      <span class="stats-timestamp actions-start">
         Updated {formatDateInTimezone(data.generated_at, "UTC")}
       </span>
     {/if}
+    <button type="button" class="btn btn-secondary" onclick={() => uiState.closePopup()}>
+      Close
+    </button>
   {/snippet}
 </PopupShell>
 

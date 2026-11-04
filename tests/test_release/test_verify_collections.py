@@ -15,6 +15,7 @@ _GENRE = {
     "label": "Genre",
     "kind": "tag",
     "operators": ["is"],
+    "smart_operators": ["is"],
     "local": True,
     "smart": True,
 }
@@ -62,7 +63,14 @@ _MOVIES: dict[str, Any] = {
         _collection(5, "Scary", managed=True),
         _collection(6, "Frights", managed=False),
     ],
-    "/api/collections/5": {"rule": {"criteria": {"conditions": [{"kind": "field"}]}}},
+    # The detail reports the rule's outcome, which a preview does not take.
+    "/api/collections/5": {
+        "rule": {
+            "criteria": {"conditions": [{"kind": "field"}]},
+            "last_synced_at": None,
+            "source_summary": None,
+        }
+    },
     # Plex names the genre as it lists it, not as the editor offers it.
     "/api/collections/6/adopt": {
         "rule": {
@@ -120,7 +128,9 @@ def requests(monkeypatch: pytest.MonkeyPatch) -> Requests:
 
 
 def _args(report: Path | None, *urls: str) -> Any:
-    return module.argparse.Namespace(urls=list(urls), report=report, sources=None)
+    return module.argparse.Namespace(
+        urls=list(urls), report=report, sources=None, plex=None
+    )
 
 
 async def test_a_run_checks_each_instance_in_turn_and_reports_the_problems(
@@ -156,6 +166,12 @@ async def test_a_run_checks_each_instance_in_turn_and_reports_the_problems(
     assert "Genre 'horror' is offered as 'Horror'" in text
     # A managed collection previews to fewer members than the server holds.
     assert "| collection | Scary (regular) | 1 |  | 3 |" in text
+    saved = [
+        body["rule"]
+        for _, path, body in requests
+        if path == "/api/collections/preview" and "kind" in str(body)
+    ]
+    assert all("last_synced_at" not in rule for rule in saved)
     assert "Set TMDB_API_KEY" in text
     assert "| set | Genres |" in text
     assert "Custom" not in text
@@ -186,3 +202,40 @@ async def test_a_run_needs_an_api_key_for_each_instance(
     monkeypatch.setenv("OVERTURE_API_KEY", "a,b,c")
     with pytest.raises(SystemExit, match="one per address"):
         await module.run(_args(None, "http://plex.test", "http://jellyfin.test"))
+
+
+async def test_plex_fields_overture_lacks_are_problems(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def plex(request: httpx2.Request) -> httpx2.Response:
+        assert request.headers["X-Plex-Token"] == "token"
+        if request.url.path == "/library/sections":
+            directories = [{"key": "1", "type": "show", "title": "TV"}]
+            return httpx2.Response(
+                200, json={"MediaContainer": {"Directory": directories}}
+            )
+        types = [
+            {
+                "type": "2",
+                "Filter": [{"filter": "genre"}, {"filter": "unwatchedLeaves"}],
+                "Field": [{"key": "show.title"}, {"key": "show.originalTitle"}],
+                "Sort": [{"key": "titleSort"}, {"key": "episode.addedAt"}],
+            },
+            {"type": "4", "Field": [{"key": "episode.resolution"}, {"key": "year"}]},
+        ]
+        return httpx2.Response(200, json={"MediaContainer": {"Directory": types}})
+
+    original = httpx2.AsyncClient
+
+    def client(**kwargs: Any) -> httpx2.AsyncClient:
+        return original(transport=httpx2.MockTransport(plex), **kwargs)
+
+    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+
+    cases = await module.verify_plex_fields("http://plex.test", "token")
+
+    assert [(case.check, case.label) for case in cases] == [
+        ("plex field", "originalTitle"),
+        ("plex sort", "episode.addedAt"),
+        ("plex field", "episode.year"),
+    ]

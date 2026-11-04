@@ -68,7 +68,7 @@ class JellyfinClient(MediaServerHttpClient):
     #: get_people fetches on change.
     _ITEM_FIELDS: ClassVar[str] = (
         "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
-        "Tags,ProductionLocations,Width"
+        "Tags,ProductionLocations,Width,SortName"
     )
     #: The DTO field a metadata update reads the sort name from.
     _SORT_NAME_FIELD: ClassVar[str] = "ForcedSortName"

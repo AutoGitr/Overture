@@ -1,10 +1,14 @@
+import { createContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 import { readJson, writeJson } from "../utils/storage";
 
-const STORAGE_KEY = "sections_open";
+const STORAGE_KEY = "sections_open_by_view";
+
+/** Names the view collapsible sections are shown in. */
+export const [getSectionView, setSectionView] = createContext<string>();
 
 /**
- * Which collapsible sections the user opened or closed, by title.
+ * Which collapsible sections the user opened or closed, by view and title.
  *
  * The choice outlives the component: a section remounted by navigation, a
  * refetch or a keyed block, or given a new default, keeps it.
@@ -14,13 +18,13 @@ class SectionState {
     Object.entries(readJson<Record<string, boolean>>(STORAGE_KEY, {})),
   );
 
-  /** Whether *title* is open; *fallback* until the user has chosen. */
-  isOpen(title: string, fallback: boolean): boolean {
-    return this.#open.get(title) ?? fallback;
+  /** Whether *title* is open in *view*; *fallback* until the user has chosen. */
+  isOpen(view: string, title: string, fallback: boolean): boolean {
+    return this.#open.get(`${view}/${title}`) ?? fallback;
   }
 
-  setOpen(title: string, open: boolean) {
-    this.#open.set(title, open);
+  setOpen(view: string, title: string, open: boolean) {
+    this.#open.set(`${view}/${title}`, open);
     writeJson(STORAGE_KEY, Object.fromEntries(this.#open));
   }
 
