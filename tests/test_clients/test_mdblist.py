@@ -96,16 +96,23 @@ async def test_missing_key_is_actionable_without_a_network_request(
             "https://mdblist.com/lists/linaspurinis/top-watched",
             "linaspurinis/top-watched",
         ),
-        ("https://mdblist.com/franchises/the-matrix/", "system/the-matrix"),
-        (
-            "https://www.mdblist.com/franchises/star-wars-universe",
-            "system/star-wars-universe",
-        ),
         ("236084", "236084"),
     ],
 )
-def test_lists_and_franchises_resolve_to_api_lists(value: str, identifier: str) -> None:
+def test_lists_resolve_to_api_lists(value: str, identifier: str) -> None:
     assert mdblist_identifier(value) == identifier
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://mdblist.com/franchises/marvel-cinematic-universe/",
+        "https://mdblist.com/franchises/collection/234/",
+    ],
+)
+def test_franchise_pages_are_refused_with_what_works_instead(value: str) -> None:
+    with pytest.raises(ValueError, match="TMDB franchise condition"):
+        mdblist_identifier(value)
 
 
 def test_official_lists_are_refused_by_name() -> None:

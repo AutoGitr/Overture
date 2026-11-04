@@ -462,7 +462,20 @@ class DimensionSpec:
     title_format: str = "{value}"
     #: Order values as numbers, newest first, rather than alphabetically.
     numeric: bool = False
+    #: What a new set starts with: only the most common values, the text each
+    #: value's name drops, and the size and order its collections default to.
+    top: int | None = None
+    strip_prefix: str = ""
+    strip_suffix: str = ""
+    minimum_items: int | None = None
+    order_type: CollectionOrder | None = None
 
+
+#: Sets of people, studios and other long-tailed values keep the most common.
+_TOP = 25
+#: The fewest titles a person's or studio's collection, or a rarer value's, needs.
+_PEOPLE = 3
+_FEW = 5
 
 DIMENSIONS: frozendict[SetDimension, DimensionSpec] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -471,34 +484,71 @@ DIMENSIONS: frozendict[SetDimension, DimensionSpec] = frozendict(
         ),
         SetDimension.YEAR: DimensionSpec("Years", FilterField.YEAR, numeric=True),
         SetDimension.GENRE: DimensionSpec("Genres", FilterField.GENRE),
-        SetDimension.STUDIO: DimensionSpec("Studios", FilterField.STUDIO),
+        SetDimension.STUDIO: DimensionSpec(
+            "Studios", FilterField.STUDIO, top=_TOP, minimum_items=_PEOPLE
+        ),
         SetDimension.COUNTRY: DimensionSpec("Countries", FilterField.COUNTRY),
         SetDimension.CONTENT_RATING: DimensionSpec(
             "Content ratings", FilterField.CONTENT_RATING
         ),
         SetDimension.RESOLUTION: DimensionSpec("Resolutions", FilterField.RESOLUTION),
         SetDimension.LABEL: DimensionSpec("Labels", FilterField.LABEL),
-        SetDimension.ACTOR: DimensionSpec("Actors", FilterField.ACTOR),
-        SetDimension.DIRECTOR: DimensionSpec("Directors", FilterField.DIRECTOR),
-        SetDimension.WRITER: DimensionSpec("Writers", FilterField.WRITER),
-        SetDimension.PRODUCER: DimensionSpec("Producers", FilterField.PRODUCER),
-        SetDimension.FRANCHISE: DimensionSpec("TMDB franchises", None),
+        SetDimension.ACTOR: DimensionSpec(
+            "Actors", FilterField.ACTOR, top=_TOP, minimum_items=_PEOPLE
+        ),
+        SetDimension.DIRECTOR: DimensionSpec(
+            "Directors", FilterField.DIRECTOR, top=_TOP, minimum_items=_PEOPLE
+        ),
+        SetDimension.WRITER: DimensionSpec(
+            "Writers", FilterField.WRITER, top=_TOP, minimum_items=_PEOPLE
+        ),
+        SetDimension.PRODUCER: DimensionSpec(
+            "Producers", FilterField.PRODUCER, top=_TOP, minimum_items=_PEOPLE
+        ),
+        SetDimension.FRANCHISE: DimensionSpec(
+            "TMDB franchises",
+            None,
+            strip_prefix="The ",
+            strip_suffix=" Collection",
+            minimum_items=2,
+            order_type=CollectionOrder.RELEASE_ASC,
+        ),
         SetDimension.EDITION: DimensionSpec("Editions", FilterField.EDITION),
-        SetDimension.NETWORK: DimensionSpec("Networks", FilterField.NETWORK),
+        SetDimension.NETWORK: DimensionSpec(
+            "Networks", FilterField.NETWORK, top=_TOP, minimum_items=_PEOPLE
+        ),
         SetDimension.ORIGINAL_LANGUAGE: DimensionSpec(
-            "Original languages", FilterField.ORIGINAL_LANGUAGE
+            "Original languages", FilterField.ORIGINAL_LANGUAGE, minimum_items=_FEW
         ),
         SetDimension.ORIGIN_COUNTRY: DimensionSpec(
-            "Origin countries", FilterField.ORIGIN_COUNTRY
+            "Origin countries", FilterField.ORIGIN_COUNTRY, minimum_items=_FEW
         ),
         SetDimension.STREAMING: DimensionSpec(
-            "Streaming services", FilterField.STREAMING
+            "Streaming services", FilterField.STREAMING, minimum_items=_FEW
         ),
         SetDimension.AUDIO_LANGUAGE: DimensionSpec(
-            "Audio languages", FilterField.AUDIO_LANGUAGE
+            "Audio languages", FilterField.AUDIO_LANGUAGE, minimum_items=_FEW
         ),
         SetDimension.SUBTITLE_LANGUAGE: DimensionSpec(
-            "Subtitle languages", FilterField.SUBTITLE_LANGUAGE
+            "Subtitle languages", FilterField.SUBTITLE_LANGUAGE, minimum_items=_FEW
+        ),
+        SetDimension.VIDEO_CODEC: DimensionSpec(
+            "Video codecs", FilterField.VIDEO_CODEC
+        ),
+        SetDimension.AUDIO_CODEC: DimensionSpec(
+            "Audio codecs", FilterField.AUDIO_CODEC
+        ),
+        SetDimension.AUDIO_LAYOUT: DimensionSpec(
+            "Audio channels", FilterField.AUDIO_LAYOUT
+        ),
+        SetDimension.COMPANY: DimensionSpec(
+            "Production companies", FilterField.COMPANY, top=_TOP, minimum_items=_PEOPLE
+        ),
+        SetDimension.TMDB_KEYWORD: DimensionSpec(
+            "TMDB keywords", FilterField.TMDB_KEYWORD, top=_TOP, minimum_items=_FEW
+        ),
+        SetDimension.SHOW_STATUS: DimensionSpec(
+            "Show statuses", FilterField.SHOW_STATUS
         ),
         SetDimension.CUSTOM: DimensionSpec("Custom", None),
     }

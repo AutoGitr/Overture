@@ -2,6 +2,7 @@ import { DEFAULT_APP_SETTINGS } from "../../generated/settings";
 import type { JobLogFeed } from "../../lib/stores/jobLogFeed.svelte";
 import type {
   AppSettingsRead,
+  CollectionDimensionRead,
   ArtCandidate,
   ArtMatchResponse,
   BulkAssetsScheduleResponse,
@@ -230,6 +231,22 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
 }
 
 /** What Plex offers movie collections, as the backend describes it. */
+export function dimension(
+  overrides: Partial<CollectionDimensionRead> &
+    Pick<CollectionDimensionRead, "dimension" | "label">,
+): CollectionDimensionRead {
+  return {
+    title_format: "{value}",
+    smart_only: false,
+    top: null,
+    strip_prefix: "",
+    strip_suffix: "",
+    minimum_items: null,
+    order_type: null,
+    ...overrides,
+  };
+}
+
 export function collectionCapabilities(
   overrides: Partial<CollectionCapabilities> = {},
 ): CollectionCapabilities {
@@ -318,15 +335,17 @@ export function collectionCapabilities(
       },
     ],
     dimensions: [
-      { dimension: "decade", label: "Decades", title_format: "{value}s", smart_only: false },
-      { dimension: "genre", label: "Genres", title_format: "{value}", smart_only: false },
-      {
+      dimension({ dimension: "decade", label: "Decades", title_format: "{value}s" }),
+      dimension({ dimension: "genre", label: "Genres" }),
+      dimension({
         dimension: "franchise",
         label: "TMDB franchises",
-        title_format: "{value}",
-        smart_only: false,
-      },
-      { dimension: "custom", label: "Custom", title_format: "{value}", smart_only: false },
+        strip_prefix: "The ",
+        strip_suffix: " Collection",
+        minimum_items: 2,
+        order_type: "release.asc",
+      }),
+      dimension({ dimension: "custom", label: "Custom" }),
     ],
     member_labels: true,
     arr: true,
@@ -374,6 +393,7 @@ export function catalogDetail(overrides: Partial<CatalogEntryDetail> = {}): Cata
     entry_key: "tmdb-348",
     entry: catalogEntry(),
     draft: null,
+    draft_issue: null,
     library_item_id: null,
     library_collection_id: null,
     ...overrides,

@@ -39,6 +39,7 @@ lazy from ...utils.art_urls import art_preview_url, refused_art_host
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from .issue import contribution_issue
 
 type Entry = dict[str, Any]
 
@@ -55,7 +56,9 @@ def _draft_entries(
     }
 
 
-def _item_entry(item: PublicDatasetItem, season_posters: dict[int, str]) -> Entry:
+def catalog_item_entry(
+    item: PublicDatasetItem, season_posters: dict[int, str]
+) -> Entry:
     """Return a stored movie or show as the contract spells the entry."""
     entry: Entry = {
         name: getattr(item, name)
@@ -72,7 +75,7 @@ def _item_entry(item: PublicDatasetItem, season_posters: dict[int, str]) -> Entr
     return entry
 
 
-def _collection_entry(collection: PublicDatasetCollection) -> Entry:
+def catalog_collection_entry(collection: PublicDatasetCollection) -> Entry:
     """Return a stored collection as the contract spells the entry."""
     entry: Entry = {
         name: CatalogMediaType.COLLECTION.value
@@ -173,7 +176,8 @@ class CatalogBrowser:
             catalog = PublicDatasetRepository(session)
             if media_type is CatalogMediaType.COLLECTION:
                 entries = [
-                    _collection_entry(row) for row in await catalog.list_collections()
+                    catalog_collection_entry(row)
+                    for row in await catalog.list_collections()
                 ]
             else:
                 items = await catalog.list_items(MediaType(media_type))
@@ -181,7 +185,8 @@ class CatalogBrowser:
                     {item.id for item in items if item.id is not None}
                 )
                 entries = [
-                    _item_entry(item, posters.get(item.id or 0, {})) for item in items
+                    catalog_item_entry(item, posters.get(item.id or 0, {}))
+                    for item in items
                 ]
             drafts = await PublicDatasetDraftRepository(session).list_all()
             links = await self._library_links(session, media_type)
@@ -201,7 +206,7 @@ class CatalogBrowser:
             drafts = await PublicDatasetDraftRepository(session).list_all()
         drafted = _draft_entries(drafts, CatalogMediaType.MOVIE)
         return {
-            item.tmdb_id: self._row(_item_entry(item, {}), {}, drafted)
+            item.tmdb_id: self._row(catalog_item_entry(item, {}), {}, drafted)
             for item in items
             if item.tmdb_id is not None
         }
@@ -281,10 +286,10 @@ class CatalogBrowser:
                 else {}
             )
             if found:
-                return _collection_entry(next(iter(found.values())))
+                return catalog_collection_entry(next(iter(found.values())))
         elif item := await catalog.find_item(MediaType(media_type), field, value):
             seasons = await catalog.list_seasons(item.id or 0)
-            return _item_entry(
+            return catalog_item_entry(
                 item,
                 {s.season_num: s.poster_url for s in seasons if s.poster_url},
             )
@@ -302,6 +307,9 @@ class CatalogBrowser:
             entry_key=row.entry_key,
             entry=CatalogEntry.model_validate(entry),
             draft=CatalogEntry.model_validate(draft.entry) if draft else None,
+            draft_issue=contribution_issue(draft.entry, [], current=entry)
+            if draft
+            else None,
             library_item_id=row.library_item_id,
             library_collection_id=row.library_collection_id,
         )

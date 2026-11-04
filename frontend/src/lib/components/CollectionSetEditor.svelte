@@ -7,13 +7,14 @@
     LibrarySectionRead,
     MediaType,
   } from "../../generated/rest/types.gen";
-  import type { SetGenerator } from "../utils/collectionForms.svelte";
+  import { withDimension, type SetGenerator } from "../utils/collectionForms.svelte";
   import { emptyGroup, splitList } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PendingButton from "./PendingButton.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
+  import SetDimensionField from "./SetDimensionField.svelte";
 
   let {
     generator = $bindable(),
@@ -23,7 +24,7 @@
     capabilities,
     group,
     minimum,
-    titled = false,
+    standalone = false,
   }: {
     generator: SetGenerator;
     /** The libraries the set creates its collections in. */
@@ -34,8 +35,8 @@
     /** The group the set saves into, whose collections the preview matches. */
     group: string;
     minimum: number | null;
-    /** Edit the title template here, where no Setup section holds it. */
-    titled?: boolean;
+    /** Edit the dimension and title template here, where no Setup section holds them. */
+    standalone?: boolean;
   } = $props();
 
   const id = $props.id();
@@ -73,35 +74,12 @@
   }
 </script>
 
-<FieldRow
-  label="Split by"
-  for={`${id}-dimension`}
-  hint={dimension?.smart_only ? "Only Plex knows these values." : undefined}
->
-  <select
-    id={`${id}-dimension`}
+{#if standalone}
+  <SetDimensionField
     value={generator.dimension}
-    onchange={(event) => {
-      const chosen = dimensions.find((entry) => entry.dimension === event.currentTarget.value);
-      if (!chosen) return;
-      generator.dimension = chosen.dimension;
-      generator.title_format = chosen.title_format;
-      if (chosen.smart_only) generator.smart = true;
-      if (chosen.dimension === "custom" && !generator.custom_values?.length)
-        generator.custom_values = [{ name: "", criteria: emptyGroup() }];
-      if (chosen.dimension !== "custom") generator.custom_values = [];
-    }}
-  >
-    {#if !dimension}
-      <option value={generator.dimension} disabled>Unavailable here</option>
-    {/if}
-    {#each dimensions as entry (entry.dimension)}
-      <option value={entry.dimension}>{entry.label}{entry.smart_only ? " (Plex smart)" : ""}</option
-      >
-    {/each}
-  </select>
-</FieldRow>
-{#if titled}
+    {dimensions}
+    onchoose={(chosen) => Object.assign(generator, withDimension(generator, chosen))}
+  />
   <FieldRow
     label="Title template"
     for={`${id}-title`}

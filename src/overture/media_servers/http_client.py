@@ -177,7 +177,7 @@ class MediaServerHttpClient(ABC):
                 # The server answered: one request failed, not the server.
                 self.health.record(MediaServerState.REACHABLE)
                 return MediaServerError(
-                    "Media server returned an unsuccessful response",
+                    f"Media server returned an unsuccessful response (HTTP {status})",
                     upstream_status_code=status,
                 )
         error = MediaServerError(

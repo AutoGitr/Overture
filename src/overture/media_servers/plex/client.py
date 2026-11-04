@@ -973,10 +973,9 @@ class PlexClient(MediaServerHttpClient):
         self, collection_id: str, art_type: ArtType, image_bytes: bytes, mime_type: str
     ) -> None:
         """Upload bytes rather than asking Plex to fetch an arbitrary URL."""
-        endpoint = "art" if art_type is ArtType.BACKGROUND else "posters"
         await self._request(
             "POST",
-            f"/library/metadata/{collection_id}/{endpoint}",
+            f"/library/metadata/{collection_id}/{_ARTWORK_LISTING[art_type]}",
             content=image_bytes,
             headers={"Content-Type": mime_type},
         )

@@ -22,7 +22,7 @@ lazy from ...domain import (
     MediaType,
 )
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
-lazy from .fields import FIELDS, PlexField, order_field
+lazy from .fields import FIELDS, PlexField, PlexFieldType, order_field
 
 #: A key no Plex tag has, for names the section does not list.
 _MISSING_TAG = "-1"
@@ -236,6 +236,23 @@ def _group_pairs(
         if not nested.is_empty()
     )
     return _group(terms, "and" if group.mode == "all" else "or")
+
+
+def plex_operators(plex_type: PlexFieldType) -> frozenset[str]:
+    """The Plex operators Overture writes for a field type.
+
+    A boolean's *is not* is written as *is* of the other value, so Plex's
+    ``!=`` is covered as well.
+    """
+    match plex_type:
+        case "string":
+            return frozenset(_STRING_OPERATORS.values())
+        case "integer" | "float":
+            return frozenset(_NUMBER_OPERATORS.values())
+        case "tag" | "boolean":
+            return frozenset({"=", "!="})
+        case "date":
+            return frozenset({">>=", "<<="})
 
 
 def plex_sort(order: CollectionOrder) -> str:

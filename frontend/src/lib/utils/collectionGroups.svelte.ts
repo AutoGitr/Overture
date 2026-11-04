@@ -5,7 +5,7 @@ import {
   renameCollectionGroupMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionGroupDelete, MediaType } from "../../generated/rest/types.gen";
-import { chooseAction, createNotifier } from "../stores/notificationState.svelte";
+import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
 /** Actions for the selected group; the popup owns which group is selected. */
@@ -19,6 +19,8 @@ export class CollectionGroupActions {
     private readonly mediaType: () => MediaType,
     /** The other groups its collections can move to. */
     private readonly others: () => string[],
+    /** How many collections the group holds, or null until that is known. */
+    private readonly members: () => number | null,
   ) {}
   get busy() {
     return this.renameRequest.isPending || this.deleteRequest.isPending;
@@ -41,9 +43,41 @@ export class CollectionGroupActions {
       return null;
     }
   }
-  /** Ask what happens to its collections, then delete the group. */
+  /** Ask what happens to its collections, if it has any, then delete the group. */
   async delete(): Promise<boolean> {
     if (this.busy) return false;
+    const body = this.members() === 0 ? await this.confirmEmpty() : await this.chooseScope();
+    if (!body) return false;
+    try {
+      const result = await this.deleteRequest.mutateAsync({
+        query: { name: this.group(), media_type: this.mediaType() },
+        body,
+      });
+      const errors = Object.values(result.errors);
+      if (errors.length) {
+        this.feedback.error(
+          `The group was kept because ${errors.length} collection operations failed: ${errors.join("; ")}`,
+        );
+        return false;
+      }
+      this.feedback.success("Group deleted.");
+      return true;
+    } catch (error) {
+      this.feedback.error(errorMessage(error, "Could not delete group"));
+      return false;
+    }
+  }
+  /** An empty group has no collections to decide about. */
+  private async confirmEmpty(): Promise<CollectionGroupDelete | null> {
+    const confirmed = await confirmAction({
+      title: `Delete group "${this.group()}"?`,
+      message: "It holds no collections; only its defaults are removed.",
+      confirmLabel: "Delete group",
+      destructive: true,
+    });
+    return confirmed ? { collections: "keep", group: null } : null;
+  }
+  private async chooseScope(): Promise<CollectionGroupDelete | null> {
     const options: { body: CollectionGroupDelete; label: string; description?: string }[] = [
       { body: { collections: "keep", group: null }, label: "Move them to Ungrouped" },
       ...this.others().map((group) => ({
@@ -67,26 +101,7 @@ export class CollectionGroupActions {
       destructive: true,
       choices: options.map(({ label, description }) => ({ value: label, label, description })),
     });
-    const body = options.find((option) => option.label === chosen)?.body;
-    if (!body) return false;
-    try {
-      const result = await this.deleteRequest.mutateAsync({
-        query: { name: this.group(), media_type: this.mediaType() },
-        body,
-      });
-      const errors = Object.values(result.errors);
-      if (errors.length) {
-        this.feedback.error(
-          `The group was kept because ${errors.length} collection operations failed: ${errors.join("; ")}`,
-        );
-        return false;
-      }
-      this.feedback.success("Group deleted.");
-      return true;
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Could not delete group"));
-      return false;
-    }
+    return options.find((option) => option.label === chosen)?.body ?? null;
   }
 }
 

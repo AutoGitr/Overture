@@ -1,3 +1,4 @@
+import { alphabetical } from "./alphabetical";
 import { countOf } from "./plural";
 import {
   ASPECT_RATIOS,
@@ -527,11 +528,17 @@ export const THEME_SOURCE_LABELS: Record<ThemeSource, string> = {
   metadata_url: "Other file link",
   selection: "Selected",
 };
-export const THEME_SOURCES = keysOf(THEME_SOURCE_LABELS);
+export const THEME_SOURCES = alphabetical(
+  keysOf(THEME_SOURCE_LABELS),
+  (source) => THEME_SOURCE_LABELS[source],
+);
 
 /** Where an item's selected artwork comes from; OvertureDB's catalog art counts as its own. */
 export const ART_SOURCE_LABELS: Record<ArtSource, string> = SELECTED_ART_SOURCE_LABELS;
-export const ART_SOURCES = keysOf(ART_SOURCE_LABELS);
+export const ART_SOURCES = alphabetical(
+  keysOf(ART_SOURCE_LABELS),
+  (source) => ART_SOURCE_LABELS[source],
+);
 
 /** Which of a row's artwork the art source filter looks at. */
 export const ART_SOURCE_SLOTS = {
@@ -581,7 +588,10 @@ export const METADATA_ISSUE_CHECKS: Record<MetadataIssue, MetadataIssueCheck> = 
     library: (item) => item.public_dataset_ids === "mismatching",
   },
 };
-export const METADATA_ISSUES = keysOf(METADATA_ISSUE_CHECKS);
+export const METADATA_ISSUES = alphabetical(
+  keysOf(METADATA_ISSUE_CHECKS),
+  (flag) => METADATA_ISSUE_CHECKS[flag].label,
+);
 
 /** Whether *flag* can be checked in the list: OvertureDB's issues need it enabled. */
 function issueAvailable(

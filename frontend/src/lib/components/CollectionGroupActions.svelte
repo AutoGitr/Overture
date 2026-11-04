@@ -1,6 +1,9 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { listCollectionGroupsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import {
+    listCollectionGroupsOptions,
+    listCollectionsOptions,
+  } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { MediaType } from "../../generated/rest/types.gen";
 
   import { CollectionGroupActions } from "../utils/collectionGroups.svelte";
@@ -23,9 +26,17 @@
     () => group,
     () => mediaType,
     () => others,
+    () => members,
   );
   const groups = createQuery(() =>
     listCollectionGroupsOptions({ query: { media_type: mediaType } }),
+  );
+  const collections = createQuery(() =>
+    listCollectionsOptions({ query: { media_type: mediaType } }),
+  );
+  let members = $derived(
+    collections.data?.filter((row) => row.managed && row.collection_group === group).length ??
+      null,
   );
   const id = $props.id();
   let others = $derived((groups.data ?? []).filter((name) => name !== group));

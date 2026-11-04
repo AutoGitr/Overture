@@ -1,17 +1,15 @@
-import { createMutation, createQuery } from "@tanstack/svelte-query";
+import { createMutation, createQuery, keepPreviousData } from "@tanstack/svelte-query";
 import { UNGROUPED_GROUP } from "../../generated/settings";
 import { SvelteSet } from "svelte/reactivity";
 import {
   createCollectionMutation,
   deleteCollectionMutation,
-  deleteCollectionPresetMutation,
   orphanCollectionMutation,
   getCollectionCapabilitiesOptions,
   getCollectionDefaultsOptions,
   getCollectionGroupPolicyOptions,
-  listCollectionPresetsOptions,
   previewCollectionMutation,
-  saveCollectionPresetMutation,
+  recommendCollectionKindOptions,
   saveCollectionGroupPolicyMutation,
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
@@ -21,6 +19,7 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   CollectionDetail,
+  CollectionDimensionRead,
   DeleteCollectionData,
   CollectionFiltering,
   CollectionGeneratorInput,
@@ -28,8 +27,6 @@ import type {
   CollectionOptions,
   CollectionGroupPolicyInput,
   CollectionOrder,
-  CollectionPresetRead,
-  CollectionPresetSave,
   CollectionRuleWriteInput,
   FilterGroupInput,
   LibrarySectionRead,
@@ -37,11 +34,7 @@ import type {
   MediaType,
   TmdbCollectionResponse,
 } from "../../generated/rest/types.gen";
-import {
-  patchCollectionRule,
-  refreshCollectionPresets,
-  storeCollectionDetail,
-} from "../rest/cache";
+import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
 import type { PolicyData } from "../components/CollectionPolicyFields.svelte";
 import type { ScheduleData } from "../components/CollectionScheduleFields.svelte";
 import { queryClient } from "../rest/queryClient";
@@ -97,6 +90,28 @@ export function defaultRule(): CollectionRuleWriteInput {
 export type SetGenerator = CollectionGeneratorInput & { criteria: FilterGroupInput };
 /** The defaults a set's group gives its collections. */
 export type SetPolicy = Omit<CollectionGroupPolicyInput, "generator">;
+
+/** A generator split by *dimension*, starting with what the dimension starts sets with. */
+export function withDimension(
+  generator: SetGenerator,
+  dimension: CollectionDimensionRead,
+): SetGenerator {
+  return {
+    ...generator,
+    dimension: dimension.dimension,
+    title_format: dimension.title_format,
+    top: dimension.top,
+    strip_prefix: dimension.strip_prefix,
+    strip_suffix: dimension.strip_suffix,
+    smart: dimension.smart_only || generator.smart,
+    custom_values:
+      dimension.dimension === "custom"
+        ? generator.custom_values?.length
+          ? generator.custom_values
+          : [{ name: "", criteria: emptyGroup() }]
+        : [],
+  };
+}
 
 export function defaultGenerator(libraryIds: string[] = []): SetGenerator {
   return {
@@ -205,7 +220,7 @@ export class CollectionEditor {
 
   memberSearch = $state("");
   draggingMemberId = $state<number | null>(null);
-  readonly preview = new CriteriaPreview(() => this);
+  readonly preview: CriteriaPreview;
 
   private readonly updateRequest = createMutation(() => updateCollectionMutation());
   private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
@@ -233,6 +248,8 @@ export class CollectionEditor {
       } = saved;
       this.rule = structuredClone(rest);
     }
+    // Last: its query reads the form as soon as it is created.
+    this.preview = new CriteriaPreview(() => this);
   }
 
   get collection() {
@@ -442,12 +459,10 @@ export class CollectionEditor {
 export class CollectionDraft {
   readonly defaults;
   readonly capabilities;
-  readonly presets;
   readonly creating = true;
   readonly manualMembersAllowed = false;
   readonly generated = false;
   kind = $state<DraftKind>("collection");
-  presetKey = $state("");
   title = $derived.by(() => this.seed()?.title ?? "");
   sortTitleFormat = $state("");
   collectionGroup = $state("");
@@ -478,7 +493,7 @@ export class CollectionDraft {
   );
   /** One library, or several: a collection in several libraries is kept alike in each. */
   libraryIds = $derived<string[]>(this.onlyLibrary);
-  readonly preview = new CriteriaPreview(() => this);
+  readonly preview: CriteriaPreview;
   readonly request = createMutation(() => createCollectionMutation());
   private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
   private readonly syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
@@ -495,9 +510,8 @@ export class CollectionDraft {
       }),
     );
     this.capabilities = capabilitiesQuery(() => this.mediaType);
-    this.presets = createQuery(() =>
-      listCollectionPresetsOptions({ query: { media_type: this.mediaType } }),
-    );
+    // Last: its query reads the form as soon as it is created.
+    this.preview = new CriteriaPreview(() => this);
   }
 
   get serverType() {
@@ -543,34 +557,28 @@ export class CollectionDraft {
 
   selectKind(kind: DraftKind) {
     this.kind = kind;
-    this.presetKey = "";
+    const dimension = this.dimensions.find((entry) => entry.dimension === this.generator.dimension);
+    if (kind === "set" && dimension && !this.collectionGroup) this.chooseDimension(dimension);
   }
 
-  /** Start from a preset of either kind: it fills the form, which stays editable. */
-  applyPreset(preset: CollectionPresetRead | undefined) {
-    this.presetKey = preset?.key ?? "";
-    if (preset) this.kind = preset.set ? "set" : "collection";
-    if (preset?.collection) {
-      const saved = preset.collection.rule;
-      this.title = preset.collection.title;
-      this.collectionFiltering = preset.collection.collection_filtering;
-      this.orderType = saved.order_type;
-      this.sortTitleFormat = saved.sort_title_format ?? "";
-      this.summaryFormat = saved.summary_format ?? "";
-      this.activeStartMmdd = saved.active_start_mmdd ?? "";
-      this.activeEndMmdd = saved.active_end_mmdd ?? "";
-      this.deleteWhenInactive = saved.delete_when_inactive;
-      // A writable derived holds what it is given, so the copy is made deeply reactive.
-      const rule = $state({ ...defaultRule(), ...structuredClone(saved) });
-      this.rule = rule;
-    } else if (preset?.set) {
-      this.collectionGroup = preset.set.group;
-      this.setPolicy = structuredClone(preset.set.policy);
-      this.generator = {
-        ...defaultGenerator(this.libraryIds),
-        ...structuredClone(preset.set.generator),
-      };
-    }
+  get dimensions() {
+    return this.capabilities.data?.dimensions ?? [];
+  }
+
+  /**
+   * Split the set by a dimension: it names the group, unless one was typed,
+   * and starts the set and its collections with the dimension's defaults.
+   */
+  chooseDimension(dimension: CollectionDimensionRead) {
+    const previous = this.dimensions.find((entry) => entry.dimension === this.generator.dimension);
+    if (!this.collectionGroup.trim() || this.collectionGroup === previous?.label)
+      this.collectionGroup = dimension.label;
+    this.generator = withDimension(this.generator, dimension);
+    this.setPolicy = {
+      ...this.setPolicy,
+      minimum_items: dimension.minimum_items,
+      order_type: dimension.order_type,
+    };
   }
 
   /** Save in Overture; with `sync`, then create it on the server. */
@@ -581,7 +589,7 @@ export class CollectionDraft {
 
   private async saveCollection(sync: boolean) {
     if (this.linked) {
-      const rule = presetRule(this);
+      const rule = linkedRule(this);
       const { criteria, smart, limit: _limit, ...policy } = rule;
       return this.saveSet(sync, {
         group: this.collectionGroup.trim() || this.title.trim(),
@@ -665,8 +673,8 @@ export class CollectionDraft {
   }
 }
 
-/** The rule a preset or a linked set keeps: criteria with every chosen setting. */
-function presetRule(form: CollectionForm): CollectionRuleWriteInput {
+/** The rule a linked set keeps: criteria with every chosen setting. */
+function linkedRule(form: CollectionForm): CollectionRuleWriteInput {
   return {
     ...ruleBody(form),
     sort_title_format: form.sortTitleFormat || null,
@@ -677,69 +685,34 @@ function presetRule(form: CollectionForm): CollectionRuleWriteInput {
   };
 }
 
-/** What a form keeps as a preset: its collection, or its set. */
-export function presetBody(form: CollectionForm, label: string): CollectionPresetSave {
-  const base = { media_type: form.mediaType, label: label.trim() };
-  if (form instanceof CollectionDraft && form.kind === "set") {
-    const { library_ids: _libraries, ...generator } = $state.snapshot(form.generator);
-    return {
-      ...base,
-      set: { group: form.setGroup, policy: $state.snapshot(form.setPolicy), generator },
-    };
-  }
-  return {
-    ...base,
-    collection: {
-      title: form.title.trim(),
-      collection_filtering: form.collectionFiltering,
-      rule: presetRule(form),
-    },
-  };
-}
-
-/** Saves a form as a preset, and forgets saved ones. */
-export class PresetActions {
-  private readonly saveRequest = createMutation(() => saveCollectionPresetMutation());
-  private readonly deleteRequest = createMutation(() => deleteCollectionPresetMutation());
-  private readonly feedback = createNotifier();
-  label = $state("");
-
-  constructor(private readonly form: () => CollectionForm) {}
-
-  get busy() {
-    return this.saveRequest.isPending || this.deleteRequest.isPending;
-  }
-
-  async save() {
-    if (this.busy || !this.label.trim()) return;
-    try {
-      const saved = await this.saveRequest.mutateAsync({
-        body: presetBody(this.form(), this.label),
-      });
-      await refreshCollectionPresets();
-      this.feedback.success(`Saved the preset "${saved.label}".`);
-      this.label = "";
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Could not save the preset"));
-    }
-  }
-
-  async delete(preset: CollectionPresetRead) {
-    if (this.busy || preset.saved_id == null) return;
-    try {
-      await this.deleteRequest.mutateAsync({ path: { preset_id: preset.saved_id } });
-      await refreshCollectionPresets();
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Could not delete the preset"));
-    }
-  }
-}
-
-/** Shows what a form's criteria select now, before anything is saved. */
+/**
+ * Shows what a form's criteria select now, before anything is saved, and
+ * which collection kind suits them as they are edited.
+ */
 export class CriteriaPreview {
   private readonly request = createMutation(() => previewCollectionMutation());
+  private readonly kind;
 
-  constructor(private readonly form: () => CollectionForm) {}
+  constructor(private readonly form: () => CollectionForm) {
+    this.kind = createQuery(() => {
+      const criteria = form().rule.criteria;
+      return {
+        ...recommendCollectionKindOptions({
+          body: { media_type: form().mediaType, rule: ruleBody(form()) },
+        }),
+        enabled:
+          !!form().capabilities.data?.smart &&
+          (criteria.conditions?.length ?? 0) + (criteria.groups?.length ?? 0) > 0,
+        // An unfinished condition is refused; the last advice stands until it is complete.
+        placeholderData: keepPreviousData,
+      };
+    });
+  }
+
+  /** The kind the criteria suit, on servers with smart collections. */
+  get recommendation() {
+    return this.kind.data ?? null;
+  }
 
   get result() {
     return this.request.data;

@@ -1290,6 +1290,7 @@ export type CatalogEntry = {
  */
 export type CatalogEntryDetail = {
     draft: CatalogEntry | null;
+    draft_issue: ContributionIssue | null;
     entry: CatalogEntry;
     /**
      * Entry Key
@@ -1882,13 +1883,30 @@ export type CollectionDimensionRead = {
      */
     label: string;
     /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    order_type: CollectionOrder | null;
+    /**
      * Smart Only
      */
     smart_only: boolean;
     /**
+     * Strip Prefix
+     */
+    strip_prefix: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix: string;
+    /**
      * Title Format
      */
     title_format: string;
+    /**
+     * Top
+     */
+    top: number | null;
 };
 
 /**
@@ -2019,92 +2037,6 @@ export type CollectionGeneratorOutput = {
      * Library Ids
      */
     library_ids: Array<string>;
-    /**
-     * Smart
-     */
-    smart: boolean;
-    /**
-     * Strip Prefix
-     */
-    strip_prefix: string;
-    /**
-     * Strip Suffix
-     */
-    strip_suffix: string;
-    title_format: SetTitleFormat;
-    /**
-     * Top
-     */
-    top: number | null;
-};
-
-/**
- * CollectionGeneratorBase
- *
- * What a collection set creates one collection for, before a library is chosen.
- */
-export type CollectionGeneratorBaseInput = {
-    /**
-     * Aliases
-     */
-    aliases?: Array<SetValueAlias>;
-    criteria?: FilterGroupInput;
-    /**
-     * Custom Values
-     */
-    custom_values?: Array<CustomSetValueInput>;
-    dimension: SetDimension;
-    /**
-     * Exclude
-     */
-    exclude?: Array<string>;
-    /**
-     * Include
-     */
-    include?: Array<string>;
-    /**
-     * Smart
-     */
-    smart?: boolean;
-    /**
-     * Strip Prefix
-     */
-    strip_prefix?: string;
-    /**
-     * Strip Suffix
-     */
-    strip_suffix?: string;
-    title_format?: SetTitleFormat;
-    /**
-     * Top
-     */
-    top?: number | null;
-};
-
-/**
- * CollectionGeneratorBase
- *
- * What a collection set creates one collection for, before a library is chosen.
- */
-export type CollectionGeneratorBaseOutput = {
-    /**
-     * Aliases
-     */
-    aliases: Array<SetValueAlias>;
-    criteria: FilterGroupOutput;
-    /**
-     * Custom Values
-     */
-    custom_values: Array<CustomSetValueOutput>;
-    dimension: SetDimension;
-    /**
-     * Exclude
-     */
-    exclude: Array<string>;
-    /**
-     * Include
-     */
-    include: Array<string>;
     /**
      * Smart
      */
@@ -2316,6 +2248,16 @@ export type CollectionGroupSyncResult = {
 export type CollectionKind = 'regular' | 'smart';
 
 /**
+ * CollectionKindRequest
+ *
+ * A rule being edited, to recommend the collection kind for.
+ */
+export type CollectionKindRequest = {
+    media_type: MediaType;
+    rule: CollectionRuleWriteInput;
+};
+
+/**
  * CollectionMembersUpdate
  *
  * Replace membership and optionally set its display order.
@@ -2443,223 +2385,6 @@ export type CollectionOptions = {
 export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'critic_rating.desc' | 'critic_rating.asc' | 'audience_rating.desc' | 'audience_rating.asc' | 'user_rating.desc' | 'user_rating.asc' | 'duration.desc' | 'duration.asc' | 'plays.desc' | 'plays.asc' | 'last_played.desc' | 'last_played.asc' | 'random';
 
 /**
- * CollectionPolicyBase
- *
- * Shared policy and media server display configuration.
- */
-export type CollectionPolicyBaseInput = {
-    active_end_mmdd?: SeasonalDate | null;
-    active_start_mmdd?: SeasonalDate | null;
-    arr_tag?: MemberTagFormat | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art?: boolean | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme?: boolean | null;
-    collection_filtering?: CollectionFiltering | null;
-    collection_mode?: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum?: boolean | null;
-    /**
-     * Delete When Inactive
-     */
-    delete_when_inactive?: boolean | null;
-    /**
-     * Home Order
-     */
-    home_order?: number | null;
-    member_label?: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
-    order_type?: CollectionOrder | null;
-    /**
-     * Request Missing
-     */
-    request_missing?: boolean | null;
-    sort_title_format?: SortTitleFormat | null;
-    summary_format?: SummaryFormat | null;
-    sync_mode?: SyncMode | null;
-    /**
-     * Visible Home
-     */
-    visible_home?: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library?: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared?: boolean | null;
-};
-
-/**
- * CollectionPolicyBase
- *
- * Shared policy and media server display configuration.
- */
-export type CollectionPolicyBaseOutput = {
-    active_end_mmdd: SeasonalDate | null;
-    active_start_mmdd: SeasonalDate | null;
-    arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art: boolean | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme: boolean | null;
-    collection_filtering: CollectionFiltering | null;
-    collection_mode: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum: boolean | null;
-    /**
-     * Delete When Inactive
-     */
-    delete_when_inactive: boolean | null;
-    /**
-     * Home Order
-     */
-    home_order: number | null;
-    member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
-    order_type: CollectionOrder | null;
-    /**
-     * Request Missing
-     */
-    request_missing: boolean | null;
-    sort_title_format: SortTitleFormat | null;
-    summary_format: SummaryFormat | null;
-    sync_mode: SyncMode | null;
-    /**
-     * Visible Home
-     */
-    visible_home: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared: boolean | null;
-};
-
-/**
- * CollectionPresetCollection
- *
- * A single collection a preset starts from.
- */
-export type CollectionPresetCollectionInput = {
-    collection_filtering?: CollectionFiltering | null;
-    rule: CollectionRuleWriteInput;
-    /**
-     * Title
-     */
-    title: string;
-};
-
-/**
- * CollectionPresetCollection
- *
- * A single collection a preset starts from.
- */
-export type CollectionPresetCollectionOutput = {
-    collection_filtering: CollectionFiltering | null;
-    rule: CollectionRuleWriteOutput;
-    /**
-     * Title
-     */
-    title: string;
-};
-
-/**
- * CollectionPresetRead
- *
- * A starting point for a new collection or collection set.
- */
-export type CollectionPresetRead = {
-    collection: CollectionPresetCollectionOutput | null;
-    /**
-     * Description
-     */
-    description: string;
-    /**
-     * Key
-     */
-    key: string;
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Saved Id
-     */
-    saved_id: number | null;
-    set: CollectionPresetSetOutput | null;
-};
-
-/**
- * CollectionPresetSave
- *
- * A collection or set to keep as a preset.
- */
-export type CollectionPresetSave = {
-    collection?: CollectionPresetCollectionInput | null;
-    /**
-     * Description
-     */
-    description?: string;
-    /**
-     * Label
-     */
-    label: string;
-    media_type: MediaType;
-    set?: CollectionPresetSetInput | null;
-};
-
-/**
- * CollectionPresetSet
- *
- * A collection set a preset starts from.
- */
-export type CollectionPresetSetInput = {
-    generator: CollectionGeneratorBaseInput;
-    /**
-     * Group
-     */
-    group: string;
-    policy: CollectionPolicyBaseInput;
-};
-
-/**
- * CollectionPresetSet
- *
- * A collection set a preset starts from.
- */
-export type CollectionPresetSetOutput = {
-    generator: CollectionGeneratorBaseOutput;
-    /**
-     * Group
-     */
-    group: string;
-    policy: CollectionPolicyBaseOutput;
-};
-
-/**
  * CollectionPreview
  *
  * What a collection's criteria select now, before it is saved.
@@ -2673,7 +2398,6 @@ export type CollectionPreview = {
      * Members
      */
     members: Array<string>;
-    recommendation: KindRecommendation | null;
     /**
      * Tmdb Unread
      */
@@ -3349,6 +3073,23 @@ export type ConnectivityStatusResponse = {
      * Tmdb
      */
     tmdb: boolean;
+};
+
+/**
+ * ContributionIssue
+ *
+ * A prefilled OvertureDB issue contributing one entry, or why there is none.
+ */
+export type ContributionIssue = {
+    /**
+     * Notes
+     */
+    notes: Array<PublicText>;
+    reason: PublicText | null;
+    /**
+     * Url
+     */
+    url: string | null;
 };
 
 /**
@@ -5091,7 +4832,7 @@ export type SetCollectionThemeRequest = {
  *
  * The metadata a collection set creates one collection per value of.
  */
-export type SetDimension = 'decade' | 'year' | 'genre' | 'studio' | 'country' | 'content_rating' | 'resolution' | 'label' | 'actor' | 'director' | 'writer' | 'producer' | 'franchise' | 'edition' | 'network' | 'original_language' | 'origin_country' | 'streaming' | 'audio_language' | 'subtitle_language' | 'custom';
+export type SetDimension = 'decade' | 'year' | 'genre' | 'studio' | 'country' | 'content_rating' | 'resolution' | 'label' | 'actor' | 'director' | 'writer' | 'producer' | 'franchise' | 'edition' | 'network' | 'original_language' | 'origin_country' | 'streaming' | 'audio_language' | 'subtitle_language' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'company' | 'tmdb_keyword' | 'show_status' | 'custom';
 
 export type SetTitleFormat = string;
 
@@ -7683,117 +7424,6 @@ export type RenameCollectionGroupResponses = {
 
 export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
 
-export type ListCollectionPresetsData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
-    url: '/api/collections/presets';
-};
-
-export type ListCollectionPresetsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListCollectionPresetsError = ListCollectionPresetsErrors[keyof ListCollectionPresetsErrors];
-
-export type ListCollectionPresetsResponses = {
-    /**
-     * Response List Collection Presets
-     *
-     * Successful Response
-     */
-    200: Array<CollectionPresetRead>;
-};
-
-export type ListCollectionPresetsResponse = ListCollectionPresetsResponses[keyof ListCollectionPresetsResponses];
-
-export type SaveCollectionPresetData = {
-    body: CollectionPresetSave;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/collections/presets';
-};
-
-export type SaveCollectionPresetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SaveCollectionPresetError = SaveCollectionPresetErrors[keyof SaveCollectionPresetErrors];
-
-export type SaveCollectionPresetResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionPresetRead;
-};
-
-export type SaveCollectionPresetResponse = SaveCollectionPresetResponses[keyof SaveCollectionPresetResponses];
-
-export type DeleteCollectionPresetData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Preset Id
-         */
-        preset_id: number;
-    };
-    query?: never;
-    url: '/api/collections/presets/{preset_id}';
-};
-
-export type DeleteCollectionPresetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteCollectionPresetError = DeleteCollectionPresetErrors[keyof DeleteCollectionPresetErrors];
-
-export type DeleteCollectionPresetResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type DeleteCollectionPresetResponse = DeleteCollectionPresetResponses[keyof DeleteCollectionPresetResponses];
-
 export type PreviewCollectionData = {
     body: CollectionPreviewRequest;
     headers?: {
@@ -7826,6 +7456,41 @@ export type PreviewCollectionResponses = {
 };
 
 export type PreviewCollectionResponse = PreviewCollectionResponses[keyof PreviewCollectionResponses];
+
+export type RecommendCollectionKindData = {
+    body: CollectionKindRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collections/recommend-kind';
+};
+
+export type RecommendCollectionKindErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RecommendCollectionKindError = RecommendCollectionKindErrors[keyof RecommendCollectionKindErrors];
+
+export type RecommendCollectionKindResponses = {
+    /**
+     * Response Recommend Collection Kind
+     *
+     * Successful Response
+     */
+    200: KindRecommendation | null;
+};
+
+export type RecommendCollectionKindResponse = RecommendCollectionKindResponses[keyof RecommendCollectionKindResponses];
 
 export type PreviewCollectionSetData = {
     body: CollectionSetPreview;
@@ -9959,6 +9624,46 @@ export type GetCatalogEntryRecordResponses = {
 
 export type GetCatalogEntryRecordResponse = GetCatalogEntryRecordResponses[keyof GetCatalogEntryRecordResponses];
 
+export type GetPublicDatasetCollectionIssueData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query?: never;
+    url: '/api/public-dataset/collections/{collection_id}/issue';
+};
+
+export type GetPublicDatasetCollectionIssueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPublicDatasetCollectionIssueError = GetPublicDatasetCollectionIssueErrors[keyof GetPublicDatasetCollectionIssueErrors];
+
+export type GetPublicDatasetCollectionIssueResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContributionIssue;
+};
+
+export type GetPublicDatasetCollectionIssueResponse = GetPublicDatasetCollectionIssueResponses[keyof GetPublicDatasetCollectionIssueResponses];
+
 export type GetPublicDatasetCollectionRecordData = {
     body?: never;
     headers?: {
@@ -10064,6 +9769,46 @@ export type ExportPublicDatasetSelectionsResponses = {
 };
 
 export type ExportPublicDatasetSelectionsResponse = ExportPublicDatasetSelectionsResponses[keyof ExportPublicDatasetSelectionsResponses];
+
+export type GetPublicDatasetItemIssueData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/public-dataset/items/{item_id}/issue';
+};
+
+export type GetPublicDatasetItemIssueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPublicDatasetItemIssueError = GetPublicDatasetItemIssueErrors[keyof GetPublicDatasetItemIssueErrors];
+
+export type GetPublicDatasetItemIssueResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContributionIssue;
+};
+
+export type GetPublicDatasetItemIssueResponse = GetPublicDatasetItemIssueResponses[keyof GetPublicDatasetItemIssueResponses];
 
 export type GetPublicDatasetRecordData = {
     body?: never;

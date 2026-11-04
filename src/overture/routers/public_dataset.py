@@ -15,6 +15,7 @@ lazy from ..schemas.public_dataset import (
     CatalogDraftUpdate,
     CatalogEntryDetail,
     CatalogEntryRow,
+    ContributionIssue,
     PublicDatasetEnabledRequest,
     PublicDatasetRecord,
     PublicDatasetSources,
@@ -93,6 +94,22 @@ async def get_public_dataset_collection_record(
 ) -> PublicDatasetRecord:
     """Return the catalog record of a library collection."""
     return await dataset.get_record_for_collection(collection_id)
+
+
+@router.get("/items/{item_id}/issue")
+async def get_public_dataset_item_issue(
+    item_id: ItemIdPath, dataset: PublicDatasetDep
+) -> ContributionIssue:
+    """Return a prefilled issue contributing an item's saved selections."""
+    return await dataset.get_issue_for_item(item_id)
+
+
+@router.get("/collections/{collection_id}/issue")
+async def get_public_dataset_collection_issue(
+    collection_id: CollectionIdPath, dataset: PublicDatasetDep
+) -> ContributionIssue:
+    """Return a prefilled issue contributing a collection's art and theme."""
+    return await dataset.get_issue_for_collection(collection_id)
 
 
 @router.get("/catalog/{media_type}/{entry_key}/record")

@@ -323,6 +323,21 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         return await self.client.get_active_image_url(server_id, art_type)
 
     @override
+    async def get_collection_image_url(
+        self, server_collection_id: str, art_type: ArtType
+    ) -> str | None:
+        """Return the BoxSet's image URL with its tag, which changes on upload."""
+        boxset = await self.client.get_item(server_collection_id)
+        tag = (
+            next(iter(boxset.get("BackdropImageTags") or []), None)
+            if art_type is ArtType.BACKGROUND
+            else (boxset.get("ImageTags") or {}).get(IMAGE_TYPES[art_type])
+        )
+        return _media_browser_image_url(
+            self.client, server_collection_id, IMAGE_TYPES[art_type], tag
+        )
+
+    @override
     async def delete_theme(self, server_item_id: str, theme_id: str | None) -> None:
         """Delete a theme song; MediaBrowser themes are items of their own."""
         if theme_id:

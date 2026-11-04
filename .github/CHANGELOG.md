@@ -9,11 +9,17 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
-- **Collections:** MDBList conditions take franchise URLs (`mdblist.com/franchises/...`) besides lists; official-list URLs are refused, since MDBList's API does not serve them.
-- **Collections:** `verify_collections.py --plex` reports every filter, field and sort Plex offers that Overture's criteria cannot use.
+- **Collections:** MDBList conditions refuse franchise and official-list URLs (`mdblist.com/franchises/...`, `mdblist.com/lists/official/...`) and say what to use instead, since MDBList's API serves neither.
+- **Collections:** `scripts/verify.py` replaces `verify_collections.py`: besides Overture's own checks it reads each media server directly, read only, and compares libraries, items, collections, values and counts with the server's own, loads every collection image, and reports every Plex filter, field, sort and operator and every Jellyfin and Emby filter Overture cannot use.
+- **OvertureDB:** a library title, collection or catalog draft can be contributed on its own through **Contribute issue**, which opens its OvertureDB form on GitHub filled in.
+- **Collections:** sets can be split by production company, TMDB keyword and show status, and on Plex by video codec, audio codec and audio channels.
 
 ### Changed
 
+- **Collections:** a new collection starts from **Create**, then, for a set, **Split by**, which names the group and fills in the defaults that suit its values; **Start from** and **Save as preset** are gone, and the migration drops saved presets.
+- **Interface:** TMDB charts, person roles, Radarr and Sonarr tags, root folders and quality profiles, the bulk sort list and the sidebar's art source, theme source and metadata issue filters are listed alphabetically.
+- **Collections:** the editor suggests Smart or Regular as the criteria change, without a preview, and suggests Smart whenever Plex can filter every condition natively.
+- **Interface:** a theme's length, title and source are no longer shown under the detail header; only a running download is.
 - **Settings:** new installs start with the Art & Themes workflow, auto-advance through slots and items, auto-unmonitor once art and theme are complete, the theme search `{title} {year} main theme music`, theme durations of 20 to 600 seconds, collections of at least 2 members that are deleted below it and removed from the server when inactive, no scheduled collection sync, and Radarr and Sonarr searches off when titles are added. Saved settings are kept.
 - **Collections:** regular collections now evaluate and order criteria as Plex does: an unknown number or release date matches no condition (`is not` included), a title never played counts as last played before any date, durations compare whole minutes on both sides, titles sort by the server's sort title with numbers by value, and items without a value sort lowest.
 - **Collections:** a show is in progress when one of its episodes is partly played, as Plex's filter tests.
@@ -22,8 +28,11 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Collections:** a poster uploaded to a Plex collection shows in Overture instead of the placeholder, and uploading a background no longer fails with a 502.
+- **Collections:** deleting an empty group asks only to confirm, instead of waiting for a choice about collections it does not have.
+- **Collections:** a set of smart collections is refused on Jellyfin and Emby, which have none.
+- **Media servers:** an unsuccessful media server response names its HTTP status.
 - **Sync:** Plex titles keep every genre, country, cast member, producer and label; the section listing Overture read shortened or left them out, so criteria on them missed titles.
-- **Collections:** the A to Z set preset previews and saves instead of failing.
 - **Collections:** Plex show smart collections made in Plex Web (`show.title`, `show.actor`, `show.unwatchedLeaves` and the like) can be adopted, and show resolutions are offered as the values sync stores.
 - **Collections:** Plex smart collections no longer offer operators Plex ignores, such as Resolution is not.
 - **Interface:** a long summary no longer stretches the poster in the detail header.

@@ -758,7 +758,7 @@ describe("sidebar registry", () => {
   });
 
   it("offers collections only the metadata issues they have data for", () => {
-    expect(metadataIssuesFor("movie", true, "collections")).toEqual(["no_tmdb_id", "no_server_id"]);
+    expect(metadataIssuesFor("movie", true, "collections")).toEqual(["no_server_id", "no_tmdb_id"]);
   });
 
   it("merges the collection title and TMDB ID search into one field", () => {

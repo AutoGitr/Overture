@@ -10,6 +10,7 @@ lazy from ...schemas.collections import (
     CollectionDimensionRead,
     CollectionFieldRead,
     CollectionFieldValue,
+    CollectionKindRequest,
     CollectionPreview,
     CollectionPreviewRequest,
     CollectionSourceRead,
@@ -124,6 +125,11 @@ class CollectionDiscovery:
                         label=spec.label,
                         title_format=spec.title_format,
                         smart_only=smart_only_dimension(dimension, server, media_type),
+                        top=spec.top,
+                        strip_prefix=spec.strip_prefix,
+                        strip_suffix=spec.strip_suffix,
+                        minimum_items=spec.minimum_items,
+                        order_type=spec.order_type,
                     )
                     for dimension, spec in DIMENSIONS.items()
                     if dimension_available(dimension, server, media_type, smart=plex)
@@ -202,6 +208,19 @@ class CollectionDiscovery:
             )
         ]
 
+    async def recommend(self, body: CollectionKindRequest) -> KindRecommendation | None:
+        """Return the collection kind that suits a rule, as it is being edited."""
+        async with self._access.database.read_session() as session:
+            policy = await self._access.policy(
+                session, body.media_type, None, body.rule
+            )
+        return recommend_kind(
+            body.rule,
+            self.capabilities(body.media_type),
+            media_type=body.media_type,
+            order=policy.order_type,
+        )
+
     async def preview(self, body: CollectionPreviewRequest) -> CollectionPreview:
         """What the criteria select now; Plex counts a smart collection's members."""
         rule = body.rule
@@ -209,17 +228,6 @@ class CollectionDiscovery:
         async with self._access.database.read_session() as session:
             policy = await self._access.policy(session, body.media_type, None, rule)
         items = await self._access.library_items(body.library_id, body.media_type)
-        recommended = recommend_kind(
-            rule,
-            self.capabilities(body.media_type),
-            media_type=body.media_type,
-            order=policy.order_type,
-        )
-        recommendation = (
-            None
-            if recommended is None
-            else KindRecommendation(kind=recommended[0], reason=recommended[1])
-        )
         server = self._access.server_type
         local = all(
             field_available(condition.field, server, body.media_type, smart=False)
@@ -240,7 +248,6 @@ class CollectionDiscovery:
             return CollectionPreview(
                 member_count=min(total, rule.limit or total),
                 members=[by_server_id[i] for i in ids if i in by_server_id],
-                recommendation=recommendation,
             )
         if rule.smart and not local:
             raise PublicServiceError(
@@ -261,7 +268,6 @@ class CollectionDiscovery:
         return CollectionPreview(
             member_count=len(wanted),
             members=[item.title for item in wanted[:_PREVIEW_MEMBERS]],
-            recommendation=recommendation,
             tmdb_unread=sum(
                 item.tmdb_id is not None and item.tmdb_checked_id != item.tmdb_id
                 for item in items

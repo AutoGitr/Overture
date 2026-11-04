@@ -192,7 +192,7 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         {"collectionMode": "1", "collectionSort": "2"},
         {"collectionMode": "-1", "collectionFilterBasedOnUser": "1"},
     ]
-    upload = next(r for r in requests if r.url.path == "/library/metadata/box/art")
+    upload = next(r for r in requests if r.url.path == "/library/metadata/box/arts")
     assert upload.content == b"image"
     assert mutations[-1] == ("DELETE", "/library/metadata/box", {})
 

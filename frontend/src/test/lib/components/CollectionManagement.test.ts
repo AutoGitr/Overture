@@ -372,7 +372,13 @@ describe("collection management", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
     await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
     expect(
-      JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
+      JSON.parse(
+        String(
+          calls.find(
+            (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
+          )?.init.body,
+        ),
+      ),
     ).toMatchObject({
       title: "Saga",
       library_id: "movies",
@@ -500,9 +506,21 @@ describe("collection management", () => {
     expect(screen.getByRole("button", { name: "Save and Create" })).toBeEnabled();
     expect(screen.getByLabelText("Criteria condition 1 TMDB IDs")).toHaveValue("11");
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
+        ),
+      ).toBe(true),
+    );
     expect(
-      JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
+      JSON.parse(
+        String(
+          calls.find(
+            (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
+          )?.init.body,
+        ),
+      ),
     ).toMatchObject({
       title: "Saga",
       library_id: "other",

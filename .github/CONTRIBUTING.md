@@ -64,29 +64,45 @@ changes, without tests or builds.
 | Frontend checks, in `frontend/` | `bun run format:fix`, `typecheck`, `lint`, `test:unit` |
 | End-to-end tests, in `frontend/` | `bun run test:e2e`, and `test:oidc` for sign-in |
 
-### Checking collections against real services
+### Checking Overture against real media servers
 
 Unit tests replace the media server, TMDB, MDBList, Radarr and Sonarr. To see
-how collections behave against the real ones, point
-`scripts/verify_collections.py` at synced instances, one per media server; it
-checks them in turn:
+how Overture behaves against the real ones, point `scripts/verify.py` at synced
+instances, one per media server, and at those servers themselves:
 
 ```sh
-OVERTURE_API_KEY=plex-key,jellyfin-key,emby-key uv run python -m scripts.verify_collections \
-  http://localhost:5885 http://localhost:5886 http://localhost:5887 --report collections.md
+OVERTURE_API_KEY=plex-key,jellyfin-key,emby-key \
+PLEX_TOKEN=... JELLYFIN_API_KEY=... EMBY_API_KEY=... \
+  uv run python -m scripts.verify \
+  http://localhost:5885 http://localhost:5886 http://localhost:5887 \
+  --plex https://plex.local:32400 --jellyfin http://jellyfin.local:8096 \
+  --emby http://emby.local:8096 --report verify.md
 ```
 
-In each library it previews every field and operator, order, list source,
-preset and set dimension, and on Plex compares Overture's member count and
-order with Plex's for the same criteria. It previews each managed collection's
-rule against the members the server holds, and plans the adoption of each
-unmanaged one: the filter must read back into values the editor offers and
-select what the server holds. It is safe on a real library: it signs in with
-API keys (API keys in the menu), which Overture lets read and preview but never
-change. Pass `--sources sources.json`, a list of source objects as the API
-takes them, to include TMDB lists, franchises, people and MDBList lists. Run it
-before each release and after changing `src/overture/services/collections/`,
-and turn each problem it reports into a test.
+Through Overture's API it previews every field and operator, order, list
+source and set dimension in each library, checks the collection kind
+recommended for each field, previews each managed collection's rule against
+the members the server holds, plans the adoption of each unmanaged one, loads
+every collection image and reads a sample of contribution issues. Against each
+media server directly it compares the libraries, items and collections Overture
+lists with the server's own, the values Overture offers with those the server
+lists, and Overture's counts with the server's: on Plex as a smart filter,
+naming the first title the two disagree on with the values Plex holds for it;
+on Jellyfin and Emby with the server's own item filters. It reports every Plex
+filter, field, sort and operator, and every Jellyfin and Emby filter, Overture
+cannot use. With `TMDB_API_KEY` and `MDBLIST_API_KEY` set, and `--radarr` and
+`--sonarr` given with `RADARR_API_KEY` and `SONARR_API_KEY`, it also reads what
+those services offer: every TMDB chart, MDBList's lists, list search and title
+details (including whether it names a franchise), and Radarr's and Sonarr's
+tags, profiles, root folders and import lists against what Overture offers.
+
+It is safe on a real library: Overture is signed in to with API keys (API keys
+in the menu), which read and preview but never change, and media servers are
+ever sent only GET requests, like every other service. A media server left out is checked through
+Overture alone. Pass `--sources sources.json`, a list of source objects as the
+API takes them, to include TMDB lists, franchises, people and MDBList lists.
+Run it before each release and after changing `src/overture/services/collections/`
+or `src/overture/media_servers/`, and turn each problem it reports into a test.
 
 ## Generated files
 

@@ -1,13 +1,10 @@
 <script lang="ts">
-  import Check from "@lucide/svelte/icons/check";
-  import ExternalLink from "@lucide/svelte/icons/external-link";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import type { CollectionDetail, ThemeSearchResult } from "../../generated/rest/types.gen";
   import type { CollectionActions } from "../utils/collectionActions.svelte";
   import {
     buildCollectionThemeSearchQuery,
     mergeThemeResults,
-    youtubeShortUrl,
   } from "../utils/themeSearch";
   import ThemeSearch from "./ThemeSearch.svelte";
 
@@ -24,28 +21,6 @@
   <p class="text-muted">{coll.theme_unavailable}</p>
 {:else}
   <div class="theme-panel">
-    {#if coll.theme_status !== "missing"}
-      <div class="theme-status">
-        <div class="theme-status-info">
-          <Check size={16} class="text-success" />
-          {#if coll.youtube_id}
-            <span>Source: </span>
-            <a
-              href={youtubeShortUrl(coll.youtube_id)}
-              target="_blank"
-              rel="noopener"
-              class="theme-link"
-            >
-              youtu.be/{coll.youtube_id}
-              <ExternalLink size={11} />
-            </a>
-          {:else}
-            <span class="text-muted">Theme assigned</span>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
     {#if actions.activeThemeJob}
       <div class="theme-status">
         <div class="theme-status-info">
@@ -100,8 +75,7 @@
     justify-content: space-between;
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
-    background: var(--success-muted);
-    border: 1px solid oklch(from var(--success) l c h / 0.15);
+    background: var(--bg-secondary);
     border-radius: var(--radius-md);
   }
 
@@ -113,13 +87,4 @@
     font-size: var(--text-sm);
   }
 
-  .theme-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    min-width: 0;
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-  }
 </style>

@@ -200,7 +200,7 @@
         capabilities={capabilities.data}
         {group}
         minimum={form.minimum_items ?? null}
-        titled
+        standalone
       />
     {/if}
   </DetailForm>{/if}

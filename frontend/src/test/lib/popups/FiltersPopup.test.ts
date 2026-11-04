@@ -114,7 +114,8 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
     expect(uiState.movieFilters.artSource).toEqual({
       artType: "poster",
-      sources: ["tmdb", "tpdb"],
+      // Sources keep the list's alphabetical order.
+      sources: ["tpdb", "tmdb"],
     });
     expect(view.queryByRole("checkbox", { name: "OvertureDB" })).toBeNull();
   });

@@ -63,10 +63,9 @@ lazy from overture.schemas.collections import (
     CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionGroupRename,
+    CollectionKindRequest,
     CollectionMembersUpdate,
     CollectionOptions,
-    CollectionPresetCollection,
-    CollectionPresetSave,
     CollectionPreviewRequest,
     CollectionRequest,
     CollectionRuleWrite,
@@ -1803,7 +1802,7 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
         )
 
 
-async def test_capabilities_and_presets_follow_the_server(
+async def test_capabilities_follow_the_server(
     manager: Manager, app_config: Settings, database: Database
 ) -> None:
     plex = manager.service.discovery.capabilities(MediaType.MOVIE)
@@ -1836,9 +1835,6 @@ async def test_capabilities_and_presets_follow_the_server(
     labels = {field.field: field.label for field in capabilities.fields}
     assert labels[FilterField.LABEL] == "Tag"
     assert FilterField.UNPLAYED not in labels
-    assert "unplayed" not in {
-        preset.key for preset in await jellyfin.presets.available(MediaType.MOVIE)
-    }
 
 
 async def test_field_values_count_library_metadata_or_ask_plex(
@@ -2914,31 +2910,6 @@ async def test_previews_count_members_before_saving(manager: Manager) -> None:
     assert manager.provider.queries[-1] == "sort=addedAt%3Adesc&year%3E=2000"
 
 
-async def test_saved_presets_are_listed_first_replaced_and_deleted(
-    manager: Manager,
-) -> None:
-    body = CollectionPresetSave(
-        media_type=MediaType.MOVIE,
-        label="Mine",
-        collection=CollectionPresetCollection(
-            title="Mine", rule=CollectionRuleWrite(criteria=_chart())
-        ),
-    )
-    first = await manager.service.presets.save(body)
-    again = await manager.service.presets.save(
-        body.model_copy(update={"description": "New"})
-    )
-    assert first.saved_id == again.saved_id
-    listed = await manager.service.presets.available(MediaType.MOVIE)
-    assert (listed[0].label, listed[0].description) == ("Mine", "New")
-    assert first.saved_id is not None
-    await manager.service.presets.delete(first.saved_id)
-    assert all(
-        preset.saved_id is None
-        for preset in await manager.service.presets.available(MediaType.MOVIE)
-    )
-
-
 async def test_source_summary_follows_the_first_list(manager: Manager) -> None:
     detail = await manager.service.editor.create(
         CollectionCreate(
@@ -3186,30 +3157,28 @@ async def test_missing_group_membership_uses_reserved_fallback(
 @pytest.mark.parametrize(
     ("criteria", "order", "expected"),
     [
-        # Either kind serves fields both evaluate, so nothing is suggested.
+        # Native filters alone suit a smart collection, which Plex keeps current.
         (
             where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
             CollectionOrder.TITLE_ASC,
-            None,
+            (CollectionKind.SMART, "Plex filters every condition natively"),
         ),
         (
             where(FilterField.HDR, FilterOperator.IS, True),
             CollectionOrder.TITLE_ASC,
-            (CollectionKind.SMART, "only Plex can test HDR"),
+            (CollectionKind.SMART, "Only Plex can test HDR is."),
         ),
         (
             sources(TmdbItemSource(tmdb_ids=[11])),
             CollectionOrder.TITLE_ASC,
-            (
-                CollectionKind.REGULAR,
-                "lists and tags have no Plex filter, so Overture syncs their members",
-            ),
+            (CollectionKind.REGULAR, "Lists and tags have no Plex filter"),
         ),
         (
             where(FilterField.TMDB_RATING, FilterOperator.GTE, 7),
             CollectionOrder.TITLE_ASC,
-            (CollectionKind.REGULAR, "Plex cannot test TMDB rating"),
+            (CollectionKind.REGULAR, "Plex has no filter for TMDB rating gte"),
         ),
+        # Neither kind can test both conditions, so the rule must change.
         (
             FilterGroup(
                 conditions=[
@@ -3227,7 +3196,7 @@ async def test_missing_group_membership_uses_reserved_fallback(
         (
             where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
             CollectionOrder.CUSTOM,
-            (CollectionKind.REGULAR, "Plex cannot keep a custom order"),
+            (CollectionKind.REGULAR, "Plex cannot keep a custom order."),
         ),
     ],
 )
@@ -3240,10 +3209,13 @@ def test_kind_recommendation_follows_what_plex_can_evaluate(
     capabilities = manager.service.discovery.capabilities(MediaType.MOVIE)
     rule = CollectionRuleWrite(criteria=criteria)
 
-    assert (
-        recommend_kind(rule, capabilities, media_type=MediaType.MOVIE, order=order)
-        == expected
-    )
+    found = recommend_kind(rule, capabilities, media_type=MediaType.MOVIE, order=order)
+    if expected is None:
+        assert found is None
+    else:
+        assert found is not None
+        assert found.kind is expected[0]
+        assert found.reason.startswith(expected[1])
     assert (
         recommend_kind(
             rule,
@@ -3282,16 +3254,15 @@ async def test_preview_counts_titles_tmdb_has_not_described_yet(
     assert studio.tmdb_unread == 0
 
 
-async def test_preview_carries_the_kind_recommendation(manager: Manager) -> None:
-    preview = await manager.service.discovery.preview(
-        CollectionPreviewRequest(
+async def test_the_kind_is_recommended_without_a_preview(manager: Manager) -> None:
+    recommendation = await manager.service.discovery.recommend(
+        CollectionKindRequest(
             media_type=MediaType.MOVIE,
-            library_id="movies",
             rule=CollectionRuleWrite(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
         )
     )
-    assert preview.recommendation is not None
-    assert preview.recommendation.kind is CollectionKind.REGULAR
+    assert recommendation is not None
+    assert recommendation.kind is CollectionKind.REGULAR
 
 
 async def test_collection_rows_report_art_size_source_and_shape(
@@ -3387,12 +3358,19 @@ async def test_unmanaged_collections_accept_only_adoption(
     assert again.errors == {identity: "Overture already manages it"}
 
 
-async def test_every_set_preset_previews(manager: Manager) -> None:
-    for preset in await manager.service.presets.available(MediaType.MOVIE):
-        if preset.set is None:
+async def test_every_dimension_previews_with_its_defaults(manager: Manager) -> None:
+    capabilities = manager.service.discovery.capabilities(MediaType.MOVIE)
+    for entry in capabilities.dimensions:
+        if entry.dimension is SetDimension.CUSTOM:
             continue
-        generator = CollectionGenerator.model_validate(
-            {**preset.set.generator.model_dump(), "library_ids": ["movies"]}
+        generator = CollectionGenerator(
+            dimension=entry.dimension,
+            library_ids=["movies"],
+            top=entry.top,
+            title_format=entry.title_format,
+            strip_prefix=entry.strip_prefix,
+            strip_suffix=entry.strip_suffix,
+            smart=entry.smart_only,
         )
         await manager.service.sets.preview(
             CollectionSetPreview(media_type=MediaType.MOVIE, generator=generator)

@@ -29,7 +29,6 @@ lazy from .post_sync import (
     PostSync,
     RequestMissing,
 )
-lazy from .preset_store import PresetStore
 lazy from .reader import CollectionReader
 lazy from .rule_sync import RuleSync
 lazy from .schedule import CollectionSchedule
@@ -88,7 +87,6 @@ class CollectionsService:
             sources=self._sources,
             app_config=app_config,
         )
-        self.presets = PresetStore(access=access, app_config=app_config)
         self.editor = CollectionEditor(
             access=access,
             validator=validator,

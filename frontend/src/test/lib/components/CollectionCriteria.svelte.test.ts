@@ -27,6 +27,7 @@ import {
   collectionDetail,
   collectionRule,
   mediaItem,
+  dimension,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -695,17 +696,16 @@ describe("collection criteria", () => {
       capabilities: collectionCapabilities({
         dimensions: [
           ...capabilities.dimensions,
-          {
+          dimension({
             dimension: "audio_language",
             label: "Audio languages",
-            title_format: "{value}",
             smart_only: true,
-          },
+          }),
         ],
       }),
       group: "Mine",
       minimum: null,
-      titled: true,
+      standalone: true,
     });
     await fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
     await fireEvent.change(screen.getByLabelText("Alias 1 values"), {

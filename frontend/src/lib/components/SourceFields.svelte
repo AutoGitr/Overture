@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { alphabetical } from "../utils/alphabetical";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     getCollectionCapabilitiesOptions,
@@ -40,7 +41,9 @@
     ...getCollectionCapabilitiesOptions({ query: { media_type: mediaType } }),
     enabled: source.type === "tmdb_chart",
   }));
-  let charts = $derived(capabilities.data?.charts ?? []);
+  let charts = $derived(
+    alphabetical(capabilities.data?.charts ?? [], (chart) => CHART_LABELS[chart]),
+  );
 
   const radarrTags = createQuery(() => ({
     ...listRadarrTagsOptions(),
@@ -61,14 +64,14 @@
   let tagLabels = $derived.by(() => {
     const known = (tags ?? []).map((tag) => tag.label);
     const named = source.type === "radarr_tag" || source.type === "sonarr_tag" ? source.tags : [];
-    return [...known, ...named.filter((tag) => !known.includes(tag))];
+    return alphabetical([...known, ...named.filter((tag) => !known.includes(tag))], (tag) => tag);
   });
 
   const ROLES: readonly (readonly [TmdbPersonRole, string])[] = [
     ["actor", "Actor"],
     ["director", "Director"],
-    ["writer", "Writer"],
     ["producer", "Producer"],
+    ["writer", "Writer"],
   ];
 </script>
 
@@ -166,7 +169,7 @@
     <input
       required
       aria-label={`${label} MDBList lists`}
-      placeholder="MDBList list or franchise URLs, or user/list, separated by commas"
+      placeholder="MDBList list URLs or IDs, or user/list, separated by commas"
       value={source.identifiers.join(", ")}
       onchange={(event) => {
         if (source.type === "mdblist") source.identifiers = splitList(event.currentTarget.value);

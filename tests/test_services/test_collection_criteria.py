@@ -1,4 +1,4 @@
-"""Criteria evaluation, member order, Plex queries, sets and presets."""
+"""Criteria evaluation, member order, Plex queries and sets."""
 
 lazy from collections import Counter
 lazy from datetime import UTC, datetime
@@ -30,6 +30,7 @@ lazy from overture.services.collections.criteria import (
     order_items,
 )
 lazy from overture.services.collections.fields import (
+    DIMENSIONS,
     available_orders,
     dimension_available,
     field_available,
@@ -40,7 +41,6 @@ lazy from overture.services.collections.plex_query import (
     compile_plex_query,
     tag_keys,
 )
-lazy from overture.services.collections.presets import available_presets
 lazy from overture.services.collections.sets import count_values, set_values
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
@@ -508,28 +508,10 @@ def test_set_titles_need_the_value() -> None:
         )
 
 
-def test_presets_adapt_to_the_server() -> None:
-    plex = {
-        preset.key: preset
-        for preset in available_presets(ServerType.PLEX, MediaType.MOVIE, tmdb=True)
-    }
-    jellyfin = {
-        preset.key
-        for preset in available_presets(ServerType.JELLYFIN, MediaType.MOVIE, tmdb=True)
-    }
-    shows = {
-        preset.key
-        for preset in available_presets(ServerType.PLEX, MediaType.SHOW, tmdb=True)
-    }
-    unplayed = plex["unplayed"].collection
-    assert unplayed is not None
-    assert unplayed.rule.smart
-    assert plex["4k"].collection is not None
-    assert not plex["4k"].collection.rule.smart
-    assert {"decades", "franchises", "unplayed", "short"} <= set(plex)
-    assert "unplayed" not in jellyfin
-    assert "decades" in jellyfin
-    assert not {"franchises", "short"} & shows
-    franchises = plex["franchises"].set
-    assert franchises is not None
-    assert franchises.generator.strip_suffix == " Collection"
+def test_dimensions_start_a_set_with_their_defaults() -> None:
+    franchises = DIMENSIONS[SetDimension.FRANCHISE]
+    assert (franchises.strip_prefix, franchises.strip_suffix) == ("The ", " Collection")
+    assert franchises.order_type is CollectionOrder.RELEASE_ASC
+    actors = DIMENSIONS[SetDimension.ACTOR]
+    assert (actors.top, actors.minimum_items) == (25, 3)
+    assert DIMENSIONS[SetDimension.GENRE].top is None

@@ -22,7 +22,7 @@
   let capabilities = $derived(editor.capabilities.data);
   // The editor owns its rule, so its criteria are bound here rather than through `editor`.
   let rule = $derived(editor.rule);
-  let recommendation = $derived(editor.preview.result?.recommendation ?? null);
+  let recommendation = $derived(editor.preview.recommendation);
   /** A kind the criteria need that the collection is not, which the preview found. */
   let suggested = $derived(
     recommendation && (recommendation.kind === "smart") !== !!editor.rule.smart
@@ -66,7 +66,7 @@
       <Notice
         tone="info"
         title={smart ? "A smart collection suits these criteria" : "A regular collection suits these criteria"}
-        message={`It is needed because ${suggested.reason}.`}
+        message={suggested.reason}
         action={{
           label: smart ? "Switch to smart" : "Switch to regular",
           run: () => switchKind(editor, smart),

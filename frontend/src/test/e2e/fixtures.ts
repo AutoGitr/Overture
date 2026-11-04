@@ -135,7 +135,6 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       await page.route("**/api/collections/capabilities?*", (route) =>
         route.fulfill({ json: collectionCapabilities() }),
       );
-      await page.route("**/api/collections/presets?*", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/library/libraries?*", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/bulk/assets/schedules", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/media-server/libraries", (route) => route.fulfill({ json: [] }));

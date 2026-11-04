@@ -54,7 +54,7 @@ def _catalog_art_url(url: str | None) -> str | None:
         return None
 
 
-def _item_entry(item: MediaItem) -> dict[str, Any] | None:
+def item_entry(item: MediaItem) -> dict[str, Any] | None:
     """Return a library item's selections as a catalog entry, if it has any."""
     poster = _catalog_art_url(read_art_slot(item, ArtType.POSTER).url)
     background = _catalog_art_url(read_art_slot(item, ArtType.BACKGROUND).url)
@@ -82,7 +82,7 @@ def _item_entry(item: MediaItem) -> dict[str, Any] | None:
     return entry
 
 
-def _collection_entry(
+def collection_entry(
     collection: MediaCollection, catalog: PublicDatasetCollection | None
 ) -> dict[str, Any] | None:
     """Return a matched collection's art and theme as a catalog entry, if any.
@@ -190,7 +190,7 @@ def _archive(directory: Path, left_out: list[str]) -> Path:
     return target
 
 
-def _left_out(title: str, owner: MediaItem | MediaCollection) -> list[str]:
+def refused_art(title: str, owner: MediaItem | MediaCollection) -> list[str]:
     """The selected art OvertureDB would refuse, as lines of the export summary."""
     return [
         f"{title}: {line}"
@@ -249,8 +249,10 @@ async def export_selections(database: Database, directory: Path) -> Path:
             )
         if not items:
             break
-        entries = [entry for item in items if (entry := _item_entry(item))]
-        left_out.extend(line for item in items for line in _left_out(item.title, item))
+        entries = [entry for item in items if (entry := item_entry(item))]
+        left_out.extend(
+            line for item in items for line in refused_art(item.title, item)
+        )
         await owned_thread(_stage_batch, directory, entries)
         after = items[-1].id or after
     async with database.read_session() as session:
@@ -261,13 +263,13 @@ async def export_selections(database: Database, directory: Path) -> Path:
     entries = [
         entry
         for row in collections
-        if (entry := _collection_entry(row, catalog.get(row.tmdb_collection_id or 0)))
+        if (entry := collection_entry(row, catalog.get(row.tmdb_collection_id or 0)))
     ]
     left_out.extend(
         line
         for row in collections
         if row.tmdb_collection_id is not None
-        for line in _left_out(row.title, row)
+        for line in refused_art(row.title, row)
     )
     await owned_thread(_stage_batch, directory, entries)
     return await owned_thread(_archive, directory, left_out)

@@ -21,7 +21,7 @@
   import { uiState, type FilterState } from "../stores/uiState.svelte";
   import { sidebarGroup } from "../router/routes";
   import { runBulkCollections } from "../utils/bulkCollections";
-  import { ORDER_LABELS } from "../utils/collectionCriteria";
+  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import { UNGROUPED_GROUP } from "../../generated/settings";
   import DataStatus from "./DataStatus.svelte";
@@ -502,10 +502,10 @@
       <FieldRow
         label="Sort"
         for={`${id}-order`}
-        hint="Smart collections cannot use a custom order."
+        hint={capabilities.data?.smart ? "Smart collections cannot use a custom order." : undefined}
       >
         <select id={`${id}-order`} bind:value={order} disabled={busy}
-          >{#each capabilities.data?.orders ?? [] as entry (entry)}<option value={entry}
+          >{#each sortedOrders(capabilities.data?.orders ?? []) as entry (entry)}<option value={entry}
               >{ORDER_LABELS[entry]}</option
             >{/each}</select
         >

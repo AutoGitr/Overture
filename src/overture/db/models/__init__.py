@@ -7,7 +7,6 @@ lazy from .art import (
 )
 lazy from .auth_session import AuthSession
 lazy from .collection_group import CollectionGroup
-lazy from .collection_preset import CollectionPreset
 lazy from .collection_rule import CollectionRule
 lazy from .download_job import DownloadJob, DownloadJobBase
 lazy from .job_result import JobResult, JobRun
@@ -46,7 +45,6 @@ __all__ = [
     "ArtSlot",
     "AuthSession",
     "CollectionGroup",
-    "CollectionPreset",
     "CollectionRule",
     "DownloadJob",
     "DownloadJobBase",

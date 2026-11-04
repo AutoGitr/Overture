@@ -257,3 +257,24 @@ def test_stored_minutes_become_seconds_and_back() -> None:
             ).all() == [(117,)]
     finally:
         engine.dispose()
+
+
+def test_saved_presets_are_dropped_and_the_table_comes_back_empty() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "7fc9ce3c2813")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_presets (media_type, label, description, "
+                "payload_json) VALUES ('movie', 'Mine', '', '{}')"
+            )
+
+            command.upgrade(config, "b3a91c4e5f27")
+            assert "collection_presets" not in inspect(conn).get_table_names()
+
+            command.downgrade(config, "7fc9ce3c2813")
+            assert conn.exec_driver_sql("SELECT * FROM collection_presets").all() == []
+    finally:
+        engine.dispose()

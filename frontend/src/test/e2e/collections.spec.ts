@@ -211,8 +211,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
       await route.fulfill({ json: detail });
     } else if (path === "/api/collections" || path === "/api/collections/groups")
       await route.fulfill({ json: [] });
-    else if (path === "/api/collections/capabilities" || path === "/api/collections/presets")
-      await route.fallback();
+    else if (path === "/api/collections/capabilities") await route.fallback();
     else await route.fulfill({ json: detail });
   });
   await logIn(page);
@@ -221,7 +220,8 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Movies", exact: true })).toBeChecked();
-  await expect(page.getByLabel(/^Start from/)).toBeInViewport();
+  // Setup starts with what to create.
+  await expect(page.getByText("One collection", { exact: true })).toBeInViewport();
   await page.getByLabel("Title", { exact: true }).fill("New collection");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
   await page
@@ -418,8 +418,8 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await expect(page.getByRole("navigation", { name: "Configure sections" })).toHaveCount(0);
   const submit = page.getByRole("button", { name: "Save and Create", exact: true });
   await page.getByLabel(/^Split by/).selectOption("franchise");
-  // A blank group is named after what the set splits by.
-  await expect(setup.getByLabel(/^Group/)).toHaveAttribute("placeholder", "TMDB franchises");
+  // Split by names the group, and fills in what suits franchises.
+  await expect(setup.getByLabel(/^Group/)).toHaveValue("TMDB franchises");
   await setup.getByLabel(/^Group/).fill("Franchises");
   await page.getByLabel("Trailing text to remove", { exact: true }).fill(" Collection");
   await page.getByLabel(/^Skip these values/).fill("10, 20");

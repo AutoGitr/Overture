@@ -7,7 +7,7 @@ lazy from pydantic import Field
 
 lazy from ..domain import CatalogMediaType, MediaType
 lazy from .art import ArtCandidate
-lazy from .base import StrictBaseModel
+lazy from .base import PublicText, StrictBaseModel
 lazy from .common import JobEnvelope
 
 
@@ -191,12 +191,23 @@ class CatalogEntryRow(StrictBaseModel):
     library_collection_id: int | None = None
 
 
+class ContributionIssue(StrictBaseModel):
+    """A prefilled OvertureDB issue contributing one entry, or why there is none."""
+
+    url: str | None = None
+    reason: PublicText | None = None
+    #: What the issue leaves out or the contributor still has to do on the form.
+    notes: list[PublicText] = Field(default_factory=list[PublicText])
+
+
 class CatalogEntryDetail(StrictBaseModel):
     """One catalog entry with the local draft of changes to it."""
 
     entry_key: str
     entry: CatalogEntry
     draft: CatalogEntry | None = None
+    #: The issue contributing the draft, while there is one.
+    draft_issue: ContributionIssue | None = None
     library_item_id: int | None = None
     library_collection_id: int | None = None
 

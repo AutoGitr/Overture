@@ -5,11 +5,8 @@
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
-  import {
-    CollectionDraft,
-    PresetActions,
-    type CollectionEditor,
-  } from "../utils/collectionForms.svelte";
+  import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
+  import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
 
   let {
@@ -28,12 +25,8 @@
     ["collection", "One collection"],
     ["set", "One per value"],
   ] as const;
-  const presetActions = new PresetActions(() => editor);
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
-  let presets = $derived(draft?.presets.data ?? []);
-  let preset = $derived(presets.find((entry) => entry.key === draft?.presetKey));
-  let saved = $derived(presets.filter((entry) => entry.saved_id != null));
 </script>
 
 <DetailForm
@@ -47,6 +40,20 @@
 >
   {#if draft}
     {@const form = draft}
+    <FieldRow label="Create">
+      <SegmentedControl
+        label="Create"
+        options={KINDS}
+        bind:value={() => form.kind, (kind) => form.selectKind(kind)}
+      />
+    </FieldRow>
+    {#if creatingSet}
+      <SetDimensionField
+        value={form.generator.dimension}
+        dimensions={form.dimensions}
+        onchoose={(dimension) => form.chooseDimension(dimension)}
+      />
+    {/if}
     <fieldset class="libraries">
       <legend class="form-label">Libraries</legend>
       {#each libraries as library (library.id)}
@@ -68,57 +75,6 @@
         >
       {/if}
     </fieldset>
-
-    <FieldRow
-      label="Start from"
-      for={`${id}-start`}
-      hint={preset?.description || "A preset fills in the form, which stays editable."}
-    >
-      <select
-        id={`${id}-start`}
-        value={form.presetKey}
-        onchange={(event) =>
-          form.applyPreset(presets.find((entry) => entry.key === event.currentTarget.value))}
-      >
-        <option value="">Blank</option>
-        {#if saved.length}
-          <optgroup label="Saved">
-            {#each saved as entry (entry.key)}
-              <option value={entry.key}>{entry.label}</option>
-            {/each}
-          </optgroup>
-        {/if}
-        <optgroup label="One collection">
-          {#each presets.filter((entry) => entry.collection && entry.saved_id == null) as entry (entry.key)}
-            <option value={entry.key}>{entry.label}</option>
-          {/each}
-        </optgroup>
-        <optgroup label="One collection per value">
-          {#each presets.filter((entry) => entry.set && entry.saved_id == null) as entry (entry.key)}
-            <option value={entry.key}>{entry.label}</option>
-          {/each}
-        </optgroup>
-      </select>
-      {#if preset?.saved_id != null}
-        {@const chosen = preset}
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm"
-          disabled={presetActions.busy}
-          onclick={async () => {
-            await presetActions.delete(chosen);
-            form.applyPreset(undefined);
-          }}>Delete preset</button
-        >
-      {/if}
-    </FieldRow>
-    <FieldRow label="Create">
-      <SegmentedControl
-        label="Create"
-        options={KINDS}
-        bind:value={() => form.kind, (kind) => form.selectKind(kind)}
-      />
-    </FieldRow>
   {:else}
     <FieldRow label="Library" for={`${id}-library`}>
       <select id={`${id}-library`} value={editor.libraryId} disabled>
@@ -148,13 +104,13 @@
     <FieldRow
       label="Group"
       for={`${id}-group`}
-      hint="A set is a group whose collections it creates. Blank names it after the values; an existing group becomes this set."
+      hint="A set is a group whose collections it creates; Split by names it. An existing group becomes this set."
     >
       <input
         id={`${id}-group`}
         maxlength="200"
         bind:value={form.collectionGroup}
-        placeholder={form.setGroup || "e.g. Decades"}
+        placeholder="e.g. Decades"
         list={`${id}-groups`}
       />
       <datalist id={`${id}-groups`}>
@@ -206,30 +162,6 @@
     </FieldRow>
   {/if}
 
-  <FieldRow
-    label="Save as preset"
-    for={`${id}-preset`}
-    hint="New collections can start from it under Start from."
-  >
-    <input
-      id={`${id}-preset`}
-      maxlength="100"
-      placeholder="Preset name"
-      bind:value={presetActions.label}
-      onkeydown={(event) => {
-        // Enter saves the preset here, not the collection.
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        void presetActions.save();
-      }}
-    />
-    <button
-      type="button"
-      class="btn btn-secondary"
-      disabled={presetActions.busy || !presetActions.label.trim()}
-      onclick={() => void presetActions.save()}>Save preset</button
-    >
-  </FieldRow>
 </DetailForm>
 
 <style>

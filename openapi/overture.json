@@ -2630,6 +2630,16 @@
               }
             ]
           },
+          "draft_issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributionIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "entry": {
             "$ref": "#/components/schemas/CatalogEntry"
           },
@@ -2664,6 +2674,7 @@
           "entry_key",
           "entry",
           "draft",
+          "draft_issue",
           "library_item_id",
           "library_collection_id"
         ],
@@ -4192,21 +4203,68 @@
             "title": "Label",
             "type": "string"
           },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "smart_only": {
             "default": false,
             "title": "Smart Only",
             "type": "boolean"
           },
+          "strip_prefix": {
+            "default": "",
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": "",
+            "title": "Strip Suffix",
+            "type": "string"
+          },
           "title_format": {
             "title": "Title Format",
             "type": "string"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top"
           }
         },
         "required": [
           "dimension",
           "label",
           "title_format",
-          "smart_only"
+          "smart_only",
+          "top",
+          "strip_prefix",
+          "strip_suffix",
+          "minimum_items",
+          "order_type"
         ],
         "title": "CollectionDimensionRead",
         "type": "object"
@@ -4495,190 +4553,6 @@
           "library_ids"
         ],
         "title": "CollectionGenerator",
-        "type": "object"
-      },
-      "CollectionGeneratorBase-Input": {
-        "additionalProperties": false,
-        "description": "What a collection set creates one collection for, before a library is chosen.",
-        "properties": {
-          "aliases": {
-            "items": {
-              "$ref": "#/components/schemas/SetValueAlias"
-            },
-            "maxItems": 200,
-            "title": "Aliases",
-            "type": "array"
-          },
-          "criteria": {
-            "$ref": "#/components/schemas/FilterGroup-Input"
-          },
-          "custom_values": {
-            "items": {
-              "$ref": "#/components/schemas/CustomSetValue-Input"
-            },
-            "maxItems": 200,
-            "title": "Custom Values",
-            "type": "array"
-          },
-          "dimension": {
-            "$ref": "#/components/schemas/SetDimension"
-          },
-          "exclude": {
-            "items": {
-              "maxLength": 200,
-              "minLength": 1,
-              "type": "string"
-            },
-            "maxItems": 500,
-            "title": "Exclude",
-            "type": "array"
-          },
-          "include": {
-            "items": {
-              "maxLength": 200,
-              "minLength": 1,
-              "type": "string"
-            },
-            "maxItems": 500,
-            "title": "Include",
-            "type": "array"
-          },
-          "smart": {
-            "default": false,
-            "title": "Smart",
-            "type": "boolean"
-          },
-          "strip_prefix": {
-            "default": "",
-            "maxLength": 100,
-            "title": "Strip Prefix",
-            "type": "string"
-          },
-          "strip_suffix": {
-            "default": "",
-            "maxLength": 100,
-            "title": "Strip Suffix",
-            "type": "string"
-          },
-          "title_format": {
-            "$ref": "#/components/schemas/SetTitleFormat",
-            "default": "{value}"
-          },
-          "top": {
-            "anyOf": [
-              {
-                "maximum": 500.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top"
-          }
-        },
-        "required": [
-          "dimension"
-        ],
-        "title": "CollectionGeneratorBase",
-        "type": "object"
-      },
-      "CollectionGeneratorBase-Output": {
-        "additionalProperties": false,
-        "description": "What a collection set creates one collection for, before a library is chosen.",
-        "properties": {
-          "aliases": {
-            "items": {
-              "$ref": "#/components/schemas/SetValueAlias"
-            },
-            "maxItems": 200,
-            "title": "Aliases",
-            "type": "array"
-          },
-          "criteria": {
-            "$ref": "#/components/schemas/FilterGroup-Output"
-          },
-          "custom_values": {
-            "items": {
-              "$ref": "#/components/schemas/CustomSetValue-Output"
-            },
-            "maxItems": 200,
-            "title": "Custom Values",
-            "type": "array"
-          },
-          "dimension": {
-            "$ref": "#/components/schemas/SetDimension"
-          },
-          "exclude": {
-            "items": {
-              "maxLength": 200,
-              "minLength": 1,
-              "type": "string"
-            },
-            "maxItems": 500,
-            "title": "Exclude",
-            "type": "array"
-          },
-          "include": {
-            "items": {
-              "maxLength": 200,
-              "minLength": 1,
-              "type": "string"
-            },
-            "maxItems": 500,
-            "title": "Include",
-            "type": "array"
-          },
-          "smart": {
-            "default": false,
-            "title": "Smart",
-            "type": "boolean"
-          },
-          "strip_prefix": {
-            "default": "",
-            "maxLength": 100,
-            "title": "Strip Prefix",
-            "type": "string"
-          },
-          "strip_suffix": {
-            "default": "",
-            "maxLength": 100,
-            "title": "Strip Suffix",
-            "type": "string"
-          },
-          "title_format": {
-            "$ref": "#/components/schemas/SetTitleFormat",
-            "default": "{value}"
-          },
-          "top": {
-            "anyOf": [
-              {
-                "maximum": 500.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top"
-          }
-        },
-        "required": [
-          "dimension",
-          "include",
-          "exclude",
-          "top",
-          "title_format",
-          "strip_prefix",
-          "strip_suffix",
-          "criteria",
-          "smart",
-          "custom_values",
-          "aliases"
-        ],
-        "title": "CollectionGeneratorBase",
         "type": "object"
       },
       "CollectionGroupDelete": {
@@ -5305,6 +5179,24 @@
         "title": "CollectionKind",
         "type": "string"
       },
+      "CollectionKindRequest": {
+        "additionalProperties": false,
+        "description": "A rule being edited, to recommend the collection kind for.",
+        "properties": {
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CollectionRuleWrite-Input"
+          }
+        },
+        "required": [
+          "media_type",
+          "rule"
+        ],
+        "title": "CollectionKindRequest",
+        "type": "object"
+      },
       "CollectionMembersUpdate": {
         "additionalProperties": false,
         "description": "Replace membership and optionally set its display order.",
@@ -5600,683 +5492,6 @@
         "title": "CollectionOrder",
         "type": "string"
       },
-      "CollectionPolicyBase-Input": {
-        "additionalProperties": false,
-        "description": "Shared policy and media server display configuration.",
-        "properties": {
-          "active_end_mmdd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeasonalDate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "active_start_mmdd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeasonalDate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "arr_tag": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MemberTagFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
-          },
-          "auto_match_theme": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Theme"
-          },
-          "collection_filtering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionFiltering"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "collection_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "delete_below_minimum": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delete Below Minimum"
-          },
-          "delete_when_inactive": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delete When Inactive"
-          },
-          "home_order": {
-            "anyOf": [
-              {
-                "maximum": 999.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Home Order"
-          },
-          "member_label": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MemberTagFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "minimum_items": {
-            "anyOf": [
-              {
-                "maximum": 100.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Minimum Items"
-          },
-          "order_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionOrder"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "request_missing": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Request Missing"
-          },
-          "sort_title_format": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SortTitleFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "summary_format": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SummaryFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "visible_home": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Home"
-          },
-          "visible_library": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Library"
-          },
-          "visible_shared": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Shared"
-          }
-        },
-        "title": "CollectionPolicyBase",
-        "type": "object"
-      },
-      "CollectionPolicyBase-Output": {
-        "additionalProperties": false,
-        "description": "Shared policy and media server display configuration.",
-        "properties": {
-          "active_end_mmdd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeasonalDate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "active_start_mmdd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeasonalDate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "arr_tag": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MemberTagFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
-          },
-          "auto_match_theme": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Theme"
-          },
-          "collection_filtering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionFiltering"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "collection_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "delete_below_minimum": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delete Below Minimum"
-          },
-          "delete_when_inactive": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delete When Inactive"
-          },
-          "home_order": {
-            "anyOf": [
-              {
-                "maximum": 999.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Home Order"
-          },
-          "member_label": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MemberTagFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "minimum_items": {
-            "anyOf": [
-              {
-                "maximum": 100.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Minimum Items"
-          },
-          "order_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionOrder"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "request_missing": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Request Missing"
-          },
-          "sort_title_format": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SortTitleFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "summary_format": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SummaryFormat"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "visible_home": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Home"
-          },
-          "visible_library": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Library"
-          },
-          "visible_shared": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visible Shared"
-          }
-        },
-        "required": [
-          "sync_mode",
-          "minimum_items",
-          "delete_below_minimum",
-          "auto_match_art",
-          "auto_match_theme",
-          "delete_when_inactive",
-          "collection_mode",
-          "order_type",
-          "collection_filtering",
-          "visible_home",
-          "visible_shared",
-          "visible_library",
-          "sort_title_format",
-          "summary_format",
-          "active_start_mmdd",
-          "active_end_mmdd",
-          "request_missing",
-          "member_label",
-          "arr_tag",
-          "home_order"
-        ],
-        "title": "CollectionPolicyBase",
-        "type": "object"
-      },
-      "CollectionPresetCollection-Input": {
-        "additionalProperties": false,
-        "description": "A single collection a preset starts from.",
-        "properties": {
-          "collection_filtering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionFiltering"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "rule": {
-            "$ref": "#/components/schemas/CollectionRuleWrite-Input"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title",
-          "rule"
-        ],
-        "title": "CollectionPresetCollection",
-        "type": "object"
-      },
-      "CollectionPresetCollection-Output": {
-        "additionalProperties": false,
-        "description": "A single collection a preset starts from.",
-        "properties": {
-          "collection_filtering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionFiltering"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "rule": {
-            "$ref": "#/components/schemas/CollectionRuleWrite-Output"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title",
-          "collection_filtering",
-          "rule"
-        ],
-        "title": "CollectionPresetCollection",
-        "type": "object"
-      },
-      "CollectionPresetRead": {
-        "additionalProperties": false,
-        "description": "A starting point for a new collection or collection set.",
-        "properties": {
-          "collection": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionPresetCollection-Output"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "saved_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Saved Id"
-          },
-          "set": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionPresetSet-Output"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "key",
-          "label",
-          "description",
-          "collection",
-          "set",
-          "saved_id"
-        ],
-        "title": "CollectionPresetRead",
-        "type": "object"
-      },
-      "CollectionPresetSave": {
-        "additionalProperties": false,
-        "description": "A collection or set to keep as a preset.",
-        "properties": {
-          "collection": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionPresetCollection-Input"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "description": {
-            "default": "",
-            "maxLength": 500,
-            "title": "Description",
-            "type": "string"
-          },
-          "label": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Label",
-            "type": "string"
-          },
-          "media_type": {
-            "$ref": "#/components/schemas/MediaType"
-          },
-          "set": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionPresetSet-Input"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "media_type",
-          "label"
-        ],
-        "title": "CollectionPresetSave",
-        "type": "object"
-      },
-      "CollectionPresetSet-Input": {
-        "additionalProperties": false,
-        "description": "A collection set a preset starts from.",
-        "properties": {
-          "generator": {
-            "$ref": "#/components/schemas/CollectionGeneratorBase-Input"
-          },
-          "group": {
-            "title": "Group",
-            "type": "string"
-          },
-          "policy": {
-            "$ref": "#/components/schemas/CollectionPolicyBase-Input"
-          }
-        },
-        "required": [
-          "group",
-          "policy",
-          "generator"
-        ],
-        "title": "CollectionPresetSet",
-        "type": "object"
-      },
-      "CollectionPresetSet-Output": {
-        "additionalProperties": false,
-        "description": "A collection set a preset starts from.",
-        "properties": {
-          "generator": {
-            "$ref": "#/components/schemas/CollectionGeneratorBase-Output"
-          },
-          "group": {
-            "title": "Group",
-            "type": "string"
-          },
-          "policy": {
-            "$ref": "#/components/schemas/CollectionPolicyBase-Output"
-          }
-        },
-        "required": [
-          "group",
-          "policy",
-          "generator"
-        ],
-        "title": "CollectionPresetSet",
-        "type": "object"
-      },
       "CollectionPreview": {
         "additionalProperties": false,
         "description": "What a collection's criteria select now, before it is saved.",
@@ -6292,16 +5507,6 @@
             "title": "Members",
             "type": "array"
           },
-          "recommendation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/KindRecommendation"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "tmdb_unread": {
             "default": 0,
             "title": "Tmdb Unread",
@@ -6311,7 +5516,6 @@
         "required": [
           "member_count",
           "members",
-          "recommendation",
           "tmdb_unread"
         ],
         "title": "CollectionPreview",
@@ -8143,6 +7347,47 @@
           "tmdb"
         ],
         "title": "ConnectivityStatusResponse",
+        "type": "object"
+      },
+      "ContributionIssue": {
+        "additionalProperties": false,
+        "description": "A prefilled OvertureDB issue contributing one entry, or why there is none.",
+        "properties": {
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/PublicText"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "url",
+          "reason",
+          "notes"
+        ],
+        "title": "ContributionIssue",
         "type": "object"
       },
       "Coverage": {
@@ -11528,6 +10773,12 @@
           "streaming",
           "audio_language",
           "subtitle_language",
+          "video_codec",
+          "audio_codec",
+          "audio_layout",
+          "company",
+          "tmdb_keyword",
+          "show_status",
           "custom"
         ],
         "title": "SetDimension",
@@ -16797,260 +16048,6 @@
         ]
       }
     },
-    "/api/collections/presets": {
-      "get": {
-        "description": "Return saved presets, then the built-in ones the server can evaluate.",
-        "operationId": "list_collection_presets",
-        "parameters": [
-          {
-            "description": "Media type ('movie' or 'show')",
-            "in": "query",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/MediaType",
-              "description": "Media type ('movie' or 'show')"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CollectionPresetRead"
-                  },
-                  "title": "Response List Collection Presets",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Collection Presets",
-        "tags": [
-          "collections"
-        ]
-      },
-      "post": {
-        "description": "Keep a collection or set as a preset.",
-        "operationId": "save_collection_preset",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionPresetSave"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPresetRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Save Collection Preset",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/presets/{preset_id}": {
-      "delete": {
-        "description": "Forget a saved preset.",
-        "operationId": "delete_collection_preset",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "preset_id",
-            "required": true,
-            "schema": {
-              "exclusiveMinimum": 0,
-              "title": "Preset Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Collection Preset",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
     "/api/collections/preview": {
       "post": {
         "description": "Show what criteria select now, before the collection is saved.",
@@ -17130,6 +16127,99 @@
           }
         },
         "summary": "Preview Collection",
+        "tags": [
+          "collections"
+        ],
+        "x-reads-only": true
+      }
+    },
+    "/api/collections/recommend-kind": {
+      "post": {
+        "description": "Recommend a smart or regular collection for a rule, changing nothing.",
+        "operationId": "recommend_collection_kind",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionKindRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/KindRecommendation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Recommend Collection Kind"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recommend Collection Kind",
         "tags": [
           "collections"
         ],
@@ -21895,6 +20985,92 @@
         ]
       }
     },
+    "/api/public-dataset/collections/{collection_id}/issue": {
+      "get": {
+        "description": "Return a prefilled issue contributing a collection's art and theme.",
+        "operationId": "get_public_dataset_collection_issue",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContributionIssue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Dataset Collection Issue",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
     "/api/public-dataset/collections/{collection_id}/record": {
       "get": {
         "description": "Return the catalog record of a library collection.",
@@ -22135,6 +21311,91 @@
           }
         },
         "summary": "Export Public Dataset Selections",
+        "tags": [
+          "public-dataset"
+        ]
+      }
+    },
+    "/api/public-dataset/items/{item_id}/issue": {
+      "get": {
+        "description": "Return a prefilled issue contributing an item's saved selections.",
+        "operationId": "get_public_dataset_item_issue",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContributionIssue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Dataset Item Issue",
         "tags": [
           "public-dataset"
         ]

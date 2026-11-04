@@ -141,28 +141,13 @@ describe("CollectionThemePanel theme state", () => {
     searchYoutube.mockResolvedValue({ data: { results: [] } });
   });
 
-  it("links the assigned theme's YouTube source", () => {
-    show({
-      ...starWars,
-      theme_status: "complete",
-      has_theme: true,
-      youtube_id: "abc12345678",
-    });
+  it("shows no facts about an assigned theme", () => {
+    show({ ...starWars, theme_status: "complete", has_theme: true, youtube_id: "abc12345678" });
 
     renderPanel();
 
-    expect(screen.getByRole("link", { name: /youtu\.be\/abc12345678/ })).toHaveAttribute(
-      "href",
-      "https://youtu.be/abc12345678",
-    );
-  });
-
-  it("says a theme is assigned when its source is unknown", () => {
-    show({ ...starWars, theme_status: "complete", has_theme: true });
-
-    renderPanel();
-
-    expect(screen.getByText("Theme assigned")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /youtu\.be\/abc12345678/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Theme assigned")).not.toBeInTheDocument();
   });
 
   it("shows a running theme job's progress and holds other changes", () => {

@@ -10,7 +10,11 @@ export default defineConfig({
     hooks: {
       operations: {
         getKind: (operation) => {
-          if (operation.method === "post" && operation.path === "/api/themes/search") {
+          // Reads that take a body too large for a query string.
+          if (
+            operation.method === "post" &&
+            ["/api/themes/search", "/api/collections/recommend-kind"].includes(operation.path)
+          ) {
             return ["query"];
           }
         },

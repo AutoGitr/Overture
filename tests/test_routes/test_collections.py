@@ -197,13 +197,6 @@ async def test_collection_routes_delegate_to_service() -> None:
         )
         == capabilities
     )
-    service.presets.available = AsyncMock(return_value=[])
-    assert (
-        await collections_router.list_collection_presets(
-            service.presets, MediaType.MOVIE
-        )
-        == []
-    )
     service.discovery.field_values = AsyncMock(return_value=[])
     assert (
         await collections_router.list_collection_field_values(

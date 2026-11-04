@@ -2,6 +2,7 @@ import {
   getItemOptions,
   getCollectionOptions,
   getCatalogEntryOptions,
+  getPublicDatasetItemIssueQueryKey,
   getSeasonsOptions,
   listBulkAssetsSchedulesQueryKey,
   listSyncSchedulesQueryKey,
@@ -107,6 +108,11 @@ export function upsertLibraryItem(item: MediaItemRead): void {
 
   // The open item follows this query, so its detail view updates from here too.
   queryClient.setQueryData(getItemOptions({ path: { item_id: item.id } }).queryKey, item);
+  // The issue contributing the item carries its selections.
+  void queryClient.invalidateQueries({
+    queryKey: getPublicDatasetItemIssueQueryKey({ path: { item_id: item.id } }),
+    exact: true,
+  });
   artPreviewState.itemUpdated(item);
   if (added) outdateTmdbMatches();
 }
@@ -310,11 +316,4 @@ const SCHEDULE_LISTS = {
 /** Reload one kind's saved schedules, which the server said changed. */
 export function invalidateSchedules(kind: SchedulesChangedEvent["kind"]): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: SCHEDULE_LISTS[kind] });
-}
-
-/** Saved presets join the built-in ones, so every preset list refetches. */
-export function refreshCollectionPresets(): Promise<void> {
-  return queryClient.invalidateQueries({
-    predicate: ({ queryKey }) => isTaggedQuery(queryKey, "listCollectionPresets"),
-  });
 }

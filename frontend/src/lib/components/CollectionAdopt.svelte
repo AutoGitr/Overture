@@ -41,7 +41,9 @@
 >
   <p class="hint">
     Adopting it gives it criteria that keep what it holds today; movies that all belong to one
-    TMDB collection follow that collection, and a Plex smart collection keeps its filter. It can then be edited, synced and given art and a theme like any other.
+    TMDB collection follow that collection{collection.kind === "smart"
+      ? ", and the smart collection keeps its filter"
+      : ""}. It can then be edited, synced and given art and a theme like any other.
   </p>
   <FieldRow label="Group" for={`${id}-group`}>
     <select id={`${id}-group`} bind:value={group}>

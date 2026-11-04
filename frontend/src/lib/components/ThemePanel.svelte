@@ -51,13 +51,6 @@
   let datasetEnabled = $derived(catalogBrowsing.enabled);
   let catalogEntry = $derived(catalog?.entry);
   let subject = $derived(item ?? preview ?? catalogEntry);
-  const provenanceLabels = {
-    download: "Source recorded when downloaded",
-    embedded_id: "Recovered from an embedded YouTube ID",
-    source_url: "Recovered from an embedded YouTube source URL",
-    metadata_url: "Recovered from a YouTube link in file metadata",
-    selection: "Selected in Overture; downloads once the item has a local folder",
-  };
 
   const feedback = createNotifier();
   let downloadingId = $state<string | null>(null);
@@ -243,10 +236,6 @@
       disabled={context.draft.busy}
       onclick={() => void saveCatalogTheme(context, { no_theme: true })}>No theme</button
     >
-  {/if}
-
-  {#if item?.youtube_id && item.youtube_id_source}
-    <p class="text-muted">{provenanceLabels[item.youtube_id_source]}</p>
   {/if}
 
   {#if subject}

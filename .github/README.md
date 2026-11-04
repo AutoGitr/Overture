@@ -39,8 +39,8 @@ media server's asset naming scheme.
   a duration limit, or paste a YouTube link. Save as MP3 with optional loudness
   normalization.
 - **Collections that maintain themselves.** Build Plex, Jellyfin and Emby
-  collections from criteria, TMDB franchises and lists, MDBList lists and franchises, people
-  and presets, or one per decade, genre or studio. Overture keeps them in sync
+  collections from criteria, TMDB franchises and lists, MDBList lists and
+  people, or one per decade, genre or studio. Overture keeps them in sync
   on a schedule and can request missing titles from Radarr or Sonarr.
 - **Everything on one page.** The library, artwork, themes and every tool share
   a single page; no item, view, setting or operation is more than two clicks away.
@@ -449,19 +449,20 @@ Browsers offer this only over HTTPS, so serve Overture through a
 Plex, Jellyfin and Emby collections appear in the library sidebar under
 **Groups**, inside their groups, or **Collections**, all in one list; Overture
 remembers which you used last. **+ Create collection** opens a Configure page, the one place to create
-anything: **One collection**, or **One per value** (a collection set), from
-scratch, from a preset or from a preset you saved, under **Start from**.
+anything: **One collection**, or **One per value** (a collection set).
 
 Both kinds share the same sections, in the same order:
 
-1. **Setup**: the libraries, the preset, what to create, the title (a set's
-   title template, where `{value}s` turns 1990 into 1990s) and the group. One
-   collection in several libraries becomes a set with that collection in each,
-   kept alike. **Save as preset** keeps the form for later.
+1. **Setup**: what to **Create** first; for a set, what it **Splits by**
+   next, which names its group and fills in what suits the values, such as the
+   25 most common actors, at least two titles per TMDB franchise in release
+   order, or names without "The" and "Collection". Then the libraries, the
+   title (a set's title template, where `{value}s` turns 1990 into 1990s) and
+   the group. One collection in several libraries becomes a set with that
+   collection in each, kept alike.
 2. **Content**: who evaluates the criteria, and the criteria themselves, with
-   **Preview members**. A set instead
-   chooses what it **Splits by**, its values and the conditions every
-   collection needs, with **Preview collections**.
+   **Preview members**. A set instead chooses its values and the conditions
+   every collection needs, with **Preview collections**.
 3. **Members** (a saved collection): its members, and **Missing**, the titles
    its lists hold that the library lacks, which **Request** sends to Radarr or
    Sonarr.
@@ -521,15 +522,18 @@ stored, or **Smart**, a Plex smart collection Plex keeps current with every Plex
 filter, including languages, HDR, codecs and play state for each user.
 Conditions Plex has no filter for, such as lists and tags, label the items they
 match, such as `overture:tmdb_person:5292:actor`, so Plex can filter on the
-labels. TMDB facts are tested by Overture only. **Preview members** suggests the
-other type only when the criteria need it: a filter only Plex has needs Smart,
-and lists, tags, TMDB facts or a custom order need Regular.
+labels. TMDB facts are tested by Overture only. As the criteria are edited, the
+editor suggests the type that suits them: Smart when Plex filters every
+condition natively, or when a filter only Plex has needs it, and Regular when
+lists, tags, TMDB facts, an operator Plex lacks or a custom order need it.
+Jellyfin and Emby have no smart collections, so the choice is not shown there.
 
 A **collection set** creates one collection per value in its libraries: each
 decade, year, genre, studio, network, country, origin country, original
 language, streaming service, content rating, resolution, edition, label, actor,
-director, writer or producer, or TMDB franchise; on Plex smart sets also each
-audio or subtitle language. A **custom** set lists its collections, each with
+director, writer, producer, production company, TMDB keyword, show status or
+TMDB franchise; on Plex smart sets also each audio or subtitle language, video
+or audio codec and audio channel layout. A **custom** set lists its collections, each with
 its own criteria, such as A to Z or Based on a book. Sets can keep the most
 common values, include or skip values, remove text from names, and rename or
 merge values. Values below the minimum are removed when **Below minimum**
@@ -701,6 +705,9 @@ hidden, and an OvertureDB page that was open returns to the library.
 
 To contribute, use **OvertureDB -> Export selections** and attach the ZIP to a
 [bulk contribution](https://github.com/AutoGitr/OvertureDB/issues/new?template=bulk.yml).
+To contribute one title, collection or draft, open it and use **Contribute
+issue**: it opens the movie, show or collection form on GitHub filled in with
+its selections, and warns about anything the form needs from you.
 
 Review and submit the issue on GitHub; a maintainer approves it before it joins
 the catalog. Imported ThemerrDB choices are maintained upstream in ThemerrDB.

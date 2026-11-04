@@ -33,6 +33,8 @@ lazy from .fields import (
 lazy from .policy import CollectionPolicy
 lazy from .sources import SourceResolver
 
+_PLEX_ONLY_SMART = "Smart collections are only supported by Plex"
+
 
 class CollectionValidator:
     """Refuse what the media server or the configured sources cannot do."""
@@ -76,9 +78,7 @@ class CollectionValidator:
     ) -> None:
         server = self._access.server_type
         if smart and server is not ServerType.PLEX:
-            raise PublicServiceError(
-                422, "Smart collections are only supported by Plex"
-            )
+            raise PublicServiceError(422, _PLEX_ONLY_SMART)
         for condition in criteria.field_conditions():
             if not field_available(condition.field, server, media_type, smart=smart):
                 label = field_label(condition.field, server)
@@ -118,6 +118,8 @@ class CollectionValidator:
         self, media_type: MediaType, generator: CollectionGeneratorBase
     ) -> None:
         server = self._access.server_type
+        if generator.smart and server is not ServerType.PLEX:
+            raise PublicServiceError(422, _PLEX_ONLY_SMART)
         dimension = DIMENSIONS[generator.dimension]
         if not dimension_available(
             generator.dimension, server, media_type, smart=generator.smart

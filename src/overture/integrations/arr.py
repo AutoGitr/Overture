@@ -221,7 +221,7 @@ class ArrClient:
         return response.json() if response.content else None
 
     async def options(self) -> ArrOptions:
-        """The root folders and quality profiles titles can be requested with."""
+        """The root folders and quality profiles requests can use, by name."""
         try:
             folders = _FOLDER_LIST.validate_python(
                 await self._request("GET", "/api/v3/rootfolder")
@@ -234,9 +234,14 @@ class ArrClient:
                 502, f"{self._label} returned unreadable options"
             ) from exc
         return ArrOptions(
-            root_folders=tuple(folder.path for folder in folders),
+            root_folders=tuple(
+                sorted((folder.path for folder in folders), key=str.casefold)
+            ),
             quality_profiles=tuple(
-                ArrTag(id=profile.id, label=profile.name) for profile in profiles
+                sorted(
+                    (ArrTag(id=profile.id, label=profile.name) for profile in profiles),
+                    key=lambda profile: profile.label.casefold(),
+                )
             ),
         )
 

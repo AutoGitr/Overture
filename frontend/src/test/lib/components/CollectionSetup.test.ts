@@ -1,9 +1,8 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { CollectionPresetRead } from "../../../generated/rest/types.gen";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
-import { goToCollectionView, navigate, route, sidebarGroup } from "../../../lib/router/routes";
+import { goToCollectionView, navigate, sidebarGroup } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
@@ -21,75 +20,6 @@ const libraries = [
   { id: "movies", title: "Movies", count: 1 },
   { id: "other", title: "Other movies", count: 1 },
 ];
-const presets: CollectionPresetRead[] = [
-  {
-    key: "decades",
-    label: "Decades",
-    description: "One collection per decade.",
-    collection: null,
-    set: {
-      group: "Decades",
-      policy: {
-        sync_mode: null,
-        minimum_items: 2,
-        delete_below_minimum: null,
-        auto_match_art: null,
-        auto_match_theme: null,
-        delete_when_inactive: null,
-        collection_mode: null,
-        order_type: null,
-        collection_filtering: null,
-        visible_home: null,
-        visible_shared: null,
-        visible_library: null,
-        sort_title_format: null,
-        summary_format: null,
-        active_start_mmdd: null,
-        active_end_mmdd: null,
-        request_missing: null,
-        member_label: null,
-        arr_tag: null,
-        home_order: null,
-      },
-      generator: {
-        dimension: "decade",
-        include: [],
-        exclude: [],
-        top: null,
-        title_format: "{value}s",
-        strip_prefix: "",
-        strip_suffix: "",
-        criteria: { mode: "all", conditions: [], groups: [] },
-        smart: false,
-        custom_values: [],
-        aliases: [],
-      },
-    },
-    saved_id: null,
-  },
-  {
-    key: "unplayed",
-    label: "Unplayed",
-    description: "What each user has not played yet, newest additions first.",
-    set: null,
-    collection: {
-      title: "Unplayed",
-      collection_filtering: "user",
-      rule: {
-        ...collectionRule(),
-        criteria: {
-          mode: "all",
-          conditions: [{ kind: "field", field: "unplayed", operator: "is", value: true }],
-          groups: [],
-        },
-        smart: true,
-        order_type: "release.desc",
-      },
-    },
-    saved_id: null,
-  },
-];
-
 function mockPage(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
     "/api/library/libraries": libraries,
@@ -101,7 +31,6 @@ function mockPage(overrides: Record<string, unknown> = {}) {
       summary_format: "From {group}",
     },
     "/api/collections/capabilities": collectionCapabilities(),
-    "/api/collections/presets": presets,
     "/api/collections/12": detail,
     "/api/collections": detail,
     "/api/collections/12/rule": collectionRule(),
@@ -116,7 +45,9 @@ async function createPage() {
 }
 
 function postedBody(calls: { url: string; init: RequestInit }[], path: string) {
-  const call = calls.find((entry) => entry.url.startsWith(path) && entry.init.method !== "GET");
+  const call = calls.find(
+    (entry) => entry.url.split("?")[0] === path.split("?")[0] && entry.init.method !== "GET",
+  );
   return JSON.parse(String(call?.init.body));
 }
 
@@ -139,28 +70,15 @@ describe("collection setup flow", () => {
     await createPage();
     const setup = within(screen.getByRole("region", { name: "Collection setup" }));
     expect(setup.getByRole("group", { name: "Libraries" })).toBeInTheDocument();
-    for (const name of [/^Start from/, "Title", "Group"]) {
+    for (const name of ["Title", "Group"]) {
       expect(setup.getByLabelText(name)).toBeInTheDocument();
     }
+    expect(setup.queryByLabelText(/^Start from/)).toBeNull();
+    expect(setup.queryByLabelText("Save as preset")).toBeNull();
+    expect(setup.queryByLabelText("Split by")).toBeNull();
     expect(setup.queryByLabelText("TMDB collection ID")).toBeNull();
     expect(screen.queryByRole("tablist", { name: "Detail modes" })).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Configure sections" })).toBeNull();
-
-    // Presets of both kinds share one list, grouped by what they create.
-    const start = setup.getByLabelText(/^Start from/);
-    expect(
-      within(start)
-        .getAllByRole("group")
-        .map((group) => [
-          group.getAttribute("label"),
-          within(group)
-            .getAllByRole("option")
-            .map((option) => option.textContent),
-        ]),
-    ).toEqual([
-      ["One collection", ["Unplayed"]],
-      ["One collection per value", ["Decades"]],
-    ]);
 
     await fireEvent.click(setup.getByLabelText("One per value"));
     expect(setup.queryByLabelText("Title")).toBeNull();
@@ -169,6 +87,13 @@ describe("collection setup flow", () => {
     for (const name of ["Collection content", "Collection settings", "Collection schedule"])
       expect(screen.getByRole("region", { name })).toBeInTheDocument();
     expect(setup.getByLabelText(/^Title template/)).toHaveValue("{value}s");
+    // Create comes first, then Split by, which names the group.
+    const labels = setup
+      .getAllByText(/^(Create|Split by|Libraries)$/)
+      .map((label) => label.textContent);
+    expect(labels).toEqual(["Create", "Split by", "Libraries"]);
+    expect(setup.getByLabelText("Split by")).toHaveValue("decade");
+    expect(setup.getByRole("combobox", { name: /^Group/ })).toHaveValue("Decades");
   });
 
   it("starts with only Setup and Content expanded and opens sections from any view", async () => {
@@ -194,38 +119,20 @@ describe("collection setup flow", () => {
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Draft" } });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
     await fireEvent.submit(screen.getByRole("form", { name: "Configure collection" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
+        ),
+      ).toBe(true),
+    );
     expect(
       calls
-        .find((call) => call.init.method === "POST")
+        .find(
+          (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
+        )
         ?.url.startsWith("/api/collections?to_server=false"),
     ).toBe(true);
-  });
-
-  it("creates a per-user smart collection from a preset", async () => {
-    const { calls } = mockPage();
-    await createPage();
-    await onlyLibrary(screen, "Movies");
-    await fireEvent.change(screen.getByLabelText(/^Start from/), { target: { value: "unplayed" } });
-    expect(screen.getByText(presets[1]?.description ?? "")).toBeInTheDocument();
-    expect(screen.getByLabelText("Title")).toHaveValue("Unplayed");
-    expect(screen.getByLabelText("Smart")).toBeChecked();
-    expect(screen.getByLabelText("Criteria condition 1 field")).toHaveValue("field:unplayed");
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
-    expect(postedBody(calls, "/api/collections")).toMatchObject({
-      title: "Unplayed",
-      library_id: "movies",
-      collection_filtering: "user",
-      order_type: "release.desc",
-      rule: {
-        smart: true,
-        order_type: "release.desc",
-        criteria: {
-          conditions: [{ kind: "field", field: "unplayed", operator: "is", value: true }],
-        },
-      },
-    });
   });
 
   it("creates a smart collection combining a Radarr tag with an unplayed condition", async () => {
@@ -249,7 +156,13 @@ describe("collection setup flow", () => {
       target: { value: "false" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
+        ),
+      ).toBe(true),
+    );
     expect(postedBody(calls, "/api/collections").rule).toMatchObject({
       smart: true,
       criteria: {
@@ -262,7 +175,7 @@ describe("collection setup flow", () => {
     });
   });
 
-  it("creates a collection set from a preset into a group that keeps its other defaults", async () => {
+  it("creates a set split by a dimension into a group that keeps its other defaults", async () => {
     const { calls } = mockPage({
       "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
         Response.json(
@@ -287,12 +200,15 @@ describe("collection setup flow", () => {
     await createPage();
     const setup = within(screen.getByRole("region", { name: "Collection setup" }));
     await onlyLibrary(setup, "Other movies");
-    // Choosing a set preset switches the form to a set.
-    await fireEvent.change(setup.getByLabelText(/^Start from/), { target: { value: "decades" } });
-    expect(setup.getByLabelText("One per value")).toBeChecked();
-    expect(setup.getByRole("combobox", { name: /^Group/ })).toHaveValue("Decades");
+    await fireEvent.click(setup.getByLabelText("One per value"));
+    // Split by fills in the group, the title and the defaults its collections start with.
+    await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "franchise" } });
+    const group = setup.getByRole("combobox", { name: /^Group/ });
+    expect(group).toHaveValue("TMDB franchises");
+    await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "decade" } });
+    expect(group).toHaveValue("Decades");
     const set = within(screen.getByRole("region", { name: "Collection content" }));
-    expect(set.getByLabelText("Split by")).toHaveValue("decade");
+    expect(set.queryByLabelText("Split by")).toBeNull();
     await fireEvent.click(set.getByRole("button", { name: "Preview collections" }));
     expect(await set.findByText("1990s")).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
@@ -300,8 +216,12 @@ describe("collection setup flow", () => {
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
     expect(postedBody(calls, "/api/collections/group-policy?")).toMatchObject({
       visible_home: true,
-      minimum_items: 2,
-      generator: { dimension: "decade", library_ids: ["other"], title_format: "{value}s" },
+      generator: {
+        dimension: "decade",
+        library_ids: ["other"],
+        title_format: "{value}s",
+        strip_prefix: "",
+      },
     });
     expect(calls.some((call) => call.url.startsWith("/api/collections/group-policy/sync"))).toBe(
       true,
@@ -410,14 +330,12 @@ describe("collection setup flow", () => {
     );
   });
 
-  it("suggests the kind the criteria need, and switches to it", async () => {
+  it("suggests the kind the criteria suit as they are edited, and switches to it", async () => {
     mockPage({
-      "/api/collections/preview": {
-        member_count: 2,
-        members: ["First", "Second"],
-        recommendation: { kind: "smart", reason: "only Plex can test HDR" },
+      "/api/collections/recommend-kind": {
+        kind: "smart",
+        reason: "Plex filters every condition natively.",
       },
-      "/api/collections/presets": presets,
     });
     await createPage();
     await onlyLibrary(screen, "Movies");
@@ -425,69 +343,19 @@ describe("collection setup flow", () => {
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:year" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Preview members" }));
 
+    // No preview is needed: the advice follows the criteria.
     const title = await screen.findByText("A smart collection suits these criteria");
     const suggestion = title.closest<HTMLElement>('[role="status"]')!;
-    expect(suggestion).toHaveTextContent("It is needed because only Plex can test HDR.");
+    expect(suggestion).toHaveTextContent("Plex filters every condition natively.");
     await fireEvent.click(within(suggestion).getByRole("button", { name: "Switch to smart" }));
     expect(screen.getByLabelText("Smart")).toBeChecked();
     expect(screen.queryByText("A smart collection suits these criteria")).toBeNull();
   });
 
-  it("loads and deletes a saved preset while keeping its filled collection draft", async () => {
-    const saved: CollectionPresetRead = {
-      ...presets[1]!,
-      key: "saved:1",
-      label: "Seasonal",
-      saved_id: 1,
-      collection: {
-        title: "Seasonal",
-        collection_filtering: "admin",
-        rule: collectionRule({
-          sort_title_format: "01_{title}",
-          summary_format: "{title}",
-          active_start_mmdd: "12-01",
-          active_end_mmdd: "12-31",
-          delete_when_inactive: true,
-        }),
-      },
-    };
-    let available = [...presets, saved];
-    const { calls } = mockPage({
-      "/api/collections/presets": () => Response.json(available),
-      "/api/collections/presets/1": () => {
-        available = presets;
-        return Response.json({ status: "deleted" });
-      },
-    });
-    await createPage();
-    await screen.findByRole("option", { name: "Seasonal" });
-    await fireEvent.change(screen.getByLabelText("Start from"), { target: { value: "saved:1" } });
-    expect(screen.getByLabelText("Title")).toHaveValue("Seasonal");
-    expect(screen.getByLabelText("Sort title")).toHaveValue("01_{title}");
-    await fireEvent.click(screen.getByRole("button", { name: "Delete preset" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("option", { name: "Seasonal" })).not.toBeInTheDocument(),
-    );
-    expect(
-      calls.some(
-        (call) => call.url === "/api/collections/presets/1" && call.init.method === "DELETE",
-      ),
-    ).toBe(true);
-    expect(screen.getByLabelText("Title")).toHaveValue("Seasonal");
-    await waitFor(() => expect(screen.getByLabelText("Start from")).toHaveValue(""));
-  });
-
-  it("previews members and saves the form as a preset", async () => {
-    let preset: unknown = null;
+  it("previews members", async () => {
     const { calls } = mockPage({
       "/api/collections/preview": { member_count: 2, members: ["First", "Second"] },
-      "/api/collections/presets": ({ init }: { init: RequestInit }) => {
-        if (init.method !== "POST") return Response.json(presets);
-        preset = JSON.parse(String(init.body));
-        return Response.json({ ...presets[1], key: "saved:1", label: "Mine", saved_id: 1 });
-      },
     });
     await createPage();
     await onlyLibrary(screen, "Movies");
@@ -502,14 +370,5 @@ describe("collection setup flow", () => {
       library_id: "movies",
       media_type: "movie",
     });
-
-    await fireEvent.input(screen.getByLabelText("Save as preset"), { target: { value: "Mine" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Save preset" }));
-    await waitFor(() =>
-      expect(preset).toMatchObject({
-        label: "Mine",
-        collection: { title: "Nineties", rule: { criteria: { conditions: [{ field: "year" }] } } },
-      }),
-    );
   });
 });

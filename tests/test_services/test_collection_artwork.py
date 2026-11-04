@@ -131,6 +131,12 @@ class ArtProvider(Provider):
         assert server_collection_id == "box"
         self.uploads.append((art_type, image_bytes, mime_type))
 
+    @override
+    async def get_collection_image_url(
+        self, server_collection_id: str, art_type: ArtType
+    ) -> str | None:
+        return f"https://plex.test/library/metadata/box/thumb/{len(self.uploads)}"
+
 
 async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
     tmp_path: Path,
@@ -199,6 +205,8 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             )
             assert slot.collection_id == 1
             assert slot.media_item_id is None
+            # The image route reads the path the server lists after the upload.
+            assert row.thumb_url == "https://plex.test/library/metadata/box/thumb/1"
         assert publisher.broadcasts[-1] == ("collection.updated", {"collection_id": 1})
         # Client dimensions cannot disguise actual landscape bytes as a poster.
         with pytest.raises(PublicServiceError, match="aspect ratio"):

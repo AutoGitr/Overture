@@ -2,7 +2,7 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Path, Query
+lazy from fastapi import APIRouter, Depends, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import (
@@ -12,7 +12,6 @@ lazy from ..dependencies import (
     CollectionDiscoveryDep,
     CollectionEditorDep,
     CollectionGroupsDep,
-    CollectionPresetsDep,
     CollectionReaderDep,
     CollectionRulesDep,
     CollectionSetsDep,
@@ -40,11 +39,10 @@ lazy from ..schemas.collections import (
     CollectionGroupPolicy,
     CollectionGroupRename,
     CollectionGroupSyncResult,
+    CollectionKindRequest,
     CollectionMembersUpdate,
     CollectionMissing,
     CollectionOptions,
-    CollectionPresetRead,
-    CollectionPresetSave,
     CollectionPreview,
     CollectionPreviewRequest,
     CollectionRead,
@@ -58,6 +56,7 @@ lazy from ..schemas.collections import (
     CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
+    KindRecommendation,
     SetCollectionThemeRequest,
 )
 lazy from ..schemas.common import (
@@ -120,28 +119,12 @@ async def get_collection_capabilities(
     return discovery.capabilities(media_type)
 
 
-@router.get("/presets")
-async def list_collection_presets(
-    presets: CollectionPresetsDep, media_type: MediaTypeQuery
-) -> list[CollectionPresetRead]:
-    """Return saved presets, then the built-in ones the server can evaluate."""
-    return await presets.available(media_type)
-
-
-@router.post("/presets")
-async def save_collection_preset(
-    body: CollectionPresetSave, presets: CollectionPresetsDep
-) -> CollectionPresetRead:
-    """Keep a collection or set as a preset."""
-    return await presets.save(body)
-
-
-@router.delete("/presets/{preset_id}")
-async def delete_collection_preset(
-    preset_id: Annotated[int, Path(gt=0)], presets: CollectionPresetsDep
-) -> StatusResponse:
-    """Forget a saved preset."""
-    return await presets.delete(preset_id)
+@router.post("/recommend-kind", openapi_extra=READS_ONLY)
+async def recommend_collection_kind(
+    body: CollectionKindRequest, discovery: CollectionDiscoveryDep
+) -> KindRecommendation | None:
+    """Recommend a smart or regular collection for a rule, changing nothing."""
+    return await discovery.recommend(body)
 
 
 @router.post("/preview", openapi_extra=READS_ONLY)

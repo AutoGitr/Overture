@@ -51,5 +51,6 @@
     height: 34px;
     object-fit: contain;
     display: block;
+    filter: var(--id-badge-icon-filter, none);
   }
 </style>

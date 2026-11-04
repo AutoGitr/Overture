@@ -89,19 +89,10 @@ describe("ThemePanel search", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("explains recovered provenance and clears the label when switching items", async () => {
-    showItem(
-      mediaItem({
-        youtube_id: "UuPb1J_RCJM",
-        youtube_id_source: "source_url",
-      }),
-    );
-    const view = renderPanel();
-    expect(screen.getByText("Recovered from an embedded YouTube source URL")).toBeInTheDocument();
-    await view.rerender({ item: mediaItem({ id: 2, youtube_id: "hXVsOWrU6Ws" }), preview: null });
-    await waitFor(() => {
-      expect(screen.queryByText(/Recovered from/)).not.toBeInTheDocument();
-    });
+  it("shows no facts about a finished download", () => {
+    showItem(mediaItem({ youtube_id: "UuPb1J_RCJM", youtube_id_source: "download" }));
+    renderPanel();
+    expect(screen.queryByText(/recorded when downloaded|Recovered from/)).not.toBeInTheDocument();
   });
 
   it("treats a missing OvertureDB entry as a normal empty result", async () => {

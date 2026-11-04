@@ -9,7 +9,10 @@
     LibrarySectionRead,
     TmdbCollectionResponse,
   } from "../../generated/rest/types.gen";
+  import { createQuery } from "@tanstack/svelte-query";
   import { untrack } from "svelte";
+  import { getPublicDatasetCollectionIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import ContributeIssueLink from "./ContributeIssueLink.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import DataStatus from "./DataStatus.svelte";
   import { CollectionDraft, CollectionEditor } from "../utils/collectionForms.svelte";
@@ -25,7 +28,6 @@
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
   import CollectionAdopt from "./CollectionAdopt.svelte";
-  import ThemeStatus from "./ThemeStatus.svelte";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
   import PasteArtButton from "./PasteArtButton.svelte";
@@ -75,6 +77,10 @@
   let artType = $derived(routedCollectionArtType());
   let managing = $derived(!!editor && (editor.creating || view === "configure"));
   const catalog = new CatalogBrowsing();
+  const collectionIssue = createQuery(() => ({
+    ...getPublicDatasetCollectionIssueOptions({ path: { collection_id: collection?.id ?? 0 } }),
+    enabled: !!collection?.tmdb_collection_id && catalog.enabled,
+  }));
   const panelId = $props.id();
   const formId = `${panelId}-configure`;
 </script>
@@ -146,6 +152,7 @@
           }}
         />
       {/if}
+      <ContributeIssueLink issue={collectionIssue.data} />
     {/if}
   {/snippet}
   {#snippet recordActions()}
@@ -220,10 +227,6 @@
         {libraries}
       />
     {:else if collection && actions && view === "themes"}
-      {#if !collection.theme_unavailable}<ThemeStatus
-          duration={collection.theme_status === "missing" ? null : collection.theme_duration}
-          title={collection.youtube_title}
-        />{/if}
       <CollectionThemePanel {collection} {actions} />
     {:else if collection}
       {#key `${collection.id}-${artType}`}

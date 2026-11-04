@@ -404,6 +404,13 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         return await self.client.get_art_url(server_id, _art_field(art_type))
 
     @override
+    async def get_collection_image_url(
+        self, server_collection_id: str, art_type: ArtType
+    ) -> str | None:
+        """Return the collection's listed image, which changes with each upload."""
+        return await self.get_active_art_url(server_collection_id, art_type)
+
+    @override
     async def delete_theme(self, server_item_id: str, theme_id: str | None) -> None:
         """Delete the Plex theme attached to an item."""
         await self.client.delete_theme(server_item_id)

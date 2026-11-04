@@ -289,6 +289,12 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     async def get_active_art_url(self, server_id: str, art_type: ArtType) -> str | None:
         """Return the currently selected provider artwork URL."""
 
+    @abstractmethod
+    async def get_collection_image_url(
+        self, server_collection_id: str, art_type: ArtType
+    ) -> str | None:
+        """Return a collection's image URL as ``list_collections`` reports it."""
+
     async def get_art_candidates(
         self, server_id: str, art_type: ArtType
     ) -> list[ArtCandidate]:

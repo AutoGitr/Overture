@@ -253,6 +253,12 @@ class SetDimension(StrEnum):
     STREAMING = "streaming"
     AUDIO_LANGUAGE = "audio_language"
     SUBTITLE_LANGUAGE = "subtitle_language"
+    VIDEO_CODEC = "video_codec"
+    AUDIO_CODEC = "audio_codec"
+    AUDIO_LAYOUT = "audio_layout"
+    COMPANY = "company"
+    TMDB_KEYWORD = "tmdb_keyword"
+    SHOW_STATUS = "show_status"
     #: Collections the set lists itself, each with its own conditions.
     CUSTOM = "custom"
 

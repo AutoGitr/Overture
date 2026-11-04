@@ -8,7 +8,6 @@ lazy from sqlmodel import col, delete, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.collection_group import CollectionGroup
-lazy from ..db.models.collection_preset import CollectionPreset
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection, MediaCollectionMember
 lazy from ..db.models.media_item import MediaItem
@@ -324,15 +323,6 @@ class CollectionRepository:
                 )
             )
         ).first()
-
-    async def presets(self, media_type: MediaType) -> list[CollectionPreset]:
-        """Saved presets for the media type, by label."""
-        stmt = (
-            select(CollectionPreset)
-            .where(col(CollectionPreset.media_type) == media_type)
-            .order_by(col(CollectionPreset.label))
-        )
-        return list((await self.session.exec(stmt)).all())
 
     async def rules(self) -> list[CollectionRule]:
         """Return every rule in stable order."""

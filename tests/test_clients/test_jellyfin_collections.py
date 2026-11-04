@@ -3,7 +3,7 @@
 lazy from typing import override
 
 lazy from overture.config import Settings
-lazy from overture.domain import MediaType
+lazy from overture.domain import ArtType, MediaType
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.jellyfin.provider import JellyfinProvider
 lazy from overture.media_servers.wire import MediaBrowserItem
@@ -70,3 +70,28 @@ async def test_created_boxset_immediately_has_its_theme_folder(
     created = await provider.create_collection("movies", "New", MediaType.MOVIE, ["m1"])
     assert created.path == "/config/data/collections/New [boxset]"
     assert created.member_ids == ("m1",)
+
+
+async def test_boxset_image_url_carries_the_tag_an_upload_changes(
+    app_config: Settings,
+) -> None:
+    class ImageClient(Client):
+        @override
+        async def get_item(self, item_id: str) -> MediaBrowserItem:
+            return {
+                "Id": item_id,
+                "ImageTags": {"Primary": "new"},
+                "BackdropImageTags": ["back"],
+            }
+
+    app_config.MEDIA_SERVER_URL = "https://jellyfin.test"
+    provider = JellyfinProvider(
+        client=ImageClient(app_config=app_config), app_config=app_config
+    )
+
+    assert await provider.get_collection_image_url("box", ArtType.POSTER) == (
+        "https://jellyfin.test/Items/box/Images/Primary?tag=new"
+    )
+    assert await provider.get_collection_image_url("box", ArtType.BACKGROUND) == (
+        "https://jellyfin.test/Items/box/Images/Backdrop?tag=back"
+    )

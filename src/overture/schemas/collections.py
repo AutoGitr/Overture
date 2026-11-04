@@ -889,10 +889,15 @@ class CollectionPreview(StrictBaseModel):
     member_count: int
     #: The first members, in the collection's order.
     members: list[str]
-    #: Only on servers with smart collections.
-    recommendation: KindRecommendation | None = None
     #: Titles whose TMDB facts no sync has read yet, when the criteria test them.
     tmdb_unread: int = 0
+
+
+class CollectionKindRequest(StrictBaseModel):
+    """A rule being edited, to recommend the collection kind for."""
+
+    media_type: MediaType
+    rule: CollectionRuleWrite
 
 
 class CollectionPreviewRequest(StrictBaseModel):
@@ -910,51 +915,6 @@ class CollectionGroupSyncResult(StrictBaseModel):
     removed: list[int] = Field(default_factory=list[int])
     synced: int = 0
     errors: dict[str, PublicText] = Field(default_factory=dict[str, PublicText])
-
-
-class CollectionPresetCollection(StrictBaseModel):
-    """A single collection a preset starts from."""
-
-    title: str
-    collection_filtering: CollectionFiltering | None = None
-    rule: CollectionRuleWrite
-
-
-class CollectionPresetSet(StrictBaseModel):
-    """A collection set a preset starts from."""
-
-    group: str
-    policy: CollectionPolicyBase
-    generator: CollectionGeneratorBase
-
-
-class CollectionPresetRead(StrictBaseModel):
-    """A starting point for a new collection or collection set."""
-
-    key: str
-    label: str
-    description: str
-    collection: CollectionPresetCollection | None = None
-    set: CollectionPresetSet | None = None
-    #: Set for a preset saved from the form, which can be deleted.
-    saved_id: int | None = None
-
-
-class CollectionPresetSave(StrictBaseModel):
-    """A collection or set to keep as a preset."""
-
-    media_type: MediaType
-    label: Annotated[str, Field(min_length=1, max_length=100)]
-    description: Annotated[str, Field(max_length=500)] = ""
-    collection: CollectionPresetCollection | None = None
-    set: CollectionPresetSet | None = None
-
-    @model_validator(mode="after")
-    def validate_kind(self) -> Self:
-        """A preset makes either one collection or a set."""
-        if (self.collection is None) == (self.set is None):
-            raise ValueError("Save either a collection or a set")
-        return self
 
 
 class CollectionFieldRead(StrictBaseModel):
@@ -988,6 +948,13 @@ class CollectionDimensionRead(StrictBaseModel):
     title_format: str
     #: Only a set of Plex smart collections can enumerate it.
     smart_only: bool = False
+    #: What a new set of it starts with: its most common values, the text its
+    #: values' names drop, and the group defaults its collections inherit.
+    top: int | None = None
+    strip_prefix: str = ""
+    strip_suffix: str = ""
+    minimum_items: int | None = None
+    order_type: CollectionOrder | None = None
 
 
 class CollectionCapabilities(StrictBaseModel):

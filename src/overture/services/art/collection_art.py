@@ -140,8 +140,13 @@ class CollectionArtService:
                 raise PublicServiceError(
                     409, "The collection is inactive and has no server copy"
                 )
-            await self._provider_registry.provider.upload_collection_art(
+            provider = self._provider_registry.provider
+            await provider.upload_collection_art(
                 row.server_item_id, art_type, fetched.data, fetched.media_type
+            )
+            # The image route and its cache version read the URL the server now lists.
+            server_url = await provider.get_collection_image_url(
+                row.server_item_id, art_type
             )
             async with self._database.write_session() as db:
                 row = await self._require(db, collection_id, media_type, art_type)
@@ -160,11 +165,10 @@ class CollectionArtService:
                     ),
                 )
                 row.updated_at = utc_now()
-                # A stable provider path still needs a new browser cache version.
                 if art_type is ArtType.POSTER:
-                    row.thumb_url = original.file_hash
+                    row.thumb_url = server_url
                 else:
-                    row.art_url = original.file_hash
+                    row.art_url = server_url
                 db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}

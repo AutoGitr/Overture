@@ -21,6 +21,7 @@ lazy from ...jobs.runner import JobContext
 lazy from ...jobs.slot import ManagedBackgroundJob
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...schemas.public_dataset import (
+    ContributionIssue,
     PublicDatasetRecord,
     PublicDatasetSources,
     PublicDatasetStatus,
@@ -40,6 +41,7 @@ lazy from ..scheduler import SchedulerService
 lazy from . import catalog, staging
 lazy from .browse import CatalogBrowser
 lazy from .export import export_archive
+lazy from .issue import collection_issue, item_issue
 lazy from .lookup import (
     get_record_for_collection,
     get_record_for_entry,
@@ -275,6 +277,14 @@ class PublicDatasetService:
         return await get_sources_for_item(
             item_id, app_config=self._app_config, database=self._database
         )
+
+    async def get_issue_for_item(self, item_id: int) -> ContributionIssue:
+        """Return the issue contributing one item's saved selections."""
+        return await item_issue(item_id, database=self._database)
+
+    async def get_issue_for_collection(self, collection_id: int) -> ContributionIssue:
+        """Return the issue contributing one collection's art and theme."""
+        return await collection_issue(collection_id, database=self._database)
 
     async def get_record_for_item(self, item_id: int) -> PublicDatasetRecord:
         """Look up public dataset record for an item."""

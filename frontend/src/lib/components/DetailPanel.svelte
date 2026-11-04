@@ -3,7 +3,9 @@
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
+  import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
+  import { getPublicDatasetItemIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { createSeasonsQuery } from "../rest/queries";
@@ -25,6 +27,7 @@
   import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
   import { catalogStatus, hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
   import CollectionBadge from "./CollectionBadge.svelte";
+  import ContributeIssueLink from "./ContributeIssueLink.svelte";
   import ArtPanel from "./ArtPanel.svelte";
   import ArtCategoryTabs, { ART_TABS } from "./ArtCategoryTabs.svelte";
   import DetailRecordActions from "./DetailRecordActions.svelte";
@@ -35,7 +38,6 @@
   import SeasonGrid from "./SeasonGrid.svelte";
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import ThemePanel from "./ThemePanel.svelte";
-  import ThemeStatus from "./ThemeStatus.svelte";
 
   let {
     item = null,
@@ -57,6 +59,10 @@
   const catalogBrowsing = new CatalogBrowsing();
 
   const actions = new ItemRecordActions(() => item);
+  const itemIssue = createQuery(() => ({
+    ...getPublicDatasetItemIssueOptions({ path: { item_id: item?.id ?? 0 } }),
+    enabled: !!item && catalogBrowsing.enabled,
+  }));
   let detail = $derived(catalog?.detail);
   let catalogEntry = $derived(catalog?.entry);
   let catalogTones = $derived(catalogEntry ? catalogStatus(catalogEntry) : null);
@@ -229,6 +235,7 @@
         onselect={openLibrary}
       />
     {/if}
+    <ContributeIssueLink issue={detail ? detail.draft_issue : item ? itemIssue.data : null} />
     {#if detail?.draft}<button
         class="btn btn-ghost btn-sm"
         disabled={catalog?.draft.busy}
@@ -292,7 +299,6 @@
         <ArtPanel {item} {preview} {catalog} {artType} drillSeasonNum={view.drillSeasonNum} />
       {/if}
     {:else}
-      <ThemeStatus duration={item?.theme_duration} title={item?.youtube_title} />
       {#key subjectKey}
         <ThemePanel {item} {preview} {catalog} />
       {/key}
