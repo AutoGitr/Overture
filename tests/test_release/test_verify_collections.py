@@ -239,3 +239,38 @@ async def test_plex_fields_overture_lacks_are_problems(
         ("plex sort", "episode.addedAt"),
         ("plex field", "episode.year"),
     ]
+
+
+async def test_insecure_skips_tls_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verified: list[bool] = []
+    seen: Requests = []
+    overture_transport = fake_overture(seen)
+    original = httpx2.AsyncClient
+
+    def plex(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"MediaContainer": {"Directory": []}})
+
+    def client(**kwargs: Any) -> httpx2.AsyncClient:
+        verified.append(kwargs.get("verify", True))
+        transport = (
+            httpx2.MockTransport(plex)
+            if kwargs.get("base_url") == "https://plex.test"
+            else overture_transport
+        )
+        return original(transport=transport, **kwargs)
+
+    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    monkeypatch.setenv("OVERTURE_API_KEY", "plex-key")
+    monkeypatch.setenv("PLEX_TOKEN", "token")
+
+    args = module.argparse.Namespace(
+        urls=["http://plex.test"],
+        report=None,
+        sources=None,
+        plex="https://plex.test",
+        insecure=True,
+    )
+    await module.run(args)
+    assert verified == [False, False]

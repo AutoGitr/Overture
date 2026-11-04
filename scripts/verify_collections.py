@@ -34,7 +34,8 @@ in the menu and pass them in the same order as the addresses:
 One key without commas is used for every instance. Pass --sources with a JSON
 file of source objects (as the API takes them) to test TMDB, MDBList and
 person sources. Pass --plex with Plex's address and PLEX_TOKEN set to compare
-the fields Plex offers with Overture's; it only reads from Plex.
+the fields Plex offers with Overture's; it only reads from Plex. Pass
+--insecure to skip TLS certificate verification.
 """
 
 lazy import argparse
@@ -127,9 +128,12 @@ def detail(response: httpx2.Response) -> str:
 class Overture:
     """A client of one Overture instance, holding a read-only API key."""
 
-    def __init__(self, base_url: str, api_key: str) -> None:
+    def __init__(self, base_url: str, api_key: str, *, verify: bool = True) -> None:
         self.client = httpx2.AsyncClient(
-            base_url=base_url, timeout=300, headers={API_KEY_HEADER: api_key}
+            base_url=base_url,
+            timeout=300,
+            verify=verify,
+            headers={API_KEY_HEADER: api_key},
         )
 
     async def get(self, path: str, **params: Any) -> Any:
@@ -442,10 +446,14 @@ class Library:
 
 
 async def verify_instance(
-    url: str, api_key: str, extra_sources: list[dict[str, Any]]
+    url: str,
+    api_key: str,
+    extra_sources: list[dict[str, Any]],
+    *,
+    verify: bool = True,
 ) -> list[Case]:
     """Run every check against one Overture instance."""
-    overture = Overture(url, api_key)
+    overture = Overture(url, api_key, verify=verify)
     cases: list[Case] = []
     try:
         for media_type in ("movie", "show"):
@@ -498,13 +506,16 @@ def _plex_sorts() -> set[str]:
     return keys
 
 
-async def verify_plex_fields(url: str, token: str) -> list[Case]:
+async def verify_plex_fields(
+    url: str, token: str, *, verify: bool = True
+) -> list[Case]:
     """Report each filter, field and sort a Plex section offers that Overture lacks."""
     cases: list[Case] = []
     sorts = _plex_sorts()
     async with httpx2.AsyncClient(
         base_url=url,
         timeout=60,
+        verify=verify,
         headers={"X-Plex-Token": token, "Accept": "application/json"},
     ) as client:
         response = await client.get("/library/sections")
@@ -622,13 +633,14 @@ def api_keys(count: int) -> list[str]:
 async def run(args: argparse.Namespace) -> int:
     extra = json.loads(args.sources.read_text()) if args.sources else []
     cases: list[Case] = []
+    verify = not getattr(args, "insecure", False)
     for url, key in zip(args.urls, api_keys(len(args.urls)), strict=True):
-        cases.extend(await verify_instance(url, key, extra))
+        cases.extend(await verify_instance(url, key, extra, verify=verify))
     if args.plex:
         token = os.environ.get("PLEX_TOKEN", "")
         if not token:
             raise SystemExit("Set PLEX_TOKEN to read Plex's fields with --plex")
-        cases.extend(await verify_plex_fields(args.plex, token))
+        cases.extend(await verify_plex_fields(args.plex, token, verify=verify))
     text = report(cases)
     if args.report:
         args.report.write_text(text)
@@ -652,6 +664,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--plex", help="Plex's address, to compare its fields with Overture's"
+    )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Skip TLS certificate verification",
     )
     sys.exit(asyncio.run(run(parser.parse_args())))
 
