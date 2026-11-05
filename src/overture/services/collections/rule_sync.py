@@ -63,25 +63,7 @@ class RuleSync:
             await self._refresh_source_summary(rule)
             error = None
             try:
-                if not self._access.active(
-                    row.active_start_mmdd or policy.active_start_mmdd,
-                    row.active_end_mmdd or policy.active_end_mmdd,
-                ):
-                    if policy.delete_when_inactive and row.server_item_id is not None:
-                        await self._editor.withhold_locked(row)
-                        result = CollectionSyncResponse(
-                            deleted=True, removed=len(current)
-                        )
-                    else:
-                        result = CollectionSyncResponse(skipped=True)
-                elif rule.smart:
-                    result = await self._sync_smart(
-                        row, rule, policy, current, library_items
-                    )
-                else:
-                    result = await self._sync_regular(
-                        row, rule, policy, current, library_items
-                    )
+                result = await self._apply(row, rule, policy, current, library_items)
             except Exception as exc:
                 error = str(exc)
                 raise
@@ -97,9 +79,33 @@ class RuleSync:
             # without one is now withheld until it is active or large enough.
             if not result.skipped or row.server_item_id is None:
                 await self._mark_synced(collection_id)
-        if not result.skipped and not result.deleted:
+        if not result.skipped and not result.withheld:
             await self._post_sync.run(collection_id, media_type)
         return result
+
+    async def _apply(
+        self,
+        row: MediaCollection,
+        rule: CollectionRule,
+        policy: CollectionPolicy,
+        current: list[MediaItem],
+        library_items: list[MediaItem],
+    ) -> CollectionSyncResponse:
+        """Withhold a collection its set or season leaves out, else sync it."""
+        inactive = not self._access.active(
+            row.active_start_mmdd or policy.active_start_mmdd,
+            row.active_end_mmdd or policy.active_end_mmdd,
+        )
+        if row.deselected or (inactive and policy.delete_when_inactive):
+            if row.server_item_id is None:
+                return CollectionSyncResponse(withheld=True)
+            await self._editor.withhold_locked(row)
+            return CollectionSyncResponse(withheld=True, removed=len(current))
+        if inactive:
+            return CollectionSyncResponse(skipped=True)
+        if rule.smart:
+            return await self._sync_smart(row, rule, policy, current, library_items)
+        return await self._sync_regular(row, rule, policy, current, library_items)
 
     async def _sync_smart(
         self,
@@ -140,7 +146,9 @@ class RuleSync:
             saved.child_count = len(remote_ids)
             saved.updated_at = utc_now()
             session.add(saved)
-        await self._membership.prune_source_labels(row.library_id or "", row.media_type)
+        # Labels go unused only when criteria change, which clears the last sync.
+        if rule.last_synced_at is None:
+            await self._membership.prune_labels(row.library_id or "", row.media_type)
         old_ids = {item.id or 0 for item in current}
         return CollectionSyncResponse(
             added=len(set(members) - old_ids),
@@ -179,9 +187,9 @@ class RuleSync:
                 set(remote_ids) | {item.server_item_id for item in wanted}
             )
         if member_count < policy.minimum_items:
-            if policy.delete_below_minimum:
-                await self._editor.delete_locked(row)
-                return CollectionSyncResponse(deleted=True, removed=len(current))
+            if policy.delete_below_minimum and row.server_item_id is not None:
+                await self._editor.withhold_locked(row)
+                return CollectionSyncResponse(withheld=True, removed=len(current))
             return CollectionSyncResponse(skipped=True)
         await self._editor.replace_kind(row, smart=False)
         await self._editor.set_members_locked(
@@ -189,7 +197,7 @@ class RuleSync:
         )
         await self._editor.update_locked(row, saved_options(row, rule))
         if was_smart and row.library_id:
-            await self._membership.prune_source_labels(row.library_id, row.media_type)
+            await self._membership.prune_labels(row.library_id, row.media_type)
         old = {item.id for item in current}
         new = {item.id for item in wanted}
         return CollectionSyncResponse(

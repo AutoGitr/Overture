@@ -396,7 +396,9 @@ export const SEARCHES = {
     label: "Director",
     placeholder: "Search directors...",
     movieOnly: true,
-    library: textMatcher((item) => (item.media_type === "movie" ? item.director : null)),
+    library: textMatcher((item) =>
+      item.media_type === "movie" ? item.directors.join("\n") : null,
+    ),
   },
   studio: {
     label: "Studio",

@@ -433,23 +433,45 @@ def field_label(field: FilterField, server: ServerType) -> str:
     return _SERVER_LABELS.get((server, field), FIELDS[field].label)
 
 
+def plex_tests(field: FilterField, server: ServerType, media_type: MediaType) -> bool:
+    """Whether Plex smart collections test the field themselves."""
+    spec = FIELDS[field]
+    plex = spec.plex
+    return (
+        server is ServerType.PLEX
+        and plex is not None
+        and plex.filterable
+        and (
+            media_type in spec.media_types
+            or (media_type is MediaType.SHOW and plex.show_key is not None)
+        )
+    )
+
+
 def field_available(
     field: FilterField, server: ServerType, media_type: MediaType, *, smart: bool
 ) -> bool:
-    """Whether a collection evaluated by Overture, or by Plex if smart, can test it."""
+    """Whether a collection evaluated by Overture, or by Plex if smart, can test it.
+
+    A smart collection tests a field Plex lacks through a label Overture keeps
+    on the items matching the condition, refreshed on each sync.
+    """
     spec = FIELDS[field]
+    local = media_type in spec.media_types and server in spec.local
     if smart:
-        plex = spec.plex
-        return (
-            server is ServerType.PLEX
-            and plex is not None
-            and plex.filterable
-            and (
-                media_type in spec.media_types
-                or (media_type is MediaType.SHOW and plex.show_key is not None)
-            )
+        return server is ServerType.PLEX and (
+            local or plex_tests(field, server, media_type)
         )
-    return media_type in spec.media_types and server in spec.local
+    return local
+
+
+def labelled_field(
+    field: FilterField, server: ServerType, media_type: MediaType
+) -> bool:
+    """Whether smart collections test the field through Overture's labels."""
+    return field_available(field, server, media_type, smart=True) and not plex_tests(
+        field, server, media_type
+    )
 
 
 @dataclass(slots=True, frozen=True)
@@ -462,20 +484,12 @@ class DimensionSpec:
     title_format: str = "{value}"
     #: Order values as numbers, newest first, rather than alphabetically.
     numeric: bool = False
-    #: What a new set starts with: only the most common values, the text each
-    #: value's name drops, and the size and order its collections default to.
-    top: int | None = None
+    #: What a new set starts with: the text each value's name drops, and the
+    #: order its collections default to.
     strip_prefix: str = ""
     strip_suffix: str = ""
-    minimum_items: int | None = None
     order_type: CollectionOrder | None = None
 
-
-#: Sets of people, studios and other long-tailed values keep the most common.
-_TOP = 25
-#: The fewest titles a person's or studio's collection, or a rarer value's, needs.
-_PEOPLE = 3
-_FEW = 5
 
 DIMENSIONS: frozendict[SetDimension, DimensionSpec] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -484,53 +498,40 @@ DIMENSIONS: frozendict[SetDimension, DimensionSpec] = frozendict(
         ),
         SetDimension.YEAR: DimensionSpec("Years", FilterField.YEAR, numeric=True),
         SetDimension.GENRE: DimensionSpec("Genres", FilterField.GENRE),
-        SetDimension.STUDIO: DimensionSpec(
-            "Studios", FilterField.STUDIO, top=_TOP, minimum_items=_PEOPLE
-        ),
+        SetDimension.STUDIO: DimensionSpec("Studios", FilterField.STUDIO),
         SetDimension.COUNTRY: DimensionSpec("Countries", FilterField.COUNTRY),
         SetDimension.CONTENT_RATING: DimensionSpec(
             "Content ratings", FilterField.CONTENT_RATING
         ),
         SetDimension.RESOLUTION: DimensionSpec("Resolutions", FilterField.RESOLUTION),
         SetDimension.LABEL: DimensionSpec("Labels", FilterField.LABEL),
-        SetDimension.ACTOR: DimensionSpec(
-            "Actors", FilterField.ACTOR, top=_TOP, minimum_items=_PEOPLE
-        ),
-        SetDimension.DIRECTOR: DimensionSpec(
-            "Directors", FilterField.DIRECTOR, top=_TOP, minimum_items=_PEOPLE
-        ),
-        SetDimension.WRITER: DimensionSpec(
-            "Writers", FilterField.WRITER, top=_TOP, minimum_items=_PEOPLE
-        ),
-        SetDimension.PRODUCER: DimensionSpec(
-            "Producers", FilterField.PRODUCER, top=_TOP, minimum_items=_PEOPLE
-        ),
+        SetDimension.ACTOR: DimensionSpec("Actors", FilterField.ACTOR),
+        SetDimension.DIRECTOR: DimensionSpec("Directors", FilterField.DIRECTOR),
+        SetDimension.WRITER: DimensionSpec("Writers", FilterField.WRITER),
+        SetDimension.PRODUCER: DimensionSpec("Producers", FilterField.PRODUCER),
         SetDimension.FRANCHISE: DimensionSpec(
             "TMDB franchises",
             None,
             strip_prefix="The ",
             strip_suffix=" Collection",
-            minimum_items=2,
             order_type=CollectionOrder.RELEASE_ASC,
         ),
         SetDimension.EDITION: DimensionSpec("Editions", FilterField.EDITION),
-        SetDimension.NETWORK: DimensionSpec(
-            "Networks", FilterField.NETWORK, top=_TOP, minimum_items=_PEOPLE
-        ),
+        SetDimension.NETWORK: DimensionSpec("Networks", FilterField.NETWORK),
         SetDimension.ORIGINAL_LANGUAGE: DimensionSpec(
-            "Original languages", FilterField.ORIGINAL_LANGUAGE, minimum_items=_FEW
+            "Original languages", FilterField.ORIGINAL_LANGUAGE
         ),
         SetDimension.ORIGIN_COUNTRY: DimensionSpec(
-            "Origin countries", FilterField.ORIGIN_COUNTRY, minimum_items=_FEW
+            "Origin countries", FilterField.ORIGIN_COUNTRY
         ),
         SetDimension.STREAMING: DimensionSpec(
-            "Streaming services", FilterField.STREAMING, minimum_items=_FEW
+            "Streaming services", FilterField.STREAMING
         ),
         SetDimension.AUDIO_LANGUAGE: DimensionSpec(
-            "Audio languages", FilterField.AUDIO_LANGUAGE, minimum_items=_FEW
+            "Audio languages", FilterField.AUDIO_LANGUAGE
         ),
         SetDimension.SUBTITLE_LANGUAGE: DimensionSpec(
-            "Subtitle languages", FilterField.SUBTITLE_LANGUAGE, minimum_items=_FEW
+            "Subtitle languages", FilterField.SUBTITLE_LANGUAGE
         ),
         SetDimension.VIDEO_CODEC: DimensionSpec(
             "Video codecs", FilterField.VIDEO_CODEC
@@ -542,10 +543,10 @@ DIMENSIONS: frozendict[SetDimension, DimensionSpec] = frozendict(
             "Audio channels", FilterField.AUDIO_LAYOUT
         ),
         SetDimension.COMPANY: DimensionSpec(
-            "Production companies", FilterField.COMPANY, top=_TOP, minimum_items=_PEOPLE
+            "Production companies", FilterField.COMPANY
         ),
         SetDimension.TMDB_KEYWORD: DimensionSpec(
-            "TMDB keywords", FilterField.TMDB_KEYWORD, top=_TOP, minimum_items=_FEW
+            "TMDB keywords", FilterField.TMDB_KEYWORD
         ),
         SetDimension.SHOW_STATUS: DimensionSpec(
             "Show statuses", FilterField.SHOW_STATUS

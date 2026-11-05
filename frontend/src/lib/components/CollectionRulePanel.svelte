@@ -47,7 +47,7 @@
     <FieldRow
       label="Collection type"
       hint={editor.rule.smart
-        ? "Plex evaluates it live, per user, with every Plex filter. Conditions Plex has no filter for, such as lists and tags, label the items they match so Plex can filter on the labels."
+        ? "Plex evaluates it live, per user, with every Plex filter. Conditions Plex has no filter for, such as lists, tags and TMDB facts, label the items they match so Plex can filter on the labels; Overture refreshes those labels on each sync."
         : "Overture evaluates it on each sync from the library metadata, TMDB facts and lists it stored, so play state is as of the last library sync."}
     >
       <SegmentedControl

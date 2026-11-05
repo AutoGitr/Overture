@@ -1882,10 +1882,6 @@ export type CollectionDimensionRead = {
      * Label
      */
     label: string;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
     order_type: CollectionOrder | null;
     /**
      * Smart Only
@@ -1903,10 +1899,6 @@ export type CollectionDimensionRead = {
      * Title Format
      */
     title_format: string;
-    /**
-     * Top
-     */
-    top: number | null;
 };
 
 /**
@@ -1921,6 +1913,10 @@ export type CollectionFieldRead = {
      * Label
      */
     label: string;
+    /**
+     * Labelled
+     */
+    labelled: boolean;
     /**
      * Local
      */
@@ -2217,7 +2213,7 @@ export type CollectionGroupRename = {
 /**
  * CollectionGroupSyncResult
  *
- * What syncing a group created, removed and failed to sync.
+ * What syncing a group created, took off the server and failed to sync.
  */
 export type CollectionGroupSyncResult = {
     /**
@@ -2231,13 +2227,13 @@ export type CollectionGroupSyncResult = {
         [key: string]: PublicText;
     };
     /**
-     * Removed
-     */
-    removed: Array<number>;
-    /**
      * Synced
      */
     synced: number;
+    /**
+     * Withheld
+     */
+    withheld: Array<number>;
 };
 
 /**
@@ -2970,10 +2966,6 @@ export type CollectionSyncResponse = {
      */
     added: number;
     /**
-     * Deleted
-     */
-    deleted: boolean;
-    /**
      * Removed
      */
     removed: number;
@@ -2981,6 +2973,10 @@ export type CollectionSyncResponse = {
      * Skipped
      */
     skipped: boolean;
+    /**
+     * Withheld
+     */
+    withheld: boolean;
 };
 
 /**
@@ -3882,9 +3878,9 @@ export type MediaItemRead = {
      */
     created_at: string | null;
     /**
-     * Director
+     * Directors
      */
-    director: string | null;
+    directors: Array<string>;
     /**
      * Folder Path
      */

@@ -53,7 +53,7 @@ def _make_server_item(
     server_link: str = "",
     library_id: str = "lib-1",
     folder_path: str | None = None,
-    director: str | None = None,
+    directors: tuple[str, ...] = (),
     studio: str | None = None,
 ) -> ServerItem:
     return ServerItem(
@@ -67,7 +67,7 @@ def _make_server_item(
         server_link=server_link or f"https://server.test/items/{item_id}",
         library_id=library_id,
         folder_path=folder_path,
-        director=director,
+        directors=directors,
         studio=studio,
     )
 
@@ -604,7 +604,7 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
             server_item_id="plex-12",
             server_link="https://app.plex.tv/desktop/#!/server/abc/details?key=12",
             library_id="plex-lib-1",
-            director="T. Gilliam",
+            directors=["T. Gilliam"],
             studio="Universal",
         )
         session.add(plex_item)
@@ -627,7 +627,7 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
             guids={"tmdb": "63", "imdb": "tt0114746"},
             server_link="http://jellyfin.local:8096/web/index.html#!/details?id=jf-uuid-twelve-monkeys",
             library_id="jf-movies-lib",
-            director="Terry Gilliam",
+            directors=("Terry Gilliam",),
             studio="Universal Pictures",
         )
     ]
@@ -643,7 +643,7 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
         assert updated.id == item_id
         assert updated.title == "Twelve Monkeys"
         assert updated.year == 1996
-        assert updated.director == "Terry Gilliam"
+        assert updated.directors == ["Terry Gilliam"]
         assert updated.studio == "Universal Pictures"
         assert updated.server_item_id == "jf-uuid-twelve-monkeys"
         assert updated.imdb_id == "tt0114746"
@@ -670,7 +670,7 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
             year=2020,
             tvdb_id=999,
             server_item_id="old-server-show",
-            director="Accidental Director",
+            directors=["Accidental Director"],
             library_id="lib-shows",
         )
         session.add(existing_show)
@@ -693,7 +693,7 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
             year=2020,
             guids={"tvdb": "999"},
             library_id="lib-shows",
-            director="Server Show Director",
+            directors=("Server Show Director",),
         ),
         _make_server_item(
             "brand-new-show",
@@ -702,7 +702,7 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
             year=2024,
             guids={"tvdb": "888"},
             library_id="lib-shows",
-            director="Another Show Director",
+            directors=("Another Show Director",),
         ),
     ]
 
@@ -712,12 +712,12 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
     async with isolated_session_factory() as session:
         updated_show = await session.get(MediaItem, show_id)
         assert updated_show is not None
-        assert updated_show.director is None
+        assert updated_show.directors == []
 
         repo = MediaItemRepository(session)
         created_show = await repo.find_by_server_id("brand-new-show", "show")
         assert created_show is not None
-        assert created_show.director is None
+        assert created_show.directors == []
 
 
 async def test_sync_isolates_item_level_runtime_error_resource_unavailable(

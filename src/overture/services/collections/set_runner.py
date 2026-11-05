@@ -1,7 +1,7 @@
 """Collection sets: one generated collection per value of a dimension."""
 
 lazy from collections import Counter
-lazy from collections.abc import Mapping
+lazy from collections.abc import Collection, Mapping
 
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
@@ -82,7 +82,16 @@ class CollectionSets:
             )
             for library_id in body.generator.library_ids
             for value, below in await self._values(
-                body.media_type, body.generator, library_id, body.group, minimum
+                body.media_type,
+                body.generator,
+                library_id,
+                body.group,
+                minimum,
+                {
+                    value
+                    for (library, value) in existing
+                    if library == library_id and value is not None
+                },
             )
         ]
 
@@ -92,10 +101,13 @@ class CollectionSets:
         generator: CollectionGenerator,
         result: CollectionGroupSyncResult,
     ) -> None:
-        """Create the set's new collections, update the rest and remove stale ones.
+        """Create the set's new collections, update the rest and deselect stale ones.
 
-        Values below the minimum go when the policy deletes them, and so do
-        values the library no longer holds or the set no longer selects.
+        A value the library no longer holds or the set no longer selects is
+        deselected: its collection leaves the server until the set selects it
+        again. Values below the minimum are left to the minimum policy, applied
+        when each collection syncs. Overture keeps every collection until it
+        is deleted explicitly.
         """
         media_type = group.media_type
         server = self._access.server_type
@@ -123,24 +135,40 @@ class CollectionSets:
                 for row in in_library
                 if row.generated_value is None or row.collection_group != group.name
             }
-            # A value the set no longer selects has no members, so it is below minimum.
-            stale: set[str] = set(members) if policy.delete_below_minimum else set()
-            for value, below in await self._values(
-                media_type, generator, library_id, group.name, policy.minimum_items
-            ):
-                stale.discard(value.value)
-                if below:
-                    if policy.delete_below_minimum and value.value in members:
-                        stale.add(value.value)
-                    continue
-                await self._apply_value(
-                    group, generator, library_id, value, members, titles, rules, result
-                )
-            for value in sorted(stale):
+            values = await self._values(
+                media_type,
+                generator,
+                library_id,
+                group.name,
+                policy.minimum_items,
+                set(members),
+            )
+            selected = {value.value for value, _ in values}
+            await self._deselect(
+                [row for value, row in members.items() if value not in selected],
+                [row for value, row in members.items() if value in selected],
+            )
+            for value, below in values:
+                # An existing collection below the minimum is the minimum
+                # policy's to withhold or keep when it syncs.
+                if not below or value.value in members:
+                    await self._apply_value(
+                        group,
+                        generator,
+                        library_id,
+                        value,
+                        members,
+                        titles,
+                        rules,
+                        result,
+                    )
+            for value in sorted(set(members) - selected):
                 row = members[value]
+                if row.server_item_id is None:
+                    continue
                 try:
-                    await self._editor.delete(row.id or 0, media_type)
-                    result.removed.append(row.id or 0)
+                    await self._editor.delete(row.id or 0, media_type, target="server")
+                    result.withheld.append(row.id or 0)
                 except Exception as exc:
                     result.errors[row.title] = str(exc)
         async with self._access.database.write_session() as session:
@@ -152,6 +180,26 @@ class CollectionSets:
                 session.add(saved)
         await self._access.changed()
 
+    async def _deselect(
+        self, stale: list[MediaCollection], selected: list[MediaCollection]
+    ) -> None:
+        """Record which of the set's collections its values still select."""
+        changed = {
+            row.id or 0: deselected
+            for rows, deselected in ((stale, True), (selected, False))
+            for row in rows
+            if row.deselected is not deselected
+        }
+        if not changed:
+            return
+        async with self._access.database.write_session() as session:
+            repo = CollectionRepository(session)
+            for collection_id, deselected in changed.items():
+                row = await repo.get(collection_id)
+                if row is not None:
+                    row.deselected = deselected
+                    session.add(row)
+
     async def _values(
         self,
         media_type: MediaType,
@@ -159,12 +207,14 @@ class CollectionSets:
         library_id: str,
         group: str | None,
         minimum: int,
+        existing: Collection[str],
     ) -> list[tuple[SetValue, bool]]:
         """The set's values in one library, and whether each is below the minimum.
 
-        Franchises below the minimum, or kept by collections outside the group,
-        are left out rather than looked up on TMDB. Values only Plex knows are
-        counted by Plex.
+        Franchises kept by collections outside the group, and new ones below
+        the minimum, are left out rather than looked up on TMDB; a franchise
+        with a collection in *existing* stays, for the minimum policy to
+        decide. Values only Plex knows are counted by Plex.
         """
         self._validator.generator(media_type, generator)
         server = self._access.server_type
@@ -188,7 +238,8 @@ class CollectionSets:
             for value, count in list(counts.items()):
                 name = (
                     await self._sources.franchise_name(int(value))
-                    if count >= minimum and int(value) not in elsewhere
+                    if (count >= minimum or value in existing)
+                    and int(value) not in elsewhere
                     else None
                 )
                 if name is None:

@@ -54,14 +54,16 @@ class Provider(JellyfinProvider):
 
 class DirectorProvider(Provider):
     def __init__(
-        self, directors: dict[str, str | None], *, app_config: Settings
+        self, directors: dict[str, tuple[str, ...]], *, app_config: Settings
     ) -> None:
         super().__init__([], app_config=app_config)
         self.directors = directors
         self.director_calls: list[list[str]] = []
 
     @override
-    async def get_directors(self, server_item_ids: list[str]) -> dict[str, str | None]:
+    async def get_directors(
+        self, server_item_ids: list[str]
+    ) -> dict[str, tuple[str, ...]]:
         self.director_calls.append(server_item_ids)
         return {
             key: self.directors[key] for key in server_item_ids if key in self.directors
@@ -72,7 +74,7 @@ def _server_item(
     item_id: str,
     title: str,
     library_id: str = "lib1",
-    director: str | None = None,
+    directors: tuple[str, ...] = (),
     folder_path: str | None = None,
     media_type: MediaType = MediaType.MOVIE,
     director_etag: str | None = None,
@@ -87,7 +89,7 @@ def _server_item(
         background_url=None,
         server_link=f"https://server/items/{item_id}",
         library_id=library_id,
-        director=director,
+        directors=directors,
         director_etag=director_etag,
         folder_path=folder_path,
     )
@@ -106,21 +108,25 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
                     media_type=MediaType.MOVIE,
                     title="Brazil",
                     server_item_id="same",
-                    director="Terry Gilliam",
+                    directors=["Terry Gilliam"],
                     director_etag="v1",
                 ),
                 MediaItem(
                     media_type=MediaType.MOVIE,
                     title="Alien",
                     server_item_id="changed",
-                    director="Someone Else",
+                    directors=["Someone Else"],
                     director_etag="v1",
                 ),
             ]
         )
         await session.commit()
     provider = DirectorProvider(
-        {"changed": "Ridley Scott", "new": "John Carpenter", "same": "Wrong"},
+        {
+            "changed": ("Ridley Scott",),
+            "new": ("John Carpenter", "Tommy Lee Wallace"),
+            "same": ("Wrong",),
+        },
         app_config=app_config,
     )
     reconciler = LibraryReconciler(
@@ -135,36 +141,36 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
         _server_item("changed", "Alien", director_etag="v2"),
         _server_item("new", "The Thing", director_etag="v1"),
         _server_item("gone", "Gone", director_etag="v1"),
-        _server_item("inline", "Inline", director="Plex Director"),
+        _server_item("inline", "Inline", directors=("Plex Director",)),
         _server_item("show", "Show", media_type=MediaType.SHOW),
     ]
 
     await reconciler.fill_deferred_directors(provider, items)
 
     assert provider.director_calls == [["changed", "new", "gone"]]
-    assert [(item.director, item.director_etag) for item in items] == [
-        ("Terry Gilliam", "v1"),
-        ("Ridley Scott", "v2"),
-        ("John Carpenter", "v1"),
-        (None, None),
-        ("Plex Director", None),
-        (None, None),
+    assert [(item.directors, item.director_etag) for item in items] == [
+        (("Terry Gilliam",), "v1"),
+        (("Ridley Scott",), "v2"),
+        (("John Carpenter", "Tommy Lee Wallace"), "v1"),
+        ((), None),
+        (("Plex Director",), None),
+        ((), None),
     ]
 
     await sync_full(reconciler, items)
     async with isolated_session_factory() as session:
         stored = {
-            item.server_item_id: (item.director, item.director_etag)
+            item.server_item_id: (item.directors, item.director_etag)
             for item in (await session.exec(select(MediaItem))).all()
         }
-    assert stored["changed"] == ("Ridley Scott", "v2")
-    assert stored["new"] == ("John Carpenter", "v1")
-    assert stored["gone"] == (None, None)
+    assert stored["changed"] == (["Ridley Scott"], "v2")
+    assert stored["new"] == (["John Carpenter", "Tommy Lee Wallace"], "v1")
+    assert stored["gone"] == ([], None)
 
     unchanged = [_server_item("changed", "Alien", director_etag="v2")]
     await reconciler.fill_deferred_directors(provider, unchanged)
     assert len(provider.director_calls) == 1
-    assert unchanged[0].director == "Ridley Scott"
+    assert unchanged[0].directors == ("Ridley Scott",)
 
 
 async def test_failed_stamp_never_replaces_the_sync_error(
@@ -403,7 +409,7 @@ async def test_sync_emits_targeted_upserts_and_removals(
                     media_type=MediaType.MOVIE,
                     title="Preserved Year",
                     year=1980,
-                    director="Existing Director",
+                    directors=("Existing Director",),
                     server_item_id="preserved-year",
                     server_link="https://server/items/preserved-year",
                     library_id="lib1",
@@ -416,10 +422,10 @@ async def test_sync_emits_targeted_upserts_and_removals(
         [
             _server_item("revived", "Revived"),
             _server_item("new", "New"),
-            _server_item("changed", "Changed", director="Ridley Scott"),
+            _server_item("changed", "Changed", directors=("Ridley Scott",)),
             _server_item("skipped", "Skipped"),
             _server_item(
-                "preserved-year", "Preserved Year", director="Existing Director"
+                "preserved-year", "Preserved Year", directors=("Existing Director",)
             ),
         ],
         app_config=app_config,
@@ -475,11 +481,11 @@ async def test_sync_emits_targeted_upserts_and_removals(
     assert revived is not None
     assert revived.server_removed_at is None
     assert changed is not None
-    assert changed.director == "Ridley Scott"
+    assert changed.directors == ["Ridley Scott"]
     assert changed.year == 1979
     assert preserved_year is not None
     assert preserved_year.year == 1980
-    assert preserved_year.director == "Existing Director"
+    assert preserved_year.directors == ["Existing Director"]
     assert out_of_scope is not None
     assert out_of_scope.server_removed_at is None
 

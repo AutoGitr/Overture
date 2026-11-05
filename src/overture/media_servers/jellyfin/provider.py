@@ -57,13 +57,14 @@ def _media_browser_image_url(
     return client.api_url(f"/Items/{item_id}/Images/{kind}", tag=tag)
 
 
-def _media_browser_person(
+def _media_browser_people(
     people: list[MediaBrowserPerson], person_type: str
-) -> str | None:
-    """Return the first person credited with a MediaBrowser person type."""
-    return next(
-        (person.get("Name") for person in people if person.get("Type") == person_type),
-        None,
+) -> tuple[str, ...]:
+    """Return everyone credited with a MediaBrowser person type, in credit order."""
+    return tuple(
+        name
+        for person in people
+        if person.get("Type") == person_type and (name := person.get("Name"))
     )
 
 
@@ -275,10 +276,12 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                     yield batch
 
     @override
-    async def get_directors(self, server_item_ids: list[str]) -> dict[str, str | None]:
-        """Return the first credited director of each listed movie."""
+    async def get_directors(
+        self, server_item_ids: list[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """Return every credited director of each listed movie."""
         return {
-            item["Id"]: _media_browser_person(item.get("People") or [], "Director")
+            item["Id"]: _media_browser_people(item.get("People") or [], "Director")
             for item in await self.client.get_people(server_item_ids)
         }
 
@@ -405,6 +408,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         self,
         server_collection_id: str,
         *,
+        library_id: str,
         title: str,
         summary: str | None,
         sort_title: str | None,

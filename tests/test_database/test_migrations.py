@@ -278,3 +278,43 @@ def test_saved_presets_are_dropped_and_the_table_comes_back_empty() -> None:
             assert conn.exec_driver_sql("SELECT * FROM collection_presets").all() == []
     finally:
         engine.dispose()
+
+
+def test_a_movies_director_becomes_the_first_of_its_directors_and_back() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "b3a91c4e5f27")
+            for item_id, director in ((1, "'Ridley Scott'"), (2, "NULL")):
+                conn.exec_driver_sql(
+                    "INSERT INTO media_items (id, media_type, title, monitored, "
+                    "genres, actors, writers, producers, countries, labels, "
+                    "origin_countries, tmdb_keywords, companies, networks, streaming, "
+                    "theme_provenance_cleared, director, director_etag) VALUES "
+                    f"({item_id}, 'movie', 'Movie', 1, '[]', '[]', '[]', '[]', '[]', "
+                    f"'[]', '[]', '[]', '[]', '[]', '[]', 0, {director}, 'v1')"
+                )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, media_type, server_type, kind, "
+                "title, order_type, visible_home, visible_shared, visible_library, "
+                "child_count, monitored, unsynced) VALUES (1, 'movie', 'plex', "
+                "'regular', 'Saga', 'release.asc', 0, 0, 0, 0, 1, 0)"
+            )
+
+            command.upgrade(config, "c6d2e8f41a90")
+            # A stored director loses its Etag, so the next sync reads them all.
+            assert conn.exec_driver_sql(
+                "SELECT directors, director_etag FROM media_items ORDER BY id"
+            ).all() == [('["Ridley Scott"]', None), ("[]", "v1")]
+            assert conn.exec_driver_sql(
+                "SELECT deselected FROM media_collections"
+            ).all() == [(0,)]
+
+            command.downgrade(config, "b3a91c4e5f27")
+            assert conn.exec_driver_sql(
+                "SELECT director FROM media_items ORDER BY id"
+            ).all() == [("Ridley Scott",), (None,)]
+    finally:
+        engine.dispose()

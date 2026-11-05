@@ -99,7 +99,7 @@ class LibraryReconciler:
         """Fill directors a listing omitted, asking the server only on change.
 
         A movie whose ``director_etag`` matches a stored row keeps that row's
-        director; the rest are fetched in one batch. A movie the server no
+        directors; the rest are fetched in one batch. A movie the server no
         longer returns loses its Etag, so the next sync asks again.
         """
         deferred = [item for item in server_items if item.director_etag is not None]
@@ -113,7 +113,7 @@ class LibraryReconciler:
         for item in deferred:
             key = (item.id, item.director_etag or "")
             if key in stored:
-                item.director = stored[key]
+                item.directors = stored[key]
             else:
                 changed.append(item)
         if not changed:
@@ -121,7 +121,7 @@ class LibraryReconciler:
         directors = await provider.get_directors([item.id for item in changed])
         for item in changed:
             if item.id in directors:
-                item.director = directors[item.id]
+                item.directors = directors[item.id]
             else:
                 item.director_etag = None
 

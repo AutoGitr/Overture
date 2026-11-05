@@ -37,7 +37,7 @@ class MediaItemRead(StrictBaseModel):
     server_verified_at: datetime | None = None
     library_id: str | None = None
     monitored: bool = True
-    director: str | None = None
+    directors: list[str] = Field(default_factory=list[str])
     studio: str | None = None
 
     # Artwork & Assets

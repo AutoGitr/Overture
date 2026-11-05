@@ -91,7 +91,7 @@ lazy from overture.services.collections.criteria import CriteriaContext, evaluat
 lazy from overture.services.collections.fields import FIELDS
 lazy from overture.services.collections.recommend import recommend_kind
 lazy from overture.services.collections.service import CollectionsService
-lazy from overture.services.collections.sources import source_label
+lazy from overture.services.collections.sources import condition_label, source_label
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
@@ -213,6 +213,7 @@ class Provider(PlexProvider):
         self,
         server_collection_id: str,
         *,
+        library_id: str,
         title: str,
         summary: str | None,
         sort_title: str | None,
@@ -305,11 +306,12 @@ class Tmdb(TMDBClient):
         return TmdbCollection(
             collection_id,
             "Saga",
-            "Collection overview",
+            None,
             (
                 TmdbTitle(12, "Second", 2005, "2005-01-01", None),
                 TmdbTitle(11, "First", 1995, "1995-01-01", None),
             ),
+            overview="Collection overview",
         )
 
     @override
@@ -764,7 +766,7 @@ async def test_group_rename_preserves_defaults_and_rejects_collisions(
         await manager.service.groups.rename(MediaType.SHOW, "Evenings", "Shows")
 
 
-async def test_sets_create_update_and_remove_their_collections(
+async def test_sets_create_update_and_withhold_their_collections(
     manager: Manager,
 ) -> None:
     decades = CollectionGenerator(
@@ -822,10 +824,15 @@ async def test_sets_create_update_and_remove_their_collections(
         ),
     )
     edited = await manager.service.groups.sync(MediaType.MOVIE, "Decades")
-    assert edited.removed == [first]
+    assert edited.withheld == [first]
     assert (
         await manager.service.reader.get(second, MediaType.MOVIE)
     ).title == "The 2000s"
+    # Overture keeps the deselected collection, and its own sync leaves it
+    # off the server until the set selects its value again.
+    assert (await manager.service.reader.get(first, MediaType.MOVIE)).withheld
+    assert (await manager.service.rules.sync(first, MediaType.MOVIE)).withheld
+    assert (await manager.service.reader.get(first, MediaType.MOVIE)).withheld
     with pytest.raises(PublicServiceError, match="edit the set"):
         await manager.service.editor.save_rule(
             second,
@@ -841,7 +848,7 @@ async def test_sets_create_update_and_remove_their_collections(
             media_type=MediaType.MOVIE, generator=decades, group="Decades"
         )
     )
-    assert [entry.collection_id for entry in kept] == [None, second]
+    assert [entry.collection_id for entry in kept] == [first, second]
     genres = await manager.service.sets.preview(
         CollectionSetPreview(
             media_type=MediaType.SHOW,
@@ -1063,7 +1070,7 @@ async def test_rule_sync_uses_global_defaults_and_nullable_overrides(
 
 
 @pytest.mark.parametrize("delete", [False, True])
-async def test_below_minimum_keeps_or_deletes_collection(
+async def test_below_minimum_keeps_or_withholds_collection(
     manager: Manager, database: Database, *, delete: bool
 ) -> None:
     identity = await create(manager)
@@ -1079,8 +1086,11 @@ async def test_below_minimum_keeps_or_deletes_collection(
         CollectionRuleWrite(criteria=sources(MdblistSource(identifiers=["42"]))),
     )
     result = await manager.service.rules.sync(identity, MediaType.MOVIE)
-    assert result.deleted is delete
+    assert result.withheld is delete
     assert result.skipped is not delete
+    # Overture keeps the collection either way; only its server copy goes.
+    detail = await manager.service.reader.get(identity, MediaType.MOVIE)
+    assert detail.withheld is delete
     if not delete:
         assert (
             len((await manager.service.reader.get(identity, MediaType.MOVIE)).members)
@@ -1237,7 +1247,7 @@ async def test_append_keeps_new_server_members_and_counts_them_for_minimum(
     )
     result = await manager.service.rules.sync(identity, MediaType.MOVIE)
     assert not result.skipped
-    assert not result.deleted
+    assert not result.withheld
     assert manager.provider.members["1"] == ["m1", "m0", "m2", "unimported"]
     detail = await manager.service.reader.get(identity, MediaType.MOVIE)
     assert detail.child_count == 4
@@ -1389,7 +1399,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
     )
     result = await manager.service.rules.sync(identity, MediaType.MOVIE)
     assert result.skipped
-    assert not result.deleted
+    assert not result.withheld
     listed = await manager.service.reader.listed(MediaType.MOVIE)
     assert listed[0].below_minimum
     await manager.service.editor.save_rule(
@@ -1547,6 +1557,61 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
     # Without a smart collection filtering on it, Overture removes the label.
     await manager.service.editor.delete(detail.id, MediaType.MOVIE)
     assert manager.provider.synced_labels[-1] == (label, [], ["m2"])
+
+
+async def test_a_franchise_set_gives_each_collection_its_tmdb_summary(
+    manager: Manager,
+) -> None:
+    """Without a summary template, a collection takes its list's description."""
+    await manager.service.groups.save_policy(
+        MediaType.MOVIE,
+        "Franchises",
+        CollectionGroupPolicy(
+            generator=CollectionGenerator(
+                dimension=SetDimension.FRANCHISE, library_ids=["movies"]
+            )
+        ),
+    )
+
+    result = await manager.service.groups.sync(MediaType.MOVIE, "Franchises")
+
+    [created] = result.created
+    detail = await manager.service.reader.get(created, MediaType.MOVIE)
+    assert detail.summary == "Collection overview"
+    assert list(manager.provider.summaries.values()) == ["Collection overview"]
+
+
+async def test_smart_collections_test_fields_plex_lacks_through_labels(
+    manager: Manager, database: Database
+) -> None:
+    async with database.write_session() as session:
+        first = await session.get(MediaItem, manager.ids[0])
+        assert first is not None
+        first.original_language = "ja"
+        session.add(first)
+    japanese = FieldCondition(field=FilterField.ORIGINAL_LANGUAGE, value="ja")
+    label = condition_label(japanese)
+    manager.provider.choices = {"label": [("7", label)]}
+
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Japanese",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=CollectionRuleWrite(
+                smart=True,
+                order_type=CollectionOrder.TITLE_ASC,
+                criteria=FilterGroup(conditions=[japanese]),
+            ),
+        )
+    )
+
+    assert detail.kind is CollectionKind.SMART
+    assert manager.provider.synced_labels == [(label, ["m0"], [])]
+    assert manager.provider.smart_filters["1"] == "sort=titleSort&label=7"
+    # Its Plex filter reads Overture's label, so it cannot be left unmanaged.
+    with pytest.raises(PublicServiceError, match="labels only Overture keeps"):
+        await manager.service.editor.orphan(detail.id, MediaType.MOVIE)
 
 
 async def test_regular_and_smart_kinds_replace_the_server_collection(
@@ -2303,18 +2368,28 @@ async def test_sync_group_records_rule_errors(manager: Manager) -> None:
     assert "Will Fail" in res.errors
 
 
-async def test_create_collection_below_minimum_raises_422(manager: Manager) -> None:
-    with pytest.raises(
-        PublicServiceError, match="fewer members than the effective minimum"
-    ):
-        await manager.service.editor.create(
-            CollectionCreate(
-                title="Empty",
-                library_id="movies",
-                media_type=MediaType.MOVIE,
-                rule=NOTHING_MATCHES,
-            )
+async def test_a_collection_below_its_minimum_waits_in_overture_for_the_server(
+    manager: Manager,
+) -> None:
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Empty",
+            library_id="movies",
+            media_type=MediaType.MOVIE,
+            rule=NOTHING_MATCHES,
         )
+    )
+    assert detail.withheld
+    assert manager.provider.created == []
+    # Once it has enough members, its sync creates it on the server.
+    await manager.service.editor.save_rule(
+        detail.id,
+        MediaType.MOVIE,
+        CollectionRuleWrite(criteria=sources(MdblistSource(identifiers=["42"]))),
+    )
+    result = await manager.service.rules.sync(detail.id, MediaType.MOVIE)
+    assert not (result.skipped or result.withheld)
+    assert not (await manager.service.reader.get(detail.id, MediaType.MOVIE)).withheld
 
 
 async def test_scheduled_sync_rule_skips_when_not_due(manager: Manager) -> None:
@@ -3178,7 +3253,7 @@ async def test_missing_group_membership_uses_reserved_fallback(
             CollectionOrder.TITLE_ASC,
             (CollectionKind.REGULAR, "Plex has no filter for TMDB rating gte"),
         ),
-        # Neither kind can test both conditions, so the rule must change.
+        # Only Plex tests HDR, and a smart collection tests TMDB facts by label.
         (
             FilterGroup(
                 conditions=[
@@ -3191,7 +3266,7 @@ async def test_missing_group_membership_uses_reserved_fallback(
                 ]
             ),
             CollectionOrder.TITLE_ASC,
-            None,
+            (CollectionKind.SMART, "Only Plex can test HDR is."),
         ),
         (
             where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
@@ -3363,18 +3438,20 @@ async def test_every_dimension_previews_with_its_defaults(manager: Manager) -> N
     for entry in capabilities.dimensions:
         if entry.dimension is SetDimension.CUSTOM:
             continue
-        generator = CollectionGenerator(
-            dimension=entry.dimension,
-            library_ids=["movies"],
-            top=entry.top,
-            title_format=entry.title_format,
-            strip_prefix=entry.strip_prefix,
-            strip_suffix=entry.strip_suffix,
-            smart=entry.smart_only,
-        )
-        await manager.service.sets.preview(
-            CollectionSetPreview(media_type=MediaType.MOVIE, generator=generator)
-        )
+        # On Plex every dimension makes a smart set too, testing by label
+        # what Plex cannot test itself.
+        for smart in {entry.smart_only, True}:
+            generator = CollectionGenerator(
+                dimension=entry.dimension,
+                library_ids=["movies"],
+                title_format=entry.title_format,
+                strip_prefix=entry.strip_prefix,
+                strip_suffix=entry.strip_suffix,
+                smart=smart,
+            )
+            await manager.service.sets.preview(
+                CollectionSetPreview(media_type=MediaType.MOVIE, generator=generator)
+            )
 
 
 async def test_plex_lists_resolutions_as_the_keys_sync_stores(manager: Manager) -> None:

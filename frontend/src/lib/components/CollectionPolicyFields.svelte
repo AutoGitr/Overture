@@ -56,9 +56,9 @@
     [true, "Show"],
     [false, "Hide"],
   ] as const;
-  const DELETE_KEEP = [
-    [true, "Delete collection"],
-    [false, "Keep collection"],
+  const REMOVE_KEEP = [
+    [true, "Remove from server"],
+    [false, "Keep on server"],
   ] as const;
 </script>
 
@@ -78,6 +78,7 @@
     sync = true,
     arr = null,
     memberLabels = false,
+    filtering = true,
     children,
   }: {
     policy: PolicyData;
@@ -95,6 +96,8 @@
     arr?: string | null;
     /** The server takes labels Overture puts on members. */
     memberLabels?: boolean;
+    /** Offer per-user filtering, which only Plex smart collections apply. */
+    filtering?: boolean;
     /** Fields placed right after Sort, under Display. */
     children?: Snippet;
   } = $props();
@@ -136,7 +139,8 @@
     {inherits}
     bind:value={policy.delete_below_minimum}
     inherited={defaults?.delete_below_minimum}
-    options={DELETE_KEEP}
+    options={REMOVE_KEEP}
+    hint="Overture keeps the collection either way, and puts it back once it is large enough."
   />
   <h4 class="caps-label">Automation</h4>
   <InheritedSelect
@@ -215,14 +219,16 @@
     inherited={defaults?.collection_mode}
     options={MODES}
   />
-  <InheritedSelect
-    label="Collection filtering"
-    {inherits}
-    bind:value={policy.collection_filtering}
-    inherited={defaults?.collection_filtering}
-    options={FILTERINGS}
-    hint="User's library makes per-user smart collections such as Unplayed."
-  />
+  {#if filtering}
+    <InheritedSelect
+      label="Collection filtering"
+      {inherits}
+      bind:value={policy.collection_filtering}
+      inherited={defaults?.collection_filtering}
+      options={FILTERINGS}
+      hint="Smart collections only: User's library evaluates the filter for each user, such as Unplayed. Regular collections show everyone the same members."
+    />
+  {/if}
   <InheritedSelect
     label="Library recommended"
     {inherits}

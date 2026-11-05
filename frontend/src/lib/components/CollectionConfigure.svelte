@@ -132,6 +132,7 @@
                 : "Sonarr"
               : null}
             memberLabels={set.capabilities.data?.member_labels ?? false}
+            filtering={!!set.generator.smart}
           />
         </DetailForm>
       {:else}

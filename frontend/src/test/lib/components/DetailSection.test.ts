@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { expect, it } from "vitest";
+import { sectionState } from "../../../lib/stores/sectionState.svelte";
+import { readJson } from "../../../lib/utils/storage";
 import ViewedSection from "../../helpers/ViewedSection.svelte";
 
 const children = createRawSnippet(() => ({ render: () => "<p>Body</p>" }));
@@ -38,4 +40,20 @@ it("keeps each view's choice apart", async () => {
     "true",
     "false",
   ]);
+});
+
+it("starts each collection over, and remembers only views meant to be remembered", async () => {
+  const first = render(ViewedSection, { ...props, view: "collection:1" });
+  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
+  first.unmount();
+  // The same collection remounted, by a refetch say, keeps the choice.
+  const again = render(ViewedSection, { ...props, view: "collection:1" });
+  expect(screen.getByRole("button", { name: "Settings", expanded: true })).toBeInTheDocument();
+  again.unmount();
+  sectionState.enter("collection:2");
+  render(ViewedSection, { ...props, view: "collection:2" });
+  expect(screen.getByRole("button", { name: "Settings", expanded: false })).toBeInTheDocument();
+  sectionState.enter("collection:1");
+  expect(sectionState.isOpen("collection:1", "Settings", false)).toBe(false);
+  expect(readJson("sections_open_by_view", {})).toEqual({});
 });

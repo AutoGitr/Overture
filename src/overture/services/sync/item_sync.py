@@ -46,7 +46,7 @@ class ItemReconciler:
             item.server_link,
             item.library_id,
             item.monitored,
-            item.director,
+            tuple(item.directors),
             item.studio,
             item.last_matched_at,
             item.created_at,
@@ -188,10 +188,10 @@ class ItemReconciler:
             server_item_id=server_item.id,
             server_link=server_item.server_link,
             library_id=server_item.library_id or None,
-            director=(
-                server_item.director
+            directors=(
+                list(server_item.directors)
                 if server_item.media_type == MediaType.MOVIE
-                else None
+                else []
             ),
             director_etag=(
                 server_item.director_etag
@@ -273,10 +273,10 @@ class ItemReconciler:
         if server_item.year is not None and (item.year is None or server_changed):
             item.year = server_item.year
         if server_item.media_type == MediaType.MOVIE:
-            item.director = server_item.director
+            item.directors = list(server_item.directors)
             item.director_etag = server_item.director_etag
         else:
-            item.director = None
+            item.directors = []
             item.director_etag = None
         apply_server_metadata(item, server_item)
 

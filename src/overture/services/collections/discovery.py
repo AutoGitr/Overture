@@ -27,6 +27,7 @@ lazy from .fields import (
     field_available,
     field_label,
     field_operators,
+    plex_tests,
     smart_only_dimension,
 )
 lazy from .membership import Membership
@@ -83,28 +84,7 @@ class CollectionDiscovery:
             smart_orders=available_orders(server, media_type, smart=True)
             if plex
             else [],
-            fields=sorted(
-                (
-                    CollectionFieldRead(
-                        field=field,
-                        label=field_label(field, server),
-                        kind=spec.kind,
-                        operators=list(field_operators(field, smart=False)),
-                        smart_operators=list(field_operators(field, smart=True))
-                        if smart
-                        else [],
-                        local=local,
-                        smart=smart,
-                    )
-                    for field, spec in FIELDS.items()
-                    if (
-                        local := field_available(field, server, media_type, smart=False)
-                        and (tmdb or not spec.tmdb)
-                    )
-                    | (smart := field_available(field, server, media_type, smart=True))
-                ),
-                key=_by_label,
-            ),
+            fields=sorted(self._fields(media_type), key=_by_label),
             sources=sorted(
                 (
                     CollectionSourceRead(
@@ -125,10 +105,8 @@ class CollectionDiscovery:
                         label=spec.label,
                         title_format=spec.title_format,
                         smart_only=smart_only_dimension(dimension, server, media_type),
-                        top=spec.top,
                         strip_prefix=spec.strip_prefix,
                         strip_suffix=spec.strip_suffix,
-                        minimum_items=spec.minimum_items,
                         order_type=spec.order_type,
                     )
                     for dimension, spec in DIMENSIONS.items()
@@ -144,6 +122,35 @@ class CollectionDiscovery:
                 key=_by_label,
             ),
         )
+
+    def _fields(self, media_type: MediaType) -> list[CollectionFieldRead]:
+        """The fields collections of the media type can test on the server."""
+        server = self._access.server_type
+        tmdb = self._app_config.tmdb_configured
+        found: list[CollectionFieldRead] = []
+        for field, spec in FIELDS.items():
+            local = field_available(field, server, media_type, smart=False) and (
+                tmdb or not spec.tmdb
+            )
+            tested = plex_tests(field, server, media_type)
+            smart = self._access.plex and (local or tested)
+            if not (local or smart):
+                continue
+            found.append(
+                CollectionFieldRead(
+                    field=field,
+                    label=field_label(field, server),
+                    kind=spec.kind,
+                    operators=list(field_operators(field, smart=False)),
+                    smart_operators=list(field_operators(field, smart=True))
+                    if smart
+                    else [],
+                    local=local,
+                    smart=smart,
+                    labelled=smart and not tested,
+                )
+            )
+        return found
 
     async def field_values(
         self,

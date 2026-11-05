@@ -175,6 +175,26 @@ class PublicDatasetIndex:
             enabled=self.enabled,
         )
 
+    def collection_art(self, row: MediaCollection, art_type: ArtType) -> CatalogPick:
+        """Return OvertureDB's artwork for one collection slot, or why it has none."""
+        entry = self.collections.get(row.tmdb_collection_id or 0)
+        url = (
+            None
+            if entry is None
+            else entry.poster_url
+            if art_type is ArtType.POSTER
+            else entry.background_url
+            if art_type is ArtType.BACKGROUND
+            else None
+        )
+        if url:
+            return CatalogPick(url, "OvertureDB artwork")
+        return CatalogPick(
+            None,
+            notes=(self._missing(row, f"no {art_type.label} for it"),),
+            enabled=self.enabled,
+        )
+
     def has_no_theme(self, item: MediaItem | MediaCollection) -> bool:
         """Whether OvertureDB says *item* has no theme music."""
         public_item = (

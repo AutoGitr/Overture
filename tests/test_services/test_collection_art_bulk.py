@@ -10,19 +10,20 @@ lazy from overture.db.art_slots import (
     select_art,
 )
 lazy from overture.db.models.media_collection import MediaCollection
+lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtBulkSource,
-    ArtSource,
     ArtType,
     MediaType,
     ServerType,
 )
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
+lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.jobs.runner import run_managed_job
 lazy from overture.jobs.tally import BulkAssetTally
-lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtRequest
+lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse, SaveArtRequest
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.services.art.collection_art import CollectionArtService
@@ -30,12 +31,12 @@ lazy from overture.services.art.collection_bulk import (
     plan_collection_art,
     run_collection_art,
 )
-lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
+lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.collection_helpers import managing_rule
-lazy from tests.runtime_helpers import JobProbe, unused
+lazy from tests.runtime_helpers import JobProbe
 
 CATALOG_URL = "https://image.tmdb.org/t/p/original/catalog.jpg"
 
@@ -76,7 +77,7 @@ async def test_group_scope_resolves_to_the_groups_collections(
 
 
 async def test_collection_art_plans_posters_and_backgrounds_with_item_rules(
-    *, database: Database
+    *, app_config: Settings, database: Database
 ) -> None:
     await _seed(database)
     async with database.write_session() as session:
@@ -86,31 +87,71 @@ async def test_collection_art_plans_posters_and_backgrounds_with_item_rules(
         record_art_file(
             row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1500, 1, 1)
         )
+        row.tmdb_collection_id = 10
+        row.art_url = "https://plex.test/background.jpg"
         session.add(row)
 
     plan = await plan_collection_art(
-        BulkMatchArtRequest(collection_ids=[1]), database=database
+        BulkMatchArtRequest(collection_ids=[1]),
+        app_config=app_config,
+        database=database,
     )
 
-    # The saved poster is kept; the background and nothing else is visited.
+    # The saved poster is kept; the background is matched with the server's.
     assert plan.total == 2
     assert sum(plan.decided.values()) == 1
     assert [dict(batch) for batch in plan.batches()] == [{1: (ArtType.BACKGROUND,)}]
 
 
+async def test_slots_no_source_can_serve_are_decided_together_while_planning(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed(database)
+
+    plan = await plan_collection_art(
+        BulkMatchArtRequest(collection_groups=["Sagas"]),
+        app_config=app_config,
+        database=database,
+    )
+
+    # Without a TMDB collection or a server image, local matching has nothing
+    # to compare, and OvertureDB is off: no slot is visited.
+    assert list(plan.batches()) == []
+    assert plan.decided == {
+        (
+            JobOutcome.NO_MATCH,
+            (
+                "OvertureDB is disabled; "
+                "Local art matching: the collection has no TMDB collection ID"
+            ),
+        ): 2
+    }
+
+
 class RecordingArt(CollectionArtService):
-    def __init__(self) -> None:
+    def __init__(self, matches: list[ArtCandidate] | None = None) -> None:
         self.saved: list[tuple[int, ArtType, str]] = []
+        self.adopted: list[tuple[int, ArtType, str]] = []
+        self.matches = matches or []
 
     @override
-    async def sources(
-        self, collection_id: int, media_type: MediaType, art_type: ArtType
-    ) -> ArtSourcesResponse:
-        return ArtSourcesResponse(
-            sources={ArtSource.OVERTUREDB: [ArtCandidate(url=CATALOG_URL)]}
-            if art_type is ArtType.POSTER
-            else {}
+    async def match(
+        self,
+        collection_id: int,
+        media_type: MediaType,
+        art_type: ArtType,
+        threshold: int,
+    ) -> ArtMatchResponse:
+        return ArtMatchResponse(
+            matches=self.matches, total_compared=1, reference="media_server"
         )
+
+    @override
+    async def adopt(
+        self, collection_id: int, media_type: MediaType, art_type: ArtType, url: str
+    ) -> bool:
+        self.adopted.append((collection_id, art_type, url))
+        return True
 
     @override
     async def save(
@@ -124,15 +165,14 @@ class RecordingArt(CollectionArtService):
         return StatusResponse(status=Status.OK)
 
 
-async def test_collection_art_run_uploads_the_catalog_art_it_finds(
-    *, database: Database
-) -> None:
-    await _seed(database)
-    params = BulkMatchArtRequest(
-        collection_groups=["Sagas"], source_order=[ArtBulkSource.OVERTUREDB]
-    )
-    plan = await plan_collection_art(params, database=database)
-    art = RecordingArt()
+async def _run(
+    params: BulkMatchArtRequest,
+    art: RecordingArt,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> BulkAssetTally:
+    plan = await plan_collection_art(params, app_config=app_config, database=database)
     probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
     async with run_managed_job(
         probe.context, BulkAssetTally(), database=database
@@ -140,14 +180,61 @@ async def test_collection_art_run_uploads_the_catalog_art_it_finds(
         await job.started()
         await job.planned(plan.total)
         await run_collection_art(
-            job, params, plan, art=art, matcher=unused(ArtMatcher), database=database
+            job, params, plan, art=art, app_config=app_config, database=database
         )
-        tally = job.tally
+        return job.tally
+
+
+async def test_collection_art_run_uploads_the_catalog_art_it_finds(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed(database)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, 1)
+        assert row is not None
+        row.tmdb_collection_id = 10
+        session.add(row)
+        session.add(
+            PublicDatasetCollection(tmdb_id=10, title="Saga", poster_url=CATALOG_URL)
+        )
+        await enable_public_dataset(session)
+    params = BulkMatchArtRequest(
+        collection_groups=["Sagas"], source_order=[ArtBulkSource.OVERTUREDB]
+    )
+    plan = await plan_collection_art(params, app_config=app_config, database=database)
+    assert plan.decided == {
+        (JobOutcome.NO_MATCH, "OvertureDB has no background for it"): 1
+    }
+    art = RecordingArt()
+
+    tally = await _run(params, art, app_config=app_config, database=database)
 
     assert art.saved == [(1, ArtType.POSTER, CATALOG_URL)]
-    assert (tally.downloaded, tally.no_match) == (1, 1)
+    assert tally.downloaded == 1
     async with database.read_session() as session:
         row = await session.get(MediaCollection, 1)
     assert row is not None
     assert row.last_matched_at is not None
     assert read_art_slot(row, ArtType.BACKGROUND).url is None
+
+
+async def test_local_matching_compares_the_server_image_overture_did_not_upload(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed(database)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, 1)
+        assert row is not None
+        row.tmdb_collection_id = 10
+        row.thumb_url = "https://plex.test/poster.jpg"
+        session.add(row)
+    params = BulkMatchArtRequest(
+        collection_ids=[1],
+        art_types=[ArtType.POSTER],
+        source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+    )
+    art = RecordingArt([ArtCandidate(url=CATALOG_URL, hamming=0, perfect_match=True)])
+
+    tally = await _run(params, art, app_config=app_config, database=database)
+    assert art.adopted == [(1, ArtType.POSTER, CATALOG_URL)]
+    assert tally.adopted == 1

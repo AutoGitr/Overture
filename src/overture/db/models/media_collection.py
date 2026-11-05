@@ -90,6 +90,9 @@ class MediaCollectionBase(SQLModel):
 
     # Whether the collection is included in theme workflows.
     monitored: bool = Field(default=True, nullable=False)
+    #: Its set no longer selects its value, so it stays off the server until
+    #: the set selects it again; Overture keeps it until it is deleted.
+    deselected: bool = Field(default=False, nullable=False)
     # Saved in Overture and not yet sent to the server. Library syncs keep the
     # saved choices, and the scheduler never creates a collection still unsynced.
     unsynced: bool = Field(default=False, nullable=False)

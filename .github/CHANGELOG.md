@@ -13,20 +13,35 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** `scripts/verify.py` replaces `verify_collections.py`: besides Overture's own checks it reads each media server directly, read only, and compares libraries, items, collections, values and counts with the server's own, loads every collection image, and reports every Plex filter, field, sort and operator and every Jellyfin and Emby filter Overture cannot use.
 - **OvertureDB:** a library title, collection or catalog draft can be contributed on its own through **Contribute issue**, which opens its OvertureDB form on GitHub filled in.
 - **Collections:** sets can be split by production company, TMDB keyword and show status, and on Plex by video codec, audio codec and audio channels.
+- **Collections:** Plex smart collections and smart sets can test any field Overture can evaluate, such as original language or TMDB facts, through labels Overture keeps on the matching items and refreshes on each sync.
+- **Interface:** smart collections carry a sparkle in the sidebar.
+- **Collections:** TMDB list and title conditions take TMDB links as well as IDs.
 
 ### Changed
 
-- **Collections:** a new collection starts from **Create**, then, for a set, **Split by**, which names the group and fills in the defaults that suit its values; **Start from** and **Save as preset** are gone, and the migration drops saved presets.
+- **Collections:** a new collection starts from **Create**, then, for a set, **Split by**, which names the group and its title template and fills in the names and order that suit its values, adding no minimum or **Most common only** of its own; **Start from** and **Save as preset** are gone, and the migration drops saved presets.
+- **Collections:** Overture never deletes a collection it manages unless you do: below its minimum, out of season, or left out by its set, a collection only leaves the media server, and **Below minimum** offers **Remove from server** or **Keep on server**. A managed collection deleted on the server stays in Overture and its next sync recreates it.
+- **Sync:** a full sync with Collections selected also syncs every managed collection, sending members, titles, sort titles, summaries and display settings, and no longer overwrites what Overture manages with the server's copy; with libraries chosen, groups sync only their collections in those libraries.
+- **Collections:** without a summary template a collection takes its list's description, so TMDB franchises get TMDB's overview.
+- **Collections:** Collection filtering is offered only for smart collections, the only ones Plex filters per user.
+- **Interface:** the sidebar's Groups view lists every group, empty ones too; Ungrouped and Unmanaged appear only while they hold a collection.
+- **Interface:** collection operations and their target groups are listed alphabetically, and groups are renamed and deleted only in Collection groups.
+- **Database:** movies store every director; the migration keeps each stored director as the first and reads the rest on the next sync.
 - **Interface:** TMDB charts, person roles, Radarr and Sonarr tags, root folders and quality profiles, the bulk sort list and the sidebar's art source, theme source and metadata issue filters are listed alphabetically.
 - **Collections:** the editor suggests Smart or Regular as the criteria change, without a preview, and suggests Smart whenever Plex can filter every condition natively.
 - **Interface:** a theme's length, title and source are no longer shown under the detail header; only a running download is.
-- **Settings:** new installs start with the Art & Themes workflow, auto-advance through slots and items, auto-unmonitor once art and theme are complete, the theme search `{title} {year} main theme music`, theme durations of 20 to 600 seconds, collections of at least 2 members that are deleted below it and removed from the server when inactive, no scheduled collection sync, and Radarr and Sonarr searches off when titles are added. Saved settings are kept.
+- **Settings:** new installs start with the Art & Themes workflow, auto-advance through slots and items, auto-unmonitor once art and theme are complete, the theme search `{title} {year} main theme music`, theme durations of 20 to 600 seconds, collections of at least 2 members that leave the server below it and when inactive, no scheduled collection sync, and Radarr and Sonarr searches off when titles are added. Saved settings are kept.
 - **Collections:** regular collections now evaluate and order criteria as Plex does: an unknown number or release date matches no condition (`is not` included), a title never played counts as last played before any date, durations compare whole minutes on both sides, titles sort by the server's sort title with numbers by value, and items without a value sort lowest.
 - **Collections:** a show is in progress when one of its episodes is partly played, as Plex's filter tests.
-- **Interface:** save, run and create buttons sit at the lower right of their row or popup, with resets at the left; Copy comes before Duplicate; each view remembers its own open sections, and only Setup and Content start open; Rename or delete is the last section of a group.
+- **Interface:** save, run and create buttons sit at the lower right of their row or popup, with resets at the left; Copy comes before Duplicate; the filters and Collection groups remember their open sections, while each collection opens with only Setup and Content expanded; Rename or delete is the last section of a group.
 - **Interface:** the criteria field list calls its list and tag sources External.
 
 ### Fixed
+
+- **Collections:** changing **Split by** to a dimension Overture counts no longer leaves a set evaluated by Plex when Plex had only been required by the previous dimension.
+- **Collections:** collection art runs compare each collection's current server image with TMDB's, not only images Overture uploaded, and decide while planning the slots no source can serve, reporting them together.
+- **Interface:** an edit to a group's settings, or a TMDB ID list being typed, is no longer undone when the group is fetched again or the field loses focus.
+- **Sync:** Plex collection sync asks Plex for less: no lookup of a collection's library, only the members out of a custom order move, and smart collections update only the labels that change.
 
 - **Collections:** a poster uploaded to a Plex collection shows in Overture instead of the placeholder, and uploading a background no longer fails with a 502.
 - **Collections:** deleting an empty group asks only to confirm, instead of waiting for a choice about collections it does not have.

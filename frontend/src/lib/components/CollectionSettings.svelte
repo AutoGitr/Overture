@@ -36,6 +36,7 @@
     sync={!editor.smart}
     arr={capabilities?.arr ? (editor.mediaType === "movie" ? "Radarr" : "Sonarr") : null}
     memberLabels={capabilities?.member_labels ?? false}
+    filtering={editor.smart}
   >
     <FieldRow
       label="Limit"

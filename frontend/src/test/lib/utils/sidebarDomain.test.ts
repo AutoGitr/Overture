@@ -346,9 +346,9 @@ describe("sidebar item filters", () => {
 describe("sidebar search", () => {
   it("searches directors on movies only", () => {
     const items = [
-      mediaItem({ id: 1, title: "12 Monkeys", media_type: "movie", director: "Terry Gilliam" }),
-      mediaItem({ id: 2, title: "Alien", media_type: "movie", director: "Ridley Scott" }),
-      mediaItem({ id: 3, title: "Monty Python", media_type: "show", director: "Terry Gilliam" }),
+      mediaItem({ id: 1, title: "12 Monkeys", media_type: "movie", directors: ["Terry Gilliam"] }),
+      mediaItem({ id: 2, title: "Alien", media_type: "movie", directors: ["Ridley Scott"] }),
+      mediaItem({ id: 3, title: "Monty Python", media_type: "show", directors: ["Terry Gilliam"] }),
     ];
 
     expect(filterItems(items, { searchQuery: "Gilliam", searchField: "director" })).toEqual([

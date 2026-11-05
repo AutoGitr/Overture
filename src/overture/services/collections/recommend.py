@@ -7,16 +7,25 @@ lazy from ...schemas.collections import (
     FieldCondition,
     KindRecommendation,
 )
-lazy from .fields import FIELDS, field_available, field_operators
+lazy from .fields import FIELDS, field_available, field_operators, plex_tests
 
 
 def _tests(
     condition: FieldCondition, server: ServerType, media_type: MediaType, *, smart: bool
 ) -> bool:
-    """Whether Overture, or Plex if *smart*, can evaluate the condition itself."""
+    """Whether a regular collection, or a smart one if *smart*, can test it."""
     return field_available(
         condition.field, server, media_type, smart=smart
     ) and condition.operator in field_operators(condition.field, smart=smart)
+
+
+def _native(
+    condition: FieldCondition, server: ServerType, media_type: MediaType
+) -> bool:
+    """Whether Plex tests the condition itself, rather than Overture's label."""
+    return plex_tests(
+        condition.field, server, media_type
+    ) and condition.operator in field_operators(condition.field, smart=True)
 
 
 def _named(condition: FieldCondition) -> str:
@@ -34,11 +43,12 @@ def recommend_kind(
 ) -> KindRecommendation | None:
     """Return the kind that serves *rule* best and why; ``None`` without a choice.
 
-    A filter only Plex knows needs a smart collection and a custom order a
-    regular one. Otherwise a rule Plex can evaluate whole, as a native filter in
-    an order it sorts by, suits a smart collection, which Plex keeps current
-    per user without a sync; one that needs lists, tags, TMDB facts or an
-    operator Plex lacks suits a regular one, which Overture fills on each sync.
+    A filter only Plex knows needs a smart collection, which tests the rest
+    through Overture's labels, and a custom order a regular one. Otherwise a
+    rule Plex can evaluate whole, as a native filter in an order it sorts by,
+    suits a smart collection, which Plex keeps current per user without a
+    sync; one that needs lists, tags, TMDB facts or an operator Plex lacks
+    suits a regular one, which Overture fills on each sync.
     """
     if not capabilities.smart:
         return None
@@ -46,15 +56,16 @@ def recommend_kind(
     conditions = rule.criteria.field_conditions()
     sources = rule.criteria.source_conditions()
     plex_cannot = next(
-        (c for c in conditions if not _tests(c, server, media_type, smart=True)), None
+        (c for c in conditions if not _native(c, server, media_type)), None
     )
     overture_cannot = next(
         (c for c in conditions if not _tests(c, server, media_type, smart=False)),
         None,
     )
     if overture_cannot is not None:
-        # Neither kind can test both, so the rule must change, not the kind.
-        if plex_cannot is not None:
+        # Smart collections test what Plex cannot through Overture's labels;
+        # a condition neither kind can test means the rule must change.
+        if not all(_tests(c, server, media_type, smart=True) for c in conditions):
             return None
         return KindRecommendation(
             kind=CollectionKind.SMART,

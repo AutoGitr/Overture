@@ -12,7 +12,8 @@
     TmdbChart,
     TmdbPersonRole,
   } from "../../generated/rest/types.gen";
-  import { splitIds, splitList } from "../utils/collectionCriteria";
+  import { splitList } from "../utils/collectionCriteria";
+  import IdListInput from "./IdListInput.svelte";
   import { toggleSelectedValue } from "../utils/popupSelection";
   import TmdbSourcePicker from "./TmdbSourcePicker.svelte";
 
@@ -86,23 +87,21 @@
       }}
     />
   {:else if source.type === "tmdb_list"}
-    <input
-      required
-      aria-label={`${label} TMDB list IDs`}
-      placeholder="TMDB list IDs, e.g. 123, 456"
-      value={source.list_ids.join(", ")}
-      onchange={(event) => {
-        if (source.type === "tmdb_list") source.list_ids = splitIds(event.currentTarget.value);
+    <IdListInput
+      label={`${label} TMDB list IDs`}
+      placeholder="TMDB list IDs or links, e.g. 123, 456"
+      ids={source.list_ids}
+      onchange={(ids) => {
+        if (source.type === "tmdb_list") source.list_ids = ids;
       }}
     />
   {:else if source.type === "tmdb_item"}
-    <input
-      required
-      aria-label={`${label} TMDB IDs`}
-      placeholder={`TMDB ${mediaType === "movie" ? "movie" : "show"} IDs, e.g. 550, 680`}
-      value={source.tmdb_ids.join(", ")}
-      onchange={(event) => {
-        if (source.type === "tmdb_item") source.tmdb_ids = splitIds(event.currentTarget.value);
+    <IdListInput
+      label={`${label} TMDB IDs`}
+      placeholder={`TMDB ${mediaType === "movie" ? "movie" : "show"} IDs or links, e.g. 550, 680`}
+      ids={source.tmdb_ids}
+      onchange={(ids) => {
+        if (source.type === "tmdb_item") source.tmdb_ids = ids;
       }}
     />
   {:else if source.type === "tmdb_person"}

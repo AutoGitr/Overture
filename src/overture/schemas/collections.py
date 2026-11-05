@@ -77,6 +77,11 @@ class FieldCondition(StrictBaseModel):
         self.value = _condition_value(kind, self.operator, self.value)
         return self
 
+    @property
+    def key(self) -> str:
+        """Identify the condition, so identical conditions share one label."""
+        return self.model_dump_json()
+
 
 def _condition_value(
     kind: FieldKind, operator: FilterOperator, value: str | int | float | bool
@@ -668,7 +673,8 @@ class CollectionSyncResponse(StrictBaseModel):
     added: int = 0
     removed: int = 0
     skipped: bool = False
-    deleted: bool = False
+    #: Taken off the server, below its minimum or out of season; Overture keeps it.
+    withheld: bool = False
 
 
 class CustomSetValue(StrictBaseModel):
@@ -909,10 +915,10 @@ class CollectionPreviewRequest(StrictBaseModel):
 
 
 class CollectionGroupSyncResult(StrictBaseModel):
-    """What syncing a group created, removed and failed to sync."""
+    """What syncing a group created, took off the server and failed to sync."""
 
     created: list[int] = Field(default_factory=list[int])
-    removed: list[int] = Field(default_factory=list[int])
+    withheld: list[int] = Field(default_factory=list[int])
     synced: int = 0
     errors: dict[str, PublicText] = Field(default_factory=dict[str, PublicText])
 
@@ -930,6 +936,9 @@ class CollectionFieldRead(StrictBaseModel):
     local: bool
     #: Plex smart collections can test it.
     smart: bool
+    #: Smart collections test it through labels Overture keeps on matching
+    #: items, so their members change when Overture syncs, not live.
+    labelled: bool = False
 
 
 class CollectionSourceRead(StrictBaseModel):
@@ -948,12 +957,10 @@ class CollectionDimensionRead(StrictBaseModel):
     title_format: str
     #: Only a set of Plex smart collections can enumerate it.
     smart_only: bool = False
-    #: What a new set of it starts with: its most common values, the text its
-    #: values' names drop, and the group defaults its collections inherit.
-    top: int | None = None
+    #: What a new set of it starts with: the text its values' names drop, and
+    #: the order its collections inherit from the group.
     strip_prefix: str = ""
     strip_suffix: str = ""
-    minimum_items: int | None = None
     order_type: CollectionOrder | None = None
 
 

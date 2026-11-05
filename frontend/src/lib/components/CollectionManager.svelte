@@ -39,7 +39,7 @@
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
-  import { setSectionView } from "../stores/sectionState.svelte";
+  import { sectionState, setSectionView } from "../stores/sectionState.svelte";
 
   let {
     collection,
@@ -54,7 +54,10 @@
     groups: string[];
     libraries: LibrarySectionRead[];
   } = $props();
-  setSectionView("collection");
+  // Each collection opens with only Setup and Content expanded.
+  const sectionView = `collection:${untrack(() => collection?.id ?? "new")}`;
+  sectionState.enter(sectionView);
+  setSectionView(sectionView);
 
   function currentCollection(): CollectionDetail {
     if (!collection) throw new Error("The saved collection must remain mounted");

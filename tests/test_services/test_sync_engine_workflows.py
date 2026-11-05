@@ -34,7 +34,6 @@ lazy from overture.media_servers.adapters import (
     SyncStopCheck,
 )
 lazy from overture.media_servers.errors import MediaServerError
-lazy from overture.protocols import CollectionGroups
 lazy from overture.schemas.collections import CollectionGroupSyncResult
 lazy from overture.schemas.sync import (
     SyncRunRequest,
@@ -109,7 +108,9 @@ class FakeProvider:
     ) -> AsyncIterator[list[ServerItem]]:
         yield self.items
 
-    async def get_directors(self, server_item_ids: list[str]) -> dict[str, str | None]:
+    async def get_directors(
+        self, server_item_ids: list[str]
+    ) -> dict[str, tuple[str, ...]]:
         raise AssertionError("Plex items carry their directors")
 
 
@@ -340,7 +341,7 @@ async def test_partial_provider_listing_cannot_reconcile(tmp_path: Path) -> None
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
     assert probe.names()[-1] == "sync.failed"
 
@@ -352,6 +353,18 @@ class NoCollections(CollectionSync):
     @override
     async def run(self, *_args: object, **_kwargs: object) -> None:
         return None
+
+
+class NoGroups:
+    """A server whose Overture holds no collection groups yet."""
+
+    async def names(self, media_type: MediaType) -> list[str]:
+        return []
+
+    async def sync(
+        self, media_type: MediaType, name: str, *, library_ids: list[str] | None = None
+    ) -> CollectionGroupSyncResult:
+        raise AssertionError("There are no groups to sync")
 
 
 class NoTmdbShows(TmdbSeasonSync):
@@ -449,7 +462,7 @@ def make_engine(
         local_assets=unused(LocalAssets),
         app_config=app_config,
         database=database,
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
 
@@ -528,7 +541,7 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
     assert provider.calls == [{"library_ids": ["1"]}]
@@ -617,7 +630,7 @@ async def test_run_sync_progress_counters_survive_a_throttled_callback(
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
     _, progress_payload = probe.events[-2]
@@ -667,7 +680,7 @@ async def test_run_sync_reports_stopped_when_cancellation_is_requested(
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
     assert probe.names()[-1] == "sync.stopped"
@@ -701,7 +714,7 @@ async def test_run_sync_provider_error_fails_the_job(tmp_path: Path) -> None:
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
     assert probe.names()[-1] == "sync.failed"
@@ -730,7 +743,7 @@ async def test_run_sync_reports_failed_when_the_run_itself_raises(
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
     assert probe.names()[-1] == "sync.failed"
@@ -825,7 +838,7 @@ async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
     try:
         assert engine.start_background_sync()
@@ -1054,7 +1067,7 @@ async def test_full_sync_oserror_has_one_terminal_event(
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
     event, payload = probe.terminal()
     assert event == "sync.failed"
@@ -1123,7 +1136,7 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
         ),
         app_config=app_config,
         database=database,
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
     try:
         assert engine.start_background_sync(SyncRunRequest(library_ids=["1"]))
@@ -1199,7 +1212,7 @@ async def test_full_sync_collection_phase_respects_target(
         tmdb_seasons=NoTmdbShows(),
         enrichment=facts,
         collections=collections,
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
     # Without items, only the collections are synced.
     assert provider.calls == ([{"library_ids": ["1"]}] if items else [])
@@ -1295,15 +1308,19 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
 ) -> None:
     class Groups:
         def __init__(self) -> None:
-            self.synced: list[tuple[MediaType, str]] = []
+            self.synced: list[tuple[MediaType, str, list[str] | None]] = []
 
         async def names(self, media_type: MediaType) -> list[str]:
             return ["Sagas", "Ungrouped"] if media_type is MediaType.MOVIE else []
 
         async def sync(
-            self, media_type: MediaType, name: str
+            self,
+            media_type: MediaType,
+            name: str,
+            *,
+            library_ids: list[str] | None = None,
         ) -> CollectionGroupSyncResult:
-            self.synced.append((media_type, name))
+            self.synced.append((media_type, name, library_ids))
             return CollectionGroupSyncResult(synced=2, errors={"Broken": "refused"})
 
     class EveryCollection(NoCollections):
@@ -1327,10 +1344,52 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
         groups=groups,
     )
 
-    assert groups.synced == [(MediaType.MOVIE, "Sagas")]
+    assert groups.synced == [(MediaType.MOVIE, "Sagas", ["1"])]
     assert probe.names()[-1] == "sync.completed"
     _, payload = probe.terminal()
     assert payload["errors"] == 1
+
+
+async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(
+    tmp_path: Path,
+) -> None:
+    """Every collection Overture manages is sent its members and settings."""
+    order: list[str] = []
+
+    class Groups:
+        async def names(self, media_type: MediaType) -> list[str]:
+            return ["Sagas", "Ungrouped"] if media_type is MediaType.MOVIE else []
+
+        async def sync(
+            self,
+            media_type: MediaType,
+            name: str,
+            *,
+            library_ids: list[str] | None = None,
+        ) -> CollectionGroupSyncResult:
+            order.append(f"{media_type}:{name}:{library_ids}")
+            return CollectionGroupSyncResult(synced=1)
+
+    class ReadServer(NoCollections):
+        @override
+        async def run(self, *_args: object, **_kwargs: object) -> None:
+            order.append("read")
+
+    probe = JobProbe(lifecycle=LIFECYCLE)
+    await sync_runner_module.run_sync(
+        probe.context,
+        items=False,
+        provider_registry=NoopProviderRegistry(FakeProvider()),
+        reconciler=FakeReconciler(),
+        config_dir=tmp_path,
+        tmdb_seasons=NoTmdbShows(),
+        enrichment=NoTmdbFacts(),
+        collections=ReadServer(),
+        groups=Groups(),
+    )
+
+    assert order == ["read", "movie:Sagas:None", "movie:Ungrouped:None"]
+    assert probe.names()[-1] == "sync.completed"
 
 
 class DownProvider(FakeProvider):
@@ -1363,7 +1422,7 @@ async def test_run_sync_fails_at_once_while_the_media_server_is_down(
         tmdb_seasons=NoTmdbShows(),
         enrichment=NoTmdbFacts(),
         collections=NoCollections(),
-        groups=unused(CollectionGroups),
+        groups=NoGroups(),
     )
 
     assert probe.names()[-1] == "sync.failed"

@@ -12,6 +12,7 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionSource,
+    FieldCondition,
     FilterGroup,
     MdblistSource,
     RadarrTagSource,
@@ -38,7 +39,7 @@ SOURCE_LABELS: frozendict[SourceType, str] = frozendict(
     }
 )
 
-#: Labels Overture keeps on Plex items for smart collections' sources.
+#: Labels Overture keeps on Plex items for smart collections' sources and fields.
 SOURCE_LABEL_PREFIX = "overture:"
 
 _MOVIE_SOURCES = frozenset({SourceType.TMDB_COLLECTION, SourceType.RADARR_TAG})
@@ -62,6 +63,18 @@ def source_label(condition: SourceCondition) -> str:
     digest of the whole source. Collections with the same source share it.
     """
     return f"{SOURCE_LABEL_PREFIX}{condition.source.type}:{_source_identity(condition)}"
+
+
+def condition_label(condition: FieldCondition) -> str:
+    """The label marking the items a field condition matches, for smart collections.
+
+    Plex tests it in place of a field it cannot test itself; collections
+    testing the same condition share it.
+    """
+    return (
+        f"{SOURCE_LABEL_PREFIX}field:{condition.field.value}:"
+        f"{condition.operator.value}:{condition.value}"
+    )
 
 
 def _source_identity(condition: SourceCondition) -> str:

@@ -118,9 +118,9 @@ class ServerItem:
     server_link: str
     library_id: str = ""
     folder_path: str | None = None
-    director: str | None = None
-    #: Metadata version of a movie listed without its director; the sync
-    #: fetches the director only when this differs from the stored version.
+    directors: tuple[str, ...] = ()
+    #: Metadata version of a movie listed without its directors; the sync
+    #: fetches them only when this differs from the stored version.
     director_etag: str | None = None
     sort_title: str | None = None
     studio: str | None = None

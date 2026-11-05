@@ -91,19 +91,23 @@ export type SetGenerator = CollectionGeneratorInput & { criteria: FilterGroupInp
 /** The defaults a set's group gives its collections. */
 export type SetPolicy = Omit<CollectionGroupPolicyInput, "generator">;
 
-/** A generator split by *dimension*, starting with what the dimension starts sets with. */
+/**
+ * A generator split by *dimension*, starting with what the dimension starts sets with.
+ * Only Plex can count a smart-only dimension, so it makes the set smart; leaving one
+ * for a dimension Overture counts returns the set to Overture's evaluation.
+ */
 export function withDimension(
   generator: SetGenerator,
   dimension: CollectionDimensionRead,
+  previous: CollectionDimensionRead | undefined,
 ): SetGenerator {
   return {
     ...generator,
     dimension: dimension.dimension,
     title_format: dimension.title_format,
-    top: dimension.top,
     strip_prefix: dimension.strip_prefix,
     strip_suffix: dimension.strip_suffix,
-    smart: dimension.smart_only || generator.smart,
+    smart: dimension.smart_only || (!!generator.smart && !previous?.smart_only),
     custom_values:
       dimension.dimension === "custom"
         ? generator.custom_values?.length
@@ -337,7 +341,7 @@ export class CollectionEditor {
   /** Save in Overture; with `sync`, then make the server match. */
   save(sync = false) {
     // Read the form as it is now: the saved rule resets drafts, and saving can remount the view.
-    const { target, mediaType } = this;
+    const { target } = this;
     const options = { ...this.localTarget, body: optionsBody(this) };
     return this.perform(async () => {
       const rule = await this.persistRule();
@@ -349,11 +353,12 @@ export class CollectionEditor {
         return;
       }
       const result = await this.syncRequest.mutateAsync(target);
-      if (result.deleted) goToCollectionsList(mediaType);
       this.feedback.success(
-        result.skipped
-          ? "Saved. Below minimum or out of season, so the server is unchanged."
-          : `Saved and synced: ${result.added} added, ${result.removed} removed.`,
+        result.withheld
+          ? "Saved. Below minimum, out of season or left out by its set, so it is off the server; Overture keeps it."
+          : result.skipped
+            ? "Saved. Below minimum or out of season, so the server is unchanged."
+            : `Saved and synced: ${result.added} added, ${result.removed} removed.`,
       );
     });
   }
@@ -573,12 +578,8 @@ export class CollectionDraft {
     const previous = this.dimensions.find((entry) => entry.dimension === this.generator.dimension);
     if (!this.collectionGroup.trim() || this.collectionGroup === previous?.label)
       this.collectionGroup = dimension.label;
-    this.generator = withDimension(this.generator, dimension);
-    this.setPolicy = {
-      ...this.setPolicy,
-      minimum_items: dimension.minimum_items,
-      order_type: dimension.order_type,
-    };
+    this.generator = withDimension(this.generator, dimension, previous);
+    this.setPolicy = { ...this.setPolicy, order_type: dimension.order_type };
   }
 
   /** Save in Overture; with `sync`, then create it on the server. */

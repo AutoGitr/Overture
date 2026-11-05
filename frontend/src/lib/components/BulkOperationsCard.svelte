@@ -272,6 +272,28 @@
     collectionOperation === "adopt" ? unmanagedCollections : collections,
   );
   let targetGroup = $state(UNGROUPED_GROUP);
+  let targetGroups = $derived(
+    [...new Set([UNGROUPED_GROUP, ...(groupsQuery.data ?? [])])].sort((a, b) =>
+      a.localeCompare(b),
+    ),
+  );
+  /** The operations, by label, with whether each has collections to act on. */
+  let collectionOperations = $derived(
+    (
+      [
+        ["adopt", "Adopt unmanaged", !unmanagedCollections.length],
+        ["orphan", "Orphan managed", !collections.length],
+        ["trigger_sync", "Sync", !collections.length],
+        ["set_group", "Assign group", !collections.length],
+        ["set_order", "Set sort", !collections.length],
+        ["apply_sort_title_format", "Format sort titles", !collections.length],
+        ...(capabilities.data?.visibility
+          ? [["set_visibility", "Set visibility", !collections.length] as const]
+          : []),
+        ["delete", "Delete collections", !collections.length],
+      ] as const satisfies readonly (readonly [BulkCollectionOperation["operation"], string, boolean])[]
+    ).toSorted((a, b) => a[1].localeCompare(b[1])),
+  );
   let template = $state("{title}");
   let visibility = $state<CollectionMode | null>(null);
   let home = $state(false);
@@ -454,28 +476,15 @@
         bind:value={collectionOperation}
         disabled={busy || !resultsReady || !matchedCollections.length}
       >
-        <option value="adopt" disabled={!unmanagedCollections.length}>Adopt unmanaged</option>
-        <option value="orphan" disabled={!collections.length}>Orphan managed</option>
-        <option value="trigger_sync" disabled={!collections.length}>Sync</option>
-        <option value="set_group" disabled={!collections.length}>Assign group</option>
-        <option value="set_order" disabled={!collections.length}>Set sort</option>
-        <option value="apply_sort_title_format" disabled={!collections.length}
-          >Format sort titles</option
-        >
-        {#if capabilities.data?.visibility}<option
-            value="set_visibility"
-            disabled={!collections.length}>Set visibility</option
-          >{/if}
-        <option value="delete" disabled={!collections.length}>Delete collections</option>
+        {#each collectionOperations as [value, label, disabled] (value)}
+          <option {value} {disabled}>{label}</option>
+        {/each}
       </select>
     </FieldRow>
     {#if collectionOperation === "set_group" || collectionOperation === "adopt"}
       <FieldRow label="Target group" for={`${id}-group`}>
         <select id={`${id}-group`} bind:value={targetGroup} disabled={busy}>
-          {#if !groupsQuery.data?.includes(UNGROUPED_GROUP)}
-            <option value={UNGROUPED_GROUP}>{UNGROUPED_GROUP}</option>
-          {/if}
-          {#each groupsQuery.data ?? [] as group (group)}<option value={group}>{group}</option>{/each}
+          {#each targetGroups as group (group)}<option value={group}>{group}</option>{/each}
         </select>
       </FieldRow>
       <DataStatus
@@ -513,11 +522,11 @@
     {:else if collectionOperation === "set_visibility"}
       <FieldRow label="Visibility" for={`${id}-visibility`}>
         <select id={`${id}-visibility`} bind:value={visibility} disabled={busy}
-          ><option value={null}>Inherit group or global default</option><option value="default"
+          ><option value={null}>Inherit group or global default</option><option value="hide"
+            >Hide collection</option
+          ><option value="hide_items">Hide items</option><option value="default"
             >Library default</option
-          ><option value="hide_items">Hide items</option><option value="show_items"
-            >Show collection and items</option
-          ><option value="hide">Hide collection</option></select
+          ><option value="show_items">Show collection and items</option></select
         >
       </FieldRow>
       <FieldRow label="Visible on home" for={`${id}-home`}>

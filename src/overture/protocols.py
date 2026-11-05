@@ -54,5 +54,5 @@ class CollectionGroups(Protocol):
     async def names(self, media_type: MediaType) -> list[str]: ...
 
     async def sync(
-        self, media_type: MediaType, name: str
+        self, media_type: MediaType, name: str, *, library_ids: list[str] | None = None
     ) -> CollectionGroupSyncResult: ...

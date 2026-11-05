@@ -8,8 +8,6 @@
     getLibrariesOptions,
     listCatalogEntriesOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { UNMANAGED_GROUP, UNGROUPED_GROUP } from "../../generated/settings";
-  import { openSidebarGroup, sidebarGroup } from "../router/routes";
   import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
   import { filterAvailableValues, toggleSelectedValue } from "../utils/popupSelection";
@@ -18,7 +16,6 @@
   import CardColumn from "../components/CardColumn.svelte";
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
   import CheckboxList from "../components/CheckboxList.svelte";
-  import CollectionGroupActions from "../components/CollectionGroupActions.svelte";
   import FieldRow from "../components/FieldRow.svelte";
   import FilterSection from "../components/FilterSection.svelte";
   import PopupShell from "../components/PopupShell.svelte";
@@ -28,7 +25,6 @@
 
   setSectionView("filters");
   const catalogBrowsing = new CatalogBrowsing();
-  let openGroup = $derived(sidebarGroup());
   let datasetEnabled = $derived(catalogBrowsing.enabled);
 
   let draft = $state<FilterState>($state.snapshot(uiState.currentFilters));
@@ -338,23 +334,6 @@
           {/each}
         {/if}
       {/each}
-
-      {#if uiState.sidebarMode === "collections" && openGroup && openGroup !== UNMANAGED_GROUP && openGroup !== UNGROUPED_GROUP}
-        {@const group = openGroup}
-        <CollectionGroupActions
-          {group}
-          mediaType={uiState.sidebarTab}
-          onrename={(replacement) => {
-            uiState.collectionGroupChanged(group, replacement);
-            openSidebarGroup(replacement);
-          }}
-          ondelete={() => {
-            uiState.collectionGroupChanged(group, "");
-            openSidebarGroup(null);
-            uiState.closePopup();
-          }}
-        />
-      {/if}
 
       <BulkOperationsCard
         {filters}

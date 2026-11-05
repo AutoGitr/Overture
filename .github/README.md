@@ -424,7 +424,10 @@ services:
 ## Using Overture
 
 1. Run a full **Sync** to import movies, shows and your Plex, Jellyfin or Emby collections.
-   Collections and their members refresh when Collections is selected for a full sync.
+   With Collections selected, a full sync reads the server's collections, then
+   syncs every collection Overture manages, sending its members, titles, sort
+   titles, summaries and display settings; choosing groups syncs only theirs.
+   Movies keep every director the server credits.
 2. Enable [OvertureDB](#overturedb) if you want community picks, then open an
    item to compare artwork and preview themes. Saving a choice downloads it.
 3. Work through items manually, run **Assets** in bulk, or save schedules for
@@ -448,15 +451,18 @@ Browsers offer this only over HTTPS, so serve Overture through a
 
 Plex, Jellyfin and Emby collections appear in the library sidebar under
 **Groups**, inside their groups, or **Collections**, all in one list; Overture
-remembers which you used last. **+ Create collection** opens a Configure page, the one place to create
+remembers which you used last. **Groups** lists every group, empty ones too;
+**Ungrouped** and **Unmanaged** appear only while they hold a collection. A
+sparkle marks smart collections. **+ Create collection** opens a Configure page, the one place to create
 anything: **One collection**, or **One per value** (a collection set).
 
 Both kinds share the same sections, in the same order:
 
 1. **Setup**: what to **Create** first; for a set, what it **Splits by**
-   next, which names its group and fills in what suits the values, such as the
-   25 most common actors, at least two titles per TMDB franchise in release
-   order, or names without "The" and "Collection". Then the libraries, the
+   next, which names its group and its title template, and fills in what suits
+   the values, such as release order and names without "The" and "Collection"
+   for TMDB franchises. A dimension adds no minimum or **Most common only** of
+   its own. Then the libraries, the
    title (a set's title template, where `{value}s` turns 1990 into 1990s) and
    the group. One collection in several libraries becomes a set with that
    collection in each, kept alike.
@@ -469,12 +475,26 @@ Both kinds share the same sections, in the same order:
 4. **Settings**: sort and limit, Sync mode (Sync removes members that stop
    matching, Append keeps them), minimum, automatic art and theme, Request
    missing, Member label, Radarr or Sonarr tag, Plex's collection mode,
-   filtering, Home and recommended promotion and Home order, sort title and
-   summary templates, and the TMDB collection ID.
+   filtering (smart collections only: Plex evaluates a smart filter, such as
+   Unplayed, for each user; a regular collection shows everyone the same
+   members, and Jellyfin and Emby have no such choice), Home and recommended
+   promotion and Home order, sort title and summary templates, and the TMDB
+   collection ID.
 5. **Schedule**: the active dates, which repeat yearly and can cross New Year,
    and whether an inactive collection leaves the server. When a collection
    syncs is its group's choice: Scheduled sync and the sync schedule (a cron
    expression with presets) are set per group and in the global defaults.
+
+A collection's page opens with Setup and Content expanded and the rest
+closed, each time.
+
+**Minimum members** and **When inactive** decide only whether a collection is
+on the media server: below its minimum, out of season or left out by its set,
+**Remove from server** takes the server copy away and a later sync puts it
+back. Overture keeps every collection it manages until you delete it; a
+managed collection deleted on the server is recreated by its next sync. Only
+unmanaged collections disappear from Overture, when the server no longer
+lists them.
 
 A group's settings in **Collection groups** and the global defaults under
 **Settings > Collections** use the same fields and names. **Default**
@@ -522,10 +542,13 @@ stored, or **Smart**, a Plex smart collection Plex keeps current with every Plex
 filter, including languages, HDR, codecs and play state for each user.
 Conditions Plex has no filter for, such as lists and tags, label the items they
 match, such as `overture:tmdb_person:5292:actor`, so Plex can filter on the
-labels. TMDB facts are tested by Overture only. As the criteria are edited, the
-editor suggests the type that suits them: Smart when Plex filters every
-condition natively, or when a filter only Plex has needs it, and Regular when
-lists, tags, TMDB facts, an operator Plex lacks or a custom order need it.
+labels. Fields Plex has no filter for, such as TMDB facts, original language
+or folder, work the same way: Overture labels the items that match the
+condition, such as `overture:field:original_language:is:ja`, and refreshes the
+labels on each sync. As the criteria are edited, the editor suggests the type
+that suits them: Smart when Plex filters every condition natively, or when a
+filter only Plex has needs it, and Regular when lists, tags, TMDB facts, an
+operator Plex lacks or a custom order need it.
 Jellyfin and Emby have no smart collections, so the choice is not shown there.
 
 A **collection set** creates one collection per value in its libraries: each
@@ -536,8 +559,12 @@ TMDB franchise; on Plex smart sets also each audio or subtitle language, video
 or audio codec and audio channel layout. A **custom** set lists its collections, each with
 its own criteria, such as A to Z or Based on a book. Sets can keep the most
 common values, include or skip values, remove text from names, and rename or
-merge values. Values below the minimum are removed when **Below minimum**
-deletes, and collections whose value disappears when the set says so. A set's
+merge values. Changing **Split by** switches the title template, the group's
+name and, when Plex alone can count the new values, **Evaluated by** to Plex.
+A smart set can split by anything Overture can count, testing by label what
+Plex cannot. A collection whose value the set no longer selects, or the
+library no longer holds, leaves the server and stays in Overture until the set
+selects its value again. A set's
 collections take their criteria and titles from the set; edit it in
 **Collection groups**. A set runs on its schedule once it has been synced.
 
@@ -551,7 +578,9 @@ shows **Unsynced**, and a library sync keeps those changes.
 
 Summary templates take `{title}`, `{group}`, `{start_date}`, `{end_date}`,
 `{summary}` (the server's) and `{source_summary}`, the description of the first
-list or a person's biography. Collections whose criteria list a TMDB person
+list or a person's biography. Without a template, a collection keeps its own
+summary, or takes its list's description, so each TMDB franchise gets TMDB's
+overview. Collections whose criteria list a TMDB person
 offer that person's photos as poster candidates.
 
 Set `TMDB_API_KEY` for TMDB lists, charts, titles, people, franchises and facts,
@@ -568,7 +597,7 @@ takes effect on the next sync, **Save and Apply** sends display settings to the
 server at once while keeping members and explicit overrides, and **Save and
 Sync** runs the set and syncs the group's collections; both need the group to
 hold a collection or a set first. Rename or delete a custom group in
-**Collection groups** or **Filters & operations**. Every managed collection
+**Collection groups**. Every managed collection
 belongs to a group. Deleting a group moves its collections to the reserved
 **Ungrouped** group by default; you can instead move them to another group,
 remove them from Overture (the next library sync lists the server's copies as

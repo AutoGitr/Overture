@@ -73,7 +73,7 @@ async def populated_repository(
                 tmdb_id=10,
                 tvdb_id=20,
                 imdb_id="tt30",
-                director="Director",
+                directors=["Director", "Co-Director"],
                 director_etag="v1",
             ),
             MediaItem(
@@ -168,8 +168,8 @@ async def test_identifier_and_director_maps_filter_and_prefer_present_rows(
     assert await repo.ids_by_tmdb_ids(MediaType.MOVIE, []) == {}
     assert await repo.directors_by_version([]) == {}
     assert await repo.directors_by_version(["one", "two", "three", "five"]) == {
-        ("one", "v1"): "Director",
-        ("five", "v2"): None,
+        ("one", "v1"): ("Director", "Co-Director"),
+        ("five", "v2"): (),
     }
 
 

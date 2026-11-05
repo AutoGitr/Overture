@@ -131,13 +131,14 @@ class CollectionEditor:
             body = body.model_copy(update={"order_type": policy.order_type})
         items = await self._initial_members(body, library_items)
         source_summary = await self._sources.summary(rule.criteria)
-        if sync and not smart and len(items) < policy.minimum_items:
-            raise PublicServiceError(
-                422, "Collection has fewer members than the effective minimum"
+        # The minimum and the season decide only whether the server has it
+        # yet; Overture keeps it either way, and a later sync creates it.
+        withhold = (not smart and len(items) < policy.minimum_items) or (
+            policy.delete_when_inactive
+            and not self._access.active(
+                body.active_start_mmdd or policy.active_start_mmdd,
+                body.active_end_mmdd or policy.active_end_mmdd,
             )
-        withhold = policy.delete_when_inactive and not self._access.active(
-            body.active_start_mmdd or policy.active_start_mmdd,
-            body.active_end_mmdd or policy.active_end_mmdd,
         )
         server = self._access.server_type
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
@@ -365,7 +366,7 @@ class CollectionEditor:
             await CollectionRepository(session).delete_ids([collection_id])
         await self._downloads.committed(session)
         if row.kind is CollectionKind.SMART and row.library_id:
-            await self._membership.prune_source_labels(row.library_id, row.media_type)
+            await self._membership.prune_labels(row.library_id, row.media_type)
         await self._access.changed()
 
     async def withhold_locked(self, row: MediaCollection) -> None:
@@ -373,13 +374,9 @@ class CollectionEditor:
         collection_id = row.id or 0
         await self.delete_server_collection(row)
         async with self._access.database.write_session() as session:
-            current = await CollectionRepository(session).get(collection_id)
-            if current is not None:
-                current.server_item_id = None
-                current.child_count = 0
-                current.updated_at = utc_now()
-                session.add(current)
-            await CollectionRepository(session).replace_members(collection_id, [])
+            await CollectionRepository(session).clear_server_copy(
+                collection_id, utc_now()
+            )
         await self._access.changed()
 
     async def delete(
@@ -662,7 +659,7 @@ class CollectionEditor:
                 raise PublicServiceError(
                     409, "Its group's set made it; remove its value from the set"
                 )
-            if rule.smart and rule_criteria(rule).source_conditions():
+            if rule.smart and self._membership.labels(media_type, rule_criteria(rule)):
                 raise PublicServiceError(
                     409,
                     "Its Plex filter reads labels only Overture keeps; "

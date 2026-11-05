@@ -32,7 +32,7 @@ lazy from ...domain import PERFECT_MATCH_ONLY, ArtBulkSource, ArtType
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import BulkAssetTally
-lazy from ...schemas.art import ArtCandidate, ArtMatchResponse
+lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.concurrency import in_order
@@ -42,6 +42,7 @@ lazy from ..bulk_common import (
     SAVED_SELECTION,
     CheckedStamper,
     count_label,
+    no_match_reason,
     queue_and_report,
     queue_download,
     report_downloads,
@@ -64,7 +65,6 @@ lazy from .targets import target_label
 logger = logging.getLogger(__name__)
 
 #: Why candidates never reached the comparison stage.
-REJECTED_CANDIDATES = "rejected on size or aspect ratio"
 
 #: What the comparison reference was, as said in a reason.
 _REFERENCE_NOTES: frozendict[str, str] = frozendict(
@@ -110,27 +110,6 @@ class _ArtRun:
     stamper: CheckedStamper
     database: Database
     app_config: Settings
-
-
-def _no_match_reason(match_result: ArtMatchResponse, threshold: int) -> str:
-    """Say why local art matching found nothing for one slot."""
-    if reason := match_result.reason:
-        return reason
-    rejected = match_result.prefiltered
-    if not match_result.total_compared:
-        if rejected == 1:
-            return f"1 candidate {REJECTED_CANDIDATES}"
-        return (
-            f"all {rejected} candidates {REJECTED_CANDIDATES}"
-            if rejected
-            else "no candidates returned by enabled artwork providers"
-        )
-    within = (
-        "no perfect match"
-        if threshold == PERFECT_MATCH_ONLY
-        else f"nothing within distance {threshold}"
-    )
-    return f"{within}, {rejected} {REJECTED_CANDIDATES}" if rejected else within
 
 
 def _sized(reason: str, candidate: ArtCandidate) -> str:
@@ -203,7 +182,7 @@ async def _from_local_matching(
             notes.errors.append(f"Local art matching: {'; '.join(errors)}")
         else:
             notes.empty.append(
-                f"Local art matching: {_no_match_reason(match_result, threshold)}"
+                f"Local art matching: {no_match_reason(match_result, threshold)}"
             )
         return None
 
@@ -476,7 +455,9 @@ async def run_bulk_art_match(
             )
             await job.started()
             plan = await plan_bulk_art(params, app_config=app_config, database=database)
-            collection_plan = await plan_collection_art(params, database=database)
+            collection_plan = await plan_collection_art(
+                params, app_config=app_config, database=database
+            )
             await job.planned(plan.total + collection_plan.total)
             for planned in (plan, collection_plan):
                 for (outcome, reason), count in planned.decided.items():
@@ -537,7 +518,7 @@ async def run_bulk_art_match(
                         params,
                         collection_plan,
                         art=art,
-                        matcher=art_matcher,
+                        app_config=app_config,
                         database=database,
                     )
                 finally:

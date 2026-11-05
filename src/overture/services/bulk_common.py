@@ -24,12 +24,13 @@ lazy from ..db.art_slots import read_art_slot
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE, PAGE_SIZE, Database
-lazy from ..domain import MediaSortKey, RecentUnit, media_sort_key
+lazy from ..domain import PERFECT_MATCH_ONLY, MediaSortKey, RecentUnit, media_sort_key
 lazy from ..jobs.progress_log import JobOutcome
 lazy from ..jobs.runner import ManagedJob
 lazy from ..jobs.tally import BulkAssetTally
 lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..repositories.seasons import SeasonRepository
+lazy from ..schemas.art import ArtMatchResponse
 lazy from ..utils.time import utc_now
 lazy from .downloads.queue import JobTarget
 lazy from .downloads.service import DownloadService
@@ -51,6 +52,31 @@ LEFT_LIBRARY = "no longer in the library"
 NOT_PUBLIC_ART_URL = (
     "the matching artwork's link is not a public link Overture can save"
 )
+
+#: Why artwork candidates were not compared.
+REJECTED_CANDIDATES = "rejected on size or aspect ratio"
+
+
+def no_match_reason(match_result: ArtMatchResponse, threshold: int) -> str:
+    """Say why local art matching found nothing for one slot."""
+    if reason := match_result.reason:
+        return reason
+    rejected = match_result.prefiltered
+    if not match_result.total_compared:
+        if rejected == 1:
+            return f"1 candidate {REJECTED_CANDIDATES}"
+        return (
+            f"all {rejected} candidates {REJECTED_CANDIDATES}"
+            if rejected
+            else "no candidates returned by enabled artwork providers"
+        )
+    within = (
+        "no perfect match"
+        if threshold == PERFECT_MATCH_ONLY
+        else f"nothing within distance {threshold}"
+    )
+    return f"{within}, {rejected} {REJECTED_CANDIDATES}" if rejected else within
+
 
 #: What one target came to without being visited: its outcome and the reason.
 type PlannedOutcome = tuple[JobOutcome, str]

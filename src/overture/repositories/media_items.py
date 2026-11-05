@@ -175,13 +175,13 @@ class MediaItemRepository:
 
     async def directors_by_version(
         self, server_item_ids: Collection[str]
-    ) -> dict[tuple[str, str], str | None]:
+    ) -> dict[tuple[str, str], tuple[str, ...]]:
         """Return stored movie directors keyed by server ID and director Etag."""
         if not server_item_ids:
             return {}
         result = await self.session.exec(
             select(
-                MediaItem.server_item_id, MediaItem.director_etag, MediaItem.director
+                MediaItem.server_item_id, MediaItem.director_etag, MediaItem.directors
             ).where(
                 col(MediaItem.media_type) == MediaType.MOVIE,
                 col(MediaItem.server_item_id).in_(server_item_ids),
@@ -189,8 +189,8 @@ class MediaItemRepository:
             )
         )
         return {
-            (server_id, etag): director
-            for server_id, etag, director in result.all()
+            (server_id, etag): tuple(directors)
+            for server_id, etag, directors in result.all()
             if server_id is not None and etag is not None
         }
 

@@ -63,14 +63,20 @@ def plex_field(field: FilterField) -> PlexField:
     return plex
 
 
-def tag_keys(criteria: FilterGroup, media_type: MediaType) -> set[str]:
-    """The Plex tag fields whose keys the criteria need looked up."""
+def tag_keys(
+    criteria: FilterGroup, media_type: MediaType, labels: Mapping[str, str]
+) -> set[str]:
+    """The Plex tag fields whose keys the criteria need looked up.
+
+    Conditions in *labels* are tested through their label.
+    """
     keys = {
         plex.key_for(media_type)
         for condition in criteria.field_conditions()
-        if (plex := plex_field(condition.field)).type == "tag"
+        if condition.key not in labels
+        and (plex := plex_field(condition.field)).type == "tag"
     }
-    if criteria.source_conditions():
+    if labels:
         keys.add(plex_field(FilterField.LABEL).key)
     return keys
 
@@ -206,12 +212,26 @@ def _field_pairs(
                     return [_op(key, ">>=", str(int(_epoch(after)) - 1))]
 
 
-def _source_pairs(
-    condition: SourceCondition, choices: PlexChoices, labels: Mapping[str, str]
+def _label_pairs(
+    label: str, operator: FilterOperator, choices: PlexChoices
 ) -> list[Pair]:
     key = plex_field(FilterField.LABEL).key
-    keys = choices.get(key, {}).get(labels[condition.key].casefold(), (_MISSING_TAG,))
-    return _tag(key, condition.operator, keys)
+    keys = choices.get(key, {}).get(label.casefold(), (_MISSING_TAG,))
+    return _tag(key, operator, keys)
+
+
+def _condition_pairs(
+    condition: FieldCondition | SourceCondition,
+    media_type: MediaType,
+    choices: PlexChoices,
+    labels: Mapping[str, str],
+) -> list[Pair]:
+    """A source's label holds its items; a field's holds the items matching it."""
+    if isinstance(condition, SourceCondition):
+        return _label_pairs(labels[condition.key], condition.operator, choices)
+    if condition.key in labels:
+        return _label_pairs(labels[condition.key], FilterOperator.IS, choices)
+    return _field_pairs(condition, media_type, choices)
 
 
 def _group_pairs(
@@ -221,9 +241,7 @@ def _group_pairs(
     labels: Mapping[str, str],
 ) -> list[Pair]:
     terms: list[list[Pair]] = [
-        _source_pairs(condition, choices, labels)
-        if isinstance(condition, SourceCondition)
-        else _field_pairs(condition, media_type, choices)
+        _condition_pairs(condition, media_type, choices, labels)
         for condition in group.conditions
     ]
     terms.extend(
@@ -278,7 +296,8 @@ def compile_plex_query(
 ) -> str:
     """Compile criteria, sort and limit into a smart collection query string.
 
-    *labels* names the label Overture keeps on each source condition's items.
+    *labels* names the label Overture keeps on each source condition's items,
+    and on the items matching each field condition Plex cannot test.
     """
     pairs: list[Pair] = [("sort", plex_sort(order))]
     if limit is not None:

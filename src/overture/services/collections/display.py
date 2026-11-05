@@ -82,7 +82,8 @@ def inherited_summary(
         else policy.summary_format
     )
     if not template:
-        return options.summary
+        # Without a template, a collection's own summary wins over its list's.
+        return options.summary or source_summary
     if (
         options.summary_format is None
         and options.summary is not None
@@ -170,6 +171,7 @@ class CollectionDisplay:
             return effective
         await self._access.provider().update_collection_details(
             row.server_item_id,
+            library_id=row.library_id or "",
             title=options.title,
             summary=summary,
             sort_title=sort_title,

@@ -92,6 +92,10 @@ class CollectionSync:
                     for row in await CollectionRepository(session).list_all()
                     if row.server_type is provider.server_type
                 }
+                managed_ids = {
+                    rule.collection_id
+                    for rule in await CollectionRepository(session).rules()
+                }
             seen = {collection.id for collection in listed}
             newly_identified: list[int] = []
             identified = 0
@@ -139,6 +143,7 @@ class CollectionSync:
                             ),
                             facts=facts,
                             theme_checked=checked,
+                            managed=previous is not None and previous.id in managed_ids,
                             now=utc_now(),
                         )
                 identified += row.tmdb_collection_id is not None
@@ -170,15 +175,22 @@ class CollectionSync:
                         )
                     )
                 ]
+                managed = await CollectionRepository(session).managed_ids(gone)
             for collection_id in gone:
                 async with (
                     self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
                     self._database.write_session() as session,
                 ):
+                    repo = CollectionRepository(session)
+                    if collection_id in managed:
+                        # Overture keeps what it manages; the next rule sync
+                        # puts the collection back on the server.
+                        await repo.clear_server_copy(collection_id, utc_now())
+                        continue
                     await self._downloads.cancel_assets(
                         session, AssetScope(collection_id=collection_id)
                     )
-                    await CollectionRepository(session).delete_ids([collection_id])
+                    await repo.delete_ids([collection_id])
                 await self._downloads.committed(session)
             await self._publisher.broadcast("collections.changed")
         await queue_catalog_themes_for_collections(
@@ -195,7 +207,8 @@ class CollectionSync:
                 JobOutcome.STARTED,
                 "Collections",
                 f"{len(listed)} listed, {identified} with TMDB IDs, "
-                f"{len(gone)} removed",
+                f"{len(gone) - len(managed)} removed, "
+                f"{len(managed)} managed no longer on the server",
             )
         )
 
@@ -278,6 +291,7 @@ class CollectionSync:
         folder_themes: bool,
         facts: ThemeFileFacts | None,
         theme_checked: bool,
+        managed: bool,
         now: datetime,
     ) -> MediaCollection:
         row = await repository.find_server(
@@ -308,10 +322,13 @@ class CollectionSync:
                 "updated_at": now,
             }
         )
-        # Choices saved in Overture and not yet synced win over the server's.
-        keep_choices = row.id is not None and row.unsynced
-        if not keep_choices:
+        # Overture owns what it manages, and its next sync sends those choices;
+        # members saved in Overture and not yet synced win over the server's too.
+        keep_members = row.id is not None and row.unsynced
+        if not (keep_members or managed):
             _store_choices(row, collection)
+        if not keep_members:
+            row.child_count = len(collection.member_ids)
         if theme_checked:
             replaced = (
                 (
@@ -340,7 +357,7 @@ class CollectionSync:
         await repository.session.flush()
         if row.id is None:
             raise RuntimeError("Collection row was not assigned an ID")
-        if not keep_choices:
+        if not keep_members:
             await repository.replace_members(row.id, [member.id for member in members])
         return row
 
@@ -370,7 +387,6 @@ def _store_choices(row: MediaCollection, collection: ServerCollection) -> None:
             "title": collection.title,
             "summary": collection.summary,
             "sort_title": sort_title,
-            "child_count": len(collection.member_ids),
         }
     )
     if collection.collection_mode is not None:

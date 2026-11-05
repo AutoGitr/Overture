@@ -68,10 +68,10 @@
   type GroupDraft = Omit<CollectionGroupPolicyInput, "generator"> & {
     generator: SetGenerator | null;
   };
-  let draft = $derived.by(() => {
-    if (!query.data) return null;
-    const value = $state<GroupDraft>(structuredClone(query.data));
-    return value;
+  // Seeded once: a refetch, such as one a sync's broadcasts start, never undoes an edit.
+  let draft = $state<GroupDraft | null>(null);
+  $effect(() => {
+    if (query.data && draft === null) draft = structuredClone($state.snapshot(query.data));
   });
   let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
   const collections = createQuery(() =>
@@ -126,7 +126,7 @@
         query: { name: group, media_type: mediaType },
       });
       const errors = Object.entries(result.errors);
-      const summary = `${result.created.length} created, ${result.removed.length} removed, ${result.synced} synced`;
+      const summary = `${result.created.length} created, ${result.withheld.length} taken off the server, ${result.synced} synced`;
       if (errors.length) {
         feedback.error(
           `${summary}. ${errors.length} failed: ${errors.map(([title, error]) => `${title}: ${error}`).join("; ")}`,

@@ -112,6 +112,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         self,
         server_collection_id: str,
         *,
+        library_id: str,
         title: str,
         summary: str | None,
         sort_title: str | None,
@@ -218,7 +219,9 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         times = [t for t in (item.server_updated_at, item.server_added_at) if t]
         return bool(times) and max(times) > since
 
-    async def get_directors(self, server_item_ids: list[str]) -> dict[str, str | None]:
+    async def get_directors(
+        self, server_item_ids: list[str]
+    ) -> dict[str, tuple[str, ...]]:
         """Return directors of movies listed with a ``director_etag``.
 
         Servers that list a movie's director with the movie never set the

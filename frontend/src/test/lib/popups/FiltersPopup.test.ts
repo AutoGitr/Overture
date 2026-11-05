@@ -249,9 +249,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   it("counts operations using draft filters and the active search field", async () => {
     queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
       items: [
-        mediaItem({ id: 1, director: "Alice", youtube_id: "theme" }),
-        mediaItem({ id: 2, director: "Alice", monitored: false }),
-        mediaItem({ id: 3, title: "Alice", director: "Bob", youtube_id: "other" }),
+        mediaItem({ id: 1, directors: ["Alice"], youtube_id: "theme" }),
+        mediaItem({ id: 2, directors: ["Alice"], monitored: false }),
+        mediaItem({ id: 3, title: "Alice", directors: ["Bob"], youtube_id: "other" }),
       ],
       total: 3,
     });
@@ -442,6 +442,46 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
     ).toEqual({ collection_ids: [1], media_type: "movie", operation, ...expected });
+  });
+
+  it("lists collection operations and target groups alphabetically, without group actions", async () => {
+    await navigate("/movies/collections");
+    openSidebarGroup("Weekend");
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+      collection({ id: 1, title: "Saga", collection_group: "Weekend" }),
+    ]);
+    mockFetchRoutes({
+      "/api/library/libraries": [],
+      "/api/collections/capabilities": collectionCapabilities(),
+      "/api/collections/groups": ["Weekend", "Anime", "Ungrouped"],
+    });
+    const view = renderWithQueryClient(FiltersPopup);
+    await view.findByRole("radiogroup", { name: "Kind" });
+    const operations = within(view.getByLabelText("Operation"))
+      .getAllByRole("option")
+      .map((option) => option.textContent?.trim());
+    expect(operations).toEqual([
+      "Adopt unmanaged",
+      "Assign group",
+      "Delete collections",
+      "Format sort titles",
+      "Orphan managed",
+      "Set sort",
+      "Set visibility",
+      "Sync",
+    ]);
+    await fireEvent.change(view.getByLabelText("Operation"), { target: { value: "set_group" } });
+    await waitFor(() =>
+      expect(
+        within(view.getByLabelText("Target group"))
+          .getAllByRole("option")
+          .map((option) => option.textContent),
+      ).toEqual(["Anime", "Ungrouped", "Weekend"]),
+    );
+    // Groups are renamed and deleted in Collection groups, not among the filters.
+    expect(view.queryByRole("button", { name: /rename/i })).toBeNull();
+    expect(view.queryByRole("button", { name: /delete group/i })).toBeNull();
   });
 
   it("groups collection filters: status inline together, then art, theme, bulk and collection operations", async () => {

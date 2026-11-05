@@ -41,6 +41,7 @@ lazy from overture.services.sync.collection_sync import CollectionSync
 lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnrichment
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
+lazy from tests.collection_helpers import managing_rule
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry, unused
 
@@ -642,3 +643,39 @@ async def test_unsynced_choices_and_members_survive_a_library_sync(
     async with database.read_session() as session:
         members = await CollectionRepository(session).members(refreshed.id or 0)
     assert [member.id for member in members] == [movies["m2"]]
+
+
+async def test_managed_collections_keep_overtures_choices_and_outlive_their_server_copy(
+    *, app_config: Settings, database: Database
+) -> None:
+    """Overture's sync sends what it manages; only unmanaged ones mirror the server."""
+    await _seed_movies(database)
+    server = Server(_collection("saga", "m0", "m1"), _collection("loose", "m0"))
+    await _run(server, database, app_config)
+    async with database.write_session() as session:
+        row = (await _rows(database))["saga"]
+        row.title = "Saga"
+        row.sort_title_format = "01_{title}"
+        session.add(row)
+        session.add(managing_rule(row.id or 0))
+    server.listed = [
+        replace(server.listed[0], title="Renamed on Plex", member_ids=("m0",)),
+        server.listed[1],
+    ]
+    await _run(server, database, app_config)
+    saga = (await _rows(database))["saga"]
+    assert (saga.title, saga.sort_title_format, saga.child_count) == (
+        "Saga",
+        "01_{title}",
+        1,
+    )
+
+    server.listed = []
+    await _run(server, database, app_config)
+    async with database.read_session() as session:
+        repo = CollectionRepository(session)
+        kept = await repo.get(saga.id or 0)
+        assert kept is not None
+        assert (kept.server_item_id, kept.child_count) == (None, 0)
+        assert await repo.members(saga.id or 0) == []
+        assert [row.title for row in await repo.list_all()] == ["Saga"]

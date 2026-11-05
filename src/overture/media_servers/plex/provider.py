@@ -211,7 +211,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         """
         rating_key = str(metadata.get("ratingKey", ""))
         movie = media_type is MediaType.MOVIE
-        directors = metadata.get("Director") or []
         media_list = metadata.get("Media") or []
         first_media = media_list[0] if media_list else None
         duration_ms = metadata.get("duration")
@@ -234,9 +233,11 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                 if movie
                 else None
             ),
-            director=(directors[0].get("tag") if directors else None)
+            directors=tuple(
+                tag for d in metadata.get("Director") or [] if (tag := d.get("tag"))
+            )
             if movie
-            else None,
+            else (),
             studio=metadata.get("studio") or None,
             genres=tuple(
                 tag for g in metadata.get("Genre") or [] if (tag := g.get("tag"))
@@ -575,6 +576,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         self,
         server_collection_id: str,
         *,
+        library_id: str,
         title: str,
         summary: str | None,
         sort_title: str | None,
@@ -588,6 +590,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     ) -> None:
         await self.client.update_collection_details(
             server_collection_id,
+            library_id=library_id,
             title=title,
             summary=summary,
             sort_title=sort_title,

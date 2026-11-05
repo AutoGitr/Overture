@@ -227,6 +227,17 @@ class CollectionRepository:
             for position, item_id in enumerate(media_item_ids)
         )
 
+    async def clear_server_copy(self, collection_id: int, timestamp: datetime) -> None:
+        """Record that a collection has no copy on the server, keeping its row."""
+        row = await self.get(collection_id)
+        if row is None:
+            return
+        row.server_item_id = None
+        row.child_count = 0
+        row.updated_at = timestamp
+        self.session.add(row)
+        await self.replace_members(collection_id, [])
+
     async def delete_ids(self, collection_ids: Sequence[int]) -> None:
         """Delete collections; their members go with them."""
         for batch in batched(collection_ids, CHUNK_SIZE, strict=False):

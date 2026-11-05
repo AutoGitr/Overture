@@ -59,7 +59,7 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     background_url: null,
     background_width: null,
     created_at: null,
-    director: null,
+    directors: [],
     has_incorrect_aspect_ratio: false,
     theme_duration: null,
     theme_file_hash: null,
@@ -238,10 +238,8 @@ export function dimension(
   return {
     title_format: "{value}",
     smart_only: false,
-    top: null,
     strip_prefix: "",
     strip_suffix: "",
-    minimum_items: null,
     order_type: null,
     ...overrides,
   };
@@ -274,6 +272,7 @@ export function collectionCapabilities(
         smart_operators: [...text],
         local: true,
         smart: true,
+        labelled: false,
       },
       {
         field: "genre",
@@ -283,6 +282,7 @@ export function collectionCapabilities(
         smart_operators: ["is", "is_not"],
         local: true,
         smart: true,
+        labelled: false,
       },
       {
         field: "year",
@@ -292,6 +292,7 @@ export function collectionCapabilities(
         smart_operators: [...numbers],
         local: true,
         smart: true,
+        labelled: false,
       },
       {
         field: "added",
@@ -301,6 +302,7 @@ export function collectionCapabilities(
         smart_operators: ["in_last", "not_in_last", "before", "after"],
         local: true,
         smart: true,
+        labelled: false,
       },
       {
         field: "unplayed",
@@ -310,6 +312,7 @@ export function collectionCapabilities(
         smart_operators: ["is", "is_not"],
         local: true,
         smart: true,
+        labelled: false,
       },
       {
         field: "hdr",
@@ -319,6 +322,7 @@ export function collectionCapabilities(
         smart_operators: ["is", "is_not"],
         local: false,
         smart: true,
+        labelled: false,
       },
     ],
     sources: [
@@ -342,7 +346,6 @@ export function collectionCapabilities(
         label: "TMDB franchises",
         strip_prefix: "The ",
         strip_suffix: " Collection",
-        minimum_items: 2,
         order_type: "release.asc",
       }),
       dimension({ dimension: "custom", label: "Custom" }),

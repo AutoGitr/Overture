@@ -252,8 +252,13 @@ class CollectionGroups:
                 result.errors[collection_id] = str(exc)
         return result
 
-    async def sync(self, media_type: MediaType, name: str) -> CollectionGroupSyncResult:
-        """Run the group's set, if it is one, then sync its other collections."""
+    async def sync(
+        self, media_type: MediaType, name: str, *, library_ids: list[str] | None = None
+    ) -> CollectionGroupSyncResult:
+        """Run the group's set, if it is one, then sync every collection it holds.
+
+        *library_ids* limits both to the group's collections in those libraries.
+        """
         name = name.strip()
         server = self._access.server_type
         async with self._access.database.read_session() as session:
@@ -263,13 +268,26 @@ class CollectionGroups:
         result = CollectionGroupSyncResult()
         set_generator = generator(group)
         if group is not None and set_generator is not None:
-            await self._sets.run(group, set_generator, result)
+            if library_ids is not None:
+                set_generator = set_generator.model_copy(
+                    update={
+                        "library_ids": [
+                            library_id
+                            for library_id in set_generator.library_ids
+                            if library_id in library_ids
+                        ]
+                    }
+                )
+            if set_generator.library_ids:
+                await self._sets.run(group, set_generator, result)
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rows = [
                 row
                 for row in await repo.list_listed(media_type)
-                if row.server_type is server and row.collection_group == name
+                if row.server_type is server
+                and row.collection_group == name
+                and (library_ids is None or row.library_id in library_ids)
             ]
             managed = {rule.collection_id for rule in await repo.rules()}
         for row in rows:

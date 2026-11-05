@@ -1,6 +1,7 @@
 """Plex API client."""
 
 lazy import asyncio
+lazy import bisect
 lazy import logging
 lazy import urllib.parse
 lazy from collections.abc import AsyncIterator, Callable, Collection, Mapping, Sequence
@@ -195,6 +196,34 @@ def _address_origin(url: str, domain: str) -> str:
     return (
         f"https://{str(address).replace('.', '-')}.{domain}:{parsed.port or _PLEX_PORT}"
     )
+
+
+def longest_ordered_run(current: list[str], wanted: list[str]) -> set[str]:
+    """The most items *current* already holds in *wanted*'s order.
+
+    They stay put, so only the others need a move; a longest increasing
+    subsequence of their wanted positions, found in O(n log n).
+    """
+    position = {item: index for index, item in enumerate(wanted)}
+    ranks = [position[item] for item in current if item in position]
+    tails: list[int] = []
+    tail_at: list[int] = []
+    previous = [-1] * len(ranks)
+    for index, rank in enumerate(ranks):
+        at = bisect.bisect_left(tails, rank)
+        if at == len(tails):
+            tails.append(rank)
+            tail_at.append(index)
+        else:
+            tails[at] = rank
+            tail_at[at] = index
+        previous[index] = tail_at[at - 1] if at else -1
+    settled: set[str] = set()
+    index = tail_at[-1] if tail_at else -1
+    while index >= 0:
+        settled.add(wanted[ranks[index]])
+        index = previous[index]
+    return settled
 
 
 class PlexClient(MediaServerHttpClient):
@@ -888,7 +917,12 @@ class PlexClient(MediaServerHttpClient):
             )
         server_order = [item for item in current_ids if item in wanted] + additions
         if order not in PLEX_COLLECTION_SORTS and server_order != member_ids:
+            settled = longest_ordered_run(server_order, member_ids)
+            # Each move puts an item after its predecessor, so moving in the
+            # wanted order leaves every earlier item where it belongs.
             for position, item in enumerate(member_ids):
+                if item in settled:
+                    continue
                 await self._request(
                     "PUT",
                     f"/library/collections/{collection_id}/items/{item}/move",
@@ -901,6 +935,7 @@ class PlexClient(MediaServerHttpClient):
         self,
         collection_id: str,
         *,
+        library_id: str,
         title: str,
         summary: str | None,
         sort_title: str | None,
@@ -938,10 +973,7 @@ class PlexClient(MediaServerHttpClient):
             f"/library/metadata/{collection_id}/prefs",
             params=prefs,
         )
-        metadata = await self.get_metadata(collection_id)
-        section_id = metadata.get("librarySectionID") if metadata else None
-        if section_id is None:
-            raise MediaServerError("Plex returned no collection library")
+        section_id = library_id
         path = f"/hubs/sections/{section_id}/manage"
         data = wire_object(
             await self._get(path, params={"metadataItemId": collection_id})

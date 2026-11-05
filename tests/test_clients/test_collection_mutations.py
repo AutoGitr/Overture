@@ -16,7 +16,7 @@ lazy from overture.domain import (
 )
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
-lazy from overture.media_servers.plex.client import PlexClient
+lazy from overture.media_servers.plex.client import PlexClient, longest_ordered_run
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
 
 
@@ -130,6 +130,7 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         )
         await client.update_collection_details(
             "box",
+            library_id="1",
             title="Saga",
             summary=None,
             sort_title="!Saga",
@@ -141,6 +142,7 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         )
         await client.update_collection_details(
             "box",
+            library_id="1",
             title="Saga",
             summary="",
             sort_title=None,
@@ -163,10 +165,14 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
     ]
     assert ("DELETE", "/library/collections/box/items/remove", {}) in mutations
     moves = [entry for entry in mutations if entry[1].endswith("/move")]
+    # Plex appends the new item after "keep", so only "keep" moves.
     assert moves == [
-        ("PUT", "/library/collections/box/items/add/move", {}),
         ("PUT", "/library/collections/box/items/keep/move", {"after": "add"}),
     ]
+    # The collection's library is known, so Plex is not asked for it.
+    assert not any(
+        r.method == "GET" and r.url.path == "/library/metadata/box" for r in requests
+    )
     edits = [
         entry[2] for entry in mutations if entry[:2] == ("PUT", "/library/metadata/box")
     ]
@@ -329,3 +335,18 @@ async def test_plex_filter_choices_decode_the_keys_plex_encodes(
     assert [
         (request.url.path, request.url.params["type"]) for request in transport.requests
     ] == [("/library/sections/1/studio", "1"), ("/library/sections/2/resolution", "4")]
+
+
+@pytest.mark.parametrize(
+    ("current", "wanted", "settled"),
+    [
+        (["a", "b", "c", "d"], ["a", "b", "c", "d"], {"a", "b", "c", "d"}),
+        (["a", "b", "c", "new"], ["new", "a", "b", "c"], {"a", "b", "c"}),
+        (["d", "a", "b", "c"], ["a", "b", "c", "d"], {"a", "b", "c"}),
+        ([], ["a"], set[str]()),
+    ],
+)
+def test_only_items_out_of_order_move(
+    current: list[str], wanted: list[str], settled: set[str]
+) -> None:
+    assert longest_ordered_run(current, wanted) == settled

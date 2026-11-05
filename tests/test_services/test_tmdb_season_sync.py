@@ -21,7 +21,6 @@ lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.runner import run_managed_job
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerItem
-lazy from overture.protocols import CollectionGroups
 lazy from overture.repositories.seasons import SeasonRepository
 lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
 lazy from overture.services.sync.runner import run_sync
@@ -33,9 +32,8 @@ lazy from tests.runtime_helpers import (
     JobProbe,
     NoopProviderRegistry,
     NoTmdbFacts,
-    unused,
 )
-lazy from tests.test_services.test_sync_engine_workflows import NoCollections
+lazy from tests.test_services.test_sync_engine_workflows import NoCollections, NoGroups
 
 LIFECYCLE = ManagedJobLifecycle(JobKind.SYNC)
 
@@ -148,7 +146,7 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
             tmdb_seasons=service,
             enrichment=NoTmdbFacts(),
             collections=NoCollections(),
-            groups=unused(CollectionGroups),
+            groups=NoGroups(),
         )
         _, result = probe.terminal()
         assert result["total"] == result["done"] == 2

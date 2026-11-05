@@ -42,6 +42,7 @@ lazy from overture.services.collections.plex_query import (
     tag_keys,
 )
 lazy from overture.services.collections.sets import count_values, set_values
+lazy from overture.services.collections.sources import condition_label
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 
@@ -56,7 +57,7 @@ def _item(item_id: int = 1, **kwargs: object) -> MediaItem:
         "critic_rating": 8.6,
         "duration_seconds": 121 * 60 + 59,
         "studio": "Lucasfilm",
-        "director": "George Lucas",
+        "directors": ["Irvin Kershner", "George Lucas"],
         "content_rating": "PG",
         "resolution": "4k",
         "genres": ["Action", "Sci-Fi"],
@@ -105,6 +106,7 @@ def _matches(item: MediaItem, *conditions: FieldCondition, mode: str = "all") ->
         (_field(FilterField.GENRE, FilterOperator.IS, "sci-fi"), True),
         (_field(FilterField.GENRE, FilterOperator.IS_NOT, "Action"), False),
         (_field(FilterField.DIRECTOR, FilterOperator.IS, "George Lucas"), True),
+        (_field(FilterField.DIRECTOR, FilterOperator.IS, "Irvin Kershner"), True),
         (_field(FilterField.CONTENT_RATING, FilterOperator.IS, "PG-13"), False),
         (_field(FilterField.YEAR, FilterOperator.GTE, 1977), True),
         (_field(FilterField.YEAR, FilterOperator.GT, 1977), False),
@@ -365,7 +367,7 @@ def test_plex_query_nests_groups_and_filters_sources_by_label() -> None:
             FilterGroup(),
         ],
     )
-    assert tag_keys(criteria, MediaType.MOVIE) == {"label"}
+    assert tag_keys(criteria, MediaType.MOVIE, {source.key: "overture:x"}) == {"label"}
     query = compile_plex_query(
         criteria,
         media_type=MediaType.MOVIE,
@@ -377,6 +379,31 @@ def test_plex_query_nests_groups_and_filters_sources_by_label() -> None:
     assert query == "sort=random&label=7&or=1&push=1&label=8&and=1&hdr=1&pop=1"
 
 
+def test_plex_tests_fields_it_lacks_through_overture_labels() -> None:
+    language = _field(FilterField.ORIGINAL_LANGUAGE, FilterOperator.IS, "ja")
+    criteria = FilterGroup(
+        conditions=[language, _field(FilterField.GENRE, FilterOperator.IS, "Drama")]
+    )
+    label = condition_label(language)
+    assert label == "overture:field:original_language:is:ja"
+    assert tag_keys(criteria, MediaType.MOVIE, {language.key: label}) == {
+        "genre",
+        "label",
+    }
+    query = compile_plex_query(
+        criteria,
+        media_type=MediaType.MOVIE,
+        order=CollectionOrder.TITLE_ASC,
+        limit=None,
+        choices={
+            "label": choice_keys([("9", label)]),
+            "genre": choice_keys([("4", "Drama")]),
+        },
+        labels={language.key: label},
+    )
+    assert query == "sort=titleSort&label=9&and=1&genre=4"
+
+
 def test_plex_show_queries_test_media_fields_on_episodes() -> None:
     criteria = FilterGroup(
         conditions=[
@@ -385,7 +412,7 @@ def test_plex_show_queries_test_media_fields_on_episodes() -> None:
             _field(FilterField.AGE_RATING, FilterOperator.LT, 13),
         ]
     )
-    assert tag_keys(criteria, MediaType.SHOW) == {"episode.resolution"}
+    assert tag_keys(criteria, MediaType.SHOW, {}) == {"episode.resolution"}
     query = compile_plex_query(
         criteria,
         media_type=MediaType.SHOW,
@@ -509,9 +536,7 @@ def test_set_titles_need_the_value() -> None:
 
 
 def test_dimensions_start_a_set_with_their_defaults() -> None:
+    """Only names and order start from defaults; no dimension limits a set."""
     franchises = DIMENSIONS[SetDimension.FRANCHISE]
     assert (franchises.strip_prefix, franchises.strip_suffix) == ("The ", " Collection")
     assert franchises.order_type is CollectionOrder.RELEASE_ASC
-    actors = DIMENSIONS[SetDimension.ACTOR]
-    assert (actors.top, actors.minimum_items) == (25, 3)
-    assert DIMENSIONS[SetDimension.GENRE].top is None

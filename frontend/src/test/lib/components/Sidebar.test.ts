@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getTmdbCollectionOptions,
+  listCollectionGroupsOptions,
   listCollectionsOptions,
   searchTmdbOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
@@ -82,6 +83,25 @@ describe("Sidebar", () => {
     expect(screen.queryByRole("button", { name: "Select collection Saga" })).toBeNull();
   });
 
+  it("lists every group, empty ones too, and the reserved groups only while they hold collections", async () => {
+    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+      collection({ id: 1, title: "Saga", collection_group: "Weekend", kind: "smart" }),
+    ]);
+    client.setQueryData(listCollectionGroupsOptions({ query: { media_type: "movie" } }).queryKey, [
+      "Empty",
+      "Ungrouped",
+      "Weekend",
+    ]);
+    await navigate("/movies/collections");
+    render(SidebarHarness, { props: { client, movies: [movie] } });
+    expect(await screen.findByRole("button", { name: "Open group Empty" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Open group Weekend" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open group Ungrouped" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open group Unmanaged" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Open group Weekend" }));
+    expect(await screen.findByText("Smart collection")).toBeInTheDocument();
+  });
+
   it("shows collection art and theme badges except themes on Emby", async () => {
     client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
       collection({ id: 1, title: "Plex", server_type: "plex" }),
@@ -122,7 +142,7 @@ describe("Sidebar", () => {
       mediaItem({
         id: index + 10,
         title: `Movie ${index}`,
-        director: index % 2 === 0 ? "Ridley Scott" : "Other",
+        directors: index % 2 === 0 ? ["Terry Gilliam", "Ridley Scott"] : ["Other"],
         monitored: index % 3 === 0,
       }),
     );
@@ -135,7 +155,9 @@ describe("Sidebar", () => {
     await fireEvent.click(screen.getByRole("menuitemradio", { name: "Director" }));
     expect(screen.getByLabelText("Search sidebar")).toHaveFocus();
     await fireEvent.input(screen.getByLabelText("Search sidebar"), { target: { value: "Ridley" } });
-    const expected = movies.filter((item) => !item.monitored && item.director === "Ridley Scott");
+    const expected = movies.filter(
+      (item) => !item.monitored && item.directors.includes("Ridley Scott"),
+    );
     await waitFor(() =>
       expect(sidebarState.current?.itemIds.toSorted()).toEqual(
         expected.map((item) => item.id).toSorted(),

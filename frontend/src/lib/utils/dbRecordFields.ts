@@ -55,7 +55,7 @@ const TOP_LEVEL_ORDER = [
   "youtube_id_themerrdb",
   "no_theme",
   "has_incorrect_aspect_ratio",
-  "director",
+  "directors",
   "studio",
   "public_dataset_complete",
   "last_synced_at",

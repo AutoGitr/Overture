@@ -3,6 +3,7 @@
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
+  import Sparkles from "@lucide/svelte/icons/sparkles";
   import type {
     CatalogEntryRow,
     CollectionRead,
@@ -181,6 +182,12 @@
             <span>{row.meta}</span>
           {/if}
           {#if catalogEntry?.has_draft}<span class="badge badge-warning">Draft</span>{/if}
+          {#if collection?.kind === "smart"}
+            <span class="smart" title="Smart collection"
+              ><Sparkles size={12} aria-hidden="true" /><span class="sr-only">Smart collection</span
+              ></span
+            >
+          {/if}
           {#if row.unmonitored}
             <EyeOff size={12} class="item-unmonitored" />
           {/if}
@@ -331,6 +338,11 @@
     gap: var(--space-2);
     color: var(--text-tertiary);
     font-size: var(--text-xs);
+  }
+
+  .smart {
+    display: inline-flex;
+    color: var(--accent);
   }
 
   .sidebar-item :global(.item-unmonitored) {

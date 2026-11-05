@@ -760,7 +760,6 @@ describe("collection management", () => {
     for (const [label, explicit] of [
       ["Sort", "title.asc"],
       ["Collection mode", "hide"],
-      ["Collection filtering", "user"],
       ["Library recommended", "true"],
       ["Home", "false"],
       ["Shared users' home", "true"],
@@ -770,6 +769,8 @@ describe("collection management", () => {
       await fireEvent.change(select, { target: { value: "" } });
       expect(select).toHaveValue("");
     }
+    // Only smart collections filter by user, so a regular one does not offer it.
+    expect(screen.queryByLabelText("Collection filtering")).toBeNull();
     for (const label of ["Sort title", "Summary"]) {
       const input = screen.getByLabelText(label);
       await fireEvent.input(input, { target: { value: "Custom" } });
@@ -781,7 +782,6 @@ describe("collection management", () => {
       expect(JSON.parse(String(saved?.init.body))).toMatchObject({
         order_type: null,
         collection_mode: null,
-        collection_filtering: null,
         visible_library: null,
         visible_home: null,
         visible_shared: null,
@@ -836,6 +836,28 @@ describe("collection management", () => {
       delete_below_minimum: false,
       sort_title_format: "+{title}",
     });
+  });
+
+  it("keeps group edits when the group is fetched again", async () => {
+    let served = { sort_title_format: null as string | null, summary_format: null };
+    const { calls } = mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/group-policy": () => Response.json(served),
+    });
+    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
+    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const sortTitle = await screen.findByRole("textbox", { name: "Sort title" });
+    await fireEvent.input(sortTitle, { target: { value: "+{title}" } });
+    await fireEvent.blur(sortTitle);
+    // A sync elsewhere refreshes the group, with data that differs from what was loaded.
+    served = { sort_title_format: "01_{title}", summary_format: null };
+    const fetched = calls.length;
+    await queryClient.invalidateQueries();
+    await waitFor(() =>
+      expect(calls.slice(fetched).some((call) => call.url.includes("group-policy"))).toBe(true),
+    );
+    expect(screen.getByRole("textbox", { name: "Sort title" })).toHaveValue("+{title}");
   });
 
   it("saves group defaults before explicitly applying them to the group", async () => {

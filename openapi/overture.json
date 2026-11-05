@@ -4203,17 +4203,6 @@
             "title": "Label",
             "type": "string"
           },
-          "minimum_items": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Minimum Items"
-          },
           "order_type": {
             "anyOf": [
               {
@@ -4242,17 +4231,6 @@
           "title_format": {
             "title": "Title Format",
             "type": "string"
-          },
-          "top": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top"
           }
         },
         "required": [
@@ -4260,10 +4238,8 @@
           "label",
           "title_format",
           "smart_only",
-          "top",
           "strip_prefix",
           "strip_suffix",
-          "minimum_items",
           "order_type"
         ],
         "title": "CollectionDimensionRead",
@@ -4282,6 +4258,11 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "labelled": {
+            "default": false,
+            "title": "Labelled",
+            "type": "boolean"
           },
           "local": {
             "title": "Local",
@@ -4313,7 +4294,8 @@
           "operators",
           "smart_operators",
           "local",
-          "smart"
+          "smart",
+          "labelled"
         ],
         "title": "CollectionFieldRead",
         "type": "object"
@@ -5132,7 +5114,7 @@
       },
       "CollectionGroupSyncResult": {
         "additionalProperties": false,
-        "description": "What syncing a group created, removed and failed to sync.",
+        "description": "What syncing a group created, took off the server and failed to sync.",
         "properties": {
           "created": {
             "items": {
@@ -5148,22 +5130,22 @@
             "title": "Errors",
             "type": "object"
           },
-          "removed": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Removed",
-            "type": "array"
-          },
           "synced": {
             "default": 0,
             "title": "Synced",
             "type": "integer"
+          },
+          "withheld": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Withheld",
+            "type": "array"
           }
         },
         "required": [
           "created",
-          "removed",
+          "withheld",
           "synced",
           "errors"
         ],
@@ -7147,11 +7129,6 @@
             "title": "Added",
             "type": "integer"
           },
-          "deleted": {
-            "default": false,
-            "title": "Deleted",
-            "type": "boolean"
-          },
           "removed": {
             "default": 0,
             "title": "Removed",
@@ -7161,13 +7138,18 @@
             "default": false,
             "title": "Skipped",
             "type": "boolean"
+          },
+          "withheld": {
+            "default": false,
+            "title": "Withheld",
+            "type": "boolean"
           }
         },
         "required": [
           "added",
           "removed",
           "skipped",
-          "deleted"
+          "withheld"
         ],
         "title": "CollectionSyncResponse",
         "type": "object"
@@ -8830,16 +8812,12 @@
             ],
             "title": "Created At"
           },
-          "director": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Director"
+          "directors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Directors",
+            "type": "array"
           },
           "folder_path": {
             "anyOf": [
@@ -9240,7 +9218,7 @@
           "server_verified_at",
           "library_id",
           "monitored",
-          "director",
+          "directors",
           "studio",
           "art_status",
           "poster_status",

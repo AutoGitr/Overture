@@ -8,6 +8,7 @@
     MediaItemRead,
   } from "../../generated/rest/types.gen";
   import {
+    listCollectionGroupsOptions,
     listCollectionsOptions,
     listCatalogEntriesOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -77,6 +78,14 @@
       (uiState.sidebarMode === "collections" || uiState.searchField === "tmdb"),
   }));
   let collections = $derived(collectionsQuery.data ?? []);
+  const groupsQuery = createQuery(() => ({
+    ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
+    enabled:
+      settingsState.current.collections_supported &&
+      uiState.sidebarSource === "library" &&
+      uiState.sidebarMode === "collections" &&
+      uiState.collectionView === "groups",
+  }));
 
   const catalogMovies = createQuery(() => ({
     ...listCatalogEntriesOptions({ query: { media_type: "movie" } }),
@@ -222,14 +231,16 @@
     }),
   );
 
+  // Every group is listed, empty or not; the reserved ones only while they hold a collection.
   let collectionGroups = $derived([
     ...[
-      ...new Set(
-        filteredCollections.flatMap((row) =>
+      ...new Set([
+        ...(groupsQuery.data ?? []).filter((group) => group !== UNGROUPED_GROUP),
+        ...filteredCollections.flatMap((row) =>
           row.managed && row.collection_group ? [row.collection_group] : [],
         ),
-      ),
-    ].sort(),
+      ]),
+    ].sort((a, b) => a.localeCompare(b)),
     ...(filteredCollections.some((row) => !row.managed) ? [UNMANAGED_GROUP] : []),
   ]);
   let groupView = $derived(uiState.collectionView === "groups");

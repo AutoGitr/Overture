@@ -49,12 +49,16 @@
   let dimension = $derived(dimensions.find((entry) => entry.dimension === generator.dimension));
   let custom = $derived(generator.dimension === "custom");
   let libraryId = $derived(libraryIds[0] ?? "");
-  // Overture counts values itself; Plex then evaluates smart collections.
+  // Overture counts values itself, then Plex may evaluate smart collections. Plex
+  // counts the values only it knows, so it must test the shared criteria itself.
   let fields = $derived(
-    (capabilities?.fields ?? []).filter(
-      (field) => (dimension?.smart_only || field.local) && (!generator.smart || field.smart),
+    (capabilities?.fields ?? []).filter((field) =>
+      dimension?.smart_only
+        ? field.smart && !field.labelled
+        : field.local && (!generator.smart || field.smart),
     ),
   );
+  let sharedSources = $derived(dimension?.smart_only ? [] : (capabilities?.sources ?? []));
   let entries = $derived(preview.data ?? null);
   let created = $derived(entries?.filter((entry) => !entry.below_minimum) ?? []);
 
@@ -78,7 +82,7 @@
   <SetDimensionField
     value={generator.dimension}
     {dimensions}
-    onchoose={(chosen) => Object.assign(generator, withDimension(generator, chosen))}
+    onchoose={(chosen) => Object.assign(generator, withDimension(generator, chosen, dimension))}
   />
   <FieldRow
     label="Title template"
@@ -152,15 +156,17 @@
   </FieldRow>
 {/if}
 
-{#if capabilities?.smart}
-  <FieldRow label="Evaluated by">
+{#if capabilities?.smart && !dimension?.smart_only}
+  <FieldRow
+    label="Evaluated by"
+    hint={generator.smart
+      ? "Plex keeps each collection current. Conditions Plex cannot test, such as lists and TMDB facts, use labels Overture refreshes on each sync."
+      : undefined}
+  >
     <SegmentedControl
       label="Evaluated by"
       options={EVALUATION}
-      bind:value={
-        () => (generator.smart ? "smart" : "overture"),
-        (value) => (generator.smart = value === "smart" || !!dimension?.smart_only)
-      }
+      bind:value={() => (generator.smart ? "smart" : "overture"), (value) => (generator.smart = value === "smart")}
     />
   </FieldRow>
 {/if}
@@ -246,7 +252,7 @@
   <CriteriaEditor
     bind:group={generator.criteria}
     {fields}
-    sources={capabilities?.sources ?? []}
+    sources={sharedSources}
     {mediaType}
     {libraryId}
     label="Every collection also needs"

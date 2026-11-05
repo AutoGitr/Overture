@@ -118,7 +118,7 @@ async def test_a_movie_row_is_normalised(app_config: Settings) -> None:
                     "Guid": [{"id": "tmdb://348"}, {"id": "imdb://tt0078748"}, {}],
                     "thumb": "/library/metadata/10/thumb/1",
                     "art": f"{BASE}/art.jpg?X-Plex-Token=secret",
-                    "Director": [{"tag": "Ridley Scott"}],
+                    "Director": [{"tag": "Ridley Scott"}, {"tag": "Second Unit"}],
                     "studio": "",
                     "Media": [{"Part": [{"file": "/movies/Alien (1979)/alien.mkv"}]}],
                 },
@@ -134,7 +134,7 @@ async def test_a_movie_row_is_normalised(app_config: Settings) -> None:
     assert alien.poster_url == f"{BASE}/library/metadata/10/thumb/1"
     assert alien.background_url == f"{BASE}/art.jpg"
     assert alien.folder_path == "/movies/Alien (1979)"
-    assert (alien.director, alien.studio) == ("Ridley Scott", None)
+    assert (alien.directors, alien.studio) == (("Ridley Scott", "Second Unit"), None)
     assert "machine" in alien.server_link
     assert (odd.poster_url, odd.background_url, odd.folder_path) == (None, None, None)
 

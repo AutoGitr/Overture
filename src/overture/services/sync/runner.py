@@ -66,8 +66,17 @@ async def run_sync(
             await enrichment.run(job, library_ids=library_ids)
             if include_collections:
                 await collections.run(job, library_ids=library_ids)
-            elif collection_groups and provider_registry.collections is not None:
-                await _sync_groups(job, groups, collection_groups)
+            # Having read what the server holds, make it match what Overture
+            # manages: every group, or only the chosen ones.
+            if provider_registry.collections is not None and (
+                include_collections or collection_groups
+            ):
+                await _sync_groups(
+                    job,
+                    groups,
+                    None if include_collections else collection_groups,
+                    library_ids,
+                )
 
         # A stop must interrupt provider calls and rate-limit waits as well
         # as the loops between them. Each writer rolls back on cancellation.
@@ -88,18 +97,25 @@ async def run_sync(
 
 
 async def _sync_groups(
-    job: ManagedJob[SyncTally], groups: protocols.CollectionGroups, names: list[str]
+    job: ManagedJob[SyncTally],
+    groups: protocols.CollectionGroups,
+    names: list[str] | None,
+    library_ids: list[str] | None,
 ) -> None:
-    """Run each group's set and sync its collections, for every media type it has."""
+    """Run each group's set and sync its collections, for every media type it has.
+
+    Without *names* every group is synced; *library_ids* limits each group
+    to its collections in those libraries.
+    """
     for media_type in MediaType:
-        existing = set(await groups.names(media_type))
-        for name in names:
+        existing = await groups.names(media_type)
+        for name in existing if names is None else names:
             if job.stop_requested():
                 return
             if name not in existing:
                 continue
             try:
-                result = await groups.sync(media_type, name)
+                result = await groups.sync(media_type, name, library_ids=library_ids)
             except Exception as exc:
                 await job.report(
                     JobOutcome.ERROR, f"Group {name}", str(exc), finished=False
@@ -112,7 +128,7 @@ async def _sync_groups(
                     JobOutcome.STARTED,
                     f"Group {name}",
                     f"{result.synced} synced, {len(result.created)} created, "
-                    f"{len(result.removed)} removed",
+                    f"{len(result.withheld)} taken off the server",
                 )
             )
 

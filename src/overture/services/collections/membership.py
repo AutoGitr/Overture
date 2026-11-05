@@ -11,9 +11,15 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess
 lazy from .criteria import CriteriaContext, evaluate, order_items
+lazy from .fields import labelled_field
 lazy from .plex_query import choice_keys, compile_plex_query, tag_keys
 lazy from .rules import criteria as rule_criteria
-lazy from .sources import SOURCE_LABEL_PREFIX, SourceResolver, source_label
+lazy from .sources import (
+    SOURCE_LABEL_PREFIX,
+    SourceResolver,
+    condition_label,
+    source_label,
+)
 
 
 def resolve_members(ids: list[int], items: list[MediaItem]) -> list[MediaItem]:
@@ -150,18 +156,40 @@ class Membership:
         await self._access.provider().sync_item_labels(
             library_id, media_type, label, add=add, remove_ids=remove
         )
+        changed = sorted(
+            ((wanted_ids - labeled) & by_id.keys()) | (labeled - wanted_ids)
+        )
         async with self._access.database.write_session() as session:
-            for item in await CollectionRepository(session).library_items(
-                media_type, library_id
-            ):
+            for item_id in changed:
+                item = await session.get(MediaItem, item_id)
+                if item is None:
+                    continue
                 kept = [entry for entry in item.labels if entry.casefold() != folded]
-                labels = [*kept, label] if (item.id or 0) in wanted_ids else kept
-                if labels != item.labels:
-                    item.labels = labels
-                    session.add(item)
+                item.labels = [*kept, label] if item_id in wanted_ids else kept
+                session.add(item)
 
-    async def prune_source_labels(self, library_id: str, media_type: MediaType) -> None:
-        """Remove source labels no smart collection in the library filters on."""
+    def labels(self, media_type: MediaType, criteria: FilterGroup) -> dict[str, str]:
+        """The label a smart collection tests for each condition Plex cannot.
+
+        Sources and the fields Plex lacks are both kept as labels on the
+        items Overture finds them to match.
+        """
+        server = self._access.server_type
+        labels = {
+            condition.key: source_label(condition)
+            for condition in criteria.source_conditions()
+        }
+        labels.update(
+            {
+                condition.key: condition_label(condition)
+                for condition in criteria.field_conditions()
+                if labelled_field(condition.field, server, media_type)
+            }
+        )
+        return labels
+
+    async def prune_labels(self, library_id: str, media_type: MediaType) -> None:
+        """Remove Overture's labels no smart collection in the library filters on."""
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rows = {
@@ -170,10 +198,10 @@ class Membership:
                 if row.library_id == library_id and row.media_type is media_type
             }
             used = {
-                source_label(condition)
+                label
                 for rule in await repo.rules()
                 if rule.smart and rule.collection_id in rows
-                for condition in rule_criteria(rule).source_conditions()
+                for label in self.labels(media_type, rule_criteria(rule)).values()
             }
             items = await repo.library_items(media_type, library_id)
         stale = {
@@ -192,19 +220,29 @@ class Membership:
         order: CollectionOrder,
         items: list[MediaItem],
     ) -> str:
-        """Label each source's items, then compile the query Plex evaluates."""
+        """Label what Plex cannot test, then compile the query Plex evaluates."""
         library_id = row.library_id or ""
-        labels: dict[str, str] = {}
-        if sources := rule.criteria.source_conditions():
-            _, resolved = await self.context(
+        labels = self.labels(row.media_type, rule.criteria)
+        if labels:
+            context, resolved = await self.context(
                 row.media_type, library_id, [rule.criteria], items
             )
-            for condition in sources:
-                labels[condition.key] = source_label(condition)
+            fields = {
+                condition.key: condition
+                for condition in rule.criteria.field_conditions()
+            }
             for key, label in labels.items():
-                await self.sync_label(
-                    library_id, row.media_type, label, set(resolved[key]), items
+                wanted = (
+                    {
+                        item.id or 0
+                        for item in evaluate(
+                            items, FilterGroup(conditions=[fields[key]]), context
+                        )
+                    }
+                    if key in fields
+                    else set(resolved[key])
                 )
+                await self.sync_label(library_id, row.media_type, label, wanted, items)
         return await self._compile(
             library_id, row.media_type, rule.criteria, order, rule.limit, labels
         )
@@ -216,7 +254,7 @@ class Membership:
         criteria: FilterGroup,
         order: CollectionOrder = CollectionOrder.TITLE_ASC,
     ) -> str:
-        """Compile criteria without lists into the query Plex evaluates."""
+        """Compile criteria Plex tests itself into the query Plex evaluates."""
         return await self._compile(library_id, media_type, criteria, order, None, {})
 
     async def _compile(
@@ -231,7 +269,7 @@ class Membership:
         provider = self._access.provider()
         choices = {
             key: choice_keys(await provider.filter_choices(library_id, media_type, key))
-            for key in tag_keys(criteria, media_type)
+            for key in tag_keys(criteria, media_type, labels)
         }
         return compile_plex_query(
             criteria,

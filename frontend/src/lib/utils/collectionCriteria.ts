@@ -149,8 +149,17 @@ export function splitList(text: string): string[] {
     .filter(Boolean);
 }
 
-export function splitIds(text: string): number[] {
-  return splitList(text)
-    .map(Number)
-    .filter((id) => Number.isInteger(id) && id > 0);
+/** A TMDB page's URL ends in its ID, alone or before a slug: `/list/8136-best`. */
+const TMDB_URL_ID = /\/([1-9]\d*)(?:-[^/]*)?\/?(?:[?#].*)?$/;
+
+/** TMDB IDs typed as numbers or TMDB page URLs, and the entries that are neither. */
+export function parseIds(text: string): { ids: number[]; invalid: string[] } {
+  const ids: number[] = [];
+  const invalid: string[] = [];
+  for (const part of splitList(text)) {
+    const id = /^[1-9]\d*$/.test(part) ? Number(part) : Number(TMDB_URL_ID.exec(part)?.[1]);
+    if (Number.isSafeInteger(id) && id > 0) ids.push(id);
+    else invalid.push(part);
+  }
+  return { ids, invalid };
 }

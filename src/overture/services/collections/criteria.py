@@ -60,7 +60,7 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.EDITION: lambda item: item.edition,
     FilterField.GENRE: lambda item: item.genres,
     FilterField.ACTOR: lambda item: item.actors,
-    FilterField.DIRECTOR: lambda item: _one(item.director),
+    FilterField.DIRECTOR: lambda item: item.directors,
     FilterField.WRITER: lambda item: item.writers,
     FilterField.PRODUCER: lambda item: item.producers,
     FilterField.COUNTRY: lambda item: item.countries,

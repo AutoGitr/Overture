@@ -46,7 +46,7 @@ class MediaItemBase(SQLModel):
     )
     theme_file_hash: str | None = None
 
-    director: str | None = None
+    directors: list[str] = Field(default_factory=list, sa_type=JSON)
     studio: str | None = None
     genres: list[str] = Field(default_factory=list, sa_type=JSON)
     actors: list[str] = Field(default_factory=list, sa_type=JSON)
@@ -108,7 +108,7 @@ class MediaItem(MediaItemBase, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
 
-    # Media-server metadata version the stored director was read at, for
+    # Media-server metadata version the stored directors were read at, for
     # servers whose listings omit directors (Jellyfin and Emby).
     director_etag: str | None = None
     theme_file_mtime_ns: int | None = None

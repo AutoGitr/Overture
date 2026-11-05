@@ -28,6 +28,7 @@ lazy from .fields import (
     field_available,
     field_label,
     field_operators,
+    labelled_field,
     smart_only_dimension,
 )
 lazy from .policy import CollectionPolicy
@@ -135,19 +136,26 @@ class CollectionValidator:
         if generator.dimension is SetDimension.FRANCHISE:
             self._sources.require(SourceType.TMDB_COLLECTION, media_type)
         # Overture counts values itself, then Plex may evaluate each collection.
+        # Plex counts the values only it knows, so it must test the shared
+        # criteria itself rather than through Overture's labels.
+        plex_counts = smart_only_dimension(generator.dimension, server, media_type)
         for criteria in (
             generator.criteria,
             *(value.criteria for value in generator.custom_values),
         ):
-            if not smart_only_dimension(generator.dimension, server, media_type):
+            if not plex_counts:
                 self.criteria(media_type, criteria, smart=False)
             if generator.smart:
                 self.criteria(media_type, criteria, smart=True)
-        if (
-            generator.smart
-            and dimension.field is not None
-            and not field_available(dimension.field, server, media_type, smart=True)
+        if plex_counts and (
+            generator.criteria.source_conditions()
+            or any(
+                labelled_field(condition.field, server, media_type)
+                for condition in generator.criteria.field_conditions()
+            )
         ):
             raise PublicServiceError(
-                422, f"Plex smart collections cannot test {dimension.label}"
+                422,
+                f"Plex counts {dimension.label.casefold()}, so every collection's "
+                "conditions must be ones Plex tests itself",
             )

@@ -542,8 +542,10 @@ describe("collection criteria", () => {
 
   it("saves display, seasonal and Plex visibility choices", async () => {
     let putBody: unknown = null;
+    // Per-user filtering is a smart collection's.
+    const smartRule = { ...rule, smart: true };
     mockFetchRoutes({
-      "/api/collections/12/rule": rule,
+      "/api/collections/12/rule": smartRule,
       "/api/collections/defaults": {},
       "/api/collections/groups": [],
       "/api/collections/capabilities": capabilities,
@@ -554,7 +556,7 @@ describe("collection criteria", () => {
           putBody = JSON.parse(String(init.body));
           return Response.json({ ...detail, ...JSON.parse(String(init.body)) });
         }
-        return Response.json({ ...detail, rule });
+        return Response.json({ ...detail, kind: "smart", rule: smartRule });
       },
     });
     goToCollectionView(detail, "configure");

@@ -238,6 +238,7 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
                                 "People": [
                                     {"Name": "Jonathan Pryce", "Type": "Actor"},
                                     {"Name": "Terry Gilliam", "Type": "Director"},
+                                    {"Name": "Terry Jones", "Type": "Director"},
                                 ],
                             },
                             {"Id": "movie2", "People": []},
@@ -336,7 +337,7 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
     assert items[0].background_url == (
         "http://jellyfin.test/Items/movie1/Images/Backdrop"
     )
-    assert items[0].director is None
+    assert items[0].directors == ()
     assert items[0].director_etag == "movie-etag"
     assert items[1].director_etag is None
     seasons = {season.num: season for season in items[1].seasons}
@@ -345,8 +346,8 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
     listed = [r.url.params.get("includeItemTypes") for r in transport.requests]
     assert listed.count("Season") == listed.count("Episode") == 1
     assert await provider.get_directors(["movie1", "movie2"]) == {
-        "movie1": "Terry Gilliam",
-        "movie2": None,
+        "movie1": ("Terry Gilliam", "Terry Jones"),
+        "movie2": (),
     }
 
 
@@ -561,10 +562,10 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
     assert show.seasons[0].file_count == 1
     assert movie.year == 1982
     assert movie.folder_path == "/media/movies/Movie"
-    assert movie.director is None
+    assert movie.directors == ()
     assert movie.director_etag == "movie-etag"
     assert show.director_etag is None
-    assert await provider.get_directors(["movie1"]) == {"movie1": "John Carpenter"}
+    assert await provider.get_directors(["movie1"]) == {"movie1": ("John Carpenter",)}
     assert movie.server_link.endswith("item?id=movie1&serverId=server-1")
 
 
