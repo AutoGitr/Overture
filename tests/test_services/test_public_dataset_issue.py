@@ -6,7 +6,6 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.art_slots import select_art
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
@@ -19,6 +18,7 @@ lazy from overture.services.public_dataset.issue import (
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 
 POSTER = "https://image.tmdb.org/t/p/original/poster.jpg"
 
@@ -86,7 +86,7 @@ async def test_a_collection_issue_needs_its_tmdb_collection(
     db_session: AsyncSession, database: Database
 ) -> None:
     matched, unmatched = (
-        MediaCollection(
+        stored_collection(
             server_item_id=key,
             media_type=MediaType.MOVIE,
             server_type=ServerType.PLEX,

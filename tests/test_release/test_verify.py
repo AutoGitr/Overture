@@ -55,7 +55,8 @@ def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
         "unsynced": False,
         "below_minimum": False,
         "child_count": 3,
-        "library_id": "1",
+        "library_ids": ["1"],
+        "media_types": ["movie"],
         "server_item_id": f"c{identity}",
         "thumb_url": f"/api/collections/{identity}/image/poster?t=1",
         "art_url": None,
@@ -94,9 +95,16 @@ _MOVIES: dict[str, Any] = {
     # Plex names the genre as it lists it, not as the editor offers it.
     "/api/collections/6/adopt": {
         "rule": {
-            "criteria": {
-                "conditions": [{"field": "genre", "operator": "is", "value": "horror"}]
-            },
+            "libraries": [
+                {
+                    "library_id": "1",
+                    "criteria": {
+                        "conditions": [
+                            {"field": "genre", "operator": "is", "value": "horror"}
+                        ]
+                    },
+                }
+            ],
             "smart": True,
         },
         "tmdb_collection_id": None,
@@ -108,9 +116,12 @@ def _preview(body: dict[str, Any]) -> httpx2.Response:
     # Plex counts and lists Aliens as well, where Overture does not.
     if body["rule"].get("smart"):
         return httpx2.Response(
-            200, json={"member_count": 2, "members": ["Alien", "Aliens"]}
+            200,
+            json={"libraries": [{"member_count": 2, "members": ["Alien", "Aliens"]}]},
         )
-    return httpx2.Response(200, json={"member_count": 1, "members": ["Alien"]})
+    return httpx2.Response(
+        200, json={"libraries": [{"member_count": 1, "members": ["Alien"]}]}
+    )
 
 
 def _issue(template: str, title: str) -> dict[str, Any]:
@@ -140,7 +151,7 @@ def _overture(
     path = request.url.path
     if request.headers.get(API_KEY_HEADER) != f"{host}-key":
         return httpx2.Response(401, json={"detail": "Invalid API key"})
-    movies = request.url.params.get("media_type") == "movie"
+    movies = request.url.params.get("media_type", "movie") == "movie"
     match path:
         case "/api/collections/capabilities":
             return httpx2.Response(200, json=_capabilities(host))
@@ -152,6 +163,8 @@ def _overture(
             return httpx2.Response(
                 200, content=b"png", headers={"content-type": "image/png"}
             )
+        case "/api/collections":
+            return httpx2.Response(200, json=_MOVIES[path])
         case _ if path in _FIXED:
             return httpx2.Response(200, json=_FIXED[path])
         case _ if path in _MOVIES:

@@ -18,8 +18,10 @@ import {
   inCollectionGroup,
   metadataIssuesFor,
   normalizeSortPreference,
+  collectionGroupRows,
   preloadRowIndexes,
   searchFieldGroups,
+  sortCollectionGroups,
   sortMenu,
   type SidebarSortField,
   statusTone,
@@ -484,7 +486,7 @@ function filterCollections(
 describe("sidebar collections", () => {
   it("returns an empty collection list when selected libraries do not match", () => {
     expect(
-      filterCollections([collection({ id: 1, library_id: "library-1" })], {
+      filterCollections([collection({ id: 1, library_ids: ["library-1"] })], {
         filters: withFilters({ libraryIds: ["library-2"] }),
       }),
     ).toEqual([]);
@@ -835,5 +837,60 @@ describe("inCollectionGroup", () => {
     expect(inCollectionGroup({ collection_group: null, managed: true }, null)).toBe(true);
     expect(inCollectionGroup({ collection_group: null, managed: false }, null)).toBe(false);
     expect(inCollectionGroup({ collection_group: "Weekend", managed: true }, null)).toBe(false);
+  });
+});
+
+describe("collection and group sorts", () => {
+  const ids = (scope: Parameters<typeof sortMenu>[0], context?: Parameters<typeof sortMenu>[1]) =>
+    sortMenu(scope, context).map((entry) => entry.id);
+
+  it("offers collections only what they all have a value for", () => {
+    expect(ids("collections", { plex: true })).toEqual([
+      "title",
+      "sort_title",
+      "group",
+      "home_order",
+      "child_count",
+      "server_added_at",
+      "last_synced_at",
+    ]);
+  });
+
+  it("drops what says nothing about the list shown", () => {
+    expect(ids("collections", { inGroup: true })).not.toContain("group");
+    expect(ids("collections", { plex: false })).not.toContain("home_order");
+  });
+
+  it("sorts groups by what their collections add up to", () => {
+    expect(ids("groups")).toEqual([
+      "title",
+      "collection_count",
+      "child_count",
+      "server_added_at",
+      "last_synced_at",
+    ]);
+    const rows = collectionGroupRows(
+      ["Small", "Large", "Empty"],
+      [
+        collection({ id: 1, managed: true, collection_group: "Small", child_count: 1 }),
+        collection({ id: 2, managed: true, collection_group: "Large", child_count: 4 }),
+        collection({ id: 3, managed: true, collection_group: "Large", child_count: 5 }),
+      ],
+    );
+    expect(rows.map((row) => [row.title, row.collections, row.items])).toEqual([
+      ["Small", 1, 1],
+      ["Large", 2, 9],
+      ["Empty", 0, 0],
+    ]);
+    expect(sortCollectionGroups(rows, "child_count", "desc").map((row) => row.title)).toEqual([
+      "Large",
+      "Small",
+      "Empty",
+    ]);
+    expect(sortCollectionGroups(rows, "title", "desc").map((row) => row.title)).toEqual([
+      "Small",
+      "Large",
+      "Empty",
+    ]);
   });
 });

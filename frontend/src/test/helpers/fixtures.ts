@@ -171,8 +171,8 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     tmdb_collection_id: null,
     public_dataset_complete: false,
     public_dataset_themerrdb: false,
-    library_id: null,
-    media_type: "movie",
+    library_ids: ["1"],
+    media_types: ["movie"],
     monitored: false,
     server_added_at: null,
     server_link: null,
@@ -194,17 +194,22 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     active_start_mmdd: null,
     auto_match_art: null,
     auto_match_theme: null,
-    criteria: {
-      mode: "all",
-      conditions: [
-        {
-          kind: "source",
-          operator: "is",
-          source: { type: "mdblist", identifiers: ["user/list"] },
+    libraries: [
+      {
+        library_id: "1",
+        criteria: {
+          mode: "all",
+          conditions: [
+            {
+              kind: "source",
+              operator: "is",
+              source: { type: "mdblist", identifiers: ["user/list"] },
+            },
+          ],
+          groups: [],
         },
-      ],
-      groups: [],
-    },
+      },
+    ],
     collection_filtering: null,
     collection_mode: null,
     delete_below_minimum: null,
@@ -259,6 +264,7 @@ export function collectionCapabilities(
   const numbers = ["is", "is_not", "gt", "gte", "lt", "lte"] as const;
   return {
     server_type: "plex",
+    spans_libraries: false,
     smart: true,
     visibility: true,
     orders: ["custom", "release.asc", "release.desc", "title.asc", "critic_rating.desc"],

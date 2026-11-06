@@ -3,7 +3,13 @@
 lazy from collections import Counter
 
 lazy from ...config import Settings
-lazy from ...domain import FilterField, MediaType, SetDimension, TmdbChart
+lazy from ...domain import (
+    CollectionOrder,
+    FilterField,
+    MediaType,
+    SetDimension,
+    TmdbChart,
+)
 lazy from ...integrations.tmdb import chart_available
 lazy from ...schemas.collections import (
     CollectionCapabilities,
@@ -11,13 +17,15 @@ lazy from ...schemas.collections import (
     CollectionFieldRead,
     CollectionFieldValue,
     CollectionKindRequest,
+    CollectionLibraryPreview,
     CollectionPreview,
     CollectionPreviewRequest,
+    CollectionRuleWrite,
     CollectionSourceRead,
     KindRecommendation,
 )
 lazy from ...utils.errors import PublicServiceError
-lazy from .access import CollectionAccess
+lazy from .access import CollectionAccess, LibraryScope
 lazy from .criteria import field_value
 lazy from .fields import (
     DIMENSIONS,
@@ -71,6 +79,7 @@ class CollectionDiscovery:
         tmdb = self._app_config.tmdb_configured
         return CollectionCapabilities(
             server_type=server,
+            spans_libraries=self._access.spans_libraries,
             smart=plex,
             visibility=plex,
             member_labels=plex,
@@ -170,7 +179,7 @@ class CollectionDiscovery:
         if field_available(field, server, media_type, smart=False):
             items = await self._access.library_items(library_id, media_type)
             collections = (
-                await self._access.collection_titles(media_type, library_id)
+                await self._access.collection_titles(library_id)
                 if field is FilterField.COLLECTION
                 else {}
             )
@@ -216,43 +225,72 @@ class CollectionDiscovery:
         ]
 
     async def recommend(self, body: CollectionKindRequest) -> KindRecommendation | None:
-        """Return the collection kind that suits a rule, as it is being edited."""
+        """Return the collection kind that suits a rule, as it is being edited.
+
+        The kind is the collection's, so libraries that disagree give no advice.
+        """
+        rule = body.rule
+        types = await self._access.library_types(e.library_id for e in rule.libraries)
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(
-                session, body.media_type, None, body.rule
+            policy = await self._access.policy(session, None, rule)
+        advice = [
+            recommend_kind(
+                library.criteria,
+                self.capabilities(types[library.library_id]),
+                media_type=types[library.library_id],
+                order=policy.order_type,
             )
-        return recommend_kind(
-            body.rule,
-            self.capabilities(body.media_type),
-            media_type=body.media_type,
-            order=policy.order_type,
+            for library in rule.libraries
+        ]
+        first = advice[0]
+        return (
+            first
+            if all(
+                entry is not None and first is not None and entry.kind is first.kind
+                for entry in advice
+            )
+            else None
         )
 
     async def preview(self, body: CollectionPreviewRequest) -> CollectionPreview:
-        """What the criteria select now; Plex counts a smart collection's members."""
+        """What each library's criteria select now."""
         rule = body.rule
-        self._validator.criteria(body.media_type, rule.criteria, smart=rule.smart)
+        scopes = await self._access.scopes(rule.libraries)
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, body.media_type, None, rule)
-        items = await self._access.library_items(body.library_id, body.media_type)
+            policy = await self._access.policy(session, None, rule)
+        return CollectionPreview(
+            libraries=[
+                await self._preview_library(scope, rule, policy.order_type)
+                for scope in scopes
+            ]
+        )
+
+    async def _preview_library(
+        self, scope: LibraryScope, rule: CollectionRuleWrite, order: CollectionOrder
+    ) -> CollectionLibraryPreview:
+        """Plex counts a smart collection's members; Overture any other's."""
+        library_id, media_type = scope.library_id, scope.media_type
+        criteria, items = scope.criteria, scope.items
+        self._validator.criteria(media_type, criteria, smart=rule.smart)
         server = self._access.server_type
         local = all(
-            field_available(condition.field, server, body.media_type, smart=False)
-            for condition in rule.criteria.field_conditions()
+            field_available(condition.field, server, media_type, smart=False)
+            for condition in criteria.field_conditions()
         )
         # Plex answers for a smart collection, so the preview is what it shows;
         # a list only becomes a label Plex can test once the collection is saved.
-        if rule.smart and not rule.criteria.source_conditions():
+        if rule.smart and not criteria.source_conditions():
             total, ids = await self._access.provider().find_matching(
-                body.library_id,
-                body.media_type,
+                library_id,
+                media_type,
                 await self._membership.plex_filter(
-                    body.library_id, body.media_type, rule.criteria, policy.order_type
+                    library_id, media_type, criteria, order
                 ),
                 _PREVIEW_MEMBERS,
             )
             by_server_id = {item.server_item_id: item.title for item in items}
-            return CollectionPreview(
+            return CollectionLibraryPreview(
+                library_id=library_id,
                 member_count=min(total, rule.limit or total),
                 members=[by_server_id[i] for i in ids if i in by_server_id],
             )
@@ -261,18 +299,13 @@ class CollectionDiscovery:
                 422, "Save the collection to preview Plex filters with lists"
             )
         wanted = await self._membership.wanted(
-            body.media_type,
-            body.library_id,
-            rule.criteria,
-            items,
-            order=policy.order_type,
-            limit=rule.limit,
+            media_type, library_id, criteria, items, order=order, limit=rule.limit
         )
         tests_tmdb = any(
-            FIELDS[condition.field].tmdb
-            for condition in rule.criteria.field_conditions()
+            FIELDS[condition.field].tmdb for condition in criteria.field_conditions()
         )
-        return CollectionPreview(
+        return CollectionLibraryPreview(
+            library_id=library_id,
             member_count=len(wanted),
             members=[item.title for item in wanted[:_PREVIEW_MEMBERS]],
             tmdb_unread=sum(

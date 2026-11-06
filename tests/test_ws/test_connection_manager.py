@@ -117,7 +117,9 @@ def test_connection_lifecycle_with_uvicorn_event_loop(
         assert websocket.closed is not None
 
     # Auto selects uvloop on Linux, matching the container's default command.
-    config = Config("overture.main:create_app", factory=True, loop=loop_name)
+    config = Config(
+        "overture.main:create_app", factory=True, loop=loop_name, log_config=None
+    )
     with asyncio.Runner(loop_factory=config.get_loop_factory()) as runner:
         runner.run(exercise())
 

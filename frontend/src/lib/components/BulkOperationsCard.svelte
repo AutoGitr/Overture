@@ -59,7 +59,7 @@
     enabled: uiState.sidebarMode === "items",
   }));
   const collectionsQuery = createQuery(() => ({
-    ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
+    ...listCollectionsOptions(),
     enabled: uiState.sidebarMode === "collections",
   }));
   const capabilities = createQuery(() => ({
@@ -67,7 +67,7 @@
     enabled: uiState.sidebarMode === "collections",
   }));
   const groupsQuery = createQuery(() => ({
-    ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
+    ...listCollectionGroupsOptions(),
     enabled: uiState.sidebarMode === "collections",
   }));
 
@@ -221,7 +221,6 @@
         const result = await runBulkCollections(
           {
             collection_ids: ids,
-            media_type: uiState.sidebarTab,
             operation: "set_monitored",
             monitored,
           },
@@ -253,7 +252,6 @@
       const result = await runBulkCollections(
         {
           collection_ids: targets.map((collection) => collection.id),
-          media_type: uiState.sidebarTab,
           operation,
         },
         (body) => collectionsRequest.mutateAsync({ body }),
@@ -267,7 +265,7 @@
     }
   }
 
-  let collectionOperation = $state<BulkCollectionOperation["operation"]>("trigger_sync");
+  let collectionOperation = $state<BulkCollectionOperation["operation"]>("set_group");
   let operationTargets = $derived(
     collectionOperation === "adopt" ? unmanagedCollections : collections,
   );
@@ -283,7 +281,6 @@
       [
         ["adopt", "Adopt unmanaged", !unmanagedCollections.length],
         ["orphan", "Orphan managed", !collections.length],
-        ["trigger_sync", "Sync", !collections.length],
         ["set_group", "Assign group", !collections.length],
         ["set_order", "Set sort", !collections.length],
         ["apply_sort_title_format", "Format sort titles", !collections.length],
@@ -343,7 +340,6 @@
     const body: BulkCollectionOperation = {
       ...answer,
       collection_ids: ids,
-      media_type: uiState.sidebarTab,
       operation,
     };
     if (operation === "set_group" || operation === "adopt") {

@@ -33,9 +33,7 @@ vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({
   listServerLibraries: async () => ({ data: await libraries() }),
   listSyncSchedules: async () => ({ data: await schedules() }),
   getPublicDatasetStatus: async () => ({ data: await datasetStatus() }),
-  listCollectionGroups: async (options: { query: { media_type: string } }) => ({
-    data: options.query.media_type === "movie" ? ["Sagas"] : [],
-  }),
+  listCollectionGroups: async () => ({ data: ["Sagas"] }),
 }));
 vi.mock("../../../../generated/rest/@tanstack/svelte-query.gen", async (importOriginal) => ({
   ...(await importOriginal<

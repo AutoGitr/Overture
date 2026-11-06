@@ -38,11 +38,10 @@ describe("Sidebar", () => {
         },
       },
     });
-    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    client.setQueryData(listCollectionsOptions().queryKey, [
       collection({
         id: 1,
         title: "Action",
-        media_type: "movie",
         server_type: "plex",
       }),
     ]);
@@ -61,11 +60,11 @@ describe("Sidebar", () => {
   });
 
   it("hides grouped collections until the group is opened and keeps that group while opening art", async () => {
-    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    client.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Saga", collection_group: "Weekend", art_status: "complete" }),
       collection({ id: 2, title: "Loose" }),
     ]);
-    await navigate("/movies/collections");
+    await navigate("/collections");
     render(SidebarHarness, { props: { client, movies: [movie] } });
     expect(await screen.findByRole("button", { name: "Open group Weekend" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Select collection Saga" })).toBeNull();
@@ -76,7 +75,7 @@ describe("Sidebar", () => {
     const art = screen.getByRole("button", { name: "Open art for Saga" });
     expect(art).toHaveAttribute("data-status", "success");
     await fireEvent.click(art);
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/1-saga/art/poster"));
+    await waitFor(() => expect(route.pathname).toBe("/collections/1-saga/art/poster"));
     expect(screen.getByRole("button", { name: "Select collection Saga" })).toBeVisible();
     await fireEvent.click(screen.getByRole("button", { name: "Back to results" }));
     expect(await screen.findByRole("button", { name: "Open group Weekend" })).toBeVisible();
@@ -84,15 +83,11 @@ describe("Sidebar", () => {
   });
 
   it("lists every group, empty ones too, and the reserved groups only while they hold collections", async () => {
-    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    client.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Saga", collection_group: "Weekend", kind: "smart" }),
     ]);
-    client.setQueryData(listCollectionGroupsOptions({ query: { media_type: "movie" } }).queryKey, [
-      "Empty",
-      "Ungrouped",
-      "Weekend",
-    ]);
-    await navigate("/movies/collections");
+    client.setQueryData(listCollectionGroupsOptions().queryKey, ["Empty", "Ungrouped", "Weekend"]);
+    await navigate("/collections");
     render(SidebarHarness, { props: { client, movies: [movie] } });
     expect(await screen.findByRole("button", { name: "Open group Empty" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Open group Weekend" })).toBeVisible();
@@ -103,16 +98,16 @@ describe("Sidebar", () => {
   });
 
   it("shows collection art and theme badges except themes on Emby", async () => {
-    client.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    client.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Plex", server_type: "plex" }),
       collection({ id: 2, title: "Emby", server_type: "emby" }),
     ]);
-    await navigate("/movies/collections");
+    await navigate("/collections");
     render(SidebarHarness, { props: { client } });
     expect(await screen.findByRole("button", { name: "Open art for Emby" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Open themes for Emby" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Open themes for Plex" }));
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/1-plex/themes"));
+    await waitFor(() => expect(route.pathname).toBe("/collections/1-plex/themes"));
   });
 
   it("remembers the scroll position of each tab separately", async () => {
@@ -243,7 +238,7 @@ describe("Sidebar", () => {
     await fireEvent.input(screen.getByLabelText("Search sidebar"), {
       target: { value: "Action" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: /^Collections/ }));
 
     await waitFor(() => expect(uiState.sidebarMode).toBe("collections"));
     expect(sidebarState.current).toBeNull();

@@ -181,7 +181,9 @@ class MediaItemRepository:
             return {}
         result = await self.session.exec(
             select(
-                MediaItem.server_item_id, MediaItem.director_etag, MediaItem.directors
+                MediaItem.server_item_id,
+                MediaItem.director_etag,
+                col(MediaItem.directors),
             ).where(
                 col(MediaItem.media_type) == MediaType.MOVIE,
                 col(MediaItem.server_item_id).in_(server_item_ids),
@@ -446,21 +448,24 @@ class MediaItemRepository:
 
     async def library_counts(
         self, media_type: MediaType | None = None
-    ) -> dict[str, int]:
-        """Return visible media item counts keyed by media-server library ID."""
+    ) -> dict[str, tuple[MediaType, int]]:
+        """Return what each media-server library holds, and how many visible items."""
         stmt = (
-            select(MediaItem.library_id, func.count())
+            select(MediaItem.library_id, MediaItem.media_type, func.count())
             .where(
                 col(MediaItem.library_id).is_not(None),
                 col(MediaItem.server_removed_at).is_(None),
             )
-            .group_by(col(MediaItem.library_id))
+            .group_by(col(MediaItem.library_id), col(MediaItem.media_type))
         )
         if media_type:
             stmt = stmt.where(col(MediaItem.media_type) == media_type)
 
         result = await self.session.exec(stmt)
-        return {str(library_id): count for library_id, count in result.all()}
+        return {
+            str(library_id): (MediaType(held), count)
+            for library_id, held, count in result.all()
+        }
 
     async def folder_paths(self) -> list[str]:
         """Return every stored media item folder path."""

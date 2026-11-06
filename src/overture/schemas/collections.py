@@ -48,6 +48,8 @@ lazy from .common import StatusResponse
 lazy from .library import MediaItemRead
 lazy from .validators import CronExpression, GroupName, YouTubeId
 
+type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
+
 
 class ArrTagRead(StrictBaseModel):
     """One tag configured on Radarr or Sonarr."""
@@ -345,8 +347,9 @@ class CollectionRead(CollectionArtwork):
     art_url: str | None = None
     child_count: int = 0
     below_minimum: bool = False
-    media_type: MediaType
-    library_id: str | None = None
+    #: What its libraries hold, movies first.
+    media_types: list[MediaType]
+    library_ids: list[str]
     server_added_at: str | None = None
     server_type: ServerType
     #: Opens the server's copy; none while the server holds no copy.
@@ -402,7 +405,6 @@ class SetCollectionThemeRequest(StrictBaseModel):
     """Validate the set collection theme request payload."""
 
     youtube_id: YouTubeId
-    media_type: MediaType
 
 
 class DeleteCollectionThemeResponse(StatusResponse):
@@ -416,7 +418,6 @@ class CollectionThemeUpdatedEvent(StrictBaseModel):
     """Collection theme state update."""
 
     collection_id: int
-    media_type: MediaType
     has_theme: bool
     youtube_id: str | None = None
     youtube_title: str | None = None
@@ -479,8 +480,8 @@ def collection_read(
         thumb_url=_collection_image_url(row.id or 0, "poster", row.thumb_url),
         art_url=_collection_image_url(row.id or 0, "background", row.art_url),
         child_count=row.child_count,
-        media_type=row.media_type,
-        library_id=row.library_id,
+        media_types=row.media_types,
+        library_ids=row.library_ids,
         server_added_at=row.server_added_at.isoformat()
         if row.server_added_at
         else None,
@@ -522,7 +523,6 @@ class BulkCollectionMonitorUpdate(StrictBaseModel):
     """Validate bulk collection monitor updates."""
 
     collection_ids: list[int]
-    media_type: MediaType
     monitored: bool
 
 
@@ -626,10 +626,8 @@ class CollectionOptions(StrictBaseModel):
 
 
 class CollectionCreate(CollectionOptions):
-    """Create a collection in one selected library; its criteria decide its members."""
+    """Create a collection; its rule names the libraries and what each selects."""
 
-    media_type: MediaType
-    library_id: Annotated[str, Field(min_length=1, max_length=200)]
     rule: CollectionRuleWrite
 
 
@@ -640,19 +638,32 @@ class CollectionMembersUpdate(StrictBaseModel):
     order_type: CollectionOrder
 
 
-class CollectionRuleWrite(CollectionPolicyBase):
-    """Criteria that decide membership, with nullable policy overrides."""
+class CollectionLibraryCriteria(StrictBaseModel):
+    """What a collection selects from one library."""
 
+    library_id: LibraryId
     criteria: FilterGroup
+
+
+class CollectionRuleWrite(CollectionPolicyBase):
+    """Each library's criteria, which decide membership, and policy overrides."""
+
+    libraries: Annotated[
+        list[CollectionLibraryCriteria], Field(min_length=1, max_length=20)
+    ]
     #: Plex evaluates the criteria live instead of Overture on each sync.
     smart: bool = False
+    #: The most members taken from each library.
     limit: Annotated[int, Field(ge=1, le=10000)] | None = None
 
     @model_validator(mode="after")
     def validate_rule(self) -> Self:
-        """Require a condition, and leave smart collections to Plex's order."""
-        if self.criteria.is_empty():
-            raise ValueError("Add at least one condition")
+        """Require a condition per library, and leave smart ones to Plex's order."""
+        ids = [library.library_id for library in self.libraries]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Give each library one set of criteria")
+        if any(library.criteria.is_empty() for library in self.libraries):
+            raise ValueError("Add at least one condition for each library")
         if self.smart and self.order_type is CollectionOrder.CUSTOM:
             raise ValueError(SMART_CUSTOM_ORDER)
         return self
@@ -816,9 +827,8 @@ class CollectionGroupDelete(StrictBaseModel):
 
 
 class CollectionSetPreview(StrictBaseModel):
-    """Preview a set's collections in its library before saving it."""
+    """Preview a set's collections in its libraries before saving it."""
 
-    media_type: MediaType
     generator: CollectionGenerator
     #: The group the set saves into, whose existing collections are matched.
     group: Annotated[str, Field(max_length=200)] | None = None
@@ -844,8 +854,11 @@ class CollectionMissingTitle(StrictBaseModel):
     title: str
     year: int | None = None
     poster_url: str | None = None
+    media_type: MediaType
     #: Radarr or Sonarr already has it.
     requested: bool = False
+    #: Radarr or Sonarr is set up to take it.
+    requestable: bool = False
 
 
 class CollectionMissing(StrictBaseModel):
@@ -854,16 +867,21 @@ class CollectionMissing(StrictBaseModel):
     titles: list[CollectionMissingTitle]
     #: More titles are missing than are listed.
     truncated: bool = False
-    #: Radarr or Sonarr is set up to take requests for the library.
+    #: Radarr or Sonarr is set up to take requests for one of its libraries.
     requestable: bool = False
+
+
+class CollectionRequestTitle(StrictBaseModel):
+    """One title to request; TMDB numbers movies and shows apart."""
+
+    tmdb_id: Annotated[int, Field(gt=0)]
+    media_type: MediaType
 
 
 class CollectionRequest(StrictBaseModel):
     """Titles to request; none requests every missing one."""
 
-    tmdb_ids: (
-        Annotated[list[Annotated[int, Field(gt=0)]], Field(max_length=500)] | None
-    ) = None
+    titles: Annotated[list[CollectionRequestTitle], Field(max_length=500)] | None = None
 
 
 class CollectionRequestResult(StrictBaseModel):
@@ -889,9 +907,10 @@ class KindRecommendation(StrictBaseModel):
     reason: PublicText
 
 
-class CollectionPreview(StrictBaseModel):
-    """What a collection's criteria select now, before it is saved."""
+class CollectionLibraryPreview(StrictBaseModel):
+    """What one library's criteria select now."""
 
+    library_id: str
     member_count: int
     #: The first members, in the collection's order.
     members: list[str]
@@ -899,18 +918,21 @@ class CollectionPreview(StrictBaseModel):
     tmdb_unread: int = 0
 
 
+class CollectionPreview(StrictBaseModel):
+    """What a collection's criteria select now, before it is saved."""
+
+    libraries: list[CollectionLibraryPreview]
+
+
 class CollectionKindRequest(StrictBaseModel):
     """A rule being edited, to recommend the collection kind for."""
 
-    media_type: MediaType
     rule: CollectionRuleWrite
 
 
 class CollectionPreviewRequest(StrictBaseModel):
-    """Criteria to preview in one library."""
+    """A rule whose criteria to preview in each of its libraries."""
 
-    media_type: MediaType
-    library_id: Annotated[str, Field(min_length=1, max_length=200)]
     rule: CollectionRuleWrite
 
 
@@ -968,6 +990,8 @@ class CollectionCapabilities(StrictBaseModel):
     """What the active media server lets collections do, for one media type."""
 
     server_type: ServerType
+    #: One server collection can hold several libraries, of either media type.
+    spans_libraries: bool
     smart: bool
     #: Plex's visibility, Home promotion and Home order.
     visibility: bool
@@ -997,14 +1021,12 @@ class BulkCollectionOperation(StrictBaseModel):
     collection_ids: Annotated[
         list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
     ]
-    media_type: MediaType
     operation: Literal[
         "set_visibility",
         "set_order",
         "set_monitored",
         "set_group",
         "apply_sort_title_format",
-        "trigger_sync",
         "adopt",
         "orphan",
         "clear_artwork",

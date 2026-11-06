@@ -27,14 +27,15 @@ const reads = vi.hoisted(() => ({
   listBulkAssetsSchedules: vi.fn(() => Promise.resolve({ data: schedules.value })),
   getLibraries: vi.fn((options: { query?: { media_type?: string } }) =>
     Promise.resolve({
-      data: options.query?.media_type === "movie" ? [{ id: "1", title: "Movies", count: 1 }] : [],
+      data:
+        options.query?.media_type === "movie"
+          ? [{ id: "1", title: "Movies", media_type: "movie", count: 1 }]
+          : [],
     }),
   ),
   getPublicDatasetStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
   clearJobSnapshot: vi.fn(() => Promise.resolve({ data: { status: "cleared" } })),
-  listCollectionGroups: vi.fn((options: { query?: { media_type?: string } }) =>
-    Promise.resolve({ data: options.query?.media_type === "movie" ? ["Sagas", "Studios"] : [] }),
-  ),
+  listCollectionGroups: vi.fn(() => Promise.resolve({ data: ["Sagas"] })),
 }));
 
 vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({

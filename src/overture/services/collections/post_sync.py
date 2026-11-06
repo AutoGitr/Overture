@@ -4,7 +4,7 @@ Each step decides from the synced collection whether it applies, so a new
 step is a new :class:`PostSyncStep`, not a change to the sync itself.
 """
 
-lazy from collections.abc import Sequence
+lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass
 lazy from typing import Protocol
 
@@ -26,7 +26,7 @@ lazy from .member_effects import MemberEffects
 lazy from .membership import Membership
 lazy from .policy import CollectionPolicy
 lazy from .reader import catalog_collections
-lazy from .rules import criteria
+lazy from .rules import criteria_of
 lazy from .sources import SourceResolver
 lazy from .themes import CollectionThemes
 
@@ -39,21 +39,22 @@ class SyncedCollection:
     rule: CollectionRule | None
     policy: CollectionPolicy
     members: list[MediaItem]
-    library_items: list[MediaItem]
+    library_items: Mapping[str, list[MediaItem]]
     settings: AppSettings
     plex: bool
+    #: The sync made a server copy the collection's saved assets are not on yet.
+    new_copies: bool = False
 
     @property
     def collection_id(self) -> int:
         return self.row.id or 0
 
     @property
-    def media_type(self) -> MediaType:
-        return self.row.media_type
-
-    @property
     def on_server(self) -> bool:
-        return self.row.server_item_id is not None
+        return bool(self.row.server_ids)
+
+    def members_of(self, media_type: MediaType) -> list[MediaItem]:
+        return [item for item in self.members if item.media_type is media_type]
 
 
 class PostSyncStep(Protocol):
@@ -88,13 +89,14 @@ class AutoAssets:
 
     async def run(self, synced: SyncedCollection) -> None:
         row, policy = synced.row, synced.policy
-        if policy.auto_match_art:
-            for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
-                if read_art_slot(row, art_type).url:
-                    continue
-                sources = await self._art.sources(
-                    synced.collection_id, synced.media_type, art_type
+        for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
+            url = read_art_slot(row, art_type).url
+            if url and synced.new_copies:
+                await self._art.save(
+                    synced.collection_id, art_type, SaveArtRequest(url=url)
                 )
+            elif not url and policy.auto_match_art:
+                sources = await self._art.sources(synced.collection_id, art_type)
                 candidates = [
                     candidate
                     for group in sources.sources.values()
@@ -103,11 +105,17 @@ class AutoAssets:
                 if candidates:
                     await self._art.save(
                         synced.collection_id,
-                        synced.media_type,
                         art_type,
                         SaveArtRequest(url=candidates[0].url),
                     )
-        if not policy.auto_match_theme or row.youtube_id or not row.tmdb_collection_id:
+        if row.youtube_id:
+            if synced.new_copies and self._themes.unavailable() is None:
+                await self._themes.queue(
+                    synced.collection_id,
+                    SetCollectionThemeRequest(youtube_id=row.youtube_id),
+                )
+            return
+        if not policy.auto_match_theme or not row.tmdb_collection_id:
             return
         async with self._access.database.read_session() as session:
             catalog = await catalog_collections(
@@ -117,10 +125,7 @@ class AutoAssets:
         if entry and entry.youtube_id_overturedb and self._themes.unavailable() is None:
             await self._themes.queue(
                 synced.collection_id,
-                SetCollectionThemeRequest(
-                    media_type=synced.media_type,
-                    youtube_id=entry.youtube_id_overturedb,
-                ),
+                SetCollectionThemeRequest(youtube_id=entry.youtube_id_overturedb),
             )
 
 
@@ -141,13 +146,18 @@ class MemberLabel:
             title=synced.row.title,
             group=synced.row.collection_group,
         )
-        await self._membership.sync_label(
-            synced.row.library_id or "",
-            synced.media_type,
-            label,
-            {member.id or 0 for member in synced.members},
-            synced.library_items,
-        )
+        for part in synced.row.libraries:
+            await self._membership.sync_label(
+                part.library_id,
+                part.media_type,
+                label,
+                {
+                    member.id or 0
+                    for member in synced.members
+                    if member.library_id == part.library_id
+                },
+                synced.library_items[part.library_id],
+            )
 
 
 class MemberTag:
@@ -160,9 +170,9 @@ class MemberTag:
         self._effects = effects
 
     def applies(self, synced: SyncedCollection) -> bool:
-        return (
-            bool(synced.policy.arr_tag)
-            and self._sources.arr(synced.media_type).configured
+        return bool(synced.policy.arr_tag) and any(
+            self._sources.arr(media_type).configured
+            for media_type in synced.row.media_types
         )
 
     async def run(self, synced: SyncedCollection) -> None:
@@ -171,7 +181,9 @@ class MemberTag:
             title=synced.row.title,
             group=synced.row.collection_group,
         )
-        await self._effects.tag(synced.media_type, tag, synced.members)
+        for media_type in synced.row.media_types:
+            if self._sources.arr(media_type).configured:
+                await self._effects.tag(media_type, tag, synced.members_of(media_type))
 
 
 class RequestMissing:
@@ -186,19 +198,22 @@ class RequestMissing:
     def applies(self, synced: SyncedCollection) -> bool:
         return (
             synced.policy.request_missing
-            and self._sources.arr(synced.media_type).configured
             and synced.rule is not None
+            and any(
+                self._sources.arr(media_type).configured
+                for media_type in synced.row.media_types
+            )
         )
 
     async def run(self, synced: SyncedCollection) -> None:
-        if synced.rule is None:
-            return
-        await self._arr.request(
-            synced.media_type,
-            criteria(synced.rule),
-            synced.library_items,
-            synced.settings,
-        )
+        for part in synced.row.libraries:
+            if self._sources.arr(part.media_type).configured:
+                await self._arr.request(
+                    part.media_type,
+                    criteria_of(part),
+                    synced.library_items[part.library_id],
+                    synced.settings,
+                )
 
 
 class HomeOrder:
@@ -213,31 +228,32 @@ class HomeOrder:
         return synced.plex and synced.policy.home_order is not None and synced.on_server
 
     async def run(self, synced: SyncedCollection) -> None:
-        library_id = synced.row.library_id or ""
-        media_type = synced.media_type
+        for part in synced.row.libraries:
+            await self._order_library(part.library_id)
+
+    async def _order_library(self, library_id: str) -> None:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            rows = [
-                row
-                for row in await repo.list_listed(media_type)
-                if row.library_id == library_id and row.server_item_id is not None
-            ]
             rules = {rule.collection_id: rule for rule in await repo.rules()}
             ordered: list[tuple[int, str, str]] = []
-            for row in rows:
+            for row in await repo.list_listed():
+                held = next(
+                    (
+                        part.server_item_id
+                        for part in row.libraries
+                        if part.library_id == library_id and part.server_item_id
+                    ),
+                    None,
+                )
+                if held is None:
+                    continue
                 policy = await self._access.policy(
-                    session, media_type, row.collection_group, rules.get(row.id or 0)
+                    session, row.collection_group, rules.get(row.id or 0)
                 )
                 if policy.home_order is not None and (
                     row.visible_home or row.visible_shared or row.visible_library
                 ):
-                    ordered.append(
-                        (
-                            policy.home_order,
-                            row.title.casefold(),
-                            row.server_item_id or "",
-                        )
-                    )
+                    ordered.append((policy.home_order, row.title.casefold(), held))
         await self._access.provider().order_collection_hubs(
             library_id, [server_id for _, _, server_id in sorted(ordered)]
         )
@@ -252,7 +268,7 @@ class PostSync:
         self._access = access
         self._steps = steps
 
-    async def run(self, collection_id: int, media_type: MediaType) -> None:
+    async def run(self, collection_id: int, *, new_copies: bool = False) -> None:
         """Run what a sync does beyond membership, each step whatever the others do.
 
         Members are already synced, so a failed step is recorded on the rule
@@ -260,20 +276,22 @@ class PostSync:
         """
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            row = await self._access.require(session, collection_id, media_type)
+            row = await self._access.require(session, collection_id)
             rule = await repo.rule(collection_id)
             synced = SyncedCollection(
                 row=row,
                 rule=rule,
-                policy=await self._access.policy(
-                    session, media_type, row.collection_group, rule
-                ),
+                policy=await self._access.policy(session, row.collection_group, rule),
                 members=await repo.members(collection_id),
-                library_items=await repo.library_items(
-                    media_type, row.library_id or ""
-                ),
+                library_items={
+                    part.library_id: await repo.library_items(
+                        part.media_type, part.library_id
+                    )
+                    for part in row.libraries
+                },
                 settings=await get_app_settings(session),
                 plex=self._access.plex,
+                new_copies=new_copies,
             )
         failures: list[str] = []
         for step in self._steps:

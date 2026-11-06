@@ -32,7 +32,7 @@ lazy from ..adapters import (
 lazy from ..base import BaseMediaServerProvider
 lazy from ..errors import MediaServerError
 lazy from ..health import MediaServerHealthTracker
-lazy from ..wire import PlexMetadata
+lazy from ..wire import PlexDirector, PlexMetadata
 lazy from .client import (
     PLEX_COLLECTION_FILTERING,
     PLEX_COLLECTION_MODES,
@@ -122,6 +122,11 @@ def _plex_guids(metadata: PlexMetadata) -> dict[str, str]:
             agent, external_id = gid.split("://", 1)
             guids[agent] = external_id
     return guids
+
+
+def _plex_tags(tags: list[PlexDirector] | None) -> tuple[str, ...]:
+    """The names of a row's tags, such as its genres or actors."""
+    return tuple(tag for entry in tags or [] if (tag := entry.get("tag")))
 
 
 def _plex_season(season: PlexMetadata, plex_base: str) -> ServerSeason:
@@ -233,30 +238,14 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                 if movie
                 else None
             ),
-            directors=tuple(
-                tag for d in metadata.get("Director") or [] if (tag := d.get("tag"))
-            )
-            if movie
-            else (),
+            directors=_plex_tags(metadata.get("Director")) if movie else (),
             studio=metadata.get("studio") or None,
-            genres=tuple(
-                tag for g in metadata.get("Genre") or [] if (tag := g.get("tag"))
-            ),
-            actors=tuple(
-                tag for r in metadata.get("Role") or [] if (tag := r.get("tag"))
-            ),
-            writers=tuple(
-                tag for w in metadata.get("Writer") or [] if (tag := w.get("tag"))
-            ),
-            producers=tuple(
-                tag for p in metadata.get("Producer") or [] if (tag := p.get("tag"))
-            ),
-            countries=tuple(
-                tag for c in metadata.get("Country") or [] if (tag := c.get("tag"))
-            ),
-            labels=tuple(
-                tag for lbl in metadata.get("Label") or [] if (tag := lbl.get("tag"))
-            ),
+            genres=_plex_tags(metadata.get("Genre")),
+            actors=_plex_tags(metadata.get("Role")),
+            writers=_plex_tags(metadata.get("Writer")),
+            producers=_plex_tags(metadata.get("Producer")),
+            countries=_plex_tags(metadata.get("Country")),
+            labels=_plex_tags(metadata.get("Label")),
             content_rating=metadata.get("contentRating") or None,
             edition=(metadata.get("editionTitle") or None) if movie else None,
             resolution=(first_media.get("videoResolution") if first_media else None)

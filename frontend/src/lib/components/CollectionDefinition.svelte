@@ -35,7 +35,7 @@
   title="Setup"
   description={creatingSet
     ? "One collection per value in the library, such as each decade, kept up to date."
-    : "Where the collection lives, its title and its group."}
+    : "Which libraries it draws from, its title and its group."}
   busy={editor.busy}
 >
   {#if draft}
@@ -54,37 +54,30 @@
         onchoose={(dimension) => form.chooseDimension(dimension)}
       />
     {/if}
-    <fieldset class="libraries">
-      <legend class="form-label">Libraries</legend>
-      {#each libraries as library (library.id)}
-        <label class="form-row">
-          <input
-            type="checkbox"
-            checked={form.libraryIds.includes(library.id)}
-            onchange={(event) =>
-              (form.libraryIds = event.currentTarget.checked
-                ? [...form.libraryIds, library.id]
-                : form.libraryIds.filter((libraryId) => libraryId !== library.id))}
-          />
-          {library.title}
-        </label>
-      {/each}
-      {#if form.linked}
-        <span class="hint"
-          >Several libraries make a set with this collection in each, kept alike.</span
-        >
-      {/if}
-    </fieldset>
-  {:else}
-    <FieldRow label="Library" for={`${id}-library`}>
-      <select id={`${id}-library`} value={editor.libraryId} disabled>
-        <option value={editor.libraryId}
-          >{libraries.find((library) => library.id === editor.libraryId)?.title ??
-            editor.libraryId}</option
-        >
-      </select>
-    </FieldRow>
   {/if}
+  <fieldset class="libraries" disabled={editor.generated}>
+    <legend class="form-label">Libraries</legend>
+    {#each libraries as library (library.id)}
+      <label class="form-row">
+        <input
+          type="checkbox"
+          checked={editor.libraryIds.includes(library.id)}
+          onchange={(event) => editor.setLibrary(library.id, event.currentTarget.checked)}
+        />
+        {library.title}
+        <span class="badge badge-muted" aria-hidden="true"
+          >{library.media_type === "movie" ? "Movies" : "Shows"}</span
+        >
+      </label>
+    {/each}
+    {#if editor.libraryIds.length > 1 && !creatingSet}
+      <span class="hint"
+        >{editor.capabilities.data?.spans_libraries
+          ? "One collection on the server holds them all."
+          : "Plex keeps a collection in one library, so each gets its own, kept alike."}</span
+      >
+    {/if}
+  </fieldset>
 
   {#if draft && creatingSet}
     {@const form = draft}

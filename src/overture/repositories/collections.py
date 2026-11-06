@@ -9,7 +9,11 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.collection_group import CollectionGroup
 lazy from ..db.models.collection_rule import CollectionRule
-lazy from ..db.models.media_collection import MediaCollection, MediaCollectionMember
+lazy from ..db.models.media_collection import (
+    CollectionLibrary,
+    MediaCollection,
+    MediaCollectionMember,
+)
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import MediaType, ServerType
@@ -21,23 +25,20 @@ class CollectionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def group_policies(
-        self, server_type: ServerType, media_type: MediaType
-    ) -> list[CollectionGroup]:
-        """Return defaults scoped to the active server and media type."""
+    async def group_policies(self, server_type: ServerType) -> list[CollectionGroup]:
+        """Return the active server's group defaults."""
         return list(
             (
                 await self.session.exec(
                     select(CollectionGroup).where(
-                        col(CollectionGroup.server_type) == server_type,
-                        col(CollectionGroup.media_type) == media_type,
+                        col(CollectionGroup.server_type) == server_type
                     )
                 )
             ).all()
         )
 
     async def group_policy(
-        self, server_type: ServerType, media_type: MediaType, name: str | None
+        self, server_type: ServerType, name: str | None
     ) -> CollectionGroup | None:
         """Return one group's defaults without conflating ungrouped collections."""
         if not name:
@@ -46,23 +47,21 @@ class CollectionRepository:
             await self.session.exec(
                 select(CollectionGroup).where(
                     col(CollectionGroup.server_type) == server_type,
-                    col(CollectionGroup.media_type) == media_type,
                     col(CollectionGroup.name) == name,
                 )
             )
         ).first()
 
-    async def get(
-        self, collection_id: int, media_type: MediaType | None = None
-    ) -> MediaCollection | None:
+    async def get(self, collection_id: int) -> MediaCollection | None:
         """Return a collection row, listed or not."""
-        stmt = select(MediaCollection).where(col(MediaCollection.id) == collection_id)
-        if media_type is not None:
-            stmt = stmt.where(col(MediaCollection.media_type) == media_type)
-        return (await self.session.exec(stmt)).first()
+        return (
+            await self.session.exec(
+                select(MediaCollection).where(col(MediaCollection.id) == collection_id)
+            )
+        ).first()
 
     async def group_members(
-        self, server_type: ServerType, media_type: MediaType, name: str
+        self, server_type: ServerType, name: str
     ) -> list[MediaCollection]:
         """Include unlisted collections so group operations leave no orphaned data."""
         return list(
@@ -71,7 +70,6 @@ class CollectionRepository:
                     select(MediaCollection)
                     .where(
                         col(MediaCollection.server_type) == server_type,
-                        col(MediaCollection.media_type) == media_type,
                         col(MediaCollection.collection_group) == name,
                     )
                     .order_by(col(MediaCollection.id))
@@ -82,33 +80,37 @@ class CollectionRepository:
     async def find_server(
         self, server_type: ServerType, server_item_id: str
     ) -> MediaCollection | None:
-        """Return the collection identified by one provider."""
+        """Return the collection one of whose server copies this is."""
         return (
             await self.session.exec(
-                select(MediaCollection).where(
+                select(MediaCollection)
+                .join(
+                    CollectionLibrary,
+                    col(CollectionLibrary.collection_id) == col(MediaCollection.id),
+                )
+                .where(
                     col(MediaCollection.server_type) == server_type,
-                    col(MediaCollection.server_item_id) == server_item_id,
+                    col(CollectionLibrary.server_item_id) == server_item_id,
                 )
             )
         ).first()
 
-    async def get_listed(
-        self, collection_id: int, media_type: MediaType
-    ) -> MediaCollection | None:
+    async def get_listed(self, collection_id: int) -> MediaCollection | None:
         """Return a collection the last sync listed."""
-        row = await self.get(collection_id, media_type)
+        row = await self.get(collection_id)
         return row if row is not None and row.last_synced_at is not None else None
 
-    async def list_listed(
-        self, media_type: MediaType | None = None
-    ) -> list[MediaCollection]:
+    async def list_listed(self) -> list[MediaCollection]:
         """Return the collections the last sync listed."""
-        stmt = select(MediaCollection).where(
-            col(MediaCollection.last_synced_at).is_not(None)
+        return list(
+            (
+                await self.session.exec(
+                    select(MediaCollection).where(
+                        col(MediaCollection.last_synced_at).is_not(None)
+                    )
+                )
+            ).all()
         )
-        if media_type is not None:
-            stmt = stmt.where(col(MediaCollection.media_type) == media_type)
-        return list((await self.session.exec(stmt)).all())
 
     async def list_all(self) -> list[MediaCollection]:
         """Return every collection row, listed or not."""
@@ -227,16 +229,47 @@ class CollectionRepository:
             for position, item_id in enumerate(media_item_ids)
         )
 
-    async def clear_server_copy(self, collection_id: int, timestamp: datetime) -> None:
-        """Record that a collection has no copy on the server, keeping its row."""
+    async def clear_server_copies(
+        self,
+        collection_id: int,
+        timestamp: datetime,
+        server_ids: Collection[str] | None = None,
+    ) -> None:
+        """Record that the server no longer holds these copies, or any of them.
+
+        The collection keeps its row and the members of the copies that remain.
+        """
         row = await self.get(collection_id)
         if row is None:
             return
-        row.server_item_id = None
-        row.child_count = 0
+        gone = {
+            part.library_id
+            for part in row.libraries
+            if part.server_item_id
+            and (server_ids is None or part.server_item_id in server_ids)
+        }
+        for part in row.libraries:
+            if part.library_id in gone:
+                part.server_item_id = None
+                self.session.add(part)
+        kept = (
+            await self.session.exec(
+                select(col(MediaItem.id))
+                .join(
+                    MediaCollectionMember,
+                    col(MediaCollectionMember.media_item_id) == col(MediaItem.id),
+                )
+                .where(
+                    col(MediaCollectionMember.collection_id) == collection_id,
+                    col(MediaItem.library_id).not_in(gone),
+                )
+                .order_by(col(MediaCollectionMember.position))
+            )
+        ).all()
+        row.child_count = len(kept)
         row.updated_at = timestamp
         self.session.add(row)
-        await self.replace_members(collection_id, [])
+        await self.replace_members(collection_id, [i for i in kept if i is not None])
 
     async def delete_ids(self, collection_ids: Sequence[int]) -> None:
         """Delete collections; their members go with them."""
@@ -248,7 +281,6 @@ class CollectionRepository:
     async def bulk_set_monitored(
         self,
         collection_ids: list[int],
-        media_type: MediaType,
         monitored: bool,
         *,
         timestamp: datetime,
@@ -260,7 +292,6 @@ class CollectionRepository:
                 update(MediaCollection)
                 .where(
                     col(MediaCollection.id).in_(batch),
-                    col(MediaCollection.media_type) == media_type,
                     col(MediaCollection.last_synced_at).is_not(None),
                     # Collections Overture does not manage stay as they are.
                     col(MediaCollection.id).in_(select(CollectionRule.collection_id)),
@@ -289,9 +320,7 @@ class CollectionRepository:
             ).all()
         )
 
-    async def titles_by_item(
-        self, media_type: MediaType, library_id: str
-    ) -> dict[int, list[str]]:
+    async def titles_by_item(self, library_id: str) -> dict[int, list[str]]:
         """The titles of the listed collections each item of a library belongs to."""
         stmt = (
             select(col(MediaCollectionMember.media_item_id), col(MediaCollection.title))
@@ -299,9 +328,11 @@ class CollectionRepository:
                 MediaCollection,
                 col(MediaCollection.id) == col(MediaCollectionMember.collection_id),
             )
+            .join(
+                MediaItem, col(MediaItem.id) == col(MediaCollectionMember.media_item_id)
+            )
             .where(
-                col(MediaCollection.media_type) == media_type,
-                col(MediaCollection.library_id) == library_id,
+                col(MediaItem.library_id) == library_id,
                 col(MediaCollection.last_synced_at).is_not(None),
             )
         )

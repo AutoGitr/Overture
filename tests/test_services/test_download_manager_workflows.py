@@ -14,7 +14,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import ArtFileFacts, read_art_slot, record_art_file
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
@@ -47,6 +46,7 @@ lazy from overture.utils.image import (
     UnsupportedImageFormatError,
     encoded_image_extension,
 )
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -942,7 +942,7 @@ async def test_a_new_collection_theme_supersedes_the_pending_upload(
 
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=1,
                 server_type=ServerType.PLEX,
                 server_item_id="c1",

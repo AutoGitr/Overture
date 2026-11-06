@@ -182,7 +182,6 @@ export interface ServerAuditFixEvent {
 
 export interface CollectionThemeUpdatedEvent {
   collection_id: number;
-  media_type: MediaType;
   has_theme: boolean;
   youtube_id?: string | null;
   youtube_title?: string | null;

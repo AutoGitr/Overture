@@ -3,7 +3,6 @@
 lazy from collections.abc import Callable
 lazy from typing import Any, Protocol
 
-lazy from .domain import MediaType
 lazy from .schemas.collections import CollectionGroupSyncResult
 
 
@@ -51,8 +50,8 @@ class EventPublisher(Protocol):
 class CollectionGroups(Protocol):
     """The collection groups a full sync can run."""
 
-    async def names(self, media_type: MediaType) -> list[str]: ...
+    async def names(self) -> list[str]: ...
 
     async def sync(
-        self, media_type: MediaType, name: str, *, library_ids: list[str] | None = None
+        self, name: str, *, library_ids: list[str] | None = None
     ) -> CollectionGroupSyncResult: ...

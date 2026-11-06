@@ -9,7 +9,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.models.art import ArtSlot
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
@@ -18,6 +17,7 @@ lazy from overture.main import create_app
 lazy from overture.schemas.stats import StatsResponse
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_runtime
 
 
@@ -180,7 +180,7 @@ async def test_stats_with_seeded_data(
     await db_session.commit()
 
     # Seed a synced collection with the theme Overture stored
-    coll1 = MediaCollection(
+    coll1 = stored_collection(
         server_item_id="coll-1",
         media_type=MediaType.MOVIE,
         server_type=ServerType.PLEX,

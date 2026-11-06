@@ -376,14 +376,13 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     ["set_order", { order_type: "title.asc" }],
     ["apply_sort_title_format", { sort_title_format: "+{title}" }],
     ["set_visibility", { collection_mode: "hide", visible_home: true }],
-    ["trigger_sync", {}],
     ["orphan", {}],
     ["delete", { delete_target: "server" }],
   ])("applies %s only to filtered collections in the open group", async (operation, expected) => {
-    await navigate("/movies/collections");
+    await navigate("/collections");
     openSidebarGroup("Weekend");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
-    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({
         id: 1,
         title: "Empty",
@@ -441,14 +440,14 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
-    ).toEqual({ collection_ids: [1], media_type: "movie", operation, ...expected });
+    ).toEqual({ collection_ids: [1], operation, ...expected });
   });
 
   it("lists collection operations and target groups alphabetically, without group actions", async () => {
-    await navigate("/movies/collections");
+    await navigate("/collections");
     openSidebarGroup("Weekend");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
-    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Saga", collection_group: "Weekend" }),
     ]);
     mockFetchRoutes({
@@ -469,7 +468,6 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "Orphan managed",
       "Set sort",
       "Set visibility",
-      "Sync",
     ]);
     await fireEvent.change(view.getByLabelText("Operation"), { target: { value: "set_group" } });
     await waitFor(() =>
@@ -485,12 +483,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   });
 
   it("groups collection filters: status inline together, then art, theme, bulk and collection operations", async () => {
-    await navigate("/movies/collections");
+    await navigate("/collections");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
-    queryClient.setQueryData(
-      listCollectionsOptions({ query: { media_type: "movie" } }).queryKey,
-      [],
-    );
+    queryClient.setQueryData(listCollectionsOptions().queryKey, []);
     mockFetchRoutes({
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
@@ -548,9 +543,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   });
 
   it("clears the artwork and theme choices of the matching collections", async () => {
-    await navigate("/movies/collections");
+    await navigate("/collections");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
-    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, youtube_id: "abcdefghijk" }),
       collection({ id: 2 }),
     ]);
@@ -566,7 +561,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await waitFor(() =>
       expect(
         JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
-      ).toEqual({ collection_ids: [1], media_type: "movie", operation: "clear_themes" }),
+      ).toEqual({ collection_ids: [1], operation: "clear_themes" }),
     );
     expect(view.getByRole("button", { name: /Clear artwork selections 2/ })).toBeEnabled();
   });

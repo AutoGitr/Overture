@@ -95,7 +95,6 @@
         collection_id: slot.kind === "collection" ? slot.collectionId : 0,
         art_type: artType,
       },
-      query: { media_type: slot.kind === "collection" ? slot.mediaType : "movie" },
     }),
     enabled: slot.kind === "collection" && slot.tmdbId !== null,
   }));
@@ -148,7 +147,7 @@
     slot.kind === "collection"
       ? matchCollectionRequest.mutateAsync({
           path: { collection_id: slot.collectionId, art_type: artType },
-          query: { media_type: slot.mediaType, threshold: args.query.threshold },
+          query: { threshold: args.query.threshold },
         })
       : matchArtRequest.mutateAsync(args),
   );
@@ -191,7 +190,6 @@
         await saveCollectionRequest.mutateAsync({
           body,
           path: { collection_id: slot.collectionId, art_type: artType },
-          query: { media_type: slot.mediaType },
         });
         if (artType === "poster" || artType === "background")
           handleRecordSelectionAdvance(collectionKey(slot.collectionId), artType, advanceContext);

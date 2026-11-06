@@ -36,7 +36,7 @@ const members = [mediaItem({ id: 1, title: "First", library_id: "movies", server
 const detail = collectionDetail({
   id: 12,
   title: "Saga",
-  library_id: "movies",
+  library_ids: ["movies"],
   members,
   child_count: 1,
 });
@@ -46,7 +46,7 @@ describe("collection criteria", () => {
   beforeEach(async () => {
     queryClient.clear();
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
-    await navigate("/movies/collections/:collectionSlug", {
+    await navigate("/collections/:collectionSlug", {
       params: { collectionSlug: "12-saga" },
     });
   });
@@ -508,7 +508,7 @@ describe("collection criteria", () => {
       smart: true,
       limit: 25,
       order_type: "critic_rating.desc",
-      criteria: rule.criteria,
+      libraries: rule.libraries,
     });
   });
 
@@ -549,7 +549,7 @@ describe("collection criteria", () => {
       "/api/collections/defaults": {},
       "/api/collections/groups": [],
       "/api/collections/capabilities": capabilities,
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 1 }],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 1 }],
       "/api/library/items": { items: members, total: 1 },
       "/api/collections/12": ({ init }: { init: RequestInit }) => {
         if (init.method === "PUT") {
@@ -652,8 +652,7 @@ describe("collection criteria", () => {
     });
     renderWithQueryClient(GroupSettingsHarness, {
       group: "Genres",
-      mediaType: "movie",
-      libraries: [{ id: "movies", title: "Movies", count: 10 }],
+      libraries: [{ id: "movies", title: "Movies", media_type: "movie", count: 10 }],
     });
 
     await fireEvent.click(await screen.findByRole("button", { name: "Collection set" }));
@@ -671,7 +670,6 @@ describe("collection criteria", () => {
       String(calls.find((call) => call.url.startsWith("/api/collections/sets"))?.init.body),
     );
     expect(preview).toMatchObject({
-      media_type: "movie",
       group: "Genres",
       minimum_items: 2,
       generator: { dimension: "genre", library_ids: ["movies"], top: 10 },
@@ -693,8 +691,7 @@ describe("collection criteria", () => {
     renderWithQueryClient(CollectionSetEditor, {
       generator,
       libraryIds: ["movies"],
-      libraries: [{ id: "movies", title: "Movies", count: 1 }],
-      mediaType: "movie",
+      libraries: [{ id: "movies", title: "Movies", media_type: "movie", count: 1 }],
       capabilities: collectionCapabilities({
         dimensions: [
           ...capabilities.dimensions,

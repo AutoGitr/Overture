@@ -41,7 +41,7 @@ lazy from overture.services.sync.collection_sync import CollectionSync
 lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnrichment
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
-lazy from tests.collection_helpers import managing_rule
+lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry, unused
 
@@ -180,7 +180,7 @@ async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
     async with database.write_session() as session:
         session.add_all(
             [
-                MediaCollection(
+                stored_collection(
                     server_item_id="saga",
                     media_type=MediaType.MOVIE,
                     server_type=ServerType.PLEX,
@@ -189,14 +189,14 @@ async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
                     monitored=False,
                     tmdb_collection_id=99,
                 ),
-                MediaCollection(
+                stored_collection(
                     server_item_id="kept",
                     media_type=MediaType.MOVIE,
                     server_type=ServerType.PLEX,
                     youtube_id="abcDEF12345",
                     server_theme_id="/theme/kept",
                 ),
-                MediaCollection(
+                stored_collection(
                     server_item_id="gone",
                     media_type=MediaType.MOVIE,
                     server_type=ServerType.PLEX,
@@ -230,7 +230,7 @@ async def test_a_library_scoped_sync_leaves_other_libraries_collections(
     await _seed_movies(database)
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 server_item_id="elsewhere",
                 media_type=MediaType.MOVIE,
                 server_type=ServerType.PLEX,
@@ -277,7 +277,8 @@ async def test_jellyfin_collections_take_type_library_and_theme_from_disk(
     await _run(Jellyfin(app_config=app_config), database, app_config)
 
     row = (await _rows(database))["box"]
-    assert (row.media_type, row.library_id) == (MediaType.MOVIE, "1")
+    # A BoxSet stands outside the libraries, so it spans those its members are in.
+    assert (row.media_types, row.library_ids) == ([MediaType.MOVIE], ["1", "2"])
     assert row.tmdb_collection_id == 77
     assert row.server_theme_id is None
     assert row.theme_file_hash is not None
@@ -478,7 +479,7 @@ async def test_an_unavailable_jellyfin_mount_preserves_theme_facts_and_provenanc
     await _seed_movies(database)
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 server_item_id="box",
                 server_type=ServerType.JELLYFIN,
                 media_type=MediaType.MOVIE,
@@ -512,7 +513,7 @@ async def test_a_listed_boxset_without_local_members_preserves_manual_matching(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 server_item_id="box",
                 server_type=ServerType.JELLYFIN,
                 media_type=MediaType.MOVIE,

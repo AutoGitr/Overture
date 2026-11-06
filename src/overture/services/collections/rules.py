@@ -1,12 +1,15 @@
 """Conversions between stored collection rules and the criteria they hold."""
 
+lazy from collections.abc import Mapping, Sequence
+
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
-lazy from ...db.models.media_collection import MediaCollection
+lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import FilterField, FilterOperator, SourceType
+lazy from ...domain import FilterField, FilterOperator, MediaType, SourceType
 lazy from ...schemas.collections import (
     CollectionGenerator,
+    CollectionLibraryCriteria,
     CollectionRuleRead,
     CollectionRuleWrite,
     Condition,
@@ -27,18 +30,62 @@ ORDERED_SOURCES = frozenset(
 )
 
 
-def criteria(rule: CollectionRule) -> FilterGroup:
-    return FilterGroup.model_validate_json(rule.criteria_json)
+def library_criteria(row: MediaCollection) -> list[CollectionLibraryCriteria]:
+    """What each library selects; a library on its way out selects nothing."""
+    return [
+        CollectionLibraryCriteria(
+            library_id=part.library_id,
+            criteria=FilterGroup.model_validate_json(part.criteria_json),
+        )
+        for part in row.libraries
+        if part.criteria_json is not None
+    ]
 
 
-def rule_read(rule: CollectionRule | None) -> CollectionRuleRead | None:
+def criteria_of(part: CollectionLibrary) -> FilterGroup:
+    if part.criteria_json is None:
+        raise RuntimeError("A library leaving its collection has no criteria")
+    return FilterGroup.model_validate_json(part.criteria_json)
+
+
+def apply_libraries(
+    row: MediaCollection,
+    libraries: Sequence[CollectionLibraryCriteria],
+    types: Mapping[str, MediaType],
+) -> None:
+    """Make these the libraries the collection selects from.
+
+    A library leaving with a server copy stays, without criteria, until the
+    next sync removes the copy; saving never touches the server.
+    """
+    chosen = {entry.library_id: entry for entry in libraries}
+    for part in list(row.libraries):
+        entry = chosen.pop(part.library_id, None)
+        if entry is not None:
+            part.criteria_json = entry.criteria.model_dump_json()
+        elif part.server_item_id is None:
+            row.libraries.remove(part)
+        else:
+            part.criteria_json = None
+    row.libraries.extend(
+        CollectionLibrary(
+            collection_id=row.id or 0,
+            library_id=library_id,
+            media_type=types[library_id],
+            criteria_json=entry.criteria.model_dump_json(),
+        )
+        for library_id, entry in chosen.items()
+    )
+
+
+def rule_read(
+    rule: CollectionRule | None, row: MediaCollection
+) -> CollectionRuleRead | None:
     if rule is None:
         return None
     return CollectionRuleRead(
-        **rule.model_dump(
-            exclude={"id", "collection_id", "criteria_json", "smart", "item_limit"}
-        ),
-        criteria=criteria(rule),
+        **rule.model_dump(exclude={"id", "collection_id", "smart", "item_limit"}),
+        libraries=library_criteria(row),
         smart=rule.smart,
         limit=rule.item_limit,
     )
@@ -47,9 +94,8 @@ def rule_read(rule: CollectionRule | None) -> CollectionRuleRead | None:
 def rule_row(collection_id: int, body: CollectionRuleWrite) -> CollectionRule:
     return CollectionRule(
         collection_id=collection_id,
-        criteria_json=body.criteria.model_dump_json(),
         item_limit=body.limit,
-        **body.model_dump(exclude={"criteria", "limit"}),
+        **body.model_dump(exclude={"libraries", "limit"}),
     )
 
 
@@ -119,10 +165,11 @@ def generator(group: CollectionGroup | None) -> CollectionGenerator | None:
     return CollectionGenerator.model_validate_json(group.generator_json)
 
 
-def franchise_ids(criteria: FilterGroup) -> set[int]:
+def franchise_ids(libraries: Sequence[CollectionLibraryCriteria]) -> set[int]:
     return {
         condition.source.collection_id
-        for condition in criteria.source_conditions()
+        for library in libraries
+        for condition in library.criteria.source_conditions()
         if isinstance(condition.source, TmdbCollectionSource)
         and condition.operator is FilterOperator.IS
     }

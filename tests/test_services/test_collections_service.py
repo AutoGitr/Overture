@@ -50,7 +50,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
-lazy from tests.collection_helpers import managing_rule
+lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.factories import seed_art_slot
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 
@@ -152,7 +152,7 @@ def _service(
 async def _collection(
     session: AsyncSession, server_id: str = "c1", **fields: Any
 ) -> MediaCollection:
-    row = MediaCollection(
+    row = stored_collection(
         server_item_id=server_id,
         media_type=MediaType.MOVIE,
         server_type=ServerType.PLEX,
@@ -172,11 +172,11 @@ async def test_every_action_rejects_a_server_without_collections(
 ) -> None:
     service = _service(app_config=app_config, database=database, supported=False)
     for call in (
-        service.reader.listed(MediaType.MOVIE),
-        service.reader.get(1, MediaType.MOVIE),
+        service.reader.listed(),
+        service.reader.get(1),
         service.themes.queue(
             1,
-            SetCollectionThemeRequest(youtube_id="a" * 11, media_type=MediaType.MOVIE),
+            SetCollectionThemeRequest(youtube_id="a" * 11),
         ),
         service.reader.image(1, ArtType.POSTER, None),
     ):
@@ -192,7 +192,7 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
     await _collection(db_session, "c2", server_theme_id="/theme/1")
     # Kept from before the first sync: not shown until a sync lists it.
     db_session.add(
-        MediaCollection(
+        stored_collection(
             server_item_id="old",
             media_type=MediaType.MOVIE,
             server_type=ServerType.PLEX,
@@ -206,16 +206,15 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
     await db_session.commit()
     service = _service(app_config=app_config, database=database)
 
-    disabled = await service.reader.listed(MediaType.MOVIE)
+    disabled = await service.reader.listed()
     await enable_public_dataset(db_session)
-    enabled = {c.id: c for c in await service.reader.listed(MediaType.MOVIE)}
+    enabled = {c.id: c for c in await service.reader.listed()}
 
     assert sorted(c.id for c in disabled) == [1, 2]
     assert not any(c.public_dataset_complete for c in disabled)
     assert enabled[1].public_dataset_complete is True
     assert enabled[2].has_theme is True
     assert enabled[2].theme_status == "partial"
-    assert await service.reader.listed(MediaType.SHOW) == []
 
 
 async def test_get_collection_lists_members_and_catalog_candidates(
@@ -251,9 +250,7 @@ async def test_get_collection_lists_members_and_catalog_candidates(
     await db_session.commit()
     await enable_public_dataset(db_session)
 
-    detail = await _service(app_config=app_config, database=database).reader.get(
-        1, MediaType.MOVIE
-    )
+    detail = await _service(app_config=app_config, database=database).reader.get(1)
 
     assert [member.title for member in detail.members] == ["Star Wars", "Empire"]
     assert detail.members[1].poster_hash == "poster-hash"
@@ -271,7 +268,7 @@ async def test_get_collection_raises_404_for_an_unlisted_collection(
 ) -> None:
     service = _service(app_config=app_config, database=database)
     with pytest.raises(PublicServiceError) as exc_info:
-        await service.reader.get(999, MediaType.MOVIE)
+        await service.reader.get(999)
     assert exc_info.value.status_code == 404
 
 
@@ -284,7 +281,7 @@ async def test_set_collection_theme_enqueues_job(
 
     result = await service.themes.queue(
         1,
-        SetCollectionThemeRequest(youtube_id="abcDEF123_4", media_type=MediaType.MOVIE),
+        SetCollectionThemeRequest(youtube_id="abcDEF123_4"),
     )
 
     assert result.job_id == "job-1"
@@ -306,7 +303,7 @@ async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
     with pytest.raises(PublicServiceError, match="JELLYFIN_COLLECTIONS_PATH"):
         await service.themes.queue(
             1,
-            SetCollectionThemeRequest(youtube_id="a" * 11, media_type=MediaType.MOVIE),
+            SetCollectionThemeRequest(youtube_id="a" * 11),
         )
 
 
@@ -323,11 +320,11 @@ async def test_delete_collection_theme_clears_row_and_broadcasts(
         publisher=publisher,
     )
 
-    result = await service.themes.delete(1, MediaType.MOVIE)
+    result = await service.themes.delete(1)
 
     assert result.status is Status.OK
     assert provider.deleted_theme_for == ["c1"]
-    row = await CollectionRepository(db_session).get(1, MediaType.MOVIE)
+    row = await CollectionRepository(db_session).get(1)
     assert row is not None
     await db_session.refresh(row)
     assert (row.youtube_id, row.server_theme_id) == (None, None)
@@ -346,9 +343,9 @@ async def test_delete_collection_theme_keeps_the_row_when_the_server_fails(
     )
 
     with pytest.raises(MediaServerError):
-        await service.themes.delete(1, MediaType.MOVIE)
+        await service.themes.delete(1)
 
-    row = await CollectionRepository(db_session).get(1, MediaType.MOVIE)
+    row = await CollectionRepository(db_session).get(1)
     assert row is not None
     assert row.youtube_id == "abcDEF12345"
 
@@ -360,13 +357,13 @@ async def test_monitored_flags_change_only_listed_collections(
     await _collection(db_session, "c2")
     service = _service(app_config=app_config, database=database)
 
-    single = await service.editor.set_monitored(1, MediaType.MOVIE, False)
-    bulk = await service.editor.bulk_set_monitored([1, 2, 999], MediaType.MOVIE, False)
+    single = await service.editor.set_monitored(1, False)
+    bulk = await service.editor.bulk_set_monitored([1, 2, 999], False)
 
     assert single.monitored is False
     assert bulk.updated == 2
     with pytest.raises(PublicServiceError) as exc_info:
-        await service.editor.set_monitored(999, MediaType.MOVIE, False)
+        await service.editor.set_monitored(999, False)
     assert exc_info.value.status_code == 404
 
 
@@ -432,7 +429,7 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
     app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=1,
                 server_item_id="opaque-id",
                 server_type=ServerType.JELLYFIN,
@@ -451,14 +448,14 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
         database=database,
         provider=Jellyfin(app_config=app_config),
     )
-    detail = await service.reader.get(1, MediaType.MOVIE)
+    detail = await service.reader.get(1)
     assert not detail.theme_writable
     assert detail.theme_unavailable is not None
     folder = tmp_path / "Saga [boxset]"
     folder.mkdir()
     (folder / "theme.mp3").write_bytes(b"audio")
-    assert (await service.reader.get(1, MediaType.MOVIE)).theme_writable
-    await service.themes.delete(1, MediaType.MOVIE)
+    assert (await service.reader.get(1)).theme_writable
+    await service.themes.delete(1)
     assert not (folder / "theme.mp3").exists()
     assert refreshed == ["opaque-id"]
     async with database.read_session() as session:
@@ -479,7 +476,6 @@ async def test_every_bulk_operation_has_a_handler(
     body = BulkCollectionOperation.model_validate(
         {
             "collection_ids": [404],
-            "media_type": MediaType.MOVIE,
             "operation": operation,
             "order_type": CollectionOrder.TITLE_ASC,
             "monitored": True,

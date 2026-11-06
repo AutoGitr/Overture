@@ -1,5 +1,4 @@
 import type { CatalogMediaType, MediaItemRead } from "../../generated/rest/types.gen";
-import { slugify } from "./slug";
 
 export function buildTmdbCollectionUrl(id: number): string {
   return `https://www.themoviedb.org/collection/${id}`;
@@ -33,9 +32,10 @@ export function buildTmdbUrl(
   return base;
 }
 
+/** TVDB's slugs cannot be derived from a title, so its ID redirect finds the page. */
 export function buildTvdbUrl(item: DetailSubject | null) {
-  if (!item?.tvdb_id || !item.title || item.media_type === "collection") return null;
-  return `https://thetvdb.com/${item.media_type === "movie" ? "movies" : "series"}/${slugify(item.title)}`;
+  if (!item?.tvdb_id || item.media_type === "collection") return null;
+  return `https://thetvdb.com/dereferrer/${item.media_type === "movie" ? "movie" : "series"}/${item.tvdb_id}`;
 }
 
 export function buildPosterDbUrl(item: DetailSubject | null) {

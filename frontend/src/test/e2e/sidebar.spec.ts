@@ -68,18 +68,18 @@ test("a collection theme badge opens its theme view", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/collections?*", (route) =>
+  await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({ json: [collection({ id: 1, title: "Action" })] }),
   );
   await page.route("**/api/themes/search?**", (route) => route.fulfill({ json: { results: [] } }));
   await logIn(page);
-  await page.getByRole("button", { name: "Collections", exact: true }).click();
+  await page.getByRole("button", { name: /^Collections/ }).click();
   const row = page.locator(".sidebar-item").filter({ hasText: "Action" });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Open themes for Action" }).click();
-  await assertRoute(page, "/movies/collections/1-action/themes");
+  await assertRoute(page, "/collections/1-action/themes");
   await page.goBack();
-  await assertRoute(page, "/movies/collections");
+  await assertRoute(page, "/collections");
   await expect(row).toBeVisible();
 });
 

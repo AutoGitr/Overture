@@ -46,7 +46,7 @@ class MediaItemBase(SQLModel):
     )
     theme_file_hash: str | None = None
 
-    directors: list[str] = Field(default_factory=list, sa_type=JSON)
+    directors: list[str] = Field(default_factory=list[str], sa_type=JSON)
     studio: str | None = None
     genres: list[str] = Field(default_factory=list, sa_type=JSON)
     actors: list[str] = Field(default_factory=list, sa_type=JSON)

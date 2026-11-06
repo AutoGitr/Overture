@@ -84,6 +84,7 @@ lazy from overture.services.server_audit.work import (
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.path import real_path
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.factories import MediaItemFactory, SeasonFactory
 lazy from tests.runtime_helpers import make_runtime
 
@@ -295,7 +296,10 @@ class TestLibraryResponseMappers:
         )
 
         assert MediaItemListResponse(items=[item], total=1).total == 1
-        assert LibrarySectionRead(id="movies", title="Movies", count=5).count == 5
+        library = LibrarySectionRead(
+            id="movies", title="Movies", media_type=MediaType.MOVIE, count=5
+        )
+        assert library.count == 5
         assert folder_roots_response({"movies": ["/movies"]}).shows == []
         assert season.file_count == 3
         assert season.poster_url == "https://images.test/s.jpg"
@@ -304,7 +308,7 @@ class TestLibraryResponseMappers:
 class TestCollectionResponseMappers:
     @staticmethod
     def _row(**changes: str | None) -> MediaCollection:
-        row = MediaCollection(
+        row = stored_collection(
             id=1,
             server_item_id="abc",
             media_type=MediaType.MOVIE,

@@ -161,10 +161,10 @@ describe("DbRecordPopup", () => {
   });
 
   it("shows the selected collection and its OvertureDB record, never an item's", async () => {
-    queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
-      collection({ id: 12, title: "Action", media_type: "movie" }),
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
+      collection({ id: 12, title: "Action" }),
     ]);
-    await navigate("/movies/collections/:collectionSlug", {
+    await navigate("/collections/:collectionSlug", {
       params: { collectionSlug: "12-action" },
     });
     const { calls } = mockFetchRoutes({

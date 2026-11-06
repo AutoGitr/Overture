@@ -22,12 +22,6 @@ lazy from .art import ArtSlot
 class MediaCollectionBase(SQLModel):
     """Base model holding media-server collection fields."""
 
-    # Provider IDs are scoped to their server type; public callers use id.
-    # Null when a dynamic or seasonal collection is currently withheld from the server.
-    server_item_id: str | None = Field(default=None, nullable=True, index=True)
-
-    media_type: MediaType = Field(sa_type=enum_type(MediaType), index=True)
-
     # Which media server supplied this collection
     server_type: ServerType = Field(sa_type=enum_type(ServerType))
 
@@ -56,9 +50,9 @@ class MediaCollectionBase(SQLModel):
     active_start_mmdd: str | None = None
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
-    library_id: str | None = Field(default=None, index=True)
     child_count: int = Field(default=0, nullable=False)
-    # Server image URLs; only their hash leaves the backend, as a cache version.
+    # The lead server copy's image URLs; only their hash leaves the backend, as a
+    # cache version.
     thumb_url: str | None = None
     art_url: str | None = None
     server_link: str | None = None
@@ -104,16 +98,9 @@ class MediaCollectionBase(SQLModel):
 
 
 class MediaCollection(MediaCollectionBase, table=True):
-    """Stores media-server collections, their TMDB match and their theme."""
+    """One collection as Overture shows it, across every library it spans."""
 
     __tablename__: ClassVar[Any] = "media_collections"
-    __table_args__ = (
-        UniqueConstraint(
-            "server_type",
-            "server_item_id",
-            name="uq_media_collection_server_item",
-        ),
-    )
 
     id: int | None = Field(default=None, primary_key=True)
     art_slots: list["ArtSlot"] = Relationship(
@@ -121,10 +108,67 @@ class MediaCollection(MediaCollectionBase, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    libraries: list["CollectionLibrary"] = Relationship(
+        back_populates="collection",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "selectin", "order_by": "CollectionLibrary.id"},
+    )
+
+    @property
+    def server_ids(self) -> list[str]:
+        """The server collections holding it, the lead copy first."""
+        return list(
+            dict.fromkeys(
+                part.server_item_id for part in self.libraries if part.server_item_id
+            )
+        )
+
+    @property
+    def server_item_id(self) -> str | None:
+        """The lead server copy, whose images and link stand for the collection."""
+        return next(iter(self.server_ids), None)
+
+    @property
+    def media_types(self) -> list[MediaType]:
+        """What its libraries hold, movies first."""
+        held = {part.media_type for part in self.libraries}
+        return [media_type for media_type in MediaType if media_type in held]
+
+    @property
+    def library_ids(self) -> list[str]:
+        return [part.library_id for part in self.libraries]
 
     def server_image_url(self, art_type: ArtType) -> str | None:
         """The server's current poster or background, as sync last saw it."""
         return self.thumb_url if art_type is ArtType.POSTER else self.art_url
+
+
+class CollectionLibrary(SQLModel, table=True):
+    """One library a collection spans, and where the server keeps its members.
+
+    Jellyfin and Emby keep collections outside their libraries, so every
+    library of a collection names the same server collection; Plex keeps one
+    in each library.
+    """
+
+    __tablename__: ClassVar[Any] = "collection_libraries"
+    __table_args__ = (
+        UniqueConstraint("collection_id", "library_id", name="uq_collection_library"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    collection_id: int = Field(
+        foreign_key="media_collections.id", ondelete="CASCADE", index=True
+    )
+    library_id: str
+    media_type: MediaType = Field(sa_type=enum_type(MediaType), index=True)
+    # Null while the collection is withheld from the server.
+    server_item_id: str | None = Field(default=None, index=True)
+    #: A ``FilterGroup`` of field and source conditions. Null on a collection
+    #: Overture does not manage, and on a library leaving a managed collection
+    #: until the next sync removes it from the server.
+    criteria_json: str | None = None
+    collection: "MediaCollection" = Relationship(back_populates="libraries")
 
 
 class MediaCollectionMember(SQLModel, table=True):
@@ -143,3 +187,4 @@ class MediaCollectionMember(SQLModel, table=True):
 
 
 enum_columns(MediaCollection)
+enum_columns(CollectionLibrary)

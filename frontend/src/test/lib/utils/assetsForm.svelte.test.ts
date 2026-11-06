@@ -4,8 +4,8 @@ import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { AssetsForm } from "../../../lib/utils/assetsForm.svelte";
 import { bulkAssetsSchedule } from "../../helpers/fixtures";
 
-const movies: LibrarySectionRead[] = [{ id: "1", title: "Movies", count: 10 }];
-const shows: LibrarySectionRead[] = [{ id: "2", title: "Shows", count: 4 }];
+const movies: LibrarySectionRead[] = [{ id: "1", title: "Movies", media_type: "movie", count: 10 }];
+const shows: LibrarySectionRead[] = [{ id: "2", title: "Shows", media_type: "movie", count: 4 }];
 
 function form({ dataset = true, loaded = true } = {}) {
   return new AssetsForm({

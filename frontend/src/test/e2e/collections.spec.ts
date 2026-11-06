@@ -10,10 +10,10 @@ test("a collection set previews and creates its collections without horizontal o
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/library/libraries?*", (route) =>
-    route.fulfill({ json: [{ id: "movies", title: "Movies", count: 7 }] }),
+  await page.route("**/api/library/libraries{,?*}", (route) =>
+    route.fulfill({ json: [{ id: "movies", title: "Movies", media_type: "movie", count: 7 }] }),
   );
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/collections/sets/preview", (route) =>
     route.fulfill({
       json: [
@@ -35,14 +35,14 @@ test("a collection set previews and creates its collections without horizontal o
     }),
   );
   let saved: unknown = null;
-  await page.route("**/api/collections/group-policy?*", (route) => {
+  await page.route("**/api/collections/group-policy{,?*}", (route) => {
     if (route.request().method() === "PUT") saved = route.request().postDataJSON();
     return route.fulfill({ json: saved ?? {} });
   });
-  await page.route("**/api/collections/group-policy/sync?*", (route) =>
+  await page.route("**/api/collections/group-policy/sync{,?*}", (route) =>
     route.fulfill({ json: { created: [13], removed: [], synced: 0, errors: {} } }),
   );
-  await logIn(page, "/movies/collections/new");
+  await logIn(page, "/collections/new");
   await expect(page.getByRole("button", { name: "Setup", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",
@@ -66,7 +66,7 @@ test("a collection set previews and creates its collections without horizontal o
   await expect
     .poll(() => saved)
     .toMatchObject({ generator: { dimension: "decade", library_ids: ["movies"] } });
-  await expect(page).toHaveURL(/movies\/collections(\?|$)/);
+  await expect(page).toHaveURL(/\/collections(\?|$)/);
 });
 
 test("collection members, metadata and rule views work on desktop and mobile", async ({ page }) => {
@@ -75,7 +75,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   let detail = collectionDetail({
     id: 12,
     title: "Saga",
-    library_id: "movies",
+    library_ids: ["movies"],
     child_count: 2,
     members: [first, second],
     rule,
@@ -87,20 +87,20 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await page.route("**/api/library/items?*", (route) =>
     route.fulfill({ json: { items: [first, second], total: 2 } }),
   );
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [detail] }));
-  await page.route("**/api/collections/12?*", async (route) => {
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [detail] }));
+  await page.route("**/api/collections/12{,?*}", async (route) => {
     if (route.request().method() === "PUT")
       detail = { ...detail, ...route.request().postDataJSON() };
     await route.fulfill({ json: detail });
   });
-  await page.route("**/api/collections/groups?*", (route) =>
+  await page.route("**/api/collections/groups{,?*}", (route) =>
     route.fulfill({ json: ["default-decades", "Weekend"] }),
   );
-  await page.route("**/api/collections/12/rule?*", (route) => route.fulfill({ json: rule }));
+  await page.route("**/api/collections/12/rule{,?*}", (route) => route.fulfill({ json: rule }));
   await page.route("**/api/collections/12/art/*/sources?*", (route) =>
     route.fulfill({ json: { sources: {}, current_url: null } }),
   );
-  await page.route("**/api/collections/12/members?*", async (route) => {
+  await page.route("**/api/collections/12/members{,?*}", async (route) => {
     const body = route.request().postDataJSON();
     detail = {
       ...detail,
@@ -111,7 +111,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     await route.fulfill({ json: detail });
   });
   await logIn(page);
-  await page.goto("/movies/collections/12-saga");
+  await page.goto("/collections/12-saga");
   const title = page.getByLabel("Title", { exact: true });
   await title.fill("");
   // Save stays unavailable, and says why, until the form can be saved.
@@ -181,15 +181,15 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   const detail = collectionDetail({
     id: 12,
     title: "New collection",
-    library_id: "movies",
+    library_ids: ["movies"],
     members: [first],
     child_count: 1,
   });
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/library/libraries?*", (route) =>
-    route.fulfill({ json: [{ id: "movies", title: "Movies", count: 2 }] }),
+  await page.route("**/api/library/libraries{,?*}", (route) =>
+    route.fulfill({ json: [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }] }),
   );
   await page.route("**/api/library/items?*", (route) =>
     route.fulfill({ json: { items: [first, second], total: 2 } }),
@@ -199,13 +199,21 @@ test("collection creation uses the selected library and TMDB list sources", asyn
     if (path === "/api/collections" && route.request().method() === "POST") {
       expect(route.request().postDataJSON()).toMatchObject({
         title: "New collection",
-        library_id: "movies",
         rule: {
-          criteria: {
-            conditions: [
-              { kind: "source", operator: "is", source: { type: "tmdb_list", list_ids: [123] } },
-            ],
-          },
+          libraries: [
+            {
+              library_id: "movies",
+              criteria: {
+                conditions: [
+                  {
+                    kind: "source",
+                    operator: "is",
+                    source: { type: "tmdb_list", list_ids: [123] },
+                  },
+                ],
+              },
+            },
+          ],
         },
       });
       await route.fulfill({ json: detail });
@@ -215,7 +223,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
     else await route.fulfill({ json: detail });
   });
   await logIn(page);
-  await page.goto("/movies/collections");
+  await page.goto("/collections");
   await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
@@ -238,14 +246,14 @@ test("items and collections share record actions and fit a narrow viewport", asy
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/collections/12?*", (route) =>
+  await page.route("**/api/collections/12{,?*}", (route) =>
     route.fulfill({ json: collectionDetail({ id: 12, title: "Saga", members: [first, second] }) }),
   );
   await logIn(page);
   for (const [path, deleteLabel, count] of [
     ["/movies/1-alien/art/poster", "Delete item from database", 3],
     // A collection can also be orphaned.
-    ["/movies/collections/12-saga", "Delete collection", 4],
+    ["/collections/12-saga", "Delete collection", 4],
   ] as const) {
     await page.goto(path);
     const actions = page.getByRole("group", { name: "Record actions", exact: true });
@@ -282,7 +290,7 @@ test("Emby collections clearly explain unsupported themes", async ({ page }) => 
       }),
     }),
   );
-  await page.route("**/api/collections/12?*", (route) =>
+  await page.route("**/api/collections/12{,?*}", (route) =>
     route.fulfill({
       json: collectionDetail({
         id: 12,
@@ -293,7 +301,7 @@ test("Emby collections clearly explain unsupported themes", async ({ page }) => 
     }),
   );
   await logIn(page);
-  await page.goto("/movies/collections/12-emby-saga/themes");
+  await page.goto("/collections/12-emby-saga/themes");
   await expect(
     page.getByText("Emby does not support collection themes", { exact: true }),
   ).toBeVisible();
@@ -308,20 +316,20 @@ test("groups hide collections until opened, preserve browsing on asset navigatio
     title: "Grouped saga",
     collection_group: "Weekend",
     members: [first],
-    library_id: "movies",
+    library_ids: ["movies"],
   });
   const loose = collectionDetail({ id: 13, title: "Loose saga", members: [second] });
   let candidateRequests = 0;
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [grouped, loose] }));
-  await page.route("**/api/collections/12?*", (route) => route.fulfill({ json: grouped }));
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped, loose] }));
+  await page.route("**/api/collections/12{,?*}", (route) => route.fulfill({ json: grouped }));
   await page.route("**/api/collections/12/art/*/sources?*", (route) => {
     candidateRequests += 1;
     return route.fulfill({ json: { sources: {}, current_url: null } });
   });
-  await logIn(page, "/movies/collections");
+  await logIn(page, "/collections");
   await expect(page.getByRole("button", { name: "Open group Weekend" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toHaveCount(0);
   await page.getByRole("button", { name: "Open group Weekend" }).click();
@@ -351,16 +359,16 @@ test("creating again opens a fresh draft and multiple libraries require a choice
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/library/libraries?*", (route) =>
+  await page.route("**/api/library/libraries{,?*}", (route) =>
     route.fulfill({
       json: [
-        { id: "movies", title: "Movies", count: 1 },
-        { id: "other", title: "Other", count: 1 },
+        { id: "movies", title: "Movies", media_type: "movie", count: 1 },
+        { id: "other", title: "Other", media_type: "movie", count: 1 },
       ],
     }),
   );
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
-  await logIn(page, "/movies/collections");
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
+  await logIn(page, "/collections");
   await page.getByRole("button", { name: "Create collection", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Other", exact: true })).not.toBeChecked();
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
@@ -375,19 +383,19 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/library/libraries?*", (route) =>
+  await page.route("**/api/library/libraries{,?*}", (route) =>
     route.fulfill({
       json: [
-        { id: "movies", title: "Movies", count: 2 },
-        { id: "other", title: "Other movies", count: 3 },
+        { id: "movies", title: "Movies", media_type: "movie", count: 2 },
+        { id: "other", title: "Other movies", media_type: "movie", count: 3 },
       ],
     }),
   );
-  await page.route("**/api/collections/groups?*", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
   let saves = 0;
   let syncs = 0;
-  await page.route("**/api/collections/group-policy?*", (route) => {
+  await page.route("**/api/collections/group-policy{,?*}", (route) => {
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
       expect(body).toMatchObject({
@@ -406,11 +414,11 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     }
     return route.fulfill({ json: { visible_home: true } });
   });
-  await page.route("**/api/collections/group-policy/sync?*", (route) => {
+  await page.route("**/api/collections/group-policy/sync{,?*}", (route) => {
     syncs++;
     return route.fulfill({ json: { created: [12], removed: [], synced: 0, errors: {} } });
   });
-  await logIn(page, "/movies/collections/new");
+  await logIn(page, "/collections/new");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
   await setup.getByRole("checkbox", { name: "Other movies", exact: true }).check();
@@ -434,7 +442,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   await submit.click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/movies/collections");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/collections");
   await expect
     .poll(() => new URL(page.url()).searchParams.get("collection_group"))
     .toBe("group:Franchises");
@@ -446,45 +454,49 @@ test("smart collections combine list sources and live criteria", async ({ page }
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/library/libraries?*", (route) =>
-    route.fulfill({ json: [{ id: "movies", title: "Movies", count: 2 }] }),
+  await page.route("**/api/library/libraries{,?*}", (route) =>
+    route.fulfill({ json: [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }] }),
   );
   const detail = collectionDetail({
     id: 12,
     title: "Unwatched favorites",
-    library_id: "movies",
+    library_ids: ["movies"],
     kind: "smart",
   });
   let created = false;
   // Creating posts to the list's own URL, with ?to_server.
-  await page.route("**/api/collections?*", (route) => {
+  await page.route("**/api/collections{,?*}", (route) => {
     if (route.request().method() !== "POST") return route.fulfill({ json: [] });
     expect(route.request().postDataJSON()).toMatchObject({
       title: "Unwatched favorites",
-      library_id: "movies",
       collection_filtering: "user",
       active_start_mmdd: "12-01",
       active_end_mmdd: "01-05",
       rule: {
         smart: true,
-        criteria: {
-          mode: "all",
-          conditions: [
-            {
-              kind: "source",
-              operator: "is",
-              source: { type: "mdblist", identifiers: ["first/list", "second/list"] },
+        libraries: [
+          {
+            library_id: "movies",
+            criteria: {
+              mode: "all",
+              conditions: [
+                {
+                  kind: "source",
+                  operator: "is",
+                  source: { type: "mdblist", identifiers: ["first/list", "second/list"] },
+                },
+                { kind: "field", field: "unplayed", operator: "is", value: true },
+              ],
             },
-            { kind: "field", field: "unplayed", operator: "is", value: true },
-          ],
-        },
+          },
+        ],
       },
     });
     created = true;
     return route.fulfill({ json: detail });
   });
-  await page.route("**/api/collections/12?*", (route) => route.fulfill({ json: detail }));
-  await logIn(page, "/movies/collections/new");
+  await page.route("**/api/collections/12{,?*}", (route) => route.fulfill({ json: detail }));
+  await logIn(page, "/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unwatched favorites");
   await page.getByText("Smart", { exact: true }).click();
   await page.getByRole("button", { name: "Condition", exact: true }).click();
@@ -525,8 +537,10 @@ test("group management saves and applies defaults separately from an unsaved col
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
-  await page.route("**/api/collections/groups?*", (route) => route.fulfill({ json: ["Weekend"] }));
-  await page.route("**/api/collections/group-policy?*", (route) =>
+  await page.route("**/api/collections/groups{,?*}", (route) =>
+    route.fulfill({ json: ["Weekend"] }),
+  );
+  await page.route("**/api/collections/group-policy{,?*}", (route) =>
     route.fulfill({
       json:
         route.request().method() === "PUT"
@@ -535,15 +549,15 @@ test("group management saves and applies defaults separately from an unsaved col
     }),
   );
   let applied = false;
-  await page.route("**/api/collections/group-policy/apply?*", (route) => {
+  await page.route("**/api/collections/group-policy/apply{,?*}", (route) => {
     applied = true;
     return route.fulfill({ json: { collection_ids: [12], errors: {} } });
   });
   // Save and Apply needs the group to hold a collection.
-  await page.route("**/api/collections?*", (route) =>
+  await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({ json: [collectionDetail({ id: 12, collection_group: "Weekend" })] }),
   );
-  await logIn(page, "/movies/collections/new");
+  await logIn(page, "/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Group", { exact: true }).selectOption("Weekend");

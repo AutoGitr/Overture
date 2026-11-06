@@ -39,6 +39,9 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
 
     server_type: ClassVar[ServerType]
     collections: ClassVar[CollectionSupport | None] = None
+    #: The server keeps collections outside its libraries, so one can hold
+    #: movies and shows from several; otherwise a library holds its own.
+    collections_span_libraries: ClassVar[bool] = False
 
     async def list_collections(self) -> list[ServerCollection]:
         """Return collections when the provider declares support."""

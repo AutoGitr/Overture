@@ -239,8 +239,11 @@ async def test_counts_folders_and_visible_lists_respect_removal(
     populated_repository: MediaItemRepository, tmp_path: Path
 ) -> None:
     repo = populated_repository
-    assert await repo.library_counts() == {"movies": 3, "shows": 1}
-    assert await repo.library_counts(MediaType.SHOW) == {"shows": 1}
+    assert await repo.library_counts() == {
+        "movies": (MediaType.MOVIE, 3),
+        "shows": (MediaType.SHOW, 1),
+    }
+    assert await repo.library_counts(MediaType.SHOW) == {"shows": (MediaType.SHOW, 1)}
     assert [item.id for item in await repo.list_visible(MediaType.MOVIE)] == [2, 5, 1]
     assert [item.id for item in await repo.list_visible()] == [2, 5, 1, 3, 6]
     assert sorted(await repo.folder_paths()) == sorted(

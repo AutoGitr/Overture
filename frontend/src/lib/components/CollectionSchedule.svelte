@@ -16,7 +16,7 @@
   title="Schedule"
   description="When the collection is active each year. Its group decides when it syncs."
   busy={editor.busy}
-  disabled={!editor.libraryId}
+  disabled={!editor.libraryIds.length}
 >
   <CollectionScheduleFields
     bind:policy

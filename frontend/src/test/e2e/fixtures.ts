@@ -130,12 +130,12 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       await page.route("**/api/settings", (route) =>
         route.fulfill({ json: appSettings({ workflow: "art", auto_match_art: false }) }),
       );
-      await page.route("**/api/collections/defaults?*", (route) => route.fulfill({ json: {} }));
-      await page.route("**/api/collections/groups?*", (route) => route.fulfill({ json: [] }));
-      await page.route("**/api/collections/capabilities?*", (route) =>
+      await page.route("**/api/collections/defaults{,?*}", (route) => route.fulfill({ json: {} }));
+      await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
+      await page.route("**/api/collections/capabilities{,?*}", (route) =>
         route.fulfill({ json: collectionCapabilities() }),
       );
-      await page.route("**/api/library/libraries?*", (route) => route.fulfill({ json: [] }));
+      await page.route("**/api/library/libraries{,?*}", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/bulk/assets/schedules", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/media-server/libraries", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/sync/schedules", (route) => route.fulfill({ json: [] }));

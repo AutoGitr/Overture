@@ -8,6 +8,7 @@ lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionArrOptions,
     CollectionMissing,
+    CollectionMissingTitle,
     CollectionRequest,
     CollectionRequestResult,
     FilterGroup,
@@ -15,7 +16,7 @@ lazy from ...schemas.collections import (
 lazy from ...utils.errors import PublicServiceError
 lazy from .access import CollectionAccess
 lazy from .member_effects import MemberEffects
-lazy from .rules import criteria as rule_criteria
+lazy from .rules import criteria_of
 lazy from .sources import SourceResolver
 
 
@@ -52,46 +53,77 @@ class CollectionArr:
             ],
         )
 
-    async def missing(
-        self, collection_id: int, media_type: MediaType
-    ) -> CollectionMissing:
-        """Titles the collection's lists hold that its library lacks."""
+    async def missing(self, collection_id: int) -> CollectionMissing:
+        """Titles the collection's lists hold that its libraries lack."""
         async with self._access.database.read_session() as session:
-            row = await self._access.require(session, collection_id, media_type)
-            rule = await CollectionRepository(session).rule(collection_id)
-        if rule is None:
-            return CollectionMissing(
-                titles=[], requestable=self._sources.arr(media_type).configured
+            row = await self._access.require(session, collection_id)
+            managed = (
+                await CollectionRepository(session).rule(collection_id) is not None
             )
-        return await self._effects.missing(
-            rule_criteria(rule),
-            media_type,
-            await self._access.library_items(row.library_id or "", media_type),
-            region=await self._access.region(),
+        requestable = any(
+            self._sources.arr(media_type).configured for media_type in row.media_types
+        )
+        if not managed:
+            return CollectionMissing(titles=[], requestable=requestable)
+        found: dict[tuple[MediaType, int], CollectionMissingTitle] = {}
+        truncated = False
+        region = await self._access.region()
+        for part in row.libraries:
+            if part.criteria_json is None:
+                continue
+            missing = await self._effects.missing(
+                criteria_of(part),
+                part.media_type,
+                await self._access.library_items(part.library_id, part.media_type),
+                region=region,
+            )
+            truncated = truncated or missing.truncated
+            for title in missing.titles:
+                found.setdefault((title.media_type, title.tmdb_id), title)
+        return CollectionMissing(
+            titles=list(found.values()), truncated=truncated, requestable=requestable
         )
 
     async def request_missing(
-        self, collection_id: int, media_type: MediaType, body: CollectionRequest
+        self, collection_id: int, body: CollectionRequest
     ) -> CollectionRequestResult:
         """Ask Radarr or Sonarr for missing titles, or for the chosen ones."""
         async with self._access.database.read_session() as session:
-            row = await self._access.require(session, collection_id, media_type)
-            rule = await CollectionRepository(session).rule(collection_id)
+            row = await self._access.require(session, collection_id)
             settings = await get_app_settings(session)
-        if not self._sources.arr(media_type).configured:
-            raise PublicServiceError(
-                422,
-                "Set up Radarr to request movies"
-                if media_type is MediaType.MOVIE
-                else "Set up Sonarr to request shows",
+        titles = body.titles
+        wanted = {title.media_type for title in titles or ()}
+        result = CollectionRequestResult()
+        for part in row.libraries:
+            media_type = part.media_type
+            if part.criteria_json is None or (
+                titles is not None and media_type not in wanted
+            ):
+                continue
+            if not self._sources.arr(media_type).configured:
+                if titles is not None:
+                    raise PublicServiceError(
+                        422,
+                        "Set up Radarr to request movies"
+                        if media_type is MediaType.MOVIE
+                        else "Set up Sonarr to request shows",
+                    )
+                continue
+            done = await self.request(
+                media_type,
+                criteria_of(part),
+                await self._access.library_items(part.library_id, media_type),
+                settings,
+                [t.tmdb_id for t in titles if t.media_type is media_type]
+                if titles is not None
+                else None,
             )
-        return await self.request(
-            media_type,
-            rule_criteria(rule) if rule is not None else FilterGroup(),
-            await self._access.library_items(row.library_id or "", media_type),
-            settings,
-            body.tmdb_ids,
-        )
+            result.requested += done.requested
+            result.present += done.present
+            result.errors += done.errors
+            # A title is requested once, however many libraries could hold it.
+            wanted.discard(media_type)
+        return result
 
     async def request(
         self,

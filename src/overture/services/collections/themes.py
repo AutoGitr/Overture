@@ -5,7 +5,7 @@ lazy from pathlib import Path
 lazy from ...config import Settings
 lazy from ...db.completion import collection_theme_status
 lazy from ...db.theme_file import record_theme_file
-lazy from ...domain import AssetScope, MediaType
+lazy from ...domain import AssetScope
 lazy from ...media_servers.adapters import UploadThemes
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import (
@@ -49,12 +49,10 @@ class CollectionThemes:
         """Why this server cannot take collection themes, if it cannot."""
         return collection_themes_unavailable(self._access.provider(), self._app_config)
 
-    async def status(
-        self, collection_id: int, media_type: MediaType
-    ) -> CollectionThemeStatusResponse:
+    async def status(self, collection_id: int) -> CollectionThemeStatusResponse:
         """Return the current theme status for a collection."""
         async with self._access.database.read_session() as session:
-            row = await self._access.require(session, collection_id, media_type)
+            row = await self._access.require(session, collection_id)
         return collection_theme_status_response(collection_read(row, None))
 
     async def queue(
@@ -65,9 +63,7 @@ class CollectionThemes:
         if reason is not None:
             raise PublicServiceError(400, reason)
         async with self._access.database.read_session() as session:
-            row = await self._access.require_managed(
-                session, collection_id, body.media_type
-            )
+            row = await self._access.require_managed(session, collection_id)
         target = JobTarget.collection_theme(collection_id, row.title, body.youtube_id)
         async with self._access.asset_locks.acquire(target.slot.lock_key):
             reason = await collection_theme_unavailable(
@@ -76,22 +72,20 @@ class CollectionThemes:
             if reason:
                 raise PublicServiceError(400, reason)
             async with self._access.database.write_session() as session:
-                await self._access.require(session, collection_id, body.media_type)
+                await self._access.require(session, collection_id)
                 job_id, _ = await self._downloads.queue_job(session, target)
         await self._downloads.committed(session)
         return EnqueuedJobResponse(job_id=job_id)
 
-    async def delete(
-        self, collection_id: int, media_type: MediaType
-    ) -> DeleteCollectionThemeResponse:
+    async def delete(self, collection_id: int) -> DeleteCollectionThemeResponse:
         """Remove the theme from a collection and clear its stored record."""
         async with self._access.database.read_session() as session:
-            await self._access.require_managed(session, collection_id, media_type)
+            await self._access.require_managed(session, collection_id)
         scope = AssetScope(collection_id=collection_id)
         async with self._access.asset_locks.acquire(scope.lock_key):
             await self._remove_server_theme(collection_id)
             async with self._access.database.write_session() as db:
-                row = await CollectionRepository(db).get(collection_id, media_type)
+                row = await CollectionRepository(db).get(collection_id)
                 if row is not None:
                     row.sqlmodel_update(
                         {
@@ -115,7 +109,6 @@ class CollectionThemes:
             "collection.theme.updated",
             {
                 "collection_id": collection_id,
-                "media_type": media_type,
                 "has_theme": False,
                 "youtube_id": None,
                 "youtube_title": None,
@@ -135,7 +128,8 @@ class CollectionThemes:
         if row is None or row.server_item_id is None:
             raise PublicServiceError(404, "Collection not found")
         if isinstance(provider.collections, UploadThemes):
-            await provider.delete_collection_theme(row.server_item_id)
+            for server_id in row.server_ids:
+                await provider.delete_collection_theme(server_id)
             return
         try:
             folder = await theme_folder(

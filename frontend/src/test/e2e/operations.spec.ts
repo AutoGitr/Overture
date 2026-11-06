@@ -191,14 +191,14 @@ test("assets runs only the current sidebar search results", async ({ page }) => 
                 id: 1,
                 title: "Alien",
                 media_type: "movie",
-                director: "Ridley Scott",
+                directors: ["Ridley Scott"],
                 monitored: false,
               },
               {
                 id: 3,
                 title: "Aliens",
                 media_type: "movie",
-                director: "James Cameron",
+                directors: ["James Cameron"],
                 monitored: true,
               },
             ]
@@ -297,7 +297,7 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
       json: appSettings({ media_server: "jellyfin", collections_supported: true }),
     }),
   );
-  await page.route("**/api/collections?*", (route) =>
+  await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({
       json: [
         collection({ id: 12, title: "Star Wars", server_type: "jellyfin" }),
@@ -311,7 +311,7 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
     await route.fulfill({ json: { art: "not_requested", themes: "started" } });
   });
   await logIn(page);
-  await page.getByRole("button", { name: "Collections", exact: true }).click();
+  await page.getByRole("button", { name: /^Collections/ }).click();
   await page.getByLabel("Search sidebar").fill("Star Wars");
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Operations", exact: true });

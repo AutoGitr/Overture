@@ -54,7 +54,10 @@ describe("site links", () => {
   });
 
   it("names movies and shows the way each site does", () => {
-    expect(buildTvdbUrl(movie)).toBe("https://thetvdb.com/movies/the-matrix");
+    expect(buildTvdbUrl(movie)).toBe("https://thetvdb.com/dereferrer/movie/169");
+    expect(buildTvdbUrl({ ...item, title: "MasterClass: Annie Leibovitz", tvdb_id: 343797 })).toBe(
+      "https://thetvdb.com/dereferrer/series/343797",
+    );
     expect(buildPosterDbUrl(item)).toBe("https://theposterdb.com/search?term=Show&section=shows");
     expect(buildImdbUrl("tt0133093")).toBe("https://www.imdb.com/title/tt0133093/");
   });

@@ -23,7 +23,6 @@
       storeCollectionDetail(
         await request.mutateAsync({
           path: { collection_id: collection.id },
-          query: { media_type: collection.media_type },
           body: { group: group || null },
         }),
       );

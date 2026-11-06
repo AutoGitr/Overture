@@ -9,7 +9,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.dataset_contract.contract import validate_entries
 lazy from overture.db.art_slots import select_art
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
@@ -22,6 +21,7 @@ lazy from overture.services.public_dataset.export import (
 lazy from overture.utils.art_urls import PublicArtUrl, art_refusals
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 
 
 async def test_export_reads_saved_season_art_and_omits_private_fields(
@@ -181,7 +181,7 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
     tmp_path: Path,
     database: Database,
 ) -> None:
-    collection = MediaCollection(
+    collection = stored_collection(
         server_item_id="saga",
         media_type=MediaType.MOVIE,
         server_type=ServerType.PLEX,

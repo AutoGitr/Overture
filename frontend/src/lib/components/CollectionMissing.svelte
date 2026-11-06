@@ -4,7 +4,11 @@
     getCollectionMissingOptions,
     requestCollectionMissingMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { CollectionDetail } from "../../generated/rest/types.gen";
+  import type {
+    CollectionDetail,
+    CollectionRequestTitle,
+    MediaType,
+  } from "../../generated/rest/types.gen";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { getSectionView, sectionState } from "../stores/sectionState.svelte";
   import { errorMessage } from "../utils/errors";
@@ -17,10 +21,7 @@
   const TITLE = "Missing";
   const view = getSectionView();
   let expanded = $derived(sectionState.isOpen(view, TITLE, false));
-  const target = $derived({
-    path: { collection_id: collection.id },
-    query: { media_type: collection.media_type },
-  });
+  const target = $derived({ path: { collection_id: collection.id } });
   const missing = createQuery(() => ({
     ...getCollectionMissingOptions(target),
     // Lists are read from TMDB and MDBList, so only once someone looks.
@@ -28,17 +29,20 @@
   }));
   const request = createMutation(() => requestCollectionMissingMutation());
   const feedback = createNotifier();
-  let arr = $derived(collection.media_type === "movie" ? "Radarr" : "Sonarr");
+  function arrOf(mediaType: MediaType) {
+    return mediaType === "movie" ? "Radarr" : "Sonarr";
+  }
+  let arrs = $derived(collection.media_types.map(arrOf).join(" and "));
 
-  async function requestTitles(tmdbIds: number[] | null) {
+  async function requestTitles(titles: CollectionRequestTitle[] | null) {
     try {
-      const result = await request.mutateAsync({ ...target, body: { tmdb_ids: tmdbIds } });
-      const summary = `${result.requested} requested, ${result.present} already in ${arr}`;
+      const result = await request.mutateAsync({ ...target, body: { titles } });
+      const summary = `${result.requested} requested, ${result.present} already held`;
       if (result.errors.length) feedback.error(`${summary}. ${result.errors.join("; ")}`);
       else feedback.success(`${summary}.`);
       await missing.refetch();
     } catch (error) {
-      feedback.error(errorMessage(error, `Could not request from ${arr}`));
+      feedback.error(errorMessage(error, `Could not request from ${arrs}`));
     }
   }
 </script>
@@ -59,18 +63,20 @@
     {@const data = missing.data}
     {#if data.titles.length}
       <ul class="missing">
-        {#each data.titles as title (title.tmdb_id)}
+        {#each data.titles as title (`${title.media_type}:${title.tmdb_id}`)}
           <li>
             <span>{title.title}{title.year ? ` (${title.year})` : ""}</span>
             {#if title.requested}
-              <span class="badge badge-muted">In {arr}</span>
-            {:else if data.requestable}
+              <span class="badge badge-muted">In {arrOf(title.media_type)}</span>
+            {:else if title.requestable}
               <button
                 type="button"
                 class="btn btn-ghost btn-sm"
                 disabled={request.isPending}
-                aria-label={`Request ${title.title} from ${arr}`}
-                onclick={() => void requestTitles([title.tmdb_id])}>Request</button
+                aria-label={`Request ${title.title} from ${arrOf(title.media_type)}`}
+                onclick={() =>
+                  void requestTitles([{ tmdb_id: title.tmdb_id, media_type: title.media_type }])}
+                >Request</button
               >
             {/if}
           </li>
@@ -84,7 +90,7 @@
             class="btn btn-secondary"
             pending={request.isPending}
             pendingLabel="Requesting..."
-            onclick={() => void requestTitles(null)}>Request all from {arr}</PendingButton
+            onclick={() => void requestTitles(null)}>Request all from {arrs}</PendingButton
           >
         </div>
       {/if}

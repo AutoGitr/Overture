@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { LibrarySectionRead } from "../../generated/rest/types.gen";
   import { countOf } from "../utils/plural";
   import {
     switchKind,
@@ -13,7 +14,10 @@
   import SegmentedControl from "./SegmentedControl.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
 
-  let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
+  let {
+    editor,
+    libraries,
+  }: { editor: CollectionEditor | CollectionDraft; libraries: LibrarySectionRead[] } = $props();
 
   const KINDS = [
     ["regular", "Regular"],
@@ -22,6 +26,10 @@
   let capabilities = $derived(editor.capabilities.data);
   // The editor owns its rule, so its criteria are bound here rather than through `editor`.
   let rule = $derived(editor.rule);
+
+  function libraryName(id: string) {
+    return libraries.find((library) => library.id === id)?.title ?? id;
+  }
   let recommendation = $derived(editor.preview.recommendation);
   /** A kind the criteria need that the collection is not, which the preview found. */
   let suggested = $derived(
@@ -41,7 +49,7 @@
       ? "Plex keeps the members current, with play state per user."
       : "Each sync adds what matches the criteria."}
   busy={editor.busy}
-  disabled={!editor.libraryId}
+  disabled={!editor.libraryIds.length}
 >
   {#if capabilities?.smart}
     <FieldRow
@@ -74,32 +82,24 @@
       />
     {/if}
   {/if}
+  {#if !rule.libraries.length}
+    <p class="hint">Choose a library in Setup, then what the collection holds from it.</p>
+  {/if}
+  {#each rule.libraries as entry (entry.library_id)}
+    {@const mediaType = editor.typeOf(entry.library_id)}
+    {@const result = editor.preview.resultFor(entry.library_id)}
+    {@const name = libraryName(entry.library_id)}
     <fieldset class="criteria" disabled={editor.generated}>
-      <legend class="sr-only">Criteria</legend>
+      <legend class="form-label">{name}</legend>
       <CriteriaEditor
-        bind:group={rule.criteria}
-        fields={editor.fields}
-        sources={capabilities?.sources ?? []}
-        mediaType={editor.mediaType}
-        libraryId={editor.libraryId}
-        label="Criteria"
+        bind:group={entry.criteria}
+        fields={editor.fieldsFor(mediaType)}
+        sources={editor.options.for(mediaType).data?.sources ?? []}
+        {mediaType}
+        libraryId={entry.library_id}
+        label={rule.libraries.length > 1 ? `${name} criteria` : "Criteria"}
       />
-    </fieldset>
-    <div class="preview">
-      <div class="actions-row">
-        <PendingButton
-          type="button"
-          class="btn btn-secondary"
-          pending={editor.preview.pending}
-          pendingLabel="Previewing..."
-          disabled={!editor.libraryId}
-          onclick={() => editor.preview.run()}>Preview members</PendingButton
-        >
-      </div>
-      {#if editor.preview.error}
-        <p role="alert">{errorMessage(editor.preview.error, "Could not preview the members")}</p>
-      {:else if editor.preview.result}
-        {@const result = editor.preview.result}
+      {#if result}
         <p class="hint">
           {countOf(result.member_count, "member")}{result.members.length
             ? `: ${result.members.join(", ")}${result.member_count > result.members.length ? ", ..." : ""}`
@@ -112,7 +112,23 @@
           </p>
         {/if}
       {/if}
+    </fieldset>
+  {/each}
+  <div class="preview">
+    <div class="actions-row">
+      <PendingButton
+        type="button"
+        class="btn btn-secondary"
+        pending={editor.preview.pending}
+        pendingLabel="Previewing..."
+        disabled={!editor.libraryIds.length}
+        onclick={() => editor.preview.run()}>Preview members</PendingButton
+      >
     </div>
+    {#if editor.preview.error}
+      <p role="alert">{errorMessage(editor.preview.error, "Could not preview the members")}</p>
+    {/if}
+  </div>
 </DetailForm>
 
 <style>
@@ -124,9 +140,17 @@
   }
 
   .criteria {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
     min-width: 0;
     margin: 0;
-    padding: 0;
-    border: 0;
+    padding: var(--space-3);
+    border: var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .criteria legend {
+    padding: 0 var(--space-1);
   }
 </style>

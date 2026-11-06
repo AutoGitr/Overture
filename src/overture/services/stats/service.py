@@ -109,8 +109,7 @@ class StatsService:
         """
         try:
             collections = [
-                *await self._collections.listed(MediaType.MOVIE),
-                *await self._collections.listed(MediaType.SHOW),
+                *await self._collections.listed(),
             ]
         except PublicServiceError:
             return None

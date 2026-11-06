@@ -87,7 +87,6 @@ describe("realtime REST cache policy", () => {
     applyRestCachePolicy(
       message("collection.theme.updated", {
         collection_id: 1,
-        media_type: "movie",
         has_theme: true,
         theme_status: "complete",
       }),

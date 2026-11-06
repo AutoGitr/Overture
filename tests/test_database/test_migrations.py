@@ -289,7 +289,7 @@ def test_a_movies_director_becomes_the_first_of_its_directors_and_back() -> None
             command.upgrade(config, "b3a91c4e5f27")
             for item_id, director in ((1, "'Ridley Scott'"), (2, "NULL")):
                 conn.exec_driver_sql(
-                    "INSERT INTO media_items (id, media_type, title, monitored, "
+                    "INSERT INTO media_items (id, media_type, title, monitored, "  # noqa: S608 -- literal test values
                     "genres, actors, writers, producers, countries, labels, "
                     "origin_countries, tmdb_keywords, companies, networks, streaming, "
                     "theme_provenance_cleared, director, director_etag) VALUES "
@@ -316,5 +316,203 @@ def test_a_movies_director_becomes_the_first_of_its_directors_and_back() -> None
             assert conn.exec_driver_sql(
                 "SELECT director FROM media_items ORDER BY id"
             ).all() == [("Ridley Scott",), (None,)]
+    finally:
+        engine.dispose()
+
+
+def _seed_collection(
+    conn: Connection,
+    collection_id: int,
+    *,
+    media_type: str,
+    library_id: str,
+    server_id: str,
+    group: str,
+    value: str | None = None,
+) -> None:
+    conn.execute(
+        text(
+            "INSERT INTO media_collections (id, server_item_id, media_type, "
+            "library_id, server_type, kind, title, order_type, visible_home, "
+            "visible_shared, "
+            "visible_library, child_count, monitored, unsynced, deselected, "
+            "collection_group, generated_value) VALUES (:id, :server, :type, :library, "
+            "'plex', 'regular', 'Saga', 'release.asc', 0, 0, 0, 1, 1, 0, 0, :group, "
+            ":value)"
+        ),
+        {
+            "id": collection_id,
+            "server": server_id,
+            "type": media_type,
+            "library": library_id,
+            "group": group,
+            "value": value,
+        },
+    )
+    conn.execute(
+        text(
+            "INSERT INTO collection_rules (collection_id, criteria_json, smart) "
+            "VALUES (:id, :criteria, 0)"
+        ),
+        {"id": collection_id, "criteria": f'{{"library": "{library_id}"}}'},
+    )
+
+
+def _seed_group(
+    conn: Connection, media_type: str, name: str, minimum: int | None
+) -> None:
+    conn.execute(
+        text(
+            "INSERT INTO collection_groups (server_type, media_type, name, "
+            "minimum_items) VALUES ('plex', :type, :name, :minimum)"
+        ),
+        {"type": media_type, "name": name, "minimum": minimum},
+    )
+
+
+def test_collections_move_to_their_libraries_and_groups_are_shared() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c6d2e8f41a90")
+            _seed_collection(
+                conn, 1, media_type="movie", library_id="m", server_id="a", group="Same"
+            )
+            _seed_collection(
+                conn, 2, media_type="show", library_id="s", server_id="b", group="Same"
+            )
+            _seed_collection(
+                conn,
+                3,
+                media_type="movie",
+                library_id="m",
+                server_id="c",
+                group="Differ",
+            )
+            _seed_collection(
+                conn,
+                4,
+                media_type="show",
+                library_id="s",
+                server_id="d",
+                group="Differ",
+            )
+            _seed_collection(
+                conn,
+                5,
+                media_type="movie",
+                library_id="m",
+                server_id="e",
+                group="Set",
+                value="1990",
+            )
+            _seed_collection(
+                conn,
+                6,
+                media_type="movie",
+                library_id="m2",
+                server_id="f",
+                group="Set",
+                value="1990",
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO art_slots (collection_id, art_type, url) "
+                    "VALUES (6, 'poster', 'https://example.test/poster.jpg')"
+                )
+            )
+            _seed_group(conn, "movie", "Same", None)
+            _seed_group(conn, "show", "Same", 3)
+            _seed_group(conn, "movie", "Differ", 1)
+            _seed_group(conn, "show", "Differ", 2)
+            conn.execute(
+                text(
+                    "INSERT INTO saved_schedules (kind, name, enabled, "
+                    "cron_expression, payload_json, state_json, created_at, "
+                    "updated_at) VALUES ('sync', 'Nightly', 1, '0 3 * * *', :payload, "
+                    "'{}', '2026-01-01', '2026-01-01')"
+                ),
+                {"payload": '{"collection_groups": ["Differ"]}'},
+            )
+
+            command.upgrade(config, "e1f4a7c92b3d")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_id, library_id, media_type, server_item_id, "
+                "criteria_json FROM collection_libraries ORDER BY id"
+            ).all() == [
+                (1, "m", "movie", "a", '{"library": "m"}'),
+                (2, "s", "show", "b", '{"library": "s"}'),
+                (3, "m", "movie", "c", '{"library": "m"}'),
+                (4, "s", "show", "d", '{"library": "s"}'),
+                (5, "m", "movie", "e", '{"library": "m"}'),
+                (5, "m2", "movie", "f", '{"library": "m2"}'),
+            ]
+            # Groups that agree merge; ones that differ keep every setting.
+            assert conn.exec_driver_sql(
+                "SELECT name, minimum_items FROM collection_groups ORDER BY name"
+            ).all() == [("Differ", 1), ("Differ (Shows)", 2), ("Same", 3)]
+            assert conn.exec_driver_sql(
+                "SELECT id, collection_group FROM media_collections ORDER BY id"
+            ).all() == [
+                (1, "Same"),
+                (2, "Same"),
+                (3, "Differ"),
+                (4, "Differ (Shows)"),
+                (5, "Set"),
+            ]
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT payload_json FROM saved_schedules"
+                ).scalar_one()
+                == '{"collection_groups": ["Differ", "Differ (Shows)"]}'
+            )
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT child_count FROM media_collections WHERE id = 5"
+                ).scalar_one()
+                == 2
+            )
+            # Migrations run without cascades, so nothing of a merged row is left.
+            assert (
+                conn.exec_driver_sql("SELECT count(*) FROM art_slots").scalar_one() == 0
+            )
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT count(*) FROM collection_rules WHERE collection_id = 6"
+                ).scalar_one()
+                == 0
+            )
+
+            command.downgrade(config, "c6d2e8f41a90")
+
+            assert conn.exec_driver_sql(
+                "SELECT id, media_type, library_id, server_item_id "
+                "FROM media_collections ORDER BY id"
+            ).all() == [
+                (1, "movie", "m", "a"),
+                (2, "show", "s", "b"),
+                (3, "movie", "m", "c"),
+                (4, "show", "s", "d"),
+                (5, "movie", "m", "e"),
+            ]
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT criteria_json FROM collection_rules WHERE collection_id = 5"
+                ).scalar_one()
+                == '{"library": "m"}'
+            )
+            # A shared group goes back to each media type its collections hold.
+            assert conn.exec_driver_sql(
+                "SELECT name, media_type FROM collection_groups "
+                "ORDER BY name, media_type"
+            ).all() == [
+                ("Differ", "movie"),
+                ("Differ (Shows)", "show"),
+                ("Same", "movie"),
+                ("Same", "show"),
+            ]
     finally:
         engine.dispose()

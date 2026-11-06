@@ -8,7 +8,7 @@ import {
 } from "../helpers/fixtures";
 
 test("default redirect opens shows when no movie libraries exist", async ({ page }) => {
-  await page.route("**/api/library/libraries?*", (request) =>
+  await page.route("**/api/library/libraries{,?*}", (request) =>
     request.fulfill({
       json: request.request().url().includes("media_type=show")
         ? [{ id: "shows", title: "Shows", count: 1 }]
@@ -127,10 +127,10 @@ test.describe("path-based client routing", () => {
     await page.route("**/api/settings", (route) =>
       route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
     );
-    await page.route("**/api/collections/1?*", (route) =>
+    await page.route("**/api/collections/1{,?*}", (route) =>
       route.fulfill({ json: collectionDetail({ id: 1, title: "Action" }) }),
     );
-    await page.route("**/api/collections?*", (route) =>
+    await page.route("**/api/collections{,?*}", (route) =>
       route.fulfill({ json: [collection({ id: 1, title: "Action" })] }),
     );
     await page.route("**/api/themes/search?**", (route) =>
@@ -158,14 +158,18 @@ test.describe("path-based client routing", () => {
     await assertRoute(page, "/movies/1-alien/themes");
 
     // Deep link to collections list
+    await page.goto("/collections");
+    await expect(page.getByRole("button", { name: "Groups", exact: true })).toBeVisible();
+    await assertRoute(page, "/collections");
+
+    // Links from before collections spanned movies and shows still land.
     await page.goto("/movies/collections");
-    await expect(page.getByRole("button", { name: "Collections", exact: true })).toBeVisible();
-    await assertRoute(page, "/movies/collections");
+    await expect(page).toHaveURL(/\/collections$/);
 
     // Deep link to specific collection
-    await page.goto("/movies/collections/1-action");
+    await page.goto("/collections/1-action");
     await expect(page.getByRole("heading", { name: "Action", exact: true })).toBeVisible();
-    await assertRoute(page, "/movies/collections/1-action");
+    await assertRoute(page, "/collections/1-action");
   });
 
   test("unauthenticated cold deep link returns to the requested URL after login", async ({
@@ -331,16 +335,16 @@ test("collection member rows show posters, link to items and omit show matching 
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ collections_supported: true, tmdb_configured: true }) }),
   );
-  await page.route("**/api/collections?*", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/collections/1?*", (route) =>
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collections/1{,?*}", (route) =>
     route.fulfill({ json: collectionDetail({ id: 1, title: "Alien Collection", members }) }),
   );
-  await page.route("**/api/collections/2?*", (route) =>
+  await page.route("**/api/collections/2{,?*}", (route) =>
     route.fulfill({
-      json: collectionDetail({ id: 2, title: "TV Collection", media_type: "show" }),
+      json: collectionDetail({ id: 2, title: "TV Collection", media_types: ["show"] }),
     }),
   );
-  await logIn(page, "/movies/collections/1-alien-collection");
+  await logIn(page, "/collections/1-alien-collection");
   await expect(page.getByRole("tab", { name: "Configure", selected: true })).toBeVisible();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.getByLabel("TMDB collection ID", { exact: true })).toBeVisible();
@@ -360,7 +364,7 @@ test("collection member rows show posters, link to items and omit show matching 
   await first.click();
   await assertRoute(page, "/movies/1-alien");
 
-  await page.goto("/shows/collections/2-tv-collection");
+  await page.goto("/collections/2-tv-collection");
   await expect(page.getByRole("heading", { name: "TV Collection", exact: true })).toBeVisible();
   await expect(page.getByRole("form", { name: "Configure collection", exact: true })).toBeVisible();
   await expect(page.getByLabel("TMDB collection ID", { exact: true })).toHaveCount(0);

@@ -116,7 +116,7 @@ test("toolbar dialogs restore focus and stay inside the viewport", async ({ page
 });
 
 test("filters dialog stays inside the viewport and scrolls its body", async ({ page }) => {
-  await page.route("**/api/library/libraries?*", (route) =>
+  await page.route("**/api/library/libraries{,?*}", (route) =>
     route.fulfill({
       json: [
         { id: 1, title: "Movies", count: 3500 },

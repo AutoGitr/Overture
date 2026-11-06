@@ -1,5 +1,7 @@
 """The checks every collection write passes before anything is saved."""
 
+lazy from collections.abc import Collection, Mapping
+
 lazy from ...domain import (
     SMART_CUSTOM_ORDER,
     CollectionMode,
@@ -47,7 +49,7 @@ class CollectionValidator:
     def display(
         self,
         options: CollectionOptions | CollectionPolicyBase | CollectionMembersUpdate,
-        media_type: MediaType,
+        media_types: Collection[MediaType],
         *,
         smart: bool,
     ) -> None:
@@ -64,8 +66,9 @@ class CollectionValidator:
             )
         ):
             raise PublicServiceError(422, "Visibility and home promotion require Plex")
-        if options.order_type is not None and options.order_type not in (
-            available_orders(server, media_type, smart=smart)
+        if options.order_type is not None and any(
+            options.order_type not in available_orders(server, media_type, smart=smart)
+            for media_type in media_types
         ):
             raise PublicServiceError(
                 422,
@@ -106,12 +109,17 @@ class CollectionValidator:
                 )
 
     def rule(
-        self, media_type: MediaType, rule: CollectionRuleWrite, policy: CollectionPolicy
+        self,
+        types: Mapping[str, MediaType],
+        rule: CollectionRuleWrite,
+        policy: CollectionPolicy,
     ) -> None:
-        self.criteria(media_type, rule.criteria, smart=rule.smart)
+        """Check each library's criteria against what that library holds."""
+        for library in rule.libraries:
+            self.criteria(types[library.library_id], library.criteria, smart=rule.smart)
         self.display(
             rule.model_copy(update={"order_type": policy.order_type}),
-            media_type,
+            set(types.values()),
             smart=rule.smart,
         )
 

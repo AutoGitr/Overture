@@ -1,10 +1,7 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
-  import {
-    getLibrariesOptions,
-    listCollectionGroupsOptions,
-  } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { listCollectionGroupsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { UNGROUPED_GROUP } from "../../generated/settings";
   import { uiState } from "../stores/uiState.svelte";
   import PopupShell from "../components/PopupShell.svelte";
@@ -13,17 +10,14 @@
   import WorkflowSections from "../components/WorkflowSections.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
+  import { allLibraries } from "../utils/libraries.svelte";
   setSectionView("collection-groups");
   let name = $state(uiState.collectionGroupToEdit);
   let newName = $state(uiState.collectionGroupToEdit);
   /** The group being configured has not been saved yet. */
   let unsaved = $state(false);
-  const groups = createQuery(() =>
-    listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
-  );
-  const libraries = createQuery(() =>
-    getLibrariesOptions({ query: { media_type: uiState.sidebarTab } }),
-  );
+  const groups = createQuery(() => listCollectionGroupsOptions());
+  const libraries = allLibraries();
   /** The open group's save actions, which its settings hand over. */
   let groupFooter = $state<Snippet | null>(null);
 </script>
@@ -76,9 +70,8 @@
   {/if}
   {#if name.trim()}
     <WorkflowSections>
-      {#key `${uiState.sidebarTab}:${name.trim()}`}<CollectionGroupSettings
+      {#key name.trim()}<CollectionGroupSettings
           group={name.trim()}
-          mediaType={uiState.sidebarTab}
           libraries={libraries.data ?? []}
           onfooterchange={(footer) => (groupFooter = footer)}
           onsave={() => {
@@ -91,7 +84,6 @@
       {#if groups.data?.includes(name) && !unsaved && name !== UNGROUPED_GROUP}
         <CollectionGroupActions
           group={name}
-          mediaType={uiState.sidebarTab}
           onrename={(replacement) => {
             uiState.collectionGroupChanged(name, replacement);
             name = replacement;

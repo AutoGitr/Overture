@@ -2,6 +2,7 @@
 
 lazy from collections import Counter
 lazy from collections.abc import Collection, Mapping
+lazy from dataclasses import dataclass
 
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
@@ -13,6 +14,7 @@ lazy from ...schemas.collections import (
     CollectionGenerator,
     CollectionGeneratorBase,
     CollectionGroupSyncResult,
+    CollectionLibraryCriteria,
     CollectionRuleWrite,
     CollectionSetEntry,
     CollectionSetPreview,
@@ -27,10 +29,19 @@ lazy from .editor import CollectionEditor
 lazy from .fields import DIMENSIONS, FIELDS, smart_only_dimension
 lazy from .membership import Membership
 lazy from .post_sync import PostSync
-lazy from .rules import TITLE_TAKEN, criteria, franchise_ids, rule_read
+lazy from .rules import TITLE_TAKEN, franchise_ids, library_criteria, rule_read
 lazy from .sets import SetValue, count_values, set_values
 lazy from .sources import SourceResolver
 lazy from .validation import CollectionValidator
+
+
+@dataclass(slots=True)
+class _SetCollection:
+    """One value of a set across its libraries: the collection it makes."""
+
+    title: str
+    libraries: list[CollectionLibraryCriteria]
+    count: int
 
 
 class CollectionSets:
@@ -58,19 +69,16 @@ class CollectionSets:
         async with self._access.database.read_session() as session:
             minimum = (
                 body.minimum_items
-                or (
-                    await self._access.policy(session, body.media_type, body.group)
-                ).minimum_items
+                or (await self._access.policy(session, body.group)).minimum_items
             )
             existing = {
-                (row.library_id, row.generated_value): row.id
-                for row in await CollectionRepository(session).list_listed(
-                    body.media_type
-                )
+                row.generated_value: row.id
+                for row in await CollectionRepository(session).list_listed()
                 if body.group
                 and row.collection_group == body.group
                 and row.generated_value is not None
             }
+        types = await self._access.library_types(body.generator.library_ids)
         return [
             CollectionSetEntry(
                 library_id=library_id,
@@ -78,20 +86,16 @@ class CollectionSets:
                 title=value.title,
                 member_count=value.count,
                 below_minimum=below,
-                collection_id=existing.get((library_id, value.value)),
+                collection_id=existing.get(value.value),
             )
-            for library_id in body.generator.library_ids
+            for library_id, media_type in types.items()
             for value, below in await self._values(
-                body.media_type,
+                media_type,
                 body.generator,
                 library_id,
                 body.group,
                 minimum,
-                {
-                    value
-                    for (library, value) in existing
-                    if library == library_id and value is not None
-                },
+                set(existing),
             )
         ]
 
@@ -103,77 +107,79 @@ class CollectionSets:
     ) -> None:
         """Create the set's new collections, update the rest and deselect stale ones.
 
-        A value the library no longer holds or the set no longer selects is
+        A value makes one collection across every library that holds it. A
+        value no library holds any more, or the set no longer selects, is
         deselected: its collection leaves the server until the set selects it
         again. Values below the minimum are left to the minimum policy, applied
         when each collection syncs. Overture keeps every collection until it
         is deleted explicitly.
         """
-        media_type = group.media_type
         server = self._access.server_type
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, media_type, group.name)
+            policy = await self._access.policy(session, group.name)
             listed = [
                 row
-                for row in await CollectionRepository(session).list_listed(media_type)
+                for row in await CollectionRepository(session).list_listed()
                 if row.server_type is server
             ]
             rules = {
                 rule.collection_id: rule
                 for rule in await CollectionRepository(session).rules()
             }
-        for library_id in generator.library_ids:
-            in_library = [row for row in listed if row.library_id == library_id]
-            members = {
-                row.generated_value: row
-                for row in in_library
-                if row.collection_group == group.name
-                and row.generated_value is not None
-            }
-            titles = {
-                row.title.casefold()
-                for row in in_library
-                if row.generated_value is None or row.collection_group != group.name
-            }
-            values = await self._values(
+        members = {
+            row.generated_value: row
+            for row in listed
+            if row.collection_group == group.name and row.generated_value is not None
+        }
+        titles = {
+            (library_id, row.title.casefold())
+            for row in listed
+            if row.generated_value is None or row.collection_group != group.name
+            for library_id in row.library_ids
+        }
+        types = await self._access.library_types(generator.library_ids)
+        selected: dict[str, _SetCollection] = {}
+        for library_id, media_type in types.items():
+            for value, _ in await self._values(
                 media_type,
                 generator,
                 library_id,
                 group.name,
                 policy.minimum_items,
                 set(members),
-            )
-            selected = {value.value for value, _ in values}
-            await self._deselect(
-                [row for value, row in members.items() if value not in selected],
-                [row for value, row in members.items() if value in selected],
-            )
-            for value, below in values:
-                # An existing collection below the minimum is the minimum
-                # policy's to withhold or keep when it syncs.
-                if not below or value.value in members:
-                    await self._apply_value(
-                        group,
-                        generator,
-                        library_id,
-                        value,
-                        members,
-                        titles,
-                        rules,
-                        result,
+            ):
+                found = selected.setdefault(
+                    value.value, _SetCollection(value.title, [], 0)
+                )
+                found.libraries.append(
+                    CollectionLibraryCriteria(
+                        library_id=library_id, criteria=value.criteria
                     )
-            for value in sorted(set(members) - selected):
-                row = members[value]
-                if row.server_item_id is None:
-                    continue
-                try:
-                    await self._editor.delete(row.id or 0, media_type, target="server")
-                    result.withheld.append(row.id or 0)
-                except Exception as exc:
-                    result.errors[row.title] = str(exc)
+                )
+                found.count += value.count
+        await self._deselect(
+            [row for value, row in members.items() if value not in selected],
+            [row for value, row in members.items() if value in selected],
+        )
+        for value, collection in selected.items():
+            # An existing collection below the minimum is the minimum
+            # policy's to withhold or keep when it syncs.
+            if collection.count >= policy.minimum_items or value in members:
+                await self._apply_value(
+                    group, generator, value, collection, members, titles, rules, result
+                )
+        for value in sorted(set(members) - set(selected)):
+            row = members[value]
+            if not row.server_ids:
+                continue
+            try:
+                await self._editor.delete(row.id or 0, target="server")
+                result.withheld.append(row.id or 0)
+            except Exception as exc:
+                result.errors[row.title] = str(exc)
         async with self._access.database.write_session() as session:
             saved = await CollectionRepository(session).group_policy(
-                group.server_type, media_type, group.name
+                group.server_type, group.name
             )
             if saved is not None:
                 saved.generated_at = utc_now()
@@ -234,7 +240,7 @@ class CollectionSets:
             counts = count_values(generator, items, context)
         names: dict[str, str] = {}
         if generator.dimension is SetDimension.FRANCHISE:
-            elsewhere = await self._franchises_elsewhere(media_type, group)
+            elsewhere = await self._franchises_elsewhere(group)
             for value, count in list(counts.items()):
                 name = (
                     await self._sources.franchise_name(int(value))
@@ -286,88 +292,86 @@ class CollectionSets:
             counts[title] = total
         return counts
 
-    async def _franchises_elsewhere(
-        self, media_type: MediaType, group: str | None
-    ) -> set[int]:
+    async def _franchises_elsewhere(self, group: str | None) -> set[int]:
         """TMDB franchises collections outside the group already hold."""
         server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            outside = {
-                row.id: row
-                for row in await repo.list_listed(media_type)
+            outside = [
+                row
+                for row in await repo.list_listed()
                 if row.collection_group != group and row.server_type is server
-            }
-            rules = await repo.rules()
+            ]
         return {
             row.tmdb_collection_id
-            for row in outside.values()
+            for row in outside
             if row.tmdb_collection_id is not None
         } | {
             franchise
-            for rule in rules
-            if rule.collection_id in outside
-            for franchise in franchise_ids(criteria(rule))
+            for row in outside
+            for franchise in franchise_ids(library_criteria(row))
         }
 
     async def _apply_value(
         self,
         group: CollectionGroup,
         generator: CollectionGenerator,
-        library_id: str,
-        value: SetValue,
+        value: str,
+        collection: _SetCollection,
         members: Mapping[str, MediaCollection],
-        titles: set[str],
+        titles: set[tuple[str, str]],
         rules: Mapping[int, CollectionRule],
         result: CollectionGroupSyncResult,
     ) -> None:
         """Create the value's collection, or bring the existing one up to date."""
-        rule = CollectionRuleWrite(criteria=value.criteria, smart=generator.smart)
+        rule = CollectionRuleWrite(
+            libraries=collection.libraries, smart=generator.smart
+        )
+        title = collection.title.casefold()
+        library_ids = [entry.library_id for entry in collection.libraries]
         try:
-            row = members.get(value.value)
+            row = members.get(value)
             if row is not None:
-                await self._refresh(row, rules.get(row.id or 0), value, rule)
+                await self._refresh(row, rules.get(row.id or 0), collection, rule)
                 return
-            if value.title.casefold() in titles:
+            if any((library_id, title) in titles for library_id in library_ids):
                 raise PublicServiceError(409, TITLE_TAKEN)
             detail = await self._editor.create(
                 CollectionCreate(
-                    title=value.title,
-                    media_type=group.media_type,
-                    library_id=library_id,
-                    collection_group=group.name,
-                    rule=rule,
+                    title=collection.title, collection_group=group.name, rule=rule
                 ),
-                generated_value=value.value,
+                generated_value=value,
             )
             result.created.append(detail.id)
-            titles.add(value.title.casefold())
-            await self._post_sync.run(detail.id, group.media_type)
+            titles.update((library_id, title) for library_id in library_ids)
+            await self._post_sync.run(detail.id)
         except Exception as exc:
-            result.errors[value.title] = str(exc)
+            result.errors[collection.title] = str(exc)
 
     async def _refresh(
         self,
         row: MediaCollection,
         saved: CollectionRule | None,
-        value: SetValue,
+        collection: _SetCollection,
         rule: CollectionRuleWrite,
     ) -> None:
         """Bring a set's collection in line with the set's current definition."""
         async with self._access.locked(row.id or 0):
-            if row.title != value.title:
+            if row.title != collection.title:
                 await self._editor.update_locked(
                     row,
-                    saved_options(row, saved).model_copy(update={"title": value.title}),
+                    saved_options(row, saved).model_copy(
+                        update={"title": collection.title}
+                    ),
                 )
-            current = rule_read(saved)
+            current = rule_read(saved, row)
             if (
                 current is None
-                or current.criteria != rule.criteria
+                or current.libraries != rule.libraries
                 or current.smart != rule.smart
             ):
                 overrides = (
-                    current.model_dump(exclude={"criteria", "smart", "limit"})
+                    current.model_dump(exclude={"libraries", "smart", "limit"})
                     if current
                     else {}
                 )

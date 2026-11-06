@@ -7,10 +7,7 @@ it("batches large selections and preserves successful IDs and per-record errors"
     .fn()
     .mockResolvedValueOnce({ collection_ids: ids.slice(0, 999), errors: { 1000: "Failed" } })
     .mockResolvedValueOnce({ collection_ids: [1001], errors: {} });
-  const result = await runBulkCollections(
-    { collection_ids: ids, media_type: "movie", operation: "delete" },
-    execute,
-  );
+  const result = await runBulkCollections({ collection_ids: ids, operation: "delete" }, execute);
   expect(execute.mock.calls.map(([body]) => body.collection_ids.length)).toEqual([1000, 1]);
   expect(result.collection_ids).toEqual([...ids.slice(0, 999), 1001]);
   expect(result.errors).toEqual({ 1000: "Failed" });

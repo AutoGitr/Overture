@@ -31,7 +31,7 @@
     enabled: itemId !== null,
   }));
   const collectionsQuery = createQuery(() => ({
-    ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
+    ...listCollectionsOptions(),
     enabled: collectionId !== null,
   }));
   let item = $derived(itemId !== null && itemQuery.data?.id === itemId ? itemQuery.data : null);

@@ -166,7 +166,6 @@
       goToCollection({
         id: detail.library_collection_id,
         title: catalogEntry.title,
-        media_type: "movie",
       });
   }
 </script>

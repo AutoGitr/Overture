@@ -1,6 +1,7 @@
 """The Plex client against a scripted Plex server."""
 
 lazy from collections.abc import AsyncIterator, Callable
+lazy from functools import partial
 lazy from typing import Any
 
 lazy import httpx2
@@ -9,6 +10,7 @@ lazy import pytest
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import MediaType, ServerType
+lazy from overture.integrations.http import request_with_retry
 lazy from overture.media_servers.adapters import ServerTheme
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.client import PlexClient
@@ -180,9 +182,15 @@ async def test_the_connection_test_reads_the_server_identity(
 
 
 async def test_an_unreachable_server_fails_the_connection_test(
-    plex: tuple[PlexClient, RecordingMockTransport], routes: dict[str, Route]
+    plex: tuple[PlexClient, RecordingMockTransport],
+    routes: dict[str, Route],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, _ = plex
+    monkeypatch.setattr(
+        "overture.media_servers.http_client.request_with_retry",
+        partial(request_with_retry, retry_delays=(0, 0)),
+    )
     routes["/identity"] = lambda _r: httpx2.Response(500)
 
     assert not await client.test_connection()

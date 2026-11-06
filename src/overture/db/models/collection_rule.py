@@ -1,4 +1,4 @@
-"""The criteria that maintain one collection's members."""
+"""The rule that maintains one collection's members."""
 
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
@@ -15,7 +15,10 @@ lazy from ..columns import enum_columns, enum_type
 
 
 class CollectionRule(SQLModel, table=True):
-    """Criteria, evaluated by Overture or by Plex, and nullable policy overrides."""
+    """How a collection's criteria are evaluated, and nullable policy overrides.
+
+    Each library's criteria are stored with that library.
+    """
 
     __tablename__: ClassVar[Any] = "collection_rules"
 
@@ -23,9 +26,9 @@ class CollectionRule(SQLModel, table=True):
     collection_id: int = Field(
         foreign_key="media_collections.id", ondelete="CASCADE", unique=True, index=True
     )
-    #: A ``FilterGroup`` of field and source conditions.
-    criteria_json: str
+    #: Plex evaluates each library's criteria live instead of Overture on each sync.
     smart: bool = False
+    #: The most members taken from each library.
     item_limit: int | None = None
     sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
     minimum_items: int | None = None

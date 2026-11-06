@@ -44,16 +44,16 @@ describe("route helpers", () => {
     goToLibrary(tab);
     await expectPath(base);
 
-    goToCollectionsList(tab);
-    await expectPath(`${base}/collections`);
+    goToCollectionsList();
+    await expectPath("/collections");
   });
 
   it("open a collection by its id and title", async () => {
-    goToCollection({ id: 12, title: "Star Wars: Saga", media_type: "show" });
-    await expectPath("/shows/collections/12-star-wars-saga");
+    goToCollection({ id: 12, title: "Star Wars: Saga" });
+    await expectPath("/collections/12-star-wars-saga");
 
-    goToCollection({ id: 3, title: "Alien", media_type: "movie" });
-    await expectPath("/movies/collections/3-alien");
+    goToCollection({ id: 3, title: "Alien" });
+    await expectPath("/collections/3-alien");
   });
 
   it("open each detail tab of a stored item", async () => {
@@ -148,8 +148,8 @@ describe("route helpers", () => {
     expect(routedItemId()).toBeNull();
     expect(routedCollectionId()).toBeNull();
 
-    goToCollection({ id: 12, title: "Action", media_type: "movie" });
-    await expectPath("/movies/collections/12-action");
+    goToCollection({ id: 12, title: "Action" });
+    await expectPath("/collections/12-action");
     expect(routedCollectionId()).toBe(12);
     expect(routedItem()).toBeNull();
   });
@@ -197,8 +197,8 @@ describe("catalog routes", () => {
     expect(routedCatalogEntry()?.entry_key).toBe("tvdb-81189");
   });
   it.each([12, 345, 6789])("round-trips database collection ID %s", async (id) => {
-    goToCollection({ id, title: "Star Wars", media_type: "movie" });
-    await expectPath(`/movies/collections/${id}-star-wars`);
+    goToCollection({ id, title: "Star Wars" });
+    await expectPath(`/collections/${id}-star-wars`);
     expect(routedCollectionId()).toBe(id);
   });
 });

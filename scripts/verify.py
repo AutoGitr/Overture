@@ -223,13 +223,10 @@ class Overture:
             raise ApiError(detail(response))
         return response.json()
 
-    async def preview(
-        self, media_type: str, library_id: str, rule: dict[str, Any]
-    ) -> dict[str, Any]:
-        return await self.post(
-            "/api/collections/preview",
-            {"media_type": media_type, "library_id": library_id, "rule": rule},
-        )
+    async def preview(self, rule: dict[str, Any]) -> dict[str, Any]:
+        """What the rule's only library previews to."""
+        found = await self.post("/api/collections/preview", {"rule": rule})
+        return found["libraries"][0]
 
 
 class Server:
@@ -252,9 +249,10 @@ class Server:
         return response.json()
 
 
-def single(condition: dict[str, Any], **rule: Any) -> dict[str, Any]:
-    """A rule of one condition."""
-    return {"criteria": {"conditions": [condition]}, **rule}
+def single(library_id: str, condition: dict[str, Any], **rule: Any) -> dict[str, Any]:
+    """A rule of one condition in one library."""
+    criteria = {"conditions": [condition]}
+    return {"libraries": [{"library_id": library_id, "criteria": criteria}], **rule}
 
 
 def field_value(kind: str, operator: str, values: list[dict[str, Any]]) -> Any:
@@ -361,7 +359,7 @@ class Library:
     async def preview(self, case: Case, rule: dict[str, Any]) -> list[str]:
         """Record what a rule previews to: Overture's count, or Plex's if smart."""
         try:
-            result = await self.overture.preview(self.media_type, self.id, rule)
+            result = await self.overture.preview(rule)
         except ApiError as exc:
             case.error = str(exc)
             return []
@@ -415,17 +413,17 @@ class Library:
                     condition, local=operator in local, smart=operator in smart
                 )
                 if operator not in smart:
-                    await self.preview(case, single(condition))
+                    await self.preview(case, single(self.id, condition))
                     continue
                 case.differs = PLEX_DIFFERS.get((entry["field"], operator), "")
                 if operator not in local:
-                    await self.preview(case, single(condition, smart=True))
+                    await self.preview(case, single(self.id, condition, smart=True))
                     continue
                 # Both in one order, so the first title they disagree on shows why.
                 ordered = {"order_type": CollectionOrder.TITLE_ASC.value}
-                ours = await self.preview(case, single(condition, **ordered))
+                ours = await self.preview(case, single(self.id, condition, **ordered))
                 theirs = await self.preview(
-                    case, single(condition, smart=True, **ordered)
+                    case, single(self.id, condition, smart=True, **ordered)
                 )
                 if case.mismatch and case.differs:
                     case.note = case.differs
@@ -458,7 +456,7 @@ class Library:
         try:
             advice = await self.overture.post(
                 "/api/collections/recommend-kind",
-                {"media_type": self.media_type, "rule": single(condition)},
+                {"rule": single(self.id, condition)},
             )
         except ApiError as exc:
             case.error = str(exc)
@@ -480,7 +478,10 @@ class Library:
                 if order in (smart if is_smart else regular):
                     members[is_smart] = (
                         await self.preview(
-                            case, single(EVERYTHING, order_type=order, smart=is_smart)
+                            case,
+                            single(
+                                self.id, EVERYTHING, order_type=order, smart=is_smart
+                            ),
                         )
                     )[:ORDER_DEPTH]
             if (
@@ -514,7 +515,8 @@ class Library:
         for label, source in sources:
             case = self.case("source", label)
             await self.preview(
-                case, single({"kind": "source", "operator": "is", "source": source})
+                case,
+                single(self.id, {"kind": "source", "operator": "is", "source": source}),
             )
             if case.count == 0:
                 case.note = "selects nothing in this library"
@@ -540,10 +542,7 @@ class Library:
         try:
             entries = await self.overture.post(
                 "/api/collections/sets/preview",
-                {
-                    "media_type": self.media_type,
-                    "generator": {**generator, "library_ids": [self.id]},
-                },
+                {"generator": {**generator, "library_ids": [self.id]}},
             )
         except ApiError as exc:
             case.error = str(exc)
@@ -602,13 +601,11 @@ class Library:
                     if key in CollectionRuleWrite.model_fields
                 }
             else:
-                plan = await self.overture.get(
-                    f"{path}/adopt", media_type=self.media_type
-                )
+                plan = await self.overture.get(f"{path}/adopt")
                 rule = plan["rule"]
                 if plan["tmdb_collection_id"]:
                     case.note = f"TMDB collection {plan['tmdb_collection_id']}"
-                await self.check_offered(case, rule["criteria"])
+                await self.check_offered(case, rule["libraries"][0]["criteria"])
         except ApiError as exc:
             case.error = str(exc)
             return
@@ -949,12 +946,13 @@ class MediaBrowserServer(Server):
             await library.preview(
                 case,
                 single(
+                    library.id,
                     {
                         "kind": "field",
                         "field": field_name,
                         "operator": "is",
                         "value": int(value) if spec["kind"] == "number" else value,
-                    }
+                    },
                 ),
             )
             counted = await self.items(
@@ -1017,6 +1015,7 @@ async def verify_instance(
     listed: list[dict[str, Any]] = []
     try:
         items = (await overture.get("/api/library/items"))["items"]
+        everything = await overture.get("/api/collections")
         for media_type in ("movie", "show"):
             capabilities = await overture.get(
                 "/api/collections/capabilities", media_type=media_type
@@ -1024,7 +1023,9 @@ async def verify_instance(
             server = capabilities["server_type"]
             if direct is not None and direct.server != server:
                 raise SystemExit(f"{url} uses {server}, not {direct.server}")
-            collections = await overture.get("/api/collections", media_type=media_type)
+            collections = [
+                row for row in everything if row["media_types"][0] == media_type
+            ]
             listed.extend(collections)
             found = await overture.get("/api/library/libraries", media_type=media_type)
             if direct is not None:
@@ -1046,7 +1047,7 @@ async def verify_instance(
                     {
                         collection["title"]
                         for collection in collections
-                        if collection["library_id"] == library["id"]
+                        if library["id"] in collection["library_ids"]
                         and collection["kind"] == "regular"
                     },
                     [
@@ -1056,7 +1057,7 @@ async def verify_instance(
                         and item["media_type"] == media_type
                         and item["server_removed_at"] is None
                     ],
-                    [row for row in collections if row["library_id"] == library["id"]],
+                    [row for row in collections if library["id"] in row["library_ids"]],
                     direct,
                 )
                 for library in found
@@ -1065,7 +1066,7 @@ async def verify_instance(
                 print(f"Checking {server}: {library.name}...", flush=True)
                 await library.check(extra_sources)
             for collection in collections:
-                if (library := libraries.get(collection["library_id"])) is not None:
+                if (library := libraries.get(collection["library_ids"][0])) is not None:
                     await library.check_collection(collection)
             for library in libraries.values():
                 cases.extend(library.cases)

@@ -164,12 +164,11 @@ describe("REST transport", () => {
     await sdkData(
       deleteCollectionTheme({
         path: { collection_id: 12 },
-        query: { media_type: "movie" },
         throwOnError: true,
       }),
     );
 
-    expect(calls[0]?.url).toBe("/api/collections/12/theme?media_type=movie");
+    expect(calls[0]?.url).toBe("/api/collections/12/theme");
   });
 
   it("supports generated reads through the configured transport", async () => {

@@ -2,7 +2,6 @@
   import { createQuery } from "@tanstack/svelte-query";
   import {
     getCollectionOptions,
-    getLibrariesOptions,
     listItemsOptions,
     listCollectionGroupsOptions,
     getTmdbCollectionOptions,
@@ -11,18 +10,14 @@
   import DataStatus from "../../components/DataStatus.svelte";
   import DetailPanel from "../../components/DetailPanel.svelte";
   import { uiState } from "../../stores/uiState.svelte";
+  import { allLibraries } from "../../utils/libraries.svelte";
   import { route, routedCollectionId, routedCollectionView } from "../routes";
 
   let creating = $derived(route.pathname.endsWith("/collections/new"));
-  const libraries = createQuery(() =>
-    getLibrariesOptions({ query: { media_type: uiState.sidebarTab } }),
-  );
+  const libraries = allLibraries();
   let collectionId = $derived(routedCollectionId());
   const collectionQuery = createQuery(() => ({
-    ...getCollectionOptions({
-      path: { collection_id: collectionId ?? 0 },
-      query: { media_type: uiState.sidebarTab },
-    }),
+    ...getCollectionOptions({ path: { collection_id: collectionId ?? 0 } }),
     enabled: collectionId !== null,
   }));
   let collection = $derived(
@@ -33,12 +28,20 @@
     ...getTmdbCollectionOptions({ path: { collection_id: seedId } }),
     enabled: seedId > 0,
   }));
-  const itemsQuery = createQuery(() => ({
-    ...listItemsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled: creating || (collection !== null && routedCollectionView() === "configure"),
+  let needsItems = $derived(
+    creating || (collection !== null && routedCollectionView() === "configure"),
+  );
+  const movieItems = createQuery(() => ({
+    ...listItemsOptions({ query: { media_type: "movie" } }),
+    enabled: needsItems,
   }));
+  const showItems = createQuery(() => ({
+    ...listItemsOptions({ query: { media_type: "show" } }),
+    enabled: needsItems,
+  }));
+  let libraryItems = $derived([...(movieItems.data?.items ?? []), ...(showItems.data?.items ?? [])]);
   const groupsQuery = createQuery(() => ({
-    ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
+    ...listCollectionGroupsOptions(),
     enabled:
       creating ||
       (collection !== null && (!collection.managed || routedCollectionView() === "configure")),
@@ -67,13 +70,15 @@
       hasData={libraries.data !== undefined}
       onretry={() => libraries.refetch()}
     />
-    <DataStatus
-      label="library items"
-      error={itemsQuery.error}
-      loading={itemsQuery.isFetching}
-      hasData={itemsQuery.data !== undefined}
-      onretry={() => itemsQuery.refetch()}
-    />
+    {#each [movieItems, showItems] as items, index (index)}
+      <DataStatus
+        label="library items"
+        error={items.error}
+        loading={items.isFetching}
+        hasData={items.data !== undefined}
+        onretry={() => items.refetch()}
+      />
+    {/each}
     {#if seedId}<DataStatus
         label="TMDB collection"
         error={seed.error}
@@ -90,12 +95,12 @@
     />
   {/if}
   {#key creating
-    ? `${uiState.sidebarTab}:${route.search.draft ?? ""}`
+    ? `${route.search.draft ?? ""}`
     : `${collectionId}:${collection?.managed}`}<CollectionManager
       {collection}
       seed={creating ? (seed.data ?? null) : null}
       libraries={libraries.data ?? []}
       {groups}
-      libraryItems={itemsQuery.data?.items ?? []}
+      {libraryItems}
     />{/key}
 {:else}<DetailPanel />{/if}

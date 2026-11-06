@@ -9,8 +9,8 @@ import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../
  *
  * URL shape:
  *   /movies                                   items mode, nothing selected
- *   /movies/collections                       collections list
- *   /movies/collections/:collectionSlug        a selected collection ("{id}-{title}")
+ *   /collections                               collections list, of movies and shows
+ *   /collections/:collectionSlug               a selected collection ("{id}-{title}")
  *   /movies/:itemSlug                          a selected item ("{id}-{title}", or
  *                                              "tmdb-{tmdbId}-{title}" for a TMDB title
  *                                              not yet stored), default detail tab
@@ -44,13 +44,14 @@ export type ArtSubTab = "poster" | "background" | "seasons";
 type SelectableItem = { title: string; media_type: SidebarTab } & (
   { id: number } | { id?: never; tmdb_id: number }
 );
-type SelectableCollection = { id: number; title: string; media_type: SidebarTab };
+type SelectableCollection = { id: number; title: string };
 type SelectableSeason = { season_num: number };
 
 const loadLibraryPage = () => import("./pages/LibraryPage.svelte");
 const loadCollectionPage = () => import("./pages/CollectionPage.svelte");
 const loadItemPage = () => import("./pages/ItemPage.svelte");
 const loadRedirectToLibrary = () => import("./pages/RedirectToLibrary.svelte");
+const loadRedirectToCollections = () => import("./pages/RedirectToCollections.svelte");
 
 const itemSubroutes = {
   "/": loadItemPage,
@@ -75,7 +76,7 @@ const collectionSubroutes = {
 
 const mediaTypeRoutes = {
   "/": loadLibraryPage,
-  "/collections": collectionSubroutes,
+  "/collections": { "/": loadRedirectToCollections, "*": loadRedirectToCollections },
   "/:itemSlug": itemSubroutes,
 };
 
@@ -96,6 +97,7 @@ const catalogCollectionSubroutes = {
 export const { navigate, route } = createRouter({
   "/movies": mediaTypeRoutes,
   "/shows": mediaTypeRoutes,
+  "/collections": collectionSubroutes,
   "/overturedb": {
     layout: () => import("./pages/CatalogLayout.svelte"),
     "/movies": {
@@ -163,23 +165,15 @@ export function goToCollectionView(
 ): void {
   const params = { collectionSlug: buildIdSlug(collection.id, collection.title), subtab };
   const options = { params, search: sidebarSearch(), hash };
-  if (collection.media_type === "show") {
-    if (view === "configure") void navigate("/shows/collections/:collectionSlug", options);
-    else if (view === "art")
-      void navigate("/shows/collections/:collectionSlug/art/:subtab", options);
-    else if (view === "themes") void navigate("/shows/collections/:collectionSlug/themes", options);
-  } else {
-    if (view === "configure") void navigate("/movies/collections/:collectionSlug", options);
-    else if (view === "art")
-      void navigate("/movies/collections/:collectionSlug/art/:subtab", options);
-    else if (view === "themes")
-      void navigate("/movies/collections/:collectionSlug/themes", options);
-  }
+  if (view === "configure") void navigate("/collections/:collectionSlug", options);
+  else if (view === "art") void navigate("/collections/:collectionSlug/art/:subtab", options);
+  else if (view === "themes") void navigate("/collections/:collectionSlug/themes", options);
 }
 
 /** The URL owns the sidebar's source, tab and mode together. */
 export function routeScope(): { source: SidebarSource; tab: SidebarTab; mode: SidebarMode } {
   const parts = route.pathname.split("/").filter(Boolean);
+  if (parts[0] === "collections") return { source: "library", tab: "movie", mode: "collections" };
   const source = parts[0] === "overturedb" ? "overturedb" : "library";
   const offset = source === "overturedb" ? 1 : 0;
   return {
@@ -290,20 +284,18 @@ export function goToLibrary(tab: SidebarTab): void {
   void navigate(tabBase(tab));
 }
 
-/** Navigate to the collections list for a tab. */
-export function goToCollectionsList(tab: SidebarTab, group?: string): void {
+/** Navigate to the collections list, optionally inside a group. */
+export function goToCollectionsList(group?: string): void {
   const search: Record<string, string> = group ? { collection_group: `group:${group}` } : {};
-  if (tab === "show") void navigate("/shows/collections", { search });
-  else void navigate("/movies/collections", { search });
+  void navigate("/collections", { search });
 }
 
-export function goToNewCollection(tab: SidebarTab, tmdbId?: number): void {
+export function goToNewCollection(tmdbId?: number): void {
   const search = {
     draft: crypto.randomUUID(),
     ...(tmdbId === undefined ? {} : { tmdb_id: tmdbId }),
   };
-  if (tab === "show") void navigate("/shows/collections/new", { search });
-  else void navigate("/movies/collections/new", { search });
+  void navigate("/collections/new", { search });
 }
 
 export function sidebarGroup(): string | null {
@@ -329,18 +321,10 @@ export { searchParams };
 
 /** Navigate to a specific collection. */
 export function goToCollection(collection: SelectableCollection): void {
-  const collectionSlug = buildIdSlug(collection.id, collection.title);
-  if (collection.media_type === "show") {
-    void navigate("/shows/collections/:collectionSlug", {
-      params: { collectionSlug },
-      search: sidebarSearch(),
-    });
-  } else {
-    void navigate("/movies/collections/:collectionSlug", {
-      params: { collectionSlug },
-      search: sidebarSearch(),
-    });
-  }
+  void navigate("/collections/:collectionSlug", {
+    params: { collectionSlug: buildIdSlug(collection.id, collection.title) },
+    search: sidebarSearch(),
+  });
 }
 
 /** Navigate to an item using whichever detail tab is configured as the default. */

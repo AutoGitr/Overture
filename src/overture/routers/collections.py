@@ -86,29 +86,24 @@ router = APIRouter(
 
 
 @router.get("")
-async def list_collections(
-    reader: CollectionReaderDep, media_type: MediaTypeQuery
-) -> list[CollectionRead]:
-    """Return the collections the last sync listed for the media type."""
-    return await reader.listed(media_type)
+async def list_collections(reader: CollectionReaderDep) -> list[CollectionRead]:
+    """Return the collections the last sync listed."""
+    return await reader.listed()
 
 
 @router.get("/groups")
-async def list_collection_groups(
-    groups: CollectionGroupsDep, media_type: MediaTypeQuery
-) -> list[str]:
-    """Return default and custom collection groups for this media type."""
-    return await groups.names(media_type)
+async def list_collection_groups(groups: CollectionGroupsDep) -> list[str]:
+    """Return default and custom collection groups."""
+    return await groups.names()
 
 
 @router.get("/defaults")
 async def get_collection_defaults(
     reader: CollectionReaderDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str | None, Query(max_length=200)] = None,
 ) -> CollectionDefaults:
     """Resolve inherited values for collection form placeholders."""
-    return await reader.inherited_policy(media_type, name)
+    return await reader.inherited_policy(name)
 
 
 @router.get("/capabilities")
@@ -167,63 +162,57 @@ async def preview_collection_set(
 async def rename_collection_group(
     body: CollectionGroupRename,
     groups: CollectionGroupsDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
 ) -> StatusResponse:
     """Rename a group and all its collection assignments."""
-    return await groups.rename(media_type, name, body.name)
+    return await groups.rename(name, body.name)
 
 
 @router.delete("/groups")
 async def delete_collection_group(
     body: CollectionGroupDelete,
     groups: CollectionGroupsDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
 ) -> BulkCollectionOperationResult:
     """Delete a group, optionally deleting its collections in either application."""
-    return await groups.delete(media_type, name, body)
+    return await groups.delete(name, body)
 
 
 @router.get("/group-policy")
 async def get_collection_group_policy(
     groups: CollectionGroupsDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
 ) -> CollectionGroupPolicy:
     """Read a group's nullable overrides for the active media server."""
-    return await groups.policy(media_type, name)
+    return await groups.policy(name)
 
 
 @router.put("/group-policy")
 async def save_collection_group_policy(
     groups: CollectionGroupsDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
     body: CollectionGroupPolicy,
 ) -> CollectionGroupPolicy:
     """Save defaults inherited by collections assigned to this group."""
-    return await groups.save_policy(media_type, name, body)
+    return await groups.save_policy(name, body)
 
 
 @router.post("/group-policy/apply")
 async def apply_collection_group_policy(
     groups: CollectionGroupsDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
 ) -> BulkCollectionOperationResult:
     """Apply group defaults while preserving each collection's explicit overrides."""
-    return await groups.apply_policy(media_type, name)
+    return await groups.apply_policy(name)
 
 
 @router.post("/group-policy/sync")
 async def sync_collection_group(
     groups: CollectionGroupsDep,
-    media_type: MediaTypeQuery,
     name: Annotated[str, Query(min_length=1, max_length=200)],
 ) -> CollectionGroupSyncResult:
     """Run the group's collection set, then sync its collections' criteria."""
-    return await groups.sync(media_type, name)
+    return await groups.sync(name)
 
 
 @router.get("/tags/radarr")
@@ -251,20 +240,18 @@ async def bulk_operate_collections(
 async def get_collection(
     collection_id: CollectionIdPath,
     reader: CollectionReaderDep,
-    media_type: MediaTypeQuery,
 ) -> CollectionDetail:
     """Return one collection with its members and catalog themes."""
-    return await reader.get(collection_id, media_type)
+    return await reader.get(collection_id)
 
 
 @router.get("/{collection_id}/sources")
 async def get_collection_sources(
     collection_id: CollectionIdPath,
     reader: CollectionReaderDep,
-    media_type: MediaTypeQuery,
 ) -> CollectionThemeSources:
     """Return the matched catalog's collection theme candidates."""
-    detail = await reader.get(collection_id, media_type)
+    detail = await reader.get(collection_id)
     return CollectionThemeSources(
         youtube_id_overturedb=detail.youtube_id_overturedb,
         youtube_id_themerrdb=detail.youtube_id_themerrdb,
@@ -275,31 +262,28 @@ async def get_collection_sources(
 async def get_collection_missing(
     collection_id: CollectionIdPath,
     arr: CollectionArrDep,
-    media_type: MediaTypeQuery,
 ) -> CollectionMissing:
     """List titles the collection's lists hold that the library lacks."""
-    return await arr.missing(collection_id, media_type)
+    return await arr.missing(collection_id)
 
 
 @router.post("/{collection_id}/missing/request")
 async def request_collection_missing(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     body: CollectionRequest,
     arr: CollectionArrDep,
 ) -> CollectionRequestResult:
     """Ask Radarr or Sonarr for the collection's missing titles."""
-    return await arr.request_missing(collection_id, media_type, body)
+    return await arr.request_missing(collection_id, body)
 
 
 @router.get("/{collection_id}/theme")
 async def get_collection_theme(
     collection_id: CollectionIdPath,
     themes: CollectionThemesDep,
-    media_type: MediaTypeQuery,
 ) -> CollectionThemeStatusResponse:
     """Return the current theme status for a collection."""
-    return await themes.status(collection_id, media_type)
+    return await themes.status(collection_id)
 
 
 @router.put("/{collection_id}/theme")
@@ -316,10 +300,9 @@ async def set_collection_theme(
 async def delete_collection_theme(
     collection_id: CollectionIdPath,
     themes: CollectionThemesDep,
-    media_type: MediaTypeQuery,
 ) -> DeleteCollectionThemeResponse:
     """Remove the theme from a collection and clear its stored record."""
-    return await themes.delete(collection_id, media_type)
+    return await themes.delete(collection_id)
 
 
 @router.patch("/{collection_id}/monitored")
@@ -327,10 +310,9 @@ async def set_collection_monitored(
     collection_id: CollectionIdPath,
     body: MonitorUpdate,
     editor: CollectionEditorDep,
-    media_type: MediaTypeQuery,
 ) -> MonitoredResponse:
     """Set whether a collection is monitored."""
-    return await editor.set_monitored(collection_id, media_type, body.monitored)
+    return await editor.set_monitored(collection_id, body.monitored)
 
 
 @router.patch("/bulk-monitored")
@@ -338,9 +320,7 @@ async def bulk_set_collection_monitored(
     body: BulkCollectionMonitorUpdate, editor: CollectionEditorDep
 ) -> BulkMonitorResponse:
     """Set the monitored flag for multiple collections at once."""
-    return await editor.bulk_set_monitored(
-        body.collection_ids, body.media_type, body.monitored
-    )
+    return await editor.bulk_set_monitored(body.collection_ids, body.monitored)
 
 
 @router.get("/{collection_id}/image/{art_type}", response_class=Response)
@@ -365,136 +345,124 @@ async def create_collection(
 @router.put("/{collection_id}")
 async def update_collection(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     body: CollectionOptions,
     editor: CollectionEditorDep,
     to_server: ToServerQuery = True,
 ) -> CollectionDetail:
     """Update collection metadata and display options."""
-    return await editor.update(collection_id, media_type, body, sync=to_server)
+    return await editor.update(collection_id, body, sync=to_server)
 
 
 @router.delete("/{collection_id}")
 async def delete_collection(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     editor: CollectionEditorDep,
     target: CollectionDeleteTarget = "both",
 ) -> StatusResponse:
     """Delete the collection while preserving its media."""
-    return await editor.delete(collection_id, media_type, target=target)
+    return await editor.delete(collection_id, target=target)
 
 
 @router.put("/{collection_id}/members")
 async def set_collection_members(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     body: CollectionMembersUpdate,
     editor: CollectionEditorDep,
     to_server: ToServerQuery = True,
 ) -> CollectionDetail:
     """Replace collection membership and order."""
-    return await editor.set_members(collection_id, media_type, body, sync=to_server)
+    return await editor.set_members(collection_id, body, sync=to_server)
 
 
 @router.put("/{collection_id}/rule")
 async def save_collection_rule(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     body: CollectionRuleWrite,
     editor: CollectionEditorDep,
 ) -> CollectionRuleRead:
     """Save a collection's criteria and inheritance overrides."""
-    return await editor.save_rule(collection_id, media_type, body)
+    return await editor.save_rule(collection_id, body)
 
 
 @router.get("/{collection_id}/adopt")
 async def plan_collection_adoption(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     editor: CollectionEditorDep,
 ) -> CollectionAdoptionPlan:
     """Show the rule adopting a collection would save, changing nothing."""
-    return await editor.adoption_plan(collection_id, media_type)
+    return await editor.adoption_plan(collection_id)
 
 
 @router.post("/{collection_id}/adopt")
 async def adopt_collection(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     body: CollectionAdoption,
     editor: CollectionEditorDep,
 ) -> CollectionDetail:
     """Let Overture manage a collection made outside it, keeping what it holds."""
-    return await editor.adopt(collection_id, media_type, body)
+    return await editor.adopt(collection_id, body)
 
 
 @router.post("/{collection_id}/orphan")
 async def orphan_collection(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     editor: CollectionEditorDep,
 ) -> CollectionDetail:
     """Stop managing a collection; the server keeps it, listed as unmanaged."""
-    return await editor.orphan(collection_id, media_type)
+    return await editor.orphan(collection_id)
 
 
 @router.post("/{collection_id}/sync")
 async def sync_collection(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     rules: CollectionRulesDep,
 ) -> CollectionSyncResponse:
     """Make the media server match the collection saved in Overture."""
-    return await rules.sync(collection_id, media_type)
+    return await rules.sync(collection_id)
 
 
 @router.delete("/{collection_id}/art")
 async def clear_all_collection_art(
-    collection_id: CollectionIdPath, media_type: MediaTypeQuery, art: CollectionArtDep
+    collection_id: CollectionIdPath, art: CollectionArtDep
 ) -> CollectionArtwork:
     """Forget all selected collection artwork, preserving the server copies."""
-    return await art.clear(collection_id, media_type, None)
+    return await art.clear(collection_id, None)
 
 
 @router.delete("/{collection_id}/art/{art_type}")
 async def clear_collection_art(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     art_type: ArtTypePath,
     art: CollectionArtDep,
 ) -> CollectionArtwork:
     """Forget one selected collection artwork slot."""
-    return await art.clear(collection_id, media_type, art_type)
+    return await art.clear(collection_id, art_type)
 
 
 @router.get("/{collection_id}/art/{art_type}/sources")
 async def get_collection_art_sources(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     art_type: ArtTypePath,
     art: CollectionArtDep,
 ) -> ArtSourcesResponse:
     """Browse shared collection artwork sources."""
-    return await art.sources(collection_id, media_type, art_type)
+    return await art.sources(collection_id, art_type)
 
 
 @router.put("/{collection_id}/art/{art_type}")
 async def save_collection_art(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     art_type: ArtTypePath,
     body: SaveArtRequest,
     art: CollectionArtDep,
 ) -> StatusResponse:
     """Validate and upload artwork to a collection."""
-    return await art.save(collection_id, media_type, art_type, body)
+    return await art.save(collection_id, art_type, body)
 
 
 @router.post("/{collection_id}/art/{art_type}/match")
 async def match_collection_art(
     collection_id: CollectionIdPath,
-    media_type: MediaTypeQuery,
     art_type: ArtTypePath,
     art: CollectionArtDep,
     threshold: Annotated[
@@ -502,4 +470,4 @@ async def match_collection_art(
     ] = MATCH_THRESHOLD_DEFAULT,
 ) -> ArtMatchResponse:
     """Rank collection art using the shared perceptual hash matcher."""
-    return await art.match(collection_id, media_type, art_type, threshold)
+    return await art.match(collection_id, art_type, threshold)

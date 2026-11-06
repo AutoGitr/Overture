@@ -2,7 +2,6 @@
 
 lazy import logging
 
-lazy from ...domain import MediaType
 lazy from ...jobs.gate import LibraryGate
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import CollectionGroupSyncResult
@@ -58,19 +57,13 @@ class CollectionSchedule:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rules = await repo.rules()
-            groups = [
-                group
-                for media_type in MediaType
-                for group in await repo.group_policies(server, media_type)
-            ]
+            groups = await repo.group_policies(server)
         for group in groups:
             set_generator = generator(group)
             if set_generator is None:
                 continue
             async with self._access.database.read_session() as session:
-                policy = await self._access.policy(
-                    session, group.media_type, group.name
-                )
+                policy = await self._access.policy(session, group.name)
             # A set runs on its schedule once it has been synced by hand.
             if group.generated_at is None or not is_due(group.generated_at, policy):
                 continue
@@ -83,14 +76,10 @@ class CollectionSchedule:
                 row = await CollectionRepository(session).get(rule.collection_id)
                 if row is None or row.server_type is not server or never_created(row):
                     continue
-                policy = await self._access.policy(
-                    session, row.media_type, row.collection_group, rule
-                )
+                policy = await self._access.policy(session, row.collection_group, rule)
             if not is_due(rule.last_synced_at, policy):
                 continue
             try:
-                await self._rules.sync(
-                    rule.collection_id, row.media_type, scheduled=True
-                )
+                await self._rules.sync(rule.collection_id, scheduled=True)
             except Exception as exc:
                 logger.warning("Collection rule %s failed: %s", rule.collection_id, exc)

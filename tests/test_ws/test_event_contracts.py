@@ -172,7 +172,6 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
         },
         "collection.theme.updated": {
             "collection_id": 1,
-            "media_type": "movie",
             "has_theme": True,
             "theme_status": "partial",
         },

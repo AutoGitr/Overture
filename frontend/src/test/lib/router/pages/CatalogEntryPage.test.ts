@@ -340,7 +340,7 @@ describe("catalog detail drafts", () => {
       "https://www.themoviedb.org/collection/10",
     );
     await fireEvent.click(screen.getByRole("button", { name: "Open in library" }));
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-star-wars"));
+    await waitFor(() => expect(route.pathname).toBe("/collections/12-star-wars"));
   });
 
   it("keeps a draft visible if discarding it fails", async () => {

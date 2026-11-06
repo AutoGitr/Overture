@@ -19,7 +19,7 @@ describe("item collection badge", () => {
       datasetEnabled: true,
     });
     await fireEvent.click(screen.getByRole("button", { name: "Collection" }));
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-collection"));
+    await waitFor(() => expect(route.pathname).toBe("/collections/12-collection"));
   });
   it("opens a catalog collection when there is no library match", async () => {
     queryClient.setQueryData(

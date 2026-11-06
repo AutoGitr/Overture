@@ -45,6 +45,15 @@ _COLLECTION_MEDIA_TYPES = frozendict(
 )
 
 
+def _people(people: list[MediaBrowserPerson], role: str) -> tuple[str, ...]:
+    """The names of the people credited in *role*."""
+    return tuple(
+        name
+        for person in people
+        if person.get("Type") == role and (name := person.get("Name"))
+    )
+
+
 def _media_browser_image_url(
     client: JellyfinClient,
     item_id: str,
@@ -84,6 +93,8 @@ def _media_browser_item_folder(
 
 class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
     """Adapt MediaBrowser (Jellyfin and Emby) responses to the shared contract."""
+
+    collections_span_libraries: ClassVar[bool] = True
 
     def _server_season(self, season: MediaBrowserItem, file_count: int) -> ServerSeason:
         """Normalize one season row with its counted episodes."""
@@ -175,21 +186,9 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             director_etag=etag if movie else None,
             studio=studios[0].get("Name") if studios else None,
             genres=tuple(metadata.get("Genres") or []),
-            actors=tuple(
-                name
-                for person in people
-                if person.get("Type") == "Actor" and (name := person.get("Name"))
-            ),
-            writers=tuple(
-                name
-                for person in people
-                if person.get("Type") == "Writer" and (name := person.get("Name"))
-            ),
-            producers=tuple(
-                name
-                for person in people
-                if person.get("Type") == "Producer" and (name := person.get("Name"))
-            ),
+            actors=_people(people, "Actor"),
+            writers=_people(people, "Writer"),
+            producers=_people(people, "Producer"),
             countries=tuple(metadata.get("ProductionLocations") or []),
             labels=tuple(metadata.get("Tags") or ())
             or tuple(

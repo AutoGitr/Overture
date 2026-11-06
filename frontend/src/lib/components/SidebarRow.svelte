@@ -126,7 +126,10 @@
       return {
         title: collection.title,
         selectLabel: `Select collection ${collection.title}`,
-        meta: `${collection.child_count} items`,
+        meta:
+          collection.media_types.length > 1
+            ? `${collection.child_count} items, movies and shows`
+            : `${collection.child_count} items`,
         unmonitored: !collection.monitored,
         icon: Layers,
         src: collectionImageUrl(collection.thumb_url),

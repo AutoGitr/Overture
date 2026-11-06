@@ -13,7 +13,6 @@
   import { untrack } from "svelte";
   import { getPublicDatasetCollectionIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import ContributeIssueLink from "./ContributeIssueLink.svelte";
-  import { uiState } from "../stores/uiState.svelte";
   import DataStatus from "./DataStatus.svelte";
   import { CollectionDraft, CollectionEditor } from "../utils/collectionForms.svelte";
   import { CollectionActions } from "../utils/collectionActions.svelte";
@@ -39,7 +38,7 @@
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import { collectionImageUrl } from "../utils/artDisplay";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
-  import { sectionState, setSectionView } from "../stores/sectionState.svelte";
+  import { setSectionView } from "../stores/sectionState.svelte";
 
   let {
     collection,
@@ -54,10 +53,7 @@
     groups: string[];
     libraries: LibrarySectionRead[];
   } = $props();
-  // Each collection opens with only Setup and Content expanded.
-  const sectionView = `collection:${untrack(() => collection?.id ?? "new")}`;
-  sectionState.enter(sectionView);
-  setSectionView(sectionView);
+  setSectionView("collection");
 
   function currentCollection(): CollectionDetail {
     if (!collection) throw new Error("The saved collection must remain mounted");
@@ -68,9 +64,8 @@
   const editor = unmanaged
     ? null
     : untrack(() => collection)
-      ? new CollectionEditor(currentCollection)
+      ? new CollectionEditor(currentCollection, () => libraries)
       : new CollectionDraft(
-          uiState.sidebarTab,
           () => libraries,
           () => seed,
         );
@@ -238,7 +233,6 @@
             kind: "collection",
             collectionId: collection.id,
             tmdbId: collection.tmdb_collection_id,
-            mediaType: collection.media_type,
           }}
           {artType}
           item={null}

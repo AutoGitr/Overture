@@ -168,7 +168,12 @@ class AssetPlan[TargetT]:
     def visit(self, item: MediaItem | MediaCollection, targets: list[TargetT]) -> None:
         """Keep *item*'s *targets* for a visit, in the order they are given."""
         if targets and item.id is not None:
-            key = media_sort_key(item.media_type, item.title, item.id)
+            media_type = (
+                item.media_types[0]
+                if isinstance(item, MediaCollection)
+                else item.media_type
+            )
+            key = media_sort_key(media_type, item.title, item.id)
             self._visits.append((key, item.id, tuple(targets)))
 
     @property

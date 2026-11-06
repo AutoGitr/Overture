@@ -45,6 +45,7 @@ export interface FilterState {
   monitored: "all" | "monitored" | "unmonitored";
   collectionSize: "all" | "empty" | "below_minimum";
   collectionKind: "all" | "regular" | "smart";
+  collectionHolds: "all" | "movie" | "show" | "both";
   collectionMembers: "all" | "managed" | "unmanaged";
   collectionSync: "all" | "synced" | "failed";
   art: Completeness;
@@ -65,6 +66,7 @@ const DEFAULT_FILTERS: FilterState = {
   monitored: "all",
   collectionSize: "all",
   collectionKind: "all",
+  collectionHolds: "all",
   collectionMembers: "all",
   collectionSync: "all",
   art: "all",
@@ -141,6 +143,11 @@ function normalizeFilters(value: unknown): FilterState {
       ["all", "empty", "below_minimum"] as const,
       defaults.collectionSize,
     ),
+    collectionHolds: stringOption(
+      source.collectionHolds,
+      ["all", "movie", "show", "both"] as const,
+      defaults.collectionHolds,
+    ),
     collectionKind: stringOption(
       source.collectionKind,
       ["all", "regular", "smart"] as const,
@@ -199,6 +206,7 @@ class UiState {
   // Filters specific to section
   movieFilters = $state<FilterState>(loadFilters("movieFilters"));
   showFilters = $state<FilterState>(loadFilters("showFilters"));
+  collectionFilters = $state<FilterState>(loadFilters("collectionFilters"));
   catalogFilters = $state<CatalogFilters>(defaultCatalogFilters());
 
   operationsTab = $state<OperationsTab>("assets");
@@ -292,7 +300,7 @@ class UiState {
       (source === "overturedb" ? tab === "movie" : settingsState.current.collections_supported);
     this.#startSearch(`${source}:${tab}:${collections ? "collections" : "items"}`);
     if (source === "overturedb") goToCatalog(tab, collections ? "collections" : "items");
-    else if (collections) goToCollectionsList(tab);
+    else if (collections) goToCollectionsList();
     else goToLibrary(tab);
   }
 
@@ -302,18 +310,22 @@ class UiState {
   }
 
   get currentFilters(): FilterState {
+    if (this.sidebarMode === "collections") return this.collectionFilters;
     return this.sidebarTab === "movie" ? this.movieFilters : this.showFilters;
   }
 
   saveFilters() {
     writeJson("movieFilters", this.movieFilters);
     writeJson("showFilters", this.showFilters);
+    writeJson("collectionFilters", this.collectionFilters);
   }
 
   setFilters(value: FilterState) {
     // Number inputs can bind zero or negative bounds; those mean "no bound".
     const filters = normalizeFilters(value);
-    if (this.sidebarTab === "movie") {
+    if (this.sidebarMode === "collections") {
+      this.collectionFilters = filters;
+    } else if (this.sidebarTab === "movie") {
       this.movieFilters = filters;
     } else {
       this.showFilters = filters;

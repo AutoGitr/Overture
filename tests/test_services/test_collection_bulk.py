@@ -40,14 +40,14 @@ lazy from overture.services.themes.collection_bulk import (
 )
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
-lazy from tests.collection_helpers import managing_rule
+lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import JobProbe
 
 
 async def _seed(database: Database, *, saved: str | None = None) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=1,
                 server_item_id="opaque-server-id",
                 server_type=ServerType.PLEX,

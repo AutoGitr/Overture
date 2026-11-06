@@ -29,7 +29,7 @@
     class="btn btn-ghost btn-sm"
     onclick={() => {
       if (libraryCollectionId !== null)
-        goToCollection({ id: libraryCollectionId, title: "Collection", media_type: "movie" });
+        goToCollection({ id: libraryCollectionId, title: "Collection" });
     }}><Layers size={16} />Collection</button
   >
 {:else if entry}

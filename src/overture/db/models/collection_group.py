@@ -9,7 +9,6 @@ lazy from ...domain import (
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
-    MediaType,
     ServerType,
     SyncMode,
 )
@@ -20,11 +19,12 @@ class CollectionGroup(SQLModel, table=True):
     """Keep group policy separate from a collection's explicit choices."""
 
     __tablename__: ClassVar[Any] = "collection_groups"
-    __table_args__ = (UniqueConstraint("server_type", "media_type", "name"),)
+    __table_args__ = (
+        UniqueConstraint("server_type", "name", name="uq_collection_group"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     server_type: ServerType = Field(sa_type=enum_type(ServerType))
-    media_type: MediaType = Field(sa_type=enum_type(MediaType))
     name: str
     sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
     minimum_items: int | None = None

@@ -5,7 +5,6 @@
   import type {
     CollectionCapabilities,
     LibrarySectionRead,
-    MediaType,
   } from "../../generated/rest/types.gen";
   import { withDimension, type SetGenerator } from "../utils/collectionForms.svelte";
   import { emptyGroup, splitList } from "../utils/collectionCriteria";
@@ -20,7 +19,6 @@
     generator = $bindable(),
     libraryIds,
     libraries,
-    mediaType,
     capabilities,
     group,
     minimum,
@@ -30,7 +28,6 @@
     /** The libraries the set creates its collections in. */
     libraryIds: string[];
     libraries: LibrarySectionRead[];
-    mediaType: MediaType;
     capabilities: CollectionCapabilities | undefined;
     /** The group the set saves into, whose collections the preview matches. */
     group: string;
@@ -49,6 +46,10 @@
   let dimension = $derived(dimensions.find((entry) => entry.dimension === generator.dimension));
   let custom = $derived(generator.dimension === "custom");
   let libraryId = $derived(libraryIds[0] ?? "");
+  /** Criteria suggest values from the first library; only shared fields are on offer. */
+  let mediaType = $derived(
+    libraries.find((library) => library.id === libraryId)?.media_type ?? "movie",
+  );
   // Overture counts values itself, then Plex may evaluate smart collections. Plex
   // counts the values only it knows, so it must test the shared criteria itself.
   let fields = $derived(
@@ -65,7 +66,6 @@
   function runPreview() {
     preview.mutate({
       body: {
-        media_type: mediaType,
         generator: { ...$state.snapshot(generator), library_ids: libraryIds },
         group: group.trim() || null,
         minimum_items: minimum,

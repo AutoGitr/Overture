@@ -2,11 +2,11 @@
 
 lazy from datetime import UTC, datetime
 
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import MediaType, ServerType
 lazy from overture.schemas.collections import collection_read
 lazy from overture.schemas.library import media_item_read_from_model
+lazy from tests.collection_helpers import stored_collection
 
 
 def test_media_item_defaults_are_safe_for_new_records() -> None:
@@ -27,7 +27,7 @@ def test_server_links_go_with_the_server_copy() -> None:
         server_link=link,
     )
     removed = on_server.model_copy(update={"server_removed_at": datetime.now(UTC)})
-    collection = MediaCollection(
+    collection = stored_collection(
         id=1,
         media_type=MediaType.MOVIE,
         server_type=ServerType.PLEX,
@@ -35,7 +35,9 @@ def test_server_links_go_with_the_server_copy() -> None:
         server_item_id="9",
         server_link=link,
     )
-    withheld = collection.model_copy(update={"server_item_id": None})
+    withheld = stored_collection(
+        server_type=ServerType.PLEX, title="Saga", server_link=link
+    )
 
     assert media_item_read_from_model(on_server, seasons=[]).server_link == link
     assert media_item_read_from_model(removed, seasons=[]).server_link is None

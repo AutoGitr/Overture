@@ -42,7 +42,7 @@ lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
-lazy from tests.collection_helpers import managing_rule
+lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 lazy from tests.test_services.test_collection_management import Provider
 lazy from tests.test_services.test_collections_service import FakePublisher
@@ -158,7 +158,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
     monkeypatch.setattr("overture.utils.image.is_private_url", public)
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=1,
                 server_item_id="box",
                 server_type=ServerType.PLEX,
@@ -183,11 +183,10 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         image_cache=ImageCache(tmp_path / "images"),
     )
     try:
-        sources = await service.collections.sources(1, MediaType.MOVIE, ArtType.POSTER)
+        sources = await service.collections.sources(1, ArtType.POSTER)
         assert sources.sources["tmdb"][0].url == URL
         await service.collections.save(
             1,
-            MediaType.MOVIE,
             ArtType.POSTER,
             SaveArtRequest(url=URL, width=200, height=300),
         )
@@ -212,15 +211,14 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         with pytest.raises(PublicServiceError, match="aspect ratio"):
             await service.collections.save(
                 1,
-                MediaType.MOVIE,
                 ArtType.BACKGROUND,
                 SaveArtRequest(url=URL, width=1920, height=1080),
             )
         assert len(provider.uploads) == 1
-        result = await service.collections.match(1, MediaType.MOVIE, ArtType.POSTER, 5)
+        result = await service.collections.match(1, ArtType.POSTER, 5)
         assert result.reference == "media_server"
         assert result.total_compared == 1
-        state = await service.collections.clear(1, MediaType.MOVIE, ArtType.POSTER)
+        state = await service.collections.clear(1, ArtType.POSTER)
         assert state.poster_url is None
         assert state.poster_status == "partial"
         async with database.read_session() as session:
@@ -230,11 +228,9 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             assert read_art_slot(cleared, ArtType.POSTER).file_hash is not None
         assert len(provider.uploads) == 1
         with pytest.raises(PublicServiceError, match="posters and backgrounds"):
-            await service.collections.sources(1, MediaType.MOVIE, ArtType.SEASON_POSTER)
+            await service.collections.sources(1, ArtType.SEASON_POSTER)
         with pytest.raises(PublicServiceError, match="Collection not found"):
-            await service.collections.save(
-                1, MediaType.SHOW, ArtType.POSTER, SaveArtRequest(url=URL)
-            )
+            await service.collections.save(404, ArtType.POSTER, SaveArtRequest(url=URL))
     finally:
         await images.client.aclose()
 
@@ -282,7 +278,7 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
         tmdb_client=tmdb,
         app_config=app_config,
     )
-    row = MediaCollection(
+    row = stored_collection(
         id=1,
         server_item_id="box",
         media_type=MediaType.MOVIE,

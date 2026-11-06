@@ -8,10 +8,10 @@ import { mockFetchRoutes } from "../../../helpers/fetch";
 import { collectionDetail as collection } from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
-const action = collection({ id: 12, title: "Action", media_type: "movie" });
+const action = collection({ id: 12, title: "Action" });
 
 async function openCollection(collectionSlug: string) {
-  await navigate("/movies/collections/:collectionSlug", { params: { collectionSlug } });
+  await navigate("/collections/:collectionSlug", { params: { collectionSlug } });
 }
 
 describe("CollectionPage", () => {
@@ -60,7 +60,7 @@ describe("CollectionPage", () => {
       "/api/collections/groups": [],
     });
     uiState.mobileShowDetail = true;
-    await navigate("/movies/collections");
+    await navigate("/collections");
 
     const { container } = renderWithQueryClient(CollectionPage);
 

@@ -1,8 +1,8 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
-import { goToCollectionView, navigate, sidebarGroup } from "../../../lib/router/routes";
+import { goToCollectionView, navigate, route, sidebarGroup } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
@@ -15,10 +15,15 @@ import {
 import { renderWithQueryClient } from "../../helpers/render";
 
 const member = mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" });
-const detail = collectionDetail({ id: 12, title: "Saga", library_id: "movies", members: [member] });
+const detail = collectionDetail({
+  id: 12,
+  title: "Saga",
+  library_ids: ["movies"],
+  members: [member],
+});
 const libraries = [
-  { id: "movies", title: "Movies", count: 1 },
-  { id: "other", title: "Other movies", count: 1 },
+  { id: "movies", title: "Movies", media_type: "movie", count: 1 },
+  { id: "other", title: "Other movies", media_type: "movie", count: 1 },
 ];
 function mockPage(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
@@ -39,9 +44,9 @@ function mockPage(overrides: Record<string, unknown> = {}) {
 }
 
 async function createPage() {
-  await navigate("/movies/collections/new");
+  await navigate("/collections/new");
   renderWithQueryClient(CollectionPage);
-  await screen.findByRole("checkbox", { name: "Movies" });
+  await fireEvent.click(await screen.findByRole("checkbox", { name: "Movies" }));
 }
 
 function postedBody(calls: { url: string; init: RequestInit }[], path: string) {
@@ -165,13 +170,17 @@ describe("collection setup flow", () => {
     );
     expect(postedBody(calls, "/api/collections").rule).toMatchObject({
       smart: true,
-      criteria: {
-        mode: "all",
-        conditions: [
-          { kind: "source", operator: "is", source: { type: "radarr_tag", tags: ["request"] } },
-          { kind: "field", field: "unplayed", operator: "is", value: false },
-        ],
-      },
+      libraries: [
+        {
+          criteria: {
+            mode: "all",
+            conditions: [
+              { kind: "source", operator: "is", source: { type: "radarr_tag", tags: ["request"] } },
+              { kind: "field", field: "unplayed", operator: "is", value: false },
+            ],
+          },
+        },
+      ],
     });
   });
 
@@ -297,37 +306,43 @@ describe("collection setup flow", () => {
     },
   );
 
-  it("keeps one collection alike in several libraries as a set, saved in Overture only", async () => {
-    const { calls } = mockPage({
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
-        Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : {}),
-    });
+  it("gives each library its own criteria, in one collection", async () => {
+    const { calls } = mockPage();
     await createPage();
-    for (const name of ["Movies", "Other movies"]) {
-      const box = screen.getByRole("checkbox", { name });
-      if (!(box instanceof HTMLInputElement) || !box.checked) await fireEvent.click(box);
-    }
-    expect(screen.getByText(/Several libraries make a set/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Other movies" }));
+    expect(screen.getByText(/each gets its own, kept alike/)).toBeInTheDocument();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Attenborough" } });
-    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
+    const boxes = screen.getAllByRole("button", { name: "Condition" });
+    await fireEvent.click(boxes[1] as HTMLElement);
+    await fireEvent.change(screen.getByLabelText("Other movies criteria condition 1 field"), {
       target: { value: "field:year" },
     });
-    await fireEvent.input(screen.getByLabelText("Criteria condition 1 value"), {
+    await fireEvent.input(screen.getByLabelText("Other movies criteria condition 1 value"), {
       target: { value: "1990" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(sidebarGroup()).toBe("Attenborough"));
-    expect(postedBody(calls, "/api/collections/group-policy?")).toMatchObject({
-      generator: {
-        dimension: "custom",
-        library_ids: ["movies", "other"],
-        custom_values: [{ name: "Attenborough" }],
-      },
+    await fireEvent.click(boxes[0] as HTMLElement);
+    await fireEvent.change(screen.getByLabelText("Movies criteria condition 1 field"), {
+      target: { value: "field:year" },
     });
-    expect(calls.some((call) => call.url.startsWith("/api/collections/group-policy/sync"))).toBe(
-      false,
-    );
+    await fireEvent.input(screen.getByLabelText("Movies criteria condition 1 value"), {
+      target: { value: "2000" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(route.pathname).toBe("/collections/12-saga"));
+    const { rule } = postedBody(calls, "/api/collections?to_server=false");
+    expect(rule.libraries).toMatchObject([
+      { library_id: "movies", criteria: { conditions: [{ value: 2000 }] } },
+      { library_id: "other", criteria: { conditions: [{ value: 1990 }] } },
+    ]);
+  });
+
+  it("says one collection holds every library where the server allows it", async () => {
+    mockPage({
+      "/api/collections/capabilities": collectionCapabilities({ spans_libraries: true }),
+    });
+    await createPage();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Other movies" }));
+    expect(screen.getByText("One collection on the server holds them all.")).toBeInTheDocument();
   });
 
   it("suggests the kind the criteria suit as they are edited, and switches to it", async () => {
@@ -355,7 +370,9 @@ describe("collection setup flow", () => {
 
   it("previews members", async () => {
     const { calls } = mockPage({
-      "/api/collections/preview": { member_count: 2, members: ["First", "Second"] },
+      "/api/collections/preview": {
+        libraries: [{ library_id: "movies", member_count: 2, members: ["First", "Second"] }],
+      },
     });
     await createPage();
     await onlyLibrary(screen, "Movies");
@@ -367,8 +384,23 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Preview members" }));
     expect(await screen.findByText("2 members: First, Second")).toBeInTheDocument();
     expect(postedBody(calls, "/api/collections/preview")).toMatchObject({
-      library_id: "movies",
-      media_type: "movie",
+      rule: { libraries: [{ library_id: "movies" }] },
     });
+  });
+
+  it("opens with only Setup and Content expanded, however it was left", async () => {
+    mockPage();
+    await createPage();
+    const expanded = () =>
+      screen.getAllByRole("button", { expanded: true }).map((button) => button.textContent?.trim());
+    expect(expanded()).toEqual(["Setup", "Content"]);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
+    expect(expanded()).toEqual(["Setup", "Content", "Settings"]);
+
+    cleanup();
+    renderWithQueryClient(CollectionPage);
+    await screen.findByRole("checkbox", { name: "Movies" });
+    expect(expanded()).toEqual(["Setup", "Content"]);
   });
 });

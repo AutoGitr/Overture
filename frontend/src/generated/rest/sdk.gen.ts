@@ -291,9 +291,9 @@ export const stopBulkAssets = <ThrowOnError extends boolean = false>(options?: O
 /**
  * List Collections
  *
- * Return the collections the last sync listed for the media type.
+ * Return the collections the last sync listed.
  */
-export const listCollections = <ThrowOnError extends boolean = false>(options: Options<ListCollectionsData, ThrowOnError>): RequestResult<ListCollectionsResponses, ListCollectionsErrors, ThrowOnError> => (options.client ?? client).get<ListCollectionsResponses, ListCollectionsErrors, ThrowOnError>({ url: '/api/collections', ...options });
+export const listCollections = <ThrowOnError extends boolean = false>(options?: Options<ListCollectionsData, ThrowOnError>): RequestResult<ListCollectionsResponses, ListCollectionsErrors, ThrowOnError> => (options?.client ?? client).get<ListCollectionsResponses, ListCollectionsErrors, ThrowOnError>({ url: '/api/collections', ...options });
 
 /**
  * Create Collection
@@ -356,7 +356,7 @@ export const getCollectionCapabilities = <ThrowOnError extends boolean = false>(
  *
  * Resolve inherited values for collection form placeholders.
  */
-export const getCollectionDefaults = <ThrowOnError extends boolean = false>(options: Options<GetCollectionDefaultsData, ThrowOnError>): RequestResult<GetCollectionDefaultsResponses, GetCollectionDefaultsErrors, ThrowOnError> => (options.client ?? client).get<GetCollectionDefaultsResponses, GetCollectionDefaultsErrors, ThrowOnError>({ url: '/api/collections/defaults', ...options });
+export const getCollectionDefaults = <ThrowOnError extends boolean = false>(options?: Options<GetCollectionDefaultsData, ThrowOnError>): RequestResult<GetCollectionDefaultsResponses, GetCollectionDefaultsErrors, ThrowOnError> => (options?.client ?? client).get<GetCollectionDefaultsResponses, GetCollectionDefaultsErrors, ThrowOnError>({ url: '/api/collections/defaults', ...options });
 
 /**
  * List Collection Field Values
@@ -417,9 +417,9 @@ export const deleteCollectionGroup = <ThrowOnError extends boolean = false>(opti
 /**
  * List Collection Groups
  *
- * Return default and custom collection groups for this media type.
+ * Return default and custom collection groups.
  */
-export const listCollectionGroups = <ThrowOnError extends boolean = false>(options: Options<ListCollectionGroupsData, ThrowOnError>): RequestResult<ListCollectionGroupsResponses, ListCollectionGroupsErrors, ThrowOnError> => (options.client ?? client).get<ListCollectionGroupsResponses, ListCollectionGroupsErrors, ThrowOnError>({ url: '/api/collections/groups', ...options });
+export const listCollectionGroups = <ThrowOnError extends boolean = false>(options?: Options<ListCollectionGroupsData, ThrowOnError>): RequestResult<ListCollectionGroupsResponses, ListCollectionGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListCollectionGroupsResponses, ListCollectionGroupsErrors, ThrowOnError>({ url: '/api/collections/groups', ...options });
 
 /**
  * Rename Collection Group

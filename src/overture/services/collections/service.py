@@ -132,7 +132,7 @@ class CollectionsService:
             sets=self.sets,
             rules=self.rules,
         )
-        self.bulk = CollectionBulk(access=access, editor=self.editor, rules=self.rules)
+        self.bulk = CollectionBulk(access=access, editor=self.editor)
         self.schedule = CollectionSchedule(
             access=access,
             sets=self.sets,

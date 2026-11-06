@@ -5,7 +5,6 @@ lazy from pathlib import Path
 lazy from typing import Any
 
 lazy from ... import protocols
-lazy from ...domain import MediaType
 lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, log_entry
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import SyncTally
@@ -102,35 +101,34 @@ async def _sync_groups(
     names: list[str] | None,
     library_ids: list[str] | None,
 ) -> None:
-    """Run each group's set and sync its collections, for every media type it has.
+    """Run each group's set and sync its collections.
 
     Without *names* every group is synced; *library_ids* limits each group
     to its collections in those libraries.
     """
-    for media_type in MediaType:
-        existing = await groups.names(media_type)
-        for name in existing if names is None else names:
-            if job.stop_requested():
-                return
-            if name not in existing:
-                continue
-            try:
-                result = await groups.sync(media_type, name, library_ids=library_ids)
-            except Exception as exc:
-                await job.report(
-                    JobOutcome.ERROR, f"Group {name}", str(exc), finished=False
-                )
-                continue
-            for title, error in result.errors.items():
-                await job.report(JobOutcome.ERROR, title, error, finished=False)
-            await job.progress(
-                log=log_entry(
-                    JobOutcome.STARTED,
-                    f"Group {name}",
-                    f"{result.synced} synced, {len(result.created)} created, "
-                    f"{len(result.withheld)} taken off the server",
-                )
+    existing = await groups.names()
+    for name in existing if names is None else names:
+        if job.stop_requested():
+            return
+        if name not in existing:
+            continue
+        try:
+            result = await groups.sync(name, library_ids=library_ids)
+        except Exception as exc:
+            await job.report(
+                JobOutcome.ERROR, f"Group {name}", str(exc), finished=False
             )
+            continue
+        for title, error in result.errors.items():
+            await job.report(JobOutcome.ERROR, title, error, finished=False)
+        await job.progress(
+            log=log_entry(
+                JobOutcome.STARTED,
+                f"Group {name}",
+                f"{result.synced} synced, {len(result.created)} created, "
+                f"{len(result.withheld)} taken off the server",
+            )
+        )
 
 
 async def _sync_with_provider(

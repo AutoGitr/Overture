@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
-    CollectionDraft,
     formPolicy,
+    type CollectionDraft,
     type CollectionEditor,
   } from "../utils/collectionForms.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
@@ -12,8 +12,6 @@
 
   const identityId = $props.id();
   let capabilities = $derived(editor.capabilities.data);
-  /** Collections in several libraries are a set, which keeps every member. */
-  let linked = $derived(editor instanceof CollectionDraft && editor.linked);
   let policy = $derived(formPolicy(editor));
 </script>
 
@@ -22,7 +20,7 @@
   title="Settings"
   description="Sorting, syncing and how the server shows the collection."
   busy={editor.busy}
-  disabled={!editor.libraryId}
+  disabled={!editor.libraryIds.length}
 >
   <CollectionPolicyFields
     bind:policy
@@ -34,16 +32,14 @@
       ? "Plex sorts smart collections itself."
       : "Custom keeps the order of the first list the criteria use."}
     sync={!editor.smart}
-    arr={capabilities?.arr ? (editor.mediaType === "movie" ? "Radarr" : "Sonarr") : null}
+    arr={editor.arr}
     memberLabels={capabilities?.member_labels ?? false}
     filtering={editor.smart}
   >
     <FieldRow
       label="Limit"
       for={`${identityId}-limit`}
-      hint={linked
-        ? "A collection in several libraries keeps every member."
-        : "Keeps the first members in the chosen sort."}
+      hint="Keeps the first members of each library in the chosen sort."
     >
       <input
         id={`${identityId}-limit`}
@@ -51,7 +47,7 @@
         min="1"
         max="10000"
         placeholder="All matches"
-        disabled={editor.generated || linked}
+        disabled={editor.generated}
         value={editor.rule.limit ?? ""}
         oninput={(event) =>
           (editor.rule.limit = event.currentTarget.value
@@ -60,7 +56,7 @@
       />
     </FieldRow>
   </CollectionPolicyFields>
-  {#if editor.mediaType === "movie"}
+  {#if editor.mediaTypes.includes("movie")}
     <FieldRow
       label="TMDB collection ID"
       for={identityId}

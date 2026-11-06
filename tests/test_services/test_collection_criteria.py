@@ -17,7 +17,6 @@ lazy from overture.domain import (
 )
 lazy from overture.schemas.collections import (
     CollectionGeneratorBase,
-    CollectionRuleWrite,
     FieldCondition,
     FilterGroup,
     MdblistSource,
@@ -43,6 +42,7 @@ lazy from overture.services.collections.plex_query import (
 )
 lazy from overture.services.collections.sets import count_values, set_values
 lazy from overture.services.collections.sources import condition_label
+lazy from tests.collection_helpers import library_rule
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 
@@ -252,11 +252,9 @@ def test_rules_need_a_condition_and_a_plex_order_when_smart() -> None:
         conditions=[_field(FilterField.GENRE, FilterOperator.IS, "Action")]
     )
     with pytest.raises(ValidationError, match="at least one condition"):
-        CollectionRuleWrite(criteria=FilterGroup())
+        library_rule(criteria=FilterGroup())
     with pytest.raises(ValidationError, match="ordered by Plex"):
-        CollectionRuleWrite(
-            criteria=criteria, smart=True, order_type=CollectionOrder.CUSTOM
-        )
+        library_rule(criteria=criteria, smart=True, order_type=CollectionOrder.CUSTOM)
 
 
 def test_plex_query_uses_documented_operators_and_tag_keys() -> None:

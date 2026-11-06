@@ -5,7 +5,6 @@
   import { createQuery, createMutation, useQueryClient } from "@tanstack/svelte-query";
   import {
     applyCollectionGroupPolicyMutation,
-    getCollectionCapabilitiesOptions,
     getCollectionDefaultsOptions,
     getCollectionGroupPolicyOptions,
     listCollectionsOptions,
@@ -19,8 +18,10 @@
     MediaType,
   } from "../../generated/rest/types.gen";
   import { createNotifier } from "../stores/notificationState.svelte";
+  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
   import { defaultGenerator, type SetGenerator } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
+  import { CollectionOptions } from "../utils/libraries.svelte";
   import { availableOrders } from "../utils/collectionCriteria";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
@@ -30,19 +31,20 @@
 
   let {
     group,
-    mediaType,
     libraries = [],
     onsave,
     onfooterchange,
   }: {
     group: string;
-    mediaType: MediaType;
     libraries?: LibrarySectionRead[];
     /** The group is saved, so it exists from now on. */
     onsave?: () => void;
     /** Hand the popup the save actions, which belong in its footer, until unmounted. */
     onfooterchange?: (footer: Snippet | null) => void;
   } = $props();
+
+  // Every group opens with its sections closed.
+  sectionState.forget(getSectionView());
 
   onMount(() => {
     onfooterchange?.(actions);
@@ -51,15 +53,11 @@
 
   const client = useQueryClient();
   const query = createQuery(() => ({
-    ...getCollectionGroupPolicyOptions({ query: { name: group, media_type: mediaType } }),
+    ...getCollectionGroupPolicyOptions({ query: { name: group } }),
     enabled: !!group.trim(),
   }));
-  const defaults = createQuery(() =>
-    getCollectionDefaultsOptions({ query: { media_type: mediaType } }),
-  );
-  const capabilities = createQuery(() =>
-    getCollectionCapabilitiesOptions({ query: { media_type: mediaType } }),
-  );
+  const defaults = createQuery(() => getCollectionDefaultsOptions());
+  const options = new CollectionOptions();
   const request = createMutation(() => saveCollectionGroupPolicyMutation());
   const syncRequest = createMutation(() => syncCollectionGroupMutation());
   const applyRequest = createMutation(() => applyCollectionGroupPolicyMutation());
@@ -73,10 +71,27 @@
   $effect(() => {
     if (query.data && draft === null) draft = structuredClone($state.snapshot(query.data));
   });
-  let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
-  const collections = createQuery(() =>
-    listCollectionsOptions({ query: { media_type: mediaType } }),
+  const collections = createQuery(() => listCollectionsOptions());
+  /** A set offers what its libraries share, a group what its collections do; an empty one both. */
+  let mediaTypes = $derived.by<MediaType[]>(() => {
+    const held = new Set<MediaType>(
+      draft?.generator
+        ? libraries
+            .filter((library) => draft?.generator?.library_ids.includes(library.id))
+            .map((library) => library.media_type)
+        : (collections.data ?? [])
+            .filter((row) => row.collection_group === group)
+            .flatMap((row) => row.media_types),
+    );
+    return held.size ? [...held] : ["movie", "show"];
+  });
+  let capabilities = $derived(options.shared(mediaTypes));
+  let arr = $derived(
+    capabilities?.arr
+      ? mediaTypes.map((type) => (type === "movie" ? "Radarr" : "Sonarr")).join(" and ")
+      : null,
   );
+  let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
   let hasMembers = $derived(
     (collections.data ?? []).some((row) => row.managed && row.collection_group === group),
   );
@@ -89,7 +104,7 @@
   async function save(then?: "apply" | "sync") {
     if (!draft || busy) return;
     const variables = {
-      query: { name: group, media_type: mediaType },
+      query: { name: group },
       body: $state.snapshot(draft),
     };
     try {
@@ -123,7 +138,7 @@
   async function sync() {
     try {
       const result = await syncRequest.mutateAsync({
-        query: { name: group, media_type: mediaType },
+        query: { name: group },
       });
       const errors = Object.entries(result.errors);
       const summary = `${result.created.length} created, ${result.withheld.length} taken off the server, ${result.synced} synced`;
@@ -149,10 +164,10 @@
 />
 <DataStatus
   label="collection options"
-  error={capabilities.error}
-  loading={capabilities.isFetching}
-  hasData={capabilities.data !== undefined}
-  onretry={() => capabilities.refetch()}
+  error={options.for("movie").error}
+  loading={options.for("movie").isFetching}
+  hasData={options.for("movie").data !== undefined}
+  onretry={() => options.for("movie").refetch()}
 />
 {#if draft}
   {@const form = draft}
@@ -196,8 +211,7 @@
         bind:generator={draft.generator!}
         libraryIds={generator.library_ids}
         {libraries}
-        {mediaType}
-        capabilities={capabilities.data}
+        {capabilities}
         {group}
         minimum={form.minimum_items ?? null}
         standalone
@@ -214,10 +228,10 @@
       bind:policy={draft}
       level="group"
       defaults={defaults.data}
-      plex={capabilities.data?.visibility ?? false}
-      orders={availableOrders(capabilities.data, !!form.generator?.smart)}
-      arr={capabilities.data?.arr ? (mediaType === "movie" ? "Radarr" : "Sonarr") : null}
-      memberLabels={capabilities.data?.member_labels ?? false}
+      plex={capabilities?.visibility ?? false}
+      orders={availableOrders(capabilities, !!form.generator?.smart)}
+      {arr}
+      memberLabels={capabilities?.member_labels ?? false}
     />
   </DetailForm>
   <DetailForm

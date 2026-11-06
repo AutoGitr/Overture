@@ -11,9 +11,9 @@ lazy from ...integrations.mdblist import MDBListClient
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...schemas.collections import (
     ArrTagRead,
+    CollectionLibraryCriteria,
     CollectionSource,
     FieldCondition,
-    FilterGroup,
     MdblistSource,
     RadarrTagSource,
     SonarrTagSource,
@@ -173,12 +173,18 @@ class SourceResolver:
             return ()
         return await self._tmdb.search_keywords(query)
 
-    async def summary(self, criteria: FilterGroup) -> str | None:
+    async def summary(
+        self, libraries: Sequence[CollectionLibraryCriteria]
+    ) -> str | None:
         """The description of the first list the criteria include, if it has one.
 
         TMDB franchises and lists have overviews and people their biography.
         """
-        for condition in criteria.source_conditions():
+        for condition in (
+            found
+            for library in libraries
+            for found in library.criteria.source_conditions()
+        ):
             if condition.operator is not FilterOperator.IS:
                 continue
             match condition.source:

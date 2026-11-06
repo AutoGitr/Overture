@@ -34,11 +34,11 @@ lazy from overture.schemas.collections import (
     CollectionGroupPolicy,
     CollectionGroupRename,
     CollectionGroupSyncResult,
+    CollectionLibraryCriteria,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionRead,
     CollectionRuleRead,
-    CollectionRuleWrite,
     CollectionSetPreview,
     CollectionSyncResponse,
     CollectionThemeStatusResponse,
@@ -56,20 +56,21 @@ lazy from overture.schemas.common import (
     Status,
     StatusResponse,
 )
+lazy from tests.collection_helpers import library_rule
 
 
 async def test_collection_routes_delegate_to_service() -> None:
     read_item = CollectionRead(
         id=1,
-        library_id="lib1",
-        media_type=MediaType.MOVIE,
+        library_ids=["lib1"],
+        media_types=[MediaType.MOVIE],
         server_type=ServerType.PLEX,
         title="Star Wars",
     )
     detail_item = CollectionDetail(
         id=1,
-        library_id="lib1",
-        media_type=MediaType.MOVIE,
+        library_ids=["lib1"],
+        media_types=[MediaType.MOVIE],
         server_type=ServerType.PLEX,
         title="Star Wars",
         members=[],
@@ -92,6 +93,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     )
     capabilities = CollectionCapabilities(
         server_type=ServerType.PLEX,
+        spans_libraries=False,
         smart=True,
         visibility=True,
         orders=[CollectionOrder.CUSTOM],
@@ -133,11 +135,18 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.editor.set_members = AsyncMock(return_value=detail_item)
     service.editor.save_rule = AsyncMock(
         return_value=CollectionRuleRead(
-            criteria=FilterGroup(
-                conditions=[
-                    SourceCondition(source=TmdbCollectionSource(collection_id=10))
-                ]
-            )
+            libraries=[
+                CollectionLibraryCriteria(
+                    library_id="lib1",
+                    criteria=FilterGroup(
+                        conditions=[
+                            SourceCondition(
+                                source=TmdbCollectionSource(collection_id=10)
+                            )
+                        ]
+                    ),
+                )
+            ]
         )
     )
     service.rules.sync = AsyncMock(return_value=CollectionSyncResponse(added=2))
@@ -149,41 +158,30 @@ async def test_collection_routes_delegate_to_service() -> None:
     art_service.match = AsyncMock(return_value=ArtMatchResponse(matches=[]))
 
     # Collections listing & groups
-    assert (
-        len(await collections_router.list_collections(service.reader, MediaType.MOVIE))
-        == 1
-    )
-    assert await collections_router.list_collection_groups(
-        service.groups, MediaType.MOVIE
-    ) == ["Franchises"]
+    assert len(await collections_router.list_collections(service.reader)) == 1
+    assert await collections_router.list_collection_groups(service.groups) == [
+        "Franchises"
+    ]
 
     defaults = CollectionDefaults(sync_schedule="0 3 * * *", sync_enabled=True)
     service.reader.inherited_policy = AsyncMock(return_value=defaults)
     assert (
-        await collections_router.get_collection_defaults(
-            service.reader, MediaType.MOVIE, "Franchises"
-        )
+        await collections_router.get_collection_defaults(service.reader, "Franchises")
         == defaults
     )
     service.groups.rename = AsyncMock(return_value=StatusResponse(status=Status.OK))
     await collections_router.rename_collection_group(
         CollectionGroupRename(name="Saga"),
         service.groups,
-        MediaType.MOVIE,
         "Franchises",
     )
-    service.groups.rename.assert_awaited_once_with(
-        MediaType.MOVIE, "Franchises", "Saga"
-    )
+    service.groups.rename.assert_awaited_once_with("Franchises", "Saga")
     service.groups.delete = AsyncMock(return_value=BulkCollectionOperationResult())
     removal = CollectionGroupDelete(collections="both")
-    await collections_router.delete_collection_group(
-        removal, service.groups, MediaType.MOVIE, "Saga"
-    )
-    service.groups.delete.assert_awaited_once_with(MediaType.MOVIE, "Saga", removal)
+    await collections_router.delete_collection_group(removal, service.groups, "Saga")
+    service.groups.delete.assert_awaited_once_with("Saga", removal)
     service.sets.preview = AsyncMock(return_value=[])
     preview = CollectionSetPreview(
-        media_type=MediaType.MOVIE,
         generator=CollectionGenerator(
             dimension=SetDimension.DECADE, library_ids=["movies"]
         ),
@@ -212,20 +210,18 @@ async def test_collection_routes_delegate_to_service() -> None:
     policy = CollectionGroupPolicy(minimum_items=3)
     assert (
         await collections_router.get_collection_group_policy(
-            service.groups, MediaType.MOVIE, "Franchises"
+            service.groups, "Franchises"
         )
         == CollectionGroupPolicy()
     )
     assert (
         await collections_router.save_collection_group_policy(
-            service.groups, MediaType.MOVIE, "Franchises", policy
+            service.groups, "Franchises", policy
         )
         == CollectionGroupPolicy()
     )
     assert (
-        await collections_router.sync_collection_group(
-            service.groups, MediaType.MOVIE, "Franchises"
-        )
+        await collections_router.sync_collection_group(service.groups, "Franchises")
     ).created == [2]
 
     # Arr tags
@@ -235,46 +231,35 @@ async def test_collection_routes_delegate_to_service() -> None:
     # Bulk operation
     bulk = BulkCollectionOperation(
         collection_ids=[1],
-        media_type=MediaType.MOVIE,
-        operation="trigger_sync",
+        operation="clear_artwork",
     )
     result = await collections_router.bulk_operate_collections(service.bulk, bulk)
     assert result.collection_ids == [1]
 
     # Get collection & theme sources
-    item = await collections_router.get_collection(1, service.reader, MediaType.MOVIE)
+    item = await collections_router.get_collection(1, service.reader)
     assert item.id == 1
-    sources = await collections_router.get_collection_sources(
-        1, service.reader, MediaType.MOVIE
-    )
+    sources = await collections_router.get_collection_sources(1, service.reader)
     assert sources.youtube_id_overturedb == "yt1"
     assert sources.youtube_id_themerrdb == "yt2"
 
     # Theme ops
-    theme = await collections_router.get_collection_theme(
-        1, service.themes, MediaType.MOVIE
-    )
+    theme = await collections_router.get_collection_theme(1, service.themes)
     assert theme.has_theme is True
-    set_theme = SetCollectionThemeRequest(
-        youtube_id="dQw4w9WgXcQ", media_type=MediaType.MOVIE
-    )
+    set_theme = SetCollectionThemeRequest(youtube_id="dQw4w9WgXcQ")
     assert (
         await collections_router.set_collection_theme(1, set_theme, service.themes)
     ).job_id == "job1"
     assert (
-        await collections_router.delete_collection_theme(
-            1, service.themes, MediaType.MOVIE
-        )
+        await collections_router.delete_collection_theme(1, service.themes)
     ).status == Status.OK
 
     # Monitored ops
     mon = await collections_router.set_collection_monitored(
-        1, MonitorUpdate(monitored=True), service.editor, MediaType.MOVIE
+        1, MonitorUpdate(monitored=True), service.editor
     )
     assert mon.monitored is True
-    bulk_mon = BulkCollectionMonitorUpdate(
-        collection_ids=[1], media_type=MediaType.MOVIE, monitored=True
-    )
+    bulk_mon = BulkCollectionMonitorUpdate(collection_ids=[1], monitored=True)
     bulk_res = await collections_router.bulk_set_collection_monitored(
         bulk_mon, service.editor
     )
@@ -286,72 +271,63 @@ async def test_collection_routes_delegate_to_service() -> None:
     )
     assert img_resp.body == b"img"
 
-    rule_write = CollectionRuleWrite(
+    rule_write = library_rule(
         criteria=FilterGroup(
             conditions=[SourceCondition(source=TmdbCollectionSource(collection_id=10))]
         )
     )
     # Create, update, delete
     create = CollectionCreate(
-        media_type=MediaType.MOVIE,
-        library_id="lib1",
         title="Star Wars",
         rule=rule_write,
     )
     assert (await collections_router.create_collection(create, service.editor)).id == 1
     options = CollectionOptions(title="Star Wars Updated")
-    updated = await collections_router.update_collection(
-        1, MediaType.MOVIE, options, service.editor
-    )
+    updated = await collections_router.update_collection(1, options, service.editor)
     assert updated.id == 1
-    deleted = await collections_router.delete_collection(
-        1, MediaType.MOVIE, service.editor
-    )
+    deleted = await collections_router.delete_collection(1, service.editor)
     assert deleted.status == Status.OK
-    service.editor.delete.assert_awaited_with(1, MediaType.MOVIE, target="both")
-    await collections_router.delete_collection(
-        1, MediaType.MOVIE, service.editor, "server"
-    )
-    service.editor.delete.assert_awaited_with(1, MediaType.MOVIE, target="server")
+    service.editor.delete.assert_awaited_with(1, target="both")
+    await collections_router.delete_collection(1, service.editor, "server")
+    service.editor.delete.assert_awaited_with(1, target="server")
 
     # Members
     members = CollectionMembersUpdate(
         member_ids=[10, 20], order_type=CollectionOrder.RELEASE_ASC
     )
     set_mem = await collections_router.set_collection_members(
-        1, MediaType.MOVIE, members, service.editor
+        1, members, service.editor
     )
     assert set_mem.id == 1
 
     # Rules
     saved_rule = await collections_router.save_collection_rule(
-        1, MediaType.MOVIE, rule_write, service.editor
+        1, rule_write, service.editor
     )
-    assert saved_rule.criteria.source_conditions()[0].source.type == "tmdb_collection"
-    sync_res = await collections_router.sync_collection(
-        1, MediaType.MOVIE, service.rules
+    assert (
+        saved_rule.libraries[0].criteria.source_conditions()[0].source.type
+        == "tmdb_collection"
     )
+    sync_res = await collections_router.sync_collection(1, service.rules)
     assert sync_res.added == 2
 
     # Art endpoints
-    all_art = await collections_router.clear_all_collection_art(
-        1, MediaType.MOVIE, art_service
-    )
+    all_art = await collections_router.clear_all_collection_art(1, art_service)
     assert all_art.poster_status is AssetStatus.COMPLETE
     slot_art = await collections_router.clear_collection_art(
-        1, MediaType.MOVIE, ArtType.POSTER, art_service
+        1, ArtType.POSTER, art_service
     )
     assert slot_art.poster_status is AssetStatus.COMPLETE
     art_sources = await collections_router.get_collection_art_sources(
-        1, MediaType.MOVIE, ArtType.POSTER, art_service
+        1, ArtType.POSTER, art_service
     )
     assert art_sources.current_url is None
     save_art = SaveArtRequest(url="https://example.com/poster.jpg")
     saved_art = await collections_router.save_collection_art(
-        1, MediaType.MOVIE, ArtType.POSTER, save_art, art_service
+        1, ArtType.POSTER, save_art, art_service
     )
     assert saved_art.status == Status.OK
     matched = await collections_router.match_collection_art(
-        1, MediaType.MOVIE, ArtType.POSTER, art_service
+        1, ArtType.POSTER, art_service
     )
     assert len(matched.matches) == 0

@@ -1,11 +1,10 @@
 import { createMutation, createQuery, keepPreviousData } from "@tanstack/svelte-query";
 import { UNGROUPED_GROUP } from "../../generated/settings";
-import { SvelteSet } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import {
   createCollectionMutation,
   deleteCollectionMutation,
   orphanCollectionMutation,
-  getCollectionCapabilitiesOptions,
   getCollectionDefaultsOptions,
   getCollectionGroupPolicyOptions,
   previewCollectionMutation,
@@ -20,6 +19,7 @@ import {
 import type {
   CollectionDetail,
   CollectionDimensionRead,
+  CollectionLibraryCriteriaInput,
   DeleteCollectionData,
   CollectionFiltering,
   CollectionGeneratorInput,
@@ -48,6 +48,7 @@ import {
   franchiseCriteria,
 } from "./collectionCriteria";
 import { errorMessage } from "./errors";
+import { CollectionOptions as Capabilities } from "./libraries.svelte";
 
 /** Make the criteria Plex's live filter or Overture's, dropping an order the new kind cannot keep. */
 export function switchKind(form: CollectionEditor | CollectionDraft, smart: boolean) {
@@ -60,7 +61,7 @@ export type DraftKind = "collection" | "set";
 
 export function defaultRule(): CollectionRuleWriteInput {
   return {
-    criteria: emptyGroup(),
+    libraries: [],
     smart: false,
     limit: null,
     sync_mode: null,
@@ -136,6 +137,18 @@ export function defaultGenerator(libraryIds: string[] = []): SetGenerator {
 
 type CollectionForm = CollectionEditor | CollectionDraft;
 
+/** Radarr, Sonarr or both, as far as the form's libraries can use them. */
+function arrName(form: CollectionForm): string | null {
+  const names = { movie: "Radarr", show: "Sonarr" } as const;
+  const usable = form.mediaTypes.filter((mediaType) => form.options.for(mediaType).data?.arr);
+  return usable.map((mediaType) => names[mediaType]).join(" and ") || null;
+}
+
+function heldTypes(libraryIds: string[], typeOf: (id: string) => MediaType): MediaType[] {
+  const held = new Set(libraryIds.map(typeOf));
+  return (["movie", "show"] as const).filter((mediaType) => held.has(mediaType));
+}
+
 /** The rule a form saves; display choices are the rule's overrides. */
 function ruleBody(form: CollectionForm): CollectionRuleWriteInput {
   return {
@@ -172,17 +185,49 @@ function optionsBody(form: CollectionForm): CollectionOptions {
   };
 }
 
-function capabilitiesQuery(mediaType: () => MediaType) {
-  return createQuery(() => ({
-    ...getCollectionCapabilitiesOptions({ query: { media_type: mediaType() } }),
-    enabled: settingsState.current.collections_supported,
-  }));
+/** The criteria a library starts with: another of its kind's, the last one's, or none. */
+function startingCriteria(
+  form: CollectionForm,
+  mediaType: MediaType,
+  fallback: FilterGroupInput,
+): FilterGroupInput {
+  const alike = form.rule.libraries.find((entry) => form.typeOf(entry.library_id) === mediaType);
+  return alike
+    ? structuredClone($state.snapshot(alike.criteria))
+    : (form.lastCriteria.get(mediaType) ?? fallback);
+}
+
+/** Add a library to the form's rule, or take it out. */
+function setLibrary(
+  form: CollectionForm,
+  libraryId: string,
+  chosen: boolean,
+  fallback: FilterGroupInput,
+) {
+  const leaving = form.rule.libraries.find((entry) => entry.library_id === libraryId);
+  if (leaving)
+    form.lastCriteria.set(
+      form.typeOf(libraryId),
+      $state.snapshot(leaving.criteria) as FilterGroupInput,
+    );
+  form.rule.libraries = chosen
+    ? [
+        ...form.rule.libraries,
+        {
+          library_id: libraryId,
+          criteria: startingCriteria(form, form.typeOf(libraryId), fallback),
+        },
+      ]
+    : form.rule.libraries.filter((entry) => entry.library_id !== libraryId);
+  if (form.orderType !== null && !form.orders.includes(form.orderType)) form.orderType = null;
 }
 
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
   readonly defaults;
-  readonly capabilities;
+  readonly options = new Capabilities();
+  /** Criteria of a library just left, so swapping one for another keeps them. */
+  readonly lastCriteria = new SvelteMap<MediaType, FilterGroupInput>();
   readonly creating = false;
   // Drafts reset when saved fields change, not when unrelated collection data changes.
   private savedTitle = $derived.by(() => this.current().title);
@@ -215,7 +260,6 @@ export class CollectionEditor {
   visibleShared = $derived<boolean | null>(this.savedVisibleShared);
   private savedVisibleLibrary = $derived.by(() => this.current().rule?.visible_library ?? null);
   visibleLibrary = $derived<boolean | null>(this.savedVisibleLibrary);
-  libraryId = $derived.by(() => this.current().library_id ?? "");
   private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
   tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
   private savedOrder = $derived.by(() => this.current().rule?.order_type ?? null);
@@ -235,13 +279,15 @@ export class CollectionEditor {
   private readonly feedback = createNotifier();
 
   /** Edits a collection Overture manages; an unmanaged one is only adopted. */
-  constructor(private readonly current: () => CollectionDetail) {
+  constructor(
+    private readonly current: () => CollectionDetail,
+    private readonly libraries: () => LibrarySectionRead[],
+  ) {
     this.defaults = createQuery(() =>
       getCollectionDefaultsOptions({
-        query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
+        query: { name: this.collectionGroup || undefined },
       }),
     );
-    this.capabilities = capabilitiesQuery(() => this.mediaType);
     const saved = this.current().rule;
     if (saved) {
       const {
@@ -262,8 +308,29 @@ export class CollectionEditor {
   get serverType() {
     return this.collection.server_type;
   }
-  get mediaType() {
-    return this.collection.media_type;
+  get libraryIds() {
+    return this.rule.libraries.map((entry) => entry.library_id);
+  }
+  /** What the chosen libraries hold, movies first. */
+  get mediaTypes(): MediaType[] {
+    return heldTypes(this.libraryIds, (id) => this.typeOf(id));
+  }
+  get capabilities() {
+    return this.options.for(this.mediaTypes[0] ?? "movie");
+  }
+  /** What takes requests and tags for the chosen libraries. */
+  get arr() {
+    return arrName(this);
+  }
+  typeOf(libraryId: string): MediaType {
+    return (
+      this.libraries().find((library) => library.id === libraryId)?.media_type ??
+      this.collection.media_types[0] ??
+      "movie"
+    );
+  }
+  setLibrary(libraryId: string, chosen: boolean) {
+    setLibrary(this, libraryId, chosen, emptyGroup());
   }
   /** Its collection set decides the criteria and title of a generated collection. */
   get generated() {
@@ -272,11 +339,11 @@ export class CollectionEditor {
   get smart() {
     return !!this.rule.smart;
   }
-  get fields() {
-    return availableFields(this.capabilities.data, this.smart);
+  fieldsFor(mediaType: MediaType) {
+    return availableFields(this.options.for(mediaType).data, this.smart);
   }
   get orders() {
-    return availableOrders(this.capabilities.data, this.smart);
+    return availableOrders(this.options.shared(this.mediaTypes), this.smart);
   }
   /** Append keeps members a sync no longer matches, so members can be added by hand too. */
   get manualMembersAllowed() {
@@ -292,7 +359,8 @@ export class CollectionEditor {
     const memberIds = new SvelteSet(this.collection.members.map((member) => member.id));
     return libraryItems.filter(
       (item) =>
-        item.library_id === this.collection.library_id &&
+        !!item.library_id &&
+        this.collection.library_ids.includes(item.library_id) &&
         item.server_item_id &&
         !item.server_removed_at &&
         !memberIds.has(item.id) &&
@@ -318,13 +386,12 @@ export class CollectionEditor {
   }
 
   private get target() {
-    const c = this.current();
-    return { path: { collection_id: c.id }, query: { media_type: c.media_type } };
+    return { path: { collection_id: this.current().id } };
   }
 
   /** Writes that stay in Overture until the collection is synced. */
   private get localTarget() {
-    return { ...this.target, query: { ...this.target.query, to_server: false } };
+    return { ...this.target, query: { to_server: false } };
   }
 
   private async perform(action: () => Promise<void>): Promise<boolean> {
@@ -432,7 +499,9 @@ export class CollectionEditor {
   }
 
   async delete() {
-    const target = await chooseAction<NonNullable<DeleteCollectionData["query"]["target"]>>({
+    const target = await chooseAction<
+      NonNullable<NonNullable<DeleteCollectionData["query"]>["target"]>
+    >({
       title: "Delete collection?",
       message: `Choose where to delete ${this.collection.title}. Media files are always kept.`,
       confirmLabel: "Delete",
@@ -449,13 +518,9 @@ export class CollectionEditor {
       ],
     });
     if (!target) return;
-    const { mediaType } = this;
     await this.perform(async () => {
-      await this.deleteRequest.mutateAsync({
-        ...this.target,
-        query: { ...this.target.query, target },
-      });
-      if (target === "both") goToCollectionsList(mediaType);
+      await this.deleteRequest.mutateAsync({ ...this.target, query: { target } });
+      if (target === "both") goToCollectionsList();
     });
   }
 }
@@ -463,7 +528,9 @@ export class CollectionEditor {
 /** An unsaved collection or collection set, created when its form is submitted. */
 export class CollectionDraft {
   readonly defaults;
-  readonly capabilities;
+  readonly options = new Capabilities();
+  /** Criteria of a library just left, so swapping one for another keeps them. */
+  readonly lastCriteria = new SvelteMap<MediaType, FilterGroupInput>();
   readonly creating = true;
   readonly manualMembersAllowed = false;
   readonly generated = false;
@@ -482,22 +549,18 @@ export class CollectionDraft {
   visibleShared = $state<boolean | null>(null);
   visibleLibrary = $state<boolean | null>(null);
   orderType = $state<CollectionOrder | null>(null);
+  /** The rule starts over as the seed and the libraries arrive; edits follow them. */
   rule = $derived.by(() => {
     const seed = this.seed();
     const rule = $state({
       ...defaultRule(),
-      ...(seed ? { criteria: franchiseCriteria(seed.tmdb_id) } : {}),
+      libraries: this.startingLibraries(seed),
     });
     return rule;
   });
   /** The group policy and generator a new set saves. */
   setPolicy = $state<SetPolicy>({});
   generator = $state<SetGenerator>(defaultGenerator());
-  private onlyLibrary = $derived.by(() =>
-    this.libraries().length === 1 ? [this.libraries()[0]?.id ?? ""] : [],
-  );
-  /** One library, or several: a collection in several libraries is kept alike in each. */
-  libraryIds = $derived<string[]>(this.onlyLibrary);
   readonly preview: CriteriaPreview;
   readonly request = createMutation(() => createCollectionMutation());
   private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
@@ -505,16 +568,14 @@ export class CollectionDraft {
   private readonly feedback = createNotifier();
 
   constructor(
-    readonly mediaType: MediaType,
     private readonly libraries: () => LibrarySectionRead[],
     private readonly seed: () => TmdbCollectionResponse | null,
   ) {
     this.defaults = createQuery(() =>
       getCollectionDefaultsOptions({
-        query: { media_type: this.mediaType, name: this.collectionGroup || undefined },
+        query: { name: this.collectionGroup || undefined },
       }),
     );
-    this.capabilities = capabilitiesQuery(() => this.mediaType);
     // Last: its query reads the form as soon as it is created.
     this.preview = new CriteriaPreview(() => this);
   }
@@ -525,32 +586,59 @@ export class CollectionDraft {
   get smart() {
     return !!this.rule.smart;
   }
-  get fields() {
-    return availableFields(this.capabilities.data, this.smart);
+  get libraryIds() {
+    return this.rule.libraries.map((entry) => entry.library_id);
+  }
+  /** What the chosen libraries hold, movies first. */
+  get mediaTypes(): MediaType[] {
+    return heldTypes(this.libraryIds, (id) => this.typeOf(id));
+  }
+  get capabilities() {
+    return this.options.for(this.mediaTypes[0] ?? "movie");
+  }
+  /** What takes requests and tags for the chosen libraries. */
+  get arr() {
+    return arrName(this);
+  }
+  typeOf(libraryId: string): MediaType {
+    return this.libraries().find((library) => library.id === libraryId)?.media_type ?? "movie";
+  }
+  /** A franchise holds movies, so a seeded form starts with its only movie library. */
+  private startingLibraries(seed: TmdbCollectionResponse | null): CollectionLibraryCriteriaInput[] {
+    const candidates = seed
+      ? this.libraries().filter((library) => library.media_type === "movie")
+      : this.libraries();
+    return candidates.length === 1
+      ? [{ library_id: candidates[0]?.id ?? "", criteria: this.fallbackCriteria(seed) }]
+      : [];
+  }
+  private fallbackCriteria(seed: TmdbCollectionResponse | null) {
+    return seed ? franchiseCriteria(seed.tmdb_id) : emptyGroup();
+  }
+  setLibrary(libraryId: string, chosen: boolean) {
+    const seed = this.typeOf(libraryId) === "movie" ? this.seed() : null;
+    setLibrary(this, libraryId, chosen, this.fallbackCriteria(seed));
+  }
+  fieldsFor(mediaType: MediaType) {
+    return availableFields(this.options.for(mediaType).data, this.smart);
   }
   get orders() {
-    return availableOrders(this.capabilities.data, this.smart);
+    return availableOrders(this.options.shared(this.mediaTypes), this.smart);
+  }
+  /** What a set can test: only what every one of its libraries holds. */
+  get setCapabilities() {
+    return this.options.shared(this.mediaTypes);
   }
   /** The group a set saves into: the one named, or else the dimension's name. */
   get setGroup() {
     return (
       this.collectionGroup.trim() ||
-      this.capabilities.data?.dimensions.find(
-        (entry) => entry.dimension === this.generator.dimension,
-      )?.label ||
+      this.dimensions.find((entry) => entry.dimension === this.generator.dimension)?.label ||
       ""
     );
   }
   get busy() {
     return this.request.isPending || this.groupRequest.isPending || this.syncGroupRequest.isPending;
-  }
-  /** The library criteria suggest values from and previews count in. */
-  get libraryId() {
-    return this.libraryIds[0] ?? "";
-  }
-  /** A collection in several libraries saves as a set with one collection in each. */
-  get linked() {
-    return this.kind === "collection" && this.libraryIds.length > 1;
   }
   /** Why the form cannot be saved yet, or null when it can. */
   get blocker(): string | null {
@@ -567,7 +655,7 @@ export class CollectionDraft {
   }
 
   get dimensions() {
-    return this.capabilities.data?.dimensions ?? [];
+    return this.setCapabilities?.dimensions ?? [];
   }
 
   /**
@@ -589,30 +677,10 @@ export class CollectionDraft {
   }
 
   private async saveCollection(sync: boolean) {
-    if (this.linked) {
-      const rule = linkedRule(this);
-      const { criteria, smart, limit: _limit, ...policy } = rule;
-      return this.saveSet(sync, {
-        group: this.collectionGroup.trim() || this.title.trim(),
-        policy,
-        generator: {
-          ...defaultGenerator(this.libraryIds),
-          dimension: "custom",
-          title_format: "{value}",
-          smart,
-          custom_values: [{ name: this.title.trim(), criteria }],
-        },
-      });
-    }
     try {
       const collection = await this.request.mutateAsync({
         query: { to_server: sync },
-        body: {
-          ...optionsBody(this),
-          media_type: this.mediaType,
-          library_id: this.libraryId,
-          rule: ruleBody(this),
-        },
+        body: { ...optionsBody(this), rule: ruleBody(this) },
       });
       storeCollectionDetail(collection);
       goToCollection(collection);
@@ -624,34 +692,27 @@ export class CollectionDraft {
   }
 
   /** Save the set into its group, keeping the group's other defaults; `sync` runs it. */
-  private async saveSet(
-    sync: boolean,
-    set: { group: string; policy: SetPolicy; generator: SetGenerator } = {
-      group: this.setGroup,
-      policy: this.setPolicy,
-      generator: this.generator,
-    },
-  ) {
-    const name = set.group;
-    const query = { name, media_type: this.mediaType };
+  private async saveSet(sync: boolean) {
+    const name = this.setGroup;
+    const query = { name };
     try {
       const existing = await queryClient.fetchQuery(getCollectionGroupPolicyOptions({ query }));
       // A choice left at Default keeps what an existing group already has.
       const chosen = Object.fromEntries(
-        Object.entries($state.snapshot(set.policy)).filter(([, value]) => value !== null),
+        Object.entries($state.snapshot(this.setPolicy)).filter(([, value]) => value !== null),
       );
       const saved = await this.groupRequest.mutateAsync({
         query,
         body: {
           ...existing,
           ...chosen,
-          generator: { ...$state.snapshot(set.generator), library_ids: this.libraryIds },
+          generator: { ...$state.snapshot(this.generator), library_ids: this.libraryIds },
         },
       });
       queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
       if (!sync) {
         this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
-        goToCollectionsList(this.mediaType, name);
+        goToCollectionsList(name);
         return true;
       }
       const result = await this.syncGroupRequest.mutateAsync({ query });
@@ -665,25 +726,13 @@ export class CollectionDraft {
       } else {
         this.feedback.success(`Created ${result.created.length} collections in "${name}".`);
       }
-      goToCollectionsList(this.mediaType, name);
+      goToCollectionsList(name);
       return true;
     } catch (error) {
       this.feedback.error(errorMessage(error, "Could not save the set"));
       return false;
     }
   }
-}
-
-/** The rule a linked set keeps: criteria with every chosen setting. */
-function linkedRule(form: CollectionForm): CollectionRuleWriteInput {
-  return {
-    ...ruleBody(form),
-    sort_title_format: form.sortTitleFormat || null,
-    summary_format: form.summaryFormat || null,
-    active_start_mmdd: form.activeStartMmdd || null,
-    active_end_mmdd: form.activeEndMmdd || null,
-    delete_when_inactive: form.deleteWhenInactive,
-  };
 }
 
 /**
@@ -696,14 +745,16 @@ export class CriteriaPreview {
 
   constructor(private readonly form: () => CollectionForm) {
     this.kind = createQuery(() => {
-      const criteria = form().rule.criteria;
+      const { libraries } = form().rule;
       return {
-        ...recommendCollectionKindOptions({
-          body: { media_type: form().mediaType, rule: ruleBody(form()) },
-        }),
+        ...recommendCollectionKindOptions({ body: { rule: ruleBody(form()) } }),
         enabled:
           !!form().capabilities.data?.smart &&
-          (criteria.conditions?.length ?? 0) + (criteria.groups?.length ?? 0) > 0,
+          libraries.length > 0 &&
+          libraries.every(
+            ({ criteria }) =>
+              (criteria.conditions?.length ?? 0) + (criteria.groups?.length ?? 0) > 0,
+          ),
         // An unfinished condition is refused; the last advice stands until it is complete.
         placeholderData: keepPreviousData,
       };
@@ -715,8 +766,9 @@ export class CriteriaPreview {
     return this.kind.data ?? null;
   }
 
-  get result() {
-    return this.request.data;
+  /** What one library's criteria selected when last previewed. */
+  resultFor(libraryId: string) {
+    return this.request.data?.libraries.find((entry) => entry.library_id === libraryId);
   }
   get pending() {
     return this.request.isPending;
@@ -728,11 +780,7 @@ export class CriteriaPreview {
   run() {
     const form = this.form();
     this.request.mutate({
-      body: {
-        media_type: form.mediaType,
-        library_id: form.libraryId,
-        rule: { ...ruleBody(form), limit: form.rule.limit ?? null },
-      },
+      body: { rule: { ...ruleBody(form), limit: form.rule.limit ?? null } },
     });
   }
 }

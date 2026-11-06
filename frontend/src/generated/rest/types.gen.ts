@@ -1025,7 +1025,6 @@ export type BulkCollectionMonitorUpdate = {
      * Collection Ids
      */
     collection_ids: Array<number>;
-    media_type: MediaType;
     /**
      * Monitored
      */
@@ -1045,7 +1044,6 @@ export type BulkCollectionOperation = {
     collection_ids: Array<number>;
     collection_mode?: CollectionMode | null;
     delete_target?: CollectionDeleteTarget;
-    media_type: MediaType;
     /**
      * Monitored
      */
@@ -1053,7 +1051,7 @@ export type BulkCollectionOperation = {
     /**
      * Operation
      */
-    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'trigger_sync' | 'adopt' | 'orphan' | 'clear_artwork' | 'clear_themes' | 'delete';
+    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'adopt' | 'orphan' | 'clear_artwork' | 'clear_themes' | 'delete';
     order_type?: CollectionOrder | null;
     sort_title_format?: SortTitleFormat | null;
     /**
@@ -1521,6 +1519,10 @@ export type CollectionCapabilities = {
      */
     sources: Array<CollectionSourceRead>;
     /**
+     * Spans Libraries
+     */
+    spans_libraries: boolean;
+    /**
      * Visibility
      */
     visibility: boolean;
@@ -1529,7 +1531,7 @@ export type CollectionCapabilities = {
 /**
  * CollectionCreate
  *
- * Create a collection in one selected library; its criteria decide its members.
+ * Create a collection; its rule names the libraries and what each selects.
  */
 export type CollectionCreate = {
     active_end_mmdd?: SeasonalDate | null;
@@ -1541,11 +1543,6 @@ export type CollectionCreate = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    /**
-     * Library Id
-     */
-    library_id: string;
-    media_type: MediaType;
     order_type?: CollectionOrder;
     rule: CollectionRuleWriteInput;
     /**
@@ -1735,14 +1732,17 @@ export type CollectionDetail = {
      */
     last_rule_sync: string | null;
     /**
-     * Library Id
+     * Library Ids
      */
-    library_id: string | null;
+    library_ids: Array<string>;
     /**
      * Managed
      */
     managed: boolean;
-    media_type: MediaType;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
     /**
      * Members
      */
@@ -2249,8 +2249,51 @@ export type CollectionKind = 'regular' | 'smart';
  * A rule being edited, to recommend the collection kind for.
  */
 export type CollectionKindRequest = {
-    media_type: MediaType;
     rule: CollectionRuleWriteInput;
+};
+
+/**
+ * CollectionLibraryCriteria
+ *
+ * What a collection selects from one library.
+ */
+export type CollectionLibraryCriteriaInput = {
+    criteria: FilterGroupInput;
+    library_id: LibraryId;
+};
+
+/**
+ * CollectionLibraryCriteria
+ *
+ * What a collection selects from one library.
+ */
+export type CollectionLibraryCriteriaOutput = {
+    criteria: FilterGroupOutput;
+    library_id: LibraryId;
+};
+
+/**
+ * CollectionLibraryPreview
+ *
+ * What one library's criteria select now.
+ */
+export type CollectionLibraryPreview = {
+    /**
+     * Library Id
+     */
+    library_id: string;
+    /**
+     * Member Count
+     */
+    member_count: number;
+    /**
+     * Members
+     */
+    members: Array<string>;
+    /**
+     * Tmdb Unread
+     */
+    tmdb_unread: number;
 };
 
 /**
@@ -2292,10 +2335,15 @@ export type CollectionMissing = {
  * A title a collection's lists hold that the library lacks.
  */
 export type CollectionMissingTitle = {
+    media_type: MediaType;
     /**
      * Poster Url
      */
     poster_url: string | null;
+    /**
+     * Requestable
+     */
+    requestable: boolean;
     /**
      * Requested
      */
@@ -2387,30 +2435,17 @@ export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title
  */
 export type CollectionPreview = {
     /**
-     * Member Count
+     * Libraries
      */
-    member_count: number;
-    /**
-     * Members
-     */
-    members: Array<string>;
-    /**
-     * Tmdb Unread
-     */
-    tmdb_unread: number;
+    libraries: Array<CollectionLibraryPreview>;
 };
 
 /**
  * CollectionPreviewRequest
  *
- * Criteria to preview in one library.
+ * A rule whose criteria to preview in each of its libraries.
  */
 export type CollectionPreviewRequest = {
-    /**
-     * Library Id
-     */
-    library_id: string;
-    media_type: MediaType;
     rule: CollectionRuleWriteInput;
 };
 
@@ -2495,14 +2530,17 @@ export type CollectionRead = {
      */
     last_rule_sync: string | null;
     /**
-     * Library Id
+     * Library Ids
      */
-    library_id: string | null;
+    library_ids: Array<string>;
     /**
      * Managed
      */
     managed: boolean;
-    media_type: MediaType;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
     /**
      * Monitored
      */
@@ -2617,9 +2655,9 @@ export type CollectionRead = {
  */
 export type CollectionRequest = {
     /**
-     * Tmdb Ids
+     * Titles
      */
-    tmdb_ids?: Array<number> | null;
+    titles?: Array<CollectionRequestTitle> | null;
 };
 
 /**
@@ -2643,6 +2681,19 @@ export type CollectionRequestResult = {
 };
 
 /**
+ * CollectionRequestTitle
+ *
+ * One title to request; TMDB numbers movies and shows apart.
+ */
+export type CollectionRequestTitle = {
+    media_type: MediaType;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number;
+};
+
+/**
  * CollectionRuleRead
  *
  * Saved rule with its most recent outcome.
@@ -2661,7 +2712,6 @@ export type CollectionRuleRead = {
     auto_match_theme: boolean | null;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
-    criteria: FilterGroupOutput;
     /**
      * Delete Below Minimum
      */
@@ -2679,6 +2729,10 @@ export type CollectionRuleRead = {
      * Last Synced At
      */
     last_synced_at: string | null;
+    /**
+     * Libraries
+     */
+    libraries: Array<CollectionLibraryCriteriaOutput>;
     /**
      * Limit
      */
@@ -2721,7 +2775,7 @@ export type CollectionRuleRead = {
 /**
  * CollectionRuleWrite
  *
- * Criteria that decide membership, with nullable policy overrides.
+ * Each library's criteria, which decide membership, and policy overrides.
  */
 export type CollectionRuleWriteInput = {
     active_end_mmdd?: SeasonalDate | null;
@@ -2737,7 +2791,6 @@ export type CollectionRuleWriteInput = {
     auto_match_theme?: boolean | null;
     collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
-    criteria: FilterGroupInput;
     /**
      * Delete Below Minimum
      */
@@ -2750,6 +2803,10 @@ export type CollectionRuleWriteInput = {
      * Home Order
      */
     home_order?: number | null;
+    /**
+     * Libraries
+     */
+    libraries: Array<CollectionLibraryCriteriaInput>;
     /**
      * Limit
      */
@@ -2788,7 +2845,7 @@ export type CollectionRuleWriteInput = {
 /**
  * CollectionRuleWrite
  *
- * Criteria that decide membership, with nullable policy overrides.
+ * Each library's criteria, which decide membership, and policy overrides.
  */
 export type CollectionRuleWriteOutput = {
     active_end_mmdd: SeasonalDate | null;
@@ -2804,7 +2861,6 @@ export type CollectionRuleWriteOutput = {
     auto_match_theme: boolean | null;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
-    criteria: FilterGroupOutput;
     /**
      * Delete Below Minimum
      */
@@ -2817,6 +2873,10 @@ export type CollectionRuleWriteOutput = {
      * Home Order
      */
     home_order: number | null;
+    /**
+     * Libraries
+     */
+    libraries: Array<CollectionLibraryCriteriaOutput>;
     /**
      * Limit
      */
@@ -2887,7 +2947,7 @@ export type CollectionSetEntry = {
 /**
  * CollectionSetPreview
  *
- * Preview a set's collections in its library before saving it.
+ * Preview a set's collections in its libraries before saving it.
  */
 export type CollectionSetPreview = {
     generator: CollectionGeneratorInput;
@@ -2895,7 +2955,6 @@ export type CollectionSetPreview = {
      * Group
      */
     group?: string | null;
-    media_type: MediaType;
     /**
      * Minimum Items
      */
@@ -3662,6 +3721,8 @@ export type KindRecommendation = {
     reason: PublicText;
 };
 
+export type LibraryId = string;
+
 export type LibraryIds = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
 
 /**
@@ -3678,6 +3739,7 @@ export type LibrarySectionRead = {
      * Id
      */
     id: string;
+    media_type: MediaType;
     /**
      * Title
      */
@@ -4819,7 +4881,6 @@ export type ServerType = 'plex' | 'jellyfin' | 'emby';
  * Validate the set collection theme request payload.
  */
 export type SetCollectionThemeRequest = {
-    media_type: MediaType;
     youtube_id: YouTubeId;
 };
 
@@ -6826,12 +6887,7 @@ export type ListCollectionsData = {
         'X-Api-Key'?: string | null;
     };
     path?: never;
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections';
 };
 
@@ -7048,11 +7104,7 @@ export type GetCollectionDefaultsData = {
         'X-Api-Key'?: string | null;
     };
     path?: never;
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
+    query?: {
         /**
          * Name
          */
@@ -7141,10 +7193,6 @@ export type GetCollectionGroupPolicyData = {
     path?: never;
     query: {
         /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-        /**
          * Name
          */
         name: string;
@@ -7182,10 +7230,6 @@ export type SaveCollectionGroupPolicyData = {
     };
     path?: never;
     query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
         /**
          * Name
          */
@@ -7225,10 +7269,6 @@ export type ApplyCollectionGroupPolicyData = {
     path?: never;
     query: {
         /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-        /**
          * Name
          */
         name: string;
@@ -7266,10 +7306,6 @@ export type SyncCollectionGroupData = {
     };
     path?: never;
     query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
         /**
          * Name
          */
@@ -7309,10 +7345,6 @@ export type DeleteCollectionGroupData = {
     path?: never;
     query: {
         /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-        /**
          * Name
          */
         name: string;
@@ -7349,12 +7381,7 @@ export type ListCollectionGroupsData = {
         'X-Api-Key'?: string | null;
     };
     path?: never;
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/groups';
 };
 
@@ -7390,10 +7417,6 @@ export type RenameCollectionGroupData = {
     };
     path?: never;
     query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
         /**
          * Name
          */
@@ -7611,11 +7634,7 @@ export type DeleteCollectionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
+    query?: {
         /**
          * Target
          */
@@ -7660,12 +7679,7 @@ export type GetCollectionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}';
 };
 
@@ -7705,11 +7719,7 @@ export type UpdateCollectionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
+    query?: {
         /**
          * To Server
          *
@@ -7756,12 +7766,7 @@ export type PlanCollectionAdoptionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/adopt';
 };
 
@@ -7801,12 +7806,7 @@ export type AdoptCollectionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/adopt';
 };
 
@@ -7846,12 +7846,7 @@ export type ClearAllCollectionArtData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/art';
 };
 
@@ -7895,12 +7890,7 @@ export type ClearCollectionArtData = {
          */
         art_type: ArtType;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/art/{art_type}';
 };
 
@@ -7944,12 +7934,7 @@ export type SaveCollectionArtData = {
          */
         art_type: ArtType;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/art/{art_type}';
 };
 
@@ -7993,11 +7978,7 @@ export type MatchCollectionArtData = {
          */
         art_type: ArtType;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
+    query?: {
         /**
          * Threshold
          */
@@ -8046,12 +8027,7 @@ export type GetCollectionArtSourcesData = {
          */
         art_type: ArtType;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/art/{art_type}/sources';
 };
 
@@ -8140,11 +8116,7 @@ export type SetCollectionMembersData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
+    query?: {
         /**
          * To Server
          *
@@ -8191,12 +8163,7 @@ export type GetCollectionMissingData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/missing';
 };
 
@@ -8236,12 +8203,7 @@ export type RequestCollectionMissingData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/missing/request';
 };
 
@@ -8281,12 +8243,7 @@ export type SetCollectionMonitoredData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/monitored';
 };
 
@@ -8326,12 +8283,7 @@ export type OrphanCollectionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/orphan';
 };
 
@@ -8371,12 +8323,7 @@ export type SaveCollectionRuleData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/rule';
 };
 
@@ -8416,12 +8363,7 @@ export type GetCollectionSourcesData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/sources';
 };
 
@@ -8461,12 +8403,7 @@ export type SyncCollectionData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/sync';
 };
 
@@ -8506,12 +8443,7 @@ export type DeleteCollectionThemeData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/theme';
 };
 
@@ -8551,12 +8483,7 @@ export type GetCollectionThemeData = {
          */
         collection_id: number;
     };
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/theme';
 };
 

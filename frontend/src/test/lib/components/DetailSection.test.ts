@@ -42,18 +42,24 @@ it("keeps each view's choice apart", async () => {
   ]);
 });
 
-it("starts each collection over, and remembers only views meant to be remembered", async () => {
-  const first = render(ViewedSection, { ...props, view: "collection:1" });
+it("starts a view over when it is forgotten, and persists only remembered views", async () => {
+  const first = render(ViewedSection, props);
   await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
   first.unmount();
-  // The same collection remounted, by a refetch say, keeps the choice.
-  const again = render(ViewedSection, { ...props, view: "collection:1" });
-  expect(screen.getByRole("button", { name: "Settings", expanded: true })).toBeInTheDocument();
-  again.unmount();
-  sectionState.enter("collection:2");
-  render(ViewedSection, { ...props, view: "collection:2" });
+  sectionState.forget("collection");
+  const again = render(ViewedSection, props);
   expect(screen.getByRole("button", { name: "Settings", expanded: false })).toBeInTheDocument();
-  sectionState.enter("collection:1");
-  expect(sectionState.isOpen("collection:1", "Settings", false)).toBe(false);
+  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
+  again.unmount();
   expect(readJson("sections_open_by_view", {})).toEqual({});
+
+  render(ViewedSection, { ...props, view: "collection-groups" });
+  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
+  expect(readJson("sections_open_by_view", {})).toEqual({});
+});
+
+it("persists the filters' sections", async () => {
+  render(ViewedSection, { ...props, view: "filters" });
+  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
+  expect(readJson("sections_open_by_view", {})).toEqual({ "filters/Settings": true });
 });

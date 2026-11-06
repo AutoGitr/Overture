@@ -19,7 +19,6 @@ lazy from ...domain import (
     UNMANAGED_REFUSAL,
     ArtType,
     ImageSize,
-    MediaType,
 )
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
@@ -72,7 +71,6 @@ class CollectionArtService:
         self,
         db: AsyncSession,
         collection_id: int,
-        media_type: MediaType,
         art_type: ArtType,
         *,
         managed: bool = False,
@@ -82,7 +80,7 @@ class CollectionArtService:
             raise PublicServiceError(
                 422, "Collections have posters and backgrounds only"
             )
-        row = await CollectionRepository(db).get_listed(collection_id, media_type)
+        row = await CollectionRepository(db).get_listed(collection_id)
         if (
             row is None
             or row.server_type is not self._provider_registry.provider.server_type
@@ -93,11 +91,11 @@ class CollectionArtService:
         return row
 
     async def sources(
-        self, collection_id: int, media_type: MediaType, art_type: ArtType
+        self, collection_id: int, art_type: ArtType
     ) -> ArtSourcesResponse:
         """Offer collection art through the shared candidate and slot pipeline."""
         async with self._database.read_session() as db:
-            row = await self._require(db, collection_id, media_type, art_type)
+            row = await self._require(db, collection_id, art_type)
             policy = CandidatePolicy.of(await get_app_settings(db))
         sources = await self._candidates.gather_collection(row, art_type, policy)
         return ArtSourcesResponse(
@@ -107,13 +105,12 @@ class CollectionArtService:
     async def save(
         self,
         collection_id: int,
-        media_type: MediaType,
         art_type: ArtType,
         body: SaveArtRequest,
     ) -> StatusResponse:
         """Upload validated bytes and record their art slot."""
         async with self._database.read_session() as db:
-            await self._require(db, collection_id, media_type, art_type, managed=True)
+            await self._require(db, collection_id, art_type, managed=True)
         selection = await self._selector.prepare(art_type, body)
         trusted = self._config.is_trusted_media_server_url(selection.target_url)
         fetched = await fetch_image(
@@ -135,21 +132,22 @@ class CollectionArtService:
             self._asset_locks.acquire(f"collection:{collection_id}"),
         ):
             async with self._database.read_session() as db:
-                row = await self._require(db, collection_id, media_type, art_type)
+                row = await self._require(db, collection_id, art_type)
             if row.server_item_id is None:
                 raise PublicServiceError(
                     409, "The collection is inactive and has no server copy"
                 )
             provider = self._provider_registry.provider
-            await provider.upload_collection_art(
-                row.server_item_id, art_type, fetched.data, fetched.media_type
-            )
+            for server_id in row.server_ids:
+                await provider.upload_collection_art(
+                    server_id, art_type, fetched.data, fetched.media_type
+                )
             # The image route and its cache version read the URL the server now lists.
             server_url = await provider.get_collection_image_url(
                 row.server_item_id, art_type
             )
             async with self._database.write_session() as db:
-                row = await self._require(db, collection_id, media_type, art_type)
+                row = await self._require(db, collection_id, art_type)
                 if selection.stored_url:
                     select_art(row, art_type, selection.stored_url)
                 record_art_file(
@@ -175,9 +173,7 @@ class CollectionArtService:
         )
         return StatusResponse(status=Status.OK)
 
-    async def adopt(
-        self, collection_id: int, media_type: MediaType, art_type: ArtType, url: str
-    ) -> bool:
+    async def adopt(self, collection_id: int, art_type: ArtType, url: str) -> bool:
         """Save *url* as the selection of art the server already shows.
 
         Returns:
@@ -190,7 +186,7 @@ class CollectionArtService:
             self._asset_locks.acquire(f"collection:{collection_id}"),
             self._database.write_session() as db,
         ):
-            row = await self._require(db, collection_id, media_type, art_type)
+            row = await self._require(db, collection_id, art_type)
             select_art(row, art_type, public)
             db.add(row)
         await self._publisher.broadcast(
@@ -199,7 +195,7 @@ class CollectionArtService:
         return True
 
     async def clear(
-        self, collection_id: int, media_type: MediaType, art_type: ArtType | None
+        self, collection_id: int, art_type: ArtType | None
     ) -> CollectionArtwork:
         """Forget collection artwork selections while preserving server images."""
         async with (
@@ -208,7 +204,7 @@ class CollectionArtService:
             self._database.write_session() as db,
         ):
             row = await self._require(
-                db, collection_id, media_type, art_type or ArtType.POSTER, managed=True
+                db, collection_id, art_type or ArtType.POSTER, managed=True
             )
             for slot_type in (art_type,) if art_type is not None else ITEM_ART_TYPES:
                 clear_art_selection(row, slot_type)
@@ -221,15 +217,11 @@ class CollectionArtService:
         return result
 
     async def match(
-        self,
-        collection_id: int,
-        media_type: MediaType,
-        art_type: ArtType,
-        threshold: int,
+        self, collection_id: int, art_type: ArtType, threshold: int
     ) -> ArtMatchResponse:
         """Compare collection candidates using the shared pHash ranking and cache."""
         async with self._database.read_session() as db:
-            row = await self._require(db, collection_id, media_type, art_type)
+            row = await self._require(db, collection_id, art_type)
         if row.tmdb_collection_id is None:
             raise PublicServiceError(
                 422, "Set a TMDB collection ID before matching artwork"
@@ -251,7 +243,7 @@ class CollectionArtService:
             params=request.params,
         )
         reference = await self._matcher.phash.compute_from_bytes(fetched.data)
-        sources = await self.sources(collection_id, media_type, art_type)
+        sources = await self.sources(collection_id, art_type)
         candidates = list(
             {
                 candidate.url: candidate

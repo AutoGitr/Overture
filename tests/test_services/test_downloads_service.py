@@ -20,7 +20,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
@@ -58,6 +57,7 @@ lazy from overture.utils.file import compute_bytes_hash
 lazy from overture.utils.image import RateLimitedError
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -347,7 +347,7 @@ async def test_start_cancels_jobs_left_by_a_previous_run(
         session.add(MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie"))
         await session.flush()
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=1,
                 server_type=ServerType.PLEX,
                 server_item_id="collection-1",
@@ -378,7 +378,7 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=1,
                 server_type=ServerType.PLEX,
                 server_item_id="collection-1",

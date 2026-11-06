@@ -8,7 +8,7 @@ lazy from ...dataset_contract.contract import entry_file_stem
 lazy from ...db.art_slots import find_art_slot
 lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.settings import get_app_settings
-lazy from ...domain import ITEM_ART_TYPES, ArtType, ImageSize, MediaType
+lazy from ...domain import ITEM_ART_TYPES, ArtType, ImageSize
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
@@ -51,21 +51,16 @@ class CollectionReader:
         self._access = access
         self._proxy_clients = proxy_clients
 
-    async def listed(self, media_type: MediaType) -> list[CollectionRead]:
-        """Return the collections the last sync listed for the media type."""
+    async def listed(self) -> list[CollectionRead]:
+        """Return the collections the last sync listed."""
         server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rows = [
-                row
-                for row in await repo.list_listed(media_type)
-                if row.server_type is server
+                row for row in await repo.list_listed() if row.server_type is server
             ]
             defaults = await get_app_settings(session)
-            groups = {
-                group.name: group
-                for group in await repo.group_policies(server, media_type)
-            }
+            groups = {group.name: group for group in await repo.group_policies(server)}
             rules = {rule.collection_id: rule for rule in await repo.rules()}
             catalog = await catalog_collections(
                 session,
@@ -101,17 +96,15 @@ class CollectionReader:
             )
         ]
 
-    async def get(self, collection_id: int, media_type: MediaType) -> CollectionDetail:
+    async def get(self, collection_id: int) -> CollectionDetail:
         """Return one collection with its members and catalog entry."""
         async with self._access.database.read_session() as session:
-            row = await self._access.require(session, collection_id, media_type)
+            row = await self._access.require(session, collection_id)
             saved = await CollectionRepository(session).rule(collection_id)
             members = display_order(
                 await CollectionRepository(session).members(row.id or 0), row.order_type
             )
-            policy = await self._access.policy(
-                session, media_type, row.collection_group, saved
-            )
+            policy = await self._access.policy(session, row.collection_group, saved)
             member_reads = await media_item_reads_with_public_dataset_status(
                 session, members
             )
@@ -133,7 +126,7 @@ class CollectionReader:
             .model_dump(),
             effective_sync_mode=policy.sync_mode,
             members=member_reads,
-            rule=rule_read(saved),
+            rule=rule_read(saved, row),
             theme_unavailable=reason,
             theme_writable=reason is None,
             catalog_entry_key=entry_file_stem({"tmdb_id": entry.tmdb_id})
@@ -144,12 +137,10 @@ class CollectionReader:
             youtube_id_themerrdb=entry.youtube_id_themerrdb if entry else None,
         )
 
-    async def inherited_policy(
-        self, media_type: MediaType, name: str | None = None
-    ) -> CollectionDefaults:
+    async def inherited_policy(self, name: str | None = None) -> CollectionDefaults:
         """Expose resolved defaults for form placeholders without duplicating rules."""
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, media_type, name)
+            policy = await self._access.policy(session, name)
         return CollectionDefaults.model_validate(
             {key: getattr(policy, key) for key in CollectionDefaults.model_fields}
         )

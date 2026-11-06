@@ -11,6 +11,7 @@ lazy from .collection_rule import CollectionRule
 lazy from .download_job import DownloadJob, DownloadJobBase
 lazy from .job_result import JobResult, JobRun
 lazy from .media_collection import (
+    CollectionLibrary,
     MediaCollection,
     MediaCollectionBase,
     MediaCollectionMember,
@@ -45,6 +46,7 @@ __all__ = [
     "ArtSlot",
     "AuthSession",
     "CollectionGroup",
+    "CollectionLibrary",
     "CollectionRule",
     "DownloadJob",
     "DownloadJobBase",

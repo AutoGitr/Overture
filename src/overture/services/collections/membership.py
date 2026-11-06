@@ -2,18 +2,17 @@
 
 lazy from collections.abc import Sequence
 
-lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import CollectionOrder, FilterField, FilterOperator, MediaType
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...schemas.collections import CollectionRuleWrite, FilterGroup
+lazy from ...schemas.collections import FilterGroup
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
-lazy from .access import CollectionAccess
+lazy from .access import CollectionAccess, LibraryScope
 lazy from .criteria import CriteriaContext, evaluate, order_items
 lazy from .fields import labelled_field
 lazy from .plex_query import choice_keys, compile_plex_query, tag_keys
-lazy from .rules import criteria as rule_criteria
+lazy from .rules import criteria_of
 lazy from .sources import (
     SOURCE_LABEL_PREFIX,
     SourceResolver,
@@ -39,11 +38,9 @@ def display_order(items: list[MediaItem], order: CollectionOrder) -> list[MediaI
     return order_items(items, order)
 
 
-def stored_ids(server_ids: list[str], library_items: list[MediaItem]) -> list[int]:
+def stored_ids(server_ids: list[str], items: Sequence[MediaItem]) -> list[int]:
     """Overture's IDs of the server's items, in the server's order."""
-    by_server_id = {
-        item.server_item_id: item for item in library_items if item.server_item_id
-    }
+    by_server_id = {item.server_item_id: item for item in items if item.server_item_id}
     return [
         by_server_id[identity].id or 0
         for identity in server_ids
@@ -78,7 +75,7 @@ class Membership:
                     region=await self._access.region(),
                 )
         collections = (
-            await self._access.collection_titles(media_type, library_id)
+            await self._access.collection_titles(library_id)
             if any(
                 condition.field is FilterField.COLLECTION
                 for group in criteria
@@ -124,6 +121,26 @@ class Membership:
             source_order=source_order,
             limit=limit,
         )
+
+    async def wanted_in(
+        self,
+        scopes: Sequence[LibraryScope],
+        *,
+        order: CollectionOrder,
+        limit: int | None,
+    ) -> dict[str, list[MediaItem]]:
+        """The members each library's criteria select, by library."""
+        return {
+            scope.library_id: await self.wanted(
+                scope.media_type,
+                scope.library_id,
+                scope.criteria,
+                scope.items,
+                order=order,
+                limit=limit,
+            )
+            for scope in scopes
+        }
 
     async def sync_label(
         self,
@@ -192,16 +209,14 @@ class Membership:
         """Remove Overture's labels no smart collection in the library filters on."""
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            rows = {
-                row.id: row
-                for row in await repo.list_all()
-                if row.library_id == library_id and row.media_type is media_type
-            }
+            smart = {rule.collection_id for rule in await repo.rules() if rule.smart}
             used = {
                 label
-                for rule in await repo.rules()
-                if rule.smart and rule.collection_id in rows
-                for label in self.labels(media_type, rule_criteria(rule)).values()
+                for row in await repo.list_all()
+                if row.id in smart
+                for part in row.libraries
+                if part.library_id == library_id and part.criteria_json is not None
+                for label in self.labels(media_type, criteria_of(part)).values()
             }
             items = await repo.library_items(media_type, library_id)
         stale = {
@@ -214,22 +229,18 @@ class Membership:
             await self.sync_label(library_id, media_type, label, set(), items)
 
     async def smart_query(
-        self,
-        row: MediaCollection,
-        rule: CollectionRuleWrite,
-        order: CollectionOrder,
-        items: list[MediaItem],
+        self, scope: LibraryScope, order: CollectionOrder, limit: int | None
     ) -> str:
         """Label what Plex cannot test, then compile the query Plex evaluates."""
-        library_id = row.library_id or ""
-        labels = self.labels(row.media_type, rule.criteria)
+        library_id, media_type = scope.library_id, scope.media_type
+        criteria, items = scope.criteria, scope.items
+        labels = self.labels(media_type, criteria)
         if labels:
             context, resolved = await self.context(
-                row.media_type, library_id, [rule.criteria], items
+                media_type, library_id, [criteria], items
             )
             fields = {
-                condition.key: condition
-                for condition in rule.criteria.field_conditions()
+                condition.key: condition for condition in criteria.field_conditions()
             }
             for key, label in labels.items():
                 wanted = (
@@ -242,9 +253,9 @@ class Membership:
                     if key in fields
                     else set(resolved[key])
                 )
-                await self.sync_label(library_id, row.media_type, label, wanted, items)
+                await self.sync_label(library_id, media_type, label, wanted, items)
         return await self._compile(
-            library_id, row.media_type, rule.criteria, order, rule.limit, labels
+            library_id, media_type, criteria, order, limit, labels
         )
 
     async def plex_filter(

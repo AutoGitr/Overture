@@ -178,7 +178,7 @@ describe("Header", () => {
         collections_supported: true,
       }),
     );
-    await navigate("/movies/collections");
+    await navigate("/collections");
     renderWithQueryClient(Header, { onLogout: vi.fn() });
 
     const browse = screen.getByRole("switch", { name: "Browse OvertureDB" });
@@ -190,7 +190,7 @@ describe("Header", () => {
     expect(browse).toBeChecked();
 
     await fireEvent.click(browse);
-    await vi.waitFor(() => expect(route.pathname).toBe("/movies/collections"));
+    await vi.waitFor(() => expect(route.pathname).toBe("/collections"));
     expect(screen.getByRole("link", { name: "Overture" })).toBeInTheDocument();
   });
 });

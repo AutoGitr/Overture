@@ -35,7 +35,7 @@ lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
-lazy from tests.collection_helpers import managing_rule
+lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import JobProbe
 
 CATALOG_URL = "https://image.tmdb.org/t/p/original/catalog.jpg"
@@ -44,7 +44,7 @@ CATALOG_URL = "https://image.tmdb.org/t/p/original/catalog.jpg"
 async def _seed(database: Database) -> None:
     async with database.write_session() as session:
         for collection_id, group in ((1, "Sagas"), (2, "Studios"), (3, None)):
-            row = MediaCollection(
+            row = stored_collection(
                 id=collection_id,
                 server_item_id=f"server-{collection_id}",
                 server_type=ServerType.PLEX,
@@ -138,7 +138,6 @@ class RecordingArt(CollectionArtService):
     async def match(
         self,
         collection_id: int,
-        media_type: MediaType,
         art_type: ArtType,
         threshold: int,
     ) -> ArtMatchResponse:
@@ -147,9 +146,7 @@ class RecordingArt(CollectionArtService):
         )
 
     @override
-    async def adopt(
-        self, collection_id: int, media_type: MediaType, art_type: ArtType, url: str
-    ) -> bool:
+    async def adopt(self, collection_id: int, art_type: ArtType, url: str) -> bool:
         self.adopted.append((collection_id, art_type, url))
         return True
 
@@ -157,7 +154,6 @@ class RecordingArt(CollectionArtService):
     async def save(
         self,
         collection_id: int,
-        media_type: MediaType,
         art_type: ArtType,
         body: SaveArtRequest,
     ) -> StatusResponse:

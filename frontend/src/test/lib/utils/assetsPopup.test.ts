@@ -23,7 +23,7 @@ import {
 } from "../../../lib/utils/assetsPopup";
 
 function library(id: string, title: string): LibrarySectionRead {
-  return { id, title, count: 0 };
+  return { id, title, media_type: "movie", count: 0 };
 }
 
 const movieLibraries = [library("m1", "Movies")];

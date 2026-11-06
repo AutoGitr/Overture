@@ -61,24 +61,19 @@ function renderPanel() {
 
 /** The panel as its route shows it, following the cached collections list. */
 async function renderPage() {
-  queryClient.setQueryData(listCollectionsOptions({ query: { media_type: "movie" } }).queryKey, [
-    shown,
-  ]);
+  queryClient.setQueryData(listCollectionsOptions().queryKey, [shown]);
   queryClient.setQueryData(
-    getCollectionOptions({ path: { collection_id: shown.id }, query: { media_type: "movie" } })
-      .queryKey,
+    getCollectionOptions({ path: { collection_id: shown.id } }).queryKey,
     shown,
   );
-  await navigate("/movies/collections/:collectionSlug/themes", {
+  await navigate("/collections/:collectionSlug/themes", {
     params: { collectionSlug: String(shown.id) },
   });
   return renderWithQueryClient(CollectionPage);
 }
 
 function cachedCollection() {
-  return queryClient.getQueryData<CollectionDetail[]>(
-    listCollectionsOptions({ query: { media_type: "movie" } }).queryKey,
-  )?.[0];
+  return queryClient.getQueryData<CollectionDetail[]>(listCollectionsOptions().queryKey)?.[0];
 }
 
 function toasts() {
@@ -126,7 +121,7 @@ describe("CollectionThemePanel search", () => {
       expect(setCollectionTheme).toHaveBeenCalledWith(
         expect.objectContaining({
           path: { collection_id: 1 },
-          body: { media_type: "movie", youtube_id: "abc12345678" },
+          body: { youtube_id: "abc12345678" },
         }),
       );
     });
@@ -191,7 +186,6 @@ describe("CollectionThemePanel theme state", () => {
     expect(deleteCollectionTheme).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { collection_id: 1 },
-        query: { media_type: "movie" },
       }),
     );
   });

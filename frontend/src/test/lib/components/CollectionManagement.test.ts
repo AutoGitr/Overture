@@ -34,7 +34,7 @@ const rule = collectionRule({ sync_mode: "append" });
 const detail = collectionDetail({
   id: 12,
   title: "Saga",
-  library_id: "movies",
+  library_ids: ["movies"],
   members,
   child_count: 2,
   rule,
@@ -67,7 +67,7 @@ describe("collection management", () => {
   beforeEach(async () => {
     queryClient.clear();
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
-    await navigate("/movies/collections/:collectionSlug", {
+    await navigate("/collections/:collectionSlug", {
       params: { collectionSlug: "12-saga" },
     });
   });
@@ -266,11 +266,11 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/groups": [],
     });
-    await navigate("/movies/collections/new");
+    await navigate("/collections/new");
     const view = renderWithQueryClient(CollectionPage);
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "Movies" })).toBeChecked());
     expect(screen.getByLabelText("Title")).toHaveValue("");
@@ -281,12 +281,12 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/library/libraries": [
-        { id: "movies", title: "Movies", count: 2 },
-        { id: "other", title: "Other", count: 1 },
+        { id: "movies", title: "Movies", media_type: "movie", count: 2 },
+        { id: "other", title: "Other", media_type: "movie", count: 1 },
       ],
       "/api/collections/groups": [],
     });
-    await navigate("/movies/collections/new");
+    await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
     await screen.findByRole("checkbox", { name: "Other" });
     for (const name of ["Movies", "Other"])
@@ -359,18 +359,18 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": detail,
     });
-    await navigate("/movies/collections/new");
+    await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
     await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
+    await waitFor(() => expect(route.pathname).toBe("/collections/12-saga"));
     expect(
       JSON.parse(
         String(
@@ -381,14 +381,18 @@ describe("collection management", () => {
       ),
     ).toMatchObject({
       title: "Saga",
-      library_id: "movies",
       rule: {
-        criteria: {
-          mode: "all",
-          conditions: [
-            { kind: "source", operator: "is", source: { type: "tmdb_item", tmdb_ids: [11] } },
-          ],
-        },
+        libraries: [
+          {
+            library_id: "movies",
+            criteria: {
+              mode: "all",
+              conditions: [
+                { kind: "source", operator: "is", source: { type: "tmdb_item", tmdb_ids: [11] } },
+              ],
+            },
+          },
+        ],
       },
     });
   });
@@ -466,7 +470,10 @@ describe("collection management", () => {
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, members: [members[0]] },
-      "/api/library/items": { items: members, total: 2 },
+      "/api/library/items": ({ url }: { url: string }) =>
+        Response.json(
+          url.includes("media_type=movie") ? { items: members, total: 2 } : { items: [], total: 0 },
+        ),
     });
     renderWithQueryClient(CollectionPage);
     await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
@@ -486,13 +493,13 @@ describe("collection management", () => {
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/library/libraries": [
-        { id: "movies", title: "Movies", count: 2 },
-        { id: "other", title: "Other", count: 1 },
+        { id: "movies", title: "Movies", media_type: "movie", count: 2 },
+        { id: "other", title: "Other", media_type: "movie", count: 1 },
       ],
       "/api/library/items": { items: [...members, third], total: 3 },
       "/api/collections": detail,
     });
-    await navigate("/movies/collections/new");
+    await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
     expect(screen.queryByLabelText("Search members")).toBeNull();
     await screen.findByRole("checkbox", { name: "Movies" });
@@ -523,14 +530,18 @@ describe("collection management", () => {
       ),
     ).toMatchObject({
       title: "Saga",
-      library_id: "other",
       rule: {
-        criteria: {
-          mode: "all",
-          conditions: [
-            { kind: "source", operator: "is", source: { type: "tmdb_item", tmdb_ids: [11] } },
-          ],
-        },
+        libraries: [
+          {
+            library_id: "other",
+            criteria: {
+              mode: "all",
+              conditions: [
+                { kind: "source", operator: "is", source: { type: "tmdb_item", tmdb_ids: [11] } },
+              ],
+            },
+          },
+        ],
       },
     });
   });
@@ -542,14 +553,14 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": () =>
         ++attempts === 1
           ? Response.json({ detail: "Create refused" }, { status: 422 })
           : Response.json(detail),
     });
-    await navigate("/movies/collections/new");
+    await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
     await screen.findByRole("checkbox", { name: "Movies" });
@@ -559,7 +570,7 @@ describe("collection management", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Create refused");
     await fireEvent.click(await screen.findByRole("button", { name: "Retry collection creation" }));
     await waitFor(() => expect(attempts).toBe(2));
-    await waitFor(() => expect(route.pathname).toBe("/movies/collections/12-saga"));
+    await waitFor(() => expect(route.pathname).toBe("/collections/12-saga"));
   });
 
   it("shows a saved rule immediately without needing a live event", async () => {
@@ -567,7 +578,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
       "/api/collections/12/rule": rule,
@@ -663,8 +674,8 @@ describe("collection management", () => {
   });
 
   it("round-trips collection art, rule, theme and settings views in both libraries", async () => {
-    for (const media_type of ["movie", "show"] as const) {
-      const target = { ...detail, media_type };
+    for (const media_types of [["movie"], ["show"]] as const) {
+      const target = { ...detail, media_types: [...media_types] };
       for (const view of ["configure", "art", "themes"] as const) {
         goToCollectionView(target, view, "background");
         await waitFor(() => expect(routedCollectionView()).toBe(view));
@@ -680,7 +691,7 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", count: 2 }],
+      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
       "/api/collections/12/monitored": { monitored: true },
@@ -894,8 +905,24 @@ describe("collection management", () => {
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12/missing": {
         titles: [
-          { tmdb_id: 99, title: "Missing film", year: 2020, poster_url: null, requested: false },
-          { tmdb_id: 98, title: "Wanted film", year: null, poster_url: null, requested: true },
+          {
+            tmdb_id: 99,
+            title: "Missing film",
+            year: 2020,
+            poster_url: null,
+            media_type: "movie",
+            requested: false,
+            requestable: true,
+          },
+          {
+            tmdb_id: 98,
+            title: "Wanted film",
+            year: null,
+            poster_url: null,
+            media_type: "movie",
+            requested: true,
+            requestable: true,
+          },
         ],
         truncated: false,
         requestable: true,
@@ -914,6 +941,8 @@ describe("collection management", () => {
     await fireEvent.click(
       missing.getByRole("button", { name: "Request Missing film from Radarr" }),
     );
-    await waitFor(() => expect(requested).toEqual({ tmdb_ids: [99] }));
+    await waitFor(() =>
+      expect(requested).toEqual({ titles: [{ tmdb_id: 99, media_type: "movie" }] }),
+    );
   });
 });

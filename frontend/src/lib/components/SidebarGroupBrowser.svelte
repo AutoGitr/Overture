@@ -1,4 +1,4 @@
-<script lang="ts" generics="T, G">
+<script lang="ts" generics="T, G extends S, S">
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import type { Snippet } from "svelte";
   import SidebarList from "./SidebarList.svelte";
@@ -20,9 +20,9 @@
   }: {
     groups: G[];
     rows: T[];
-    selected: G | null;
-    groupTitle: (group: G) => string;
-    groupKey: (group: G) => string;
+    selected: S | null;
+    groupTitle: (group: G | S) => string;
+    groupKey: (group: G | S) => string;
     groupPoster: (group: G) => string | null;
     groupEntry: Snippet<[G, number, string]>;
     entry: Snippet<[T, number, string]>;

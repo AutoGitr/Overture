@@ -99,9 +99,12 @@ async def store_collection_theme(
     server_theme_id = None
     facts = None
     if isinstance(provider.collections, UploadThemes):
-        server_theme_id = await provider.upload_collection_theme(
-            row.server_item_id, downloaded.audio_bytes
-        )
+        # The first copy's ID stands for them all: each holds the same theme.
+        uploaded = [
+            await provider.upload_collection_theme(server_id, downloaded.audio_bytes)
+            for server_id in row.server_ids
+        ]
+        server_theme_id = uploaded[0]
     else:
         folder = await theme_folder(
             job.collection_id, app_config=app_config, database=database
@@ -183,7 +186,6 @@ async def record_collection_theme(
         "collection.theme.updated",
         {
             "collection_id": job.collection_id,
-            "media_type": row.media_type,
             "has_theme": True,
             "youtube_id": job.target_url,
             "youtube_title": title,

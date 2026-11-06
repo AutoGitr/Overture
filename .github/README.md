@@ -449,11 +449,13 @@ Browsers offer this only over HTTPS, so serve Overture through a
 
 ### Collections
 
-Plex, Jellyfin and Emby collections appear in the library sidebar under
-**Groups**, inside their groups, or **Collections**, all in one list; Overture
-remembers which you used last. **Groups** lists every group, empty ones too;
-**Ungrouped** and **Unmanaged** appear only while they hold a collection. A
-sparkle marks smart collections. **+ Create collection** opens a Configure page, the one place to create
+Plex, Jellyfin and Emby collections have their own **Collections** tab in the
+library sidebar, beside Movies and Shows, with movie and show collections
+together: under **Groups**, inside their groups, or **Collections**, all in one
+list; Overture remembers which you used last. Movies and shows share groups, and
+**Holds** in the filters narrows the list to either or to collections of both.
+**Groups** lists every group, empty ones too; **Ungrouped** and **Unmanaged**
+appear only while they hold a collection. A sparkle marks smart collections. **+ Create collection** opens a Configure page, the one place to create
 anything: **One collection**, or **One per value** (a collection set).
 
 Both kinds share the same sections, in the same order:
@@ -464,10 +466,11 @@ Both kinds share the same sections, in the same order:
    for TMDB franchises. A dimension adds no minimum or **Most common only** of
    its own. Then the libraries, the
    title (a set's title template, where `{value}s` turns 1990 into 1990s) and
-   the group. One collection in several libraries becomes a set with that
-   collection in each, kept alike.
+   the group. A collection can draw from several libraries, of movies, shows or
+   both, and the libraries of a saved collection can change: see
+   [Collections across libraries](#collections-across-libraries).
 2. **Content**: who evaluates the criteria, and the criteria themselves, with
-   **Preview members**. A set instead chooses its values and the conditions
+   one box for each library, and **Preview members**. A set instead chooses its values and the conditions
    every collection needs, with **Preview collections**.
 3. **Members** (a saved collection): its members, and **Missing**, the titles
    its lists hold that the library lacks, which **Request** sends to Radarr or
@@ -486,7 +489,27 @@ Both kinds share the same sections, in the same order:
    expression with presets) are set per group and in the global defaults.
 
 A collection's page opens with Setup and Content expanded and the rest
-closed, each time.
+closed, and a group in **Collection groups** with every section closed, each
+time; neither remembers what was open.
+
+#### Collections across libraries
+
+Choosing several libraries in Setup makes one collection, listed once, with its
+own criteria for each library. What the server holds depends on the server:
+
+| Server | On the server | Kept alike |
+| --- | --- | --- |
+| Jellyfin, Emby | One collection holding every library's members, movies and shows together | Nothing to keep alike |
+| Plex | One collection in each library with the same title, because Plex keeps a collection inside one library of one type | Overture sends each the same title, summary, sort, art and theme |
+
+Settings, the group, art and theme belong to the whole collection; **Limit**
+applies to each library, and **Minimum members** to the whole. On Plex a smart
+collection is smart in every library. A library with nothing to hold gets no
+server collection until it has, and a library taken out of a saved collection
+leaves the server at the next sync. A collection set makes one collection per
+value across its libraries, in the same way, and offers the fields and
+dimensions all of them share. Orphaning a Plex collection keeps its first copy
+as this collection; the next library sync lists the others on their own.
 
 **Minimum members** and **When inactive** decide only whether a collection is
 on the media server: below its minimum, out of season or left out by its set,

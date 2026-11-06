@@ -59,7 +59,6 @@ export class CollectionActions {
     try {
       const { monitored } = await this.setMonitoredRequest.mutateAsync({
         path: { collection_id: target.id },
-        query: { media_type: target.media_type },
         body: { monitored: !target.monitored },
       });
       patchCollection(target.id, { monitored });
@@ -76,7 +75,7 @@ export class CollectionActions {
     const advanceContext = beginRecordAdvance();
     try {
       const result = await this.setThemeRequest.mutateAsync({
-        body: { media_type: target.media_type, youtube_id: videoId },
+        body: { youtube_id: videoId },
         path: { collection_id: target.id },
       });
       downloadState.trackQueuedCollectionJob({
@@ -112,11 +111,9 @@ export class CollectionActions {
         artType === "all"
           ? await this.clearAllArtRequest.mutateAsync({
               path: { collection_id: collection.id },
-              query: { media_type: collection.media_type },
             })
           : await this.clearArtRequest.mutateAsync({
               path: { collection_id: collection.id, art_type: artType },
-              query: { media_type: collection.media_type },
             });
       patchCollection(collection.id, result);
     } catch (error) {
@@ -140,7 +137,6 @@ export class CollectionActions {
     try {
       const cleared = await this.deleteThemeRequest.mutateAsync({
         path: { collection_id: target.id },
-        query: { media_type: target.media_type },
       });
       patchCollection(target.id, {
         has_theme: cleared.has_theme,

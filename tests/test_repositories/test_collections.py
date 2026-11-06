@@ -3,13 +3,13 @@
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.models.media_collection import (
-    MediaCollection,
     MediaCollectionMember,
 )
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import MediaType, ServerType
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 
 
 async def test_item_links_choose_the_matching_franchise(
@@ -22,7 +22,7 @@ async def test_item_links_choose_the_matching_franchise(
     )
     db_session.add_all(
         [
-            MediaCollection(
+            stored_collection(
                 id=n,
                 server_item_id=f"opaque-{n}",
                 server_type=ServerType.JELLYFIN,

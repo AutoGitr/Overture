@@ -46,13 +46,13 @@
     {stopping ? "Stopping..." : "Stop"}
   </PendingButton>
 {:else}
+  {@render finished?.()}
   <PendingButton
-    class="btn btn-ghost actions-start"
+    class="btn btn-ghost"
     onclick={() => clear.mutate()}
     pending={clear.isPending}
     pendingLabel="Clearing..."
   >
     Clear Results
   </PendingButton>
-  {@render finished?.()}
 {/if}

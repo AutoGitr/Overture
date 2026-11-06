@@ -129,6 +129,7 @@ class LibrarySectionRead(StrictBaseModel):
 
     id: str
     title: str
+    media_type: MediaType
     count: int
 
 

@@ -9,7 +9,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import JobStatus, MediaType, ServerAsset, ServerType
 lazy from overture.media_servers.errors import MediaServerError
@@ -28,6 +27,7 @@ lazy from overture.services.themes.youtube_resolver import (
     YouTubeResolver,
 )
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 
@@ -152,7 +152,7 @@ async def _listed_collection(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 server_item_id="collection-1",
                 media_type=MediaType.MOVIE,
                 server_type=server_type,
@@ -196,7 +196,7 @@ async def test_process_job_persists_complete_collection_theme_provenance(
         )
     await service.process_job(job_id)
 
-    row = await CollectionRepository(db_session).get(1, MediaType.MOVIE)
+    row = await CollectionRepository(db_session).get(1)
     assert row is not None
     if upload_fails:
         assert row.youtube_id is None
@@ -213,7 +213,6 @@ async def test_process_job_persists_complete_collection_theme_provenance(
         "collection.theme.updated",
         {
             "collection_id": 1,
-            "media_type": "movie",
             "has_theme": True,
             "youtube_id": "VENZKx1iFzA",
             "youtube_title": "YouTube Theme",
@@ -261,7 +260,7 @@ async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
 
     assert (folder / "theme.mp3").read_bytes() == b"mp3"
     assert refreshed == ["collection-1"]
-    row = await CollectionRepository(db_session).get(1, MediaType.MOVIE)
+    row = await CollectionRepository(db_session).get(1)
     assert row is not None
     assert row.youtube_id == "VENZKx1iFzA"
     stat = (folder / "theme.mp3").stat()

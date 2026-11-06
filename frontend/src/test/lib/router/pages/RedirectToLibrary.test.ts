@@ -10,7 +10,7 @@ import { renderWithQueryClient } from "../../../helpers/render";
 describe("RedirectToLibrary", () => {
   beforeEach(async () => {
     queryClient.clear();
-    await navigate("/movies/collections");
+    await navigate("/collections");
   });
 
   it.each([
@@ -27,7 +27,7 @@ describe("RedirectToLibrary", () => {
         "/api/library/libraries": ({ url }: FetchCall) =>
           Response.json(
             (url.includes("media_type=movie") ? movies : shows)
-              ? [{ id: "1", title: "Library", count: 1 }]
+              ? [{ id: "1", title: "Library", media_type: "movie", count: 1 }]
               : [],
           ),
       });
@@ -63,7 +63,7 @@ describe("RedirectToLibrary", () => {
     mockFetch({ detail: "Unavailable" }, { status: 400 });
     const view = renderWithQueryClient(RedirectToLibrary);
     await view.findByRole("alert");
-    expect(route.pathname).toBe("/movies/collections");
+    expect(route.pathname).toBe("/collections");
     mockFetch([]);
     await fireEvent.click(view.getByRole("button", { name: "Retry libraries" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/movies"));

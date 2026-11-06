@@ -10,7 +10,6 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
@@ -38,7 +37,7 @@ lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
-lazy from tests.collection_helpers import managing_rule
+lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.test_services.test_public_dataset_edges import (
     catalog_jsonl,
     catalog_payload,
@@ -116,7 +115,7 @@ async def test_rows_link_to_what_the_library_holds(
     movie = MediaItem(media_type=MediaType.MOVIE, title="Heat", imdb_id="tt0113277")
     db_session.add(movie)
     db_session.add(
-        MediaCollection(
+        stored_collection(
             server_item_id="saga",
             media_type=MediaType.MOVIE,
             server_type=ServerType.PLEX,
@@ -235,7 +234,7 @@ async def test_export_puts_drafts_first_then_selections_and_collection_themes(
                 tmdb_id=949,
                 youtube_id="libraryThm1",
             ),
-            MediaCollection(
+            stored_collection(
                 server_item_id="saga",
                 media_type=MediaType.MOVIE,
                 server_type=ServerType.PLEX,
@@ -285,7 +284,7 @@ async def test_correcting_a_drafts_only_identity_keeps_it_editable_and_exportabl
     assert saved.draft is not None
     assert saved.draft.tmdb_id == 11
     db_session.add(
-        MediaCollection(
+        stored_collection(
             server_item_id="saga",
             server_type=ServerType.PLEX,
             media_type=MediaType.MOVIE,
@@ -315,7 +314,7 @@ async def test_export_preserves_themerrdb_attribution_after_the_catalog_is_clear
     db_session: AsyncSession, database: Database, tmp_path: Path
 ) -> None:
     db_session.add(
-        MediaCollection(
+        stored_collection(
             server_item_id="saga",
             server_type=ServerType.PLEX,
             media_type=MediaType.MOVIE,
@@ -369,7 +368,7 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
     await staging.replace(db_session, stage, utc_now(), PublicDatasetSyncStats())
     await enable_public_dataset(db_session)
     db_session.add(
-        MediaCollection(
+        stored_collection(
             id=1,
             server_item_id="saga",
             media_type=MediaType.MOVIE,
@@ -404,7 +403,7 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
 
 
 def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
-    row = MediaCollection(
+    row = stored_collection(
         id=1,
         server_item_id="saga",
         media_type=MediaType.MOVIE,

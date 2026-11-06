@@ -358,11 +358,11 @@ class NoCollections(CollectionSync):
 class NoGroups:
     """A server whose Overture holds no collection groups yet."""
 
-    async def names(self, media_type: MediaType) -> list[str]:
+    async def names(self) -> list[str]:
         return []
 
     async def sync(
-        self, media_type: MediaType, name: str, *, library_ids: list[str] | None = None
+        self, name: str, *, library_ids: list[str] | None = None
     ) -> CollectionGroupSyncResult:
         raise AssertionError("There are no groups to sync")
 
@@ -1308,19 +1308,18 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
 ) -> None:
     class Groups:
         def __init__(self) -> None:
-            self.synced: list[tuple[MediaType, str, list[str] | None]] = []
+            self.synced: list[tuple[str, list[str] | None]] = []
 
-        async def names(self, media_type: MediaType) -> list[str]:
-            return ["Sagas", "Ungrouped"] if media_type is MediaType.MOVIE else []
+        async def names(self) -> list[str]:
+            return ["Sagas", "Ungrouped"]
 
         async def sync(
             self,
-            media_type: MediaType,
             name: str,
             *,
             library_ids: list[str] | None = None,
         ) -> CollectionGroupSyncResult:
-            self.synced.append((media_type, name, library_ids))
+            self.synced.append((name, library_ids))
             return CollectionGroupSyncResult(synced=2, errors={"Broken": "refused"})
 
     class EveryCollection(NoCollections):
@@ -1344,7 +1343,7 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
         groups=groups,
     )
 
-    assert groups.synced == [(MediaType.MOVIE, "Sagas", ["1"])]
+    assert groups.synced == [("Sagas", ["1"])]
     assert probe.names()[-1] == "sync.completed"
     _, payload = probe.terminal()
     assert payload["errors"] == 1
@@ -1357,17 +1356,16 @@ async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(
     order: list[str] = []
 
     class Groups:
-        async def names(self, media_type: MediaType) -> list[str]:
-            return ["Sagas", "Ungrouped"] if media_type is MediaType.MOVIE else []
+        async def names(self) -> list[str]:
+            return ["Sagas", "Ungrouped"]
 
         async def sync(
             self,
-            media_type: MediaType,
             name: str,
             *,
             library_ids: list[str] | None = None,
         ) -> CollectionGroupSyncResult:
-            order.append(f"{media_type}:{name}:{library_ids}")
+            order.append(f"{name}:{library_ids}")
             return CollectionGroupSyncResult(synced=1)
 
     class ReadServer(NoCollections):
@@ -1388,7 +1386,7 @@ async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(
         groups=Groups(),
     )
 
-    assert order == ["read", "movie:Sagas:None", "movie:Ungrouped:None"]
+    assert order == ["read", "Sagas:None", "Ungrouped:None"]
     assert probe.names()[-1] == "sync.completed"
 
 

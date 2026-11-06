@@ -80,11 +80,9 @@ describe("REST cache helpers", () => {
     const other = collectionDetail({ id: 2, title: "Other" });
     const firstKey = getCollectionOptions({
       path: { collection_id: 1 },
-      query: { media_type: "movie" },
     }).queryKey;
     const otherKey = getCollectionOptions({
       path: { collection_id: 2 },
-      query: { media_type: "movie" },
     }).queryKey;
     queryClient.setQueryData(firstKey, first);
     queryClient.setQueryData(otherKey, other);
@@ -261,7 +259,7 @@ describe("REST cache helpers", () => {
   });
 
   it("sets the monitoring of several collections in every list", () => {
-    const key = listCollectionsOptions({ query: { media_type: "movie" } }).queryKey;
+    const key = listCollectionsOptions().queryKey;
     queryClient.setQueryData(key, [
       fixtureCollection({ id: 1, monitored: false }),
       fixtureCollection({ id: 2, monitored: false }),
@@ -279,12 +277,11 @@ describe("REST cache helpers", () => {
     const collection = fixtureCollection({
       id: 1,
       title: "Action",
-      media_type: "movie",
       monitored: false,
       has_theme: false,
       server_type: "plex",
     });
-    const key = listCollectionsOptions({ query: { media_type: "movie" } }).queryKey;
+    const key = listCollectionsOptions().queryKey;
     queryClient.setQueryData(key, [collection]);
 
     patchCollection(collection.id, { has_theme: true, youtube_id: "abc123" });

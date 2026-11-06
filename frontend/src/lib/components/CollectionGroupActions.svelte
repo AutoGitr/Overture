@@ -4,7 +4,6 @@
     listCollectionGroupsOptions,
     listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { MediaType } from "../../generated/rest/types.gen";
 
   import { CollectionGroupActions } from "../utils/collectionGroups.svelte";
   import DetailForm from "./DetailForm.svelte";
@@ -13,27 +12,20 @@
 
   let {
     group,
-    mediaType,
     onrename,
     ondelete,
   }: {
     group: string;
-    mediaType: MediaType;
     onrename: (name: string) => void;
     ondelete: () => void;
   } = $props();
   const actions = new CollectionGroupActions(
     () => group,
-    () => mediaType,
     () => others,
     () => members,
   );
-  const groups = createQuery(() =>
-    listCollectionGroupsOptions({ query: { media_type: mediaType } }),
-  );
-  const collections = createQuery(() =>
-    listCollectionsOptions({ query: { media_type: mediaType } }),
-  );
+  const groups = createQuery(() => listCollectionGroupsOptions());
+  const collections = createQuery(() => listCollectionsOptions());
   let members = $derived(
     collections.data?.filter((row) => row.managed && row.collection_group === group).length ??
       null,

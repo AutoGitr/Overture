@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, expect, it, vi } from "vitest";
 import CollectionGroupsPopup from "../../../lib/popups/CollectionGroupsPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
@@ -10,7 +10,7 @@ import { answerConfirmation } from "../../helpers/notifications";
 
 beforeEach(async () => {
   queryClient.clear();
-  await navigate("/movies/collections");
+  await navigate("/collections");
   uiState.openCollectionGroups("Weekend");
 });
 
@@ -111,4 +111,19 @@ it("switches between existing and new groups without carrying a pending creation
   await fireEvent.change(picker, { target: { value: "Weekend" } });
   await fireEvent.click(await screen.findByRole("button", { name: "Save" }));
   expect(screen.getByRole("combobox", { name: "Group" })).toHaveValue("Weekend");
+});
+
+it("keeps every section closed, and forgets one opened", async () => {
+  renderGroups();
+  const settings = await screen.findByRole("button", { name: "Settings", expanded: false });
+  expect(screen.queryAllByRole("button", { expanded: true })).toEqual([]);
+  await fireEvent.click(settings);
+  expect(screen.getByRole("button", { name: "Settings", expanded: true })).toBeInTheDocument();
+  expect(localStorage.getItem("sections_open_by_view")).toBeNull();
+
+  cleanup();
+  renderWithQueryClient(CollectionGroupsPopup);
+  expect(
+    await screen.findByRole("button", { name: "Settings", expanded: false }),
+  ).toBeInTheDocument();
 });

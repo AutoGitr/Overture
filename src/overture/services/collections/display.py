@@ -128,9 +128,7 @@ class CollectionDisplay:
         async with self._access.database.read_session() as session:
             if rule is None and row.id is not None:
                 rule = await CollectionRepository(session).rule(row.id)
-            policy = await self._access.policy(
-                session, row.media_type, options.collection_group, rule
-            )
+            policy = await self._access.policy(session, options.collection_group, rule)
         sort_title = inherited_sort_title(options, policy)
         template = (
             options.summary_format
@@ -167,20 +165,23 @@ class CollectionDisplay:
                 "collection_filtering": filtering,
             }
         )
-        if row.server_item_id is None or not push:
+        if not push:
             return effective
-        await self._access.provider().update_collection_details(
-            row.server_item_id,
-            library_id=row.library_id or "",
-            title=options.title,
-            summary=summary,
-            sort_title=sort_title,
-            mode=options.collection_mode or policy.collection_mode,
-            order=order,
-            smart=row.kind is CollectionKind.SMART,
-            visible_home=visible_home,
-            visible_shared=visible_shared,
-            visible_library=visible_library,
-            filtering=filtering,
-        )
+        for copy in self._access.copies(row):
+            if copy.server_item_id is None:
+                continue
+            await self._access.provider().update_collection_details(
+                copy.server_item_id,
+                library_id=copy.lead.library_id,
+                title=options.title,
+                summary=summary,
+                sort_title=sort_title,
+                mode=options.collection_mode or policy.collection_mode,
+                order=order,
+                smart=row.kind is CollectionKind.SMART,
+                visible_home=visible_home,
+                visible_shared=visible_shared,
+                visible_library=visible_library,
+                filtering=filtering,
+            )
         return effective

@@ -4,7 +4,7 @@ import {
   listCollectionGroupsOptions,
   renameCollectionGroupMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
-import type { CollectionGroupDelete, MediaType } from "../../generated/rest/types.gen";
+import type { CollectionGroupDelete } from "../../generated/rest/types.gen";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
@@ -16,7 +16,6 @@ export class CollectionGroupActions {
   private readonly feedback = createNotifier();
   constructor(
     private readonly group: () => string,
-    private readonly mediaType: () => MediaType,
     /** The other groups its collections can move to. */
     private readonly others: () => string[],
     /** How many collections the group holds, or null until that is known. */
@@ -33,7 +32,7 @@ export class CollectionGroupActions {
     const name = this.name.trim();
     try {
       await this.renameRequest.mutateAsync({
-        query: { name: this.group(), media_type: this.mediaType() },
+        query: { name: this.group() },
         body: { name },
       });
       this.feedback.success("Group renamed.");
@@ -50,7 +49,7 @@ export class CollectionGroupActions {
     if (!body) return false;
     try {
       const result = await this.deleteRequest.mutateAsync({
-        query: { name: this.group(), media_type: this.mediaType() },
+        query: { name: this.group() },
         body,
       });
       const errors = Object.values(result.errors);
@@ -105,19 +104,8 @@ export class CollectionGroupActions {
   }
 }
 
-/**
- * The names of every collection group across movies and shows, as runs that
- * choose groups by name list them. Create it during component initialisation.
- */
+/** Every collection group's name, as runs that choose groups by name list them. */
 export function collectionGroupNames(enabled: () => boolean): () => string[] {
-  const queries = (["movie", "show"] as const).map((media_type) =>
-    createQuery(() => ({
-      ...listCollectionGroupsOptions({ query: { media_type } }),
-      enabled: enabled(),
-    })),
-  );
-  return () => {
-    const names = queries.flatMap((query) => query.data ?? []);
-    return names.filter((name, index) => names.indexOf(name) === index);
-  };
+  const query = createQuery(() => ({ ...listCollectionGroupsOptions(), enabled: enabled() }));
+  return () => query.data ?? [];
 }

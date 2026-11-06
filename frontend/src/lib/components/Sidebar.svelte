@@ -71,15 +71,12 @@
   const catalog = new CatalogBrowsing();
 
   const collectionsQuery = createQuery(() => ({
-    ...listCollectionsOptions({ query: { media_type: uiState.sidebarTab } }),
-    enabled:
-      settingsState.current.collections_supported &&
-      uiState.sidebarSource === "library" &&
-      (uiState.sidebarMode === "collections" || uiState.searchField === "tmdb"),
+    ...listCollectionsOptions(),
+    enabled: settingsState.current.collections_supported && uiState.sidebarSource === "library",
   }));
   let collections = $derived(collectionsQuery.data ?? []);
   const groupsQuery = createQuery(() => ({
-    ...listCollectionGroupsOptions({ query: { media_type: uiState.sidebarTab } }),
+    ...listCollectionGroupsOptions(),
     enabled:
       settingsState.current.collections_supported &&
       uiState.sidebarSource === "library" &&
@@ -115,6 +112,7 @@
   const SORT_KEYS: Record<SortScope, string> = {
     library: "overture_sidebar_sort",
     collections: "overture_collection_sort",
+    groups: "overture_group_sort",
     overturedb: "overture_catalog_sort",
   };
 
@@ -125,7 +123,7 @@
     );
   }
 
-  /** Items, collections and the catalog each remember their sort per tab. */
+  /** Items, collections, groups and the catalog each remember their sort per tab. */
   let sortByScope = $state<Record<SortScope, Record<SidebarTab, SidebarSortPreference>>>({
     library: {
       movie: loadSortPreference("library", "movie"),
@@ -135,19 +133,40 @@
       movie: loadSortPreference("collections", "movie"),
       show: loadSortPreference("collections", "show"),
     },
+    groups: {
+      movie: loadSortPreference("groups", "movie"),
+      show: loadSortPreference("groups", "show"),
+    },
     overturedb: {
       movie: loadSortPreference("overturedb", "movie"),
       show: loadSortPreference("overturedb", "show"),
     },
   });
+  let groupView = $derived(uiState.collectionView === "groups");
+  let currentGroup = $derived(groupView ? sidebarGroup() : null);
+  /** The groups list sorts its groups; an open group its collections. */
   let sortScope = $derived<SortScope>(
     uiState.sidebarSource === "overturedb"
       ? "overturedb"
-      : uiState.sidebarMode === "collections"
-        ? "collections"
-        : "library",
+      : uiState.sidebarMode !== "collections"
+        ? "library"
+        : groupView && currentGroup === null
+          ? "groups"
+          : "collections",
   );
-  let sort = $derived(sortByScope[sortScope][uiState.sidebarTab]);
+  let sortFields = $derived(
+    sidebarDomain.sortMenu(sortScope, {
+      inGroup: groupView,
+      plex: settingsState.current.media_server === "plex",
+    }),
+  );
+  let chosenSort = $derived(sortByScope[sortScope][uiState.sidebarTab]);
+  // A saved sort this list does not offer, such as Group inside a group, falls back to Title.
+  let sort = $derived<SidebarSortPreference>(
+    sortFields.some((entry) => entry.id === chosenSort.field)
+      ? chosenSort
+      : { field: "title", dir: "asc" },
+  );
   let catalogRows = $derived(
     sidebarDomain.filterCatalogEntries({
       entries: catalogEntries,
@@ -232,19 +251,24 @@
   );
 
   // Every group is listed, empty or not; the reserved ones only while they hold a collection.
-  let collectionGroups = $derived([
-    ...[
-      ...new Set([
-        ...(groupsQuery.data ?? []).filter((group) => group !== UNGROUPED_GROUP),
-        ...filteredCollections.flatMap((row) =>
-          row.managed && row.collection_group ? [row.collection_group] : [],
-        ),
-      ]),
-    ].sort((a, b) => a.localeCompare(b)),
-    ...(filteredCollections.some((row) => !row.managed) ? [UNMANAGED_GROUP] : []),
+  let groupNames = $derived([
+    ...new Set([
+      ...(groupsQuery.data ?? []).filter((group) => group !== UNGROUPED_GROUP),
+      ...filteredCollections.flatMap((row) =>
+        row.managed && row.collection_group ? [row.collection_group] : [],
+      ),
+    ]),
   ]);
-  let groupView = $derived(uiState.collectionView === "groups");
-  let currentGroup = $derived(groupView ? sidebarGroup() : null);
+  let collectionGroups = $derived([
+    ...sidebarDomain.sortCollectionGroups(
+      sidebarDomain.collectionGroupRows(groupNames, filteredCollections),
+      sort.field,
+      sort.dir,
+    ),
+    ...(filteredCollections.some((row) => !row.managed)
+      ? sidebarDomain.collectionGroupRows([UNMANAGED_GROUP], filteredCollections)
+      : []),
+  ]);
   let visibleCollections = $derived(
     groupView
       ? filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, currentGroup))
@@ -346,13 +370,13 @@
   />
 {/snippet}
 
-{#snippet collectionGroupRow(group: string, _index: number, style: string)}
+{#snippet collectionGroupRow(group: sidebarDomain.CollectionGroupRow, _index: number, style: string)}
   <SidebarGroupRow
-    title={group}
-    count={filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, group)).length}
+    title={group.title}
+    count={group.collections}
     {style}
-    locked={group === UNMANAGED_GROUP || group === UNGROUPED_GROUP}
-    onselect={() => openSidebarGroup(group)}
+    locked={group.title === UNMANAGED_GROUP || group.title === UNGROUPED_GROUP}
+    onselect={() => openSidebarGroup(group.title)}
   />
 {/snippet}
 
@@ -364,6 +388,7 @@
     totalShows={uiState.sidebarSource === "overturedb"
       ? (catalogShows.data?.length ?? 0)
       : totalShows}
+    totalCollections={collections.length}
   />
 
   <SidebarControls
@@ -384,7 +409,7 @@
           ? filteredCollections.length
           : filteredItems.length,
     )}
-    sortFields={searchingTmdb ? [] : sidebarDomain.sortMenu(sortScope)}
+    sortFields={searchingTmdb ? [] : sortFields}
     filtersOpen={uiState.openPopup === "filters"}
     activeFilters={uiState.sidebarSource === "overturedb"
       ? sidebarDomain.CATALOG_FILTER_KEYS.filter(
@@ -422,7 +447,7 @@
       <button
         type="button"
         class="btn btn-secondary btn-sm"
-        onclick={() => openDetail(() => goToNewCollection(uiState.sidebarTab))}
+        onclick={() => openDetail(() => goToNewCollection())}
         ><LayersPlus size={14} />Create collection</button
       >
       <button
@@ -515,9 +540,9 @@
         <SidebarGroupBrowser
           groups={collectionGroups}
           rows={visibleCollections}
-          selected={currentGroup}
-          groupTitle={(group) => group}
-          groupKey={(group) => group}
+          selected={currentGroup === null ? null : { title: currentGroup }}
+          groupTitle={(group) => group.title}
+          groupKey={(group) => group.title}
           groupPoster={() => null}
           groupEntry={collectionGroupRow}
           entry={collectionRow}

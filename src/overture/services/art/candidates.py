@@ -28,7 +28,6 @@ lazy from ...domain import (
 )
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.registry import ProviderRegistry
-lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
@@ -226,7 +225,7 @@ class ArtCandidates:
     ) -> CandidateSources:
         """Use the same source policy, ordering and error handling for collections."""
         person = (
-            await self._collection_person(collection)
+            self._collection_person(collection)
             if collection.tmdb_collection_id is None and art_type is ArtType.POSTER
             else None
         )
@@ -247,17 +246,17 @@ class ArtCandidates:
             )
         return await self._resolve(collection.title, lookups)
 
-    async def _collection_person(self, collection: MediaCollection) -> int | None:
+    @staticmethod
+    def _collection_person(collection: MediaCollection) -> int | None:
         """The TMDB person whose credits a collection's criteria list first."""
-        async with self._database.read_session() as session:
-            rule = await CollectionRepository(session).rule(collection.id or 0)
-        if rule is None:
-            return None
-        criteria = FilterGroup.model_validate_json(rule.criteria_json)
         return next(
             (
                 condition.source.person_id
-                for condition in criteria.source_conditions()
+                for part in collection.libraries
+                if part.criteria_json is not None
+                for condition in FilterGroup.model_validate_json(
+                    part.criteria_json
+                ).source_conditions()
                 if isinstance(condition.source, TmdbPersonSource)
             ),
             None,

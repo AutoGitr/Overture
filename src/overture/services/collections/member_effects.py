@@ -85,7 +85,9 @@ class MemberEffects:
                     title=details.title,
                     year=details.year,
                     poster_url=details.poster_url,
+                    media_type=media_type,
                     requested=external in held,
+                    requestable=arr.configured,
                 )
             )
         return CollectionMissing(

@@ -3,8 +3,8 @@
 lazy from ...domain import CollectionKind, CollectionOrder, MediaType, ServerType
 lazy from ...schemas.collections import (
     CollectionCapabilities,
-    CollectionRuleWrite,
     FieldCondition,
+    FilterGroup,
     KindRecommendation,
 )
 lazy from .fields import FIELDS, field_available, field_operators, plex_tests
@@ -35,13 +35,13 @@ def _named(condition: FieldCondition) -> str:
 
 
 def recommend_kind(
-    rule: CollectionRuleWrite,
+    criteria: FilterGroup,
     capabilities: CollectionCapabilities,
     *,
     media_type: MediaType,
     order: CollectionOrder,
 ) -> KindRecommendation | None:
-    """Return the kind that serves *rule* best and why; ``None`` without a choice.
+    """Return the kind that serves *criteria* best and why; ``None`` without a choice.
 
     A filter only Plex knows needs a smart collection, which tests the rest
     through Overture's labels, and a custom order a regular one. Otherwise a
@@ -53,8 +53,8 @@ def recommend_kind(
     if not capabilities.smart:
         return None
     server = capabilities.server_type
-    conditions = rule.criteria.field_conditions()
-    sources = rule.criteria.source_conditions()
+    conditions = criteria.field_conditions()
+    sources = criteria.source_conditions()
     plex_cannot = next(
         (c for c in conditions if not _native(c, server, media_type)), None
     )

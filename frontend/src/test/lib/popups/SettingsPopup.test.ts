@@ -179,7 +179,7 @@ describe("SettingsPopup", () => {
     "refreshes library items only when the aspect ratio tolerance changes (%s)",
     async (tolerance, refreshed) => {
       const itemsKey = listItemsOptions({ query: { media_type: "movie" } }).queryKey;
-      const collectionsKey = listCollectionsOptions({ query: { media_type: "movie" } }).queryKey;
+      const collectionsKey = listCollectionsOptions().queryKey;
       queryClient.setQueryData(collectionsKey, []);
       queryClient.setQueryData(itemsKey, { items: [], total: 0 });
       updateSettings.mockResolvedValue({ data: { aspect_ratio_tolerance: tolerance } });

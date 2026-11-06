@@ -110,8 +110,20 @@ function timestamp(value: string | null): number | null {
   return value ? Date.parse(value) : null;
 }
 
-/** Which list a sort, search or filter applies to; each list remembers its own sort. */
-export type SortScope = "library" | "collections" | "overturedb";
+/** Which list a search or filter applies to. */
+export type ListScope = "library" | "collections" | "overturedb";
+/** Which list a sort applies to; each remembers its own, and groups sort as groups. */
+export type SortScope = ListScope | "groups";
+
+/** A collection group as the sidebar lists it, with what its collections add up to. */
+export interface CollectionGroupRow {
+  title: string;
+  collections: number;
+  items: number;
+  /** When a collection in it was last added or synced, or null. */
+  added: number | null;
+  synced: number | null;
+}
 
 type SortKey = number | string | null;
 
@@ -122,6 +134,7 @@ interface SortDef {
   library?: (row: MediaItemRead) => SortKey;
   collections?: (row: CollectionRead) => SortKey;
   overturedb?: (row: CatalogEntryRow) => SortKey;
+  groups?: (row: CollectionGroupRow) => SortKey;
 }
 
 /** How far art is from its slot's shape, |w/h - target| / target; unmeasured art has none. */
@@ -154,6 +167,7 @@ export const SORTS = {
     library: (item) => item.title,
     collections: (collection) => collection.title,
     overturedb: (entry) => entry.title,
+    groups: (group) => group.title,
   },
   sort_title: {
     label: "Sort title (media server order)",
@@ -176,22 +190,30 @@ export const SORTS = {
     shortLabel: "Home",
     collections: (collection) => collection.home_order,
   },
+  collection_count: {
+    label: "Number of collections",
+    shortLabel: "Collections",
+    groups: (group) => group.collections,
+  },
   child_count: {
     label: "Number of items",
     shortLabel: "Items",
     collections: (collection) => collection.child_count,
+    groups: (group) => group.items,
   },
   server_added_at: {
     label: "Date added",
     shortLabel: "Added",
     library: (item) => timestamp(item.server_added_at),
     collections: (collection) => timestamp(collection.server_added_at),
+    groups: (group) => group.added,
   },
   last_synced_at: {
     label: "Last synced",
     shortLabel: "Synced",
     library: (item) => timestamp(item.last_synced_at),
     collections: (collection) => timestamp(collection.last_rule_sync),
+    groups: (group) => group.synced,
   },
   last_matched_at: {
     label: "Last matched",
@@ -202,32 +224,26 @@ export const SORTS = {
     label: "Poster width",
     shortLabel: "Poster",
     library: (item) => item.poster_width,
-    collections: (collection) => collection.poster_width,
   },
   background_resolution: {
     label: "Background width",
     shortLabel: "Background",
     library: (item) => item.background_width,
-    collections: (collection) => collection.background_width,
   },
   poster_aspect: {
     label: "Poster aspect deviation",
     shortLabel: "Poster shape",
     library: (item) => aspectDeviation(item.poster_width, item.poster_height, "poster"),
-    collections: (row) => aspectDeviation(row.poster_width, row.poster_height, "poster"),
   },
   background_aspect: {
     label: "Background aspect deviation",
     shortLabel: "Background shape",
     library: (item) => aspectDeviation(item.background_width, item.background_height, "background"),
-    collections: (row) =>
-      aspectDeviation(row.background_width, row.background_height, "background"),
   },
   theme_length: {
     label: "Theme length",
     shortLabel: "Theme",
     library: (item) => item.theme_duration,
-    collections: (collection) => collection.theme_duration,
   },
   completeness: {
     label: "Completeness",
@@ -259,10 +275,21 @@ function sortKey(field: string, scope: SortScope): ((row: never) => SortKey) | u
   return sort?.[scope];
 }
 
-/** The sort fields a list offers, in menu order. */
-export function sortMenu(scope: SortScope): MenuEntry<SidebarSortField>[] {
+/**
+ * The sort fields a list offers, in menu order, without those that say nothing
+ * about it: every collection in an open group has that group, and only Plex
+ * has a Home order.
+ */
+export function sortMenu(
+  scope: SortScope,
+  context: { inGroup?: boolean; plex?: boolean } = {},
+): MenuEntry<SidebarSortField>[] {
+  const pointless = new Set<SidebarSortField>([
+    ...(context.inGroup ? (["group"] as const) : []),
+    ...(context.plex === false ? (["home_order"] as const) : []),
+  ]);
   return keysOf(SORTS)
-    .filter((id) => sortKey(id, scope))
+    .filter((id) => sortKey(id, scope) && !pointless.has(id))
     .map((id) => ({ id, label: SORTS[id].label, shortLabel: SORTS[id].shortLabel }));
 }
 
@@ -315,6 +342,35 @@ function sortRows<T extends { title: string }>(
       return titleCollator.compare(a.row.title, b.row.title);
     })
     .map(({ row }) => row);
+}
+
+/** The groups as the sidebar lists them, from the collections the filters match. */
+export function collectionGroupRows(
+  names: readonly string[],
+  collections: readonly CollectionRead[],
+): CollectionGroupRow[] {
+  const latest = (values: (string | null)[]) =>
+    Math.max(...values.map((value) => timestamp(value) ?? -Infinity));
+  return names.map((title) => {
+    const held = collections.filter((row) => inCollectionGroup(row, title));
+    const added = latest(held.map((row) => row.server_added_at));
+    const synced = latest(held.map((row) => row.last_rule_sync));
+    return {
+      title,
+      collections: held.length,
+      items: held.reduce((total, row) => total + row.child_count, 0),
+      added: Number.isFinite(added) ? added : null,
+      synced: Number.isFinite(synced) ? synced : null,
+    };
+  });
+}
+
+export function sortCollectionGroups(
+  groups: CollectionGroupRow[],
+  field: SidebarSortField,
+  dir: SidebarSortDir,
+): CollectionGroupRow[] {
+  return sortBy(groups, "groups", field, dir);
 }
 
 function sortBy<T extends { title: string }>(
@@ -458,7 +514,7 @@ export interface SearchFieldGroup {
 
 function searchEntries(
   fields: readonly SidebarSearchField[],
-  scope: SortScope,
+  scope: ListScope,
 ): MenuEntry<SidebarSearchField>[] {
   return fields.map((id) => {
     const field: SearchDef = SEARCHES[id];
@@ -500,7 +556,7 @@ export function searchFieldGroups(
 }
 
 /** The list a sidebar source and mode show. */
-export function sortScope(source: SidebarSource, mode: SidebarMode): SortScope {
+export function sortScope(source: SidebarSource, mode: SidebarMode): ListScope {
   if (source === "overturedb") return "overturedb";
   return mode === "collections" ? "collections" : "library";
 }
@@ -727,8 +783,19 @@ export const FILTERS = {
         : null,
     collections: (filters) =>
       filters.libraryIds.length
-        ? (row) => !!row.library_id && filters.libraryIds.includes(row.library_id)
+        ? (row) => row.library_ids.some((id) => filters.libraryIds.includes(id))
         : null,
+  },
+  collectionHolds: {
+    label: "Holds",
+    group: "libraries",
+    order: 15,
+    collections: (filters) => {
+      const { collectionHolds: holds } = filters;
+      if (holds === "all") return null;
+      return (row) =>
+        holds === "both" ? row.media_types.length > 1 : row.media_types.join() === holds;
+    },
   },
   monitored: {
     label: "Monitor status",

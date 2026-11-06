@@ -21,6 +21,7 @@
   import WorkflowSections from "./WorkflowSections.svelte";
   import PendingButton from "./PendingButton.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
 
   let {
     collection,
@@ -37,6 +38,9 @@
     formId: string;
     libraries: LibrarySectionRead[];
   } = $props();
+
+  // Each visit opens with only Setup and Content expanded.
+  sectionState.forget(getSectionView());
 
   let onServer = $derived(!!collection && !collection.withheld);
   let set = $derived(editor instanceof CollectionDraft && editor.kind === "set" ? editor : null);
@@ -93,14 +97,13 @@
             bind:generator={set.generator}
             libraryIds={set.libraryIds}
             {libraries}
-            mediaType={set.mediaType}
-            capabilities={set.capabilities.data}
+            capabilities={set.setCapabilities}
             group={set.setGroup}
             minimum={set.setPolicy.minimum_items ?? null}
           />
         </DetailForm>
       {:else}
-        <CollectionRulePanel {editor} />
+        <CollectionRulePanel {editor} {libraries} />
       {/if}
     </section>
 
@@ -125,12 +128,8 @@
             level="group"
             defaults={set.defaults.data}
             plex={set.capabilities.data?.visibility ?? false}
-            orders={availableOrders(set.capabilities.data, !!set.generator.smart)}
-            arr={set.capabilities.data?.arr
-              ? set.mediaType === "movie"
-                ? "Radarr"
-                : "Sonarr"
-              : null}
+            orders={availableOrders(set.setCapabilities, !!set.generator.smart)}
+            arr={set.arr}
             memberLabels={set.capabilities.data?.member_labels ?? false}
             filtering={!!set.generator.smart}
           />

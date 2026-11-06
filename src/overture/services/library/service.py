@@ -156,9 +156,12 @@ class LibraryService:
 
         return [
             LibrarySectionRead(
-                id=library_id, title=titles.get(library_id, library_id), count=count
+                id=library_id,
+                title=titles.get(library_id, library_id),
+                media_type=held,
+                count=count,
             )
-            for library_id, count in sorted(
+            for library_id, (held, count) in sorted(
                 counts.items(),
                 key=lambda entry: text_sort_key(
                     titles.get(entry[0], entry[0]), entry[0]

@@ -9,6 +9,11 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Collections:** a collection can span several libraries, of movies, shows or both, with its own criteria for each. Jellyfin and Emby hold one collection for them all; Plex holds one in each library, which Overture keeps alike. The libraries of a saved collection can change, and a set makes one collection per value across its libraries.
+- **Collections:** the library sidebar has a **Collections** tab listing movie and show collections together, with a **Holds** filter.
+- **Collections:** movie and show collections share groups. On upgrade, same-named groups merge; where their settings differ, the show group is kept as `<name> (Shows)`.
+- **Collections:** a set's per-library collections of one value merge into one on upgrade; the next sync folds extra Jellyfin and Emby collections into one, and a Plex copy added later receives the collection's art and theme.
+- **Collections:** the sort menu of **Groups** sorts the groups themselves, by name, collections, items, date added or last synced.
 - **Collections:** MDBList conditions refuse franchise and official-list URLs (`mdblist.com/franchises/...`, `mdblist.com/lists/official/...`) and say what to use instead, since MDBList's API serves neither.
 - **Collections:** `scripts/verify.py` replaces `verify_collections.py`: besides Overture's own checks it reads each media server directly, read only, and compares libraries, items, collections, values and counts with the server's own, loads every collection image, and reports every Plex filter, field, sort and operator and every Jellyfin and Emby filter Overture cannot use.
 - **OvertureDB:** a library title, collection or catalog draft can be contributed on its own through **Contribute issue**, which opens its OvertureDB form on GitHub filled in.
@@ -18,6 +23,13 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** TMDB list and title conditions take TMDB links as well as IDs.
 
 ### Changed
+
+- **Collections:** collection links moved from `/movies/collections` and `/shows/collections` to `/collections`; old links redirect.
+- **API:** collection and group endpoints no longer take `media_type`. A rule holds `libraries`, each with its `library_id` and `criteria`; a collection reports `media_types` and `library_ids`; and `/collections/preview` answers per library.
+- **Collections:** only Setup and Content open by default on a collection's page and no section does in a group, and neither remembers what was open.
+- **Collections:** sort options that say nothing about a collection are gone: art size and shape, theme length, Group inside a group, and Home order outside Plex.
+- **Operations:** Clear Results sits on the right of the footer.
+- **Filters:** Collection operations no longer offer Sync; sync a collection from its page or a group from **Collection groups**.
 
 - **Collections:** a new collection starts from **Create**, then, for a set, **Split by**, which names the group and its title template and fills in the names and order that suit its values, adding no minimum or **Most common only** of its own; **Start from** and **Save as preset** are gone, and the migration drops saved presets.
 - **Collections:** Overture never deletes a collection it manages unless you do: below its minimum, out of season, or left out by its set, a collection only leaves the media server, and **Below minimum** offers **Remove from server** or **Keep on server**. A managed collection deleted on the server stays in Overture and its next sync recreates it.
@@ -37,6 +49,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Interface:** the criteria field list calls its list and tag sources External.
 
 ### Fixed
+
+- **Security:** the container image is built on a Python base with `apt` 3.0.4, fixing CVE-2026-109518.
+- **Library:** TVDB links open by ID, so titles whose TVDB slug differs from their name no longer lead to a missing page.
 
 - **Collections:** changing **Split by** to a dimension Overture counts no longer leaves a set evaluated by Plex when Plex had only been required by the previous dimension.
 - **Collections:** collection art runs compare each collection's current server image with TMDB's, not only images Overture uploaded, and decide while planning the slots no source can serve, reporting them together.

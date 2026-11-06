@@ -5,7 +5,6 @@ lazy from typing import override
 lazy from fastapi.testclient import TestClient
 
 lazy from overture.config import Settings
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import (
     PublicDatasetCollection,
@@ -17,6 +16,7 @@ lazy from overture.routers import public_dataset
 lazy from overture.schemas.common import Status
 lazy from overture.schemas.public_dataset import PublicDatasetStatus
 lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.runtime_helpers import (
     NoopPublicDataset,
 )
@@ -58,7 +58,7 @@ async def test_records_for_collections_and_catalog_entries(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaCollection(
+            stored_collection(
                 id=4,
                 server_item_id="saga",
                 server_type=ServerType.PLEX,

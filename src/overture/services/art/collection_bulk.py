@@ -156,18 +156,14 @@ async def _choose(
             notes.append(reason)
             continue
         threshold = params.threshold
-        result = await art.match(
-            row.id or 0, row.media_type, art_type, max(threshold, 0)
-        )
+        result = await art.match(row.id or 0, art_type, max(threshold, 0))
         matches = [
             match
             for match in result.matches
             if threshold != PERFECT_MATCH_ONLY or match.perfect_match
         ]
         if matches:
-            if not await art.adopt(
-                row.id or 0, row.media_type, art_type, matches[0].url
-            ):
+            if not await art.adopt(row.id or 0, art_type, matches[0].url):
                 return JobOutcome.SKIPPED, NOT_PUBLIC_ART_URL, None
             return JobOutcome.ADOPTED, "matches the server's image", None
         notes.append(f"Local art matching: {no_match_reason(result, threshold)}")
@@ -214,7 +210,6 @@ async def run_collection_art(
                     if url is not None:
                         await art.save(
                             row.id or 0,
-                            row.media_type,
                             art_type,
                             SaveArtRequest(url=url),
                         )

@@ -584,14 +584,14 @@ export const stopBulkAssetsMutation = (options?: Partial<Options<StopBulkAssetsD
     return mutationOptions;
 };
 
-export const listCollectionsQueryKey = (options: Options<ListCollectionsData>) => createQueryKey('listCollections', options, false, ['collections']);
+export const listCollectionsQueryKey = (options?: Options<ListCollectionsData>) => createQueryKey('listCollections', options, false, ['collections']);
 
 /**
  * List Collections
  *
- * Return the collections the last sync listed for the media type.
+ * Return the collections the last sync listed.
  */
-export const listCollectionsOptions = (options: Options<ListCollectionsData>) => queryOptions<ListCollectionsResponse, ListCollectionsError, ListCollectionsResponse, ReturnType<typeof listCollectionsQueryKey>>({
+export const listCollectionsOptions = (options?: Options<ListCollectionsData>) => queryOptions<ListCollectionsResponse, ListCollectionsError, ListCollectionsResponse, ReturnType<typeof listCollectionsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
         const { data } = await listCollections({
             ...options,
@@ -701,14 +701,14 @@ export const getCollectionCapabilitiesOptions = (options: Options<GetCollectionC
     queryKey: getCollectionCapabilitiesQueryKey(options)
 });
 
-export const getCollectionDefaultsQueryKey = (options: Options<GetCollectionDefaultsData>) => createQueryKey('getCollectionDefaults', options, false, ['collections']);
+export const getCollectionDefaultsQueryKey = (options?: Options<GetCollectionDefaultsData>) => createQueryKey('getCollectionDefaults', options, false, ['collections']);
 
 /**
  * Get Collection Defaults
  *
  * Resolve inherited values for collection form placeholders.
  */
-export const getCollectionDefaultsOptions = (options: Options<GetCollectionDefaultsData>) => queryOptions<GetCollectionDefaultsResponse, GetCollectionDefaultsError, GetCollectionDefaultsResponse, ReturnType<typeof getCollectionDefaultsQueryKey>>({
+export const getCollectionDefaultsOptions = (options?: Options<GetCollectionDefaultsData>) => queryOptions<GetCollectionDefaultsResponse, GetCollectionDefaultsError, GetCollectionDefaultsResponse, ReturnType<typeof getCollectionDefaultsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
         const { data } = await getCollectionDefaults({
             ...options,
@@ -837,14 +837,14 @@ export const deleteCollectionGroupMutation = (options?: Partial<Options<DeleteCo
     return mutationOptions;
 };
 
-export const listCollectionGroupsQueryKey = (options: Options<ListCollectionGroupsData>) => createQueryKey('listCollectionGroups', options, false, ['collections']);
+export const listCollectionGroupsQueryKey = (options?: Options<ListCollectionGroupsData>) => createQueryKey('listCollectionGroups', options, false, ['collections']);
 
 /**
  * List Collection Groups
  *
- * Return default and custom collection groups for this media type.
+ * Return default and custom collection groups.
  */
-export const listCollectionGroupsOptions = (options: Options<ListCollectionGroupsData>) => queryOptions<ListCollectionGroupsResponse, ListCollectionGroupsError, ListCollectionGroupsResponse, ReturnType<typeof listCollectionGroupsQueryKey>>({
+export const listCollectionGroupsOptions = (options?: Options<ListCollectionGroupsData>) => queryOptions<ListCollectionGroupsResponse, ListCollectionGroupsError, ListCollectionGroupsResponse, ReturnType<typeof listCollectionGroupsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
         const { data } = await listCollectionGroups({
             ...options,

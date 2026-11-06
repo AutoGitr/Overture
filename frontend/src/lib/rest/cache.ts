@@ -188,10 +188,7 @@ export function patchCollectionRule(collectionId: number, rule: CollectionRuleRe
 export function storeCollectionDetail(collection: CollectionDetail): void {
   patchCollection(collection.id, collection);
   queryClient.setQueryData(
-    getCollectionOptions({
-      path: { collection_id: collection.id },
-      query: { media_type: collection.media_type },
-    }).queryKey,
+    getCollectionOptions({ path: { collection_id: collection.id } }).queryKey,
     collection,
   );
 }

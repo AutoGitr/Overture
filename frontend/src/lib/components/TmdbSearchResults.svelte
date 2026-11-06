@@ -172,7 +172,7 @@
     }
     const existing = collections.find((entry) => entry.tmdb_collection_id === result.tmdb_id);
     onOpen(() =>
-      existing ? goToCollectionView(existing, mode) : goToNewCollection("movie", result.tmdb_id),
+      existing ? goToCollectionView(existing, mode) : goToNewCollection(result.tmdb_id),
     );
   }
 

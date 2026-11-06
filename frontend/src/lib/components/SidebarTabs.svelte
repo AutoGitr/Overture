@@ -1,54 +1,56 @@
 <script lang="ts">
   import Clapperboard from "@lucide/svelte/icons/clapperboard";
+  import Layers from "@lucide/svelte/icons/layers";
   import MonitorPlay from "@lucide/svelte/icons/monitor-play";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import type { CollectionView, SidebarTab } from "../utils/sidebarDomain";
 
-  let { totalMovies, totalShows }: { totalMovies: number; totalShows: number } = $props();
+  let {
+    totalMovies,
+    totalShows,
+    totalCollections,
+  }: { totalMovies: number; totalShows: number; totalCollections: number } = $props();
 
-  let collectionsEnabled = $derived(
-    uiState.sidebarSource === "overturedb"
-      ? uiState.sidebarTab === "movie"
-      : settingsState.current.collections_supported,
-  );
+  let collections = $derived(uiState.sidebarMode === "collections");
+  let library = $derived(uiState.sidebarSource === "library");
+  /** Library collections hold movies and shows alike, so they sit beside both tabs. */
+  let collectionsTab = $derived(library && settingsState.current.collections_supported);
+  let catalogModes = $derived(!library && uiState.sidebarTab === "movie");
 
   /** Show the library's collections in *view*; the open collection stays open. */
   function showCollections(view: CollectionView) {
     uiState.setCollectionView(view);
-    if (uiState.sidebarMode !== "collections")
-      uiState.goToSection(uiState.sidebarSource, uiState.sidebarTab, "collections");
+    if (!collections) uiState.goToSection("library", uiState.sidebarTab, "collections");
   }
 
-  let collections = $derived(uiState.sidebarMode === "collections");
-  let modes = $derived([
-    {
-      label: "Items",
-      active: !collections,
-      select: () => uiState.goToSection(uiState.sidebarSource, uiState.sidebarTab, "items"),
-    },
-    // The catalog's collections have no groups.
-    ...(uiState.sidebarSource === "library"
+  let modes = $derived(
+    library
       ? (["groups", "collections"] as const).map((view) => ({
           label: view === "groups" ? "Groups" : "Collections",
-          active: collections && uiState.collectionView === view,
+          active: uiState.collectionView === view,
           select: () => showCollections(view),
         }))
       : [
+          {
+            label: "Items",
+            active: !collections,
+            select: () => uiState.goToSection("overturedb", uiState.sidebarTab, "items"),
+          },
           {
             label: "Collections",
             active: collections,
             select: () => uiState.goToSection("overturedb", uiState.sidebarTab, "collections"),
           },
-        ]),
-  ]);
+        ],
+  );
 </script>
 
 {#snippet tab(value: SidebarTab, label: string, count: number)}
   <button
     type="button"
-    class={["tab", { active: uiState.sidebarTab === value }]}
-    aria-pressed={uiState.sidebarTab === value}
+    class={["tab", { active: uiState.sidebarTab === value && !(library && collections) }]}
+    aria-pressed={uiState.sidebarTab === value && !(library && collections)}
     onclick={() => uiState.goToSection(uiState.sidebarSource, value, "items")}
   >
     {#if value === "movie"}
@@ -64,9 +66,21 @@
 <div class="tabs">
   {@render tab("movie", "Movies", totalMovies)}
   {@render tab("show", "Shows", totalShows)}
+  {#if collectionsTab}
+    <button
+      type="button"
+      class={["tab", { active: collections }]}
+      aria-pressed={collections}
+      onclick={() => showCollections(uiState.collectionView)}
+    >
+      <Layers size={16} />
+      <span>Collections</span>
+      <span class="count">{totalCollections}</span>
+    </button>
+  {/if}
 </div>
 
-{#if collectionsEnabled}
+{#if (library && collections && collectionsTab) || catalogModes}
   <div class="modes" role="group" aria-label="Show">
     {#each modes as option (option.label)}
       <button

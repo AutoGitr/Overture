@@ -68,6 +68,12 @@
     ["regular", "Regular"],
     ["smart", "Smart"],
   ] as const;
+  const HOLDS_OPTIONS = [
+    ["all", "All"],
+    ["movie", "Movies"],
+    ["show", "Shows"],
+    ["both", "Both"],
+  ] as const;
   const SYNC_OPTIONS = [
     ["all", "All"],
     ["synced", "Synced"],
@@ -92,6 +98,7 @@
     overtureDb: { options: COMPLETE_OPTIONS },
     themerrDb: { options: COMPLETE_OPTIONS },
     collectionMembers: { options: MEMBERS_OPTIONS },
+    collectionHolds: { options: HOLDS_OPTIONS },
     collectionKind: { options: KIND_OPTIONS },
     collectionSync: { options: SYNC_OPTIONS },
     collectionSize: { options: SIZE_OPTIONS },
@@ -104,7 +111,9 @@
   }));
 
   const librariesQuery = createQuery(() => ({
-    ...getLibrariesOptions({ query: { media_type: uiState.sidebarTab } }),
+    ...getLibrariesOptions(
+      uiState.sidebarMode === "collections" ? {} : { query: { media_type: uiState.sidebarTab } },
+    ),
     enabled: uiState.sidebarSource === "library",
   }));
   let libraries = $derived(librariesQuery.data ?? []);

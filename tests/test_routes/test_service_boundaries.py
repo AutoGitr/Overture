@@ -11,7 +11,6 @@ lazy import pytest
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot, select_art
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.session import Database
@@ -36,6 +35,7 @@ lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopYoutube,
@@ -104,7 +104,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         select_art(item, ArtType.POSTER, PublicArtUrl("https://images.test/old.jpg"))
         session.add(item)
         session.add(
-            MediaCollection(
+            stored_collection(
                 server_item_id="collection-1",
                 media_type=MediaType.MOVIE,
                 server_type=ServerType.PLEX,
