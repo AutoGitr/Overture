@@ -16,6 +16,7 @@ lazy from ...schemas.server_audit import (
     ServerAuditRequest,
     ServerAuditThemeDeleteTarget,
 )
+lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
 lazy from ..job_snapshots import patch_snapshot, require_snapshot_keys
 lazy from ..local_assets.service import LocalAssets
@@ -45,6 +46,7 @@ class ServerAuditService:
         app_config: Settings,
         database: Database,
         config_dir: Path,
+        collection_art: CollectionArtService,
     ) -> None:
         self._jobs = background_jobs
         self._provider_registry = provider_registry
@@ -55,6 +57,7 @@ class ServerAuditService:
         self._config = app_config
         self._database = database
         self._config_dir = config_dir
+        self._collection_art = collection_art
 
     def _audit_context(self) -> AuditContext:
         return AuditContext(
@@ -66,6 +69,7 @@ class ServerAuditService:
             app_config=self._config,
             database=self._database,
             config_dir=self._config_dir,
+            collection_art=self._collection_art,
         )
 
     async def start(
@@ -95,8 +99,9 @@ class ServerAuditService:
     async def fix(self, body: FixAuditRequest) -> StatusResponse:
         """Start fixing selected findings in one run, then verify each.
 
-        Images are unlocked and refreshed; themes have their server theme
-        deleted before their item is refreshed.
+        Item images are unlocked and refreshed, collection images uploaded
+        again; themes have their server theme deleted before their item is
+        refreshed.
         """
         await self._require_current_snapshot(
             body.snapshot_finished_at, [*body.targets, *body.themes]

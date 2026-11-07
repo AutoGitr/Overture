@@ -46,8 +46,8 @@ async def test_gzip_requires_one_complete_bounded_stream(
     )
     monkeypatch.setattr(
         catalog,
-        "catalog_url_candidates",
-        lambda: ["https://catalog.test/catalog.jsonl.gz"],
+        "PUBLIC_DATASET_CATALOG_URL",
+        "https://catalog.test/catalog.jsonl.gz",
     )
 
     def mock_client(**_kwargs: object) -> httpx2.AsyncClient:

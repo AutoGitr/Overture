@@ -109,7 +109,7 @@ async def test_bulk_art_uses_source_order_and_skips_local_when_overturedb_matche
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
 ) -> None:
     item = movie_item()
-    queued: list[str] = []
+    queued: list[str | None] = []
 
     async def unexpected_local(*_args: object, **_kwargs: object):
         raise AssertionError("local source should not run after OvertureDB matched")
@@ -243,7 +243,7 @@ async def test_bulk_art_saved_incomplete_selection_queues_download_without_remat
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
 ) -> None:
     item = movie_item(art={"poster": {"url": "saved-url"}})
-    queued: list[str] = []
+    queued: list[str | None] = []
 
     async def unexpected_source(*_args: object, **_kwargs: object):
         raise AssertionError("sources should not run for saved incomplete selections")

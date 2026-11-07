@@ -6,6 +6,7 @@
   import FieldRow from "./FieldRow.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
   import { CollectionDraft, type CollectionEditor } from "../utils/collectionForms.svelte";
+  import Notice from "./Notice.svelte";
   import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
 
@@ -27,6 +28,19 @@
   ] as const;
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
+  let libraryGroups = $derived(
+    (
+      [
+        ["movie", "Movie libraries"],
+        ["show", "Show libraries"],
+      ] as const
+    )
+      .map(([mediaType, label]) => ({
+        label,
+        libraries: libraries.filter((library) => library.media_type === mediaType),
+      }))
+      .filter((group) => group.libraries.length > 0),
+  );
 </script>
 
 <DetailForm
@@ -57,18 +71,19 @@
   {/if}
   <fieldset class="libraries" disabled={editor.generated}>
     <legend class="form-label">Libraries</legend>
-    {#each libraries as library (library.id)}
-      <label class="form-row">
-        <input
-          type="checkbox"
-          checked={editor.libraryIds.includes(library.id)}
-          onchange={(event) => editor.setLibrary(library.id, event.currentTarget.checked)}
-        />
-        {library.title}
-        <span class="badge badge-muted" aria-hidden="true"
-          >{library.media_type === "movie" ? "Movies" : "Shows"}</span
-        >
-      </label>
+    {#each libraryGroups as group (group.label)}
+      <div class="library-group" role="group" aria-label={group.label}>
+        {#each group.libraries as library (library.id)}
+          <label class="form-row">
+            <input
+              type="checkbox"
+              checked={editor.libraryIds.includes(library.id)}
+              onchange={(event) => editor.setLibrary(library.id, event.currentTarget.checked)}
+            />
+            {library.title}
+          </label>
+        {/each}
+      </div>
     {/each}
     {#if editor.libraryIds.length > 1 && !creatingSet}
       <span class="hint"
@@ -97,7 +112,7 @@
     <FieldRow
       label="Group"
       for={`${id}-group`}
-      hint="A set is a group whose collections it creates; Split by names it. An existing group becomes this set."
+      hint="A set is a group whose collections it creates; Split by names it. A group that holds collections can become a set; one that already is a set cannot."
     >
       <input
         id={`${id}-group`}
@@ -110,6 +125,19 @@
         {#each groups as group (group)}<option value={group}></option>{/each}
       </datalist>
     </FieldRow>
+    {#each form.setNotices as notice (notice.title)}
+      <Notice
+        tone={notice.tone}
+        title={notice.title}
+        message={notice.message}
+        action={notice.group
+          ? {
+              label: "Open group settings",
+              run: () => uiState.openCollectionGroups(notice.group),
+            }
+          : undefined}
+      />
+    {/each}
   {:else}
     <FieldRow label="Title" for={`${id}-title`}>
       <input
@@ -127,7 +155,7 @@
       for={`${id}-group`}
       hint={editor.generated
         ? "Its group's set titles this collection."
-        : "The collection inherits the group's defaults."}
+        : (draft?.groupHint ?? "The collection inherits the group's defaults.")}
     >
       <select
         id={`${id}-group`}
@@ -158,7 +186,8 @@
 </DetailForm>
 
 <style>
-  .libraries {
+  .libraries,
+  .library-group {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2) var(--space-4);
@@ -173,4 +202,7 @@
     padding: 0;
   }
 
+  .library-group {
+    width: 100%;
+  }
 </style>

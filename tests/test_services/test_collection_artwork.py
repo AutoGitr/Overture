@@ -16,6 +16,7 @@ lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    ArtSource,
     ArtType,
     CatalogMediaType,
     ImageSize,
@@ -28,6 +29,7 @@ lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.schemas.art import ArtCandidate, SaveArtRequest
+lazy from overture.schemas.collections import collection_artwork
 lazy from overture.services.art.candidates import (
     ArtCandidates,
     CandidatePolicy,
@@ -175,6 +177,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
         matcher=Matcher(),
+        phash=unused(PhashService),
         downloads=unused(DownloadService),
         publisher=publisher,
         provider_registry=NoopProviderRegistry(provider),
@@ -233,6 +236,66 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             await service.collections.save(404, ArtType.POSTER, SaveArtRequest(url=URL))
     finally:
         await images.client.aclose()
+
+
+async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_again(
+    tmp_path: Path, database: Database, app_config: Settings
+) -> None:
+    data = BytesIO()
+    Image.new("RGB", (200, 300), "blue").save(data, format="PNG")
+    image_bytes = data.getvalue()
+    provider = ArtProvider(app_config)
+    async with database.write_session() as session:
+        session.add(
+            stored_collection(
+                id=1,
+                server_item_id="box",
+                server_type=ServerType.PLEX,
+                media_type=MediaType.MOVIE,
+                title="Saga",
+                last_synced_at=utc_now(),
+            )
+        )
+        await session.flush()
+        session.add(managing_rule(1))
+    service = ArtService(
+        app_config=app_config,
+        database=database,
+        asset_storage=AssetStorage(app_config=app_config),
+        matcher=Matcher(),
+        phash=PhashService(app_config=app_config),
+        downloads=unused(DownloadService),
+        publisher=FakePublisher(),
+        provider_registry=NoopProviderRegistry(provider),
+        candidates=Candidates(),
+        image_clients=unused(ProxyClientManager),
+        image_cache=ImageCache(tmp_path / "images"),
+    )
+
+    upload = await service.uploads.store(image_bytes)
+    await service.collections.save(
+        1, ArtType.POSTER, SaveArtRequest(upload_hash=upload.upload_hash)
+    )
+
+    assert provider.uploads == [(ArtType.POSTER, image_bytes, "image/png")]
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        artwork = collection_artwork(row)
+    assert (artwork.poster_source, artwork.poster_hash) == (
+        ArtSource.UPLOAD,
+        upload.upload_hash,
+    )
+    assert artwork.poster_status == "complete"
+    thumb = await service.collections.local_image(
+        1, ArtType.POSTER, ImageSize.DISPLAY, upload.upload_hash
+    )
+    assert thumb.media_type == "image/avif"
+    with pytest.raises(PublicServiceError, match="Collection image not found"):
+        await service.collections.local_image(1, ArtType.BACKGROUND, None, None)
+
+    await service.collections.reupload(1, ArtType.POSTER)
+    assert provider.uploads[-1] == (ArtType.POSTER, image_bytes, "image/png")
 
 
 async def test_collection_candidates_share_source_policy_and_catalog_toggle(

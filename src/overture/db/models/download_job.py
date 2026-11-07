@@ -30,6 +30,8 @@ class DownloadJobBase(SQLModel):
     job_type: JobType = Field(sa_type=enum_type(JobType))
     art_type: ArtType | None = Field(default=None, sa_type=enum_type(ArtType))
     target_url: str | None = None
+    #: An art job's source when it is an uploaded image in the image cache.
+    upload_hash: str | None = None
     season_id: int | None = Field(
         default=None,
         foreign_key="seasons.id",

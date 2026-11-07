@@ -35,6 +35,7 @@
   import IdBadge from "./IdBadge.svelte";
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import PasteArtButton from "./PasteArtButton.svelte";
+  import UploadArtButton from "./UploadArtButton.svelte";
   import SeasonGrid from "./SeasonGrid.svelte";
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import ThemePanel from "./ThemePanel.svelte";
@@ -288,7 +289,7 @@
     />
   {/snippet}
 
-  {#snippet subtabActions()}<PasteArtButton />{/snippet}
+  {#snippet subtabActions()}<PasteArtButton /><UploadArtButton />{/snippet}
 
   {#snippet content()}
     {#if view.mode === "art"}

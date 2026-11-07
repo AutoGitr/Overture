@@ -118,3 +118,51 @@ def test_franchise_pages_are_refused_with_what_works_instead(value: str) -> None
 def test_official_lists_are_refused_by_name() -> None:
     with pytest.raises(ValueError, match="official lists"):
         mdblist_identifier("https://mdblist.com/lists/official/movies/trending")
+
+
+async def test_list_search_returns_public_lists_from_the_fixed_origin(
+    app_config: Settings,
+) -> None:
+    app_config.MDBLIST_API_KEY = SecretStr("private-key")
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        assert (request.url.host, request.url.path) == (
+            "api.mdblist.com",
+            "/lists/search",
+        )
+        assert request.url.params["query"] == "top"
+        assert request.url.params["apikey"] == "private-key"
+        return httpx2.Response(
+            200,
+            json=[
+                {"id": 2194, "name": "Top Movies", "user_name": "gary", "items": 10},
+                {"id": 7, "name": "Unowned", "slug": "unowned", "likes": 3},
+            ],
+        )
+
+    factory, _transport = mock_client_factory(handle)
+    client = MDBListClient(app_config=app_config, client_factory=factory)
+    try:
+        found = await client.search_lists("top")
+    finally:
+        await client.close()
+
+    assert [
+        (entry.id, entry.name, entry.user_name, entry.items) for entry in found
+    ] == [
+        (2194, "Top Movies", "gary", 10),
+        (7, "Unowned", None, None),
+    ]
+
+
+async def test_a_failed_list_search_says_so(app_config: Settings) -> None:
+    app_config.MDBLIST_API_KEY = SecretStr("private-key")
+    factory, _transport = mock_client_factory(
+        lambda _request: httpx2.Response(200, json={"error": "Unavailable"})
+    )
+    client = MDBListClient(app_config=app_config, client_factory=factory)
+    try:
+        with pytest.raises(PublicServiceError, match="could not search"):
+            await client.search_lists("top")
+    finally:
+        await client.close()

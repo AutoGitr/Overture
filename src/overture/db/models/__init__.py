@@ -2,7 +2,6 @@
 
 lazy from .api_key import ApiKey
 lazy from .art import (
-    ART_SLOT_FIELDS,
     ArtSlot,
 )
 lazy from .auth_session import AuthSession
@@ -37,7 +36,6 @@ lazy from .settings import (
 )
 
 __all__ = [
-    "ART_SLOT_FIELDS",
     "MAX_THEME_FORMAT_LENGTH",
     "SETTINGS_ROW_ID",
     "ApiKey",

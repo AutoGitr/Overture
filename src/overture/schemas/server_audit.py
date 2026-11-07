@@ -17,14 +17,32 @@ class ServerAuditRequest(MediaFolderScope):
 
     art_types: UniqueList[ArtType] = Field(default_factory=lambda: list(ArtType))
     check_themes: bool = True
+    #: Compare the images Overture uploaded to collections with the server's.
+    check_collections: bool = False
 
 
 class ServerAuditRefreshTarget(StrictBaseModel):
-    """One image refresh target selected from server audit results."""
+    """One image target selected from server audit results.
 
-    item_id: int
+    An item's image is refreshed from its local file; a collection's is
+    uploaded again from the image Overture kept.
+    """
+
+    item_id: int | None = None
+    collection_id: int | None = None
     season_id: int | None = None
     art_type: ArtType
+
+    @model_validator(mode="after")
+    def require_one_owner(self) -> Self:
+        """Name an item or a collection; only an item has seasons."""
+        if (self.item_id is None) == (self.collection_id is None):
+            raise ValueError("Name an item or a collection")
+        if self.collection_id is not None and (
+            self.season_id is not None or self.art_type.owned_by_season
+        ):
+            raise ValueError("Collections have posters and backgrounds only")
+        return self
 
 
 class ServerAuditThemeDeleteTarget(StrictBaseModel):
@@ -42,8 +60,8 @@ class ServerAuditThemeDeleteTarget(StrictBaseModel):
 class FixAuditRequest(StrictBaseModel):
     """Findings selected from one server audit's results, to fix in one run.
 
-    Images are unlocked and refreshed; themes have their server theme deleted
-    first, then their item is refreshed.
+    Item images are unlocked and refreshed, collection images uploaded again;
+    themes have their server theme deleted first, then their item is refreshed.
     """
 
     targets: list[ServerAuditRefreshTarget] = Field(
@@ -111,7 +129,9 @@ class ServerAuditResult(StrictBaseModel):
     """One server audit result row sent over WebSocket."""
 
     kind: Literal["art", "theme"]
-    item_id: int
+    #: The item compared, or the collection; exactly one is set.
+    item_id: int | None = None
+    collection_id: int | None = None
     season_id: int | None = None
     art_type: ServerAsset
     status: AuditStatus

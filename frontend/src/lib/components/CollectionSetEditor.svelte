@@ -61,7 +61,10 @@
   );
   let sharedSources = $derived(dimension?.smart_only ? [] : (capabilities?.sources ?? []));
   let entries = $derived(preview.data ?? null);
-  let created = $derived(entries?.filter((entry) => !entry.below_minimum) ?? []);
+  let created = $derived(
+    entries?.filter((entry) => !entry.below_minimum && !entry.title_taken_by) ?? [],
+  );
+  let taken = $derived(entries?.filter((entry) => !!entry.title_taken_by) ?? []);
 
   function runPreview() {
     preview.mutate({
@@ -273,21 +276,31 @@
     <p role="alert">{errorMessage(preview.error, "Could not preview the set")}</p>
   {:else if entries}
     <p class="hint">
-      {countOf(created.length, "collection")}, {entries.length - created.length}
-      below the minimum.
+      {countOf(created.length, "collection")}, {entries.filter((entry) => entry.below_minimum)
+        .length} below the minimum.
     </p>
+    {#if taken.length}
+      <p class="hint" role="alert">
+        {taken.length === 1
+          ? `Another collection is already titled "${taken[0]?.title}", so the set skips it.`
+          : `${taken.length} titles are already taken by other collections, so the set skips them.`}
+        Rename the other collection, or change the title template or aliases.
+      </p>
+    {/if}
     <ul class="entries">
       {#each entries as entry (`${entry.library_id}:${entry.value}`)}
-        <li class={{ skipped: entry.below_minimum }}>
+        <li class={{ skipped: entry.below_minimum || !!entry.title_taken_by }}>
           <span
             >{entry.title}{libraryIds.length > 1 ? ` (${libraryName(entry.library_id)})` : ""}</span
           >
           <span class="hint"
-            >{countOf(entry.member_count, "title")}{entry.below_minimum
-              ? ", below minimum"
-              : entry.collection_id
-                ? ", exists"
-                : ", new"}</span
+            >{countOf(entry.member_count, "title")}{entry.title_taken_by
+              ? ", title taken"
+              : entry.below_minimum
+                ? ", below minimum"
+                : entry.collection_id
+                  ? ", exists"
+                  : ", new"}</span
           >
         </li>
       {/each}

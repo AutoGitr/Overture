@@ -80,7 +80,7 @@ class PublicDatasetService:
             ManagedJobLifecycle(
                 JobKind.PUBLIC_DATASET_SYNC,
                 event_job_id="public-dataset:sync",
-                target={"catalog_url": catalog.get_public_dataset_catalog_url()},
+                target={"catalog_url": catalog.PUBLIC_DATASET_CATALOG_URL},
             ),
             publisher,
             database=database,
@@ -127,7 +127,7 @@ class PublicDatasetService:
         return PublicDatasetStatus(
             enabled=schedule.enabled,
             repo_url=catalog.PUBLIC_DATASET_REPO_URL,
-            catalog_url=catalog.get_public_dataset_catalog_url(),
+            catalog_url=catalog.PUBLIC_DATASET_CATALOG_URL,
             last_synced_at=schedule.payload.last_synced_at,
             last_status=schedule.payload.last_status,
             last_stats=schedule.payload.last_stats,

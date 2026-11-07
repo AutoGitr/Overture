@@ -152,6 +152,7 @@ class TestRestResponseContracts:
             "/library/seasons/{season_id}/local-image",
             "/library/items/{item_id}/local-image/{art_type}",
             "/collections/{collection_id}/image/{art_type}",
+            "/collections/{collection_id}/local-image/{art_type}",
         }
         routes = [
             route
@@ -442,7 +443,19 @@ class TestArtRequestContract:
         assert threshold["schema"]["default"] == MATCH_THRESHOLD_DEFAULT
 
     def test_save_body_carries_only_the_picture(self) -> None:
-        assert set(SaveArtRequest.model_fields) == {"url", "width", "height"}
+        assert set(SaveArtRequest.model_fields) == {
+            "url",
+            "upload_hash",
+            "width",
+            "height",
+        }
+
+    @pytest.mark.parametrize(
+        "body", [{}, {"url": "https://img.test/a.jpg", "upload_hash": "a" * 64}]
+    )
+    def test_save_body_names_exactly_one_picture(self, body: dict[str, str]) -> None:
+        with pytest.raises(ValidationError, match="link or an uploaded image"):
+            SaveArtRequest.model_validate(body)
 
 
 class TestBulkRequestContract:

@@ -302,8 +302,8 @@ describe("collection management", () => {
       "/api/collections/groups": [],
     });
     renderWithQueryClient(CollectionPage);
-    const input = await screen.findByLabelText("TMDB collection ID");
-    expect(input).toHaveValue(10);
+    const input = await screen.findByLabelText("Collection TMDB franchise ID");
+    expect(input).toHaveValue("10");
     expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
     await fireEvent.input(input, { target: { value: "99" } });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -430,8 +430,8 @@ describe("collection management", () => {
     await waitFor(() => expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Second"));
   });
 
-  it("drops a member anywhere on another row at that row's position", async () => {
-    const all = [...members, third];
+  it("drops a member anywhere on another row of its library at that row's position", async () => {
+    const all = [...members, { ...third, library_id: "movies" }];
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
@@ -461,6 +461,30 @@ describe("collection management", () => {
     expect(JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body))).toEqual(
       { member_ids: [2, 3, 1], order_type: "custom" },
     );
+  });
+
+  it("lists members by library, moving each only among its library's", async () => {
+    const both = { ...detail, library_ids: ["movies", "other"], members: [...members, third] };
+    mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
+      "/api/collections/groups": [],
+      "/api/collections/12": both,
+      "/api/library/items": { items: both.members, total: 3 },
+      "/api/library/libraries": [
+        { id: "movies", title: "Films", media_type: "movie", count: 2 },
+        { id: "other", title: "Classics", media_type: "movie", count: 1 },
+      ],
+    });
+    renderWithQueryClient(CollectionPage);
+    await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
+
+    const films = within(await screen.findByRole("region", { name: "Films members" }));
+    const classics = within(screen.getByRole("region", { name: "Classics members" }));
+    expect(films.getAllByRole("listitem")).toHaveLength(2);
+    expect(classics.getByRole("button", { name: "Move Third up" })).toBeDisabled();
+    expect(classics.getByRole("button", { name: "Move Third down" })).toBeDisabled();
   });
 
   it("keeps member search trimmed and excludes collection members", async () => {

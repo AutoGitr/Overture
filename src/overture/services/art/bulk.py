@@ -24,7 +24,7 @@ lazy from functools import partial
 lazy from sqlalchemy.exc import SQLAlchemyError
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import ArtFileFacts, art_file_facts
+lazy from ...db.art_slots import ArtFileFacts, SavedArt, art_file_facts, saved_art
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
@@ -233,7 +233,7 @@ class _Slot:
     item_id: int
     label: str
     local: ArtFileFacts | None
-    saved_url: str | None
+    saved: SavedArt | None
 
     @property
     def target(self) -> str:
@@ -243,10 +243,18 @@ class _Slot:
     def season_id(self) -> int | None:
         return self.season.id if self.season else None
 
-    def queue(self, run: _ArtRun, url: str) -> Callable[[], Awaitable[bool]]:
+    def queue(
+        self, run: _ArtRun, url: str | None, upload_hash: str | None = None
+    ) -> Callable[[], Awaitable[bool]]:
         return lambda: queue_download(
-            JobTarget.art(self.item_id, self.art_type, url, season_id=self.season_id),
-            planned=self.saved_url,
+            JobTarget.art(
+                self.item_id,
+                self.art_type,
+                url,
+                upload_hash=upload_hash,
+                season_id=self.season_id,
+            ),
+            planned=self.saved,
             downloads=run.downloads,
             on_queued=run.watch.tracking(self.target),
             database=run.database,
@@ -261,7 +269,7 @@ class _Slot:
         )
 
 
-async def _settle_saved(run: _ArtRun, slot: _Slot, saved_url: str) -> None:
+async def _settle_saved(run: _ArtRun, slot: _Slot, saved: SavedArt) -> None:
     """Keep a saved selection when Replace existing is off, restoring its file."""
     if slot.local is not None:
         await run.job.report(JobOutcome.SKIPPED, slot.target, SAVED_SELECTION)
@@ -270,7 +278,7 @@ async def _settle_saved(run: _ArtRun, slot: _Slot, saved_url: str) -> None:
             run.job,
             slot.target,
             "restores the saved selection; local file missing",
-            slot.queue(run, saved_url),
+            slot.queue(run, saved.url, saved.upload_hash),
         )
 
 
@@ -383,13 +391,14 @@ def _slot(
         item_id=item_id,
         label=target_label(item, season=season),
         local=art_file_facts(stored) if stored else None,
-        saved_url=stored.url if stored else None,
+        saved=saved_art(stored),
     )
 
 
-#: What deciding a slot found: the sources' decision and notes, the saved URL
-#: that settles it without asking them, or the error that stopped the asking.
-type _Outcome = tuple[_Decision | None, _Notes] | str | Exception
+#: What deciding a slot found: the sources' decision and notes, the saved
+#: selection that settles it without asking them, or the error that stopped
+#: the asking.
+type _Outcome = tuple[_Decision | None, _Notes] | SavedArt | Exception
 
 
 async def _decide(
@@ -400,8 +409,8 @@ async def _decide(
     Planning already skipped it if it was checked recently, unless it is a
     saved selection Retry may restore.
     """
-    if slot.saved_url and not run.params.overwrite_existing:
-        return slot, slot.saved_url
+    if slot.saved is not None and not run.params.overwrite_existing:
+        return slot, slot.saved
     try:
         return slot, await _resolve(run, slot, index)
     except (SQLAlchemyError, OSError, ValueError) as exc:
@@ -412,7 +421,7 @@ async def _visit_slot(run: _ArtRun, slot: _Slot, outcome: _Outcome) -> None:
     """Report and act on one decided slot."""
     if isinstance(outcome, Exception):
         raise outcome
-    if isinstance(outcome, str):
+    if isinstance(outcome, SavedArt):
         await _settle_saved(run, slot, outcome)
         return
     decision, notes = outcome

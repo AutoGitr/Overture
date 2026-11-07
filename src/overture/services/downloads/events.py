@@ -6,7 +6,7 @@ lazy from typing import Any
 lazy from ... import protocols
 lazy from ...dataset_contract.contract import ART_SOURCE_LABELS
 lazy from ...db.models.download_job import DownloadJob
-lazy from ...domain import JobStatus, JobType
+lazy from ...domain import ArtSource, JobStatus, JobType
 lazy from ...jobs.kinds import DownloadStatus, JobKind
 lazy from ...jobs.lifecycle import publish_job_lifecycle
 lazy from ...jobs.progress_log import JobOutcome, log_entry
@@ -31,6 +31,8 @@ def _source(job: DownloadJob) -> str | None:
     """Name where a download comes from: the art's host, or YouTube for themes."""
     if job.job_type is not JobType.ART:
         return "YouTube"
+    if job.upload_hash:
+        return ArtSource.UPLOAD.label
     if not job.target_url:
         return None
     source = art_source_label(job.target_url)

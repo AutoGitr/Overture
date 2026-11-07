@@ -132,6 +132,7 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       );
       await page.route("**/api/collections/defaults{,?*}", (route) => route.fulfill({ json: {} }));
       await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
+      await page.route("**/api/collections/sets{,?*}", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/collections/capabilities{,?*}", (route) =>
         route.fulfill({ json: collectionCapabilities() }),
       );

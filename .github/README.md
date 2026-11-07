@@ -33,7 +33,8 @@ media server's asset naming scheme.
 
 - **Artwork in one place.** Compare candidates from your media server, TMDB and
   OvertureDB, sorted by resolution and ranked by visual similarity to your existing
-  selection. Filter by aspect ratio and language, or paste an image URL.
+  selection. Filter by aspect ratio and language, paste an image URL, or upload
+  an image of your own.
 - **Themes with a preview.** Choose OvertureDB or
   [ThemerrDB](https://github.com/LizardByte/ThemerrDB) picks, search YouTube with
   a duration limit, or paste a YouTube link. Save as MP3 with optional loudness
@@ -438,6 +439,16 @@ The sidebar offers search, sorting and completeness filters. An artwork slot
 is complete when a choice is saved and its file exists; a show also needs a
 poster for every season with videos.
 
+Besides choosing a candidate or pasting a link, **Upload image** beside **Paste
+URL** saves a JPEG or PNG from your device into any art slot, of an item, a
+season or a collection; pasting an image on the art tab does the same. An
+upload is kept in the image cache (`cache/images` in the config directory, by
+the hash of its bytes, like every image Overture shows) and written beside the
+media like any other artwork; a collection's goes to the media server. Uploads
+count as saved choices, show as the **Upload** art source in the filters, and
+cannot be contributed to OvertureDB, which takes public links only. The item
+filters can also show only the titles of one **Collection**.
+
 For titles outside your library, switch the search field to **TMDB** (requires
 `TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
 finds their media folder.
@@ -449,11 +460,13 @@ Browsers offer this only over HTTPS, so serve Overture through a
 
 ### Collections
 
-Plex, Jellyfin and Emby collections have their own **Collections** tab in the
-library sidebar, beside Movies and Shows, with movie and show collections
-together: under **Groups**, inside their groups, or **Collections**, all in one
-list; Overture remembers which you used last. Movies and shows share groups, and
+Plex, Jellyfin and Emby collections open from the icon beside Movies and Shows
+in the library sidebar, with movie and show collections together. The first
+click opens the view you used last, **Groups** (a folder icon: collections
+inside their groups) or **Collections** (a layers icon: all in one list); each
+further click switches between them. Movies and shows share groups, and
 **Holds** in the filters narrows the list to either or to collections of both.
+In the OvertureDB catalog, the same icon beside Movies opens its collections.
 **Groups** lists every group, empty ones too; **Ungrouped** and **Unmanaged**
 appear only while they hold a collection. A sparkle marks smart collections. **+ Create collection** opens a Configure page, the one place to create
 anything: **One collection**, or **One per value** (a collection set).
@@ -556,8 +569,13 @@ typed, with the library's most common values suggested first; a TMDB keyword
 also suggests the keywords TMDB knows, so one no title has yet can be used too. A TMDB person or franchise is one field: type a name and search,
 then pick a result, whose ID takes its place, or type the ID. Radarr tags and
 TMDB franchises are offered for movie collections only, Sonarr tags for show
-collections only. Each condition and group can be duplicated, or copied and
-pasted into the criteria of any collection of the same media type.
+collections only. TMDB titles and MDBList lists can be searched by name too
+(MDBList search needs `MDBLIST_API_KEY`); each result picked is added to the
+condition. TMDB has no list search, so TMDB lists take IDs or links. Each
+condition and group can be duplicated, or copied and pasted into any criteria
+that can test it: those of another library, collection or set, as long as they
+offer its field and operator or its list. TMDB title IDs and charts paste only
+into criteria of the same media type, since a movie's ID names another show.
 
 On Plex, **Collection type** chooses who evaluates the criteria: **Regular**,
 which Overture evaluates on each sync from the metadata, TMDB facts and lists it
@@ -647,7 +665,7 @@ finished.
 | Sync      | Imports library items, folders, seasons and existing local assets. Full sync also hides items removed from the server and keeps their files. |
 | Assets    | Fills artwork and themes for monitored items using your chosen sources and order. Runs manually or on a schedule.                            |
 | Renamer   | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                      |
-| Audit     | Compares local assets with the server, refreshes selected differences and checks whether the changes took effect.                            |
+| Audit     | Compares local assets, and optionally the images Overture uploaded to collections, with the server; fixes selected differences and checks whether the changes took effect. |
 
 A run you start keeps its results on screen until you choose **Clear Results**
 or the next run starts. A scheduled run, including an incremental poll, never

@@ -1,23 +1,41 @@
 """Artwork REST schemas."""
 
-lazy from typing import Literal
+lazy from typing import Literal, Self
 
-lazy from pydantic import Field
+lazy from pydantic import Field, model_validator
 
 lazy from ..domain import ArtType
 lazy from .base import PublicText, StrictBaseModel
+lazy from .validators import ImageHash
 
 
 class SaveArtRequest(StrictBaseModel):
-    """The chosen artwork for one slot.
+    """The chosen artwork for one slot: a link, or an uploaded image.
 
     Which slot it is comes from the request path and query, so the body only
     carries the picture itself.
     """
 
-    url: str
+    url: str | None = None
+    #: An image ``POST /api/art/uploads`` kept, by the hash it returned.
+    upload_hash: ImageHash | None = None
     width: int | None = None
     height: int | None = None
+
+    @model_validator(mode="after")
+    def validate_source(self) -> Self:
+        """Require exactly one of a link and an upload."""
+        if (self.url is None) == (self.upload_hash is None):
+            raise ValueError("Choose a link or an uploaded image")
+        return self
+
+
+class ArtUploadResponse(StrictBaseModel):
+    """An uploaded image, kept until a slot selects it."""
+
+    upload_hash: ImageHash
+    width: int
+    height: int
 
 
 class ArtCandidate(StrictBaseModel):

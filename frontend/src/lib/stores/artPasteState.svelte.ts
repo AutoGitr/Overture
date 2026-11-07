@@ -4,6 +4,8 @@ export type ArtPasteTarget = {
   readonly label: string;
   readonly busy: boolean;
   paste: () => Promise<void>;
+  /** Saves an image file into the slot; null where only public links are stored. */
+  readonly upload: ((file: File) => Promise<void>) | null;
 };
 
 class ArtPasteState {

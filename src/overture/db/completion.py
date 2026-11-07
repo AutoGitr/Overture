@@ -1,7 +1,8 @@
 """The one definition of when an asset is complete.
 
 A slot or theme is complete once Overture records both the selection (the
-artwork link or YouTube ID) and a local file (its hash). An item without a
+artwork link or uploaded image, or the YouTube ID) and a local file (its
+hash). An item without a
 local folder can hold no files, so its selection alone completes it. Every
 consumer - the library API, auto-unmonitor and the statistics - applies these
 rules, either to loaded rows or, for aggregate queries, as the SQL clauses
@@ -14,7 +15,7 @@ lazy from dataclasses import dataclass
 lazy from sqlmodel import and_, col, or_
 
 lazy from ..domain import ArtType, AssetStatus, MediaType
-lazy from .art_slots import find_art_slot
+lazy from .art_slots import find_art_slot, saved_art
 lazy from .models.art import ArtSlot
 lazy from .models.media_collection import MediaCollection
 lazy from .models.media_item import MediaItem
@@ -26,7 +27,7 @@ HOLDS_FILES = col(MediaItem.folder_path).is_not(None)
 #: SQL form of :func:`slot_complete`; the query must join the owning
 #: :class:`MediaItem`.
 SLOT_COMPLETE = and_(
-    col(ArtSlot.url).is_not(None),
+    or_(col(ArtSlot.url).is_not(None), col(ArtSlot.upload_hash).is_not(None)),
     or_(col(ArtSlot.file_hash).is_not(None), ~HOLDS_FILES),
 )
 
@@ -49,16 +50,18 @@ def _status(*, complete: bool, started: bool) -> AssetStatus:
 
 
 def slot_complete(slot: ArtSlot | None, *, files: bool) -> bool:
-    """Return whether a slot records its artwork link and, when *files*, a file."""
+    """Return whether a slot records its selection and, when *files*, a file."""
     return (
         slot is not None
-        and slot.url is not None
+        and saved_art(slot) is not None
         and (slot.file_hash is not None or not files)
     )
 
 
 def _slot_started(slot: ArtSlot | None) -> bool:
-    return slot is not None and (slot.url is not None or slot.file_hash is not None)
+    return slot is not None and (
+        saved_art(slot) is not None or slot.file_hash is not None
+    )
 
 
 def slot_status(slot: ArtSlot | None, *, files: bool) -> AssetStatus:

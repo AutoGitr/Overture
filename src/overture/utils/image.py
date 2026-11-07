@@ -50,7 +50,7 @@ THUMB_EXTENSION = ".avif"
 _THUMB_QUALITY = 60
 #: Most pixels Overture decodes from one image.
 MAX_IMAGE_PIXELS = 50_000_000
-MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_SNIFF_BYTES = 256 * 1024
 MAX_IMAGE_REDIRECTS = 5
 IMAGE_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
@@ -416,7 +416,7 @@ async def sniff_image_size(
             allow_private=allow_private,
             headers=headers,
         ) as response:
-            _response_size(response, MAX_REMOTE_IMAGE_BYTES)
+            _response_size(response, MAX_IMAGE_BYTES)
             parser = ImageFile.Parser()
             consumed = 0
             async for chunk in response.aiter_bytes(chunk_size=1024):
@@ -462,7 +462,7 @@ async def fetch_image_bytes(
     allow_private: bool = False,
     headers: dict[str, str] | None = None,
     params: dict[str, str] | None = None,
-    max_bytes: int = MAX_REMOTE_IMAGE_BYTES,
+    max_bytes: int = MAX_IMAGE_BYTES,
     on_progress: BytesProgress | None = None,
     transfer_slots: asyncio.Semaphore | None = SHARED_IMAGE_TRANSFERS,
 ) -> bytes:
@@ -490,7 +490,7 @@ async def fetch_image(
     allow_private: bool = False,
     headers: dict[str, str] | None = None,
     params: dict[str, str] | None = None,
-    max_bytes: int = MAX_REMOTE_IMAGE_BYTES,
+    max_bytes: int = MAX_IMAGE_BYTES,
     on_progress: BytesProgress | None = None,
     transfer_slots: asyncio.Semaphore | None = SHARED_IMAGE_TRANSFERS,
 ) -> FetchedImage:

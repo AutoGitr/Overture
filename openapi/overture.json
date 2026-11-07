@@ -1081,9 +1081,10 @@
         "type": "object"
       },
       "ArtSource": {
-        "description": "Where a selected artwork link comes from.\n\n``overturedb`` when it is the OvertureDB catalog's artwork for the slot,\nelse the name of the catalog art source whose host serves it. A test keeps\nthe hosts in step with the catalog contract's art sources.",
+        "description": "Where selected artwork comes from.\n\n``overturedb`` when it is the OvertureDB catalog's artwork for the slot,\n``upload`` when someone uploaded it, else the name of the catalog art\nsource whose host serves it. A test keeps the hosts in step with the\ncatalog contract's art sources.",
         "enum": [
           "overturedb",
+          "upload",
           "tmdb",
           "tpdb",
           "fanart",
@@ -1176,6 +1177,30 @@
           "overall"
         ],
         "title": "ArtTypeStats",
+        "type": "object"
+      },
+      "ArtUploadResponse": {
+        "additionalProperties": false,
+        "description": "An uploaded image, kept until a slot selects it.",
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "upload_hash": {
+            "$ref": "#/components/schemas/ImageHash"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "upload_hash",
+          "width",
+          "height"
+        ],
+        "title": "ArtUploadResponse",
         "type": "object"
       },
       "AspectRatioTolerance": {
@@ -2955,6 +2980,17 @@
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
           },
+          "background_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Hash"
+          },
           "background_height": {
             "anyOf": [
               {
@@ -3001,6 +3037,17 @@
               }
             ],
             "title": "Background Width"
+          },
+          "poster_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Hash"
           },
           "poster_height": {
             "anyOf": [
@@ -3055,6 +3102,8 @@
           "background_url",
           "poster_source",
           "background_source",
+          "poster_hash",
+          "background_hash",
           "poster_width",
           "poster_height",
           "background_width",
@@ -3611,6 +3660,17 @@
             ],
             "title": "Art Url"
           },
+          "background_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Hash"
+          },
           "background_height": {
             "anyOf": [
               {
@@ -3827,6 +3887,17 @@
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
+          },
+          "poster_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Hash"
           },
           "poster_height": {
             "anyOf": [
@@ -4112,6 +4183,8 @@
           "background_url",
           "poster_source",
           "background_source",
+          "poster_hash",
+          "background_hash",
           "poster_width",
           "poster_height",
           "background_width",
@@ -5608,6 +5681,17 @@
             ],
             "title": "Art Url"
           },
+          "background_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Hash"
+          },
           "background_height": {
             "anyOf": [
               {
@@ -5791,6 +5875,17 @@
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
+          },
+          "poster_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Hash"
           },
           "poster_height": {
             "anyOf": [
@@ -6028,6 +6123,8 @@
           "background_url",
           "poster_source",
           "background_source",
+          "poster_hash",
+          "background_hash",
           "poster_width",
           "poster_height",
           "background_width",
@@ -7024,6 +7121,17 @@
             "title": "Title",
             "type": "string"
           },
+          "title_taken_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Taken By"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -7035,7 +7143,8 @@
           "title",
           "member_count",
           "below_minimum",
-          "collection_id"
+          "collection_id",
+          "title_taken_by"
         ],
         "title": "CollectionSetEntry",
         "type": "object"
@@ -7077,6 +7186,33 @@
           "generator"
         ],
         "title": "CollectionSetPreview",
+        "type": "object"
+      },
+      "CollectionSetSummary": {
+        "additionalProperties": false,
+        "description": "A group that is a set: what it splits by, and in which libraries.",
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/SetDimension"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "library_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Library Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "group",
+          "dimension",
+          "library_ids"
+        ],
+        "title": "CollectionSetSummary",
         "type": "object"
       },
       "CollectionSource-Input": {
@@ -7921,6 +8057,8 @@
         "description": "Item metadata a collection condition tests.",
         "enum": [
           "title",
+          "tvdb_id",
+          "imdb_id",
           "studio",
           "edition",
           "genre",
@@ -8065,7 +8203,7 @@
       },
       "FixAuditRequest": {
         "additionalProperties": false,
-        "description": "Findings selected from one server audit's results, to fix in one run.\n\nImages are unlocked and refreshed; themes have their server theme deleted\nfirst, then their item is refreshed.",
+        "description": "Findings selected from one server audit's results, to fix in one run.\n\nItem images are unlocked and refreshed, collection images uploaded again;\nthemes have their server theme deleted first, then their item is refreshed.",
         "properties": {
           "snapshot_finished_at": {
             "title": "Snapshot Finished At",
@@ -8164,6 +8302,10 @@
         ],
         "title": "HealthResponse",
         "type": "object"
+      },
+      "ImageHash": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
       },
       "ImageSize": {
         "description": "A downscaled rendition of artwork; no size means the original file.",
@@ -8691,6 +8833,50 @@
           "saved_url"
         ],
         "type": "string"
+      },
+      "MdblistListRead": {
+        "additionalProperties": false,
+        "description": "A public MDBList list a search found.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "items"
+        ],
+        "title": "MdblistListRead",
+        "type": "object"
       },
       "MdblistSource-Input": {
         "additionalProperties": false,
@@ -10319,7 +10505,7 @@
       },
       "SaveArtRequest": {
         "additionalProperties": false,
-        "description": "The chosen artwork for one slot.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
+        "description": "The chosen artwork for one slot: a link, or an uploaded image.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
         "properties": {
           "height": {
             "anyOf": [
@@ -10332,9 +10518,26 @@
             ],
             "title": "Height"
           },
+          "upload_hash": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageHash"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "url": {
-            "title": "Url",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
           },
           "width": {
             "anyOf": [
@@ -10348,9 +10551,6 @@
             "title": "Width"
           }
         },
-        "required": [
-          "url"
-        ],
         "title": "SaveArtRequest",
         "type": "object"
       },
@@ -10656,14 +10856,32 @@
       },
       "ServerAuditRefreshTarget": {
         "additionalProperties": false,
-        "description": "One image refresh target selected from server audit results.",
+        "description": "One image target selected from server audit results.\n\nAn item's image is refreshed from its local file; a collection's is\nuploaded again from the image Overture kept.",
         "properties": {
           "art_type": {
             "$ref": "#/components/schemas/ArtType"
           },
+          "collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id"
+          },
           "item_id": {
-            "title": "Item Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           },
           "season_id": {
             "anyOf": [
@@ -10678,7 +10896,6 @@
           }
         },
         "required": [
-          "item_id",
           "art_type"
         ],
         "title": "ServerAuditRefreshTarget",
@@ -10690,6 +10907,11 @@
         "properties": {
           "art_types": {
             "$ref": "#/components/schemas/UniqueList_ArtType_"
+          },
+          "check_collections": {
+            "default": false,
+            "title": "Check Collections",
+            "type": "boolean"
           },
           "check_themes": {
             "default": true,
@@ -12494,6 +12716,91 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/art/uploads": {
+      "post": {
+        "description": "Keep an uploaded JPEG or PNG until an art slot selects it.\n\nSave it into a slot by sending the returned ``upload_hash`` in place of a\nlink.",
+        "operationId": "upload_art",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Art",
+        "tags": [
+          "art"
+        ]
+      }
+    },
     "/api/art/{item_id}": {
       "delete": {
         "description": "Clear every artwork slot across an item tree.",
@@ -15501,6 +15808,18 @@
             }
           },
           {
+            "description": "Create a set; refuse a group that already is one",
+            "in": "query",
+            "name": "new_set",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Create a set; refuse a group that already is one",
+              "title": "New Set",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Read-only API key",
             "in": "header",
             "name": "X-Api-Key",
@@ -16013,6 +16332,95 @@
         ]
       }
     },
+    "/api/collections/mdblist-lists": {
+      "get": {
+        "description": "Search MDBList's public lists, for an MDBList source condition.",
+        "operationId": "search_mdblist_lists",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MdblistListRead"
+                  },
+                  "title": "Response Search Mdblist Lists",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Mdblist Lists",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/preview": {
       "post": {
         "description": "Show what criteria select now, before the collection is saved.",
@@ -16189,6 +16597,84 @@
           "collections"
         ],
         "x-reads-only": true
+      }
+    },
+    "/api/collections/sets": {
+      "get": {
+        "description": "List the groups that are sets, with what each splits by.",
+        "operationId": "list_collection_sets",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionSetSummary"
+                  },
+                  "title": "Response List Collection Sets",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Collection Sets",
+        "tags": [
+          "collections"
+        ]
       }
     },
     "/api/collections/sets/preview": {
@@ -17498,6 +17984,131 @@
           }
         },
         "summary": "Proxy Collection Image",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/{collection_id}/local-image/{art_type}": {
+      "get": {
+        "description": "Serve the image Overture last uploaded to a collection, or its thumbnail.",
+        "operationId": "serve_collection_local_image",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Downscaled rendition to return; omit for the original",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ImageSize"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Downscaled rendition to return; omit for the original",
+              "title": "Size"
+            }
+          },
+          {
+            "description": "The artwork hash the client shows; a current one is cacheable",
+            "in": "query",
+            "name": "t",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The artwork hash the client shows; a current one is cacheable",
+              "title": "T"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Serve Collection Local Image",
         "tags": [
           "collections"
         ]

@@ -9,8 +9,8 @@ outside this module builds slot rows by hand.
 lazy from dataclasses import asdict, dataclass, fields
 lazy from operator import attrgetter
 
-lazy from ..domain import ArtType
-lazy from ..utils.art_urls import PublicArtUrl
+lazy from ..domain import ArtSource, ArtType
+lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
 lazy from .models.art import ArtSlot
 lazy from .models.media_collection import MediaCollection
 lazy from .models.media_item import MediaItem
@@ -148,27 +148,59 @@ def record_art_file(
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class SavedArt:
+    """A slot's selection: a public link, or the hash of an uploaded image."""
+
+    url: PublicArtUrl | None = None
+    upload_hash: str | None = None
+
+
+def saved_art(slot: ArtSlot | None) -> SavedArt | None:
+    """Return what the slot selects, or ``None`` when it selects nothing."""
+    if slot is None or (slot.url is None and slot.upload_hash is None):
+        return None
+    return SavedArt(slot.url, slot.upload_hash)
+
+
+def slot_art_source(slot: ArtSlot) -> ArtSource | None:
+    """Return where the slot's selected artwork comes from, if it selects any."""
+    return ArtSource.UPLOAD if slot.upload_hash else selected_art_source(slot.url)
+
+
 def select_art(
     owner: MediaItem | Season | MediaCollection, art_type: ArtType, url: PublicArtUrl
 ) -> ArtSlot:
     """Record *url* as the slot's selected artwork, leaving file facts alone."""
     slot = art_slot(owner, art_type)
     slot.url = url
+    slot.upload_hash = None
+    return slot
+
+
+def select_upload(
+    owner: MediaItem | Season | MediaCollection, art_type: ArtType, upload_hash: str
+) -> ArtSlot:
+    """Record the uploaded image *upload_hash* as the slot's selected artwork."""
+    slot = art_slot(owner, art_type)
+    slot.url = None
+    slot.upload_hash = upload_hash
     return slot
 
 
 def clear_art_selection(
     owner: MediaItem | Season | MediaCollection, art_type: ArtType
 ) -> None:
-    """Forget the slot's selected URL; facts about a local file are kept."""
+    """Forget the slot's selection; facts about a local file are kept."""
     slot = find_art_slot(owner, art_type)
     if slot is None:
         return
     slot.url = None
+    slot.upload_hash = None
     _drop_if_empty(owner, slot)
 
 
 def _drop_if_empty(owner: MediaItem | Season | MediaCollection, slot: ArtSlot) -> None:
     """Delete a row that no longer records a selection or a local file."""
-    if slot.url is None and slot.file_hash is None:
+    if saved_art(slot) is None and slot.file_hash is None:
         _slots(owner).remove(slot)

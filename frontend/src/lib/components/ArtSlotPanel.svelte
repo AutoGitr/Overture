@@ -10,8 +10,14 @@
     matchArtMutation,
     saveArtMutation,
     saveTmdbArtMutation,
+    uploadArtMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { ArtCandidate, ArtType, MediaItemRead } from "../../generated/rest/types.gen";
+  import type {
+    ArtCandidate,
+    ArtType,
+    MediaItemRead,
+    SaveArtRequest,
+  } from "../../generated/rest/types.gen";
   import { invalidateSeasons, upsertLibraryItem } from "../rest/cache";
   import { artPasteState, type ArtPasteTarget } from "../stores/artPasteState.svelte";
   import { artPreviewState } from "../stores/artPreviewState.svelte";
@@ -52,8 +58,6 @@
     /** The stored item the detail view shows. */
     item: MediaItemRead | null;
   } = $props();
-
-  type ArtSelection = Pick<ArtCandidate, "url"> & Partial<Pick<ArtCandidate, "width" | "height">>;
 
   // A TMDB title has no files or server to match against; matching needs a stored item.
   let canMatch = $derived(
@@ -138,6 +142,7 @@
   let manualEntry = $state(false);
 
   let saving = $state(false);
+  const uploadRequest = createMutation(() => uploadArtMutation());
   const matchArtRequest = createMutation(() => matchArtMutation());
   const saveArtRequest = createMutation(() => saveArtMutation());
   const saveTmdbArtRequest = createMutation(() => saveTmdbArtMutation());
@@ -175,13 +180,8 @@
    * Save a choice. A candidate from the grid passes the image the grid shows,
    * which the detail page then shows until the server has fetched the file.
    */
-  async function saveArt(art: ArtSelection, previewUrl: string | null = null) {
+  async function saveArt(body: SaveArtRequest, previewUrl: string | null = null) {
     if (saving || (slot.kind === "catalog" && slot.catalog.draft.busy)) return false;
-    if (!art.url) {
-      feedback.warning("No art URL selected");
-      return false;
-    }
-    const body = { height: art.height ?? null, url: art.url, width: art.width ?? null };
     saving = true;
     feedback.clear();
     if (slot.kind === "collection") {
@@ -203,6 +203,9 @@
     }
     if (slot.kind === "catalog") {
       const catalog = slot.catalog;
+      // OvertureDB stores public links only, so it offers no upload.
+      const url = body.url;
+      if (!url) return false;
       const advanceContext = beginRecordAdvance();
       try {
         let saved: boolean;
@@ -213,13 +216,13 @@
           const seasonNum = slot.seasonNum;
           const seasons = [
             ...(entry.seasons ?? []).filter((season) => season.season_num !== seasonNum),
-            { season_num: seasonNum, poster_url: art.url },
+            { season_num: seasonNum, poster_url: url },
           ].sort((a, b) => a.season_num - b.season_num);
           saved = await catalog.draft.save({ seasons });
           current = `season:${seasonNum}`;
         } else {
           saved = await catalog.draft.save(
-            artType === "background" ? { background_url: art.url } : { poster_url: art.url },
+            artType === "background" ? { background_url: url } : { poster_url: url },
           );
           current = artType === "background" ? "background" : "poster";
         }
@@ -310,6 +313,22 @@
     return saveArt({ url });
   }
 
+  async function uploadFile(file: File) {
+    if (saving) return;
+    saving = true;
+    feedback.clear();
+    let uploaded;
+    try {
+      uploaded = await uploadRequest.mutateAsync({ body: file });
+    } catch (err) {
+      feedback.error(errorMessage(err, "Upload failed"));
+      return;
+    } finally {
+      saving = false;
+    }
+    await saveArt(uploaded);
+  }
+
   async function saveCustomUrl(text: string) {
     if (await saveUrlText(text)) manualEntry = false;
   }
@@ -336,6 +355,9 @@
       return saving;
     },
     paste: pasteFromClipboard,
+    get upload() {
+      return slot.kind === "catalog" ? null : uploadFile;
+    },
   };
   onMount(() => {
     artPasteState.target = pasteTarget;
@@ -344,12 +366,20 @@
     };
   });
 
-  // Ctrl/Cmd+V anywhere on the art tab saves a pasted URL, which also works
-  // over plain HTTP where the clipboard API is unavailable.
+  // Ctrl/Cmd+V anywhere on the art tab saves a pasted image or URL, which also
+  // works over plain HTTP where the clipboard API is unavailable.
   function handleDocumentPaste(event: ClipboardEvent) {
     if (saving || manualEntry) return;
     const target = event.target;
     if (target instanceof Element && target.closest("input, textarea, [contenteditable], dialog")) {
+      return;
+    }
+    const image = [...(event.clipboardData?.files ?? [])].find((file) =>
+      ["image/jpeg", "image/png"].includes(file.type),
+    );
+    if (image && pasteTarget.upload) {
+      event.preventDefault();
+      void pasteTarget.upload(image);
       return;
     }
     const url = parseArtUrl(event.clipboardData?.getData("text") ?? "");
@@ -409,7 +439,8 @@
         {art}
         disabled={saving}
         {showSource}
-        onSelect={(art) => saveArt(art, candidateImageUrl(art))}
+        onSelect={(art) =>
+          saveArt({ url: art.url, width: art.width, height: art.height }, candidateImageUrl(art))}
       />
     {/each}
   </ImageGrid>

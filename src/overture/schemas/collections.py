@@ -7,7 +7,7 @@ lazy from typing import Annotated, Literal, Self
 lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 lazy from ..config import API_PREFIX
-lazy from ..db.art_slots import read_art_slot
+lazy from ..db.art_slots import read_art_slot, slot_art_source
 lazy from ..db.completion import collection_art_completion, collection_theme_status
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection
@@ -34,7 +34,6 @@ lazy from ..domain import (
 )
 lazy from ..integrations.mdblist import mdblist_identifier
 lazy from ..services.collections.fields import FIELDS, OPERATORS
-lazy from ..utils.art_urls import selected_art_source
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
     MemberTagFormat,
@@ -284,6 +283,9 @@ class CollectionArtwork(StrictBaseModel):
     background_url: str | None = None
     poster_source: ArtSource | None = None
     background_source: ArtSource | None = None
+    #: The cached image Overture last uploaded to the server, which views show.
+    poster_hash: str | None = None
+    background_hash: str | None = None
     poster_width: int | None = None
     poster_height: int | None = None
     background_width: int | None = None
@@ -301,8 +303,10 @@ def collection_artwork(row: MediaCollection) -> CollectionArtwork:
     return CollectionArtwork(
         poster_url=poster.url,
         background_url=background.url,
-        poster_source=selected_art_source(poster.url),
-        background_source=selected_art_source(background.url),
+        poster_source=slot_art_source(poster),
+        background_source=slot_art_source(background),
+        poster_hash=poster.file_hash,
+        background_hash=background.file_hash,
         poster_width=poster.width,
         poster_height=poster.height,
         background_width=background.width,
@@ -845,6 +849,17 @@ class CollectionSetEntry(StrictBaseModel):
     below_minimum: bool
     #: The set's existing collection for the value.
     collection_id: int | None = None
+    #: Another collection in the library already has the title, so a sync
+    #: cannot create this one until one of them is renamed.
+    title_taken_by: int | None = None
+
+
+class CollectionSetSummary(StrictBaseModel):
+    """A group that is a set: what it splits by, and in which libraries."""
+
+    group: str
+    dimension: SetDimension
+    library_ids: list[str]
 
 
 class CollectionMissingTitle(StrictBaseModel):
@@ -1006,6 +1021,17 @@ class CollectionCapabilities(StrictBaseModel):
     dimensions: list[CollectionDimensionRead]
     #: The TMDB charts there are for the media type.
     charts: list[TmdbChart]
+
+
+class MdblistListRead(StrictBaseModel):
+    """A public MDBList list a search found."""
+
+    id: int
+    name: str
+    #: The MDBList user who keeps it.
+    owner: str | None = None
+    #: How many titles it holds.
+    items: int | None = None
 
 
 class CollectionFieldValue(StrictBaseModel):

@@ -14,6 +14,7 @@ lazy from ...schemas.collections import (
     CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionGroupSyncResult,
+    CollectionSetSummary,
 )
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...utils.collection_groups import collection_group
@@ -23,6 +24,7 @@ lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
+lazy from .fields import DIMENSIONS
 lazy from .rule_sync import RuleSync
 lazy from .rules import generator, group_name
 lazy from .set_runner import CollectionSets
@@ -156,6 +158,22 @@ class CollectionGroups:
         await self._access.changed()
         return result
 
+    async def sets(self) -> list[CollectionSetSummary]:
+        """Return the groups that are sets, by name."""
+        async with self._access.database.read_session() as session:
+            policies = await CollectionRepository(session).group_policies(
+                self._access.server_type
+            )
+        return [
+            CollectionSetSummary(
+                group=group.name,
+                dimension=saved.dimension,
+                library_ids=saved.library_ids,
+            )
+            for group in sorted(policies, key=lambda group: group.name.casefold())
+            if (saved := generator(group)) is not None
+        ]
+
     async def policy(self, name: str) -> CollectionGroupPolicy:
         """Return nullable group overrides, including for a new group."""
         async with self._access.database.read_session() as session:
@@ -172,9 +190,16 @@ class CollectionGroups:
         )
 
     async def save_policy(
-        self, name: str, body: CollectionGroupPolicy
+        self, name: str, body: CollectionGroupPolicy, *, new_set: bool = False
     ) -> CollectionGroupPolicy:
-        """Save group defaults without replacing explicit collection overrides."""
+        """Save group defaults without replacing explicit collection overrides.
+
+        With *new_set*, the body creates a set, which never replaces another.
+
+        Raises:
+            PublicServiceError: 409 when *new_set* names a group that already
+                is a set.
+        """
         name = group_name(name)
         server = self._access.server_type
         async with self._access.database.read_session() as session:
@@ -205,6 +230,13 @@ class CollectionGroups:
                 raise PublicServiceError(422, SMART_CUSTOM_ORDER)
         async with self._access.database.write_session() as session:
             row = await CollectionRepository(session).group_policy(server, name)
+            if new_set and (current := generator(row)) is not None:
+                raise PublicServiceError(
+                    409,
+                    f'"{name}" already splits by '
+                    f"{DIMENSIONS[current.dimension].label}; "
+                    "edit that set in the group's settings, or name another group",
+                )
             if row is None:
                 row = CollectionGroup(server_type=server, name=name)
             row.sqlmodel_update(body.model_dump(exclude={"generator"}))

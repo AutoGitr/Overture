@@ -166,18 +166,16 @@
   </PinnedNotices>
 
   <div class={["main-content", { "show-detail": uiState.mobileShowDetail }]}>
-    <div class="sidebar-wrapper">
-      <Sidebar
-        {movies}
-        {shows}
-        totalMovies={movies.length}
-        totalShows={shows.length}
-        loading={activeLibrary.isPending && activeLibrary.isFetching}
-        error={activeLibrary.isError && !activeLibrary.data
-          ? "Library unavailable. Use Retry in the notification to reconnect."
-          : ""}
-      />
-    </div>
+    <Sidebar
+      {movies}
+      {shows}
+      totalMovies={movies.length}
+      totalShows={shows.length}
+      loading={activeLibrary.isPending && activeLibrary.isFetching}
+      error={activeLibrary.isError && !activeLibrary.data
+        ? "Library unavailable. Use Retry in the notification to reconnect."
+        : ""}
+    />
 
     <div class="detail-wrapper">
       <Router />
@@ -218,12 +216,6 @@
     overflow: hidden;
   }
 
-  .sidebar-wrapper {
-    display: flex;
-    flex-shrink: 0;
-    height: 100%;
-  }
-
   .detail-wrapper {
     flex: 1;
     display: flex;
@@ -233,18 +225,8 @@
   }
 
   @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
-    /* Sidebar fills the full screen by default on mobile */
-    .sidebar-wrapper {
-      width: 100%;
-      padding-bottom: var(--safe-area-bottom);
-    }
-
-    /* Detail hidden by default; revealed when show-detail is set */
+    /* The sidebar fills the screen on mobile until a detail view opens. */
     .detail-wrapper {
-      display: none;
-    }
-
-    .main-content.show-detail .sidebar-wrapper {
       display: none;
     }
 

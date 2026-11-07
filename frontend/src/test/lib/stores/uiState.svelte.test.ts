@@ -42,14 +42,12 @@ describe("uiState persisted filters", () => {
         aspectRatio: "sideways",
         mediaServer: "invalid",
         libraryIds: "not-an-array",
+        collectionId: "12",
         themeSources: ["download", "youtube", 3],
         artSource: { sources: ["tpdb", "imgur", 1], artType: "season_poster" },
         metadataIssues: { flags: ["no_tmdb_id", "no_poster", 7, null], mode: "invalid" },
         resolution: { artType: "icon", min: -20, max: "2000" },
         themeLength: { min: 30, max: Number.POSITIVE_INFINITY },
-        // Keys a removed filter left behind drop out.
-        collectionCard: "smart",
-        tmdbCollectionSearch: "8091",
       }),
     );
 
@@ -69,6 +67,7 @@ describe("uiState persisted filters", () => {
       aspectRatio: "all",
       mediaServer: "all",
       libraryIds: [],
+      collectionId: null,
       themeSources: ["download"],
       artSource: { sources: ["tpdb"], artType: "any" },
       metadataIssues: { flags: ["no_tmdb_id"], mode: "all" },

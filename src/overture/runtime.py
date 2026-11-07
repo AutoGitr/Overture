@@ -484,6 +484,7 @@ def build_runtime(
         database=database,
         asset_storage=asset_storage,
         matcher=art_matcher,
+        phash=phash,
         downloads=downloads,
         publisher=events,
         provider_registry=provider_registry,
@@ -510,6 +511,7 @@ def build_runtime(
         app_config=app_config,
         database=database,
         config_dir=config_dir,
+        collection_art=art.collections,
     )
     collections = CollectionsService(
         tmdb=tmdb,

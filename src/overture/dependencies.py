@@ -15,6 +15,7 @@ lazy from .media_servers.registry import NO_MEDIA_SERVER, ProviderRegistry
 lazy from .runtime import RuntimeServices
 lazy from .services.art.collection_art import CollectionArtService
 lazy from .services.art.service import ArtService
+lazy from .services.art.uploads import ArtUploads
 lazy from .services.asset_manager.service import AssetManagerService
 lazy from .services.assets import AssetsService
 lazy from .services.auth import AuthService
@@ -79,6 +80,11 @@ AuthDep = Annotated[AuthService, Depends(get_auth)]
 def get_art(runtime: RuntimeDep) -> ArtService:
     """Resolve the artwork domain service."""
     return runtime.art
+
+
+def get_art_uploads(runtime: RuntimeDep) -> ArtUploads:
+    """Resolve the uploaded-artwork store."""
+    return runtime.art.uploads
 
 
 def get_collection_art(runtime: RuntimeDep) -> CollectionArtService:
@@ -212,6 +218,7 @@ def get_realtime_snapshot(runtime: RuntimeDep) -> RealtimeSnapshotBuilder:
 
 
 ArtDep = Annotated[ArtService, Depends(get_art)]
+ArtUploadsDep = Annotated[ArtUploads, Depends(get_art_uploads)]
 CollectionArtDep = Annotated[CollectionArtService, Depends(get_collection_art)]
 LibraryDep = Annotated[LibraryService, Depends(get_library)]
 SyncDep = Annotated[SyncEngine, Depends(get_sync)]

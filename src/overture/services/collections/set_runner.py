@@ -71,13 +71,24 @@ class CollectionSets:
                 body.minimum_items
                 or (await self._access.policy(session, body.group)).minimum_items
             )
-            existing = {
-                row.generated_value: row.id
+            listed = [
+                row
                 for row in await CollectionRepository(session).list_listed()
-                if body.group
-                and row.collection_group == body.group
-                and row.generated_value is not None
-            }
+                if row.server_type is self._access.server_type
+            ]
+        existing = {
+            row.generated_value: row.id
+            for row in listed
+            if body.group
+            and row.collection_group == body.group
+            and row.generated_value is not None
+        }
+        taken = {
+            (library_id, row.title.casefold()): row.id
+            for row in listed
+            if row.generated_value is None or row.collection_group != body.group
+            for library_id in row.library_ids
+        }
         types = await self._access.library_types(body.generator.library_ids)
         return [
             CollectionSetEntry(
@@ -87,6 +98,9 @@ class CollectionSets:
                 member_count=value.count,
                 below_minimum=below,
                 collection_id=existing.get(value.value),
+                title_taken_by=None
+                if value.value in existing
+                else taken.get((library_id, value.title.casefold())),
             )
             for library_id, media_type in types.items()
             for value, below in await self._values(

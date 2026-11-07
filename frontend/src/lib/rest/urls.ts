@@ -3,6 +3,7 @@ import type {
   OidcLoginData,
   ProxyItemProviderArtData,
   ProxySeasonProviderArtData,
+  ServeCollectionLocalImageData,
   ServeLocalImageData,
   ServeLocalSeasonImageData,
 } from "../../generated/rest/types.gen";
@@ -58,6 +59,18 @@ export function seasonProviderArtUrl(
   return client.buildUrl<ProxySeasonProviderArtData>({
     ...SAME_ORIGIN,
     url: "/api/library/seasons/{season_id}/provider-art",
+    path,
+    query,
+  });
+}
+
+export function localCollectionImageUrl(
+  path: ServeCollectionLocalImageData["path"],
+  query: ServeCollectionLocalImageData["query"],
+): string {
+  return client.buildUrl<ServeCollectionLocalImageData>({
+    ...SAME_ORIGIN,
+    url: "/api/collections/{collection_id}/local-image/{art_type}",
     path,
     query,
   });

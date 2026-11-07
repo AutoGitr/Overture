@@ -49,7 +49,7 @@ export type AppSettingsDefaults = typeof DEFAULT_APP_SETTINGS;
 
 // Shared constants, from overture.domain and overture.utils.http_security.
 export const SERVER_DISPLAY_NAMES = {"plex": "Plex", "jellyfin": "Jellyfin", "emby": "Emby"} as const;
-export const SELECTED_ART_SOURCE_LABELS = {"tmdb": "TMDB", "tpdb": "ThePosterDB", "fanart": "fanart.tv", "tvdb": "TheTVDB", "plex": "Plex"} as const;
+export const SELECTED_ART_SOURCE_LABELS = {"upload": "Upload", "tmdb": "TMDB", "tpdb": "ThePosterDB", "fanart": "fanart.tv", "tvdb": "TheTVDB", "plex": "Plex"} as const;
 export const ART_SOURCE_LABELS = {"overturedb": "OvertureDB", "local_art_matching": "Local art matching"} as const;
 export const THEME_SOURCE_LABELS = {"overturedb": "OvertureDB", "themerrdb": "ThemerrDB", "youtube_search": "YouTube search"} as const;
 export const CATALOG_SOURCES = ["overturedb", "themerrdb"] as const;

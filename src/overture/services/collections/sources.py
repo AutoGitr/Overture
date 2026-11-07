@@ -7,7 +7,7 @@ lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import FilterOperator, MediaType, SourceType
 lazy from ...integrations.arr import ArrClient
-lazy from ...integrations.mdblist import MDBListClient
+lazy from ...integrations.mdblist import MDBListClient, MdblistList
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...schemas.collections import (
     ArrTagRead,
@@ -172,6 +172,16 @@ class SourceResolver:
         if not self._config.tmdb_configured:
             return ()
         return await self._tmdb.search_keywords(query)
+
+    async def mdblist_lists(self, query: str) -> list[MdblistList]:
+        """Public MDBList lists named like *query*.
+
+        Raises:
+            PublicServiceError: 400 without an MDBList key.
+        """
+        if not self._config.mdblist_configured:
+            raise PublicServiceError(400, "Set MDBLIST_API_KEY to search MDBList")
+        return await self._mdblist.search_lists(query)
 
     async def summary(
         self, libraries: Sequence[CollectionLibraryCriteria]

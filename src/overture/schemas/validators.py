@@ -8,6 +8,9 @@ lazy from ..dataset_contract.contract import YOUTUBE_ID_PATTERN
 lazy from ..domain import UNMANAGED_GROUP
 lazy from ..utils.cron import validate_cron_expression
 
+#: The BLAKE3 hash of an image's bytes, which names it in the image cache.
+type ImageHash = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
 #: An 11-character YouTube video ID, as the catalog contract defines it.
 type YouTubeId = Annotated[str, Field(pattern=YOUTUBE_ID_PATTERN.pattern)]
 

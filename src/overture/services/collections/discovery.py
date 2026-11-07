@@ -23,6 +23,7 @@ lazy from ...schemas.collections import (
     CollectionRuleWrite,
     CollectionSourceRead,
     KindRecommendation,
+    MdblistListRead,
 )
 lazy from ...utils.errors import PublicServiceError
 lazy from .access import CollectionAccess, LibraryScope
@@ -160,6 +161,18 @@ class CollectionDiscovery:
                 )
             )
         return found
+
+    async def mdblist_lists(self, query: str) -> list[MdblistListRead]:
+        """Find public MDBList lists to name in a source condition."""
+        return [
+            MdblistListRead(
+                id=found.id,
+                name=found.name,
+                owner=found.user_name,
+                items=found.items,
+            )
+            for found in await self._sources.mdblist_lists(query)
+        ]
 
     async def field_values(
         self,

@@ -41,7 +41,7 @@ lazy from overture.integrations.arr import (
     ArrTagMatches,
     ArrTitle,
 )
-lazy from overture.integrations.mdblist import MDBListClient
+lazy from overture.integrations.mdblist import MDBListClient, MdblistList
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import (
     TMDBClient,
@@ -76,6 +76,7 @@ lazy from overture.schemas.collections import (
     CustomSetValue,
     FieldCondition,
     FilterGroup,
+    MdblistListRead,
     MdblistSource,
     RadarrTagSource,
     SetValueAlias,
@@ -92,6 +93,7 @@ lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.collections.criteria import CriteriaContext, evaluate
 lazy from overture.services.collections.fields import FIELDS
 lazy from overture.services.collections.recommend import recommend_kind
+lazy from overture.services.collections.rules import member_criteria
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
 lazy from overture.services.scheduler import SchedulerService
@@ -283,6 +285,10 @@ class Lists(MDBListClient):
         if self.failure:
             raise PublicServiceError(502, "Source unavailable")
         return self.ids
+
+    @override
+    async def search_lists(self, query: str) -> list[MdblistList]:
+        return [MdblistList(id=5, name=f"{query} picks", user_name="gary", items=9)]
 
     @override
     async def close(self) -> None:
@@ -752,6 +758,43 @@ async def test_group_rename_preserves_defaults_and_rejects_collisions(
         await manager.service.groups.rename("Evenings", "Other")
     with pytest.raises(PublicServiceError, match="not found"):
         await manager.service.groups.rename("Nothing", "Shows")
+
+
+async def test_a_new_set_never_replaces_another_and_names_taken_titles(
+    manager: Manager,
+) -> None:
+    decades = CollectionGenerator(
+        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+    )
+    taken = await manager.service.editor.create(
+        CollectionCreate(title="1990s", rule=chosen(manager, None))
+    )
+
+    preview = await manager.service.sets.preview(
+        CollectionSetPreview(generator=decades, group="Decades")
+    )
+    assert [(entry.title, entry.title_taken_by) for entry in preview] == [
+        ("1990s", taken.id),
+        ("2000s", None),
+    ]
+
+    await manager.service.groups.save_policy(
+        "Decades", CollectionGroupPolicy(generator=decades), new_set=True
+    )
+    assert [
+        (found.group, found.dimension, found.library_ids)
+        for found in await manager.service.groups.sets()
+    ] == [("Decades", SetDimension.DECADE, ["movies"])]
+    with pytest.raises(PublicServiceError, match="already splits by Decades"):
+        await manager.service.groups.save_policy(
+            "Decades", CollectionGroupPolicy(generator=decades), new_set=True
+        )
+    await manager.service.groups.save_policy(
+        "Decades",
+        CollectionGroupPolicy(
+            generator=decades.model_copy(update={"title_format": "{value}"})
+        ),
+    )
 
 
 async def test_sets_create_update_and_withhold_their_collections(
@@ -1799,6 +1842,12 @@ async def test_capabilities_follow_the_server(
     labels = {field.field: field.label for field in capabilities.fields}
     assert labels[FilterField.LABEL] == "Tag"
     assert FilterField.UNPLAYED not in labels
+
+
+async def test_mdblist_lists_name_their_owner_and_size(manager: Manager) -> None:
+    assert await manager.service.discovery.mdblist_lists("Top") == [
+        MdblistListRead(id=5, name="Top picks", owner="gary", items=9)
+    ]
 
 
 async def test_field_values_count_library_metadata_or_ask_plex(
@@ -2851,6 +2900,33 @@ async def test_adoption_names_members_that_share_no_franchise(
         TmdbItemSource(tmdb_ids=[11 + index for index in range(len(manager.ids))])
     )
     assert detail.tmdb_collection_id is None
+
+
+def test_adoption_names_members_by_tmdb_then_tvdb_then_imdb_then_title() -> None:
+    members = [
+        MediaItem(id=1, media_type=MediaType.SHOW, title="A", tmdb_id=7, tvdb_id=70),
+        MediaItem(
+            id=2, media_type=MediaType.SHOW, title="B", tvdb_id=80, imdb_id="tt8"
+        ),
+        MediaItem(id=3, media_type=MediaType.SHOW, title="C", imdb_id="tt9"),
+        MediaItem(id=4, media_type=MediaType.SHOW, title="D"),
+    ]
+    row = MediaCollection(server_type=ServerType.PLEX, title="Saga")
+
+    criteria = member_criteria(row, members, franchise=None)
+
+    assert criteria == FilterGroup(
+        mode="any",
+        conditions=[
+            SourceCondition(source=TmdbItemSource(tmdb_ids=[7])),
+            FieldCondition(field=FilterField.TVDB_ID, value="80"),
+            FieldCondition(field=FilterField.IMDB_ID, value="tt9"),
+            FieldCondition(field=FilterField.TITLE, value="D"),
+        ],
+    )
+    context = CriteriaContext(sources={}, collections={}, now=utc_now())
+    by_ids = FilterGroup(mode="any", conditions=criteria.conditions[1:])
+    assert evaluate(members, by_ids, context) == members[1:]
 
 
 async def test_orphan_reverses_adoption_keeping_the_server_copy(

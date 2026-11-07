@@ -11,7 +11,7 @@ lazy from PIL import Image
 lazy import overture.utils.image as image_mod
 lazy from overture.utils import rate_limit
 lazy from overture.utils.image import (
-    MAX_REMOTE_IMAGE_BYTES,
+    MAX_IMAGE_BYTES,
     FetchedImage,
     RateLimitedError,
     RemoteImageError,
@@ -68,7 +68,7 @@ async def test_fetch_image_bytes_enforces_content_length_limit() -> None:
             200,
             headers={
                 "content-type": "image/jpeg",
-                "content-length": str(MAX_REMOTE_IMAGE_BYTES + 1),
+                "content-length": str(MAX_IMAGE_BYTES + 1),
             },
             content=b"",
         )

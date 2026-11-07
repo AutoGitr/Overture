@@ -12,7 +12,7 @@
     TmdbItemResult,
   } from "../../generated/rest/types.gen";
   import {
-    collectionImageUrl,
+    collectionArtDisplayUrl,
     itemArtDisplayUrl,
     itemPosterOriginalUrl,
     remotePosterUrl,
@@ -132,7 +132,7 @@
             : `${collection.child_count} items`,
         unmonitored: !collection.monitored,
         icon: Layers,
-        src: collectionImageUrl(collection.thumb_url),
+        src: collectionArtDisplayUrl(collection, "poster"),
         link: collection.thumb_url
           ? {
               href: collection.thumb_url,

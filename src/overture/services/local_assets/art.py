@@ -23,6 +23,7 @@ lazy from ...db.art_slots import (
     find_art_slot,
     record_art_file,
 )
+lazy from ...db.completion import holds_files
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
@@ -251,7 +252,8 @@ class LocalArtInspector:
         Returns:
             Whether any recorded fact or season folder changed.
         """
-        if item.id is None:
+        # An item without a folder has no files; it records only its uploads.
+        if item.id is None or not holds_files(item):
             return False
         folders, probes = await owned_thread(self._probe, item, seasons, listing)
         changes = [change for probe in probes if (change := await self._observe(probe))]

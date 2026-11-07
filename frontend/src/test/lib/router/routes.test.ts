@@ -5,7 +5,9 @@ import {
   routedCatalogEntry,
   routeScope,
   goToCollection,
+  closeCollection,
   goToCollectionsList,
+  sidebarGroup,
   goToItem,
   goToItemArt,
   goToItemThemes,
@@ -46,6 +48,17 @@ describe("route helpers", () => {
 
     goToCollectionsList();
     await expectPath("/collections");
+  });
+
+  it("closes a collection without leaving the group the sidebar is in", async () => {
+    goToCollectionsList("Franchises");
+    await vi.waitFor(() => expect(sidebarGroup()).toBe("Franchises"));
+    goToCollection({ id: 12, title: "Star Wars" });
+    await expectPath("/collections/12-star-wars");
+
+    closeCollection();
+    await expectPath("/collections");
+    expect(sidebarGroup()).toBe("Franchises");
   });
 
   it("open a collection by its id and title", async () => {

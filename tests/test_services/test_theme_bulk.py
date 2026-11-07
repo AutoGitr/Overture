@@ -563,7 +563,7 @@ async def test_bulk_theme_selects_overturedb_or_themerrdb_by_configured_order(
         youtube_id_overturedb="yt-overture",
         youtube_id_themerrdb="yt-themerr",
     )
-    queued: list[str] = []
+    queued: list[str | None] = []
 
     async def fake_queue(target: JobTarget, **_kwargs: Any) -> bool:
         queued.append(target.target_url)
@@ -627,7 +627,7 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
         youtube_id_overturedb="yt-overture-failed",
         youtube_id_themerrdb="yt-themerr-working",
     )
-    queued: list[str] = []
+    queued: list[str | None] = []
 
     async def fake_queue(target: JobTarget, **_kwargs: Any) -> bool:
         queued.append(target.target_url)

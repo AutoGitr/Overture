@@ -13,6 +13,7 @@ lazy from dataclasses import dataclass
 lazy from enum import StrEnum
 
 lazy from .dataset_contract.contract import (
+    ART_SOURCE_LABELS,
     ASPECT_RATIOS,
     ASPECT_TOLERANCE,
 )
@@ -153,6 +154,8 @@ class FilterField(StrEnum):
     """Item metadata a collection condition tests."""
 
     TITLE = "title"
+    TVDB_ID = "tvdb_id"
+    IMDB_ID = "imdb_id"
     STUDIO = "studio"
     EDITION = "edition"
     GENRE = "genre"
@@ -384,19 +387,26 @@ ITEM_ART_TYPES: tuple[ArtType, ...] = (ArtType.POSTER, ArtType.BACKGROUND)
 
 
 class ArtSource(StrEnum):
-    """Where a selected artwork link comes from.
+    """Where selected artwork comes from.
 
     ``overturedb`` when it is the OvertureDB catalog's artwork for the slot,
-    else the name of the catalog art source whose host serves it. A test keeps
-    the hosts in step with the catalog contract's art sources.
+    ``upload`` when someone uploaded it, else the name of the catalog art
+    source whose host serves it. A test keeps the hosts in step with the
+    catalog contract's art sources.
     """
 
     OVERTUREDB = "overturedb"
+    UPLOAD = "upload"
     TMDB = "tmdb"
     TPDB = "tpdb"
     FANART = "fanart"
     TVDB = "tvdb"
     PLEX = "plex"
+
+    @property
+    def label(self) -> str:
+        """How the source is named to people."""
+        return "Upload" if self is ArtSource.UPLOAD else ART_SOURCE_LABELS[self.value]
 
 
 class ImageSize(StrEnum):

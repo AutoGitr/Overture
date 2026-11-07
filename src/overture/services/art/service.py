@@ -7,9 +7,12 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.art_slots import (
+    ArtFileFacts,
     clear_art_selection,
     read_art_slot,
+    record_art_file,
     select_art,
+    select_upload,
 )
 lazy from ...db.completion import holds_files
 lazy from ...db.models.media_item import MediaItem
@@ -48,6 +51,8 @@ lazy from .candidates import ArtCandidates, CandidatePolicy, CandidateSources
 lazy from .choice import ArtSelection, ArtSelector
 lazy from .collection_art import CollectionArtService
 lazy from .matcher import ArtMatcher
+lazy from .phash import PhashService
+lazy from .uploads import ArtUploads
 
 
 async def _require_art_target(
@@ -69,6 +74,17 @@ async def _require_art_target(
     return target
 
 
+def _forget(item: MediaItem, target: MediaItem | Season, art_type: ArtType) -> None:
+    """Forget a slot's selection; an item without a folder holds no other file.
+
+    A local file stays, with its recorded facts. An item without a folder
+    records only its uploaded image, which goes with the selection.
+    """
+    clear_art_selection(target, art_type)
+    if not holds_files(item):
+        record_art_file(target, art_type, None)
+
+
 class ArtService:
     """Artwork of library items and their seasons.
 
@@ -83,6 +99,7 @@ class ArtService:
         database: Database,
         asset_storage: AssetStorage,
         matcher: ArtMatcher,
+        phash: PhashService,
         downloads: DownloadService,
         publisher: protocols.EventPublisher,
         provider_registry: ProviderRegistry,
@@ -96,11 +113,13 @@ class ArtService:
         self._downloads = downloads
         self._publisher = publisher
         self._candidates = candidates
+        self.uploads = ArtUploads(image_cache=image_cache, phash=phash)
         self.selector = ArtSelector(
             app_config=app_config,
             database=database,
             provider_registry=provider_registry,
             image_clients=image_clients,
+            uploads=self.uploads,
         )
         self.collections = CollectionArtService(
             app_config=app_config,
@@ -113,6 +132,7 @@ class ArtService:
             image_clients=image_clients,
             image_cache=image_cache,
             selector=self.selector,
+            uploads=self.uploads,
         )
 
     async def _gather(
@@ -177,25 +197,28 @@ class ArtService:
 
         The choice is saved before any download, so it survives a failed one
         and the next Assets run can restore it. An item without a local
-        folder downloads nothing: the choice is all it records.
+        folder downloads nothing: the choice is all it records, and an
+        uploaded image, kept in the image cache, is its file.
 
         Raises:
             PublicServiceError: When an item without a folder is given a
                 media-server image, which only a download could record.
         """
-        if not holds_files(item):
-            if selection.stored_url is None:
-                raise PublicServiceError(
-                    400, "Media server artwork needs an item with a local folder."
-                )
+        source = selection.source
+        upload = source if isinstance(source, ArtFileFacts) else None
+        if upload is not None:
+            select_upload(target, art_type, upload.file_hash)
+        elif selection.stored_url is not None:
             select_art(target, art_type, selection.stored_url)
-            db.add(target)
+        elif not holds_files(item):
+            raise PublicServiceError(
+                400, "Media server artwork needs an item with a local folder."
+            )
+        db.add(target)
+        if not holds_files(item):
+            record_art_file(target, art_type, upload)
             await auto_unmonitor_completed(db, item)
             return None, False
-
-        if selection.stored_url:
-            select_art(target, art_type, selection.stored_url)
-            db.add(target)
         if item.id is None:
             raise RuntimeError("A stored item needs its ID to queue downloads")
         return await self._downloads.queue_job(
@@ -203,7 +226,8 @@ class ArtService:
             JobTarget.art(
                 item.id,
                 art_type,
-                selection.target_url,
+                source if isinstance(source, str) else None,
+                upload_hash=upload.file_hash if upload is not None else None,
                 season_id=target.id if target is not item else None,
             ),
         )
@@ -243,7 +267,7 @@ class ArtService:
         art_type: ArtType,
         season_id: int | None = None,
     ) -> StatusResponse:
-        """Forget one slot's selected URL; the local file and its facts stay.
+        """Forget one slot's selection; a local file and its facts stay.
 
         A season poster without *season_id* forgets every season's at once.
         """
@@ -258,7 +282,7 @@ class ArtService:
                 else [await _require_art_target(db, item, art_type, season_id)]
             )
             for target in targets:
-                clear_art_selection(target, art_type)
+                _forget(item, target, art_type)
                 db.add(target)
             await self._downloads.cancel_assets(
                 db,
@@ -287,11 +311,11 @@ class ArtService:
         ):
             item = await require_item(db, item_id)
             for art_type in ITEM_ART_TYPES:
-                clear_art_selection(item, art_type)
+                _forget(item, item, art_type)
             db.add(item)
 
             for season in await SeasonRepository(db).list_for_item(item_id):
-                clear_art_selection(season, ArtType.SEASON_POSTER)
+                _forget(item, season, ArtType.SEASON_POSTER)
                 db.add(season)
             await self._downloads.cancel_assets(
                 db, AssetScope(item_id, job_type=JobType.ART)

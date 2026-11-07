@@ -39,6 +39,7 @@ lazy from overture.schemas.tmdb import TmdbItemResult
 lazy from overture.services.art import service as art_module
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
+lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.public_dataset.browse import CatalogBrowser
@@ -173,6 +174,7 @@ def _asset_services(
             database=database,
             asset_storage=asset_storage,
             matcher=unused(ArtMatcher),
+            phash=unused(PhashService),
             downloads=downloads_svc,
             publisher=NullEventPublisher(),
             provider_registry=NoopProviderRegistry(),

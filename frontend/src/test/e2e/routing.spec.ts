@@ -159,12 +159,8 @@ test.describe("path-based client routing", () => {
 
     // Deep link to collections list
     await page.goto("/collections");
-    await expect(page.getByRole("button", { name: "Groups", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show collections", exact: true })).toBeVisible();
     await assertRoute(page, "/collections");
-
-    // Links from before collections spanned movies and shows still land.
-    await page.goto("/movies/collections");
-    await expect(page).toHaveURL(/\/collections$/);
 
     // Deep link to specific collection
     await page.goto("/collections/1-action");

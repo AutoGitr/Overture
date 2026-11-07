@@ -20,7 +20,7 @@ lazy from typing import Any, Protocol
 lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..db.art_slots import read_art_slot
+lazy from ..db.art_slots import SavedArt, read_art_slot, saved_art
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE, PAGE_SIZE, Database
@@ -96,7 +96,7 @@ class AssetRunParams(Protocol):
 def planned_outcome(
     params: AssetRunParams,
     *,
-    saved: str | None,
+    saved: str | SavedArt | None,
     file_missing: bool,
     last_checked: datetime | None,
     catalog: CatalogPick | None,
@@ -135,11 +135,11 @@ def planned_outcome(
     return None
 
 
-def _saved_reason(saved: str | None, catalog: CatalogPick | None) -> str:
+def _saved_reason(saved: str | SavedArt | None, catalog: CatalogPick | None) -> str:
     """Say why a saved selection is kept, against the catalog's offer if known."""
     if catalog is None:
         return SAVED_SELECTION
-    if saved == catalog.value:
+    if (saved.url if isinstance(saved, SavedArt) else saved) == catalog.value:
         return f"saved selection is already the {catalog.label}"
     return (
         f"saved selection differs from the {catalog.label}; "
@@ -297,7 +297,7 @@ class SelectionChangedError(Exception):
 
 
 async def _holds_selection(
-    session: AsyncSession, target: JobTarget, planned: str | None
+    session: AsyncSession, target: JobTarget, planned: str | SavedArt | None
 ) -> bool:
     """Return whether *target*'s slot still holds the *planned* selection."""
     if target.collection_id is not None:
@@ -315,13 +315,16 @@ async def _holds_selection(
     owner = await SeasonRepository(session).art_owner(
         item, target.art_type, target.season_id
     )
-    return owner is not None and read_art_slot(owner, target.art_type).url == planned
+    return (
+        owner is not None
+        and saved_art(read_art_slot(owner, target.art_type)) == planned
+    )
 
 
 async def queue_download(
     target: JobTarget,
     *,
-    planned: str | None,
+    planned: str | SavedArt | None,
     downloads: DownloadService,
     on_queued: Callable[[str], None],
     database: Database,

@@ -2,8 +2,8 @@
 
 Items, seasons and collections own artwork through a foreign key, so
 deleting an owner takes its artwork with it at the database level.
-The table carries the payload columns (:class:`ArtSlot`) used by
-:mod:`overture.db.art_slots` to treat all owners uniformly.
+The payload columns let :mod:`overture.db.art_slots` treat all owners
+uniformly.
 """
 
 lazy from typing import Any, ClassVar, Optional
@@ -24,17 +24,6 @@ lazy from .media_collection import MediaCollection
 lazy from .media_item import MediaItem
 lazy from .season import Season
 
-#: Payload columns an art slot owns, in the order they are written.
-ART_SLOT_FIELDS: tuple[str, ...] = (
-    "url",
-    "file_hash",
-    "phash",
-    "width",
-    "height",
-    "file_mtime_ns",
-    "file_size",
-)
-
 
 class ArtSlot(SQLModel, table=True):
     """Artwork belonging to exactly one item, season or collection."""
@@ -45,6 +34,9 @@ class ArtSlot(SQLModel, table=True):
             "(media_item_id IS NOT NULL) + (season_id IS NOT NULL) "
             "+ (collection_id IS NOT NULL) = 1",
             name="ck_art_slots_owner",
+        ),
+        CheckConstraint(
+            "url IS NULL OR upload_hash IS NULL", name="ck_art_slots_selection"
         ),
         UniqueConstraint("collection_id", "art_type", name="uq_art_slots_collection"),
         UniqueConstraint("media_item_id", "art_type", name="uq_art_slots_media_item"),
@@ -77,6 +69,9 @@ class ArtSlot(SQLModel, table=True):
     # SQLModel maps no NewType; the column stays text. Typed so only a link
     # ``public_art_url`` checked can be assigned to it.
     url: PublicArtUrl | None = Field(default=None, sa_type=AutoString)
+    #: The selection is an image someone uploaded, kept in the image cache
+    #: under this hash. A slot selects a link or an upload, never both.
+    upload_hash: str | None = None
     file_hash: str | None = None
     phash: str | None = None
     width: int | None = None

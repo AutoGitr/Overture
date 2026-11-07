@@ -52,11 +52,13 @@ lazy from ..schemas.collections import (
     CollectionRuleWrite,
     CollectionSetEntry,
     CollectionSetPreview,
+    CollectionSetSummary,
     CollectionSyncResponse,
     CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     KindRecommendation,
+    MdblistListRead,
     SetCollectionThemeRequest,
 )
 lazy from ..schemas.common import (
@@ -71,6 +73,7 @@ lazy from .parameters import (
     ArtTypePath,
     CollectionIdPath,
     ImageSizeQuery,
+    ImageVersionQuery,
     MediaTypeQuery,
 )
 
@@ -150,6 +153,23 @@ async def list_collection_field_values(
     return await discovery.field_values(media_type, library_id, field, query)
 
 
+@router.get("/mdblist-lists")
+async def search_mdblist_lists(
+    discovery: CollectionDiscoveryDep,
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+) -> list[MdblistListRead]:
+    """Search MDBList's public lists, for an MDBList source condition."""
+    return await discovery.mdblist_lists(query)
+
+
+@router.get("/sets")
+async def list_collection_sets(
+    groups: CollectionGroupsDep,
+) -> list[CollectionSetSummary]:
+    """List the groups that are sets, with what each splits by."""
+    return await groups.sets()
+
+
 @router.post("/sets/preview", openapi_extra=READS_ONLY)
 async def preview_collection_set(
     body: CollectionSetPreview, sets: CollectionSetsDep
@@ -192,9 +212,12 @@ async def save_collection_group_policy(
     groups: CollectionGroupsDep,
     name: Annotated[str, Query(min_length=1, max_length=200)],
     body: CollectionGroupPolicy,
+    new_set: Annotated[
+        bool, Query(description="Create a set; refuse a group that already is one")
+    ] = False,
 ) -> CollectionGroupPolicy:
     """Save defaults inherited by collections assigned to this group."""
-    return await groups.save_policy(name, body)
+    return await groups.save_policy(name, body, new_set=new_set)
 
 
 @router.post("/group-policy/apply")
@@ -321,6 +344,18 @@ async def bulk_set_collection_monitored(
 ) -> BulkMonitorResponse:
     """Set the monitored flag for multiple collections at once."""
     return await editor.bulk_set_monitored(body.collection_ids, body.monitored)
+
+
+@router.get("/{collection_id}/local-image/{art_type}", response_class=Response)
+async def serve_collection_local_image(
+    collection_id: CollectionIdPath,
+    art_type: ArtTypePath,
+    art: CollectionArtDep,
+    size: ImageSizeQuery = None,
+    version: ImageVersionQuery = None,
+) -> Response:
+    """Serve the image Overture last uploaded to a collection, or its thumbnail."""
+    return await art.local_image(collection_id, art_type, size, version)
 
 
 @router.get("/{collection_id}/image/{art_type}", response_class=Response)

@@ -97,6 +97,12 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             _EVERY_SERVER,
             PlexField("title", "string"),
         ),
+        FilterField.TVDB_ID: FieldSpec(
+            "TVDB ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None
+        ),
+        FilterField.IMDB_ID: FieldSpec(
+            "IMDb ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None
+        ),
         FilterField.STUDIO: FieldSpec(
             "Studio",
             FieldKind.TEXT,

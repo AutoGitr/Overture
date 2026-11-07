@@ -2,41 +2,18 @@
 
 lazy import asyncio
 lazy from typing import Any
-lazy from urllib.parse import urlparse
 
 lazy from ...config import Settings
 lazy from ...dataset_contract.contract import entry_art_urls
 lazy from ...utils.art_urls import public_art_url
 
 PUBLIC_DATASET_REPO_URL = "https://github.com/AutoGitr/OvertureDB"
+#: The catalog OvertureDB publishes on GitHub Pages, as one gzip stream.
+PUBLIC_DATASET_CATALOG_URL = "https://AutoGitr.github.io/OvertureDB/catalog.jsonl.gz"
 MAX_CATALOG_COMPRESSED_BYTES = 50 * 1024 * 1024
 MAX_CATALOG_UNCOMPRESSED_BYTES = 250 * 1024 * 1024
 #: Artwork hosts checked at once while a catalog is validated.
 _URL_CHECK_CONCURRENCY = 16
-
-
-def get_public_dataset_catalog_url() -> str:
-    """Derive the GitHub Pages catalog URL from the configured repo URL."""
-    parsed = urlparse(PUBLIC_DATASET_REPO_URL)
-    if parsed.scheme != "https" or parsed.netloc != "github.com":
-        return ""
-
-    parts = [part for part in parsed.path.strip("/").split("/") if part]
-    if len(parts) < 2:
-        return ""
-
-    owner, repo = parts[0], parts[1]
-    return f"https://{owner}.github.io/{repo}/catalog.jsonl.gz"
-
-
-def catalog_url_candidates() -> list[str]:
-    """Return public-dataset catalog URLs in fallback order."""
-    primary = get_public_dataset_catalog_url()
-    if not primary:
-        return []
-    if primary.endswith(".gz"):
-        return [primary, primary.removesuffix(".gz")]
-    return [primary]
 
 
 async def check_catalog_urls(

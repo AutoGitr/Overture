@@ -130,7 +130,7 @@ async def test_slots_no_source_can_serve_are_decided_together_while_planning(
 
 class RecordingArt(CollectionArtService):
     def __init__(self, matches: list[ArtCandidate] | None = None) -> None:
-        self.saved: list[tuple[int, ArtType, str]] = []
+        self.saved: list[tuple[int, ArtType, str | None]] = []
         self.adopted: list[tuple[int, ArtType, str]] = []
         self.matches = matches or []
 

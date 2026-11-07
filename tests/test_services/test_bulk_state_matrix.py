@@ -128,7 +128,7 @@ async def test_dataset_only_state_matrix(
                 else f"https://{source}.test/image.jpg"
             )
     await db_session.commit()
-    queued: dict[int, str] = {}
+    queued: dict[int, str | None] = {}
 
     async def queue(target: JobTarget, **_kwargs: Any) -> bool:
         assert target.media_item_id is not None

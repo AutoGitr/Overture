@@ -15,7 +15,7 @@
   import { splitList } from "../utils/collectionCriteria";
   import IdListInput from "./IdListInput.svelte";
   import { toggleSelectedValue } from "../utils/popupSelection";
-  import TmdbSourcePicker from "./TmdbSourcePicker.svelte";
+  import SourcePicker from "./SourcePicker.svelte";
 
   let {
     source = $bindable(),
@@ -78,7 +78,7 @@
 
 <div class="source-fields">
   {#if source.type === "tmdb_collection"}
-    <TmdbSourcePicker
+    <SourcePicker
       kind="franchise"
       {label}
       id={source.collection_id}
@@ -104,8 +104,17 @@
         if (source.type === "tmdb_item") source.tmdb_ids = ids;
       }}
     />
+    <SourcePicker
+      kind="title"
+      {label}
+      {mediaType}
+      onpick={(id) => {
+        if (source.type === "tmdb_item" && !source.tmdb_ids.includes(id))
+          source.tmdb_ids = [...source.tmdb_ids, id];
+      }}
+    />
   {:else if source.type === "tmdb_person"}
-    <TmdbSourcePicker
+    <SourcePicker
       kind="person"
       {label}
       id={source.person_id}
@@ -172,6 +181,14 @@
       value={source.identifiers.join(", ")}
       onchange={(event) => {
         if (source.type === "mdblist") source.identifiers = splitList(event.currentTarget.value);
+      }}
+    />
+    <SourcePicker
+      kind="mdblist"
+      {label}
+      onpick={(id) => {
+        if (source.type === "mdblist" && !source.identifiers.includes(String(id)))
+          source.identifiers = [...source.identifiers, String(id)];
       }}
     />
   {:else}

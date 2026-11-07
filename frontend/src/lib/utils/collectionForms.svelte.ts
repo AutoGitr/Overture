@@ -1,5 +1,5 @@
 import { createMutation, createQuery, keepPreviousData } from "@tanstack/svelte-query";
-import { UNGROUPED_GROUP } from "../../generated/settings";
+import { UNGROUPED_GROUP, UNMANAGED_GROUP } from "../../generated/settings";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import {
   createCollectionMutation,
@@ -7,6 +7,8 @@ import {
   orphanCollectionMutation,
   getCollectionDefaultsOptions,
   getCollectionGroupPolicyOptions,
+  listCollectionSetsOptions,
+  listCollectionsOptions,
   previewCollectionMutation,
   recommendCollectionKindOptions,
   saveCollectionGroupPolicyMutation,
@@ -38,7 +40,7 @@ import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
 import type { PolicyData } from "../components/CollectionPolicyFields.svelte";
 import type { ScheduleData } from "../components/CollectionScheduleFields.svelte";
 import { queryClient } from "../rest/queryClient";
-import { goToCollection, goToCollectionsList } from "../router/routes";
+import { closeCollection, goToCollection, goToCollectionsList } from "../router/routes";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
 import {
@@ -520,9 +522,21 @@ export class CollectionEditor {
     if (!target) return;
     await this.perform(async () => {
       await this.deleteRequest.mutateAsync({ ...this.target, query: { target } });
-      if (target === "both") goToCollectionsList();
+      if (target === "both") closeCollection();
     });
   }
+}
+
+/** Something a new set's form found that the person should know before saving. */
+export type SetNotice = {
+  tone: "error" | "warning" | "info";
+  title: string;
+  message: string;
+  group?: string;
+};
+
+function sameName(a: string, b: string) {
+  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 }
 
 /** An unsaved collection or collection set, created when its form is submitted. */
@@ -566,6 +580,11 @@ export class CollectionDraft {
   private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
   private readonly syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
   private readonly feedback = createNotifier();
+  private readonly sets = createQuery(() => listCollectionSetsOptions());
+  private readonly collections = createQuery(() => ({
+    ...listCollectionsOptions(),
+    enabled: this.kind === "set",
+  }));
 
   constructor(
     private readonly libraries: () => LibrarySectionRead[],
@@ -640,10 +659,79 @@ export class CollectionDraft {
   get busy() {
     return this.request.isPending || this.groupRequest.isPending || this.syncGroupRequest.isPending;
   }
+  private dimensionLabel(dimension: string) {
+    return (
+      this.dimensions.find((entry) => entry.dimension === dimension)?.label.toLowerCase() ??
+      dimension
+    );
+  }
+
+  private libraryNames(ids: string[]) {
+    return ids
+      .map((id) => this.libraries().find((library) => library.id === id)?.title ?? id)
+      .join(", ");
+  }
+
+  get groupHint(): string | null {
+    const set = (this.sets.data ?? []).find((entry) => sameName(entry.group, this.collectionGroup));
+    return set
+      ? `"${set.group}" is a set that splits by ${this.dimensionLabel(set.dimension)}; this collection sits beside the ones it makes and inherits the group's defaults.`
+      : null;
+  }
+
+  get setNotices(): SetNotice[] {
+    const name = this.setGroup;
+    if (this.kind !== "set" || !name) return [];
+    if ([UNGROUPED_GROUP, UNMANAGED_GROUP].some((reserved) => sameName(reserved, name)))
+      return [
+        {
+          tone: "error",
+          title: `"${name}" is reserved`,
+          message: "Overture keeps it for collections outside any group; name another group.",
+        },
+      ];
+    const sets = this.sets.data ?? [];
+    const existing = sets.find((set) => sameName(set.group, name));
+    if (existing)
+      return [
+        {
+          tone: "error",
+          title: `"${existing.group}" already is a set`,
+          message: `It splits ${this.libraryNames(existing.library_ids)} by ${this.dimensionLabel(existing.dimension)}. Edit that set in the group's settings, or name another group.`,
+          group: existing.group,
+        },
+      ];
+    const notices: SetNotice[] = [];
+    const held = (this.collections.data ?? []).filter(
+      (row) => row.managed && row.collection_group !== null && sameName(row.collection_group, name),
+    );
+    if (held.length)
+      notices.push({
+        tone: "info",
+        title: `"${held[0]?.collection_group}" already holds ${held.length === 1 ? "a collection" : `${held.length} collections`}`,
+        message:
+          "They stay in the group beside the set's collections. A value whose title one of them has is skipped until one is renamed; the preview names those values.",
+      });
+    for (const set of sets) {
+      const shared = set.library_ids.filter((id) => this.libraryIds.includes(id));
+      if (set.dimension !== this.generator.dimension || !shared.length) continue;
+      notices.push({
+        tone: "warning",
+        title: `"${set.group}" already splits by ${this.dimensionLabel(set.dimension)}`,
+        message: `It covers ${this.libraryNames(shared)}, so this set makes a second collection per value there. Narrow one of them with criteria, or edit that set instead.`,
+        group: set.group,
+      });
+    }
+    return notices;
+  }
+
   /** Why the form cannot be saved yet, or null when it can. */
   get blocker(): string | null {
     if (!this.libraryIds.length) return "Choose a library";
-    if (this.kind === "set") return this.setGroup ? null : "Name the set's group";
+    if (this.kind === "set") {
+      if (!this.setGroup) return "Name the set's group";
+      return this.setNotices.find((notice) => notice.tone === "error")?.title ?? null;
+    }
     if (!this.title.trim()) return "Enter a title";
     return null;
   }
@@ -702,7 +790,7 @@ export class CollectionDraft {
         Object.entries($state.snapshot(this.setPolicy)).filter(([, value]) => value !== null),
       );
       const saved = await this.groupRequest.mutateAsync({
-        query,
+        query: { ...query, new_set: true },
         body: {
           ...existing,
           ...chosen,

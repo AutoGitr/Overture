@@ -8,7 +8,7 @@ overwriting a value the app has already resolved unless explicitly allowed.
 lazy from collections.abc import Iterable, Mapping
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import read_art_slot, select_art
+lazy from ...db.art_slots import SavedArt, read_art_slot, saved_art, select_art
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...domain import ArtType
@@ -81,12 +81,12 @@ def apply_provider_art_url(
     only_missing: bool,
 ) -> bool:
     """Persist a safe provider artwork URL while preserving local state."""
-    saved_url = read_art_slot(owner, art_type).url
+    saved = saved_art(read_art_slot(owner, art_type))
 
-    if only_missing and saved_url:
+    if only_missing and saved is not None:
         return False
     clean_url = resolved.get(url_val) if url_val else None
-    if not clean_url or clean_url == saved_url:
+    if not clean_url or saved == SavedArt(url=clean_url):
         return False
 
     select_art(owner, art_type, clean_url)

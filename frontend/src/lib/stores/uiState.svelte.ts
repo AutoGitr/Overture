@@ -55,6 +55,7 @@ export interface FilterState {
   aspectRatio: "all" | "correct" | "incorrect";
   mediaServer: "all" | "present" | "missing";
   libraryIds: string[];
+  collectionId: number | null;
   themeSources: ThemeSource[];
   artSource: { sources: ArtSource[]; artType: ArtSourceSlot };
   metadataIssues: { flags: MetadataIssue[]; mode: "all" | "any" };
@@ -76,6 +77,7 @@ const DEFAULT_FILTERS: FilterState = {
   aspectRatio: "all",
   mediaServer: "all",
   libraryIds: [],
+  collectionId: null,
   themeSources: [],
   artSource: { sources: [], artType: "any" },
   metadataIssues: { flags: [], mode: "all" },
@@ -170,6 +172,10 @@ function normalizeFilters(value: unknown): FilterState {
     aspectRatio: stringOption(source.aspectRatio, ASPECT_RATIO_FILTERS, defaults.aspectRatio),
     mediaServer: stringOption(source.mediaServer, MEDIA_SERVER_FILTERS, defaults.mediaServer),
     libraryIds: stringArray(source.libraryIds),
+    collectionId:
+      typeof source.collectionId === "number" && Number.isSafeInteger(source.collectionId)
+        ? source.collectionId
+        : null,
     themeSources: allowedValues(source.themeSources, THEME_SOURCES),
     artSource: {
       sources: allowedValues(artSource.sources, ART_SOURCES),

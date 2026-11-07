@@ -18,6 +18,7 @@ lazy from overture.schemas.server_audit import (
     ServerAuditRequest,
     ServerAuditResult,
 )
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.server_audit import compare as server_audit
 lazy from overture.services.server_audit.compare import AuditContext
@@ -28,6 +29,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    unused,
 )
 
 LIFECYCLE = ManagedJobLifecycle(JobKind.SERVER_AUDIT)
@@ -39,6 +41,7 @@ def _audit_context(
     registry = NoopProviderRegistry(object())
     return AuditContext(
         config_dir=tmp_path,
+        collection_art=unused(CollectionArtService),
         provider_registry=registry,
         asset_storage=AssetStorage(app_config=app_config),
         local_assets=make_local_assets(

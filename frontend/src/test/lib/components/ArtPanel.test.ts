@@ -4,6 +4,7 @@ import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ArtPanel from "../../../lib/components/ArtPanel.svelte";
 import PasteArtButton from "../../../lib/components/PasteArtButton.svelte";
+import UploadArtButton from "../../../lib/components/UploadArtButton.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { goToItemArt, route } from "../../../lib/router/routes";
 import { artPreviewState } from "../../../lib/stores/artPreviewState.svelte";
@@ -19,6 +20,7 @@ const {
   matchArt,
   saveArt,
   saveTmdbArt,
+  uploadArt,
   upsertLibraryItem,
   invalidateSeasons,
   trackQueuedItemJob,
@@ -31,6 +33,7 @@ const {
   matchArt: vi.fn(),
   saveArt: vi.fn(),
   saveTmdbArt: vi.fn(),
+  uploadArt: vi.fn(),
   upsertLibraryItem: vi.fn(),
   invalidateSeasons: vi.fn(),
   trackQueuedItemJob: vi.fn(),
@@ -45,6 +48,7 @@ vi.mock("../../../generated/rest/sdk.gen", () => ({
   matchArt,
   saveArt,
   saveTmdbArt,
+  uploadArt,
 }));
 vi.mock("../../../lib/utils/tmdbItems", () => ({ openPersistedItem }));
 vi.mock("../../../lib/rest/cache", () => ({ upsertLibraryItem, invalidateSeasons }));
@@ -99,6 +103,7 @@ function renderArtTab(tab: Partial<ArtTab> = {}) {
   };
   const view = renderWithQueryClient(ArtPanel, props);
   renderWithQueryClient(PasteArtButton);
+  renderWithQueryClient(UploadArtButton);
   return { ...view, props };
 }
 
@@ -284,6 +289,46 @@ describe("ArtPanel request ownership", () => {
       ),
     );
     expect(screen.queryByLabelText("Image URL")).not.toBeInTheDocument();
+  });
+
+  it("uploads a chosen image file and saves it into the slot", async () => {
+    const hash = "b".repeat(64);
+    uploadArt.mockResolvedValue({ data: { upload_hash: hash, width: 1000, height: 1500 } });
+    saveArt.mockResolvedValue({ data: selected("download-2") });
+    const { container } = renderArtTab();
+    const file = new File(["png"], "poster.png", { type: "image/png" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Upload image as poster" }));
+    const input = container.ownerDocument.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error("The upload button has no file input");
+    await fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(saveArt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: { upload_hash: hash, width: 1000, height: 1500 },
+          path: { item_id: 1, art_type: "poster" },
+        }),
+      ),
+    );
+    expect(uploadArt).toHaveBeenCalledWith(expect.objectContaining({ body: file }));
+  });
+
+  it("uploads an image pasted on the art tab", async () => {
+    uploadArt.mockResolvedValue({ data: { upload_hash: "c".repeat(64), width: 10, height: 15 } });
+    saveArt.mockResolvedValue({ data: selected(null) });
+    renderArtTab();
+    const file = new File(["jpg"], "poster.jpg", { type: "image/jpeg" });
+
+    await fireEvent.paste(document.body, {
+      clipboardData: { files: [file], getData: () => "" },
+    });
+
+    await waitFor(() =>
+      expect(saveArt).toHaveBeenCalledWith(
+        expect.objectContaining({ body: { upload_hash: "c".repeat(64), width: 10, height: 15 } }),
+      ),
+    );
   });
 
   it("warns instead of saving when the clipboard holds no image URL", async () => {

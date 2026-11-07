@@ -5,7 +5,7 @@ lazy from collections.abc import Callable
 lazy from urllib.parse import urlsplit
 
 lazy import httpx2
-lazy from pydantic import BaseModel, ConfigDict, Field, ValidationError
+lazy from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 lazy from ..config import Settings
 lazy from ..domain import MediaType
@@ -53,6 +53,19 @@ class _ListPage(BaseModel):
     shows: list[_ListItem] = Field(default_factory=list[_ListItem])
 
 
+class MdblistList(BaseModel):
+    """A public MDBList list that a search found."""
+
+    id: int = Field(gt=0)
+    name: str
+    user_name: str | None = None
+    items: int | None = None
+    mediatype: str | None = None
+
+
+_LIST_RESULTS: TypeAdapter[list[MdblistList]] = TypeAdapter(list[MdblistList])
+
+
 class MDBListClient:
     """Own the authenticated client and read bounded list pages in source order."""
 
@@ -76,6 +89,25 @@ class MDBListClient:
     async def close(self) -> None:
         """Close the owned HTTP client."""
         await self._client.close()
+
+    async def search_lists(self, query: str) -> list[MdblistList]:
+        """Return the public lists MDBList names like *query*.
+
+        Raises:
+            PublicServiceError: 502 when MDBList cannot answer.
+        """
+        try:
+            response = await request_with_retry(
+                await self._client.get(),
+                "GET",
+                "/lists/search",
+                params={"query": query},
+                limiter=self._limiter,
+            )
+            response.raise_for_status()
+            return _LIST_RESULTS.validate_python(response.json())
+        except (httpx2.HTTPError, ValueError, ValidationError) as exc:
+            raise PublicServiceError(502, "MDBList could not search lists") from exc
 
     async def tmdb_ids(self, identifier: str, media_type: MediaType) -> list[int]:
         """Return a complete list or fail before destructive membership changes."""

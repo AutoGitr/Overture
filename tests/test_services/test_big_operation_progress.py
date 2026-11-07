@@ -16,6 +16,7 @@ lazy from overture.schemas.server_audit import (
     ServerAuditRequest,
     ServerAuditResult,
 )
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.asset_manager import scan as asset_scan
 lazy from overture.services.server_audit import compare as server_audit
@@ -27,6 +28,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    unused,
 )
 
 
@@ -170,6 +172,7 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
     registry = NoopProviderRegistry(object())
     audit_context = AuditContext(
         config_dir=tmp_path,
+        collection_art=unused(CollectionArtService),
         provider_registry=registry,
         asset_storage=AssetStorage(app_config=app_config),
         local_assets=make_local_assets(app_config=app_config, database=database),

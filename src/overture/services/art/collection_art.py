@@ -1,5 +1,8 @@
 """Artwork of media-server collections: candidates, uploads and matching."""
 
+lazy from collections.abc import Callable
+
+lazy from fastapi.responses import FileResponse
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
@@ -10,6 +13,7 @@ lazy from ...db.art_slots import (
     read_art_slot,
     record_art_file,
     select_art,
+    select_upload,
 )
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import get_app_settings
@@ -33,10 +37,12 @@ lazy from ...utils.locks import KeyedLock
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
-lazy from ..storage.image_cache import ImageCache
+lazy from ..storage.image_cache import CachedOriginal, ImageCache
+lazy from ..storage.responses import cached_image_response
 lazy from .candidates import ArtCandidates, CandidatePolicy
 lazy from .choice import ArtSelector, require_valid_aspect_ratio
 lazy from .matcher import ArtMatcher
+lazy from .uploads import ArtUploads
 
 
 class CollectionArtService:
@@ -55,6 +61,7 @@ class CollectionArtService:
         image_clients: ProxyClientManager,
         image_cache: ImageCache,
         selector: ArtSelector,
+        uploads: ArtUploads,
     ) -> None:
         self._config = app_config
         self._database = database
@@ -66,6 +73,7 @@ class CollectionArtService:
         self._image_clients = image_clients
         self._image_cache = image_cache
         self._selector = selector
+        self._uploads = uploads
 
     async def _require(
         self,
@@ -112,21 +120,49 @@ class CollectionArtService:
         async with self._database.read_session() as db:
             await self._require(db, collection_id, art_type, managed=True)
         selection = await self._selector.prepare(art_type, body)
-        trusted = self._config.is_trusted_media_server_url(selection.target_url)
-        fetched = await fetch_image(
-            selection.target_url,
-            await self._image_clients.get_client(selection.target_url),
-            allow_private=trusted,
-            headers=self._provider_registry.provider.get_download_headers(
-                selection.target_url
-            ),
-        )
-        _, width, height = await owned_thread(inspect_saved_image, fetched.data)
+        if isinstance(selection.source, ArtFileFacts):
+            facts = selection.source
+            data, media_type = await self._uploads.read(facts.file_hash)
+        else:
+            data, media_type, facts = await self._fetch(selection.source, art_type)
+
+        def record(row: MediaCollection) -> None:
+            if isinstance(selection.source, ArtFileFacts):
+                select_upload(row, art_type, facts.file_hash)
+            elif selection.stored_url:
+                select_art(row, art_type, selection.stored_url)
+            else:
+                # A media-server image has no link; the old one would mislead.
+                clear_art_selection(row, art_type)
+            record_art_file(row, art_type, facts)
+
+        await self._send(collection_id, art_type, data, media_type, record)
+        return StatusResponse(status=Status.OK)
+
+    async def reupload(self, collection_id: int, art_type: ArtType) -> None:
+        """Send the server the image Overture last uploaded to it, again.
+
+        Raises:
+            PublicServiceError: 409 when Overture uploaded none, or the cache
+                no longer keeps it.
+        """
         async with self._database.read_session() as db:
-            await require_valid_aspect_ratio(db, art_type, width, height)
-        phash = await self._matcher.phash.compute_from_bytes(fetched.data)
-        original = await self._image_cache.store_original(fetched.data)
-        stat = await owned_thread(original.path.stat)
+            row = await self._require(db, collection_id, art_type)
+        file_hash = read_art_slot(row, art_type).file_hash
+        if file_hash is None:
+            raise PublicServiceError(409, "Overture has uploaded no image to it")
+        data, media_type = await self._uploads.read(file_hash)
+        await self._send(collection_id, art_type, data, media_type, lambda _: None)
+
+    async def _send(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        data: bytes,
+        media_type: str,
+        record: Callable[[MediaCollection], None],
+    ) -> None:
+        """Upload an image to every server copy, then *record* it on the row."""
         async with (
             self._asset_locks.acquire(COLLECTIONS_LOCK),
             self._asset_locks.acquire(f"collection:{collection_id}"),
@@ -140,28 +176,14 @@ class CollectionArtService:
             provider = self._provider_registry.provider
             for server_id in row.server_ids:
                 await provider.upload_collection_art(
-                    server_id, art_type, fetched.data, fetched.media_type
+                    server_id, art_type, data, media_type
                 )
-            # The image route and its cache version read the URL the server now lists.
             server_url = await provider.get_collection_image_url(
                 row.server_item_id, art_type
             )
             async with self._database.write_session() as db:
                 row = await self._require(db, collection_id, art_type)
-                if selection.stored_url:
-                    select_art(row, art_type, selection.stored_url)
-                record_art_file(
-                    row,
-                    art_type,
-                    ArtFileFacts(
-                        original.file_hash,
-                        phash,
-                        width,
-                        height,
-                        stat.st_mtime_ns,
-                        stat.st_size,
-                    ),
-                )
+                record(row)
                 row.updated_at = utc_now()
                 if art_type is ArtType.POSTER:
                     row.thumb_url = server_url
@@ -171,7 +193,72 @@ class CollectionArtService:
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
         )
-        return StatusResponse(status=Status.OK)
+
+    async def _fetch(
+        self, url: str, art_type: ArtType
+    ) -> tuple[bytes, str, ArtFileFacts]:
+        """Download a chosen link, keep it in the image cache and describe it.
+
+        Raises:
+            PublicServiceError: When its shape is outside the tolerance.
+        """
+        trusted = self._config.is_trusted_media_server_url(url)
+        fetched = await fetch_image(
+            url,
+            await self._image_clients.get_client(url),
+            allow_private=trusted,
+            headers=self._provider_registry.provider.get_download_headers(url),
+        )
+        _, width, height = await owned_thread(inspect_saved_image, fetched.data)
+        async with self._database.read_session() as db:
+            await require_valid_aspect_ratio(db, art_type, width, height)
+        phash = await self._matcher.phash.compute_from_bytes(fetched.data)
+        original = await self._image_cache.store_original(fetched.data)
+        stat = await owned_thread(original.path.stat)
+        return (
+            fetched.data,
+            fetched.media_type,
+            ArtFileFacts(
+                original.file_hash,
+                phash,
+                width,
+                height,
+                stat.st_mtime_ns,
+                stat.st_size,
+            ),
+        )
+
+    async def local_image(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        size: ImageSize | None,
+        version: str | None,
+    ) -> FileResponse:
+        """Serve the image Overture last uploaded to a collection, from the cache.
+
+        The cache is its only copy: the server keeps its own encoding, so a
+        lost image is not found until the next upload.
+
+        Raises:
+            PublicServiceError: 404 when the collection records no such image.
+        """
+        async with self._database.read_session() as db:
+            row = await self._require(db, collection_id, art_type)
+        file_hash = read_art_slot(row, art_type).file_hash
+        if file_hash is None:
+            raise PublicServiceError(404, "Collection image not found")
+
+        async def lost() -> CachedOriginal:
+            raise PublicServiceError(404, "Collection image not found")
+
+        return await cached_image_response(
+            self._image_cache,
+            file_hash,
+            restore=lost,
+            size=size,
+            current=version == file_hash,
+        )
 
     async def adopt(self, collection_id: int, art_type: ArtType, url: str) -> bool:
         """Save *url* as the selection of art the server already shows.

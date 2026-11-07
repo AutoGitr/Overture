@@ -20,6 +20,7 @@ lazy from ...jobs.runner import JobContext, run_managed_job
 lazy from ...jobs.tally import ServerAuditTally
 lazy from ...media_servers.adapters import ServerTheme
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.server_audit import (
     AuditStatus,
@@ -30,12 +31,19 @@ lazy from ...utils.audio import audio_hash, downloaded_audio, ffprobe_duration
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.image import fetch_image
 lazy from ...utils.threads import owned_thread
+lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
 lazy from ..art.targets import target_label
 lazy from ..local_assets.service import LocalAssets
 lazy from ..server_identity import resolve_owner_server_id, resolve_server_item_id
 lazy from ..storage.assets import AssetStorage, require_folder_path
-lazy from .work import AuditTarget, plan_audit
+lazy from .work import (
+    AuditTarget,
+    AuditWork,
+    CollectionAuditTarget,
+    plan_audit,
+    plan_collection_audit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +68,7 @@ class AuditContext:
     app_config: Settings
     database: Database
     config_dir: Path
+    collection_art: CollectionArtService
 
 
 def _finding(
@@ -145,6 +154,71 @@ async def _audit_art_one(
         )
         server_phash = await context.phash.compute_from_bytes(image.data)
         distance = context.phash.hamming_distance(local_phash, server_phash)
+    except (httpx2.HTTPError, OSError, ValueError) as exc:
+        return result.model_copy(update={"reason": str(exc)})
+    if distance == 0:
+        return _finding(result, AuditStatus.PHASH_MATCH, "d=0 visual match", hamming=0)
+    return _finding(
+        result, AuditStatus.PHASH_MISMATCH, f"d={distance}", hamming=distance
+    )
+
+
+async def _audit_collection_art(
+    target: CollectionAuditTarget, *, context: AuditContext
+) -> ServerAuditResult:
+    """Audit the image Overture uploaded to a collection against the server's."""
+    art_type = target.art_type
+    result = ServerAuditResult(
+        kind="art",
+        collection_id=target.collection_id,
+        art_type=art_type.server_asset,
+        status=AuditStatus.ERROR,
+        title="",
+        server_image_present=False,
+    )
+    async with context.database.read_session() as session:
+        row = await CollectionRepository(session).get_listed(target.collection_id)
+    if row is None:
+        return result.model_copy(update={"reason": "Collection not found"})
+    result.title = row.title
+    slot = find_art_slot(row, art_type)
+    if slot is None or slot.file_hash is None:
+        return _finding(
+            result, AuditStatus.LOCAL_MISSING, "Overture has uploaded no image"
+        )
+    if slot.phash is None:
+        return result.model_copy(
+            update={"reason": "The uploaded image has no fingerprint"}
+        )
+    if row.server_item_id is None:
+        return _finding(
+            result,
+            AuditStatus.UNRESOLVED_SERVER_ID,
+            "The collection has no server copy",
+        )
+    provider = context.provider_registry.provider
+    server_url = await provider.get_collection_image_url(row.server_item_id, art_type)
+    if not server_url:
+        return _finding(
+            result,
+            AuditStatus.SERVER_MISSING,
+            "Media server has no image for this art type",
+        )
+    result.server_image_present = True
+    try:
+        request = await provider.build_collection_image_request(
+            row.server_item_id, art_type, None, current_url=server_url
+        )
+        image = await fetch_image(
+            request.url,
+            await context.image_clients.get_client(request.url),
+            allow_generic_image=True,
+            allow_private=True,
+            headers=request.headers,
+            params=request.params,
+        )
+        server_phash = await context.phash.compute_from_bytes(image.data)
+        distance = context.phash.hamming_distance(slot.phash, server_phash)
     except (httpx2.HTTPError, OSError, ValueError) as exc:
         return result.model_copy(update={"reason": str(exc)})
     if distance == 0:
@@ -399,9 +473,20 @@ async def run_server_audit(
     ) as job:
         await job.started()
         await audit_context.provider_registry.require_reachable()
-        targets = await plan_audit(
-            params, audit_context.local_assets, database=audit_context.database
-        )
+        targets: list[AuditWork] = [
+            *await plan_audit(
+                params, audit_context.local_assets, database=audit_context.database
+            ),
+            *(
+                await plan_collection_audit(
+                    params,
+                    audit_context.provider_registry.provider.server_type,
+                    database=audit_context.database,
+                )
+                if params.check_collections
+                else []
+            ),
+        ]
         await job.planned(len(targets))
         async with aclosing(
             in_order(
@@ -416,19 +501,28 @@ async def run_server_audit(
                 result = _reported(results)
                 await job.report(
                     result.status.outcome,
-                    f"{result.title or f'item {target.item_id}'} ({target.asset})",
+                    f"{result.title or _owner(target)} ({target.asset})",
                     result.reason or result.status,
                     results=tally.collect(*differences(results)),
                 )
 
 
-async def audit_target(
-    target: AuditTarget, *, context: AuditContext
-) -> tuple[AuditTarget, list[ServerAuditResult]]:
+def _owner(target: AuditWork) -> str:
+    """Name a target's owner when its title is unknown."""
+    if isinstance(target, CollectionAuditTarget):
+        return f"collection {target.collection_id}"
+    return f"item {target.item_id}"
+
+
+async def audit_target[T: AuditWork](
+    target: T, *, context: AuditContext
+) -> tuple[T, list[ServerAuditResult]]:
     """Audit one target; return it with one result per server asset compared.
 
     A target whose results all match is one the server shows exactly.
     """
+    if isinstance(target, CollectionAuditTarget):
+        return target, [await _audit_collection_art(target, context=context)]
     if target.art_type is None:
         return target, await _audit_theme_one(target, context=context)
     return target, [await _audit_art_one(target, target.art_type, context=context)]

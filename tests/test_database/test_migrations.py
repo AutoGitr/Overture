@@ -7,6 +7,7 @@ lazy import pytest
 lazy from alembic import command
 lazy from sqlalchemy import insert
 lazy from sqlalchemy.engine import Connection
+lazy from sqlalchemy.exc import IntegrityError
 lazy from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 lazy from sqlmodel import CheckConstraint, create_engine, inspect, text
 
@@ -513,6 +514,47 @@ def test_collections_move_to_their_libraries_and_groups_are_shared() -> None:
                 ("Differ (Shows)", "show"),
                 ("Same", "movie"),
                 ("Same", "show"),
+            ]
+    finally:
+        engine.dispose()
+
+
+def test_slots_select_uploads_and_lose_them_on_downgrade() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "e1f4a7c92b3d")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "genres, actors, writers, producers, countries, labels, "
+                "origin_countries, tmdb_keywords, companies, networks, streaming, "
+                "theme_provenance_cleared, directors) VALUES (1, 'movie', 'Movie', 1, "
+                "'[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', 0, "
+                "'[]')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (id, media_item_id, art_type, url) "
+                "VALUES (1, 1, 'poster', 'https://images.test/p.jpg')"
+            )
+
+            command.upgrade(config, "f3b8d2a61c47")
+            assert conn.exec_driver_sql(
+                "SELECT url, upload_hash FROM art_slots"
+            ).all() == [("https://images.test/p.jpg", None)]
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (id, media_item_id, art_type, upload_hash) "
+                "VALUES (2, 1, 'background', 'a')"
+            )
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "UPDATE art_slots SET upload_hash = 'b' WHERE id = 1"
+                )
+
+            command.downgrade(config, "e1f4a7c92b3d")
+            assert conn.exec_driver_sql("SELECT id, url FROM art_slots").all() == [
+                (1, "https://images.test/p.jpg")
             ]
     finally:
         engine.dispose()

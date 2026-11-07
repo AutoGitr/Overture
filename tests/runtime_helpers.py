@@ -549,6 +549,7 @@ def make_runtime(
             database=database,
             asset_storage=asset_storage,
             matcher=art_matcher,
+            phash=phash,
             downloads=downloads,
             publisher=events,
             provider_registry=provider_registry,
@@ -583,6 +584,7 @@ def make_runtime(
             publisher=events,
             app_config=app_config,
             database=database,
+            collection_art=art.collections,
         )
         if server_audit is None
         else server_audit

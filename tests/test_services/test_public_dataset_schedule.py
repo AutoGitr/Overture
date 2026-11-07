@@ -15,9 +15,8 @@ lazy from overture.domain import ArtType
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
 lazy from overture.services.public_dataset.catalog import (
+    PUBLIC_DATASET_CATALOG_URL,
     PUBLIC_DATASET_REPO_URL,
-    catalog_url_candidates,
-    get_public_dataset_catalog_url,
 )
 lazy from overture.services.public_dataset.lookup import (
     build_candidate,
@@ -97,16 +96,6 @@ class TestPublicDatasetHelper:
 
         assert status.next_run == "2026-06-01T03:00:00+00:00"
 
-    def test_catalog_url_is_derived_from_github_repo(self) -> None:
-        assert (
-            get_public_dataset_catalog_url()
-            == "https://AutoGitr.github.io/OvertureDB/catalog.jsonl.gz"
-        )
-        assert catalog_url_candidates() == [
-            "https://AutoGitr.github.io/OvertureDB/catalog.jsonl.gz",
-            "https://AutoGitr.github.io/OvertureDB/catalog.jsonl",
-        ]
-
     def test_candidate_shape_and_status_projection(
         self, tmp_path: Path, *, app_config: Settings, database: Database
     ) -> None:
@@ -146,7 +135,7 @@ class TestPublicDatasetHelper:
 
         assert status.enabled is True
         assert status.repo_url == PUBLIC_DATASET_REPO_URL
-        assert status.catalog_url == get_public_dataset_catalog_url()
+        assert status.catalog_url == PUBLIC_DATASET_CATALOG_URL
         assert status.last_stats == PublicDatasetSyncStats(items=4)
 
 

@@ -10,6 +10,12 @@ lazy from pydantic import SecretStr
 lazy from sqlmodel import select
 
 lazy from overture.config import Settings
+lazy from overture.db.art_slots import (
+    ArtFileFacts,
+    art_file_facts,
+    read_art_slot,
+    record_art_file,
+)
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import (
     MediaCollection,
@@ -20,6 +26,7 @@ lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    ArtType,
     IncrementalThemeOrder,
     MediaType,
     ServerType,
@@ -644,6 +651,31 @@ async def test_unsynced_choices_and_members_survive_a_library_sync(
     async with database.read_session() as session:
         members = await CollectionRepository(session).members(refreshed.id or 0)
     assert [member.id for member in members] == [movies["m2"]]
+
+
+async def test_an_image_replaced_on_the_server_is_no_longer_the_one_overture_uploaded(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed_movies(database)
+    server = Server(_collection("saga", "m0"))
+    server.listed = [
+        replace(server.listed[0], thumb_url="https://server.test/uploaded")
+    ]
+    await _run(server, database, app_config)
+    facts = ArtFileFacts("a" * 64, "b" * 16, 200, 300, 1, 2)
+    async with database.write_session() as session:
+        row = (await _rows(database))["saga"]
+        record_art_file(row, ArtType.POSTER, facts)
+        session.add(row)
+
+    await _run(server, database, app_config)
+    kept = (await _rows(database))["saga"]
+    assert art_file_facts(read_art_slot(kept, ArtType.POSTER)) == facts
+
+    server.listed = [replace(server.listed[0], thumb_url="https://server.test/other")]
+    await _run(server, database, app_config)
+    replaced = (await _rows(database))["saga"]
+    assert read_art_slot(replaced, ArtType.POSTER).file_hash is None
 
 
 async def test_managed_collections_keep_overtures_choices_and_outlive_their_server_copy(

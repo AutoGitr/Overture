@@ -12,7 +12,7 @@ lazy from ...db.session import Database
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.seasons import SeasonRepository
-lazy from ...utils.art_urls import public_art_url
+lazy from ...utils.art_urls import PublicArtUrl, public_art_url
 lazy from ...utils.image import (
     RemoteImageError,
     UnsupportedImageFormatError,
@@ -92,6 +92,18 @@ class DownloadArtHandler:
                 f"Could not reach {urlsplit(target_url).hostname}: {detail}"
             ) from exc
 
+    async def _uploaded_image(self, upload_hash: str, progress: StepProgress) -> bytes:
+        """Read an uploaded image back from the image cache.
+
+        Raises:
+            DownloadError: When the cache no longer keeps the upload.
+        """
+        await progress.enter("downloading")
+        original = await self._image_cache.original(upload_hash)
+        if original is None:
+            raise DownloadError("The uploaded image is no longer kept; upload it again")
+        return await owned_thread(original.path.read_bytes)
+
     async def _season(self, job: DownloadJob, item: MediaItem) -> Season | None:
         """Return the season a season poster belongs to.
 
@@ -123,23 +135,32 @@ class DownloadArtHandler:
         Raises:
             DownloadError: When the job is incomplete or the download fails.
         """
-        if not job.target_url:
-            raise DownloadError("No target URL specified")
         if not job.art_type:
             raise DownloadError("No art type specified")
-
-        target_url = remove_sensitive_url_params(job.target_url)
-        trusted_media_server = self._app_config.is_trusted_media_server_url(target_url)
         folder_path = require_folder_path(item)
         art_type = job.art_type
-
         season = await self._season(job, item)
         progress = StepProgress(progress_cb, ("downloading", "hashing", "writing"))
-        image_data = await self._fetch_source_image(
-            target_url,
-            trusted_media_server=trusted_media_server,
-            progress=progress,
-        )
+        url: PublicArtUrl | None = None
+        if job.upload_hash:
+            image_data = await self._uploaded_image(job.upload_hash, progress)
+        elif job.target_url:
+            target_url = remove_sensitive_url_params(job.target_url)
+            trusted_media_server = self._app_config.is_trusted_media_server_url(
+                target_url
+            )
+            image_data = await self._fetch_source_image(
+                target_url,
+                trusted_media_server=trusted_media_server,
+                progress=progress,
+            )
+            url = await public_art_url(
+                target_url,
+                fetched_publicly=not trusted_media_server,
+                app_config=self._app_config,
+            )
+        else:
+            raise DownloadError("No artwork source specified")
         await progress.enter("hashing")
         phash = await self.phash.compute_from_bytes(image_data)
 
@@ -167,11 +188,8 @@ class DownloadArtHandler:
             result=DownloadedArt(
                 art_type=art_type,
                 season_id=season.id if season else None,
-                url=await public_art_url(
-                    target_url,
-                    fetched_publicly=not trusted_media_server,
-                    app_config=self._app_config,
-                ),
+                url=url,
+                upload_hash=job.upload_hash,
                 phash=phash,
                 width=original.width or None,
                 height=original.height or None,

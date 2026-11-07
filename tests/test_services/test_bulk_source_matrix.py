@@ -117,7 +117,7 @@ def planned(
 def assert_run(
     context: Context,
     expected: dict[str, Expected],
-    queued: dict[str, str],
+    queued: dict[str, str | None],
     target: str,
 ) -> None:
     """Compare a run's log, queued downloads and counters with *expected*."""
@@ -309,7 +309,7 @@ async def test_art_source_matrix(
             )
     await db_session.commit()
 
-    queued: dict[str, str] = {}
+    queued: dict[str, str | None] = {}
 
     async def queue(target: JobTarget, **_kwargs: Any) -> bool:
         queued[f"Case {target.media_item_id:03d}"] = target.target_url
@@ -572,7 +572,7 @@ async def test_theme_source_matrix(
     )
     await db_session.commit()
 
-    queued: dict[str, str] = {}
+    queued: dict[str, str | None] = {}
 
     async def queue(target: JobTarget, **_kwargs: Any) -> bool:
         queued[f"Case {target.media_item_id:03d}"] = target.target_url

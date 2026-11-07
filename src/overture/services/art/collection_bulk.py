@@ -8,7 +8,7 @@ lazy import httpx2
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import read_art_slot
+lazy from ...db.art_slots import read_art_slot, saved_art
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.session import Database
 lazy from ...domain import ITEM_ART_TYPES, PERFECT_MATCH_ONLY, ArtBulkSource, ArtType
@@ -119,7 +119,7 @@ async def plan_collection_art(
                 slot = read_art_slot(row, art_type)
                 outcome = planned_outcome(
                     params,
-                    saved=slot.url,
+                    saved=saved_art(slot),
                     file_missing=not slot.file_hash,
                     last_checked=row.last_matched_at,
                     catalog=_offer(row, art_type, params, index),
@@ -139,17 +139,21 @@ async def _choose(
     *,
     art: CollectionArtService,
     index: PublicDatasetIndex,
-) -> tuple[JobOutcome, str, str | None]:
-    """Return the outcome, its reason and the URL to upload, if any."""
-    slot = read_art_slot(row, art_type)
-    if slot.url and not params.overwrite_existing:
-        return JobOutcome.DOWNLOADED, "restores the saved selection", slot.url
+) -> tuple[JobOutcome, str, SaveArtRequest | None]:
+    """Return the outcome, its reason and the artwork to upload, if any."""
+    saved = saved_art(read_art_slot(row, art_type))
+    if saved is not None and not params.overwrite_existing:
+        return (
+            JobOutcome.DOWNLOADED,
+            "restores the saved selection",
+            SaveArtRequest(url=saved.url, upload_hash=saved.upload_hash),
+        )
     notes: list[str] = []
     for source in params.source_order:
         if source is ArtBulkSource.OVERTUREDB:
             pick = index.collection_art(row, art_type)
             if pick.value is not None:
-                return JobOutcome.DOWNLOADED, pick.label, pick.value
+                return JobOutcome.DOWNLOADED, pick.label, SaveArtRequest(url=pick.value)
             notes.extend(pick.notes)
             continue
         if reason := _unmatchable(row, art_type):
@@ -204,15 +208,11 @@ async def run_collection_art(
                     return
                 target = f"{row.title} ({art_type.value})"
                 try:
-                    outcome, reason, url = await _choose(
+                    outcome, reason, chosen = await _choose(
                         row, art_type, params, art=art, index=index
                     )
-                    if url is not None:
-                        await art.save(
-                            row.id or 0,
-                            art_type,
-                            SaveArtRequest(url=url),
-                        )
+                    if chosen is not None:
+                        await art.save(row.id or 0, art_type, chosen)
                 except _ERRORS as exc:
                     await job.report(JobOutcome.ERROR, target, str(exc))
                     continue

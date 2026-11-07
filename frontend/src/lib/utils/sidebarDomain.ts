@@ -732,7 +732,13 @@ interface FilterDef {
   needsDataset?: boolean;
   /** Shown only where the server has smart collections. */
   needsSmart?: boolean;
-  library?: (filters: FilterState, datasetEnabled: boolean) => Predicate<MediaItemRead> | null;
+  /** Shown only where the server has collections. */
+  needsCollections?: boolean;
+  library?: (
+    filters: FilterState,
+    datasetEnabled: boolean,
+    members: ReadonlySet<number>,
+  ) => Predicate<MediaItemRead> | null;
   collections?: (filters: FilterState, datasetEnabled: boolean) => Predicate<CollectionRead> | null;
 }
 
@@ -785,6 +791,14 @@ export const FILTERS = {
       filters.libraryIds.length
         ? (row) => row.library_ids.some((id) => filters.libraryIds.includes(id))
         : null,
+  },
+  collection: {
+    label: "Collection",
+    group: "libraries",
+    order: 12,
+    needsCollections: true,
+    library: (filters, _datasetEnabled, members) =>
+      filters.collectionId === null ? null : (item) => members.has(item.id),
   },
   collectionHolds: {
     label: "Holds",
@@ -955,7 +969,7 @@ export type FilterKey = keyof typeof FILTERS;
 /** The filter sections a list shows, in order. */
 export function filterSections(
   mode: SidebarMode,
-  options: { tab: SidebarTab; datasetEnabled: boolean; smart: boolean },
+  options: { tab: SidebarTab; datasetEnabled: boolean; smart: boolean; collections: boolean },
 ): FilterKey[] {
   const scope = mode === "collections" ? "collections" : "library";
   return keysOf(FILTERS)
@@ -965,7 +979,8 @@ export function filterSections(
         !!filter[scope] &&
         (!filter.mediaTypes || filter.mediaTypes.includes(options.tab)) &&
         (!filter.needsDataset || options.datasetEnabled) &&
-        (!filter.needsSmart || options.smart)
+        (!filter.needsSmart || options.smart) &&
+        (!filter.needsCollections || options.collections)
       );
     })
     .sort((a, b) => FILTERS[a].order - FILTERS[b].order);
@@ -974,10 +989,11 @@ export function filterSections(
 function libraryPredicates(
   filters: FilterState,
   datasetEnabled: boolean,
+  members: ReadonlySet<number> = new Set(),
 ): Predicate<MediaItemRead>[] {
   return keysOf(FILTERS).flatMap((key) => {
     const filter: FilterDef = FILTERS[key];
-    return filter.library?.(filters, datasetEnabled) ?? [];
+    return filter.library?.(filters, datasetEnabled, members) ?? [];
   });
 }
 
@@ -1006,12 +1022,17 @@ export function filterSidebarItems(options: {
   items: MediaItemRead[];
   filters: FilterState;
   publicDatasetEnabled: boolean;
+  collectionMembers?: ReadonlySet<number>;
   searchQuery: string;
   searchField: SidebarSearchField;
   sortField: SidebarSortField;
   sortDir: SidebarSortDir;
 }): MediaItemRead[] {
-  const predicates = libraryPredicates(options.filters, options.publicDatasetEnabled);
+  const predicates = libraryPredicates(
+    options.filters,
+    options.publicDatasetEnabled,
+    options.collectionMembers,
+  );
   const query = options.searchQuery.trim();
   const matcher = search(options.searchField)?.library;
   if (query && matcher) predicates.push(matcher(query));

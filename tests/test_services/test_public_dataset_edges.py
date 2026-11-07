@@ -155,12 +155,14 @@ def test_public_dataset_candidate_shapes_source_and_preview() -> None:
     assert build_candidate(None, ArtType.POSTER) is None
 
 
-async def test_download_catalog_uses_gzip_candidate_and_reports_stats(
+async def test_download_catalog_streams_the_gzip_catalog_and_reports_stats(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(
-        catalog_mod, "PUBLIC_DATASET_REPO_URL", "https://github.com/acme/db"
+        catalog_mod,
+        "PUBLIC_DATASET_CATALOG_URL",
+        "https://acme.github.io/db/catalog.jsonl.gz",
     )
     content = catalog_jsonl(catalog_payload())
     compressed = gzip.compress(content)
@@ -195,8 +197,8 @@ async def test_catalog_decompression_rejects_payload_over_limit(
     monkeypatch.setattr(catalog_mod, "MAX_CATALOG_UNCOMPRESSED_BYTES", 100)
     monkeypatch.setattr(
         catalog_mod,
-        "catalog_url_candidates",
-        lambda: ["https://catalog.test/catalog.jsonl.gz"],
+        "PUBLIC_DATASET_CATALOG_URL",
+        "https://catalog.test/catalog.jsonl.gz",
     )
     transport = RecordingMockTransport(
         lambda _: httpx2.Response(200, content=compressed)

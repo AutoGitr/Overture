@@ -1,12 +1,14 @@
 """HTTP evidence for services bound to an application's database and collaborators."""
 
 lazy from datetime import UTC, datetime
+lazy from io import BytesIO
 lazy from pathlib import Path
 lazy from typing import override
 lazy from zoneinfo import ZoneInfo
 
 lazy import httpx2
 lazy import pytest
+lazy from PIL import Image
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot, select_art
@@ -21,6 +23,8 @@ lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.main import create_app
 lazy from overture.protocols import CollectionGroups
+lazy from overture.routers import art as art_router
+lazy from overture.runtime_paths import image_cache_path
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import MonitoredResponse
 lazy from overture.services.art.phash import PhashService
@@ -307,3 +311,46 @@ async def test_sync_http_timezone_matches_scheduler_in_winter_and_summer(
             displayed.utcoffset()
             == datetime(2026, month, 15, 4, tzinfo=ZoneInfo(timezone)).utcoffset()
         )
+
+
+async def test_art_uploads_take_the_image_file_as_the_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    buffer = BytesIO()
+    Image.new("RGB", (20, 30), "red").save(buffer, format="PNG")
+    runtime = make_runtime(
+        config_dir=tmp_path, app_config=app_config, database=database
+    )
+    app = create_app(runtime)
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set(
+            "overture_token",
+            (await runtime.auth.new_session()).token.get_secret_value(),
+        )
+        client.cookies.set(CSRF_COOKIE, "test-csrf")
+        client.headers[CSRF_HEADER] = "test-csrf"
+        headers = {"Content-Type": "application/octet-stream"}
+
+        kept = await client.post(
+            "/api/art/uploads", content=buffer.getvalue(), headers=headers
+        )
+        refused = await client.post(
+            "/api/art/uploads", content=b"not an image", headers=headers
+        )
+        monkeypatch.setattr(art_router, "MAX_IMAGE_BYTES", 10)
+        too_large = await client.post(
+            "/api/art/uploads", content=buffer.getvalue(), headers=headers
+        )
+
+    assert kept.status_code == 200
+    assert kept.json()["width"] == 20
+    assert ImageCache(image_cache_path(tmp_path)).has_original(
+        kept.json()["upload_hash"]
+    )
+    assert refused.status_code == 415
+    assert too_large.status_code == 413

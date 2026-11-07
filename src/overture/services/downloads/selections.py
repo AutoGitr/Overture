@@ -1,6 +1,6 @@
 """Download the selections an item recorded before it had a local folder."""
 
-lazy from ...db.art_slots import find_art_slot
+lazy from ...db.art_slots import find_art_slot, saved_art
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.session import Database
 lazy from ...domain import ITEM_ART_TYPES, ArtType
@@ -32,17 +32,24 @@ async def queue_saved_selection_downloads(
             return 0
         seasons = await SeasonRepository(session).list_tracked_for_item(item_id)
         art = [
-            (art_type, slot.url, None)
+            (art_type, saved, None)
             for art_type in ITEM_ART_TYPES
-            if (slot := find_art_slot(item, art_type)) and slot.url
+            if (saved := saved_art(find_art_slot(item, art_type)))
         ] + [
-            (ArtType.SEASON_POSTER, slot.url, season.id)
+            (ArtType.SEASON_POSTER, saved, season.id)
             for season in seasons
-            if (slot := find_art_slot(season, ArtType.SEASON_POSTER)) and slot.url
+            if (saved := saved_art(find_art_slot(season, ArtType.SEASON_POSTER)))
         ]
-        for art_type, url, season_id in art:
+        for art_type, saved, season_id in art:
             await downloads.queue_job(
-                session, JobTarget.art(item_id, art_type, url, season_id=season_id)
+                session,
+                JobTarget.art(
+                    item_id,
+                    art_type,
+                    saved.url,
+                    upload_hash=saved.upload_hash,
+                    season_id=season_id,
+                ),
             )
         theme = youtube_id is not None and item.youtube_id == youtube_id
         if youtube_id is not None and theme:

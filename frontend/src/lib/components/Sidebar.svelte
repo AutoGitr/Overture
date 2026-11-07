@@ -31,7 +31,8 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import { defaultFilters, uiState } from "../stores/uiState.svelte";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
-  import { collectionImageUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
+  import { CollectionMembers } from "../utils/collectionMembers.svelte";
+  import { collectionArtDisplayUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import type {
     SidebarSortPreference,
     SortScope,
@@ -207,15 +208,18 @@
     scrollSave = setTimeout(() => writeJson(key, target.scrollTop, "session"), 200);
   }
 
-  // The TMDB field searches TMDB instead of filtering the list.
   let searchingTmdb = $derived(uiState.searchField === "tmdb");
   let libraryItems = $derived(uiState.sidebarTab === "movie" ? movies : shows);
 
+  const filteredCollection = new CollectionMembers(() =>
+    uiState.sidebarMode === "items" ? uiState.currentFilters.collectionId : null,
+  );
   let filteredItems = $derived(
     sidebarDomain.filterSidebarItems({
       items: libraryItems,
       filters: uiState.currentFilters,
       publicDatasetEnabled: catalog.enabled,
+      collectionMembers: filteredCollection.ids,
       searchQuery: uiState.searchQuery,
       searchField: uiState.searchField,
       sortField: sort.field,
@@ -380,7 +384,7 @@
   />
 {/snippet}
 
-<aside class="sidebar">
+<aside class={["sidebar", { "detail-shown": uiState.mobileShowDetail }]}>
   <SidebarTabs
     totalMovies={uiState.sidebarSource === "overturedb"
       ? (catalogMovies.data?.length ?? 0)
@@ -533,7 +537,7 @@
           message={collectionsMessage}
           scrollOffset={savedScroll}
           getKey={(collection) => collection.id}
-          posterUrl={(collection) => collectionImageUrl(collection.thumb_url)}
+          posterUrl={(collection) => collectionArtDisplayUrl(collection, "poster")}
           entry={collectionRow}
         />
       {:else}
@@ -551,7 +555,7 @@
           message={collectionsMessage}
           scrollOffset={savedScroll}
           getKey={(collection) => collection.id}
-          posterUrl={(collection) => collectionImageUrl(collection.thumb_url)}
+          posterUrl={(collection) => collectionArtDisplayUrl(collection, "poster")}
         />
       {/if}
     {/key}
@@ -571,6 +575,7 @@
   .sidebar {
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     background: var(--bg-primary);
@@ -588,6 +593,11 @@
     .sidebar {
       width: 100%;
       min-width: 0;
+      padding-bottom: var(--safe-area-bottom);
+    }
+
+    .detail-shown {
+      display: none;
     }
   }
 </style>

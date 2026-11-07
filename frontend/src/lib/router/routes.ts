@@ -51,7 +51,6 @@ const loadLibraryPage = () => import("./pages/LibraryPage.svelte");
 const loadCollectionPage = () => import("./pages/CollectionPage.svelte");
 const loadItemPage = () => import("./pages/ItemPage.svelte");
 const loadRedirectToLibrary = () => import("./pages/RedirectToLibrary.svelte");
-const loadRedirectToCollections = () => import("./pages/RedirectToCollections.svelte");
 
 const itemSubroutes = {
   "/": loadItemPage,
@@ -76,7 +75,6 @@ const collectionSubroutes = {
 
 const mediaTypeRoutes = {
   "/": loadLibraryPage,
-  "/collections": { "/": loadRedirectToCollections, "*": loadRedirectToCollections },
   "/:itemSlug": itemSubroutes,
 };
 
@@ -288,6 +286,11 @@ export function goToLibrary(tab: SidebarTab): void {
 export function goToCollectionsList(group?: string): void {
   const search: Record<string, string> = group ? { collection_group: `group:${group}` } : {};
   void navigate("/collections", { search });
+}
+
+/** Close the open collection, leaving the sidebar where it is, such as in a group. */
+export function closeCollection(): void {
+  void navigate("/collections", { search: sidebarSearch() });
 }
 
 export function goToNewCollection(tmdbId?: number): void {

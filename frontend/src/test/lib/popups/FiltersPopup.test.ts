@@ -496,8 +496,8 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const headings = view
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent?.trim());
-    // Every one-choice filter shares Status, inline; art and theme refinements follow.
     expect(headings).toEqual([
+      "Holds",
       "Status",
       "Art",
       "Theme music",
@@ -515,6 +515,24 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     ).toBeInTheDocument();
     expect(view.queryByRole("region", { name: "Collections" })).toBeNull();
     expect(view.queryByRole("region", { name: "Theme source" })).toBeNull();
+  });
+
+  it("narrows items to one collection holding the tab's media type", async () => {
+    await navigate("/movies");
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
+      collection({ id: 6, title: "Lost", media_types: ["show"] }),
+      collection({ id: 5, title: "Alien", media_types: ["movie"] }),
+    ]);
+    mockFetchRoutes({ "/api/library/libraries": [] });
+    const view = renderWithQueryClient(FiltersPopup);
+
+    const select = await view.findByRole("combobox", { name: "Collection" });
+    expect(within(select).queryByRole("option", { name: "Lost" })).toBeNull();
+    await fireEvent.change(select, { target: { value: "5" } });
+    await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
+
+    expect(uiState.movieFilters.collectionId).toBe(5);
   });
 
   it("discards the drafts of the catalog entries the filters match", async () => {

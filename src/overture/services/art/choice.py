@@ -6,6 +6,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
 lazy from ...dataset_contract.contract import canonical_art_url
+lazy from ...db.art_slots import ArtFileFacts
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import ArtType
@@ -23,6 +24,7 @@ lazy from ...utils.image import (
 )
 lazy from ...utils.security import remove_sensitive_url_params
 lazy from ...utils.ssrf import is_private_url
+lazy from .uploads import ArtUploads
 
 
 async def _validate_art_url(target_url: str, *, trusted_media_server: bool) -> None:
@@ -63,12 +65,14 @@ async def require_valid_aspect_ratio(
 class ArtSelection:
     """A validated artwork choice, ready to record for any slot.
 
-    ``stored_url`` is ``None`` for a media-server image, which has no storable
-    link: its download records the slot when it lands.
+    ``source`` is the link to download, or the uploaded image the cache
+    keeps. ``stored_url`` is the link a slot records: ``None`` for an upload,
+    and for a media-server image, which has no storable link: its download
+    records the slot when it lands.
     """
 
-    target_url: str
-    stored_url: PublicArtUrl | None
+    source: str | ArtFileFacts
+    stored_url: PublicArtUrl | None = None
 
 
 class ArtSelector:
@@ -81,11 +85,13 @@ class ArtSelector:
         database: Database,
         provider_registry: ProviderRegistry,
         image_clients: ProxyClientManager,
+        uploads: ArtUploads,
     ) -> None:
         self._config = app_config
         self._database = database
         self._provider_registry = provider_registry
         self._image_clients = image_clients
+        self._uploads = uploads
 
     async def _resolve_art_dimensions(
         self,
@@ -124,6 +130,15 @@ class ArtSelector:
 
     async def prepare(self, art_type: ArtType, body: SaveArtRequest) -> ArtSelection:
         """Validate the chosen artwork before anything is recorded."""
+        if body.upload_hash is not None:
+            upload = await self._uploads.facts(body.upload_hash)
+            async with self._database.read_session() as db:
+                await require_valid_aspect_ratio(
+                    db, art_type, upload.width or 0, upload.height or 0
+                )
+            return ArtSelection(source=upload)
+        if body.url is None:
+            raise PublicServiceError(400, "Choose a link or an uploaded image")
         try:
             target_url = canonical_art_url(remove_sensitive_url_params(body.url))
         except ValueError as exc:
@@ -140,6 +155,6 @@ class ArtSelector:
         async with self._database.read_session() as db:
             await require_valid_aspect_ratio(db, art_type, width, height)
         return ArtSelection(
-            target_url=target_url,
+            source=target_url,
             stored_url=await public_art_url(target_url, app_config=self._config),
         )

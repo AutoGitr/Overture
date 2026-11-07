@@ -24,6 +24,7 @@
   import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import { UNGROUPED_GROUP } from "../../generated/settings";
+  import { CollectionMembers } from "../utils/collectionMembers.svelte";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
   import {
@@ -71,12 +72,16 @@
     enabled: uiState.sidebarMode === "collections",
   }));
 
+  const filteredCollection = new CollectionMembers(() =>
+    uiState.sidebarMode === "items" ? filters.collectionId : null,
+  );
   let items: MediaItemRead[] = $derived(
     uiState.sidebarMode === "items"
       ? filterSidebarItems({
           items: itemsQuery.data?.items ?? [],
           filters,
           publicDatasetEnabled,
+          collectionMembers: filteredCollection.ids,
           searchQuery: uiState.searchQuery,
           searchField: uiState.searchField,
           sortField: "title",

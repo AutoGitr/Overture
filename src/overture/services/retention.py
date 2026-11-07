@@ -14,8 +14,10 @@ lazy from sqlmodel import col, delete, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.art import ArtSlot
+lazy from ..db.models.download_job import DownloadJob
 lazy from ..db.models.job_result import JobRun
 lazy from ..db.session import Database
+lazy from ..domain import JobStatus
 lazy from ..repositories.downloads import DownloadJobRepository
 lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..utils.time import utc_now
@@ -66,18 +68,28 @@ async def prune(session: AsyncSession) -> RetentionResult:
 
 
 async def prune_image_cache(*, database: Database, image_cache: ImageCache) -> int:
-    """Delete the cached images no artwork slot records, once they are old enough.
+    """Delete the cached images nothing records, once they are old enough.
+
+    A slot records its file and its uploaded selection; a queued download, the
+    upload it will write.
 
     Returns:
         How many cached files were deleted.
     """
     async with database.read_session() as session:
-        rows = await session.exec(
-            select(ArtSlot.file_hash)
-            .where(col(ArtSlot.file_hash).is_not(None))
-            .distinct()
+        files = await session.exec(
+            select(ArtSlot.file_hash).where(col(ArtSlot.file_hash).is_not(None))
         )
-        recorded = {file_hash for file_hash in rows if file_hash is not None}
+        uploads = await session.exec(
+            select(ArtSlot.upload_hash).where(col(ArtSlot.upload_hash).is_not(None))
+        )
+        queued = await session.exec(
+            select(DownloadJob.upload_hash).where(
+                col(DownloadJob.upload_hash).is_not(None),
+                col(DownloadJob.status).in_((JobStatus.PENDING, JobStatus.RUNNING)),
+            )
+        )
+        recorded = {file_hash for file_hash in (*files, *uploads, *queued) if file_hash}
     return await image_cache.prune(
         recorded,
         older_than=(utc_now() - UNUSED_IMAGE_RETENTION).timestamp(),

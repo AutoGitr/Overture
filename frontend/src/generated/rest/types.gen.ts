@@ -494,13 +494,14 @@ export type ArtMatchResponse = {
 /**
  * ArtSource
  *
- * Where a selected artwork link comes from.
+ * Where selected artwork comes from.
  *
  * ``overturedb`` when it is the OvertureDB catalog's artwork for the slot,
- * else the name of the catalog art source whose host serves it. A test keeps
- * the hosts in step with the catalog contract's art sources.
+ * ``upload`` when someone uploaded it, else the name of the catalog art
+ * source whose host serves it. A test keeps the hosts in step with the
+ * catalog contract's art sources.
  */
-export type ArtSource = 'overturedb' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex';
+export type ArtSource = 'overturedb' | 'upload' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex';
 
 /**
  * ArtSourcesResponse
@@ -541,6 +542,23 @@ export type ArtTypeStats = {
     poster_movies: Coverage;
     poster_shows: Coverage;
     season_poster: Coverage;
+};
+
+/**
+ * ArtUploadResponse
+ *
+ * An uploaded image, kept until a slot selects it.
+ */
+export type ArtUploadResponse = {
+    /**
+     * Height
+     */
+    height: number;
+    upload_hash: ImageHash;
+    /**
+     * Width
+     */
+    width: number;
 };
 
 /**
@@ -1446,6 +1464,10 @@ export type CollectionArrOptions = {
 export type CollectionArtwork = {
     art_status: AssetStatus;
     /**
+     * Background Hash
+     */
+    background_hash: string | null;
+    /**
      * Background Height
      */
     background_height: number | null;
@@ -1459,6 +1481,10 @@ export type CollectionArtwork = {
      * Background Width
      */
     background_width: number | null;
+    /**
+     * Poster Hash
+     */
+    poster_hash: string | null;
     /**
      * Poster Height
      */
@@ -1662,6 +1688,10 @@ export type CollectionDetail = {
      */
     art_url: string | null;
     /**
+     * Background Hash
+     */
+    background_hash: string | null;
+    /**
      * Background Height
      */
     background_height: number | null;
@@ -1752,6 +1782,10 @@ export type CollectionDetail = {
      */
     monitored: boolean;
     order_type: CollectionOrder;
+    /**
+     * Poster Hash
+     */
+    poster_hash: string | null;
     /**
      * Poster Height
      */
@@ -2469,6 +2503,10 @@ export type CollectionRead = {
      */
     art_url: string | null;
     /**
+     * Background Hash
+     */
+    background_hash: string | null;
+    /**
      * Background Height
      */
     background_height: number | null;
@@ -2546,6 +2584,10 @@ export type CollectionRead = {
      */
     monitored: boolean;
     order_type: CollectionOrder;
+    /**
+     * Poster Hash
+     */
+    poster_hash: string | null;
     /**
      * Poster Height
      */
@@ -2939,6 +2981,10 @@ export type CollectionSetEntry = {
      */
     title: string;
     /**
+     * Title Taken By
+     */
+    title_taken_by: number | null;
+    /**
      * Value
      */
     value: string;
@@ -2959,6 +3005,23 @@ export type CollectionSetPreview = {
      * Minimum Items
      */
     minimum_items?: number | null;
+};
+
+/**
+ * CollectionSetSummary
+ *
+ * A group that is a set: what it splits by, and in which libraries.
+ */
+export type CollectionSetSummary = {
+    dimension: SetDimension;
+    /**
+     * Group
+     */
+    group: string;
+    /**
+     * Library Ids
+     */
+    library_ids: Array<string>;
 };
 
 export type CollectionSourceInput = ({
@@ -3417,7 +3480,7 @@ export type FieldKind = 'text' | 'tag' | 'number' | 'date' | 'boolean';
  *
  * Item metadata a collection condition tests.
  */
-export type FilterField = 'title' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
+export type FilterField = 'title' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
 
 /**
  * FilterGroup
@@ -3471,8 +3534,8 @@ export type FilterOperator = 'is' | 'is_not' | 'contains' | 'does_not_contain' |
  *
  * Findings selected from one server audit's results, to fix in one run.
  *
- * Images are unlocked and refreshed; themes have their server theme deleted
- * first, then their item is refreshed.
+ * Item images are unlocked and refreshed, collection images uploaded again;
+ * themes have their server theme deleted first, then their item is refreshed.
  */
 export type FixAuditRequest = {
     /**
@@ -3538,6 +3601,8 @@ export type HealthResponse = {
      */
     version: string;
 };
+
+export type ImageHash = string;
 
 /**
  * ImageSize
@@ -3837,6 +3902,30 @@ export type LogoutResponse = {
 };
 
 export type MatchReference = 'local_file' | 'media_server' | 'saved_url';
+
+/**
+ * MdblistListRead
+ *
+ * A public MDBList list a search found.
+ */
+export type MdblistListRead = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Items
+     */
+    items: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Owner
+     */
+    owner: string | null;
+};
 
 /**
  * MdblistSource
@@ -4617,7 +4706,7 @@ export type RenameStatus = 'renamed' | 'conflict' | 'error';
 /**
  * SaveArtRequest
  *
- * The chosen artwork for one slot.
+ * The chosen artwork for one slot: a link, or an uploaded image.
  *
  * Which slot it is comes from the request path and query, so the body only
  * carries the picture itself.
@@ -4627,10 +4716,11 @@ export type SaveArtRequest = {
      * Height
      */
     height?: number | null;
+    upload_hash?: ImageHash | null;
     /**
      * Url
      */
-    url: string;
+    url?: string | null;
     /**
      * Width
      */
@@ -4789,14 +4879,21 @@ export type ServerAsset = 'poster' | 'background' | 'season_poster' | 'theme';
 /**
  * ServerAuditRefreshTarget
  *
- * One image refresh target selected from server audit results.
+ * One image target selected from server audit results.
+ *
+ * An item's image is refreshed from its local file; a collection's is
+ * uploaded again from the image Overture kept.
  */
 export type ServerAuditRefreshTarget = {
     art_type: ArtType;
     /**
+     * Collection Id
+     */
+    collection_id?: number | null;
+    /**
      * Item Id
      */
-    item_id: number;
+    item_id?: number | null;
     /**
      * Season Id
      */
@@ -4810,6 +4907,10 @@ export type ServerAuditRefreshTarget = {
  */
 export type ServerAuditRequest = {
     art_types?: UniqueListArtType;
+    /**
+     * Check Collections
+     */
+    check_collections?: boolean;
     /**
      * Check Themes
      */
@@ -5893,6 +5994,39 @@ export type UniqueListServerAssetWritable = Array<ServerAsset>;
 export type UniqueListThemeBulkSourceMinLenMinLength1Writable = Array<ThemeBulkSource>;
 
 export type UniqueListYouTubeIdMaxLenMaxLength20Writable = Array<YouTubeId>;
+
+export type UploadArtData = {
+    body: Blob | File;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/art/uploads';
+};
+
+export type UploadArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UploadArtError = UploadArtErrors[keyof UploadArtErrors];
+
+export type UploadArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtUploadResponse;
+};
+
+export type UploadArtResponse = UploadArtResponses[keyof UploadArtResponses];
 
 export type ClearAllArtData = {
     body?: never;
@@ -7234,6 +7368,12 @@ export type SaveCollectionGroupPolicyData = {
          * Name
          */
         name: string;
+        /**
+         * New Set
+         *
+         * Create a set; refuse a group that already is one
+         */
+        new_set?: boolean;
     };
     url: '/api/collections/group-policy';
 };
@@ -7443,6 +7583,46 @@ export type RenameCollectionGroupResponses = {
 
 export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
 
+export type SearchMdblistListsData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query: {
+        /**
+         * Query
+         */
+        query: string;
+    };
+    url: '/api/collections/mdblist-lists';
+};
+
+export type SearchMdblistListsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SearchMdblistListsError = SearchMdblistListsErrors[keyof SearchMdblistListsErrors];
+
+export type SearchMdblistListsResponses = {
+    /**
+     * Response Search Mdblist Lists
+     *
+     * Successful Response
+     */
+    200: Array<MdblistListRead>;
+};
+
+export type SearchMdblistListsResponse = SearchMdblistListsResponses[keyof SearchMdblistListsResponses];
+
 export type PreviewCollectionData = {
     body: CollectionPreviewRequest;
     headers?: {
@@ -7510,6 +7690,41 @@ export type RecommendCollectionKindResponses = {
 };
 
 export type RecommendCollectionKindResponse = RecommendCollectionKindResponses[keyof RecommendCollectionKindResponses];
+
+export type ListCollectionSetsData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collections/sets';
+};
+
+export type ListCollectionSetsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListCollectionSetsError = ListCollectionSetsErrors[keyof ListCollectionSetsErrors];
+
+export type ListCollectionSetsResponses = {
+    /**
+     * Response List Collection Sets
+     *
+     * Successful Response
+     */
+    200: Array<CollectionSetSummary>;
+};
+
+export type ListCollectionSetsResponse = ListCollectionSetsResponses[keyof ListCollectionSetsResponses];
 
 export type PreviewCollectionSetData = {
     body: CollectionSetPreview;
@@ -8092,6 +8307,61 @@ export type ProxyCollectionImageErrors = {
 export type ProxyCollectionImageError = ProxyCollectionImageErrors[keyof ProxyCollectionImageErrors];
 
 export type ProxyCollectionImageResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type ServeCollectionLocalImageData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query?: {
+        /**
+         * Size
+         *
+         * Downscaled rendition to return; omit for the original
+         */
+        size?: ImageSize | null;
+        /**
+         * T
+         *
+         * The artwork hash the client shows; a current one is cacheable
+         */
+        t?: string | null;
+    };
+    url: '/api/collections/{collection_id}/local-image/{art_type}';
+};
+
+export type ServeCollectionLocalImageErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ServeCollectionLocalImageError = ServeCollectionLocalImageErrors[keyof ServeCollectionLocalImageErrors];
+
+export type ServeCollectionLocalImageResponses = {
     /**
      * Successful Response
      */

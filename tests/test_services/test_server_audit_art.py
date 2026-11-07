@@ -11,19 +11,33 @@ lazy import pytest
 lazy from PIL import Image
 
 lazy from overture.config import Settings
+lazy from overture.db.art_slots import ArtFileFacts, record_art_file
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType
-lazy from overture.schemas.server_audit import AuditStatus, ServerAuditResult
+lazy from overture.domain import ArtType, ImageSize, MediaType, ServerType
+lazy from overture.media_servers.adapters import ProviderImageRequest
+lazy from overture.schemas.server_audit import (
+    AuditStatus,
+    ServerAuditRequest,
+    ServerAuditResult,
+)
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.server_audit.compare import AuditContext, audit_target
-lazy from overture.services.server_audit.work import AuditTarget
+lazy from overture.services.server_audit.work import (
+    AuditTarget,
+    CollectionAuditTarget,
+    plan_collection_audit,
+)
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.utils.time import utc_now
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.http_mock import mock_client_factory
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    unused,
 )
 
 SERVER_URL = "http://plex.local:32400/library/metadata/s1/thumb/1"
@@ -108,6 +122,7 @@ async def _audit(
         app_config=app_config,
         database=database,
         config_dir=tmp_path / "config",
+        collection_art=unused(CollectionArtService),
     )
     _, [result] = await audit_target(AuditTarget(1, ArtType.POSTER), context=context)
     return result, transport.requests
@@ -241,8 +256,128 @@ async def test_an_item_gone_from_the_library_is_an_error(
         app_config=app_config,
         database=database,
         config_dir=tmp_path,
+        collection_art=unused(CollectionArtService),
     )
 
     _, [result] = await audit_target(AuditTarget(404, ArtType.POSTER), context=context)
 
     assert (result.status, result.reason) == (AuditStatus.ERROR, "Item not found")
+
+
+class CollectionProvider(ArtProvider):
+    """A media server showing one collection's poster at *url*."""
+
+    server_type = ServerType.PLEX
+
+    async def get_collection_image_url(
+        self, server_collection_id: str, art_type: ArtType
+    ) -> str | None:
+        assert server_collection_id == "box"
+        return self.url
+
+    async def build_collection_image_request(
+        self,
+        server_item_id: str,
+        art_type: ArtType,
+        size: ImageSize | None,
+        *,
+        current_url: str,
+    ) -> ProviderImageRequest:
+        return ProviderImageRequest(current_url, {"X-Plex-Token": "token"})
+
+
+async def _audit_collection(
+    tmp_path: Path,
+    served: bytes,
+    *,
+    uploaded: bytes | None,
+    app_config: Settings,
+    database: Database,
+    phash: PhashService,
+) -> ServerAuditResult:
+    async with database.write_session() as session:
+        row = stored_collection(
+            id=1,
+            server_item_id="box",
+            server_type=ServerType.PLEX,
+            media_type=MediaType.MOVIE,
+            title="Saga",
+            last_synced_at=utc_now(),
+        )
+        if uploaded is not None:
+            record_art_file(
+                row,
+                ArtType.POSTER,
+                ArtFileFacts(
+                    "a" * 64, await phash.compute_from_bytes(uploaded), 256, 256, 1, 2
+                ),
+            )
+        session.add(row)
+    factory, _transport = mock_client_factory(lambda _request: _image(served))
+    context = AuditContext(
+        provider_registry=NoopProviderRegistry(CollectionProvider(SERVER_URL)),
+        asset_storage=AssetStorage(app_config=app_config),
+        local_assets=make_local_assets(
+            app_config=app_config, database=database, phash=phash
+        ),
+        phash=phash,
+        image_clients=StaticImageClients(factory()),
+        app_config=app_config,
+        database=database,
+        config_dir=tmp_path / "config",
+        collection_art=unused(CollectionArtService),
+    )
+    planned = await plan_collection_audit(
+        ServerAuditRequest(check_collections=True), ServerType.PLEX, database=database
+    )
+    assert planned == (
+        [CollectionAuditTarget(1, ArtType.POSTER)] if uploaded is not None else []
+    )
+    _, [result] = await audit_target(
+        CollectionAuditTarget(1, ArtType.POSTER), context=context
+    )
+    return result
+
+
+@pytest.mark.parametrize(
+    ("served", "status"),
+    [
+        (_jpeg(), AuditStatus.PHASH_MATCH),
+        (_jpeg(flipped=True), AuditStatus.PHASH_MISMATCH),
+    ],
+)
+async def test_a_collection_image_overture_uploaded_is_compared_with_the_servers(
+    tmp_path: Path,
+    served: bytes,
+    status: AuditStatus,
+    *,
+    app_config: Settings,
+    database: Database,
+    phash: PhashService,
+) -> None:
+    result = await _audit_collection(
+        tmp_path,
+        served,
+        uploaded=_jpeg(),
+        app_config=app_config,
+        database=database,
+        phash=phash,
+    )
+
+    assert (result.collection_id, result.item_id, result.title) == (1, None, "Saga")
+    assert result.status is status
+
+
+async def test_a_collection_without_an_upload_has_nothing_to_compare(
+    tmp_path: Path, *, app_config: Settings, database: Database, phash: PhashService
+) -> None:
+    result = await _audit_collection(
+        tmp_path,
+        _jpeg(),
+        uploaded=None,
+        app_config=app_config,
+        database=database,
+        phash=phash,
+    )
+
+    assert result.status is AuditStatus.LOCAL_MISSING

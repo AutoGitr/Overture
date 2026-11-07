@@ -7,6 +7,7 @@
     getCollectionCapabilitiesOptions,
     getLibrariesOptions,
     listCatalogEntriesOptions,
+    listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
@@ -22,8 +23,11 @@
   import RangeFields from "../components/RangeFields.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
+  import { alphabetical } from "../utils/alphabetical";
 
   setSectionView("filters");
+  const id = $props.id();
   const catalogBrowsing = new CatalogBrowsing();
   let datasetEnabled = $derived(catalogBrowsing.enabled);
 
@@ -117,22 +121,34 @@
     enabled: uiState.sidebarSource === "library",
   }));
   let libraries = $derived(librariesQuery.data ?? []);
+  const collectionsQuery = createQuery(() => ({
+    ...listCollectionsOptions(),
+    enabled:
+      uiState.sidebarSource === "library" &&
+      uiState.sidebarMode === "items" &&
+      settingsState.current.collections_supported,
+  }));
+  let collections = $derived(
+    alphabetical(
+      (collectionsQuery.data ?? []).filter((row) => row.media_types.includes(uiState.sidebarTab)),
+      (row) => row.title,
+    ),
+  );
   let metadataIssueOptions = $derived(
     sidebarDomain.metadataIssuesFor(uiState.sidebarTab, datasetEnabled, uiState.sidebarMode),
   );
-  /** The shown filters by popup section, in order. */
   let groupedSections = $derived.by(() => {
     const shown = sidebarDomain.filterSections(uiState.sidebarMode, {
       tab: uiState.sidebarTab,
       datasetEnabled,
       smart: !!capabilities.data?.smart,
+      collections: settingsState.current.collections_supported,
     });
     return (Object.keys(sidebarDomain.FILTER_GROUPS) as sidebarDomain.FilterGroup[])
       .map((group) => [group, shown.filter((key) => sidebarDomain.FILTERS[key].group === group)] as const)
       .filter(([, keys]) => keys.length > 0);
   });
 
-  /** The draft without selections for libraries that no longer exist. */
   let filters = $derived<FilterState>({
     ...draft,
     libraryIds: librariesQuery.isSuccess
@@ -141,6 +157,10 @@
           libraries.map((library) => library.id),
         )
       : draft.libraryIds,
+    collectionId:
+      collectionsQuery.isSuccess && !collections.some((row) => row.id === draft.collectionId)
+        ? null
+        : draft.collectionId,
   });
 
   const bulkSetCollectionMonitoredRequest = createMutation(() => bulkOperateCollectionsMutation());
@@ -230,6 +250,25 @@
       ontoggle={(source) =>
         (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
     />
+  {:else if key === "collection"}
+    <FieldRow {label} for={`${id}-collection`}>
+      <select
+        id={`${id}-collection`}
+        value={filters.collectionId === null ? "" : String(filters.collectionId)}
+        onchange={(event) =>
+          (draft.collectionId = event.currentTarget.value
+            ? Number(event.currentTarget.value)
+            : null)}
+      >
+        <option value="">Any collection</option>
+        {#each collections as row (row.id)}
+          <option value={String(row.id)}>{row.title}</option>
+        {/each}
+      </select>
+    </FieldRow>
+    {#if collectionsQuery.isError}
+      <p class="hint">{errorMessage(collectionsQuery.error, "Failed to load collections")}</p>
+    {/if}
   {:else if key === "themeLength"}
     <FieldRow {label} />
     <RangeFields
@@ -304,31 +343,37 @@
       {#each groupedSections as [group, keys] (group)}
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
         {#if group === "libraries"}
-          {@const label = sidebarDomain.FILTERS.libraries.label}
-          {#if librariesQuery.isError}
-            <FilterSection {label}>
-              <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
-            </FilterSection>
-          {:else if libraries.length > 1}
-            <FilterSection {label}>
-              {#snippet control()}
-                <span class="hint"
-                  >{filters.libraryIds.length === 0
-                    ? "All libraries"
-                    : `${filters.libraryIds.length} of ${libraries.length} selected`}</span
-                >
-              {/snippet}
-              <CheckboxList
-                options={libraries.map((library) => ({
-                  value: library.id,
-                  label: library.title,
-                  count: library.count,
-                }))}
-                selected={filters.libraryIds}
-                ontoggle={(id) => (draft.libraryIds = toggleSelectedValue(filters.libraryIds, id))}
-              />
-            </FilterSection>
-          {/if}
+          {#each keys as key (key)}
+            {#if key !== "libraries"}
+              <FilterSection label={sidebarDomain.FILTERS[key].label}>
+                {@render filter(key)}
+              </FilterSection>
+            {:else if librariesQuery.isError}
+              <FilterSection label={sidebarDomain.FILTERS.libraries.label}>
+                <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
+              </FilterSection>
+            {:else if libraries.length > 1}
+              <FilterSection label={sidebarDomain.FILTERS.libraries.label}>
+                {#snippet control()}
+                  <span class="hint"
+                    >{filters.libraryIds.length === 0
+                      ? "All libraries"
+                      : `${filters.libraryIds.length} of ${libraries.length} selected`}</span
+                  >
+                {/snippet}
+                <CheckboxList
+                  options={libraries.map((library) => ({
+                    value: library.id,
+                    label: library.title,
+                    count: library.count,
+                  }))}
+                  selected={filters.libraryIds}
+                  ontoggle={(id) =>
+                    (draft.libraryIds = toggleSelectedValue(filters.libraryIds, id))}
+                />
+              </FilterSection>
+            {/if}
+          {/each}
         {:else if title}
           <FilterSection label={title}>
             {#each keys as key (key)}

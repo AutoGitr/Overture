@@ -115,8 +115,8 @@ def member_criteria(
     """Criteria that select a collection's current members.
 
     Members that all belong to *franchise* are kept as that TMDB collection,
-    so later films join it; otherwise they are named by TMDB ID where they
-    have one, else by title.
+    so later films join it; otherwise each is named by the first ID it has of
+    TMDB, TVDB and IMDb, else by title.
     """
     if franchise is not None:
         return FilterGroup(
@@ -127,15 +127,22 @@ def member_criteria(
         )
     tmdb_ids = [item.tmdb_id for item in members if item.tmdb_id is not None]
     conditions: list[Condition] = [
-        FieldCondition(field=FilterField.TITLE, value=item.title)
-        for item in members
-        if item.tmdb_id is None
+        _member_condition(item) for item in members if item.tmdb_id is None
     ]
     if tmdb_ids:
         conditions.insert(0, SourceCondition(source=TmdbItemSource(tmdb_ids=tmdb_ids)))
     if not conditions:
         raise PublicServiceError(422, f"{row.title} has no members to keep")
     return FilterGroup(mode="any", conditions=conditions)
+
+
+def _member_condition(item: MediaItem) -> FieldCondition:
+    """Name a member without a TMDB ID by its TVDB or IMDb ID, else its title."""
+    if item.tvdb_id is not None:
+        return FieldCondition(field=FilterField.TVDB_ID, value=str(item.tvdb_id))
+    if item.imdb_id:
+        return FieldCondition(field=FilterField.IMDB_ID, value=item.imdb_id)
+    return FieldCondition(field=FilterField.TITLE, value=item.title)
 
 
 def shared_franchise(members: list[MediaItem]) -> int | None:

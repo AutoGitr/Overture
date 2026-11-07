@@ -38,13 +38,14 @@ class DownloadJobRepository:
         self,
         *,
         job_type: JobType,
-        target_url: str,
+        target_url: str | None,
         created_at: datetime,
         media_item_id: int | None = None,
         art_type: ArtType | None = None,
         season_id: int | None = None,
         collection_id: int | None = None,
         collection_title: str | None = None,
+        upload_hash: str | None = None,
     ) -> DownloadJob:
         """Create and stage a new download job."""
         job = DownloadJob(
@@ -55,6 +56,7 @@ class DownloadJobRepository:
             season_id=season_id,
             collection_id=collection_id,
             collection_title=collection_title,
+            upload_hash=upload_hash,
             created_at=created_at,
         )
         self.session.add(job)

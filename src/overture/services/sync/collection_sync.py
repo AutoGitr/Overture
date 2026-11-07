@@ -7,11 +7,13 @@ lazy from datetime import datetime
 
 lazy from ... import protocols
 lazy from ...config import Settings
+lazy from ...db.art_slots import record_art_file
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, theme_file_facts
 lazy from ...domain import (
+    ArtType,
     AssetScope,
     CollectionKind,
     CollectionOrder,
@@ -383,6 +385,13 @@ class CollectionSync:
             if any(placed.media_type is MediaType.MOVIE for placed in placement)
             else None,
         )
+        for art_type, server_url in (
+            (ArtType.POSTER, collection.thumb_url),
+            (ArtType.BACKGROUND, collection.art_url),
+        ):
+            if row.id is not None and server_url != row.server_image_url(art_type):
+                # The server shows another image than the one Overture uploaded.
+                record_art_file(row, art_type, None)
         row.sqlmodel_update(
             {
                 "kind": (

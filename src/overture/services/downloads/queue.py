@@ -21,35 +21,45 @@ class JobTarget:
     """
 
     job_type: JobType
-    target_url: str
+    #: The link to download, or the YouTube ID of a theme.
+    target_url: str | None
     media_item_id: int | None = None
     art_type: ArtType | None = None
     season_id: int | None = None
     collection_id: int | None = None
     collection_title: str | None = None
+    #: An uploaded image in the image cache, the source of an art job without a link.
+    upload_hash: str | None = None
 
     @classmethod
     def art(
         cls,
         media_item_id: int,
         art_type: ArtType,
-        url: str,
+        url: str | None,
         *,
+        upload_hash: str | None = None,
         season_id: int | None = None,
     ) -> Self:
         """Target one artwork slot of an item, or of one of its seasons.
 
+        The artwork comes from *url*, or from the uploaded image *upload_hash*.
+
         Raises:
-            ValueError: When a season slot names no season, or an item slot one.
+            ValueError: When a season slot names no season, or an item slot
+                one, or the target names not exactly one source.
         """
         if art_type.owned_by_season != (season_id is not None):
             raise ValueError("Season artwork requires a season belonging to the item")
+        if (url is None) == (upload_hash is None):
+            raise ValueError("Artwork comes from a link or an upload")
         return cls(
             JobType.ART,
             url,
             media_item_id=media_item_id,
             art_type=art_type,
             season_id=season_id,
+            upload_hash=upload_hash,
         )
 
     @classmethod
@@ -106,7 +116,11 @@ async def add_job(
     repository = DownloadJobRepository(session)
     active = await repository.list_active_with_titles(scope=target.slot)
     for existing, _ in active:
-        if existing.target_url == target.target_url or not supersede:
+        same = (existing.target_url, existing.upload_hash) == (
+            target.target_url,
+            target.upload_hash,
+        )
+        if same or not supersede:
             return existing.id, False, []
 
     now = utc_now()

@@ -12,6 +12,7 @@ lazy from overture.db.session import Database
 lazy from overture.domain import MediaType
 lazy from overture.media_servers.adapters import ServerTheme
 lazy from overture.schemas.server_audit import ServerAuditResult
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.server_audit import compare as module
 lazy from overture.services.server_audit.compare import (
@@ -27,6 +28,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    unused,
 )
 
 LOCAL_AUDIO = b"local theme audio"
@@ -133,6 +135,7 @@ async def _audit(
         app_config=app_config,
         database=database,
         config_dir=tmp_path / "config",
+        collection_art=unused(CollectionArtService),
     )
     _, results = await audit_target(AuditTarget(1), context=context)
     actionable = differences(results)

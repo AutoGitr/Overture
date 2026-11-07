@@ -109,7 +109,7 @@
 
     {#if collection && editor instanceof CollectionEditor}
       <section id={`${formId}-members`} aria-label="Collection members" tabindex="-1">
-        <CollectionMembers members={collection.members} {editor} {libraryItems} />
+        <CollectionMembers members={collection.members} {editor} {libraryItems} {libraries} />
         {#if collection.rule}<CollectionMissing {collection} />{/if}
       </section>
     {/if}

@@ -37,7 +37,9 @@ function mockPage(overrides: Record<string, unknown> = {}) {
     },
     "/api/collections/capabilities": collectionCapabilities(),
     "/api/collections/12": detail,
-    "/api/collections": detail,
+    "/api/collections": ({ init }: { init: RequestInit }) =>
+      Response.json(init.method === "POST" ? detail : []),
+    "/api/collections/sets": [],
     "/api/collections/12/rule": collectionRule(),
     ...overrides,
   });
@@ -235,6 +237,33 @@ describe("collection setup flow", () => {
     expect(calls.some((call) => call.url.startsWith("/api/collections/group-policy/sync"))).toBe(
       true,
     );
+    expect(
+      calls.some((call) => call.init.method === "PUT" && call.url.includes("new_set=true")),
+    ).toBe(true);
+  });
+
+  it("refuses a group that already is a set, and warns of another set splitting alike", async () => {
+    mockPage({
+      "/api/collections/sets": [
+        { group: "Decades", dimension: "decade", library_ids: ["other"] },
+        { group: "Genres", dimension: "genre", library_ids: ["other"] },
+      ],
+    });
+    await createPage();
+    const setup = within(screen.getByRole("region", { name: "Collection setup" }));
+    await onlyLibrary(setup, "Other movies");
+    await fireEvent.click(setup.getByLabelText("One per value"));
+    await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "decade" } });
+
+    expect(await setup.findByText('"Decades" already is a set')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save and Create" })).toBeDisabled();
+
+    await fireEvent.input(setup.getByRole("combobox", { name: /^Group/ }), {
+      target: { value: "Film decades" },
+    });
+    expect(await setup.findByText('"Decades" already splits by decades')).toBeInTheDocument();
+    expect(setup.queryByText(/"Genres" already splits/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Save and Create" })).toBeEnabled();
   });
 
   it("offers an unmanaged collection only adoption, with the group it joins", async () => {

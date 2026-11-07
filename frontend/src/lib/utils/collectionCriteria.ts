@@ -1,12 +1,14 @@
 import type {
   CollectionCapabilities,
   CollectionFieldRead,
+  CollectionSourceRead,
   CollectionOrder,
   CollectionSourceInput,
   ConditionInput,
   FieldConditionInput,
   FilterGroupInput,
   FilterOperator,
+  MediaType,
   SourceType,
 } from "../../generated/rest/types.gen";
 
@@ -162,4 +164,46 @@ export function parseIds(text: string): { ids: number[]; invalid: string[] } {
     else invalid.push(part);
   }
   return { ids, invalid };
+}
+
+/** What one set of criteria can test. */
+export type CriteriaTarget = {
+  fields: CollectionFieldRead[];
+  sources: CollectionSourceRead[];
+  mediaType: MediaType;
+};
+
+/** Sources whose values name titles of one media type: a movie's TMDB ID is another show's. */
+const TYPED_SOURCES: ReadonlySet<SourceType> = new Set(["tmdb_item", "tmdb_chart"]);
+
+/**
+ * Whether criteria offering *target* can hold a condition copied from criteria
+ * of *from*: they test its field with its operator, or offer its source.
+ */
+export function conditionFits(
+  condition: ConditionInput,
+  target: CriteriaTarget,
+  from: MediaType,
+): boolean {
+  if (condition.kind === "field") {
+    const field = target.fields.find((entry) => entry.field === condition.field);
+    return !!field && field.operators.includes(condition.operator ?? "is");
+  }
+  const type = condition.source.type;
+  return (
+    target.sources.some((entry) => entry.type === type && !entry.unavailable) &&
+    (!TYPED_SOURCES.has(type) || target.mediaType === from)
+  );
+}
+
+/** Whether every condition of a copied group, at any depth, fits *target*. */
+export function groupFits(
+  group: FilterGroupInput,
+  target: CriteriaTarget,
+  from: MediaType,
+): boolean {
+  return (
+    (group.conditions ?? []).every((condition) => conditionFits(condition, target, from)) &&
+    (group.groups ?? []).every((nested) => groupFits(nested, target, from))
+  );
 }

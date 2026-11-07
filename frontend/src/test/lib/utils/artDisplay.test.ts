@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  collectionImageUrl,
+  collectionArtDisplayUrl,
   itemArtDisplayUrl,
   itemPosterOriginalUrl,
   seasonPosterUrls,
 } from "../../../lib/utils/artDisplay";
-import { season as fixtureSeason, mediaItem } from "../../helpers/fixtures";
+import { collection, season as fixtureSeason, mediaItem } from "../../helpers/fixtures";
 
 const movie = mediaItem({
   id: 1,
@@ -129,10 +129,20 @@ describe("art display URLs", () => {
     expect(seasonPosterUrls(null, localSeason)).toEqual({ src: null, fallbackSrc: null });
   });
 
-  it("sizes collection images, which only exist on the media server", () => {
-    expect(collectionImageUrl("/api/collections/7/image/poster?t=v1")).toBe(
-      "/api/collections/7/image/poster?t=v1&size=display",
+  it("shows a collection's uploaded image from the cache, else the server's copy", () => {
+    const uploaded = collection({
+      id: 7,
+      poster_hash: "a".repeat(64),
+      thumb_url: "/api/collections/7/image/poster?t=v1",
+      art_url: "/api/collections/7/image/background?t=v2",
+    });
+    expect(collectionArtDisplayUrl(uploaded, "poster")).toBe(
+      `/api/collections/7/local-image/poster?t=${"a".repeat(64)}&size=display`,
     );
-    expect(collectionImageUrl(null)).toBeNull();
+    expect(collectionArtDisplayUrl(uploaded, "background")).toBe(
+      "/api/collections/7/image/background?t=v2&size=display",
+    );
+    expect(collectionArtDisplayUrl(collection({ thumb_url: null }), "poster")).toBeNull();
+    expect(collectionArtDisplayUrl(null, "poster")).toBeNull();
   });
 });

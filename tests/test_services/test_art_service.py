@@ -125,6 +125,7 @@ def _art_service(
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
         matcher=matcher or unused(ArtMatcher),
+        phash=unused(PhashService),
         downloads=downloads
         or _download_service(app_config=app_config, database=database),
         publisher=publisher or FakePublisher(),

@@ -4,14 +4,14 @@ lazy from collections import deque
 lazy from collections.abc import Collection, Mapping, Sequence
 lazy from dataclasses import replace
 lazy from pathlib import Path
-lazy from typing import Any
+lazy from typing import Any, override
 
 lazy import pytest
 
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerAsset
+lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.media_servers.errors import MediaServerError
@@ -22,6 +22,7 @@ lazy from overture.schemas.server_audit import (
     ServerAuditResult,
     ServerAuditThemeDeleteTarget,
 )
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.server_audit import fix as module
 lazy from overture.services.server_audit.compare import AuditContext
@@ -31,15 +32,18 @@ lazy from overture.services.server_audit.fix import (
     AuditRowKey,
     RowFix,
 )
-lazy from overture.services.server_audit.work import AuditTarget
+lazy from overture.services.server_audit.work import AuditTarget, CollectionAuditTarget
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.utils.time import utc_now
 lazy from overture.ws.events import validate_event_payload
+lazy from tests.collection_helpers import stored_collection
 lazy from tests.runtime_helpers import (
     JobProbe,
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
     make_runtime,
+    unused,
 )
 
 LIFECYCLE = ManagedJobLifecycle(JobKind.SERVER_AUDIT_FIX)
@@ -114,6 +118,7 @@ def _context(
     phash = PhashService(app_config=app_config)
     return AuditContext(
         config_dir=tmp_path,
+        collection_art=unused(CollectionArtService),
         provider_registry=NoopProviderRegistry(),
         asset_storage=AssetStorage(app_config=app_config),
         local_assets=make_local_assets(
@@ -446,3 +451,68 @@ async def test_the_service_fixes_art_and_themes_in_one_run_and_marks_the_rows(
             },
         ],
     }
+
+
+class Reuploads(CollectionArtService):
+    """Record which collection images a fix sends again."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[int, ArtType]] = []
+
+    @override
+    async def reupload(self, collection_id: int, art_type: ArtType) -> None:
+        self.sent.append((collection_id, art_type))
+
+
+async def test_a_collection_image_is_uploaded_again_then_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    async with database.write_session() as session:
+        session.add(
+            stored_collection(
+                id=4,
+                server_item_id="box",
+                server_type=ServerType.PLEX,
+                media_type=MediaType.MOVIE,
+                title="Saga",
+                last_synced_at=utc_now(),
+            )
+        )
+
+    async def audited(
+        target: CollectionAuditTarget, **_kwargs: object
+    ) -> tuple[CollectionAuditTarget, list[ServerAuditResult]]:
+        assert target == CollectionAuditTarget(4, ArtType.POSTER)
+        return target, [
+            ServerAuditResult(
+                kind="art",
+                collection_id=4,
+                art_type=target.asset,
+                title="Saga",
+                status=AuditStatus.PHASH_MATCH,
+            )
+        ]
+
+    monkeypatch.setattr(module, "audit_target", audited)
+    reuploads = Reuploads()
+    provider = FakeProvider()
+
+    marks = await _run(
+        JobProbe(lifecycle=LIFECYCLE),
+        art=[ServerAuditRefreshTarget(collection_id=4, art_type=ArtType.POSTER)],
+        provider=provider,
+        context=replace(
+            _context(tmp_path, app_config=app_config, database=database),
+            collection_art=reuploads,
+        ),
+    )
+
+    row = ("collection", 4, None, "poster")
+    assert reuploads.sent == [(4, ArtType.POSTER)]
+    # Nothing of an item is refreshed for a collection.
+    assert provider.calls == []
+    assert marks == [{row: PENDING}, {row: VERIFIED}]

@@ -125,7 +125,8 @@ export type AuditStatus = "phash_match" | "phash_mismatch" | "server_missing" | 
 
 export interface ServerAuditResult {
   kind: "art" | "theme";
-  item_id: number;
+  item_id?: number | null;
+  collection_id?: number | null;
   season_id?: number | null;
   art_type: ServerAsset;
   status: AuditStatus;

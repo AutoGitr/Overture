@@ -3,7 +3,6 @@
 lazy import json
 
 lazy from overture.dataset_contract.contract import (
-    ART_SOURCE_LABELS,
     ASPECT_RATIOS,
 )
 lazy from overture.db.models.settings import AppSettingsBase
@@ -60,7 +59,7 @@ def render_settings_defaults() -> str:
         (
             "SELECTED_ART_SOURCE_LABELS",
             {
-                source.value: ART_SOURCE_LABELS[source.value]
+                source.value: source.label
                 for source in ArtSource
                 if source is not ArtSource.OVERTUREDB
             },

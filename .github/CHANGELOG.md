@@ -10,7 +10,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **Collections:** a collection can span several libraries, of movies, shows or both, with its own criteria for each. Jellyfin and Emby hold one collection for them all; Plex holds one in each library, which Overture keeps alike. The libraries of a saved collection can change, and a set makes one collection per value across its libraries.
-- **Collections:** the library sidebar has a **Collections** tab listing movie and show collections together, with a **Holds** filter.
+- **Collections:** the icon beside Movies and Shows in the library sidebar lists movie and show collections together, with a **Holds** filter: its first click opens the last view used, Groups or Collections, and later clicks switch between them.
 - **Collections:** movie and show collections share groups. On upgrade, same-named groups merge; where their settings differ, the show group is kept as `<name> (Shows)`.
 - **Collections:** a set's per-library collections of one value merge into one on upgrade; the next sync folds extra Jellyfin and Emby collections into one, and a Plex copy added later receives the collection's art and theme.
 - **Collections:** the sort menu of **Groups** sorts the groups themselves, by name, collections, items, date added or last synced.
@@ -21,10 +21,22 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** Plex smart collections and smart sets can test any field Overture can evaluate, such as original language or TMDB facts, through labels Overture keeps on the matching items and refreshes on each sync.
 - **Interface:** smart collections carry a sparkle in the sidebar.
 - **Collections:** TMDB list and title conditions take TMDB links as well as IDs.
+- **Artwork:** **Upload image** saves a JPEG or PNG from your device into any item, season or collection art slot, and pasting an image on the art tab does the same. Uploads are kept in the image cache, count as saved choices that Assets restores, and filter as the **Upload** art source.
+- **Collections:** collection posters and backgrounds Overture uploaded show from its image cache in the sidebar and on the collection's page, and **Audit** can compare them with the server's and upload them again.
+- **Collections:** the item filters can show only the titles of one collection.
+- **Collections:** TMDB title and MDBList conditions, and a collection's TMDB collection ID, can be searched by name.
+- **Collections:** adopting a collection names members without a TMDB ID by their TVDB or IMDb ID before their title, through new **TVDB ID** and **IMDb ID** conditions.
+- **Collections:** creating a set refuses a group that already is one and warns when another set splits the same libraries alike or the group already holds collections; the set preview names values whose title another collection already has.
+- **Collections:** a copied condition or group pastes into any criteria that can test it, in another library, collection or set.
 
 ### Changed
 
-- **Collections:** collection links moved from `/movies/collections` and `/shows/collections` to `/collections`; old links redirect.
+- **Collections:** the sidebar's Groups, Collections and Items mode switches are gone; the collections icon beside Movies and Shows replaces them and the separate Collections tab.
+- **Collections:** the libraries of a new collection list movie libraries, then show libraries, and a collection's members are listed by library, reordered only within one.
+- **Collections:** deleting a collection leaves the sidebar where it was, such as inside its group.
+- **OvertureDB:** the catalog is downloaded from its gzip file only.
+
+- **Collections:** collection links moved from `/movies/collections` and `/shows/collections` to `/collections`.
 - **API:** collection and group endpoints no longer take `media_type`. A rule holds `libraries`, each with its `library_id` and `criteria`; a collection reports `media_types` and `library_ids`; and `/collections/preview` answers per library.
 - **Collections:** only Setup and Content open by default on a collection's page and no section does in a group, and neither remembers what was open.
 - **Collections:** sort options that say nothing about a collection are gone: art size and shape, theme length, Group inside a group, and Home order outside Plex.
@@ -49,6 +61,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Interface:** the criteria field list calls its list and tag sources External.
 
 ### Fixed
+
 
 - **Security:** the container image is built on a Python base with `apt` 3.0.4, fixing CVE-2026-109518.
 - **Library:** TVDB links open by ID, so titles whose TVDB slug differs from their name no longer lead to a missing page.

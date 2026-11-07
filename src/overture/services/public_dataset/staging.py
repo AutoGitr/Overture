@@ -33,45 +33,37 @@ lazy from . import catalog
 
 
 async def download(path: Path, stats: PublicDatasetSyncStats) -> None:
-    """Stream a bounded, complete gzip member to disk, noting its size in *stats*."""
-    last_error: Exception | None = None
-    async with create_client(follow_redirects=True) as client:
-        for url in catalog.catalog_url_candidates():
-            try:
-                await _download_url(client, url, path, stats)
-                return
-            except (httpx2.HTTPError, OSError, ValueError, zlib.error) as exc:
-                last_error = exc
-    raise ValueError("Public dataset catalog download failed") from last_error
+    """Stream a bounded, complete gzip member to disk, noting its size in *stats*.
 
-
-async def _download_url(
-    client: httpx2.AsyncClient,
-    url: str,
-    path: Path,
-    stats: PublicDatasetSyncStats,
-) -> None:
-    decoder = zlib.decompressobj(zlib.MAX_WBITS | 16) if url.endswith(".gz") else None
+    Raises:
+        ValueError: When the catalog cannot be downloaded in full.
+    """
+    url = catalog.PUBLIC_DATASET_CATALOG_URL
+    decoder = zlib.decompressobj(zlib.MAX_WBITS | 16)
     compressed = expanded = 0
-    with path.open("wb") as stream:
-        async with client.stream("GET", url) as response:
-            response.raise_for_status()
-            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
-                compressed += len(chunk)
-                if compressed > catalog.MAX_CATALOG_COMPRESSED_BYTES:
-                    raise ValueError("Catalog exceeds compressed size limit")
-                pending = chunk
-                while pending:
-                    data = (
-                        decoder.decompress(pending, 64 * 1024) if decoder else pending
-                    )
-                    pending = decoder.unconsumed_tail if decoder else b""
-                    expanded += len(data)
-                    if expanded > catalog.MAX_CATALOG_UNCOMPRESSED_BYTES:
-                        raise ValueError("Catalog exceeds decompressed size limit")
-                    await owned_thread(stream.write, data)
-        if decoder is not None and (not decoder.eof or decoder.unused_data):
+    try:
+        async with create_client(follow_redirects=True) as client:
+            with path.open("wb") as stream:
+                async with client.stream("GET", url) as response:
+                    response.raise_for_status()
+                    async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+                        compressed += len(chunk)
+                        if compressed > catalog.MAX_CATALOG_COMPRESSED_BYTES:
+                            raise ValueError("Catalog exceeds compressed size limit")
+                        pending = chunk
+                        while pending:
+                            data = decoder.decompress(pending, 64 * 1024)
+                            pending = decoder.unconsumed_tail
+                            expanded += len(data)
+                            if expanded > catalog.MAX_CATALOG_UNCOMPRESSED_BYTES:
+                                raise ValueError(
+                                    "Catalog exceeds decompressed size limit"
+                                )
+                            await owned_thread(stream.write, data)
+        if not decoder.eof or decoder.unused_data:
             raise ValueError("Catalog is not one complete gzip stream")
+    except (httpx2.HTTPError, OSError, ValueError, zlib.error) as exc:
+        raise ValueError("Public dataset catalog download failed") from exc
     stats.catalog_url = url
     stats.catalog_bytes = compressed
     stats.catalog_uncompressed_bytes = expanded

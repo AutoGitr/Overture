@@ -23,6 +23,7 @@ lazy from overture.domain import (
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
+lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.server_identity import resolve_server_item_id
@@ -131,6 +132,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
         matcher=unused(ArtMatcher),
+        phash=unused(PhashService),
         downloads=unused(DownloadService),
         publisher=RecordingPublisher(),
         provider_registry=registry,

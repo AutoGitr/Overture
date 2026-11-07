@@ -7,13 +7,13 @@ lazy from typing import Any, Literal
 
 lazy from pydantic import Field
 
-lazy from ..db.art_slots import read_art_slot
+lazy from ..db.art_slots import read_art_slot, slot_art_source
 lazy from ..db.completion import art_completion, slot_status, theme_status
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..domain import ArtSource, ArtType, AssetStatus, MediaType, ThemeIdSource
-lazy from ..utils.art_urls import art_preview_url, selected_art_source
+lazy from ..utils.art_urls import art_preview_url
 lazy from .base import StrictBaseModel
 lazy from .common import SaveSelectionResponse
 
@@ -188,8 +188,8 @@ def media_item_read_from_model(
             **_art_slot_fields(background, "background"),
             # Only a remote poster is shown in place of a file, at preview size.
             "poster_preview_url": _preview_url(poster, ArtType.POSTER),
-            "poster_source": selected_art_source(poster.url),
-            "background_source": selected_art_source(background.url),
+            "poster_source": slot_art_source(poster),
+            "background_source": slot_art_source(background),
             **asdict(art_completion(item, seasons)),
             "theme_duration": item.theme_file_duration or item.youtube_duration,
             "theme_status": AssetStatus.COMPLETE

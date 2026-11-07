@@ -5,6 +5,7 @@ lazy from collections.abc import Collection
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
+lazy from ...db.art_slots import find_art_slot
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import CHUNK_SIZE, Database
@@ -14,8 +15,10 @@ lazy from ...domain import (
     MediaSortKey,
     MediaType,
     ServerAsset,
+    ServerType,
     media_sort_key,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.server_audit import ServerAuditRequest
@@ -40,6 +43,23 @@ class AuditTarget:
         return (
             ServerAsset.THEME if self.art_type is None else self.art_type.server_asset
         )
+
+
+@dataclass(slots=True, frozen=True)
+class CollectionAuditTarget:
+    """One image Overture uploaded to a collection, which a server audit compares."""
+
+    collection_id: int
+    art_type: ArtType
+
+    @property
+    def asset(self) -> ServerAsset:
+        """Return the media-server asset the target is compared with."""
+        return self.art_type.server_asset
+
+
+#: What a server audit compares: an item's local file, or a collection's image.
+type AuditWork = AuditTarget | CollectionAuditTarget
 
 
 def item_in_selected_roots(item: MediaItem, real_roots: Collection[Path]) -> bool:
@@ -180,3 +200,20 @@ async def plan_audit(
         if len(items) < chunk:
             return [target for _, targets in sorted(planned) for target in targets]
         after_id = max(item.id or 0 for item in items)
+
+
+async def plan_collection_audit(
+    params: ServerAuditRequest, server: ServerType, *, database: Database
+) -> list[CollectionAuditTarget]:
+    """Return each collection image Overture uploaded to *server*, by title."""
+    async with database.read_session() as session:
+        rows = await CollectionRepository(session).list_listed()
+    return [
+        CollectionAuditTarget(row.id, art_type)
+        for row in sorted(rows, key=lambda row: (row.title.casefold(), row.id))
+        if row.id is not None and row.server_type is server
+        for art_type in ITEM_ART_TYPES
+        if art_type in params.art_types
+        and (slot := find_art_slot(row, art_type)) is not None
+        and slot.file_hash is not None
+    ]

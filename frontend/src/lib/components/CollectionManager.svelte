@@ -30,13 +30,14 @@
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
   import PasteArtButton from "./PasteArtButton.svelte";
+  import UploadArtButton from "./UploadArtButton.svelte";
   import DetailPanelBase from "./DetailPanelBase.svelte";
   import DetailRecordActions from "./DetailRecordActions.svelte";
   import ExternalLinkBadges from "./ExternalLinkBadges.svelte";
   import IdBadge from "./IdBadge.svelte";
   import StatusTab from "./StatusTab.svelte";
   import AssetModeTabs from "./AssetModeTabs.svelte";
-  import { collectionImageUrl } from "../utils/artDisplay";
+  import { collectionArtDisplayUrl } from "../utils/artDisplay";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
 
@@ -89,9 +90,9 @@
   subjectKey={collection ? `collection:${collection.id}` : "new-collection"}
   title={collection?.title ?? "New collection"}
   summary={collection?.summary}
-  posterUrl={collectionImageUrl(collection?.thumb_url ?? null)}
+  posterUrl={collectionArtDisplayUrl(collection, "poster")}
   showPoster={!!collection}
-  backgroundUrl={collectionImageUrl(collection?.art_url ?? null)}
+  backgroundUrl={collectionArtDisplayUrl(collection, "background")}
   posterHref={collection?.server_link}
   posterLinkTitle={collection?.server_link
     ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
@@ -204,7 +205,7 @@
         configuring={managing}
       />{/if}
   {/snippet}
-  {#snippet subtabActions()}{#if actions && view === "art"}<PasteArtButton />{/if}{/snippet}
+  {#snippet subtabActions()}{#if actions && view === "art"}<PasteArtButton /><UploadArtButton />{/if}{/snippet}
   {#snippet content()}
     {#if collection && !editor}
       <CollectionAdopt {collection} {groups} />

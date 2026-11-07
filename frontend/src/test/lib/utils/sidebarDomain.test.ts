@@ -67,6 +67,15 @@ function filterItems(
 }
 
 describe("sidebar domain helpers", () => {
+  it("shows only the items of the collection a filter names, none until it loads", () => {
+    const items = [mediaItem({ id: 1, title: "Alien" }), mediaItem({ id: 2, title: "Heat" })];
+    const filters = withFilters({ collectionId: 7 });
+
+    expect(filterItems(items, { filters, collectionMembers: new Set([2]) })).toEqual(["Heat"]);
+    expect(filterItems(items, { filters })).toEqual([]);
+    expect(activeFilterCount(filters, false, "items")).toBe(1);
+  });
+
   it("shows the backend's asset status as a tone, or downloading while a job runs", () => {
     expect(statusTone("complete", false)).toBe("success");
     expect(statusTone("partial", false)).toBe("warning");
@@ -738,7 +747,7 @@ describe("catalog filters", () => {
 
 describe("sidebar registry", () => {
   it("places every list's filters in order, libraries first and status filters together", () => {
-    const options = { tab: "movie", datasetEnabled: true, smart: true } as const;
+    const options = { tab: "movie", datasetEnabled: true, smart: true, collections: true } as const;
     const groups = Object.keys(FILTER_GROUPS);
     for (const mode of ["items", "collections"] as const) {
       const sections = filterSections(mode, options);
@@ -757,6 +766,8 @@ describe("sidebar registry", () => {
     expect(filterSections("items", { ...options, datasetEnabled: false })).not.toContain(
       "overtureDb",
     );
+    expect(filterSections("items", options)).toContain("collection");
+    expect(filterSections("items", { ...options, collections: false })).not.toContain("collection");
   });
 
   it("offers collections only the metadata issues they have data for", () => {

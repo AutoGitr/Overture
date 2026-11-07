@@ -23,6 +23,7 @@
   import { confirmAction, createNotifier } from "../../stores/notificationState.svelte";
   import { serverAuditFixState } from "../../stores/serverAuditFixState.svelte";
   import { serverAuditState } from "../../stores/serverAuditState.svelte";
+  import { settingsState } from "../../stores/settingsState.svelte";
   import { assetsInScope } from "../../utils/artTypes";
   import { errorMessage } from "../../utils/errors";
   import { createFolderScope } from "../../utils/folderScope.svelte";
@@ -47,14 +48,23 @@
   const config = persistedState("serverAudit", {
     artTypes: [...ITEM_ART_TYPES, ...SEASON_ART_TYPES],
     checkThemes: true,
+    checkCollections: false,
   });
+  let checkCollections = $derived(
+    settingsState.current.collections_supported && config.checkCollections,
+  );
+  let collectionArtTypes = $derived(
+    config.artTypes.filter((type) => (ITEM_ART_TYPES as readonly string[]).includes(type)),
+  );
   /** The chosen art types the scope has files for. */
   let artTypes = $derived(
     assetsInScope(config.artTypes, { hasSelection: scope.hasSelection, hasShows: scope.hasShows }),
   );
   let checkThemes = $derived(scope.hasSelection && config.checkThemes);
   let canAudit = $derived(
-    (artTypes.length > 0 || checkThemes) && scope.hasSelection && scope.ready,
+    scope.ready &&
+      ((scope.hasSelection && (artTypes.length > 0 || checkThemes)) ||
+        (checkCollections && collectionArtTypes.length > 0)),
   );
 
   const feedback = createNotifier();
@@ -63,7 +73,6 @@
   const fixRequest = createMutation(() => fixAuditFindingsMutation());
   const stopFixRequest = createMutation(() => stopAuditFixMutation());
   const clearResults = createClearResults(() => ["server_audit"], feedback);
-  /** Results show exactly while a run exists, never ahead of the server's answer. */
   let hasResults = $derived(serverAuditState.hasRun);
   let stopping = $derived(stopAuditRequest.isPending || serverAuditState.stopping);
   let fixing = $derived(serverAuditFixState.running);
@@ -92,7 +101,12 @@
     feedback.clear();
     try {
       await startAuditRequest.mutateAsync({
-        body: { art_types: artTypes, check_themes: checkThemes, ...scope.request() },
+        body: {
+          art_types: [...new Set([...artTypes, ...(checkCollections ? collectionArtTypes : [])])],
+          check_themes: checkThemes,
+          check_collections: checkCollections,
+          ...scope.request(),
+        },
       });
       serverAuditState.markStartAccepted();
     } catch (err) {
@@ -150,15 +164,22 @@
                   {
                     art_type: result.art_type,
                     item_id: result.item_id,
+                    collection_id: result.collection_id,
                     season_id: result.season_id,
                   },
                 ],
           ),
-          themes: themes.map((result) => ({
-            item_id: result.item_id,
-            server_item_id: result.server_item_id || "",
-            theme_id: result.theme_id,
-          })),
+          themes: themes.flatMap((result) =>
+            result.item_id
+              ? [
+                  {
+                    item_id: result.item_id,
+                    server_item_id: result.server_item_id || "",
+                    theme_id: result.theme_id,
+                  },
+                ]
+              : [],
+          ),
         },
       });
       if (status === "already_running") {
@@ -195,6 +216,22 @@
       ontoggletype={toggleArtType}
       ontoggletheme={(value) => (config.checkThemes = value)}
     />
+    {#if settingsState.current.collections_supported}
+      <div class="option-card">
+        <label class="checkbox-group">
+          <input
+            type="checkbox"
+            checked={config.checkCollections}
+            onchange={(event) => (config.checkCollections = event.currentTarget.checked)}
+          />
+          <span>Collections</span>
+        </label>
+        <span class="hint"
+          >Compares the posters and backgrounds Overture uploaded to collections with what the
+          server shows; refreshing uploads them again.</span
+        >
+      </div>
+    {/if}
   </CardColumn>
 {:else}
   <ServerAuditResultsPanel

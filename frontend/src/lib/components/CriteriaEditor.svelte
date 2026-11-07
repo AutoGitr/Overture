@@ -41,16 +41,18 @@
 
   /** Nesting stops here, as adding a group does. */
   const MAX_DEPTH = 3;
-  let pasteable = $derived(criteriaClipboard.pasteable(mediaType));
-  let canPaste = $derived(
-    pasteable?.kind === "condition" || (pasteable?.kind === "group" && depth < MAX_DEPTH),
-  );
+  let copied = $derived(criteriaClipboard.copied);
+  let pasteBlocker = $derived.by(() => {
+    if (!criteriaClipboard.fits({ fields, sources, mediaType }))
+      return `These criteria cannot test the copied ${copied?.kind}`;
+    if (copied?.kind === "group" && depth >= MAX_DEPTH) return "Groups nest only this deep";
+    return null;
+  });
 
   function paste() {
-    if (pasteable?.kind === "condition")
-      (group.conditions ??= []).push(structuredClone(pasteable.condition));
-    else if (pasteable?.kind === "group" && depth < MAX_DEPTH)
-      (group.groups ??= []).push(structuredClone(pasteable.group));
+    if (copied?.kind === "condition")
+      (group.conditions ??= []).push(structuredClone(copied.condition));
+    else if (copied?.kind === "group") (group.groups ??= []).push(structuredClone(copied.group));
   }
 
   function addCondition() {
@@ -143,14 +145,14 @@
         ><Plus size={14} /> Group</button
       >
     {/if}
-    {#if pasteable}
+    {#if copied}
       <button
         type="button"
         class="btn btn-ghost btn-sm"
-        aria-label={`Paste copied ${pasteable.kind} into ${label}`}
-        disabled={!canPaste}
-        title={canPaste ? undefined : "Groups nest only this deep"}
-        onclick={paste}><ClipboardPaste size={14} /> Paste {pasteable.kind}</button
+        aria-label={`Paste copied ${copied.kind} into ${label}`}
+        disabled={!!pasteBlocker}
+        title={pasteBlocker ?? undefined}
+        onclick={paste}><ClipboardPaste size={14} /> Paste {copied.kind}</button
       >
     {/if}
   </div>

@@ -248,6 +248,8 @@ describe("catalog detail drafts", () => {
     });
     renderWithQueryClient(CatalogEntryPage);
     await screen.findByRole("heading", { name: "Alien" });
+    // OvertureDB stores public links only, so it offers no upload.
+    expect(screen.queryByRole("button", { name: /^Upload image/ })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Paste URL & save as background" }));
     await fireEvent.input(await screen.findByLabelText("Image URL"), { target: { value: poster } });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));

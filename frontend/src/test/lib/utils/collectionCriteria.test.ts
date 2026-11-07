@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  conditionFits,
+  groupFits,
   availableFields,
   availableOrders,
   defaultValue,
@@ -77,5 +79,52 @@ describe("collection criteria helpers", () => {
       parseIds("https://www.themoviedb.org/list/8136-best, https://www.themoviedb.org/movie/550/")
         .ids,
     ).toEqual([8136, 550]);
+  });
+
+  it("pastes what the target criteria can test, wherever they belong", () => {
+    const fields = [{ ...field("genre"), operators: ["is" as const, "is_not" as const] }];
+    const sources = capabilities.sources;
+    const movies = { fields, sources, mediaType: "movie" as const };
+    const shows = { fields, sources, mediaType: "show" as const };
+    const genre = {
+      kind: "field" as const,
+      field: "genre" as const,
+      operator: "is" as const,
+      value: "Drama",
+    };
+
+    // Another library of either media type takes a field both offer.
+    expect(conditionFits(genre, shows, "movie")).toBe(true);
+    expect(conditionFits({ ...genre, operator: "contains" }, shows, "movie")).toBe(false);
+    expect(conditionFits({ ...genre, field: "studio" }, shows, "movie")).toBe(false);
+
+    // A TMDB title ID names another title in the other media type.
+    const titles = {
+      kind: "source" as const,
+      operator: "is" as const,
+      source: { type: "tmdb_item" as const, tmdb_ids: [550] },
+    };
+    expect(conditionFits(titles, movies, "movie")).toBe(true);
+    expect(conditionFits(titles, shows, "movie")).toBe(false);
+    expect(
+      conditionFits(
+        titles,
+        { ...movies, sources: sources.filter((s) => s.type !== "tmdb_item") },
+        "movie",
+      ),
+    ).toBe(false);
+
+    expect(
+      groupFits(
+        {
+          mode: "any",
+          conditions: [genre],
+          groups: [{ mode: "all", conditions: [titles], groups: [] }],
+        },
+        shows,
+        "movie",
+      ),
+    ).toBe(false);
+    expect(groupFits({ mode: "any", conditions: [genre], groups: [] }, shows, "movie")).toBe(true);
   });
 });

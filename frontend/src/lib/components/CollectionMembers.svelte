@@ -6,7 +6,11 @@
   import Film from "@lucide/svelte/icons/film";
   import DetailSection from "./DetailSection.svelte";
   import FallbackImage from "./FallbackImage.svelte";
-  import type { MediaItemRead, TmdbItemResult } from "../../generated/rest/types.gen";
+  import type {
+    LibrarySectionRead,
+    MediaItemRead,
+    TmdbItemResult,
+  } from "../../generated/rest/types.gen";
   import { goToCatalogEntry, goToItem } from "../router/routes";
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import type { CollectionEditor } from "../utils/collectionForms.svelte";
@@ -18,14 +22,42 @@
     catalog = false,
     editor,
     libraryItems = [],
+    libraries = [],
   }: {
     members: (MediaItemRead | TmdbItemResult)[];
     catalog?: boolean;
     editor?: CollectionEditor;
     libraryItems?: MediaItemRead[];
+    libraries?: LibrarySectionRead[];
   } = $props();
 
   let smart = $derived(editor?.collection.kind === "smart");
+  let orderable = $derived(!smart && editor?.collection.server_type === "plex");
+  let memberGroups = $derived.by(() => {
+    if (!editor) return [];
+    const collection = editor.collection;
+    const ids = [
+      ...new Set([
+        ...collection.library_ids,
+        ...collection.members.map((member) => member.library_id ?? ""),
+      ]),
+    ];
+    return ids
+      .map((id) => ({
+        id,
+        title: libraries.find((library) => library.id === id)?.title ?? id,
+        members: collection.members.filter((member) => (member.library_id ?? "") === id),
+      }))
+      .filter((group) => group.members.length > 0);
+  });
+
+  // Plex orders each library's copy of a collection on its own.
+  function moveWithin(group: MediaItemRead[], index: number, target: number) {
+    const member = group[index];
+    const neighbour = group[target];
+    if (!editor || !member || !neighbour) return;
+    void editor.moveMember(member.id, editor.collection.members.indexOf(neighbour));
+  }
   let available = $derived(editor?.availableMembers(libraryItems) ?? []);
 
   function open(member: MediaItemRead | TmdbItemResult) {
@@ -86,83 +118,96 @@
       {/if}
 
       {#if currentMembers.length}
-        <ol class="member-list">
-          {#each currentMembers as member, index (member.id)}
-            <li
-              class="member-row"
-              ondragover={(event) => {
-                if (!smart && editor.collection.server_type === "plex") event.preventDefault();
-              }}
-              ondrop={(event) => {
-                if (smart || editor.collection.server_type !== "plex") return;
-                event.preventDefault();
-                if (editor.draggingMemberId !== null && editor.draggingMemberId !== member.id) {
-                  void editor.moveMember(editor.draggingMemberId, index);
-                }
-                editor.draggingMemberId = null;
-              }}
-            >
-              {#if !smart && editor.collection.server_type === "plex"}
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-icon drag-handle"
-                  draggable={!editor.busy}
-                  aria-label={`Drag ${member.title} to reorder`}
-                  disabled={editor.busy}
-                  ondragstart={(event) => {
-                    editor.draggingMemberId = member.id;
-                    if (event.dataTransfer) {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", String(member.id));
-                    }
+        {#each memberGroups as group (group.id)}
+          <section class="member-group" aria-label={`${group.title} members`}>
+            {#if memberGroups.length > 1 || editor.collection.library_ids.length > 1}
+              <h4 class="form-label">{group.title}</h4>
+            {/if}
+            <ol class="member-list">
+              {#each group.members as member, index (member.id)}
+                <li
+                  class="member-row"
+                  ondragover={(event) => {
+                    if (orderable) event.preventDefault();
                   }}
-                  ondragend={() => (editor.draggingMemberId = null)}
-                  ><GripVertical size={16} /></button
+                  ondrop={(event) => {
+                    if (!orderable) return;
+                    event.preventDefault();
+                    const from = group.members.findIndex(
+                      (entry) => entry.id === editor.draggingMemberId,
+                    );
+                    if (from !== -1 && from !== index) moveWithin(group.members, from, index);
+                    editor.draggingMemberId = null;
+                  }}
                 >
-              {/if}
-              <button type="button" class="btn btn-ghost member-title" onclick={() => open(member)}>
-                <span class="member-poster"
-                  ><FallbackImage
-                    src={itemArtDisplayUrl(member, "poster")}
-                    alt=""
-                    placeholder={memberPlaceholder}
-                  /></span
-                >
-                <span class="member-name">
-                  {member.title}
-                  {member.year ? `(${member.year})` : ""}
-                </span>
-              </button>
-              <div class="member-actions">
-                {#if !smart && editor.collection.server_type === "plex"}
+                  {#if orderable}
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-icon drag-handle"
+                      draggable={!editor.busy}
+                      aria-label={`Drag ${member.title} to reorder`}
+                      disabled={editor.busy}
+                      ondragstart={(event) => {
+                        editor.draggingMemberId = member.id;
+                        if (event.dataTransfer) {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", String(member.id));
+                        }
+                      }}
+                      ondragend={() => (editor.draggingMemberId = null)}
+                      ><GripVertical size={16} /></button
+                    >
+                  {/if}
                   <button
                     type="button"
-                    class="btn btn-ghost btn-icon"
-                    aria-label={`Move ${member.title} up`}
-                    disabled={editor.busy || index === 0}
-                    onclick={() => void editor.moveMember(member.id, index - 1)}
-                    ><ArrowUp size={16} /></button
+                    class="btn btn-ghost member-title"
+                    onclick={() => open(member)}
                   >
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-icon"
-                    aria-label={`Move ${member.title} down`}
-                    disabled={editor.busy || index === currentMembers.length - 1}
-                    onclick={() => void editor.moveMember(member.id, index + 1)}
-                    ><ArrowDown size={16} /></button
-                  >
-                {/if}
-                {#if editor.manualMembersAllowed}<button
-                    type="button"
-                    class="btn btn-ghost btn-icon"
-                    disabled={editor.busy}
-                    aria-label={`Remove ${member.title} from collection`}
-                    onclick={() => void editor.removeMember(member.id)}><X size={16} /></button
-                  >{/if}
-              </div>
-            </li>
-          {/each}
-        </ol>
+                    <span class="member-poster"
+                      ><FallbackImage
+                        src={itemArtDisplayUrl(member, "poster")}
+                        alt=""
+                        placeholder={memberPlaceholder}
+                      /></span
+                    >
+                    <span class="member-name">
+                      {member.title}
+                      {member.year ? `(${member.year})` : ""}
+                    </span>
+                  </button>
+                  <div class="member-actions">
+                    {#if orderable}
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-icon"
+                        aria-label={`Move ${member.title} up`}
+                        disabled={editor.busy || index === 0}
+                        onclick={() => moveWithin(group.members, index, index - 1)}
+                        ><ArrowUp size={16} /></button
+                      >
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-icon"
+                        aria-label={`Move ${member.title} down`}
+                        disabled={editor.busy || index === group.members.length - 1}
+                        onclick={() => moveWithin(group.members, index, index + 1)}
+                        ><ArrowDown size={16} /></button
+                      >
+                    {/if}
+                    {#if editor.manualMembersAllowed}<button
+                        type="button"
+                        class="btn btn-ghost btn-icon"
+                        disabled={editor.busy}
+                        aria-label={`Remove ${member.title} from collection`}
+                        onclick={() => void editor.removeMember(member.id)}
+                        ><X size={16} /></button
+                      >{/if}
+                  </div>
+                </li>
+              {/each}
+            </ol>
+          </section>
+        {/each}
       {:else}<p class="text-muted">
           {smart
             ? "No items currently match the smart filter."
@@ -195,10 +240,16 @@
     gap: var(--space-2);
     min-width: 0;
   }
+  .member-group {
+    margin-top: var(--space-4);
+  }
+  .member-group h4 {
+    margin: 0 0 var(--space-1);
+  }
   .member-list {
     list-style: none;
     padding: 0;
-    margin: var(--space-4) 0 0;
+    margin: 0;
   }
   .member-row {
     display: flex;

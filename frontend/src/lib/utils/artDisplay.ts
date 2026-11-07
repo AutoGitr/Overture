@@ -7,6 +7,7 @@ import type {
 } from "../../generated/rest/types.gen";
 import {
   itemProviderArtUrl,
+  localCollectionImageUrl,
   localItemImageUrl,
   localSeasonImageUrl,
   seasonProviderArtUrl,
@@ -113,10 +114,22 @@ export function itemDetailImageUrls(item: MediaItemRead, withBackground: boolean
 }
 
 /**
- * A collection image (its `thumb_url` or `art_url`, which carry the image's
- * version) as shown in the sidebar and on the detail page, or null when it
- * has none.
+ * A collection's art as the sidebar and the detail page show it, like an
+ * item's: the image Overture uploaded, from its cache, then the media
+ * server's copy (`thumb_url` or `art_url`, which carry its version).
  */
-export function collectionImageUrl(url: CollectionRead["thumb_url"] | undefined): string | null {
-  return url ? `${url}&size=display` : null;
+export function collectionArtDisplayUrl(
+  collection: CollectionRead | null,
+  artType: "poster" | "background",
+): string | null {
+  if (!collection) return null;
+  const hash = artType === "poster" ? collection.poster_hash : collection.background_hash;
+  if (hash) {
+    return localCollectionImageUrl(
+      { collection_id: collection.id, art_type: artType },
+      { t: hash, size: "display" },
+    );
+  }
+  const serverUrl = artType === "poster" ? collection.thumb_url : collection.art_url;
+  return serverUrl ? `${serverUrl}&size=display` : null;
 }

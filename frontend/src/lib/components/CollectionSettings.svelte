@@ -7,6 +7,7 @@
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import SourcePicker from "./SourcePicker.svelte";
 
   let { editor }: { editor: CollectionEditor | CollectionDraft } = $props();
 
@@ -59,16 +60,14 @@
   {#if editor.mediaTypes.includes("movie")}
     <FieldRow
       label="TMDB collection ID"
-      for={identityId}
       hint="Used for art and themes; Content decides the members."
     >
-      <input
-        id={identityId}
-        type="number"
-        min="1"
-        step="1"
-        bind:value={editor.tmdbCollectionId}
-        placeholder="e.g. 86311"
+      <SourcePicker
+        kind="franchise"
+        label="Collection"
+        id={editor.tmdbCollectionId ?? 0}
+        onpick={(id) => (editor.tmdbCollectionId = id)}
+        onclear={() => (editor.tmdbCollectionId = undefined)}
       />
     </FieldRow>
   {/if}

@@ -345,10 +345,10 @@ def apply_provider_collection(item: MediaItem, server_item: ServerItem) -> None:
 
 def _art_slot_fingerprint(
     item: MediaItem, art_type: ArtType
-) -> tuple[str | None, str | None]:
+) -> tuple[str | None, str | None, str | None]:
     """Return the change-detection fingerprint for one item artwork slot."""
     slot = read_art_slot(item, art_type)
-    return (slot.url, slot.file_hash)
+    return (slot.url, slot.upload_hash, slot.file_hash)
 
 
 def _has_metadata_conflict(item: MediaItem, server_item: ServerItem) -> bool:

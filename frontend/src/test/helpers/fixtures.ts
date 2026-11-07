@@ -152,6 +152,8 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     background_url: null,
     poster_source: null,
     background_source: null,
+    poster_hash: null,
+    background_hash: null,
     poster_width: null,
     poster_height: null,
     background_width: null,

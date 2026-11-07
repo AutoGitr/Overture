@@ -9,6 +9,7 @@ lazy from ...db.art_slots import (
     clear_art_selection,
     record_art_file,
     select_art,
+    select_upload,
 )
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, select_theme
@@ -29,14 +30,17 @@ class DownloadedArt:
     phash: str | None
     width: int | None
     height: int | None
+    #: The uploaded image the file holds, selected in place of a link.
+    upload_hash: str | None = None
 
     async def record(
         self, session: AsyncSession, item: MediaItem, stored: StoredFile
     ) -> None:
         """Record the file and the selection it came from, together.
 
-        A source with no storable public URL (a media-server image) leaves the
-        slot without a selection: the old URL no longer describes the file.
+        A source that is neither an upload nor a storable public URL (a
+        media-server image) leaves the slot without a selection: the old one
+        no longer describes the file.
 
         Raises:
             DownloadError: When a season poster names an unrecorded season.
@@ -47,7 +51,9 @@ class DownloadedArt:
         if owner is None:
             raise DownloadError("Season not found")
 
-        if self.url:
+        if self.upload_hash:
+            select_upload(owner, self.art_type, self.upload_hash)
+        elif self.url:
             select_art(owner, self.art_type, self.url)
         else:
             clear_art_selection(owner, self.art_type)
