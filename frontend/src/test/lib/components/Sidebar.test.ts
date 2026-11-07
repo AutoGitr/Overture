@@ -238,7 +238,7 @@ describe("Sidebar", () => {
     await fireEvent.input(screen.getByLabelText("Search sidebar"), {
       target: { value: "Action" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: /^Collections/ }));
+    await fireEvent.click(screen.getByRole("button", { name: /^(Collections|Groups) \(/ }));
 
     await waitFor(() => expect(uiState.sidebarMode).toBe("collections"));
     expect(sidebarState.current).toBeNull();

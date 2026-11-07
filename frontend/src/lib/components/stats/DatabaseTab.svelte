@@ -22,7 +22,7 @@
 <section class="option-card">
   <div class="section-title-row">
     <span class="accent"><Database size={16} /></span>
-    <span class="form-label mb-0">SQLite Engine & Storage</span>
+    <span class="form-label">SQLite Engine & Storage</span>
   </div>
   <div class="metrics-row">
     {@render metric("Database File", formatBytes(stats.database.file_size_bytes))}
@@ -70,7 +70,7 @@
 <section class="option-card">
   <div class="section-title-row">
     <span class="accent"><HardDrive size={16} /></span>
-    <span class="form-label mb-0">Backups</span>
+    <span class="form-label">Backups</span>
   </div>
   <div class="metrics-row">
     {@render metric("Total Backups", String(stats.backups.total_backups))}

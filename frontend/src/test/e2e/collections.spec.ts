@@ -52,7 +52,10 @@ test("a collection set previews and creates its collections without horizontal o
     "false",
   );
   await page.getByText("One per value", { exact: true }).click();
-  await page.getByLabel(/^Group/).fill("Decades");
+  await page
+    .getByRole("region", { name: "Collection setup", exact: true })
+    .getByLabel(/^Group/)
+    .fill("Decades");
   await page.getByRole("button", { name: "Preview collections", exact: true }).click();
   await expect(page.getByText("1 collection, 1 below the minimum.")).toBeVisible();
   await expect(page.locator("body")).toHaveJSProperty(
@@ -77,7 +80,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     title: "Saga",
     library_ids: ["movies"],
     child_count: 2,
-    members: [first, second],
+    member_ids: [first.id, second.id],
     rule,
     effective_sync_mode: "append",
   });
@@ -104,7 +107,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     const body = route.request().postDataJSON();
     detail = {
       ...detail,
-      members: body.member_ids.map((id: number) => (id === 1 ? first : second)),
+      member_ids: body.member_ids,
       child_count: body.member_ids.length,
       order_type: body.order_type,
     };
@@ -149,7 +152,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(actions.getByRole("button", { name: "Orphan collection" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Danger Zone", exact: true })).toHaveCount(0);
   const sections = page.locator(".detail-sections");
-  const boxes = sections.locator(":scope > .tab-bar");
+  const boxes = sections.locator(":scope > .detail-tab-row");
   await expect(boxes).toHaveCount(2);
   const lowerBox = await boxes.nth(1).boundingBox();
   await modes.getByRole("tab", { name: "Art", exact: true }).click();
@@ -182,7 +185,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
     id: 12,
     title: "New collection",
     library_ids: ["movies"],
-    members: [first],
+    member_ids: [first.id],
     child_count: 1,
   });
   await page.route("**/api/settings", (route) =>
@@ -247,7 +250,9 @@ test("items and collections share record actions and fit a narrow viewport", asy
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
   );
   await page.route("**/api/collections/12{,?*}", (route) =>
-    route.fulfill({ json: collectionDetail({ id: 12, title: "Saga", members: [first, second] }) }),
+    route.fulfill({
+      json: collectionDetail({ id: 12, title: "Saga", member_ids: [first.id, second.id] }),
+    }),
   );
   await logIn(page);
   for (const [path, deleteLabel, count] of [
@@ -315,10 +320,10 @@ test("groups hide collections until opened, preserve browsing on asset navigatio
     id: 12,
     title: "Grouped saga",
     collection_group: "Weekend",
-    members: [first],
+    member_ids: [first.id],
     library_ids: ["movies"],
   });
-  const loose = collectionDetail({ id: 13, title: "Loose saga", members: [second] });
+  const loose = collectionDetail({ id: 13, title: "Loose saga", member_ids: [second.id] });
   let candidateRequests = 0;
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
@@ -577,4 +582,28 @@ test("group management saves and applies defaults separately from an unsaved col
   expect(applied).toBe(true);
   await dialog.getByRole("button", { name: "Close popup", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved collection");
+});
+
+test("deleting a group from the groups popup asks what happens to its collections", async ({
+  page,
+}) => {
+  const grouped = collectionDetail({ id: 12, title: "Grouped saga", collection_group: "Weekend" });
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+  );
+  await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped] }));
+  // The reserved fallback is always listed, and is where kept collections go.
+  await page.route("**/api/collections/groups{,?*}", (route) =>
+    route.fulfill({ json: ["Ungrouped", "Weekend"] }),
+  );
+  await page.route("**/api/collections/group-policy{,?*}", (route) => route.fulfill({ json: {} }));
+  await logIn(page, "/collections");
+  await page.getByRole("button", { name: "Manage groups" }).click();
+  const popup = page.getByRole("dialog", { name: "Collection groups" });
+  await popup.getByRole("combobox", { name: "Group" }).selectOption("Weekend");
+  await popup.getByRole("button", { name: "Rename or delete" }).click();
+  await popup.getByRole("button", { name: "Delete group" }).click();
+
+  const confirm = page.getByRole("dialog", { name: 'Delete group "Weekend"?' });
+  await expect(confirm.getByRole("radio", { name: "Move them to Ungrouped" })).toHaveCount(1);
 });

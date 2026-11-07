@@ -105,7 +105,7 @@ class CollectionsService:
             steps=(
                 AutoAssets(access=access, art=art, themes=self.themes),
                 MemberLabel(membership=membership),
-                MemberTag(sources=self._sources, effects=effects),
+                MemberTag(access=access, sources=self._sources, effects=effects),
                 RequestMissing(sources=self._sources, arr=self.arr),
                 HomeOrder(access=access),
             ),

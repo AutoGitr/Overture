@@ -1,8 +1,5 @@
 <script lang="ts">
-  import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import EyeOff from "@lucide/svelte/icons/eye-off";
-  import Layers from "@lucide/svelte/icons/layers";
-  import MonitorPlay from "@lucide/svelte/icons/monitor-play";
   import Sparkles from "@lucide/svelte/icons/sparkles";
   import type {
     CatalogEntryRow,
@@ -13,10 +10,12 @@
   } from "../../generated/rest/types.gen";
   import {
     collectionArtDisplayUrl,
+    collectionPosterOriginalUrl,
     itemArtDisplayUrl,
     itemPosterOriginalUrl,
     remotePosterUrl,
   } from "../utils/artDisplay";
+  import { MEDIA_ICONS, type MediaIcon } from "../utils/mediaIcons";
   import { catalogStatus, type StatusTone } from "../utils/sidebarDomain";
   import SidebarAssetBadges from "./SidebarAssetBadges.svelte";
   import FallbackImage from "./FallbackImage.svelte";
@@ -59,10 +58,17 @@
     selectLabel: string;
     meta: string | number | null;
     unmonitored: boolean;
-    icon: typeof Clapperboard;
+    icon: MediaIcon;
     src: string | null;
     /** Where the poster opens full size, with what its link says. */
     link: { href: string; label: string; title: string } | null;
+  }
+
+  /** Where the poster opens full size, for every kind of row alike. */
+  function posterLink(title: string, href: string | null): Row["link"] {
+    return href
+      ? { href, label: `Open poster for ${title} in new tab`, title: "Open poster in new tab" }
+      : null;
   }
 
   /** What every kind of row shows, so one layout renders them all. */
@@ -73,40 +79,21 @@
         selectLabel: `Select ${catalogEntry.title}`,
         meta: catalogEntry.year,
         unmonitored: false,
-        icon:
-          catalogEntry.media_type === "collection"
-            ? Layers
-            : catalogEntry.media_type === "show"
-              ? MonitorPlay
-              : Clapperboard,
+        icon: MEDIA_ICONS[catalogEntry.media_type],
         src: remotePosterUrl(catalogEntry),
-        link: catalogEntry.poster_url
-          ? {
-              href: catalogEntry.poster_url,
-              label: `Open poster for ${catalogEntry.title} in new tab`,
-              title: "Open poster in new tab",
-            }
-          : null,
+        link: posterLink(catalogEntry.title, catalogEntry.poster_url),
       };
     }
     if (item) {
       const src = itemArtDisplayUrl(item, "poster");
-      const href = itemPosterOriginalUrl(item);
       return {
         title: item.title,
         selectLabel: `Select ${item.title}`,
         meta: item.year,
         unmonitored: !item.monitored,
-        icon: item.media_type === "movie" ? Clapperboard : MonitorPlay,
+        icon: MEDIA_ICONS[item.media_type],
         src,
-        link:
-          src && href
-            ? {
-                href,
-                label: `Open poster for ${item.title} in new tab`,
-                title: "Open poster in new tab",
-              }
-            : null,
+        link: src ? posterLink(item.title, itemPosterOriginalUrl(item)) : null,
       };
     }
     if (tmdbResult) {
@@ -117,7 +104,7 @@
         selectLabel: isCollection ? `Open ${title}` : `Select ${title}`,
         meta: tmdbResult.kind === "item" ? tmdbResult.year : null,
         unmonitored: false,
-        icon: isCollection ? Layers : tmdbResult.media_type === "show" ? MonitorPlay : Clapperboard,
+        icon: MEDIA_ICONS[isCollection ? "collection" : tmdbResult.media_type],
         src: remotePosterUrl(tmdbResult),
         link: null,
       };
@@ -131,15 +118,9 @@
             ? `${collection.child_count} items, movies and shows`
             : `${collection.child_count} items`,
         unmonitored: !collection.monitored,
-        icon: Layers,
+        icon: MEDIA_ICONS.collection,
         src: collectionArtDisplayUrl(collection, "poster"),
-        link: collection.thumb_url
-          ? {
-              href: collection.thumb_url,
-              label: `Open thumbnail for ${collection.title} in new tab`,
-              title: "Open thumbnail in new tab",
-            }
-          : null,
+        link: posterLink(collection.title, collectionPosterOriginalUrl(collection)),
       };
     }
     return null;

@@ -1099,6 +1099,24 @@ async def test_libraries_are_named_by_the_media_server_while_it_answers(
     assert [(row.id, row.title, row.count) for row in libraries] == listed
 
 
+async def test_libraries_list_movies_first_then_by_title(database: Database) -> None:
+    await _add_items(
+        database,
+        MediaItem(id=1, media_type=MediaType.SHOW, title="A", library_id="1"),
+        MediaItem(id=2, media_type=MediaType.MOVIE, title="B", library_id="2"),
+        MediaItem(id=3, media_type=MediaType.MOVIE, title="C", library_id="3"),
+    )
+    sections = [
+        ServerSection("1", "Anime", MediaType.SHOW),
+        ServerSection("2", "Movies", MediaType.MOVIE),
+        ServerSection("3", "Kids Movies", MediaType.MOVIE),
+    ]
+
+    libraries = await _service(database, ArtServer(sections)).get_libraries(None)
+
+    assert [row.title for row in libraries] == ["Kids Movies", "Movies", "Anime"]
+
+
 async def test_item_provider_art_is_proxied_by_its_server_id(
     database: Database, proxied: list[str]
 ) -> None:
@@ -1146,3 +1164,30 @@ async def test_season_provider_art_is_proxied_by_the_season_server_id(
     with pytest.raises(PublicServiceError) as exc_info:
         await library.proxy_season_provider_art(11, None)
     assert exc_info.value.status_code == 404
+
+
+async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived(
+    database: Database,
+) -> None:
+    async with database.write_session() as session:
+        show = MediaItem(id=1, media_type=MediaType.SHOW, title="Show")
+        session.add(show)
+        await session.flush()
+        season = Season(media_item_id=1, season_num=1, title="Season 1")
+        session.add(season)
+        await session.flush()
+        select_art(season, ArtType.SEASON_POSTER, PublicArtUrl("https://x/s1.jpg"))
+        select_art(show, ArtType.POSTER, PublicArtUrl("https://x/p.jpg"))
+
+    record = await _service(database, ArtServer()).item_record(1)
+
+    # Each row is followed by the rows referring to it.
+    assert [row.table for row in record.stored] == [
+        "media_items",
+        "seasons",
+        "art_slots",
+        "art_slots",
+    ]
+    assert record.stored[0].values["title"] == "Show"
+    assert "poster_url" in record.derived
+    assert not record.derived.keys() & record.stored[0].values.keys()

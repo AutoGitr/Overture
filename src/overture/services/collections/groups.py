@@ -129,16 +129,19 @@ class CollectionGroups:
                 group = await repo.group_policy(server, name)
             if group is None and not rows:
                 raise PublicServiceError(404, "Collection group not found")
-            if body.collections in {"overture", "both"}:
+            if body.collections in {"orphan", "both"}:
                 for row in rows:
                     identity = row.id or 0
                     try:
                         async with self._access.asset_locks.acquire(
                             f"collection:{identity}"
                         ):
-                            await self._editor.delete_locked(
-                                row, server=body.collections == "both"
-                            )
+                            if body.collections == "orphan":
+                                await self._editor.orphan_locked(
+                                    identity, set_removed=True
+                                )
+                            else:
+                                await self._editor.delete_locked(row)
                         result.collection_ids.append(identity)
                     except Exception as exc:
                         result.errors[identity] = str(exc)

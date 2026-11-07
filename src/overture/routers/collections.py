@@ -68,10 +68,12 @@ lazy from ..schemas.common import (
     MonitorUpdate,
     StatusResponse,
 )
+lazy from ..schemas.records import DatabaseRecord
 lazy from .auth import READS_ONLY, require_auth
 lazy from .parameters import (
     ArtTypePath,
     CollectionIdPath,
+    ImageCacheKeyQuery,
     ImageSizeQuery,
     ImageVersionQuery,
     MediaTypeQuery,
@@ -259,6 +261,15 @@ async def bulk_operate_collections(
     return await bulk.run(body)
 
 
+@router.get("/{collection_id}/record")
+async def get_collection_record(
+    collection_id: CollectionIdPath,
+    reader: CollectionReaderDep,
+) -> DatabaseRecord:
+    """Return the collection's stored rows and what the API derives from them."""
+    return await reader.record(collection_id)
+
+
 @router.get("/{collection_id}")
 async def get_collection(
     collection_id: CollectionIdPath,
@@ -364,6 +375,7 @@ async def proxy_collection_image(
     art_type: ArtTypePath,
     reader: CollectionReaderDep,
     size: ImageSizeQuery = None,
+    _cache_key: ImageCacheKeyQuery = None,
 ) -> Response:
     """Proxy a collection's poster or background from the media server."""
     return await reader.image(collection_id, art_type, size)

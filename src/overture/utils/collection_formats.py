@@ -1,6 +1,7 @@
 """Restricted templates and seasonal date windows shared by collection workflows."""
 
 lazy import re
+lazy import unicodedata
 lazy from datetime import date
 lazy from string import Formatter
 lazy from typing import Annotated
@@ -53,6 +54,21 @@ def format_member_tag(template: str, *, title: str, group: str | None) -> str:
     result = template.format(title=title, group=group or "").strip()
     if not result:
         raise ValueError("The member tag renders empty")
+    return result[:200]
+
+
+def format_arr_tag(template: str, *, title: str, group: str | None) -> str:
+    """Render a member tag as Radarr and Sonarr accept one: a-z, 0-9 and -."""
+    ascii_text = (
+        unicodedata.normalize(
+            "NFKD", format_member_tag(template, title=title, group=group)
+        )
+        .encode("ascii", "ignore")
+        .decode()
+    )
+    result = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+    if not result:
+        raise ValueError("The Radarr or Sonarr tag has no letters or digits")
     return result[:200]
 
 

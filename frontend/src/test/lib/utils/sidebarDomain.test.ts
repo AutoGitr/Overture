@@ -76,6 +76,16 @@ describe("sidebar domain helpers", () => {
     expect(activeFilterCount(filters, false, "items")).toBe(1);
   });
 
+  it("sorts titles as the media server does, without leading articles", () => {
+    const items = [
+      mediaItem({ id: 1, title: "The Matrix", sort_title: "Matrix" }),
+      mediaItem({ id: 2, title: "Heat" }),
+      mediaItem({ id: 3, title: "A Quiet Place", sort_title: "Quiet Place" }),
+    ];
+
+    expect(filterItems(items)).toEqual(["Heat", "The Matrix", "A Quiet Place"]);
+  });
+
   it("shows the backend's asset status as a tone, or downloading while a job runs", () => {
     expect(statusTone("complete", false)).toBe("success");
     expect(statusTone("partial", false)).toBe("warning");
@@ -766,7 +776,12 @@ describe("sidebar registry", () => {
     expect(filterSections("items", { ...options, datasetEnabled: false })).not.toContain(
       "overtureDb",
     );
-    expect(filterSections("items", options)).toContain("collection");
+    const items = filterSections("items", options);
+    expect(items.slice(items.indexOf("themeSources") + 1)).toEqual([
+      "collection",
+      "metadataIssues",
+    ]);
+    expect(FILTERS.collectionHolds.group).toBe("status");
     expect(filterSections("items", { ...options, collections: false })).not.toContain("collection");
   });
 

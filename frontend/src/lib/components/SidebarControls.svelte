@@ -95,9 +95,10 @@
 
 <div class="sidebar-controls">
   {#if sortFields.length}
+    <div class={["filters", { active: activeFilters > 0 }]}>
     <button
       type="button"
-      class={["btn btn-ghost btn-icon filter-btn", { "has-filter": activeFilters > 0 }]}
+      class="btn btn-ghost btn-icon filter-btn"
       onclick={onOpenFilters}
       aria-label="Open filters"
       aria-haspopup="dialog"
@@ -111,12 +112,13 @@
     {#if activeFilters}
       <button
         type="button"
-        class="btn btn-ghost btn-icon"
+        class="btn btn-ghost btn-icon reset-btn"
         onclick={onResetFilters}
         aria-label="Reset filters"
-        title="Reset filters"><X size={14} /></button
+        title="Reset filters"><X size={12} /></button
       >
     {/if}
+    </div>
   {/if}
 
   <div class="search-wrapper">
@@ -234,20 +236,34 @@
   .sidebar-controls {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3);
+    gap: var(--space-1);
+    padding: var(--space-2);
     border-bottom: var(--border-subtle);
   }
 
-  .filter-btn {
-    position: relative;
+  /* Active filters and their reset share one outlined control. */
+  .filters {
+    display: flex;
     flex-shrink: 0;
+    border-radius: var(--radius-sm);
   }
 
-  .filter-btn.has-filter {
+  .filters.active {
     color: var(--accent);
     background: var(--accent-muted);
     box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .filters .btn {
+    color: inherit;
+  }
+
+  .filter-btn {
+    gap: var(--space-1);
+  }
+
+  .reset-btn {
+    padding-inline: var(--space-1);
   }
 
   .filter-count {
@@ -318,6 +334,10 @@
   .search-clear-btn:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+  }
+
+  .search-wrapper:focus-within .search-kbd {
+    display: none;
   }
 
   .search-kbd {

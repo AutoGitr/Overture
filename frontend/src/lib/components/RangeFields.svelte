@@ -56,7 +56,6 @@
   .number-input {
     flex: 1;
     min-width: 0;
-    width: 80px;
     padding: var(--space-1) var(--space-2);
   }
 

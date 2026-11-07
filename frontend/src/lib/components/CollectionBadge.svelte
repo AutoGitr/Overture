@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Layers from "@lucide/svelte/icons/layers";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
   import { createQuery } from "@tanstack/svelte-query";
   import { getCatalogEntryOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { goToCatalogEntry, goToCollection } from "../router/routes";
@@ -30,7 +30,7 @@
     onclick={() => {
       if (libraryCollectionId !== null)
         goToCollection({ id: libraryCollectionId, title: "Collection" });
-    }}><Layers size={16} />Collection</button
+    }}><MEDIA_ICONS.collection size={16} />Collection</button
   >
 {:else if entry}
   <button

@@ -3,6 +3,7 @@
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { discardDrafts } from "../utils/catalogDrafts";
   import { errorMessage } from "../utils/errors";
+  import FilterSection from "./FilterSection.svelte";
 
   /** Operations on the catalog entries the filters and search match. */
   let { entries }: { entries: CatalogEntryRow[] } = $props();
@@ -32,13 +33,14 @@
   }
 </script>
 
-<section class="option-card" aria-label="Bulk operations">
-  <h3 class="form-label">Bulk operations</h3>
-  <p class="hint">For the {entries.length} entries the filters and search match.</p>
+<FilterSection label="Bulk operations">
+  {#snippet control()}
+    <span class="hint">For the {entries.length} entries the filters and search match.</span>
+  {/snippet}
   <button
     type="button"
     class="btn btn-danger btn-sm"
     disabled={busy || !drafted.length}
     onclick={() => void discard()}>Discard drafts ({drafted.length})</button
   >
-</section>
+</FilterSection>

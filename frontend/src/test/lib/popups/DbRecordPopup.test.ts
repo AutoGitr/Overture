@@ -1,10 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  getItemOptions,
-  listCollectionsOptions,
-} from "../../../generated/rest/@tanstack/svelte-query.gen";
-import type { MediaItemRead } from "../../../generated/rest/types.gen";
+import { getItemOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import type { DatabaseRecord, MediaItemRead } from "../../../generated/rest/types.gen";
 import DbRecordPopup from "../../../lib/popups/DbRecordPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { goToCatalogEntry, goToItem, navigate, route } from "../../../lib/router/routes";
@@ -12,17 +9,22 @@ import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   catalogDetail,
   catalogEntry,
-  collection,
   mediaItem,
   publicDatasetRecord,
   publicDatasetRecordItem,
   publicDatasetRecordSeason,
-  season,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 const alien = mediaItem({ id: 7, title: "Alien", tmdb_id: 348 });
 const notFound = { found: false, item: null, seasons: [] };
+const alienRecord: DatabaseRecord = {
+  stored: [
+    { table: "media_items", values: { id: 7, title: "Alien", tmdb_id: 348 } },
+    { table: "seasons", values: { id: 3, media_item_id: 7, season_num: 1 } },
+  ],
+  derived: { art_status: "missing" },
+};
 
 function stubClipboard(writeText?: (value: string) => Promise<void>) {
   Object.defineProperty(navigator, "clipboard", {
@@ -45,7 +47,7 @@ async function openItem(item: MediaItemRead) {
 
 async function renderPopup() {
   const view = renderWithQueryClient(DbRecordPopup);
-  await screen.findByRole("dialog", { name: /^Database Record - / });
+  await screen.findByRole("dialog", { name: /^Database Record/ });
   return view;
 }
 
@@ -55,36 +57,36 @@ describe("DbRecordPopup", () => {
     await openItem(alien);
   });
 
-  it("lists the item's stored fields and re-reads it on open", async () => {
-    mockFetchRoutes({
-      "/api/library/items/7": { ...alien, year: 1979 },
+  it("groups what the database stores apart from what the API derives", async () => {
+    const { calls } = mockFetchRoutes({
+      "/api/library/items/7/record": alienRecord,
       "/api/public-dataset/items/7/record": notFound,
     });
 
     await renderPopup();
 
+    expect(
+      await screen.findByRole("heading", { name: "Stored in media_items" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Database Record - Alien" })).toBeVisible();
     expect(field("title")).toHaveTextContent("Alien");
-    expect(field("tmdb_id")).toHaveTextContent("348");
-    // The open item follows its query, which the refresh replaces.
-    await waitFor(() =>
-      expect(
-        queryClient.getQueryData(getItemOptions({ path: { item_id: 7 } }).queryKey),
-      ).toMatchObject({ year: 1979 }),
-    );
+    expect(screen.getByText("seasons 3", { selector: "summary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Derived by the API" })).toBeInTheDocument();
+    expect(field("art_status")).toHaveTextContent("missing");
+    expect(calls.map((call) => call.url)).toContain("/api/library/items/7/record");
     expect(screen.queryByRole("heading", { name: "OvertureDB Item" })).not.toBeInTheDocument();
   });
 
   it("copies a value and marks only the field copied last", async () => {
     mockFetchRoutes({
-      "/api/library/items/7": alien,
+      "/api/library/items/7/record": alienRecord,
       "/api/public-dataset/items/7/record": notFound,
     });
     const writeText = vi.fn().mockResolvedValue(undefined);
     stubClipboard(writeText);
     await renderPopup();
 
-    await fireEvent.click(field("title"));
+    await fireEvent.click(await screen.findByRole("button", { name: /^title / }));
     await waitFor(() => expect(field("title").querySelector(".text-success")).not.toBeNull());
     await fireEvent.click(field("tmdb_id"));
 
@@ -95,13 +97,13 @@ describe("DbRecordPopup", () => {
 
   it("asks for a manual copy when the clipboard is unavailable", async () => {
     mockFetchRoutes({
-      "/api/library/items/7": alien,
+      "/api/library/items/7/record": alienRecord,
       "/api/public-dataset/items/7/record": notFound,
     });
     stubClipboard();
     await renderPopup();
 
-    await fireEvent.click(field("title"));
+    await fireEvent.click(await screen.findByRole("button", { name: /^title / }));
 
     expect(
       await screen.findByText(
@@ -110,43 +112,27 @@ describe("DbRecordPopup", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps the last loaded record when the refresh fails, and retries it", async () => {
+  it("reports a record that cannot be read, and retries it", async () => {
     let available = false;
     mockFetchRoutes({
-      "/api/library/items/7": () =>
-        available ? Response.json(alien) : Response.json({ detail: "Down" }, { status: 404 }),
+      "/api/library/items/7/record": () =>
+        available ? Response.json(alienRecord) : Response.json({ detail: "Down" }, { status: 404 }),
       "/api/public-dataset/items/7/record": notFound,
     });
     await renderPopup();
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("database record: Down Showing last loaded data.");
-    expect(field("title")).toHaveTextContent("Alien");
+    expect(alert).toHaveTextContent("database record: Down");
 
     available = true;
     await fireEvent.click(within(alert).getByRole("button", { name: "Retry database record" }));
 
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-  });
-
-  it("lists a show's seasons", async () => {
-    const show = mediaItem({ id: 9, media_type: "show", title: "Firefly" });
-    await openItem(show);
-    mockFetchRoutes({
-      "/api/library/items/9": show,
-      "/api/library/items/9/seasons": [season({ id: 3, media_item_id: 9, season_num: 1 })],
-      "/api/public-dataset/items/9/record": notFound,
-    });
-
-    await renderPopup();
-
-    expect(await screen.findByRole("heading", { name: "Seasons" })).toBeInTheDocument();
-    expect(screen.getByText("Season 1", { selector: "summary" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^title / })).toHaveTextContent("Alien");
   });
 
   it("shows the matching OvertureDB record and its seasons", async () => {
     mockFetchRoutes({
-      "/api/library/items/7": alien,
+      "/api/library/items/7/record": alienRecord,
       "/api/public-dataset/items/7/record": publicDatasetRecord({
         item: publicDatasetRecordItem({ title: "Alien", tmdb_id: 348 }),
         seasons: [publicDatasetRecordSeason({ season_num: 2 })],
@@ -161,13 +147,14 @@ describe("DbRecordPopup", () => {
   });
 
   it("shows the selected collection and its OvertureDB record, never an item's", async () => {
-    queryClient.setQueryData(listCollectionsOptions().queryKey, [
-      collection({ id: 12, title: "Action" }),
-    ]);
     await navigate("/collections/:collectionSlug", {
       params: { collectionSlug: "12-action" },
     });
     const { calls } = mockFetchRoutes({
+      "/api/collections/12/record": {
+        stored: [{ table: "media_collections", values: { id: 12, title: "Action" } }],
+        derived: {},
+      },
       "/api/public-dataset/collections/12/record": {
         found: true,
         item: null,
@@ -178,12 +165,17 @@ describe("DbRecordPopup", () => {
 
     await renderPopup();
 
+    expect(
+      await screen.findByRole("heading", { name: "Stored in media_collections" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Database Record - Action" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Collection" })).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "OvertureDB Collection" }),
     ).toBeInTheDocument();
-    expect(calls.map((call) => call.url)).toEqual(["/api/public-dataset/collections/12/record"]);
+    expect(calls.map((call) => call.url).toSorted()).toEqual([
+      "/api/collections/12/record",
+      "/api/public-dataset/collections/12/record",
+    ]);
   });
 
   it("shows a catalog entry's OvertureDB record", async () => {
@@ -199,7 +191,7 @@ describe("DbRecordPopup", () => {
     await renderPopup();
 
     expect(await screen.findByRole("heading", { name: "OvertureDB Item" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Media Item" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Stored in/ })).not.toBeInTheDocument();
     // A local draft is inspectable beside the synced catalog row.
     const draft = await screen.findByRole("heading", { name: "Local draft" });
     expect(draft.closest("section")).toHaveTextContent("https://image.test/draft.jpg");

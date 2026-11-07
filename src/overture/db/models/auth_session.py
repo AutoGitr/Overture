@@ -7,7 +7,7 @@ lazy from sqlmodel import Field, SQLModel
 
 
 class AuthSession(SQLModel, table=True):
-    """Only a digest of the opaque browser credential is persisted."""
+    """A signed-in browser session; only a digest of its credential is kept."""
 
     __tablename__: ClassVar[Any] = "auth_sessions"
 

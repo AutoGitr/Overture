@@ -17,14 +17,14 @@ lazy from ...domain import ArtType, MediaType
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.art import SaveArtRequest
 lazy from ...schemas.collections import SetCollectionThemeRequest
-lazy from ...utils.collection_formats import format_member_tag
+lazy from ...utils.collection_formats import format_arr_tag, format_member_tag
 lazy from ...utils.errors import PublicServiceError
 lazy from ..art.collection_art import CollectionArtService
 lazy from .access import CollectionAccess
 lazy from .arr_requests import CollectionArr
 lazy from .member_effects import MemberEffects
 lazy from .membership import Membership
-lazy from .policy import CollectionPolicy
+lazy from .policy import CollectionPolicy, resolve_policy
 lazy from .reader import catalog_collections
 lazy from .rules import criteria_of
 lazy from .sources import SourceResolver
@@ -161,11 +161,22 @@ class MemberLabel:
 
 
 class MemberTag:
-    """Tag the members in Radarr or Sonarr."""
+    """Tag the members in Radarr or Sonarr.
+
+    Collections whose tags render alike share the tag, so it marks the members
+    of all of them and none takes it from another's members.
+    """
 
     name = "Member tag"
 
-    def __init__(self, *, sources: SourceResolver, effects: MemberEffects) -> None:
+    def __init__(
+        self,
+        *,
+        access: CollectionAccess,
+        sources: SourceResolver,
+        effects: MemberEffects,
+    ) -> None:
+        self._access = access
         self._sources = sources
         self._effects = effects
 
@@ -176,14 +187,46 @@ class MemberTag:
         )
 
     async def run(self, synced: SyncedCollection) -> None:
-        tag = format_member_tag(
-            synced.policy.arr_tag or "",
-            title=synced.row.title,
-            group=synced.row.collection_group,
-        )
+        tag = _arr_tag(synced.row, synced.policy.arr_tag or "")
+        sharing = await self._sharing_members(synced.collection_id, tag)
         for media_type in synced.row.media_types:
             if self._sources.arr(media_type).configured:
-                await self._effects.tag(media_type, tag, synced.members_of(media_type))
+                await self._effects.tag(
+                    media_type,
+                    tag,
+                    [
+                        *synced.members_of(media_type),
+                        *(item for item in sharing if item.media_type is media_type),
+                    ],
+                )
+
+    async def _sharing_members(self, collection_id: int, tag: str) -> list[MediaItem]:
+        """The stored members of the other managed collections with *tag*."""
+        server = self._access.server_type
+        async with self._access.database.read_session() as session:
+            repo = CollectionRepository(session)
+            defaults = await get_app_settings(session)
+            groups = {group.name: group for group in await repo.group_policies(server)}
+            rules = {rule.collection_id: rule for rule in await repo.rules()}
+            members: list[MediaItem] = []
+            for row in await repo.list_listed():
+                rule = rules.get(row.id or 0)
+                if (
+                    row.id == collection_id
+                    or rule is None
+                    or row.server_type is not server
+                ):
+                    continue
+                template = resolve_policy(
+                    defaults, groups.get(row.collection_group or ""), rule
+                ).arr_tag
+                if template and _arr_tag(row, template) == tag:
+                    members.extend(await repo.members(row.id or 0))
+        return members
+
+
+def _arr_tag(row: MediaCollection, template: str) -> str:
+    return format_arr_tag(template, title=row.title, group=row.collection_group)
 
 
 class RequestMissing:

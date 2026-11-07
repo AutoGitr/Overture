@@ -6,6 +6,7 @@ import type {
   SeasonRead,
 } from "../../generated/rest/types.gen";
 import {
+  collectionProviderArtUrl,
   itemProviderArtUrl,
   localCollectionImageUrl,
   localItemImageUrl,
@@ -83,8 +84,7 @@ export function seasonPosterUrls(
 ): { src: string | null; fallbackSrc: string | null } {
   if (!item) return { src: null, fallbackSrc: null };
 
-  const hasLocal = Boolean(item.folder_path && season.poster_hash);
-  const localUrl = hasLocal
+  const localUrl = season.poster_hash
     ? localSeasonImageUrl({ season_id: season.id }, { t: season.poster_hash, size: "display" })
     : null;
   const serverUrl = season.server_item_id
@@ -114,22 +114,42 @@ export function itemDetailImageUrls(item: MediaItemRead, withBackground: boolean
 }
 
 /**
- * A collection's art as the sidebar and the detail page show it, like an
- * item's: the image Overture uploaded, from its cache, then the media
- * server's copy (`thumb_url` or `art_url`, which carry its version).
+ * A collection's art, like an item's: the image Overture uploaded, from its
+ * cache, then the media server's copy, named by its version. Without a size
+ * it is the original image.
  */
-export function collectionArtDisplayUrl(
+function collectionArtUrl(
   collection: CollectionRead | null,
   artType: "poster" | "background",
+  size?: ImageSize,
 ): string | null {
   if (!collection) return null;
   const hash = artType === "poster" ? collection.poster_hash : collection.background_hash;
   if (hash) {
     return localCollectionImageUrl(
       { collection_id: collection.id, art_type: artType },
-      { t: hash, size: "display" },
+      { t: hash, size },
     );
   }
-  const serverUrl = artType === "poster" ? collection.thumb_url : collection.art_url;
-  return serverUrl ? `${serverUrl}&size=display` : null;
+  const version =
+    artType === "poster" ? collection.server_poster_version : collection.server_background_version;
+  return version
+    ? collectionProviderArtUrl(
+        { collection_id: collection.id, art_type: artType },
+        { t: version, size },
+      )
+    : null;
+}
+
+/** The one URL a collection's art is shown by, in the sidebar and on the detail page. */
+export function collectionArtDisplayUrl(
+  collection: CollectionRead | null,
+  artType: "poster" | "background",
+): string | null {
+  return collectionArtUrl(collection, artType, "display");
+}
+
+/** The original poster, for opening in a new tab. */
+export function collectionPosterOriginalUrl(collection: CollectionRead | null): string | null {
+  return collectionArtUrl(collection, "poster");
 }

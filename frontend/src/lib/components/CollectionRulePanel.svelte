@@ -7,6 +7,7 @@
     type CollectionEditor,
   } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
+  import { inLibraryOrder } from "../utils/libraries.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
   import Notice from "./Notice.svelte";
@@ -30,6 +31,7 @@
   function libraryName(id: string) {
     return libraries.find((library) => library.id === id)?.title ?? id;
   }
+  let entries = $derived(inLibraryOrder(libraries, rule.libraries, (entry) => entry.library_id));
   let recommendation = $derived(editor.preview.recommendation);
   /** A kind the criteria need that the collection is not, which the preview found. */
   let suggested = $derived(
@@ -85,7 +87,7 @@
   {#if !rule.libraries.length}
     <p class="hint">Choose a library in Setup, then what the collection holds from it.</p>
   {/if}
-  {#each rule.libraries as entry (entry.library_id)}
+  {#each entries as entry (entry.library_id)}
     {@const mediaType = editor.typeOf(entry.library_id)}
     {@const result = editor.preview.resultFor(entry.library_id)}
     {@const name = libraryName(entry.library_id)}

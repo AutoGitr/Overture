@@ -6,22 +6,24 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ...config import Settings
 lazy from ...dataset_contract.contract import entry_file_stem
 lazy from ...db.art_slots import find_art_slot
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ITEM_ART_TYPES, ArtType, ImageSize
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ...repositories.records import RecordRepository
 lazy from ...schemas.collections import (
     CollectionDefaults,
     CollectionDetail,
     CollectionRead,
     collection_read,
 )
+lazy from ...schemas.records import DatabaseRecord
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
 lazy from ..downloads.collection_theme import collection_theme_unavailable
-lazy from ..library.items import media_item_reads_with_public_dataset_status
 lazy from ..provider_images import proxy_provider_image
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from .access import CollectionAccess
@@ -96,6 +98,15 @@ class CollectionReader:
             )
         ]
 
+    async def record(self, collection_id: int) -> DatabaseRecord:
+        """Return a collection's stored rows and what the API derives from them."""
+        read = await self.get(collection_id)
+        async with self._access.database.read_session() as session:
+            stored = await RecordRepository(session).rows(
+                MediaCollection, collection_id
+            )
+        return DatabaseRecord.of(stored, read)
+
     async def get(self, collection_id: int) -> CollectionDetail:
         """Return one collection with its members and catalog entry."""
         async with self._access.database.read_session() as session:
@@ -105,9 +116,6 @@ class CollectionReader:
                 await CollectionRepository(session).members(row.id or 0), row.order_type
             )
             policy = await self._access.policy(session, row.collection_group, saved)
-            member_reads = await media_item_reads_with_public_dataset_status(
-                session, members
-            )
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
@@ -125,7 +133,7 @@ class CollectionReader:
             )
             .model_dump(),
             effective_sync_mode=policy.sync_mode,
-            members=member_reads,
+            member_ids=[member.id or 0 for member in members],
             rule=rule_read(saved, row),
             theme_unavailable=reason,
             theme_writable=reason is None,

@@ -531,12 +531,16 @@ export type ArtType = 'poster' | 'background' | 'season_poster';
 /**
  * ArtTypeStats
  *
- * Artwork breakdown across posters, backgrounds, and season posters.
+ * Artwork breakdown across posters, backgrounds, season posters and collections.
+ *
+ * ``collections`` counts each collection's poster and background, and is
+ * ``None`` when the media server could not list them.
  */
 export type ArtTypeStats = {
     background: Coverage;
     background_movies: Coverage;
     background_shows: Coverage;
+    collections: Coverage | null;
     overall: Coverage;
     poster: Coverage;
     poster_movies: Coverage;
@@ -1684,10 +1688,6 @@ export type CollectionDetail = {
     active_start_mmdd: string | null;
     art_status: AssetStatus;
     /**
-     * Art Url
-     */
-    art_url: string | null;
-    /**
      * Background Hash
      */
     background_hash: string | null;
@@ -1774,9 +1774,9 @@ export type CollectionDetail = {
      */
     media_types: Array<MediaType>;
     /**
-     * Members
+     * Member Ids
      */
-    members: Array<MediaItemRead>;
+    member_ids: Array<number>;
     /**
      * Monitored
      */
@@ -1814,9 +1814,17 @@ export type CollectionDetail = {
      */
     server_added_at: string | null;
     /**
+     * Server Background Version
+     */
+    server_background_version: string | null;
+    /**
      * Server Link
      */
     server_link: string | null;
+    /**
+     * Server Poster Version
+     */
+    server_poster_version: string | null;
     server_type: ServerType;
     /**
      * Sort Title
@@ -1851,10 +1859,6 @@ export type CollectionDetail = {
      * Theme Writable
      */
     theme_writable: boolean;
-    /**
-     * Thumb Url
-     */
-    thumb_url: string | null;
     /**
      * Title
      */
@@ -2092,14 +2096,14 @@ export type CollectionGeneratorOutput = {
  * What happens to a deleted group's collections.
  *
  * ``keep`` moves them to Ungrouped, ``move`` puts them in *group*,
- * ``overture`` forgets them (the server copies return as Unmanaged on the
- * next import) and ``both`` deletes them from the server too.
+ * ``orphan`` stops managing them, as orphaning one collection does, and
+ * ``both`` deletes them from Overture and the server.
  */
 export type CollectionGroupDelete = {
     /**
      * Collections
      */
-    collections?: 'keep' | 'move' | 'overture' | 'both';
+    collections?: 'keep' | 'move' | 'orphan' | 'both';
     group?: GroupName | null;
 };
 
@@ -2499,10 +2503,6 @@ export type CollectionRead = {
     active_start_mmdd: string | null;
     art_status: AssetStatus;
     /**
-     * Art Url
-     */
-    art_url: string | null;
-    /**
      * Background Hash
      */
     background_hash: string | null;
@@ -2615,9 +2615,17 @@ export type CollectionRead = {
      */
     server_added_at: string | null;
     /**
+     * Server Background Version
+     */
+    server_background_version: string | null;
+    /**
      * Server Link
      */
     server_link: string | null;
+    /**
+     * Server Poster Version
+     */
+    server_poster_version: string | null;
     server_type: ServerType;
     /**
      * Sort Title
@@ -2644,10 +2652,6 @@ export type CollectionRead = {
      */
     theme_duration: number | null;
     theme_status: AssetStatus;
-    /**
-     * Thumb Url
-     */
-    thumb_url: string | null;
     /**
      * Title
      */
@@ -3281,6 +3285,28 @@ export type CustomSetValueOutput = {
 };
 
 /**
+ * DatabaseRecord
+ *
+ * A record as stored, and what the API derives from it.
+ *
+ * ``stored`` is the record's own row first, then every row that refers to
+ * it through a foreign key, and theirs in turn. ``derived`` holds what the
+ * API shows that no column stores.
+ */
+export type DatabaseRecord = {
+    /**
+     * Derived
+     */
+    derived: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Stored
+     */
+    stored: Array<StoredRow>;
+};
+
+/**
  * DatabaseStats
  *
  * SQLite database metrics and table row counts.
@@ -3600,6 +3626,34 @@ export type HealthResponse = {
      * Version
      */
     version: string;
+};
+
+/**
+ * ImageCacheStats
+ *
+ * The cache of shown images: originals, uploads among them, and thumbnails.
+ */
+export type ImageCacheStats = {
+    /**
+     * Original Files
+     */
+    original_files: number;
+    /**
+     * Original Size Bytes
+     */
+    original_size_bytes: number;
+    /**
+     * Thumb Files
+     */
+    thumb_files: number;
+    /**
+     * Thumb Size Bytes
+     */
+    thumb_size_bytes: number;
+    /**
+     * Total Size Bytes
+     */
+    total_size_bytes: number;
 };
 
 export type ImageHash = string;
@@ -4130,6 +4184,10 @@ export type MediaItemRead = {
      * Server Verified At
      */
     server_verified_at: string | null;
+    /**
+     * Sort Title
+     */
+    sort_title: string | null;
     /**
      * Studio
      */
@@ -4833,6 +4891,7 @@ export type SeasonRead = {
      * Poster Preview Url
      */
     poster_preview_url: string | null;
+    poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
      * Poster Url
@@ -5102,6 +5161,7 @@ export type StatsResponse = {
      * Generated At
      */
     generated_at: string;
+    image_cache: ImageCacheStats;
     library: LibraryStats;
     storage: StorageSummary;
     themes: ThemeStats;
@@ -5126,7 +5186,7 @@ export type StatusResponse = {
 /**
  * StorageSummary
  *
- * Storage footprint aggregated across all asset types and database.
+ * Storage footprint aggregated across all asset types, caches and database.
  */
 export type StorageSummary = {
     /**
@@ -5142,6 +5202,10 @@ export type StorageSummary = {
      */
     database_size_bytes: number;
     /**
+     * Image Cache Size Bytes
+     */
+    image_cache_size_bytes: number;
+    /**
      * Themes Size Bytes
      */
     themes_size_bytes: number;
@@ -5149,6 +5213,24 @@ export type StorageSummary = {
      * Total Footprint Bytes
      */
     total_footprint_bytes: number;
+};
+
+/**
+ * StoredRow
+ *
+ * One row exactly as its table stores it.
+ */
+export type StoredRow = {
+    /**
+     * Table
+     */
+    table: string;
+    /**
+     * Values
+     */
+    values: {
+        [key: string]: JsonValue;
+    };
 };
 
 export type SummaryFormat = string;
@@ -5903,12 +5985,16 @@ export type YouTubeId = string;
 /**
  * ArtTypeStats
  *
- * Artwork breakdown across posters, backgrounds, and season posters.
+ * Artwork breakdown across posters, backgrounds, season posters and collections.
+ *
+ * ``collections`` counts each collection's poster and background, and is
+ * ``None`` when the media server could not list them.
  */
 export type ArtTypeStatsWritable = {
     background: CoverageWritable;
     background_movies: CoverageWritable;
     background_shows: CoverageWritable;
+    collections: CoverageWritable | null;
     overall: CoverageWritable;
     poster: CoverageWritable;
     poster_movies: CoverageWritable;
@@ -5965,6 +6051,7 @@ export type StatsResponseWritable = {
      * Generated At
      */
     generated_at: string;
+    image_cache: ImageCacheStats;
     library: LibraryStats;
     storage: StorageSummary;
     themes: ThemeStatsWritable;
@@ -8293,6 +8380,12 @@ export type ProxyCollectionImageData = {
          * Downscaled rendition to return; omit for the original
          */
         size?: ImageSize | null;
+        /**
+         * T
+         *
+         * Changes whenever the shown image does, so a cached copy is never reused for another; the server does not read it
+         */
+        t?: string | null;
     };
     url: '/api/collections/{collection_id}/image/{art_type}';
 };
@@ -8574,6 +8667,46 @@ export type OrphanCollectionResponses = {
 };
 
 export type OrphanCollectionResponse = OrphanCollectionResponses[keyof OrphanCollectionResponses];
+
+export type GetCollectionRecordData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query?: never;
+    url: '/api/collections/{collection_id}/record';
+};
+
+export type GetCollectionRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCollectionRecordError = GetCollectionRecordErrors[keyof GetCollectionRecordErrors];
+
+export type GetCollectionRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatabaseRecord;
+};
+
+export type GetCollectionRecordResponse = GetCollectionRecordResponses[keyof GetCollectionRecordResponses];
 
 export type SaveCollectionRuleData = {
     body: CollectionRuleWriteInput;
@@ -9300,6 +9433,46 @@ export type ProxyItemProviderArtResponses = {
      */
     200: unknown;
 };
+
+export type GetItemRecordData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/library/items/{item_id}/record';
+};
+
+export type GetItemRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetItemRecordError = GetItemRecordErrors[keyof GetItemRecordErrors];
+
+export type GetItemRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatabaseRecord;
+};
+
+export type GetItemRecordResponse = GetItemRecordResponses[keyof GetItemRecordResponses];
 
 export type GetSeasonsData = {
     body?: never;

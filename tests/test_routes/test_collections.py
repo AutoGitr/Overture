@@ -73,7 +73,7 @@ async def test_collection_routes_delegate_to_service() -> None:
         media_types=[MediaType.MOVIE],
         server_type=ServerType.PLEX,
         title="Star Wars",
-        members=[],
+        member_ids=[],
         youtube_id_overturedb="yt1",
         youtube_id_themerrdb="yt2",
     )

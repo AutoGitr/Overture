@@ -53,7 +53,7 @@ class DownloadJobBase(SQLModel):
 
 
 class DownloadJob(DownloadJobBase, table=True):
-    """Store download job rows in the application database."""
+    """A queued, running or finished artwork or theme download."""
 
     __tablename__: ClassVar[Any] = "download_jobs"
     __table_args__ = (

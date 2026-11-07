@@ -1,6 +1,5 @@
 <script lang="ts">
   import { countOf } from "../utils/plural";
-  import Layers from "@lucide/svelte/icons/layers";
   import type {
     MediaItemRead,
     SeasonRead,
@@ -11,6 +10,7 @@
   import { goToCatalogEntry, goToSeason } from "../router/routes";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { remotePosterUrl, seasonPosterUrls } from "../utils/artDisplay";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
   import PosterCard from "./PosterCard.svelte";
   import DataStatus from "./DataStatus.svelte";
   import ImageGrid from "./ImageGrid.svelte";
@@ -62,7 +62,7 @@
   {/if}
   {#if seasonsLoaded && seasons.length === 0}
     <div class="empty-state">
-      <Layers size={32} />
+      <MEDIA_ICONS.season size={32} />
       <p>No seasons found</p>
     </div>
   {:else if seasons.length > 0}
@@ -72,6 +72,7 @@
 
         <PosterCard
           title={season.title || `Season ${season.season_num}`}
+          icon={MEDIA_ICONS.season}
           {src}
           {fallbackSrc}
           onselect={() => drillInto(season)}

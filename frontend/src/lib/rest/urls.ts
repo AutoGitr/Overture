@@ -1,6 +1,7 @@
 import { client } from "../../generated/rest/client.gen";
 import type {
   OidcLoginData,
+  ProxyCollectionImageData,
   ProxyItemProviderArtData,
   ProxySeasonProviderArtData,
   ServeCollectionLocalImageData,
@@ -71,6 +72,18 @@ export function localCollectionImageUrl(
   return client.buildUrl<ServeCollectionLocalImageData>({
     ...SAME_ORIGIN,
     url: "/api/collections/{collection_id}/local-image/{art_type}",
+    path,
+    query,
+  });
+}
+
+export function collectionProviderArtUrl(
+  path: ProxyCollectionImageData["path"],
+  query: ProxyCollectionImageData["query"],
+): string {
+  return client.buildUrl<ProxyCollectionImageData>({
+    ...SAME_ORIGIN,
+    url: "/api/collections/{collection_id}/image/{art_type}",
     path,
     query,
   });

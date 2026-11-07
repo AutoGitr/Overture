@@ -188,6 +188,11 @@
             <span>Browse OvertureDB in the sidebar</span>
             <input type="checkbox" bind:checked={browse} disabled={saving || !publicDatasetEnabled} />
           </label>
+          <span class="hint"
+            >Lists the whole catalog beside your library, with filters for what each entry lacks,
+            so gaps and mismatches are easy to spot. Edit an entry to save a draft, then contribute
+            it to OvertureDB.</span
+          >
         </div>
       </div>
 

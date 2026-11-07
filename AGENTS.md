@@ -60,8 +60,38 @@ Run `npx` commands from skills as `bunx`.
   (`utils/ssrf.py`, image fetch helpers), errors and logs through
   `sanitise_error`; credentials never reach URLs, responses or the browser.
 - **Tested.** Tests are deterministic and never touch the real network or DNS.
-- **Comments explain why**, never narrate. Docstrings are one line unless a
-  caller needs more. Suppressions name the exact code and say why.
+
+## Comments and documentation
+
+Write for someone reading the code as it is now, with no knowledge of how it
+got there. History belongs in commit messages and the changelog.
+
+- **Describe the present.** Never mention what code used to do, what changed,
+  what was removed or what a fix fixed (such as "no longer", "instead of the
+  old", "previously", "fixed" or "the new"). A test name says what holds, not what
+  was broken.
+- **Comment the why, not the what.** Comment only what the code cannot say:
+  an outside constraint (an API's rule, a server's quirk, a browser
+  limitation), a non-obvious invariant, or why the obvious approach is wrong.
+  Rename or restructure instead of explaining unclear code. Never restate a
+  name, a type or the next line.
+- **Docstrings** state what a module, class or function is or returns, in one
+  line, in the present tense. Add a paragraph, `Raises:` or argument notes only
+  when a caller needs them to use it correctly. Private helpers whose name says
+  it all need none. TypeScript uses the same rules with `/** */` on exports and
+  props whose meaning is not obvious from the type.
+- **Fields.** Document a schema, model or prop field with `#:` (Python) or
+  `/** */` (TypeScript) on the field when its meaning, unit or `None`/`null`
+  case is not obvious from its name.
+- **Placement.** A comment sits directly above the code it explains and stays
+  true when that code moves. Section markers belong only in long stylesheets.
+- **No noise.** No TODOs, commented-out code, author tags, ticket links without
+  context, or apologies; open work goes in an issue.
+- **Suppressions** (`noqa`, `pyright: ignore`, `eslint-disable`) name the exact
+  rule and say why it does not apply, on the same line.
+- **Docs follow the code.** A change to behaviour, settings or the API updates
+  the README and docs in the same task, written for the person running
+  Overture: what it does and how to use it, never how it was built.
 
 ## Backend
 

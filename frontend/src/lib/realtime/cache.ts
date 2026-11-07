@@ -63,6 +63,9 @@ export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void 
   ) {
     void invalidateTags(["collections", "public-dataset", "library"]);
   }
+  if (message.event === "collection.monitored") {
+    patchCollection(message.data.collection_id, { monitored: message.data.monitored });
+  }
   if (message.event === "collection.theme.updated") {
     patchCollection(message.data.collection_id, {
       has_theme: message.data.has_theme,

@@ -24,6 +24,9 @@ class MediaItemRead(StrictBaseModel):
     id: int
     media_type: MediaType
     title: str
+    #: The media server's sort title, which leaves out leading articles in
+    #: the library's language, or the one someone set there.
+    sort_title: str | None = None
     year: int | None = None
     tmdb_id: int | None = None
     tvdb_id: int | None = None
@@ -115,6 +118,7 @@ class SeasonRead(StrictBaseModel):
 
     poster_status: AssetStatus = AssetStatus.MISSING
     poster_url: str | None = None
+    poster_source: ArtSource | None = None
     poster_preview_url: str | None = None
     poster_hash: str | None = None
     poster_phash: str | None = None
@@ -149,6 +153,7 @@ def _art_slot_fields(slot: ArtSlot, prefix: str) -> dict[str, Any]:
     """
     return {
         f"{prefix}_url": slot.url,
+        f"{prefix}_source": slot_art_source(slot),
         f"{prefix}_hash": slot.file_hash,
         f"{prefix}_phash": slot.phash,
         f"{prefix}_width": slot.width,
@@ -188,8 +193,6 @@ def media_item_read_from_model(
             **_art_slot_fields(background, "background"),
             # Only a remote poster is shown in place of a file, at preview size.
             "poster_preview_url": _preview_url(poster, ArtType.POSTER),
-            "poster_source": slot_art_source(poster),
-            "background_source": slot_art_source(background),
             **asdict(art_completion(item, seasons)),
             "theme_duration": item.theme_file_duration or item.youtube_duration,
             "theme_status": AssetStatus.COMPLETE

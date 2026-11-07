@@ -27,6 +27,7 @@
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import FilterSection from "./FilterSection.svelte";
   import {
     filterSidebarCollections,
     filterSidebarItems,
@@ -271,8 +272,16 @@
   }
 
   let collectionOperation = $state<BulkCollectionOperation["operation"]>("set_group");
+  // A set's collections leave only with their set, which would make them again.
   let operationTargets = $derived(
-    collectionOperation === "adopt" ? unmanagedCollections : collections,
+    collectionOperation === "adopt"
+      ? unmanagedCollections
+      : collectionOperation === "delete" || collectionOperation === "orphan"
+        ? collections.filter(
+            (row) =>
+              row.generated_value === null && (collectionOperation === "delete" || !row.withheld),
+          )
+        : collections,
   );
   let targetGroup = $state(UNGROUPED_GROUP);
   let targetGroups = $derived(
@@ -368,15 +377,14 @@
   }
 </script>
 
-<section class="option-card action-card" aria-label="Bulk operations">
-  <div class="heading-row">
-    <h3 class="form-label">Bulk operations</h3>
+<FilterSection label="Bulk operations">
+  {#snippet control()}
     <span class="hint">
       {resultsReady
         ? `For the ${matchCount} ${noun} the filters and search match. Local files are kept.`
         : `Matching ${noun} are unavailable or still loading.`}
     </span>
-  </div>
+  {/snippet}
   <div class="action-card-buttons">
     <button
       type="button"
@@ -460,17 +468,13 @@
       {noun}...
     </p>
   {/if}
-</section>
+</FilterSection>
 
 {#if !forItems}
-  <section
-    class="option-card"
-    aria-label="Collection operations"
-  >
-    <div class="heading-row">
-      <h3 class="form-label">Collection operations</h3>
+  <FilterSection label="Collection operations">
+    {#snippet control()}
       <span class="hint">For the collections the filters, search and open group match.</span>
-    </div>
+    {/snippet}
     <FieldRow label="Operation" for={`${id}-operation`}>
       <select
         id={`${id}-operation`}
@@ -541,14 +545,10 @@
       onclick={() => void runCollectionOperation()}
       >Apply to <span class="operation-count">{operationTargets.length}</span> collections</button
     >
-  </section>
+  </FilterSection>
 {/if}
 
 <style>
-  .action-card {
-    border: var(--border-muted);
-  }
-
   /* Even pairs; the destructive action takes a line of its own, last. */
   .action-card-buttons {
     display: grid;

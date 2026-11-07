@@ -1,14 +1,12 @@
 <script lang="ts">
   import ChartColumn from "@lucide/svelte/icons/chart-column";
-  import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import Database from "@lucide/svelte/icons/database";
   import Film from "@lucide/svelte/icons/film";
   import Image from "@lucide/svelte/icons/image";
-  import Layers from "@lucide/svelte/icons/layers";
-  import MonitorPlay from "@lucide/svelte/icons/monitor-play";
+  import Images from "@lucide/svelte/icons/images";
+  import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
   import Music from "@lucide/svelte/icons/music";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
-  import Tv from "@lucide/svelte/icons/tv";
   import { createQuery } from "@tanstack/svelte-query";
   import { getStatsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import CoverageCard from "../components/CoverageCard.svelte";
@@ -18,10 +16,11 @@
   import DatabaseTab from "../components/stats/DatabaseTab.svelte";
   import OverviewTab from "../components/stats/OverviewTab.svelte";
   import { uiState } from "../stores/uiState.svelte";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
   import { formatDateInTimezone } from "../utils/popupFormat";
 
   const TABS = [
-    { id: "overview", label: "Overview", icon: Layers },
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "art", label: "Artwork", icon: Image },
     { id: "themes", label: "Themes", icon: Music },
     { id: "database", label: "Database", icon: Database },
@@ -84,7 +83,7 @@
       {#if activeTab === "overview"}
         <OverviewTab stats={data} />
       {:else if activeTab === "art"}
-        <CoverageCard title="Overall Artwork Coverage" icon={Layers} coverage={data.art.overall} />
+        <CoverageCard title="Overall Artwork Coverage" icon={Images} coverage={data.art.overall} />
         <CoverageCard
           title="Posters"
           icon={Image}
@@ -107,22 +106,30 @@
         />
         <CoverageCard
           title="Season Posters"
-          icon={Layers}
+          icon={MEDIA_ICONS.season}
           coverage={data.art.season_poster}
           showAverage
         />
+        {#if data.art.collections}
+          <CoverageCard
+            title="Collection Artwork"
+            icon={MEDIA_ICONS.collection}
+            coverage={data.art.collections}
+            showAverage
+          />
+        {/if}
       {:else if activeTab === "themes"}
         <CoverageCard
           title="Overall Theme Audio Coverage"
           icon={Music}
           coverage={data.themes.overall}
         />
-        <CoverageCard title="Movie Themes" icon={Clapperboard} coverage={data.themes.movies} />
-        <CoverageCard title="TV Show Themes" icon={Tv} coverage={data.themes.shows} />
+        <CoverageCard title="Movie Themes" icon={MEDIA_ICONS.movie} coverage={data.themes.movies} />
+        <CoverageCard title="TV Show Themes" icon={MEDIA_ICONS.show} coverage={data.themes.shows} />
         {#if data.themes.collections}
           <CoverageCard
             title="Collection Themes"
-            icon={MonitorPlay}
+            icon={MEDIA_ICONS.collection}
             coverage={data.themes.collections}
           />
         {:else}

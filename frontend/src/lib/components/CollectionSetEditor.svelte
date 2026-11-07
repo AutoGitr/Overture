@@ -9,6 +9,7 @@
   import { withDimension, type SetGenerator } from "../utils/collectionForms.svelte";
   import { emptyGroup, splitList } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
+  import { inLibraryOrder } from "../utils/libraries.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PendingButton from "./PendingButton.svelte";
@@ -45,7 +46,7 @@
   let dimensions = $derived(capabilities?.dimensions ?? []);
   let dimension = $derived(dimensions.find((entry) => entry.dimension === generator.dimension));
   let custom = $derived(generator.dimension === "custom");
-  let libraryId = $derived(libraryIds[0] ?? "");
+  let libraryId = $derived(inLibraryOrder(libraries, libraryIds, (id) => id)[0] ?? "");
   /** Criteria suggest values from the first library; only shared fields are on offer. */
   let mediaType = $derived(
     libraries.find((library) => library.id === libraryId)?.media_type ?? "movie",

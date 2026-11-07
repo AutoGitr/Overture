@@ -139,6 +139,7 @@ describe("DetailPanel", () => {
         art_status: "partial",
         poster_status: "complete",
         poster_url: "https://image.tmdb.org/t/p/original/a.jpg",
+        poster_source: "tmdb",
         background_status: "missing",
         theme_status: "missing",
       }),
@@ -334,6 +335,7 @@ describe("DetailPanel record actions", () => {
     id: 8,
     title: "Alien",
     poster_url: "https://images.test/poster.jpg",
+    poster_source: "tmdb",
     youtube_id: "abc123",
   });
 
@@ -345,8 +347,8 @@ describe("DetailPanel record actions", () => {
     invalidateSeasons.mockResolvedValue(undefined);
     getSeasons.mockResolvedValue({
       data: [
-        season({ id: 1, season_num: 1, poster_url: "https://x/1.jpg" }),
-        season({ id: 2, season_num: 2, poster_url: "https://x/2.jpg" }),
+        season({ id: 1, season_num: 1, poster_url: "https://x/1.jpg", poster_source: "tmdb" }),
+        season({ id: 2, season_num: 2, poster_url: "https://x/2.jpg", poster_source: "tmdb" }),
       ],
     });
     await navigate("/movies", { replace: true });
@@ -381,6 +383,14 @@ describe("DetailPanel record actions", () => {
         query: { season_id: 2 },
       }),
     );
+  });
+
+  it("offers to clear an uploaded poster, which has no link", async () => {
+    renderWithQueryClient(DetailPanel, {
+      item: { ...alien, poster_url: null, poster_source: "upload" },
+    });
+
+    expect(screen.getByRole("button", { name: "Clear poster" })).toBeEnabled();
   });
 
   it("forgets one artwork type and leaves the update to the live connection", async () => {

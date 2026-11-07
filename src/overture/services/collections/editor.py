@@ -378,10 +378,9 @@ class CollectionEditor:
                 if exc.upstream_status_code != 404:
                     raise
 
-    async def delete_locked(self, row: MediaCollection, *, server: bool = True) -> None:
+    async def delete_locked(self, row: MediaCollection) -> None:
         collection_id = row.id or 0
-        if server:
-            await self.delete_server_ids(row.server_ids)
+        await self.delete_server_ids(row.server_ids)
         async with self._access.database.write_session() as session:
             await self._downloads.cancel_assets(
                 session, AssetScope(collection_id=collection_id)
@@ -427,13 +426,29 @@ class CollectionEditor:
             session.add(saved)
         row.libraries = [p for p in row.libraries if p.library_id not in ids]
 
-    async def delete(
-        self, collection_id: int, *, target: CollectionDeleteTarget = "both"
-    ) -> StatusResponse:
-        """Delete a collection and cancel its assets, preserving all media."""
+    async def withhold(self, collection_id: int) -> None:
+        """Take a collection off the server, keeping it in Overture."""
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 row = await self._access.require_managed(session, collection_id)
+            await self.withhold_locked(row)
+
+    async def delete(
+        self, collection_id: int, *, target: CollectionDeleteTarget = "both"
+    ) -> StatusResponse:
+        """Delete a collection and cancel its assets, preserving all media.
+
+        Raises:
+            PublicServiceError: 409 when its group's set made it, since the
+                set's next sync would make it again.
+        """
+        async with self._access.locked(collection_id):
+            async with self._access.database.read_session() as session:
+                row = await self._access.require_managed(session, collection_id)
+            if row.generated_value is not None:
+                raise PublicServiceError(
+                    409, "Its group's set made it; remove its value from the set"
+                )
             if target == "server":
                 await self.withhold_locked(row)
             else:
@@ -715,10 +730,20 @@ class CollectionEditor:
             PublicServiceError: 409 when it has no server copy to keep, its
                 group's set made it, or its Plex filter reads Overture's labels.
         """
-        async with (
-            self._access.locked(collection_id),
-            self._access.database.write_session() as session,
-        ):
+        async with self._access.locked(collection_id):
+            await self.orphan_locked(collection_id)
+        await self._access.changed()
+        return await self._reader.get(collection_id)
+
+    async def orphan_locked(
+        self, collection_id: int, *, set_removed: bool = False
+    ) -> None:
+        """Orphan a collection whose locks the caller holds.
+
+        *set_removed* is for a group deleted with its set, which can no longer
+        recreate what it made.
+        """
+        async with self._access.database.write_session() as session:
             row = await self._access.require(session, collection_id)
             rule = await CollectionRepository(session).rule(collection_id)
             if rule is None:
@@ -728,7 +753,7 @@ class CollectionEditor:
                 raise PublicServiceError(
                     409, "It is not on the media server; delete it instead"
                 )
-            if row.generated_value is not None:
+            if row.generated_value is not None and not set_removed:
                 raise PublicServiceError(
                     409, "Its group's set made it; remove its value from the set"
                 )
@@ -748,6 +773,7 @@ class CollectionEditor:
                 part.criteria_json = None
                 session.add(part)
             row.collection_group = None
+            row.generated_value = None
             row.unsynced = False
             row.active_start_mmdd = None
             row.active_end_mmdd = None
@@ -755,8 +781,6 @@ class CollectionEditor:
             row.tmdb_collection_id = row.provider_tmdb_id
             row.updated_at = utc_now()
             session.add(row)
-        await self._access.changed()
-        return await self._reader.get(collection_id)
 
     async def _smart_adoption_rule(self, row: MediaCollection) -> CollectionRuleWrite:
         provider = self._access.provider()
@@ -819,7 +843,10 @@ class CollectionEditor:
             row.monitored = monitored
             row.updated_at = utc_now()
             session.add(row)
-        await self._access.updated(collection_id)
+        await self._access.broadcast(
+            "collection.monitored",
+            {"collection_id": collection_id, "monitored": monitored},
+        )
         return MonitoredResponse(monitored=monitored)
 
     async def bulk_set_monitored(

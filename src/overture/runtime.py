@@ -558,6 +558,7 @@ def build_runtime(
     stats = StatsService(
         database=database,
         backups=backups,
+        image_cache=image_cache,
         collections=collections.reader,
     )
     public_dataset = PublicDatasetService(

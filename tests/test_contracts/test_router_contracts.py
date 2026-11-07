@@ -338,15 +338,14 @@ class TestCollectionResponseMappers:
         )
         read = collection_read(self._row(), catalog)
 
-        assert read.thumb_url is not None
-        assert read.thumb_url.startswith("/api/collections/1/image/poster?t=")
-        assert read.art_url is not None
-        assert read.art_url.startswith("/api/collections/1/image/background?t=")
-        assert "provider" not in read.thumb_url + read.art_url
-        # A replaced server image gets a new URL; the same one keeps its URL.
+        assert read.server_poster_version is not None
+        assert read.server_background_version is not None
+        versions = read.server_poster_version + read.server_background_version
+        assert "provider" not in versions
+        # A replaced server image gets a new version; the same one keeps its version.
         renamed = collection_read(self._row(thumb_url="provider-thumb-2"), None)
-        assert renamed.thumb_url != read.thumb_url
-        assert renamed.art_url == read.art_url
+        assert renamed.server_poster_version != read.server_poster_version
+        assert renamed.server_background_version == read.server_background_version
         assert read.has_theme is True
         assert read.youtube_id == "abcDEF12345"
         assert read.monitored is False

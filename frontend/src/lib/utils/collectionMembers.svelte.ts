@@ -5,7 +5,7 @@ import { getCollectionOptions } from "../../generated/rest/@tanstack/svelte-quer
 export class CollectionMembers {
   readonly #query;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated: $derived rebuilds it whole
-  readonly ids = $derived(new Set(this.#data()?.members.map((member) => member.id) ?? []));
+  readonly ids = $derived(new Set(this.#data()?.member_ids ?? []));
 
   constructor(collectionId: () => number | null) {
     this.#query = createQuery(() => {

@@ -37,7 +37,7 @@ class SavedScheduleBase(SQLModel):
 
 
 class SavedSchedule(SavedScheduleBase, table=True):
-    """Store named cron schedules for reusable assets and sync runs."""
+    """A named cron schedule for reusable asset and sync runs."""
 
     __tablename__: ClassVar[Any] = "saved_schedules"
     __table_args__ = (

@@ -79,6 +79,22 @@ class CachedOriginal:
         return SAVED_MEDIA_TYPES[self.path.suffix]
 
 
+@dataclass(frozen=True, slots=True)
+class CacheUsage:
+    """How many files one part of the cache holds, and their bytes."""
+
+    files: int = 0
+    size_bytes: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ImageCacheUsage:
+    """What the cache holds on disk: the originals and their thumbnails."""
+
+    originals: CacheUsage
+    thumbs: CacheUsage
+
+
 class ImageCache:
     """Keep, find and prune the images shown for local artwork."""
 
@@ -254,6 +270,23 @@ class ImageCache:
             except FileNotFoundError:
                 continue
         return removed
+
+    def _usage_of(self, kind: str) -> CacheUsage:
+        sizes = [
+            file_stat.st_size
+            for path in (self._root / kind).glob("*/*")
+            if (file_stat := _regular_stat(path)) is not None
+        ]
+        return CacheUsage(files=len(sizes), size_bytes=sum(sizes))
+
+    def _usage(self) -> ImageCacheUsage:
+        return ImageCacheUsage(
+            originals=self._usage_of(_ORIGINALS), thumbs=self._usage_of(_THUMBS)
+        )
+
+    async def usage(self) -> ImageCacheUsage:
+        """Count the cached originals and thumbnails, and their bytes."""
+        return await owned_thread(self._usage)
 
     async def prune(self, keep: Collection[str], *, older_than: float) -> int:
         """Delete unkept cached image files last written before *older_than*.

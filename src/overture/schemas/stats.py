@@ -65,7 +65,11 @@ class Coverage(StrictBaseModel):
 
 
 class ArtTypeStats(StrictBaseModel):
-    """Artwork breakdown across posters, backgrounds, and season posters."""
+    """Artwork breakdown across posters, backgrounds, season posters and collections.
+
+    ``collections`` counts each collection's poster and background, and is
+    ``None`` when the media server could not list them.
+    """
 
     poster: Coverage = Field(default_factory=Coverage)
     poster_movies: Coverage = Field(default_factory=Coverage)
@@ -74,6 +78,7 @@ class ArtTypeStats(StrictBaseModel):
     background_movies: Coverage = Field(default_factory=Coverage)
     background_shows: Coverage = Field(default_factory=Coverage)
     season_poster: Coverage = Field(default_factory=Coverage)
+    collections: Coverage | None = None
     overall: Coverage = Field(default_factory=Coverage)
 
 
@@ -119,11 +124,22 @@ class BackupStats(StrictBaseModel):
     latest_backup_at: str | None = None
 
 
+class ImageCacheStats(StrictBaseModel):
+    """The cache of shown images: originals, uploads among them, and thumbnails."""
+
+    original_files: int = 0
+    original_size_bytes: int = 0
+    thumb_files: int = 0
+    thumb_size_bytes: int = 0
+    total_size_bytes: int = 0
+
+
 class StorageSummary(StrictBaseModel):
-    """Storage footprint aggregated across all asset types and database."""
+    """Storage footprint aggregated across all asset types, caches and database."""
 
     artwork_size_bytes: int = 0
     themes_size_bytes: int = 0
+    image_cache_size_bytes: int = 0
     database_size_bytes: int = 0
     backups_size_bytes: int = 0
     total_footprint_bytes: int = 0
@@ -137,5 +153,6 @@ class StatsResponse(StrictBaseModel):
     themes: ThemeStats
     database: DatabaseStats
     backups: BackupStats
+    image_cache: ImageCacheStats
     storage: StorageSummary
     generated_at: str

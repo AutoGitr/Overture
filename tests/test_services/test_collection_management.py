@@ -59,6 +59,7 @@ lazy from overture.schemas.collections import (
     BulkCollectionOperation,
     CollectionAdoption,
     CollectionCreate,
+    CollectionDetail,
     CollectionGenerator,
     CollectionGroupDelete,
     CollectionGroupPolicy,
@@ -413,6 +414,7 @@ class FakeArrClient(ArrClient):
         self.held = [ArrTitle(id=1, tmdb_id=11, tvdb_id=None, tags=frozenset({77}))]
         self.added: list[tuple[int, ArrRequest]] = []
         self.tag_edits: list[tuple[int, list[int], bool]] = []
+        self.tag_labels: list[str] = []
 
     @override
     async def titles(self) -> list[ArrTitle]:
@@ -424,6 +426,7 @@ class FakeArrClient(ArrClient):
 
     @override
     async def tag_id(self, label: str) -> int:
+        self.tag_labels.append(label)
         return 77
 
     @override
@@ -463,6 +466,7 @@ class Manager:
     art: Art
     downloads: FakeDownloads
     radarr: FakeArrClient
+    database: Database
     ids: list[int] = field(default_factory=list[int])
 
 
@@ -583,8 +587,18 @@ async def manager(database: Database, app_config: Settings) -> Manager:
         sonarr=FakeArrClient(2, "anime"),
     )
     return Manager(
-        service, provider, lists, tmdb, publisher, art, downloads, radarr, ids
+        service, provider, lists, tmdb, publisher, art, downloads, radarr, database, ids
     )
+
+
+async def members(manager: Manager, detail: CollectionDetail) -> list[MediaItem]:
+    """The items a collection holds, in its display order."""
+    async with manager.database.read_session() as session:
+        return [
+            item
+            for identity in detail.member_ids
+            if (item := await session.get(MediaItem, identity)) is not None
+        ]
 
 
 async def create_unmanaged(manager: Manager, database: Database) -> int:
@@ -655,7 +669,7 @@ async def test_delete_from_server_preserves_configuration(
         assert row.server_item_id is not None
 
 
-@pytest.mark.parametrize("target", ["keep", "move", "overture", "both"])
+@pytest.mark.parametrize("target", ["keep", "move", "orphan", "both"])
 async def test_group_deletion_targets(
     manager: Manager, database: Database, target: str
 ) -> None:
@@ -680,8 +694,13 @@ async def test_group_deletion_targets(
     )
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(identity)
-    if target in {"both", "overture"}:
+        rule = await CollectionRepository(session).rule(identity)
+    if target == "both":
         assert row is None
+    elif target == "orphan":
+        assert row is not None
+        assert row.collection_group is None
+        assert rule is None
     else:
         assert row is not None
         assert row.collection_group == ("Evenings" if target == "move" else "Ungrouped")
@@ -797,6 +816,34 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
     )
 
 
+async def test_set_collections_leave_only_with_their_set(manager: Manager) -> None:
+    decades = CollectionGenerator(
+        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+    )
+    await manager.service.groups.save_policy(
+        "Decades", CollectionGroupPolicy(minimum_items=1, generator=decades)
+    )
+    first, _ = (await manager.service.groups.sync("Decades")).created
+    for remove in (
+        manager.service.editor.delete(first),
+        manager.service.editor.orphan(first),
+    ):
+        with pytest.raises(PublicServiceError, match="set made it"):
+            await remove
+
+    result = await manager.service.groups.delete(
+        "Decades", CollectionGroupDelete(collections="orphan")
+    )
+
+    assert not result.errors
+    detail = await manager.service.reader.get(first)
+    assert (detail.managed, detail.collection_group, detail.generated_value) == (
+        False,
+        None,
+        None,
+    )
+
+
 async def test_sets_create_update_and_withhold_their_collections(
     manager: Manager,
 ) -> None:
@@ -834,7 +881,7 @@ async def test_sets_create_update_and_withhold_their_collections(
     assert detail.rule.libraries[0].criteria == where(
         FilterField.DECADE, FilterOperator.IS, 1990
     )
-    assert [member.title for member in detail.members] == ["First"]
+    assert [member.title for member in await members(manager, detail)] == ["First"]
 
     repeated = await manager.service.groups.sync("Decades")
     assert (repeated.created, repeated.synced) == ([], 2)
@@ -972,7 +1019,7 @@ async def test_create_edit_order_and_delete_preserve_media(
             member_ids=list(reversed(manager.ids)), order_type=CollectionOrder.CUSTOM
         ),
     )
-    assert [member.id for member in detail.members] == list(reversed(manager.ids))
+    assert detail.member_ids == list(reversed(manager.ids))
     assert manager.provider.members["1"] == ["m2", "m1", "m0"]
     await manager.service.editor.save_rule(
         identity,
@@ -1042,7 +1089,7 @@ async def test_failed_server_membership_keeps_committed_members(
             ),
         )
     detail = await manager.service.reader.get(identity)
-    assert len(detail.members) == 3
+    assert len(detail.member_ids) == 3
 
 
 @pytest.mark.parametrize(
@@ -1074,7 +1121,7 @@ async def test_rule_sync_uses_global_defaults_and_nullable_overrides(
     )
     result = await manager.service.rules.sync(identity)
     detail = await manager.service.reader.get(identity)
-    assert len(detail.members) == expected
+    assert len(detail.member_ids) == expected
     assert result.removed == 3 - expected
     assert detail.rule is not None
     assert detail.rule.last_synced_at is not None
@@ -1105,7 +1152,7 @@ async def test_below_minimum_keeps_or_withholds_collection(
     detail = await manager.service.reader.get(identity)
     assert detail.withheld is delete
     if not delete:
-        assert len((await manager.service.reader.get(identity)).members) == 3
+        assert len((await manager.service.reader.get(identity)).member_ids) == 3
 
 
 async def test_failed_source_preserves_members_and_records_safe_error(
@@ -1120,7 +1167,7 @@ async def test_failed_source_preserves_members_and_records_safe_error(
     with pytest.raises(PublicServiceError, match="Source unavailable"):
         await manager.service.rules.sync(identity)
     detail = await manager.service.reader.get(identity)
-    assert len(detail.members) == 3
+    assert len(detail.member_ids) == 3
     assert detail.rule
     assert detail.rule.last_error == "Source unavailable"
 
@@ -1223,7 +1270,7 @@ async def test_auto_asset_failure_keeps_synced_members_and_records_the_failure(
     ):
         await manager.service.rules.sync(identity)
     detail = await manager.service.reader.get(identity)
-    assert len(detail.members) == 2
+    assert len(detail.member_ids) == 2
     assert detail.rule is not None
     assert detail.rule.last_error is not None
     assert "Artwork source unavailable" in detail.rule.last_error
@@ -1254,7 +1301,7 @@ async def test_append_keeps_new_server_members_and_counts_them_for_minimum(
     assert manager.provider.members["1"] == ["m1", "m0", "m2", "unimported"]
     detail = await manager.service.reader.get(identity)
     assert detail.child_count == 4
-    assert len(detail.members) == 3
+    assert len(detail.member_ids) == 3
 
 
 async def test_append_does_not_restore_a_manual_member_removed_on_the_server(
@@ -1331,7 +1378,7 @@ async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
         )
     )
     assert detail.tmdb_collection_id == 10
-    assert [member.tmdb_id for member in detail.members] == [11, 12]
+    assert [member.tmdb_id for member in await members(manager, detail)] == [11, 12]
     assert detail.rule is not None
     assert detail.rule.libraries[0].criteria == sources(
         TmdbCollectionSource(collection_id=10)
@@ -1372,7 +1419,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
     )
     await manager.service.rules.sync(identity)
     detail = await manager.service.reader.get(identity)
-    assert len(detail.members) == 2
+    assert len(detail.member_ids) == 2
     assert not detail.below_minimum
     assert manager.art.selections == []
     await manager.service.editor.save_rule(
@@ -1477,7 +1524,7 @@ async def test_composable_builders_and_person_biography_summary(
             ),
         )
     )
-    assert [m.tmdb_id for m in detail.members] == [11, 13, 12]
+    assert [m.tmdb_id for m in await members(manager, detail)] == [11, 13, 12]
     assert detail.summary == "Famous director. Person biography"
     assert manager.provider.summaries["1"] == "Famous director. Person biography"
 
@@ -1618,7 +1665,7 @@ async def test_regular_and_smart_kinds_replace_the_server_collection(
     assert manager.provider.deleted == ["1", "2"]
     regular = await manager.service.reader.get(identity)
     assert regular.kind is CollectionKind.REGULAR
-    assert len(regular.members) == 3
+    assert len(regular.member_ids) == 3
 
 
 async def test_seasonal_inactive_withholds_and_deletes_server_collection(
@@ -2355,12 +2402,12 @@ async def test_tmdb_lists_merge_in_order_and_failures_keep_members(
             rule=library_rule(criteria=sources(TmdbListSource(list_ids=[1, 2]))),
         )
     )
-    assert [item.tmdb_id for item in detail.members] == [13, 11, 12]
+    assert [item.tmdb_id for item in await members(manager, detail)] == [13, 11, 12]
     manager.tmdb.error = ValueError("List temporarily unavailable")
     with pytest.raises(ValueError, match="temporarily unavailable"):
         await manager.service.rules.sync(detail.id)
     refreshed = await manager.service.reader.get(detail.id)
-    assert [item.tmdb_id for item in refreshed.members] == [13, 11, 12]
+    assert [item.tmdb_id for item in await members(manager, refreshed)] == [13, 11, 12]
 
 
 async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
@@ -2412,7 +2459,7 @@ async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
         assert override.sort_title == "Custom sort"
         assert override.summary == "Custom summary"
         assert override.visible_home is False
-        assert [item.id for item in refreshed.members] == [manager.ids[0]]
+        assert refreshed.member_ids == [manager.ids[0]]
 
 
 async def test_summary_source_is_not_replaced_by_its_rendered_template(
@@ -2561,7 +2608,7 @@ async def test_saved_only_edits_wait_for_sync(manager: Manager) -> None:
         sync=False,
     )
     assert (detail.title, detail.unsynced) == ("Renamed", True)
-    assert [member.id for member in detail.members] == list(reversed(manager.ids))
+    assert detail.member_ids == list(reversed(manager.ids))
     assert manager.provider.members["1"] == ["m0", "m1", "m2"]
     assert manager.provider.options["1"][0] == "Saga"
 
@@ -2584,7 +2631,7 @@ async def test_append_sync_sends_members_chosen_since_the_last_sync(
             ),
         )
     )
-    picked = [*[member.id for member in created.members], manager.ids[2]]
+    picked = [*created.member_ids, manager.ids[2]]
     await manager.service.editor.set_members(
         created.id,
         CollectionMembersUpdate(member_ids=picked, order_type=CollectionOrder.CUSTOM),
@@ -2592,7 +2639,7 @@ async def test_append_sync_sends_members_chosen_since_the_last_sync(
     )
     await manager.service.rules.sync(created.id)
     detail = await manager.service.reader.get(created.id)
-    assert {member.id for member in detail.members} == set(picked)
+    assert {member.id for member in await members(manager, detail)} == set(picked)
     assert detail.unsynced is False
 
 
@@ -2615,7 +2662,10 @@ async def test_a_chart_keeps_its_order_for_its_region(manager: Manager) -> None:
             rule=library_rule(criteria=_chart()),
         )
     )
-    assert [member.title for member in detail.members] == ["Manual", "Second"]
+    assert [member.title for member in await members(manager, detail)] == [
+        "Manual",
+        "Second",
+    ]
     assert manager.tmdb.chart_requests == [(TmdbChart.POPULAR, 3, "US")]
 
 
@@ -2680,6 +2730,35 @@ async def test_a_sync_labels_tags_requests_and_orders_home(
     assert manager.provider.hub_orders[-1] == ["1"]
 
 
+async def test_collections_sharing_an_arr_tag_keep_each_others_members(
+    manager: Manager,
+) -> None:
+    """Radarr accepts a-z, 0-9 and -, so both templates render one tag."""
+    holder = await manager.service.editor.create(
+        CollectionCreate(
+            title="Holder",
+            rule=library_rule(
+                criteria=sources(TmdbItemSource(tmdb_ids=[11])), arr_tag="Shared Tag"
+            ),
+        )
+    )
+    other = await manager.service.editor.create(
+        CollectionCreate(
+            title="Other",
+            rule=library_rule(
+                criteria=sources(TmdbItemSource(tmdb_ids=[12])), arr_tag="shared-tag"
+            ),
+        )
+    )
+    await manager.service.rules.sync(holder.id)
+    await manager.service.rules.sync(other.id)
+
+    radarr = manager.radarr
+    assert radarr.tag_labels == ["shared-tag", "shared-tag"]
+    # Radarr holds only First, which the holder keeps tagged.
+    assert all(not ids for _, ids, add in radarr.tag_edits if not add)
+
+
 async def test_a_failed_effect_is_recorded_after_members_sync(
     manager: Manager,
 ) -> None:
@@ -2692,7 +2771,10 @@ async def test_a_failed_effect_is_recorded_after_members_sync(
     with pytest.raises(PublicServiceError, match="Request missing failed"):
         await manager.service.rules.sync(created.id)
     detail = await manager.service.reader.get(created.id)
-    assert [member.title for member in detail.members] == ["Second", "Manual"]
+    assert [member.title for member in await members(manager, detail)] == [
+        "Second",
+        "Manual",
+    ]
     assert detail.rule is not None
     assert detail.rule.last_error is not None
 
@@ -2877,7 +2959,7 @@ async def test_adoption_puts_an_unmanaged_collection_in_its_group(
         mode="all",
         conditions=[SourceCondition(source=TmdbCollectionSource(collection_id=10))],
     )
-    assert [member.id for member in detail.members] == manager.ids
+    assert detail.member_ids == manager.ids
     assert detail.tmdb_collection_id == 10
     with pytest.raises(PublicServiceError, match="already manages"):
         await manager.service.editor.adopt(identity, CollectionAdoption())
@@ -2944,7 +3026,7 @@ async def test_orphan_reverses_adoption_keeping_the_server_copy(
     assert detail.rule is None
     assert detail.collection_group is None
     assert not detail.withheld
-    assert [member.id for member in detail.members] == manager.ids
+    assert detail.member_ids == manager.ids
     assert await manager.service.groups.names() == ["Ungrouped"]
     with pytest.raises(PublicServiceError, match="does not manage"):
         await manager.service.editor.orphan(identity)
@@ -3330,7 +3412,10 @@ async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_
     assert manager.provider.members == {"1": ["m0"], "2": ["s1"]}
     assert detail.media_types == [MediaType.MOVIE, MediaType.SHOW]
     assert detail.library_ids == ["movies", "shows"]
-    assert {member.title for member in detail.members} == {"First", "Anime Series"}
+    assert {member.title for member in await members(manager, detail)} == {
+        "First",
+        "Anime Series",
+    }
     assert detail.child_count == 2
 
     await manager.service.editor.update(
@@ -3431,7 +3516,7 @@ async def test_removing_a_library_takes_its_copy_off_at_the_next_sync(
     assert manager.provider.deleted == ["2"]
     synced = await manager.service.reader.get(detail.id)
     assert synced.library_ids == ["movies"]
-    assert [member.title for member in synced.members] == ["First"]
+    assert [member.title for member in await members(manager, synced)] == ["First"]
 
 
 async def test_a_library_with_nothing_to_hold_gets_no_copy_until_it_has(
@@ -3575,3 +3660,14 @@ async def test_a_group_takes_a_sort_every_collection_it_holds_can_use(
         await manager.service.groups.save_policy(
             "Empty", CollectionGroupPolicy(order_type=only_movies)
         )
+
+
+async def test_monitoring_tells_clients_only_the_new_flag(manager: Manager) -> None:
+    identity = await create(manager)
+    manager.publisher.broadcasts.clear()
+
+    await manager.service.editor.set_monitored(identity, False)
+
+    assert manager.publisher.broadcasts == [
+        ("collection.monitored", {"collection_id": identity, "monitored": False})
+    ]

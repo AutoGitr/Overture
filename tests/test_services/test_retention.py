@@ -192,3 +192,22 @@ async def test_retention_pass_prunes_unreferenced_cached_images_after_grace_wind
     assert not stale_thumb.exists()
     assert not stale_unused.path.parent.exists()
     assert not stale_thumb.parent.exists()
+
+
+async def test_image_cache_usage_counts_originals_and_thumbnails(
+    tmp_path: Path,
+) -> None:
+    image_cache = ImageCache(tmp_path / "cache" / "images")
+    assert (await image_cache.usage()).originals.files == 0
+    original = await image_cache.store_original(_jpeg_bytes("red"))
+    await image_cache.store_original(_jpeg_bytes("blue"))
+    thumb = await image_cache.thumb(original)
+
+    usage = await image_cache.usage()
+
+    assert usage.originals.files == 2
+    assert usage.originals.size_bytes == sum(
+        path.stat().st_size
+        for path in (tmp_path / "cache" / "images" / "originals").rglob("*.*")
+    )
+    assert (usage.thumbs.files, usage.thumbs.size_bytes) == (1, thumb.stat().st_size)

@@ -188,7 +188,7 @@
     <FieldRow
       label={`${arr} tag`}
       for={`${id}-arr-tag`}
-      hint={`Members get this ${arr} tag and others lose it. Text or {title} and {group}.`}
+      hint={`Members get this ${arr} tag; other titles lose it unless a collection with the same tag holds them. Text or {title} and {group}, written as a-z, 0-9 and -.`}
     >
       <input
         id={`${id}-arr-tag`}

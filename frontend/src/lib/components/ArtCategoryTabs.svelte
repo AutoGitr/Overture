@@ -1,9 +1,9 @@
 <script module lang="ts">
   import Image from "@lucide/svelte/icons/image";
-  import Layers from "@lucide/svelte/icons/layers";
   import MountainSnow from "@lucide/svelte/icons/mountain-snow";
   import type { ArtType } from "../../generated/rest/types.gen";
   import type { ArtSubTab } from "../router/routes";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
 
   export const ART_TABS: readonly {
     key: ArtSubTab;
@@ -29,7 +29,7 @@
     {
       key: "seasons",
       label: "Seasons",
-      icon: Layers,
+      icon: MEDIA_ICONS.season,
       artType: "season_poster",
       statusField: "season_posters_status",
     },

@@ -3,6 +3,7 @@ import { countOf } from "./plural";
 import {
   ASPECT_RATIOS,
   SELECTED_ART_SOURCE_LABELS,
+  UNGROUPED_GROUP,
   UNMANAGED_GROUP,
 } from "../../generated/settings";
 import type {
@@ -164,7 +165,8 @@ export const SORTS = {
   title: {
     label: "Title",
     shortLabel: "Title",
-    library: (item) => item.title,
+    // The server's sort title leaves out "The", "A" and the like, as the server lists it.
+    library: (item) => item.sort_title || item.title,
     collections: (collection) => collection.title,
     overturedb: (entry) => entry.title,
     groups: (group) => group.title,
@@ -344,6 +346,20 @@ function sortRows<T extends { title: string }>(
     .map(({ row }) => row);
 }
 
+/**
+ * Every saved group, empty or not, then the reserved groups that hold one of `collections`,
+ * with the unmanaged collections last.
+ */
+export function collectionGroupNames(
+  saved: readonly string[],
+  collections: readonly CollectionRead[],
+): string[] {
+  const names = new Set(saved.filter((group) => group !== UNGROUPED_GROUP));
+  for (const row of collections)
+    if (row.managed && row.collection_group) names.add(row.collection_group);
+  return collections.some((row) => !row.managed) ? [...names, UNMANAGED_GROUP] : [...names];
+}
+
 /** The groups as the sidebar lists them, from the collections the filters match. */
 export function collectionGroupRows(
   names: readonly string[],
@@ -365,12 +381,15 @@ export function collectionGroupRows(
   });
 }
 
+/** Sorts the groups, keeping the unmanaged collections last whatever the order. */
 export function sortCollectionGroups(
   groups: CollectionGroupRow[],
   field: SidebarSortField,
   dir: SidebarSortDir,
 ): CollectionGroupRow[] {
-  return sortBy(groups, "groups", field, dir);
+  const unmanaged = groups.filter((group) => group.title === UNMANAGED_GROUP);
+  const named = groups.filter((group) => group.title !== UNMANAGED_GROUP);
+  return [...sortBy(named, "groups", field, dir), ...unmanaged];
 }
 
 function sortBy<T extends { title: string }>(
@@ -707,22 +726,23 @@ type Predicate<T> = (entry: T) => boolean;
 type Row = MediaItemRead | CollectionRead;
 
 /**
- * One filter section: its heading, its place, and the predicate it adds for
- * each list it applies to, or ``null`` while it is left at All.
- */
-/**
- * Where the filters popup places a filter: libraries first, then every
- * one-choice status filter together, then the art and theme refinements.
+ * Where the filters popup places a filter, in order. A titled group shares one
+ * section; each filter of an untitled group gets a section of its own.
  */
 export const FILTER_GROUPS = {
   libraries: null,
   status: "Status",
   art: "Art",
   theme: "Theme music",
+  collection: null,
   metadata: null,
 } as const;
 export type FilterGroup = keyof typeof FILTER_GROUPS;
 
+/**
+ * One filter: its heading, its place, and the predicate it adds for each list
+ * it applies to, or ``null`` while it is left at All.
+ */
 interface FilterDef {
   label: string;
   group: FilterGroup;
@@ -794,16 +814,16 @@ export const FILTERS = {
   },
   collection: {
     label: "Collection",
-    group: "libraries",
-    order: 12,
+    group: "collection",
+    order: 350,
     needsCollections: true,
     library: (filters, _datasetEnabled, members) =>
       filters.collectionId === null ? null : (item) => members.has(item.id),
   },
   collectionHolds: {
     label: "Holds",
-    group: "libraries",
-    order: 15,
+    group: "status",
+    order: 85,
     collections: (filters) => {
       const { collectionHolds: holds } = filters;
       if (holds === "all") return null;

@@ -22,6 +22,7 @@ lazy from ..schemas.library import (
     MediaItemRead,
     SeasonRead,
 )
+lazy from ..schemas.records import DatabaseRecord
 lazy from .auth import require_auth
 lazy from .parameters import (
     ArtTypePath,
@@ -92,6 +93,12 @@ async def list_items(
 async def get_item(item_id: ItemIdPath, library: LibraryDep) -> MediaItemRead:
     """Get a single media item."""
     return await library.get_item(item_id)
+
+
+@router.get("/items/{item_id}/record")
+async def get_item_record(item_id: ItemIdPath, library: LibraryDep) -> DatabaseRecord:
+    """Return the item's stored rows and what the API derives from them."""
+    return await library.item_record(item_id)
 
 
 @router.patch("/items/{item_id}/monitored")

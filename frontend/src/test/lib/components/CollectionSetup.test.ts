@@ -19,7 +19,7 @@ const detail = collectionDetail({
   id: 12,
   title: "Saga",
   library_ids: ["movies"],
-  members: [member],
+  member_ids: [member.id],
 });
 const libraries = [
   { id: "movies", title: "Movies", media_type: "movie", count: 1 },

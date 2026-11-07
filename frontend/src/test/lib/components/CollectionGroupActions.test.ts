@@ -54,7 +54,7 @@ it("renames the group", async () => {
 
 it.each([
   ["keep", "Move them to Ungrouped"],
-  ["overture", "Remove them from Overture"],
+  ["orphan", "Orphan them"],
   ["both", "Remove them from Overture and the media server"],
 ])("asks for and submits the %s deletion scope", async (scope, choice) => {
   const { calls } = renderActions();

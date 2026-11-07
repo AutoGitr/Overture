@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Layers from "@lucide/svelte/icons/layers";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
   import Settings from "@lucide/svelte/icons/settings";
   import Unlink from "@lucide/svelte/icons/unlink";
   import { SERVER_DISPLAY_NAMES } from "../../generated/settings";
@@ -99,8 +99,8 @@
     : null}
   tabs={collection && actions ? tabs : undefined}
 >
-  {#snippet emptyIcon()}<Layers size={64} />{/snippet}
-  {#snippet posterIcon()}<Layers size={48} />{/snippet}
+  {#snippet emptyIcon()}<MEDIA_ICONS.collection size={64} />{/snippet}
+  {#snippet posterIcon()}<MEDIA_ICONS.collection size={48} />{/snippet}
   {#snippet meta()}
     {#if collection}
       <span>{collection.child_count} items</span>
@@ -161,6 +161,7 @@
         monitoring={actions.monitoring}
         deleting={editor.busy || actions.uploading}
         deleteLabel="Delete collection"
+        deleteBlocker={editor.deleteBlocker}
         ontoggle={() => void actions.toggleMonitored()}
         ondelete={() => void editor.delete()}
       >
@@ -187,7 +188,10 @@
           poster: statusTone(collection.poster_status, actions.clearingArt),
           background: statusTone(collection.background_status, actions.clearingArt),
         }}
-        clearable={{ poster: !!collection.poster_url, background: !!collection.background_url }}
+        clearable={{
+          poster: !!collection.poster_source,
+          background: !!collection.background_source,
+        }}
         clearDisabled={actions.clearingArt}
         onclear={(tab) => {
           if (tab !== "seasons") void actions.clearArt(tab);
@@ -260,7 +264,7 @@
         : statusTone(collection.theme_status, actions.themeBusy)}
       onart={() => goToCollectionView(collection, "art", artType)}
       onthemes={() => goToCollectionView(collection, "themes")}
-      onclearart={collection.poster_url || collection.background_url
+      onclearart={collection.poster_source || collection.background_source
         ? () => void actions.clearArt("all")
         : null}
       oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"

@@ -464,8 +464,10 @@ Plex, Jellyfin and Emby collections open from the icon beside Movies and Shows
 in the library sidebar, with movie and show collections together. The first
 click opens the view you used last, **Groups** (a folder icon: collections
 inside their groups) or **Collections** (a layers icon: all in one list); each
-further click switches between them. Movies and shows share groups, and
-**Holds** in the filters narrows the list to either or to collections of both.
+further click switches between them, and hovering it shows the icon of the view
+it switches to. Its count is what it lists: groups or collections. Movies and
+shows share groups, and **Holds**, a status filter, narrows the list to either
+or to collections of both.
 In the OvertureDB catalog, the same icon beside Movies opens its collections.
 **Groups** lists every group, empty ones too; **Ungrouped** and **Unmanaged**
 appear only while they hold a collection. A sparkle marks smart collections. **+ Create collection** opens a Configure page, the one place to create
@@ -626,7 +628,11 @@ offer that person's photos as poster candidates.
 
 Set `TMDB_API_KEY` for TMDB lists, charts, titles, people, franchises and facts,
 `MDBLIST_API_KEY` for MDBList, and the Radarr or Sonarr URL and API key for
-their tags, requests and member tags. Choose where requested titles go under
+their tags, requests and member tags. A member tag is written as Radarr and
+Sonarr accept tags, in lowercase letters, digits and dashes (`{title}` gives
+`star-wars-collection`); members get it and other titles lose it, unless a
+collection whose tag comes out the same holds them, so collections can share a
+tag. Choose where requested titles go under
 **Settings > Collections**. Imported Plex smart collections keep their
 Plex filter until you choose **Replace the Plex filter with these criteria**.
 Failed list lookups keep existing members.
@@ -641,15 +647,19 @@ hold a collection or a set first. Rename or delete a custom group in
 **Collection groups**. Every managed collection
 belongs to a group. Deleting a group moves its collections to the reserved
 **Ungrouped** group by default; you can instead move them to another group,
-remove them from Overture (the next library sync lists the server's copies as
-Unmanaged), or delete them from both Overture and the server; **Delete group**
-asks which. Ungrouped cannot be renamed, deleted or made a collection set.
+orphan them (Overture stops managing them and the server keeps them, listed
+under Unmanaged), or delete them from both Overture and the server; **Delete
+group** asks which. Ungrouped cannot be renamed, deleted or made a collection
+set.
 
 A collection's delete action asks where to delete it: **From the media server
 only** keeps its Overture configuration, which a manual or scheduled sync can
 use to recreate the server collection, and **From Overture and the media
-server** removes both. Deleting a group, or filtered collections in Collection
-operations, asks the same way. Media files are always kept.
+server** removes both. **Orphan** stops managing it and keeps it on the server.
+Deleting filtered collections in Collection operations asks the same way. A
+collection its group's set made leaves only with its set, so it offers neither
+delete nor orphan. Collections Overture does not manage are never deleted.
+Media files are always kept.
 
 Bulk group assignment offers the existing groups. Status filters use aligned,
 full-width controls and stack their labels above the controls on small screens.

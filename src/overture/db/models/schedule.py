@@ -20,7 +20,7 @@ class TaskScheduleBase(SQLModel):
 
 
 class TaskSchedule(TaskScheduleBase, table=True):
-    """Store one background task's cron schedule and its JSON payload.
+    """One background task's cron schedule and its JSON payload.
 
     The payload's shape belongs to :mod:`overture.services.schedule_store`,
     which parses it into a typed model on every read.

@@ -6,51 +6,45 @@
   import {
     getCatalogEntryOptions,
     getCatalogEntryRecordOptions,
-    getItemOptions,
+    getCollectionRecordOptions,
+    getItemRecordOptions,
     getPublicDatasetCollectionRecordOptions,
     getPublicDatasetRecordOptions,
-    listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import CardColumn from "../components/CardColumn.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   import PopupShell from "../components/PopupShell.svelte";
-  import { invalidateSeasons, refreshItem } from "../rest/cache";
-  import { createSeasonsQuery } from "../rest/queries";
   import { routedCatalogEntry, routedCollectionId, routedItemId } from "../router/routes";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { dbRecordFields, type DisplayField } from "../utils/dbRecordFields";
-  import { errorMessage } from "../utils/errors";
 
-  // The open detail view's queries: these share their cache.
   let catalogEntry = $derived(routedCatalogEntry());
   let collectionId = $derived(catalogEntry ? null : routedCollectionId());
   let itemId = $derived(catalogEntry || collectionId !== null ? null : routedItemId());
-  const itemQuery = createQuery(() => ({
-    ...getItemOptions({ path: { item_id: itemId ?? 0 } }),
+  // Opening the popup reads the record again, so it shows what is stored as it opens.
+  const itemRecord = createQuery(() => ({
+    ...getItemRecordOptions({ path: { item_id: itemId ?? 0 } }),
     enabled: itemId !== null,
+    refetchOnMount: "always" as const,
   }));
-  const collectionsQuery = createQuery(() => ({
-    ...listCollectionsOptions(),
+  const collectionRecord = createQuery(() => ({
+    ...getCollectionRecordOptions({ path: { collection_id: collectionId ?? 0 } }),
     enabled: collectionId !== null,
+    refetchOnMount: "always" as const,
   }));
-  let item = $derived(itemId !== null && itemQuery.data?.id === itemId ? itemQuery.data : null);
-  let coll = $derived(
-    collectionsQuery.data?.find((collection) => collection.id === collectionId) ?? null,
-  );
-  const seasonsQuery = createSeasonsQuery(() => item);
-  let seasons = $derived(seasonsQuery.data ?? []);
+  let recordQuery = $derived(collectionId !== null ? collectionRecord : itemRecord);
+  let record = $derived(catalogEntry ? null : (recordQuery.data ?? null));
+  let subjectTitle = $derived(catalogEntry?.entry_key ?? record?.stored[0]?.values.title);
   let recordTitle = $derived(
-    `Database Record - ${(catalogEntry ? catalogEntry.entry_key : collectionId !== null ? coll?.title : item?.title) || ""}`,
+    subjectTitle ? `Database Record - ${String(subjectTitle)}` : "Database Record",
   );
   const feedback = createNotifier();
   let copiedField = $state<string | null>(null);
-  let refreshError = $state("");
-  let refreshing = $state(false);
   // One OvertureDB record query per subject; only the open subject's runs.
   const itemRecordQuery = createQuery(() => ({
-    ...getPublicDatasetRecordOptions({ path: { item_id: item?.id ?? 0 } }),
-    enabled: !!item?.id,
+    ...getPublicDatasetRecordOptions({ path: { item_id: itemId ?? 0 } }),
+    enabled: itemId !== null,
   }));
   const collectionRecordQuery = createQuery(() => ({
     ...getPublicDatasetCollectionRecordOptions({ path: { collection_id: collectionId ?? 0 } }),
@@ -81,32 +75,10 @@
     publicDatasetRecordQuery.data?.found ? publicDatasetRecordQuery.data : null,
   );
 
-  // Re-read the record on open so it includes server-side changes.
-  async function refreshRecord() {
-    if (!item) return;
-    const itemId = item.id;
-    refreshing = true;
-    refreshError = "";
-    try {
-      await Promise.all([refreshItem(itemId), invalidateSeasons(itemId)]);
-    } catch (error) {
-      refreshError = errorMessage(error, "Could not refresh the database record.");
-    } finally {
-      refreshing = false;
-    }
-  }
-
   /** Clears the "copied" mark; a later copy restarts it. */
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  onMount(() => {
-    void refreshRecord();
-    return () => clearTimeout(copiedTimer);
-  });
-
-  function getFields(obj: object | null | undefined): DisplayField[] {
-    return dbRecordFields(obj);
-  }
+  onMount(() => () => clearTimeout(copiedTimer));
 
   async function copyValue(field: DisplayField) {
     feedback.clear();
@@ -120,18 +92,17 @@
     }
   }
 
-  let mediaFields = $derived(item ? getFields(item) : []);
-  let collFields = $derived(coll ? getFields(coll) : []);
   let publicDatasetSeasons = $derived(publicDatasetRecord?.seasons ?? []);
 </script>
 
-{#snippet fieldTable(fields: DisplayField[])}
+{#snippet fieldTable(fields: DisplayField[], scope = "")}
   <div class="db-table">
     {#each fields as field (field.key)}
-      <button class="db-row" onclick={() => copyValue(field)}>
+      {@const key = `${scope}${field.key}`}
+      <button class="db-row" onclick={() => copyValue({ ...field, key })}>
         <span class="db-key">{field.key}</span>
         <span class="db-value truncate">{field.value}</span>
-        {#if copiedField === field.key}
+        {#if copiedField === key}
           <Check size={12} class="text-success" />
         {:else}
           <Copy size={12} class="text-tertiary" />
@@ -143,46 +114,38 @@
 
 <PopupShell title={recordTitle} onclose={() => uiState.closePopup()}>
   <CardColumn>
-    {#if coll}
-      <section class="option-card">
-        <h3 class="form-label">Collection</h3>
-        {@render fieldTable(collFields)}
-      </section>
-    {:else if item}
+    {#if !catalogEntry}
       <DataStatus
         label="database record"
-        error={refreshError}
-        loading={refreshing}
-        hasData={true}
-        onretry={refreshRecord}
+        error={recordQuery.error}
+        loading={recordQuery.isFetching}
+        hasData={record !== null}
+        onretry={() => recordQuery.refetch()}
       />
-      <section class="option-card">
-        <h3 class="form-label">Media Item</h3>
-        {@render fieldTable(mediaFields)}
-      </section>
-
-      {#if item.media_type === "show"}
-        <DataStatus
-          label="seasons"
-          error={seasonsQuery.error}
-          loading={seasonsQuery.isFetching}
-          hasData={seasonsQuery.data !== undefined}
-          onretry={() => seasonsQuery.refetch()}
-        />
-      {/if}
-      {#if seasons.length > 0}
+    {/if}
+    {#if record}
+      {@const [own, ...related] = record.stored}
+      {#if own}
         <section class="option-card">
-          <h3 class="form-label">Seasons</h3>
-          {#each seasons as season (season.id)}
+          <h3 class="form-label">Stored in {own.table}</h3>
+          {@render fieldTable(dbRecordFields(own.values), "own:")}
+          {#each related as row, index (index)}
             <details class="db-details">
-              <summary>{season.title || `Season ${season.season_num}`}</summary>
-              {@render fieldTable(getFields(season))}
+              <summary
+                >{row.table}{row.values.id === undefined ? "" : ` ${String(row.values.id)}`}</summary
+              >
+              {@render fieldTable(dbRecordFields(row.values), `${index}:`)}
             </details>
           {/each}
         </section>
       {/if}
+      <section class="option-card">
+        <h3 class="form-label">Derived by the API</h3>
+        <p class="hint">What Overture shows that no column stores, worked out from the rows above.</p>
+        {@render fieldTable(dbRecordFields(record.derived), "derived:")}
+      </section>
     {/if}
-    {#if coll || item || catalogEntry}
+    {#if catalogEntry || record}
       <DataStatus
         label="OvertureDB record"
         error={publicDatasetRecordQuery.error}
@@ -196,19 +159,19 @@
       {#if draft}
         <section class="option-card">
           <h3 class="form-label">Local draft</h3>
-          {@render fieldTable(getFields(draft))}
+          {@render fieldTable(dbRecordFields(draft))}
         </section>
       {/if}
       {#if publicDatasetRecord?.collection}
         <section class="option-card">
           <h3 class="form-label">OvertureDB Collection</h3>
-          {@render fieldTable(getFields(publicDatasetRecord.collection))}
+          {@render fieldTable(dbRecordFields(publicDatasetRecord.collection))}
         </section>
       {/if}
       {#if publicDatasetRecord?.item}
         <section class="option-card">
           <h3 class="form-label">OvertureDB Item</h3>
-          {@render fieldTable(getFields(publicDatasetRecord.item))}
+          {@render fieldTable(dbRecordFields(publicDatasetRecord.item))}
         </section>
 
         {#if publicDatasetSeasons.length > 0}
@@ -217,7 +180,7 @@
             {#each publicDatasetSeasons as season (season.season_num)}
               <details class="db-details">
                 <summary>Season {season.season_num}</summary>
-                {@render fieldTable(getFields(season))}
+                {@render fieldTable(dbRecordFields(season), `od-${season.season_num}:`)}
               </details>
             {/each}
           </section>

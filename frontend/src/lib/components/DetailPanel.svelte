@@ -1,8 +1,5 @@
 <script lang="ts">
   import Database from "@lucide/svelte/icons/database";
-  import Clapperboard from "@lucide/svelte/icons/clapperboard";
-  import Layers from "@lucide/svelte/icons/layers";
-  import MonitorPlay from "@lucide/svelte/icons/monitor-play";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
   import { getPublicDatasetItemIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -23,6 +20,7 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
   import { catalogStatus, hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
@@ -75,11 +73,20 @@
     view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
   );
   /** Which art tabs hold a saved selection to forget. */
-  let savedArt = $derived({
-    poster: !!(catalogEntry ?? item)?.poster_url,
-    background: !!(catalogEntry ?? item)?.background_url,
-    seasons: (catalogEntry?.seasons ?? seasons).some((season) => !!season.poster_url),
-  });
+  // A library selection is a link or an upload; a catalog entry's is always a link.
+  let savedArt = $derived(
+    catalogEntry
+      ? {
+          poster: !!catalogEntry.poster_url,
+          background: !!catalogEntry.background_url,
+          seasons: (catalogEntry.seasons ?? []).some((season) => !!season.poster_url),
+        }
+      : {
+          poster: !!item?.poster_source,
+          background: !!item?.background_source,
+          seasons: seasons.some((season) => !!season.poster_source),
+        },
+  );
 
   let artStatuses = $derived(
     Object.fromEntries(
@@ -190,23 +197,14 @@
   title={subject?.title ?? ""}
 >
   {#snippet emptyIcon()}
-    {#if uiState.sidebarMode === "collections"}
-      <Layers size={64} />
-    {:else if uiState.sidebarTab === "movie"}
-      <Clapperboard size={64} />
-    {:else}
-      <MonitorPlay size={64} />
-    {/if}
+    {@const Icon =
+      MEDIA_ICONS[uiState.sidebarMode === "collections" ? "collection" : uiState.sidebarTab]}
+    <Icon size={64} />
   {/snippet}
 
   {#snippet posterIcon()}
-    {#if subject?.media_type === "movie"}
-      <Clapperboard size={48} />
-    {:else if subject?.media_type === "show"}
-      <MonitorPlay size={48} />
-    {:else}
-      <Layers size={48} />
-    {/if}
+    {@const Icon = MEDIA_ICONS[subject?.media_type ?? "collection"]}
+    <Icon size={48} />
   {/snippet}
 
   {#snippet meta()}

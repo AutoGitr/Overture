@@ -5,6 +5,7 @@ import {
   renameCollectionGroupMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionGroupDelete } from "../../generated/rest/types.gen";
+import { UNGROUPED_GROUP } from "../../generated/settings";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 
@@ -77,16 +78,19 @@ export class CollectionGroupActions {
     return confirmed ? { collections: "keep", group: null } : null;
   }
   private async chooseScope(): Promise<CollectionGroupDelete | null> {
+    // Keeping them is moving them to Ungrouped, so it is no move target of its own.
     const options: { body: CollectionGroupDelete; label: string; description?: string }[] = [
-      { body: { collections: "keep", group: null }, label: "Move them to Ungrouped" },
-      ...this.others().map((group) => ({
-        body: { collections: "move" as const, group },
-        label: `Move them to ${group}`,
-      })),
+      { body: { collections: "keep", group: null }, label: `Move them to ${UNGROUPED_GROUP}` },
+      ...this.others()
+        .filter((group) => group !== UNGROUPED_GROUP)
+        .map((group) => ({
+          body: { collections: "move" as const, group },
+          label: `Move them to ${group}`,
+        })),
       {
-        body: { collections: "overture", group: null },
-        label: "Remove them from Overture",
-        description: "The server keeps them, and the next library sync lists them as Unmanaged.",
+        body: { collections: "orphan", group: null },
+        label: "Orphan them",
+        description: "Overture stops managing them; the server keeps them, listed under Unmanaged.",
       },
       {
         body: { collections: "both", group: null },
@@ -98,9 +102,13 @@ export class CollectionGroupActions {
       message: "Choose what happens to its collections. Media files are always kept.",
       confirmLabel: "Delete group",
       destructive: true,
-      choices: options.map(({ label, description }) => ({ value: label, label, description })),
+      choices: options.map(({ label, description }, index) => ({
+        value: String(index),
+        label,
+        description,
+      })),
     });
-    return options.find((option) => option.label === chosen)?.body ?? null;
+    return chosen === null ? null : (options[Number(chosen)]?.body ?? null);
   }
 }
 

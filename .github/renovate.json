@@ -10,7 +10,7 @@
   "minimumReleaseAge": "3 days",
   "schedule": ["* 5 * * 2"],
   "internalChecksFilter": "strict",
-  "rebaseWhen": "conflicted",
+  "rebaseWhen": "behind-base-branch",
   "osvVulnerabilityAlerts": true,
   "lockFileMaintenance": {
     "enabled": true,

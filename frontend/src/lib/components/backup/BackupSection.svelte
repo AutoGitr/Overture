@@ -18,7 +18,7 @@
 <section class="option-card">
   <div class="section-header">
     <Icon size={16} class="section-icon" />
-    <span class="form-label mb-0">
+    <span class="form-label">
       {title}
       {#if count > 0}
         <span class="count-badge">{count}</span>

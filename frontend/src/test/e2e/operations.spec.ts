@@ -311,7 +311,7 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
     await route.fulfill({ json: { art: "not_requested", themes: "started" } });
   });
   await logIn(page);
-  await page.getByRole("button", { name: /^Collections/ }).click();
+  await page.getByRole("button", { name: /^(Collections|Groups) \(/ }).click();
   await page.getByLabel("Search sidebar").fill("Star Wars");
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Operations", exact: true });

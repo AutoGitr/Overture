@@ -73,7 +73,7 @@ test("a collection theme badge opens its theme view", async ({ page }) => {
   );
   await page.route("**/api/themes/search?**", (route) => route.fulfill({ json: { results: [] } }));
   await logIn(page);
-  await page.getByRole("button", { name: /^Collections/ }).click();
+  await page.getByRole("button", { name: /^(Collections|Groups) \(/ }).click();
   const row = page.locator(".sidebar-item").filter({ hasText: "Action" });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Open themes for Action" }).click();

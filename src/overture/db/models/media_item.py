@@ -92,7 +92,7 @@ class MediaItemBase(SQLModel):
 
 
 class MediaItem(MediaItemBase, table=True):
-    """Store media item rows in the application database."""
+    """A movie or TV show of the media server's libraries."""
 
     __tablename__: ClassVar[Any] = "media_items"
     __table_args__ = (

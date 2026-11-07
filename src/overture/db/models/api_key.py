@@ -9,7 +9,7 @@ lazy from ...utils.time import utc_now
 
 
 class ApiKey(SQLModel, table=True):
-    """Only a digest of the key is persisted; the key is shown once, at creation."""
+    """An API key; only its digest is kept, and the key is shown once, at creation."""
 
     __tablename__: ClassVar[Any] = "api_keys"
 

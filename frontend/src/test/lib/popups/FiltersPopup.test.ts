@@ -497,7 +497,6 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent?.trim());
     expect(headings).toEqual([
-      "Holds",
       "Status",
       "Art",
       "Theme music",
@@ -506,7 +505,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "Collection operations",
     ]);
     const status = within(view.getByRole("region", { name: "Status" }));
-    for (const name of ["Management", "Kind", "Size", "Media server"])
+    for (const name of ["Holds", "Management", "Kind", "Size", "Media server"])
       expect(status.getByRole("group", { name })).toBeInTheDocument();
     expect(
       within(view.getByRole("region", { name: "Art" })).getByRole("group", {

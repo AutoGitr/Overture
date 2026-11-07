@@ -7,6 +7,8 @@ lazy from sqlmodel import JSON, Field, Index, SQLModel
 
 
 class JobRun(SQLModel, table=True):
+    """One run of a background job, with its summary."""
+
     __tablename__: ClassVar[Any] = "job_runs"
 
     id: str = Field(primary_key=True)
@@ -21,6 +23,8 @@ class JobRun(SQLModel, table=True):
 
 
 class JobResult(SQLModel, table=True):
+    """One finding of a scan or audit run, in the order it was found."""
+
     __tablename__: ClassVar[Any] = "job_results"
 
     run_id: str = Field(primary_key=True, foreign_key="job_runs.id", ondelete="CASCADE")
@@ -29,6 +33,8 @@ class JobResult(SQLModel, table=True):
 
 
 class JobLogLine(SQLModel, table=True):
+    """One line of a run's progress log."""
+
     __tablename__: ClassVar[Any] = "job_log_lines"
     # Pages a run's log filtered by outcome.
     __table_args__ = (

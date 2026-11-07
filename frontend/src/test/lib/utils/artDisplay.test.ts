@@ -133,8 +133,8 @@ describe("art display URLs", () => {
     const uploaded = collection({
       id: 7,
       poster_hash: "a".repeat(64),
-      thumb_url: "/api/collections/7/image/poster?t=v1",
-      art_url: "/api/collections/7/image/background?t=v2",
+      server_poster_version: "v1",
+      server_background_version: "v2",
     });
     expect(collectionArtDisplayUrl(uploaded, "poster")).toBe(
       `/api/collections/7/local-image/poster?t=${"a".repeat(64)}&size=display`,
@@ -142,7 +142,16 @@ describe("art display URLs", () => {
     expect(collectionArtDisplayUrl(uploaded, "background")).toBe(
       "/api/collections/7/image/background?t=v2&size=display",
     );
-    expect(collectionArtDisplayUrl(collection({ thumb_url: null }), "poster")).toBeNull();
+    expect(
+      collectionArtDisplayUrl(collection({ server_poster_version: null }), "poster"),
+    ).toBeNull();
+    // A season's file shows like an item's, whether or not its show has a folder.
+    expect(
+      seasonPosterUrls(
+        { ...movie, media_type: "show", folder_path: null },
+        fixtureSeason({ id: 9, poster_hash: "season-hash" }),
+      ).src,
+    ).toBe("/api/library/seasons/9/local-image?t=season-hash&size=display");
     expect(collectionArtDisplayUrl(null, "poster")).toBeNull();
   });
 });

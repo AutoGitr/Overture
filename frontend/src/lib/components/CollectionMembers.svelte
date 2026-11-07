@@ -3,7 +3,6 @@
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
   import GripVertical from "@lucide/svelte/icons/grip-vertical";
   import X from "@lucide/svelte/icons/x";
-  import Film from "@lucide/svelte/icons/film";
   import DetailSection from "./DetailSection.svelte";
   import FallbackImage from "./FallbackImage.svelte";
   import type {
@@ -13,18 +12,20 @@
   } from "../../generated/rest/types.gen";
   import { goToCatalogEntry, goToItem } from "../router/routes";
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
+  import { MEDIA_ICONS } from "../utils/mediaIcons";
   import type { CollectionEditor } from "../utils/collectionForms.svelte";
   import ImageGrid from "./ImageGrid.svelte";
   import PosterCard from "./PosterCard.svelte";
 
   let {
-    members,
+    members = [],
     catalog = false,
     editor,
     libraryItems = [],
     libraries = [],
   }: {
-    members: (MediaItemRead | TmdbItemResult)[];
+    /** What a catalog entry holds; a library collection's members are its editor's. */
+    members?: (MediaItemRead | TmdbItemResult)[];
     catalog?: boolean;
     editor?: CollectionEditor;
     libraryItems?: MediaItemRead[];
@@ -32,6 +33,11 @@
   } = $props();
 
   let smart = $derived(editor?.collection.kind === "smart");
+  let itemsById = $derived(new Map(libraryItems.map((item) => [item.id, item])));
+  /** The collection's members, as the library lists them, in its order. */
+  let held = $derived(
+    editor?.collection.member_ids.flatMap((id) => itemsById.get(id) ?? []) ?? [],
+  );
   let orderable = $derived(!smart && editor?.collection.server_type === "plex");
   let memberGroups = $derived.by(() => {
     if (!editor) return [];
@@ -39,14 +45,14 @@
     const ids = [
       ...new Set([
         ...collection.library_ids,
-        ...collection.members.map((member) => member.library_id ?? ""),
+        ...held.map((member) => member.library_id ?? ""),
       ]),
     ];
     return ids
       .map((id) => ({
         id,
         title: libraries.find((library) => library.id === id)?.title ?? id,
-        members: collection.members.filter((member) => (member.library_id ?? "") === id),
+        members: held.filter((member) => (member.library_id ?? "") === id),
       }))
       .filter((group) => group.members.length > 0);
   });
@@ -56,7 +62,7 @@
     const member = group[index];
     const neighbour = group[target];
     if (!editor || !member || !neighbour) return;
-    void editor.moveMember(member.id, editor.collection.members.indexOf(neighbour));
+    void editor.moveMember(member.id, editor.collection.member_ids.indexOf(neighbour.id));
   }
   let available = $derived(editor?.availableMembers(libraryItems) ?? []);
 
@@ -78,7 +84,7 @@
 
 <section aria-label="Collection members">
   {#if editor}
-    {@const currentMembers = editor.collection.members}
+    {@const currentMembers = held}
     <DetailSection
       collapsible
       title="Members"
@@ -163,11 +169,15 @@
                     class="btn btn-ghost member-title"
                     onclick={() => open(member)}
                   >
+                    {#snippet placeholder()}
+                      {@const Icon = MEDIA_ICONS[member.media_type]}
+                      <Icon size={16} />
+                    {/snippet}
                     <span class="member-poster"
                       ><FallbackImage
                         src={itemArtDisplayUrl(member, "poster")}
                         alt=""
-                        placeholder={memberPlaceholder}
+                        {placeholder}
                       /></span
                     >
                     <span class="member-name">
@@ -222,6 +232,7 @@
       {#each members as member ("id" in member ? member.id : member.tmdb_id)}
         <PosterCard
           title={`${member.title}${member.year ? ` (${member.year})` : ""}`}
+          icon={MEDIA_ICONS[member.media_type]}
           src={"id" in member ? itemArtDisplayUrl(member, "poster") : remotePosterUrl(member)}
           onselect={() => open(member)}
           meta={"id" in member || member.existing_item_id ? "In library" : null}
@@ -230,8 +241,6 @@
     </ImageGrid>
   {/if}
 </section>
-
-{#snippet memberPlaceholder()}<Film size={16} />{/snippet}
 
 <style>
   .add-member {

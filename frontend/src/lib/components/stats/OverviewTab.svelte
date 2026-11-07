@@ -1,14 +1,12 @@
 <script lang="ts">
-  import Clapperboard from "@lucide/svelte/icons/clapperboard";
   import Database from "@lucide/svelte/icons/database";
   import HardDrive from "@lucide/svelte/icons/hard-drive";
   import Image from "@lucide/svelte/icons/image";
-  import Layers from "@lucide/svelte/icons/layers";
-  import MonitorPlay from "@lucide/svelte/icons/monitor-play";
+  import Images from "@lucide/svelte/icons/images";
   import Music from "@lucide/svelte/icons/music";
-  import Tv from "@lucide/svelte/icons/tv";
   import type { Component, Snippet } from "svelte";
   import type { StatsResponse } from "../../../generated/rest/types.gen";
+  import { MEDIA_ICONS } from "../../utils/mediaIcons";
   import { formatBytes } from "../../utils/popupFormat";
 
   let { stats }: { stats: StatsResponse } = $props();
@@ -19,6 +17,7 @@
     return [
       { label: "Artwork", bytes: stats.storage.artwork_size_bytes, tone: "seg-art" },
       { label: "Themes", bytes: stats.storage.themes_size_bytes, tone: "seg-theme" },
+      { label: "Image cache", bytes: stats.storage.image_cache_size_bytes, tone: "seg-cache" },
       { label: "Database", bytes: stats.storage.database_size_bytes, tone: "seg-db" },
       { label: "Backups", bytes: stats.storage.backups_size_bytes, tone: "seg-backup" },
     ].map((segment) => ({ ...segment, percent: ((segment.bytes / total) * 100).toFixed(1) }));
@@ -47,7 +46,12 @@
 {/snippet}
 
 {#snippet footprintSub()}
-  Artwork, themes, database, and backups
+  Artwork, themes, image cache, database, and backups
+{/snippet}
+
+{#snippet imageCacheSub()}
+  {stats.image_cache.original_files.toLocaleString()} originals and uploads &middot; {stats.image_cache.thumb_files.toLocaleString()}
+  thumbnails
 {/snippet}
 
 {#snippet artworkSub()}
@@ -125,6 +129,12 @@
   {@render kpi(Image, "Artwork", formatBytes(stats.storage.artwork_size_bytes), artworkSub)}
   {@render kpi(Music, "Theme Music", formatBytes(stats.storage.themes_size_bytes), themeSub)}
   {@render kpi(
+    Images,
+    "Image Cache",
+    formatBytes(stats.storage.image_cache_size_bytes),
+    imageCacheSub,
+  )}
+  {@render kpi(
     Database,
     "Database & Backups",
     formatBytes(stats.storage.database_size_bytes + stats.storage.backups_size_bytes),
@@ -156,11 +166,11 @@
 <section class="option-card">
   <span class="form-label">Library Breakdown</span>
   <div class="library-grid">
-    {@render libraryStat(Clapperboard, "Movies", stats.library.total_movies, movieDetails)}
-    {@render libraryStat(Tv, "TV Shows", stats.library.total_shows, showDetails)}
-    {@render libraryStat(Layers, "Seasons", stats.library.total_seasons, seasonDetails)}
+    {@render libraryStat(MEDIA_ICONS.movie, "Movies", stats.library.total_movies, movieDetails)}
+    {@render libraryStat(MEDIA_ICONS.show, "TV Shows", stats.library.total_shows, showDetails)}
+    {@render libraryStat(MEDIA_ICONS.season, "Seasons", stats.library.total_seasons, seasonDetails)}
     {@render libraryStat(
-      MonitorPlay,
+      MEDIA_ICONS.collection,
       "Collections",
       collectionsKnown ? (stats.library.total_collections ?? null) : null,
       collectionDetails,
@@ -242,6 +252,10 @@
 
   .seg-theme {
     background: var(--asset-theme);
+  }
+
+  .seg-cache {
+    background: var(--info);
   }
 
   .seg-db {

@@ -187,7 +187,7 @@ class CollectionSets:
             if not row.server_ids:
                 continue
             try:
-                await self._editor.delete(row.id or 0, target="server")
+                await self._editor.withhold(row.id or 0)
                 result.withheld.append(row.id or 0)
             except Exception as exc:
                 result.errors[row.title] = str(exc)

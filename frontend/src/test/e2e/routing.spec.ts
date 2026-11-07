@@ -17,7 +17,7 @@ test("default redirect opens shows when no movie libraries exist", async ({ page
   );
   await logIn(page);
   await assertRoute(page, "/shows");
-  await expect(page.getByRole("button", { name: "Shows 1", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Shows (1)", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -159,7 +159,7 @@ test.describe("path-based client routing", () => {
 
     // Deep link to collections list
     await page.goto("/collections");
-    await expect(page.getByRole("button", { name: "Show collections", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /: show collections$/ })).toBeVisible();
     await assertRoute(page, "/collections");
 
     // Deep link to specific collection
@@ -332,8 +332,17 @@ test("collection member rows show posters, link to items and omit show matching 
     route.fulfill({ json: appSettings({ collections_supported: true, tmdb_configured: true }) }),
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/library/items*", (route) =>
+    route.fulfill({ json: { items: members, total: members.length } }),
+  );
   await page.route("**/api/collections/1{,?*}", (route) =>
-    route.fulfill({ json: collectionDetail({ id: 1, title: "Alien Collection", members }) }),
+    route.fulfill({
+      json: collectionDetail({
+        id: 1,
+        title: "Alien Collection",
+        member_ids: members.map((member) => member.id),
+      }),
+    }),
   );
   await page.route("**/api/collections/2{,?*}", (route) =>
     route.fulfill({

@@ -145,7 +145,7 @@ class AppSettingsBase(SQLModel):
 
 
 class AppSettings(AppSettingsBase, table=True):
-    """Store the single application settings row."""
+    """The single row of application settings."""
 
     __tablename__: ClassVar[Any] = "app_settings"
     __table_args__ = (

@@ -252,12 +252,8 @@ async def test_get_collection_lists_members_and_catalog_candidates(
 
     detail = await _service(app_config=app_config, database=database).reader.get(1)
 
-    assert [member.title for member in detail.members] == ["Star Wars", "Empire"]
-    assert detail.members[1].poster_hash == "poster-hash"
-    assert (
-        detail.members[1].poster_preview_url
-        == "https://image.tmdb.org/t/p/w342/empire.jpg"
-    )
+    # Members are listed by release, oldest first.
+    assert detail.member_ids == [older.id, newer.id]
     assert detail.catalog_title == "Star Wars Collection"
     assert detail.youtube_id_themerrdb == "b" * 11
     assert detail.theme_unavailable is None

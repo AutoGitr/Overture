@@ -1056,10 +1056,6 @@ img {
   align-self: flex-end;
 }
 
-.mb-0 {
-  margin-bottom: 0 !important;
-}
-
 .font-semibold {
   font-weight: 600;
 }

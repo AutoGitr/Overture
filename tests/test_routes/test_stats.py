@@ -191,6 +191,16 @@ async def test_stats_with_seeded_data(
     )
     db_session.add(coll1)
     await db_session.commit()
+    await db_session.refresh(coll1)
+    db_session.add(
+        ArtSlot(
+            collection_id=coll1.id,
+            art_type=ArtType.POSTER,
+            file_hash="collection-hash",
+            file_size=700,
+        )
+    )
+    await db_session.commit()
 
     # Query stats
     response = authenticated_client.get("/api/stats")
@@ -241,13 +251,19 @@ async def test_stats_with_seeded_data(
     assert stats.art.season_poster.matched_percentage == 0.0
     assert stats.art.season_poster.total_size_bytes == 500
 
+    # A collection has a poster and a background; its poster is local.
+    collection_art = stats.art.collections
+    assert collection_art is not None
+    assert (collection_art.total, collection_art.local_files) == (2, 1)
+    assert collection_art.total_size_bytes == 700
+
     # Verify overall artwork totals
-    assert stats.art.overall.total == 8
-    assert stats.art.overall.local_files == 3
-    assert stats.art.overall.local_percentage == 37.5
+    assert stats.art.overall.total == 10
+    assert stats.art.overall.local_files == 4
+    assert stats.art.overall.local_percentage == 40.0
     assert stats.art.overall.matched_files == 1
-    assert stats.art.overall.matched_percentage == 12.5
-    assert stats.art.overall.total_size_bytes == 3500
+    assert stats.art.overall.matched_percentage == 10.0
+    assert stats.art.overall.total_size_bytes == 4200
 
     # Theme checks
     assert stats.themes.movies.total == 2
@@ -279,6 +295,7 @@ async def test_stats_with_seeded_data(
     assert stats.themes.overall.total_size_bytes == theme_size
 
     # Storage summary
-    assert stats.storage.artwork_size_bytes == 3500
+    assert stats.storage.artwork_size_bytes == 4200
     assert stats.storage.themes_size_bytes == theme_size
-    assert stats.storage.total_footprint_bytes >= 3500 + theme_size
+    assert stats.storage.image_cache_size_bytes == stats.image_cache.total_size_bytes
+    assert stats.storage.total_footprint_bytes >= 4200 + theme_size

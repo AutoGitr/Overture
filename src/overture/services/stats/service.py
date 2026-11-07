@@ -1,34 +1,26 @@
 """Application statistics service."""
 
 lazy from pathlib import Path
-lazy from typing import Any
 
 lazy from sqlmodel import case, col, func, select, text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...db.completion import SLOT_COMPLETE, THEME_COMPLETE
 lazy from ...db.models.art import ArtSlot
-lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import (
-    PublicDatasetCollection,
-    PublicDatasetDraft,
-    PublicDatasetItem,
-    PublicDatasetSeason,
-)
-lazy from ...db.models.saved_schedule import SavedSchedule
-lazy from ...db.models.schedule import TaskSchedule
 lazy from ...db.models.season import Season
-lazy from ...db.models.settings import AppSettings
 lazy from ...db.session import Database
+lazy from ...db.tables import table_description, table_models, table_of
 lazy from ...domain import ITEM_ART_TYPES, ArtType, AssetStatus, MediaType
+lazy from ...schemas.collections import CollectionRead
 lazy from ...schemas.stats import (
     ArtTypeStats,
     BackupStats,
     Coverage,
     DatabaseStats,
     DatabaseTableCount,
+    ImageCacheStats,
     LibraryStats,
     StatsResponse,
     StorageSummary,
@@ -39,22 +31,7 @@ lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now_iso
 lazy from ..backup.service import BackupService
 lazy from ..collections.reader import CollectionReader
-
-#: Every table, with what its rows are, as the statistics list them.
-TABLES: tuple[tuple[type[Any], str], ...] = (
-    (MediaItem, "Movies and TV shows"),
-    (Season, "Show seasons"),
-    (ArtSlot, "Poster, background, and season artwork slots"),
-    (MediaCollection, "Media-server collections"),
-    (PublicDatasetItem, "OvertureDB curated items"),
-    (PublicDatasetSeason, "OvertureDB curated seasons"),
-    (PublicDatasetCollection, "OvertureDB curated collections"),
-    (PublicDatasetDraft, "OvertureDB drafts awaiting contribution"),
-    (DownloadJob, "Download queue history"),
-    (SavedSchedule, "Saved sync and asset schedules"),
-    (TaskSchedule, "Recurring task schedules"),
-    (AppSettings, "Application configuration"),
-)
+lazy from ..storage.image_cache import ImageCache
 
 _HAS_FILE = col(ArtSlot.file_hash).is_not(None)
 #: Counts of local and of complete art slots in a grouped query.
@@ -94,36 +71,24 @@ class StatsService:
         *,
         database: Database,
         backups: BackupService,
+        image_cache: ImageCache,
         collections: CollectionReader,
     ) -> None:
         self._database = database
         self._backups = backups
-        self._collections = collections
+        self._image_cache = image_cache
+        self._collections_reader = collections
 
-    async def _collection_themes(self) -> tuple[int, Coverage] | None:
-        """Count the synced collections and their themes.
-
-        Returns:
-            How many collections are monitored, and their theme coverage, or
-            ``None`` when the media server has no collections.
-        """
+    async def _collections(self) -> list[CollectionRead] | None:
+        """The synced collections, or ``None`` when the media server has none."""
         try:
-            collections = [
-                *await self._collections.listed(),
-            ]
+            return await self._collections_reader.listed()
         except PublicServiceError:
             return None
-        return sum(c.monitored for c in collections), Coverage(
-            total=len(collections),
-            local_files=sum(c.has_theme for c in collections),
-            matched_files=sum(
-                c.theme_status is AssetStatus.COMPLETE for c in collections
-            ),
-        )
 
     @staticmethod
     async def _library(
-        session: AsyncSession, collections: tuple[int, Coverage] | None
+        session: AsyncSession, collections: list[CollectionRead] | None
     ) -> LibraryStats:
         """Count library items by type and monitoring, and their seasons."""
         counts = {
@@ -157,12 +122,18 @@ class StatsService:
             unmonitored_shows=unmonitored[MediaType.SHOW],
             total_seasons=seasons or 0,
             seasons_with_episodes=with_episodes or 0,
-            total_collections=collections[1].total if collections else None,
-            monitored_collections=collections[0] if collections else None,
+            total_collections=None if collections is None else len(collections),
+            monitored_collections=None
+            if collections is None
+            else sum(row.monitored for row in collections),
         )
 
     @staticmethod
-    async def _art(session: AsyncSession, library: LibraryStats) -> ArtTypeStats:
+    async def _art(
+        session: AsyncSession,
+        library: LibraryStats,
+        collections: list[CollectionRead] | None,
+    ) -> ArtTypeStats:
         """Count artwork slots, their local files and matches, and their bytes."""
         owner = (col(ArtSlot.art_type), col(MediaItem.media_type))
         item_slots = col(ArtSlot.media_item_id) == col(MediaItem.id)
@@ -214,6 +185,28 @@ class StatsService:
             matched_files=season_matched or 0,
             total_size_bytes=season_bytes or 0,
         )
+        collection_art = None
+        if collections is not None:
+            collection_bytes = (
+                await session.exec(
+                    select(_SLOT_BYTES).where(
+                        col(ArtSlot.collection_id).in_([row.id for row in collections])
+                    )
+                )
+            ).one()
+            collection_art = Coverage(
+                total=len(collections) * len(ITEM_ART_TYPES),
+                local_files=sum(
+                    (row.poster_hash is not None) + (row.background_hash is not None)
+                    for row in collections
+                ),
+                matched_files=sum(
+                    (row.poster_status is AssetStatus.COMPLETE)
+                    + (row.background_status is AssetStatus.COMPLETE)
+                    for row in collections
+                ),
+                total_size_bytes=collection_bytes or 0,
+            )
         poster = poster_movies + poster_shows
         background = background_movies + background_shows
         return ArtTypeStats(
@@ -224,14 +217,18 @@ class StatsService:
             background_movies=background_movies,
             background_shows=background_shows,
             season_poster=season_poster,
-            overall=poster + background + season_poster,
+            collections=collection_art,
+            overall=poster
+            + background
+            + season_poster
+            + (collection_art or Coverage()),
         )
 
     @staticmethod
     async def _themes(
         session: AsyncSession,
         library: LibraryStats,
-        collections: tuple[int, Coverage] | None,
+        collections: list[CollectionRead] | None,
     ) -> ThemeStats:
         """Count item themes, their local files and matches, and their bytes."""
         has_file = col(MediaItem.theme_file_hash).is_not(None)
@@ -262,7 +259,26 @@ class StatsService:
             )
 
         movies, shows = coverage(MediaType.MOVIE), coverage(MediaType.SHOW)
-        collection_themes = collections[1] if collections else None
+        collection_themes = None
+        if collections is not None:
+            collection_bytes = (
+                await session.exec(
+                    select(
+                        func.sum(func.coalesce(col(MediaCollection.theme_file_size), 0))
+                    ).where(
+                        col(MediaCollection.theme_file_hash).is_not(None),
+                        col(MediaCollection.id).in_([row.id for row in collections]),
+                    )
+                )
+            ).one()
+            collection_themes = Coverage(
+                total=len(collections),
+                local_files=sum(row.has_theme for row in collections),
+                matched_files=sum(
+                    row.theme_status is AssetStatus.COMPLETE for row in collections
+                ),
+                total_size_bytes=collection_bytes or 0,
+            )
         return ThemeStats(
             movies=movies,
             shows=shows,
@@ -298,27 +314,35 @@ class StatsService:
             free_size_bytes=freelist_count * page_size,
             tables=[
                 DatabaseTableCount(
-                    table_name=model.__tablename__,
-                    description=description,
+                    table_name=table_of(model).name,
+                    description=table_description(model),
                     row_count=(
                         await session.exec(select(func.count()).select_from(model))
                     ).one(),
                 )
-                for model, description in TABLES
+                for model in table_models()
             ],
         )
 
     async def get_stats(self) -> StatsResponse:
         """Gather and compute comprehensive statistics across all domain entities."""
-        collections = await self._collection_themes()
+        collections = await self._collections()
         async with self._database.read_session() as session:
             library = await self._library(session, collections)
-            art = await self._art(session, library)
+            art = await self._art(session, library, collections)
             themes = await self._themes(session, library, collections)
             database = await self._database_stats(session)
 
         backups = await owned_thread(self._backups.store.list_backups)
         backup_bytes = sum(b.size_bytes for b in backups)
+        cached = await self._image_cache.usage()
+        image_cache = ImageCacheStats(
+            original_files=cached.originals.files,
+            original_size_bytes=cached.originals.size_bytes,
+            thumb_files=cached.thumbs.files,
+            thumb_size_bytes=cached.thumbs.size_bytes,
+            total_size_bytes=cached.originals.size_bytes + cached.thumbs.size_bytes,
+        )
         return StatsResponse(
             library=library,
             art=art,
@@ -329,13 +353,16 @@ class StatsService:
                 total_size_bytes=backup_bytes,
                 latest_backup_at=backups[0].created_at if backups else None,
             ),
+            image_cache=image_cache,
             storage=StorageSummary(
                 artwork_size_bytes=art.overall.total_size_bytes,
                 themes_size_bytes=themes.overall.total_size_bytes,
+                image_cache_size_bytes=image_cache.total_size_bytes,
                 database_size_bytes=database.total_size_bytes,
                 backups_size_bytes=backup_bytes,
                 total_footprint_bytes=art.overall.total_size_bytes
                 + themes.overall.total_size_bytes
+                + image_cache.total_size_bytes
                 + database.total_size_bytes
                 + backup_bytes,
             ),

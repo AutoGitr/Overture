@@ -35,7 +35,7 @@ const detail = collectionDetail({
   id: 12,
   title: "Saga",
   library_ids: ["movies"],
-  members,
+  member_ids: members.map((member) => member.id),
   child_count: 2,
   rule,
   effective_sync_mode: "append",
@@ -95,7 +95,7 @@ describe("collection management", () => {
       "/api/collections/groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: 2 },
-      "/api/collections/12/members": { ...detail, members: [members[1]], child_count: 1 },
+      "/api/collections/12/members": { ...detail, member_ids: [2], child_count: 1 },
     });
     renderWithQueryClient(CollectionPage);
     await fireEvent.click(await screen.findByRole("button", { name: "Members" }));
@@ -242,7 +242,7 @@ describe("collection management", () => {
     expect(settings.getByLabelText("Sort")).toBeInTheDocument();
   });
 
-  it("supports keyboard mode navigation while keeping both header boxes", async () => {
+  it("supports keyboard mode navigation with each header group in a bar of its own", async () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
@@ -255,10 +255,12 @@ describe("collection management", () => {
     const configure = await screen.findByRole("tab", { name: "Configure" });
     await fireEvent.keyDown(configure, { key: "ArrowRight" });
     expect(await screen.findByRole("tab", { name: "Art", selected: true })).toHaveFocus();
-    const boxes = container.querySelectorAll(".detail-sections > .tab-bar");
-    expect(boxes).toHaveLength(2);
-    expect(boxes[0]?.contains(screen.getByRole("group", { name: "Record actions" }))).toBe(true);
-    expect(boxes[1]?.contains(screen.getByRole("tablist", { name: "Art categories" }))).toBe(true);
+    const rows = container.querySelectorAll(".detail-sections > .detail-tab-row");
+    expect(rows).toHaveLength(2);
+    // A row wraps between its bars, so the record actions are a bar beside the modes.
+    expect(screen.getByRole("group", { name: "Record actions" })).toHaveClass("tab-bar");
+    expect(rows[0]?.contains(screen.getByRole("group", { name: "Record actions" }))).toBe(true);
+    expect(rows[1]?.contains(screen.getByRole("tablist", { name: "Art categories" }))).toBe(true);
   });
 
   it("defaults a fresh draft to its only library and leaves multiple libraries unselected", async () => {
@@ -326,6 +328,7 @@ describe("collection management", () => {
     const selected = {
       ...detail,
       poster_url: "https://example.test/poster.jpg",
+      poster_source: "tmdb",
       poster_status: "complete",
       art_status: "partial",
     };
@@ -336,6 +339,7 @@ describe("collection management", () => {
       "/api/collections/12": selected,
       "/api/collections/12/art/poster": {
         poster_url: null,
+        poster_source: null,
         background_url: null,
         poster_status: "partial",
         background_status: "missing",
@@ -411,7 +415,7 @@ describe("collection management", () => {
       "/api/collections/12/members": {
         ...detail,
         order_type: "custom",
-        members: [members[1], members[0]],
+        member_ids: [2, 1],
       },
     });
     renderWithQueryClient(CollectionPage);
@@ -437,12 +441,12 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/collections/12": { ...detail, members: all },
+      "/api/collections/12": { ...detail, member_ids: all.map((member) => member.id) },
       "/api/library/items": { items: all, total: all.length },
       "/api/collections/12/members": {
         ...detail,
         order_type: "custom",
-        members: [members[1], third, members[0]],
+        member_ids: [2, 3, 1],
       },
     });
     renderWithQueryClient(CollectionPage);
@@ -464,14 +468,19 @@ describe("collection management", () => {
   });
 
   it("lists members by library, moving each only among its library's", async () => {
-    const both = { ...detail, library_ids: ["movies", "other"], members: [...members, third] };
+    const held = [...members, third];
+    const both = {
+      ...detail,
+      library_ids: ["movies", "other"],
+      member_ids: held.map((member) => member.id),
+    };
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": both,
-      "/api/library/items": { items: both.members, total: 3 },
+      "/api/library/items": { items: held, total: 3 },
       "/api/library/libraries": [
         { id: "movies", title: "Films", media_type: "movie", count: 2 },
         { id: "other", title: "Classics", media_type: "movie", count: 1 },
@@ -493,7 +502,7 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/collections/12": { ...detail, members: [members[0]] },
+      "/api/collections/12": { ...detail, member_ids: [1] },
       "/api/library/items": ({ url }: { url: string }) =>
         Response.json(
           url.includes("media_type=movie") ? { items: members, total: 2 } : { items: [], total: 0 },

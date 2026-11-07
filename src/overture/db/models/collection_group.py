@@ -16,7 +16,7 @@ lazy from ..columns import enum_columns, enum_type
 
 
 class CollectionGroup(SQLModel, table=True):
-    """Keep group policy separate from a collection's explicit choices."""
+    """A collection group's defaults, kept apart from each collection's own choices."""
 
     __tablename__: ClassVar[Any] = "collection_groups"
     __table_args__ = (

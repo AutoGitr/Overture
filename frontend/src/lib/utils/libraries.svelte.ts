@@ -3,12 +3,32 @@ import {
   getCollectionCapabilitiesOptions,
   getLibrariesOptions,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
-import type { CollectionCapabilities, MediaType } from "../../generated/rest/types.gen";
+import type {
+  CollectionCapabilities,
+  LibrarySectionRead,
+  MediaType,
+} from "../../generated/rest/types.gen";
 import { settingsState } from "../stores/settingsState.svelte";
 
 /** Every library of the server, of either media type. Create during initialisation. */
 export function allLibraries(enabled: () => boolean = () => true) {
   return createQuery(() => ({ ...getLibrariesOptions(), enabled: enabled() }));
+}
+
+/**
+ * *entries* in the order the server lists its libraries, movies first, whatever
+ * order they were chosen in; a library the server no longer lists goes last.
+ */
+export function inLibraryOrder<T>(
+  libraries: readonly LibrarySectionRead[],
+  entries: readonly T[],
+  libraryId: (entry: T) => string,
+): T[] {
+  const position = (entry: T) => {
+    const index = libraries.findIndex((library) => library.id === libraryId(entry));
+    return index === -1 ? libraries.length : index;
+  };
+  return entries.toSorted((a, b) => position(a) - position(b));
 }
 
 /** What collections can do, by media type: their fields and sources differ. */

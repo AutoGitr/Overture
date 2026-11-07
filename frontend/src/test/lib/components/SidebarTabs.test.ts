@@ -19,17 +19,17 @@ describe("sidebar tabs", () => {
     settingsState.load(appSettings({ collections_supported: false }));
     renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 2, totalCollections: 0 });
 
-    expect(screen.queryByRole("button", { name: "Collections" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(Collections|Groups)/ })).toBeNull();
   });
 
   it("opens the last view of the collections, then switches between groups and collections", async () => {
     settingsState.load(appSettings({ media_server: "jellyfin", collections_supported: true }));
-    renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 1, totalCollections: 1 });
+    renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 1, totalCollections: 3 });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Groups (3)" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/collections"));
     expect(uiState.collectionView).toBe("groups");
-    const toggle = screen.getByRole("button", { name: "Show collections" });
+    const toggle = screen.getByRole("button", { name: "Groups (3): show collections" });
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /^Movies/ })).toHaveAttribute(
       "aria-pressed",
@@ -43,12 +43,12 @@ describe("sidebar tabs", () => {
     expect(route.pathname).toBe("/collections/12-star-wars");
     expect(uiState.collectionView).toBe("collections");
     expect(localStorage.getItem("overture_collection_view")).toBe('"collections"');
-    await fireEvent.click(screen.getByRole("button", { name: "Show groups" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Collections (3): show groups" }));
     expect(uiState.collectionView).toBe("groups");
 
     await fireEvent.click(screen.getByRole("button", { name: /^Movies/ }));
     await vi.waitFor(() => expect(route.pathname).toBe("/movies"));
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Groups (3)" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/collections"));
     expect(uiState.collectionView).toBe("groups");
   });
@@ -57,26 +57,26 @@ describe("sidebar tabs", () => {
     await navigate("/overturedb/movies");
     renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 2, totalCollections: 0 });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Collections (0)" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections"));
     // The catalog's collections have no groups to switch to.
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Collections (0)" }));
     expect(route.pathname).toBe("/overturedb/movies/collections");
     await fireEvent.click(screen.getByRole("button", { name: /^Movies/ }));
     await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/movies"));
 
     uiState.mobileShowDetail = true;
-    await fireEvent.click(screen.getByRole("button", { name: "Shows 2" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Shows (2)" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/shows"));
     expect(uiState.mobileShowDetail).toBe(false);
-    expect(screen.queryByRole("button", { name: "Collections" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Collections/ })).toBeNull();
   });
 
   it("keeps what is typed while the collections page loads", async () => {
     settingsState.load(appSettings({ collections_supported: true }));
     renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 1, totalCollections: 1 });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Groups (1)" }));
     uiState.searchQuery = "Star Wars";
     await vi.waitFor(() => expect(route.pathname).toBe("/collections"));
     uiState.followSection();

@@ -177,6 +177,7 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
         },
         "collections.changed": {},
         "collection.updated": {"collection_id": 1},
+        "collection.monitored": {"collection_id": 1, "monitored": True},
         "library.item.upserted": {
             "item": {"id": 1, "media_type": "movie", "title": "Movie"}
         },

@@ -78,11 +78,7 @@
   let collections = $derived(collectionsQuery.data ?? []);
   const groupsQuery = createQuery(() => ({
     ...listCollectionGroupsOptions(),
-    enabled:
-      settingsState.current.collections_supported &&
-      uiState.sidebarSource === "library" &&
-      uiState.sidebarMode === "collections" &&
-      uiState.collectionView === "groups",
+    enabled: settingsState.current.collections_supported && uiState.sidebarSource === "library",
   }));
 
   const catalogMovies = createQuery(() => ({
@@ -95,10 +91,7 @@
   }));
   const catalogCollections = createQuery(() => ({
     ...listCatalogEntriesOptions({ query: { media_type: "collection" } }),
-    enabled:
-      catalog.browsable &&
-      uiState.sidebarSource === "overturedb" &&
-      uiState.sidebarMode === "collections",
+    enabled: catalog.browsable && uiState.sidebarSource === "overturedb",
   }));
   let catalogQuery = $derived(
     uiState.sidebarMode === "collections"
@@ -254,25 +247,16 @@
     }),
   );
 
-  // Every group is listed, empty or not; the reserved ones only while they hold a collection.
-  let groupNames = $derived([
-    ...new Set([
-      ...(groupsQuery.data ?? []).filter((group) => group !== UNGROUPED_GROUP),
-      ...filteredCollections.flatMap((row) =>
-        row.managed && row.collection_group ? [row.collection_group] : [],
+  let collectionGroups = $derived(
+    sidebarDomain.sortCollectionGroups(
+      sidebarDomain.collectionGroupRows(
+        sidebarDomain.collectionGroupNames(groupsQuery.data ?? [], filteredCollections),
+        filteredCollections,
       ),
-    ]),
-  ]);
-  let collectionGroups = $derived([
-    ...sidebarDomain.sortCollectionGroups(
-      sidebarDomain.collectionGroupRows(groupNames, filteredCollections),
       sort.field,
       sort.dir,
     ),
-    ...(filteredCollections.some((row) => !row.managed)
-      ? sidebarDomain.collectionGroupRows([UNMANAGED_GROUP], filteredCollections)
-      : []),
-  ]);
+  );
   let visibleCollections = $derived(
     groupView
       ? filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, currentGroup))
@@ -392,7 +376,11 @@
     totalShows={uiState.sidebarSource === "overturedb"
       ? (catalogShows.data?.length ?? 0)
       : totalShows}
-    totalCollections={collections.length}
+    totalCollections={uiState.sidebarSource === "overturedb"
+      ? (catalogCollections.data?.length ?? 0)
+      : groupView
+        ? sidebarDomain.collectionGroupNames(groupsQuery.data ?? [], collections).length
+        : collections.length}
   />
 
   <SidebarControls

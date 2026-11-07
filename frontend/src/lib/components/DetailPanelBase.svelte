@@ -148,9 +148,9 @@
         </div>
 
         {#if tabs}<div class="detail-sections">
-            <div class="detail-tab-row tab-bar">
+            <div class="detail-tab-row">
               <div
-                class="mode-tabs"
+                class="tab-bar"
                 role="tablist"
                 tabindex="-1"
                 aria-label="Detail modes"
@@ -159,28 +159,30 @@
                 {@render tabs()}
               </div>
               {#if recordActions}
-                <div class="record-actions" role="group" aria-label="Record actions">
+                <div class="tab-bar record-actions" role="group" aria-label="Record actions">
                   {@render recordActions()}
                 </div>
               {/if}
             </div>
-            <div class="detail-tab-row tab-bar">
+            <div class="detail-tab-row">
               {#if sectionLinks}
-                <nav class="section-links" aria-label="Configure sections">
+                <nav class="tab-bar" aria-label="Configure sections">
                   {@render sectionLinks()}
                 </nav>
               {/if}
-              <div
-                class="detail-subtabs"
-                role="tablist"
-                tabindex="-1"
-                aria-label="Art categories"
-                onkeydown={navigateTabs}
-              >
-                {@render subtabs?.()}
-              </div>
+              {#if subtabs}
+                <div
+                  class="tab-bar"
+                  role="tablist"
+                  tabindex="-1"
+                  aria-label="Art categories"
+                  onkeydown={navigateTabs}
+                >
+                  {@render subtabs()}
+                </div>
+              {/if}
               {#if subtabActions}
-                <div class="section-actions" role="group" aria-label="Section actions">
+                <div class="tab-bar" role="group" aria-label="Section actions">
                   {@render subtabActions()}
                 </div>
               {/if}
@@ -387,47 +389,35 @@
     display: none;
   }
 
-  /* -- Mode tabs, art sub-tabs (+ paste button) --------------------------- */
+  /* -- Mode tabs, art sub-tabs and their actions -------------------------- */
+  /* Each group is its own bar, so a row wraps between bars and no bar keeps
+     the width of a line it wrapped away from. */
   .detail-tab-row {
     /* Tab button height; bars add 8px (padding + border) around it. */
     --tab-height: 36px;
 
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
     justify-content: var(--header-align);
-    gap: var(--space-1);
+    gap: var(--space-2);
     max-width: 100%;
   }
 
-  /* A bar wraps onto another line rather than hiding buttons off its edge. */
-  .tab-bar {
-    margin: 0;
+  .detail-tab-row .tab-bar {
+    flex-wrap: wrap;
     overflow: visible;
   }
 
-  .mode-tabs,
-  .detail-subtabs,
-  .section-links,
-  .record-actions,
-  .section-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: var(--header-align);
-    gap: var(--space-1);
-  }
-
-  .section-links {
-    padding-right: var(--space-1);
-    border-right: var(--border-subtle);
+  /* A group whose snippet rendered nothing, such as a preview's record actions. */
+  .tab-bar:empty {
+    display: none;
   }
 
   .record-actions :global(.tab-item.danger) {
     color: var(--danger);
   }
 
-  .tab-bar :global(.tab-item:disabled) {
+  .detail-tab-row :global(.tab-item:disabled) {
     opacity: 0.5;
     cursor: not-allowed;
   }

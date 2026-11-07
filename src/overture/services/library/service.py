@@ -17,12 +17,13 @@ lazy from ...domain import (
     ImageSize,
     JobType,
     MediaType,
-    text_sort_key,
+    media_sort_key,
 )
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.media_items import MediaItemRepository
+lazy from ...repositories.records import RecordRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.common import MonitoredResponse
 lazy from ...schemas.library import (
@@ -36,6 +37,7 @@ lazy from ...schemas.library import (
     SeasonRead,
     folder_roots_response,
 )
+lazy from ...schemas.records import DatabaseRecord
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import UnsupportedImageFormatError
 lazy from ...utils.threads import owned_thread
@@ -137,7 +139,7 @@ class LibraryService:
     async def get_libraries(
         self, media_type: MediaType | None
     ) -> list[LibrarySectionRead]:
-        """Return all distinct libraries for a media type.
+        """Return all distinct libraries for a media type, movies first, then by title.
 
         Libraries are named as the media server names them; while it cannot
         be reached, by their IDs.
@@ -163,8 +165,8 @@ class LibraryService:
             )
             for library_id, (held, count) in sorted(
                 counts.items(),
-                key=lambda entry: text_sort_key(
-                    titles.get(entry[0], entry[0]), entry[0]
+                key=lambda entry: media_sort_key(
+                    entry[1][0], titles.get(entry[0], entry[0]), entry[0]
                 ),
             )
         ]
@@ -191,6 +193,14 @@ class LibraryService:
         async with self._database.read_session() as db:
             item = await require_item(db, item_id)
             return (await media_item_reads_with_public_dataset_status(db, [item]))[0]
+
+    async def item_record(self, item_id: int) -> DatabaseRecord:
+        """Return an item's stored rows and what the API derives from them."""
+        async with self._database.read_session() as db:
+            item = await require_item(db, item_id)
+            read = (await media_item_reads_with_public_dataset_status(db, [item]))[0]
+            stored = await RecordRepository(db).rows(MediaItem, item_id)
+        return DatabaseRecord.of(stored, read)
 
     async def set_monitored(self, item_id: int, monitored: bool) -> MonitoredResponse:
         """Set whether an item is monitored."""

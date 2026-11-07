@@ -1,37 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { dbRecordFields } from "../../../lib/utils/dbRecordFields";
-import { season as fixtureSeason, mediaItem } from "../../helpers/fixtures";
+import { season as fixtureSeason } from "../../helpers/fixtures";
 
 describe("database record field formatting", () => {
-  it("orders flat art and theme fields predictably", () => {
-    const fields = dbRecordFields(
-      mediaItem({
-        art_status: "partial",
-        poster_url: "https://image.test/poster.jpg",
-        poster_preview_url: "https://image.test/poster-small.jpg",
-        youtube_id: "abc123_DEF0",
-      }),
-    );
-
-    expect(fields).toEqual(
-      expect.arrayContaining([
-        { key: "poster_url", value: "https://image.test/poster.jpg" },
-        { key: "youtube_id", value: "abc123_DEF0" },
-      ]),
-    );
-    expect(
-      fields.filter((field) => field.key.startsWith("poster")).map((field) => field.key),
-    ).toEqual([
-      "poster_url",
-      "poster_source",
-      "poster_hash",
-      "poster_phash",
-      "poster_width",
-      "poster_height",
+  it("lists every field in the record's own order", () => {
+    expect(dbRecordFields({ title: "Alien", art_status: "partial", id: 1 })).toEqual([
+      { key: "title", value: "Alien" },
+      { key: "art_status", value: "partial" },
+      { key: "id", value: "1" },
     ]);
-    // The tabs show completeness by colour; the record lists only what is stored.
-    expect(fields.some((field) => field.key.endsWith("_status"))).toBe(false);
-    expect(fields.some((field) => field.value === "[object Object]")).toBe(false);
   });
 
   it("flattens nested objects on records that still contain them", () => {
@@ -51,7 +28,7 @@ describe("database record field formatting", () => {
     expect(fields.some((field) => field.value === "[object Object]")).toBe(false);
   });
 
-  it("falls back to insertion order plus recursive flattening for unranked nested values", () => {
+  it("flattens nested values in insertion order", () => {
     const fields = dbRecordFields({ nested: { a: 1, b: 2 }, top: 1 });
 
     expect(fields).toEqual([
@@ -81,8 +58,7 @@ describe("database record field formatting", () => {
     expect(dbRecordFields({ cyclic })).toEqual([{ key: "cyclic", value: "unserializable" }]);
   });
 
-  it("leaves out display renditions and empty records", () => {
-    expect(dbRecordFields({ poster_preview_url: "https://image.test/small.jpg" })).toEqual([]);
+  it("has no fields for a missing record", () => {
     expect(dbRecordFields(null)).toEqual([]);
     expect(dbRecordFields(undefined)).toEqual([]);
   });

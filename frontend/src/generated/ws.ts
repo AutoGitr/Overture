@@ -194,6 +194,11 @@ export interface CollectionUpdatedEvent {
   collection_id: number;
 }
 
+export interface CollectionMonitoredEvent {
+  collection_id: number;
+  monitored: boolean;
+}
+
 export interface PublicDatasetSyncEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
@@ -311,6 +316,7 @@ export interface WebSocketPayloadMap {
   'collection.theme.updated': CollectionThemeUpdatedEvent;
   'collections.changed': null;
   'collection.updated': CollectionUpdatedEvent;
+  'collection.monitored': CollectionMonitoredEvent;
   'public-dataset.sync.started': PublicDatasetSyncEvent;
   'public-dataset.sync.progress': PublicDatasetSyncEvent;
   'public-dataset.sync.completed': PublicDatasetSyncEvent;
@@ -372,6 +378,7 @@ export const WEBSOCKET_EVENTS = [
   'collection.theme.updated',
   'collections.changed',
   'collection.updated',
+  'collection.monitored',
   'public-dataset.sync.started',
   'public-dataset.sync.progress',
   'public-dataset.sync.completed',

@@ -633,6 +633,7 @@ def make_runtime(
         StatsService(
             database=database,
             backups=backups,
+            image_cache=image_cache,
             collections=collections.reader,
         )
         if stats is None

@@ -358,7 +358,7 @@ export class CollectionEditor {
   availableMembers(libraryItems: MediaItemRead[]) {
     const query = this.memberSearch.trim().toLowerCase();
     if (!query) return [];
-    const memberIds = new SvelteSet(this.collection.members.map((member) => member.id));
+    const memberIds = new SvelteSet(this.collection.member_ids);
     return libraryItems.filter(
       (item) =>
         !!item.library_id &&
@@ -450,16 +450,16 @@ export class CollectionEditor {
   }
 
   removeMember(id: number) {
-    return this.setMembers(this.collection.members.filter((m) => m.id !== id).map((m) => m.id));
+    return this.setMembers(this.collection.member_ids.filter((member) => member !== id));
   }
 
   addMember(id: number) {
-    if (this.collection.members.some((m) => m.id === id)) return Promise.resolve(false);
-    return this.setMembers([...this.collection.members.map((m) => m.id), id]);
+    if (this.collection.member_ids.includes(id)) return Promise.resolve(false);
+    return this.setMembers([...this.collection.member_ids, id]);
   }
 
   moveMember(id: number, targetIndex: number) {
-    const ids = this.collection.members.map((member) => member.id);
+    const ids = [...this.collection.member_ids];
     const fromIndex = ids.indexOf(id);
     if (
       fromIndex === -1 ||
@@ -475,10 +475,13 @@ export class CollectionEditor {
   }
 
   /** Why Overture cannot stop managing it, or null when it can. */
+  /** Why the collection cannot be deleted: its set would make it again. */
+  get deleteBlocker(): string | null {
+    return this.generated ? "Its group's set made it; remove its value from the set" : null;
+  }
   get orphanBlocker(): string | null {
     if (this.collection.withheld) return "It is not on the media server; delete it instead";
-    if (this.generated) return "Its group's set made it; remove its value from the set";
-    return null;
+    return this.deleteBlocker;
   }
 
   /** Stop managing it; the server keeps it, and it moves to Unmanaged. */
@@ -501,6 +504,7 @@ export class CollectionEditor {
   }
 
   async delete() {
+    if (this.deleteBlocker) return;
     const target = await chooseAction<
       NonNullable<NonNullable<DeleteCollectionData["query"]>["target"]>
     >({

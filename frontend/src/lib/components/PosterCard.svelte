@@ -1,15 +1,18 @@
 <script lang="ts">
-  import Layers from "@lucide/svelte/icons/layers";
+  import type { MediaIcon } from "../utils/mediaIcons";
   import FallbackImage from "./FallbackImage.svelte";
 
   let {
     title,
+    icon: Icon,
     src,
     fallbackSrc = null,
     onselect,
     meta = null,
   }: {
     title: string;
+    /** Shown while the poster is missing or loading. */
+    icon: MediaIcon;
     src: string | null;
     fallbackSrc?: string | null;
     onselect: () => void;
@@ -19,7 +22,7 @@
 
 <button class="poster-card card card-interactive" onclick={onselect}>
   <div class="poster">
-    {#snippet placeholder()}<Layers size={24} />{/snippet}
+    {#snippet placeholder()}<Icon size={24} />{/snippet}
     <FallbackImage {src} {fallbackSrc} alt="" {placeholder} />
   </div>
   <div class="info">

@@ -37,7 +37,7 @@ const detail = collectionDetail({
   id: 12,
   title: "Saga",
   library_ids: ["movies"],
-  members,
+  member_ids: members.map((member) => member.id),
   child_count: 1,
 });
 const rule = collectionRule();

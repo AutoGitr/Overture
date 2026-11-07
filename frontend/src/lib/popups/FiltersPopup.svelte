@@ -342,7 +342,13 @@
     {:else}
       {#each groupedSections as [group, keys] (group)}
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
-        {#if group === "libraries"}
+        {#if title}
+          <FilterSection label={title}>
+            {#each keys as key (key)}
+              {@render filter(key)}
+            {/each}
+          </FilterSection>
+        {:else}
           {#each keys as key (key)}
             {#if key !== "libraries"}
               <FilterSection label={sidebarDomain.FILTERS[key].label}>
@@ -373,18 +379,6 @@
                 />
               </FilterSection>
             {/if}
-          {/each}
-        {:else if title}
-          <FilterSection label={title}>
-            {#each keys as key (key)}
-              {@render filter(key)}
-            {/each}
-          </FilterSection>
-        {:else}
-          {#each keys as key (key)}
-            <FilterSection label={sidebarDomain.FILTERS[key].label}>
-              {@render filter(key)}
-            </FilterSection>
           {/each}
         {/if}
       {/each}

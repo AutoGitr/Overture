@@ -50,7 +50,8 @@ const mockStats: StatsResponse = {
     background_movies: coverage(120, 105, 98, 210000000),
     background_shows: coverage(45, 35, 32, 70000000),
     season_poster: coverage(180, 160, 150, 80000000),
-    overall: coverage(510, 450, 420, 510000000),
+    collections: coverage(24, 20, 18, 4000000),
+    overall: coverage(534, 470, 438, 514000000),
   },
   themes: {
     movies: coverage(120, 60, 55, 120000000),
@@ -83,12 +84,20 @@ const mockStats: StatsResponse = {
     total_size_bytes: 35000000,
     latest_backup_at: "2026-09-14T03:00:00Z",
   },
+  image_cache: {
+    original_files: 400,
+    original_size_bytes: 60000000,
+    thumb_files: 380,
+    thumb_size_bytes: 9000000,
+    total_size_bytes: 69000000,
+  },
   storage: {
-    artwork_size_bytes: 510000000,
+    artwork_size_bytes: 514000000,
     themes_size_bytes: 180000000,
+    image_cache_size_bytes: 69000000,
     database_size_bytes: 19922944,
     backups_size_bytes: 35000000,
-    total_footprint_bytes: 744922944,
+    total_footprint_bytes: 817922944,
   },
   generated_at: "2026-09-15T12:00:00Z",
 };

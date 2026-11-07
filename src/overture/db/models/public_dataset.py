@@ -28,7 +28,7 @@ class PublicDatasetItemBase(SQLModel):
 
 
 class PublicDatasetItem(PublicDatasetItemBase, table=True):
-    """Store public dataset item rows in the application database."""
+    """An OvertureDB catalog movie or show."""
 
     __tablename__: ClassVar[Any] = "public_dataset_items"
     __table_args__ = (
@@ -67,7 +67,7 @@ class PublicDatasetSeasonBase(SQLModel):
 
 
 class PublicDatasetSeason(PublicDatasetSeasonBase, table=True):
-    """Store public dataset season rows in the application database."""
+    """A season of an OvertureDB catalog show."""
 
     __tablename__: ClassVar[Any] = "public_dataset_seasons"
     __table_args__ = (
@@ -85,7 +85,7 @@ class PublicDatasetSeason(PublicDatasetSeasonBase, table=True):
 
 
 class PublicDatasetCollection(SQLModel, table=True):
-    """Store the catalog's TMDB movie collections."""
+    """An OvertureDB catalog movie collection, by its TMDB collection."""
 
     __tablename__: ClassVar[Any] = "public_dataset_collections"
     __table_args__ = (

@@ -104,7 +104,7 @@ describe("catalog sidebar", () => {
       ],
     );
     renderWithQueryClient(Sidebar);
-    await fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: /^Collections \(/ }));
     expect(await screen.findByRole("button", { name: "Select Star Wars" })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "Select Star Wars" }));
     await waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections/tmdb-10"));

@@ -17,6 +17,7 @@ const PROJECTION_HANDLERS: WebSocketHandlerMap = {
   "realtime.snapshot": () => {},
   "collections.changed": () => {},
   "collection.updated": () => {},
+  "collection.monitored": () => {},
   ...JOB_PROJECTION_HANDLERS,
   "download.started": (data) => downloadState.handleStarted(data),
   "download.progress": (data) => downloadState.handleProgress(data),

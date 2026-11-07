@@ -28,6 +28,11 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** adopting a collection names members without a TMDB ID by their TVDB or IMDb ID before their title, through new **TVDB ID** and **IMDb ID** conditions.
 - **Collections:** creating a set refuses a group that already is one and warns when another set splits the same libraries alike or the group already holds collections; the set preview names values whose title another collection already has.
 - **Collections:** a copied condition or group pastes into any criteria that can test it, in another library, collection or set.
+- **Statistics:** the storage footprint includes the image cache, with its originals, uploads and thumbnails, and artwork coverage and sizes include collection posters, backgrounds and themes.
+- **Interface:** the database record lists every stored column of the record and of the rows that belong to it, such as seasons, art slots and collection libraries, apart from what Overture derives from them.
+- **Interface:** every section of the filters popup collapses, and stays as you left it.
+- **OvertureDB:** **Browse OvertureDB in the sidebar** explains how browsing helps find gaps and mismatches and contribute them.
+- **API:** `GET /api/library/items/{id}/record` and `GET /api/collections/{id}/record` return a record's stored rows and derived values, and the `collection.monitored` event reports a monitoring change on its own.
 
 ### Changed
 
@@ -59,9 +64,22 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** a show is in progress when one of its episodes is partly played, as Plex's filter tests.
 - **Interface:** save, run and create buttons sit at the lower right of their row or popup, with resets at the left; Copy comes before Duplicate; the filters and Collection groups remember their open sections, while each collection opens with only Setup and Content expanded; Rename or delete is the last section of a group.
 - **Interface:** the criteria field list calls its list and tag sources External.
+- **Collections:** deleting a group offers **Orphan them** for its collections, as orphaning one collection does, instead of removing them from Overture; collections a set made can be neither deleted nor orphaned while the set exists.
+- **Collections:** Radarr and Sonarr tags are written as Radarr and Sonarr accept them, in lowercase letters, digits and dashes, and collections whose tags come out the same share the tag instead of taking it from each other's members.
+- **Library:** libraries are listed movies first, then by name, everywhere; a collection's criteria follow that order whatever order its libraries were chosen in.
+- **Library:** sorting by Title follows the media server's sort title, so leading articles such as "The" and "A" are left out as the server leaves them out.
+- **Interface:** Movies, Shows and the collections icon share the sidebar's width, each with its count and with its name where there is room; the collections icon names what it lists, groups or collections, and shows the view a click switches to.
+- **Interface:** the filters popup lists **Holds** under Status, and **Collection** between Theme music and Metadata issues.
+- **Interface:** the detail tabs and actions wrap as separate bars, so no row is wider than its buttons; shows use the TV icon and seasons an icon of their own.
+- **Interface:** the sidebar's search box takes the room the filter and reset buttons give up.
+- **Collections:** toggling a collection's monitoring updates it in place, and opening a collection no longer reloads its members, which the library already lists.
+- **API:** a collection reports `member_ids` instead of `members`, and `server_poster_version` and `server_background_version` instead of `thumb_url` and `art_url`; items report `sort_title`, seasons `poster_source`; a group deleted with `collections: "orphan"` orphans its collections, replacing `"overture"`; statistics add `image_cache` and `art.collections`.
 
 ### Fixed
 
+- **Collections:** **Delete group** in Collection groups asks what happens to the group's collections instead of doing nothing.
+- **Artwork:** an uploaded poster, background or season poster can be cleared like a linked one.
+- **Artwork:** a season's local poster shows even when its show has no media folder.
 
 - **Security:** the container image is built on a Python base with `apt` 3.0.4, fixing CVE-2026-109518.
 - **Library:** TVDB links open by ID, so titles whose TVDB slug differs from their name no longer lead to a missing page.

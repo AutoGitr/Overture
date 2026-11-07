@@ -6,7 +6,6 @@ lazy from typing import Annotated, Literal, Self
 
 lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
 
-lazy from ..config import API_PREFIX
 lazy from ..db.art_slots import read_art_slot, slot_art_source
 lazy from ..db.completion import collection_art_completion, collection_theme_status
 lazy from ..db.models.collection_rule import CollectionRule
@@ -44,7 +43,6 @@ lazy from ..utils.collection_formats import (
 )
 lazy from .base import PublicText, StrictBaseModel
 lazy from .common import StatusResponse
-lazy from .library import MediaItemRead
 lazy from .validators import CronExpression, GroupName, YouTubeId
 
 type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
@@ -347,8 +345,10 @@ class CollectionRead(CollectionArtwork):
     last_rule_sync: datetime | None = None
     #: The collection set value the collection was created for.
     generated_value: str | None = None
-    thumb_url: str | None = None
-    art_url: str | None = None
+    #: Name the media server's current poster and background, as ``t`` of
+    #: their image route, so a replaced one is fetched anew; ``None`` without one.
+    server_poster_version: str | None = None
+    server_background_version: str | None = None
     child_count: int = 0
     below_minimum: bool = False
     #: What its libraries hold, movies first.
@@ -383,7 +383,8 @@ class CollectionDetail(CollectionRead):
     """One collection with its members and what limits its theme."""
 
     effective_sync_mode: SyncMode = SyncMode.SYNC
-    members: list[MediaItemRead]
+    #: The library items it holds, in display order; the library lists them.
+    member_ids: list[int]
     rule: CollectionRuleRead | None = None
     #: Why a theme cannot be stored on this collection, if it cannot.
     theme_unavailable: str | None = None
@@ -429,18 +430,9 @@ class CollectionThemeUpdatedEvent(StrictBaseModel):
     theme_status: AssetStatus
 
 
-def _collection_image_url(
-    collection_id: int, image_type: str, server_url: str | None
-) -> str | None:
-    """Return Overture's route for a collection image the server has.
-
-    ``t`` names the server's current image, so a replaced one is fetched anew
-    instead of read from the browser's cache, without revealing the server URL.
-    """
-    if not server_url:
-        return None
-    version = hashlib.sha256(server_url.encode()).hexdigest()[:16]
-    return f"{API_PREFIX}/collections/{collection_id}/image/{image_type}?t={version}"
+def _server_image_version(server_url: str | None) -> str | None:
+    """Name the server's image without revealing its URL."""
+    return hashlib.sha256(server_url.encode()).hexdigest()[:16] if server_url else None
 
 
 def collection_read(
@@ -481,8 +473,8 @@ def collection_read(
         sync_failed=bool(rule and rule.last_error),
         last_rule_sync=rule.last_synced_at if rule else None,
         generated_value=row.generated_value,
-        thumb_url=_collection_image_url(row.id or 0, "poster", row.thumb_url),
-        art_url=_collection_image_url(row.id or 0, "background", row.art_url),
+        server_poster_version=_server_image_version(row.thumb_url),
+        server_background_version=_server_image_version(row.art_url),
         child_count=row.child_count,
         media_types=row.media_types,
         library_ids=row.library_ids,
@@ -531,9 +523,16 @@ class BulkCollectionMonitorUpdate(StrictBaseModel):
 
 
 class CollectionUpdatedEvent(StrictBaseModel):
-    """A collection's match, membership or monitoring changed."""
+    """A collection's match or membership changed."""
 
     collection_id: int
+
+
+class CollectionMonitoredEvent(StrictBaseModel):
+    """A collection was monitored or unmonitored; nothing else changed."""
+
+    collection_id: int
+    monitored: bool
 
 
 class CollectionThemeSources(StrictBaseModel):
@@ -815,11 +814,11 @@ class CollectionGroupDelete(StrictBaseModel):
     """What happens to a deleted group's collections.
 
     ``keep`` moves them to Ungrouped, ``move`` puts them in *group*,
-    ``overture`` forgets them (the server copies return as Unmanaged on the
-    next import) and ``both`` deletes them from the server too.
+    ``orphan`` stops managing them, as orphaning one collection does, and
+    ``both`` deletes them from Overture and the server.
     """
 
-    collections: Literal["keep", "move", "overture", "both"] = "keep"
+    collections: Literal["keep", "move", "orphan", "both"] = "keep"
     group: GroupName | None = None
 
     @model_validator(mode="after")

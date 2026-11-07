@@ -28,7 +28,7 @@ class SeasonBase(SQLModel):
 
 
 class Season(SeasonBase, table=True):
-    """Store season rows in the application database."""
+    """One season of a TV show."""
 
     __tablename__: ClassVar[Any] = "seasons"
     __table_args__ = (
