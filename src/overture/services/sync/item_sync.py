@@ -10,11 +10,13 @@ lazy from ...domain import (
     ArtType,
     AutoUnmonitor,
     MediaType,
+    TermKind,
     guid_int,
     guid_text,
 )
 lazy from ...media_servers.adapters import ServerItem, SyncItemResult
 lazy from ...repositories.media_items import MediaItemRepository
+lazy from ...repositories.terms import TermRepository
 lazy from ...utils.time import utc_now
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from .art_urls import ResolvedArtUrls, apply_provider_art_urls
@@ -43,10 +45,9 @@ class ItemReconciler:
             item.imdb_id,
             item.folder_path,
             item.server_item_id,
-            item.server_link,
             item.library_id,
             item.monitored,
-            tuple(item.directors),
+            tuple(item.values(TermKind.DIRECTOR)),
             item.studio,
             item.last_matched_at,
             item.created_at,
@@ -76,7 +77,7 @@ class ItemReconciler:
         *,
         server_item_id: str | None = None,
         exclude_item_ids: set[int] | None = None,
-        load_art: bool = True,
+        for_update: bool = True,
     ) -> MediaItem | None:
         """Look up a MediaItem by external GUID dict."""
         return await MediaItemRepository(session).find_by_external_guids(
@@ -84,7 +85,7 @@ class ItemReconciler:
             media_type,
             server_item_id=server_item_id,
             exclude_item_ids=exclude_item_ids,
-            load_art=load_art,
+            for_update=for_update,
         )
 
     async def sync_item(
@@ -129,11 +130,11 @@ class ItemReconciler:
         server_item: ServerItem,
         *,
         exclude_item_ids: set[int] | None = None,
-        load_art: bool = True,
+        for_update: bool = True,
     ) -> MediaItem | None:
         """Find the existing row a provider item would update.
 
-        A lookup that only identifies the row passes ``load_art=False``.
+        A lookup that only identifies the row passes ``for_update=False``.
         """
         media_items = MediaItemRepository(session)
         item: MediaItem | None = None
@@ -145,7 +146,7 @@ class ItemReconciler:
                 server_item.media_type,
                 server_item_id=server_item.id,
                 exclude_item_ids=exclude_item_ids,
-                load_art=load_art,
+                for_update=for_update,
             )
 
         if not item and server_item.folder_path:
@@ -153,7 +154,7 @@ class ItemReconciler:
                 server_item.folder_path,
                 server_item.media_type,
                 exclude_item_ids=exclude_item_ids,
-                load_art=load_art,
+                for_update=for_update,
             )
 
         if not item:
@@ -161,7 +162,7 @@ class ItemReconciler:
                 server_item.id,
                 server_item.media_type,
                 exclude_item_ids=exclude_item_ids,
-                load_art=load_art,
+                for_update=for_update,
             )
             if candidate and not _has_metadata_conflict(candidate, server_item):
                 item = candidate
@@ -186,13 +187,7 @@ class ItemReconciler:
             imdb_id=guid_text(server_item.guids, "imdb"),
             folder_path=server_item.folder_path,
             server_item_id=server_item.id,
-            server_link=server_item.server_link,
             library_id=server_item.library_id or None,
-            directors=(
-                list(server_item.directors)
-                if server_item.media_type == MediaType.MOVIE
-                else []
-            ),
             director_etag=(
                 server_item.director_etag
                 if server_item.media_type == MediaType.MOVIE
@@ -201,8 +196,8 @@ class ItemReconciler:
             monitored=True,
             created_at=utc_now(),
         )
-        apply_server_metadata(item, server_item)
-        apply_provider_collection(item, server_item)
+        await apply_server_metadata(session, item, server_item)
+        await apply_provider_collection(session, item, server_item)
         session.add(item)
         await session.flush()
 
@@ -268,22 +263,20 @@ class ItemReconciler:
 
         item.server_item_id = server_item.id
         item.server_removed_at = None
-        item.server_link = server_item.server_link
         item.library_id = server_item.library_id or None
         if server_item.year is not None and (item.year is None or server_changed):
             item.year = server_item.year
-        if server_item.media_type == MediaType.MOVIE:
-            item.directors = list(server_item.directors)
-            item.director_etag = server_item.director_etag
-        else:
-            item.directors = []
-            item.director_etag = None
-        apply_server_metadata(item, server_item)
+        item.director_etag = (
+            server_item.director_etag
+            if server_item.media_type == MediaType.MOVIE
+            else None
+        )
+        await apply_server_metadata(session, item, server_item)
 
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
         item.tvdb_id = item.tvdb_id or guid_int(server_item.guids, "tvdb")
         item.imdb_id = item.imdb_id or guid_text(server_item.guids, "imdb")
-        apply_provider_collection(item, server_item)
+        await apply_provider_collection(session, item, server_item)
 
         art_pulled = apply_provider_art_urls(
             item, server_item, resolved, only_missing=not server_changed
@@ -303,17 +296,30 @@ class ItemReconciler:
         return art_pulled
 
 
-def apply_server_metadata(item: MediaItem, server_item: ServerItem) -> None:
-    """Copy the metadata the server owns, which collection criteria evaluate."""
+async def apply_server_metadata(
+    session: AsyncSession, item: MediaItem, server_item: ServerItem
+) -> None:
+    """Copy the metadata the server owns, which collection criteria evaluate.
+
+    Only movies have directors.
+    """
+    await TermRepository(session).assign(
+        item,
+        {
+            TermKind.GENRE: server_item.genres,
+            TermKind.ACTOR: server_item.actors,
+            TermKind.WRITER: server_item.writers,
+            TermKind.PRODUCER: server_item.producers,
+            TermKind.COUNTRY: server_item.countries,
+            TermKind.LABEL: server_item.labels,
+            TermKind.DIRECTOR: server_item.directors
+            if server_item.media_type == MediaType.MOVIE
+            else (),
+        },
+    )
     item.server_added_at = server_item.server_added_at
     item.sort_title = server_item.sort_title
     item.studio = server_item.studio
-    item.genres = list(server_item.genres)
-    item.actors = list(server_item.actors)
-    item.writers = list(server_item.writers)
-    item.producers = list(server_item.producers)
-    item.countries = list(server_item.countries)
-    item.labels = list(server_item.labels)
     item.content_rating = server_item.content_rating
     item.edition = server_item.edition
     item.resolution = server_item.resolution
@@ -329,14 +335,16 @@ def apply_server_metadata(item: MediaItem, server_item: ServerItem) -> None:
     item.versions = server_item.versions
 
 
-def apply_provider_collection(item: MediaItem, server_item: ServerItem) -> None:
+async def apply_provider_collection(
+    session: AsyncSession, item: MediaItem, server_item: ServerItem
+) -> None:
     """Record the TMDB collection a server names for a movie, without a TMDB key.
 
     Jellyfin's TMDB plugin stores it among the movie's provider IDs. A
     rematched title drops the TMDB facts of its previous match.
     """
     if item.tmdb_checked_id is not None and item.tmdb_checked_id != item.tmdb_id:
-        record_tmdb_facts(item, None)
+        await record_tmdb_facts(session, item, None)
         item.tmdb_checked_id = None
     collection_id = guid_int(server_item.guids, "tmdbcollection")
     if item.media_type is MediaType.MOVIE and collection_id and item.tmdb_id:

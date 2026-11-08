@@ -5,7 +5,7 @@
   import { getPublicDatasetItemIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
   import type { CatalogContext } from "../utils/catalogDraft";
-  import { createSeasonsQuery } from "../rest/queries";
+  import { createSeasonsQuery, createServerLinks } from "../rest/queries";
   import {
     goToItemView,
     goToCatalogEntry,
@@ -68,6 +68,11 @@
   let subject = $derived(item ?? preview ?? catalogEntry ?? null);
   let artType = $derived(viewArtType(view));
   const seasonsQuery = createSeasonsQuery(() => item);
+  const serverLinks = createServerLinks();
+  // A title the server dropped has no copy there to open.
+  let serverLink = $derived(
+    item && !item.server_removed_at ? serverLinks.item(item.server_item_id) : null,
+  );
   let seasons = $derived(seasonsQuery.data ?? []);
   let drillSeason = $derived(
     view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
@@ -183,8 +188,8 @@
   {subjectKey}
   recordActions={item || catalog ? recordActions : undefined}
   {backgroundUrl}
-  posterHref={item?.server_link ?? null}
-  posterLinkTitle={item?.server_link ? `Open in ${settingsState.media_server_name}` : null}
+  posterHref={serverLink}
+  posterLinkTitle={serverLink ? `Open in ${settingsState.media_server_name}` : null}
   emptyMessage={emptyMessage ??
     `Select a ${
       uiState.sidebarMode === "collections"

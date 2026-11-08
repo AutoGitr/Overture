@@ -1,7 +1,13 @@
 """Application-owned media-server reconciliation."""
 
 lazy import logging
-lazy from collections.abc import AsyncGenerator, Awaitable, Callable, Collection
+lazy from collections.abc import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Collection,
+    Sequence,
+)
 lazy from contextlib import asynccontextmanager
 lazy from dataclasses import dataclass, field
 lazy from typing import Any
@@ -18,11 +24,13 @@ lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.adapters import (
     ServerItem,
+    ServerSection,
     SyncItemResult,
     SyncProgressCallback,
     SyncStopCheck,
 )
 lazy from ...media_servers.base import BaseMediaServerProvider
+lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...services.library.items import (
     emit_library_item_removed,
@@ -92,6 +100,11 @@ class LibraryReconciler:
     def asset_storage(self) -> AssetStorage:
         """Return the storage whose locks guard each item's files."""
         return self.local_assets.asset_storage
+
+    async def record_libraries(self, sections: Sequence[ServerSection]) -> None:
+        """Store the libraries the server lists, which its items are filed under."""
+        async with self._database.write_session() as session:
+            await LibraryRepository(session).record(sections, utc_now())
 
     async def fill_deferred_directors(
         self, provider: BaseMediaServerProvider[Any], server_items: list[ServerItem]
@@ -237,7 +250,7 @@ class LibraryReconciler:
         for _ in range(500):
             async with self._database.read_session() as session:
                 candidate = await self._items.find_existing_item(
-                    session, server_item, exclude_item_ids=excluded, load_art=False
+                    session, server_item, exclude_item_ids=excluded, for_update=False
                 )
             if candidate is None or candidate.id is None:
                 return excluded, None

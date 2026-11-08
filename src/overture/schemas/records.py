@@ -1,9 +1,12 @@
 """Database record REST schemas."""
 
-lazy from pydantic import BaseModel
+lazy from collections.abc import Mapping
+
+lazy from pydantic import BaseModel, Field
 
 lazy from ..db.art_slots import flattened_art_names
 lazy from ..db.models.art import ArtSlot
+lazy from ..domain import TermKind
 lazy from ..utils.types import JsonValue
 lazy from .base import StrictBaseModel
 
@@ -24,10 +27,17 @@ class DatabaseRecord(StrictBaseModel):
     """
 
     stored: list[StoredRow]
+    #: The metadata values a title holds, such as its genres, by kind.
+    values: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
     derived: dict[str, JsonValue]
 
     @classmethod
-    def of(cls, stored: list[StoredRow], read: BaseModel) -> DatabaseRecord:
+    def of(
+        cls,
+        stored: list[StoredRow],
+        read: BaseModel,
+        values: Mapping[TermKind, list[str]] | None = None,
+    ) -> DatabaseRecord:
         """The stored rows, and what *read* shows beyond the record's own columns."""
         shown = set(stored[0].values) if stored else set[str]()
         for row in stored:
@@ -35,6 +45,7 @@ class DatabaseRecord(StrictBaseModel):
                 shown |= flattened_art_names(str(row.values["art_type"]))
         return cls(
             stored=stored,
+            values={str(kind): names for kind, names in (values or {}).items()},
             derived={
                 key: value
                 for key, value in read.model_dump(mode="json").items()

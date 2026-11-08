@@ -17,6 +17,7 @@ lazy from ..db.models.media_collection import (
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import MediaType, ServerType
+lazy from .media_items import WITH_TERMS
 
 
 class CollectionRepository:
@@ -25,8 +26,8 @@ class CollectionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def group_policies(self, server_type: ServerType) -> list[CollectionGroup]:
-        """Return the active server's group defaults."""
+    async def groups(self, server_type: ServerType) -> list[CollectionGroup]:
+        """Return the server's groups."""
         return list(
             (
                 await self.session.exec(
@@ -37,10 +38,10 @@ class CollectionRepository:
             ).all()
         )
 
-    async def group_policy(
+    async def group(
         self, server_type: ServerType, name: str | None
     ) -> CollectionGroup | None:
-        """Return one group's defaults without conflating ungrouped collections."""
+        """Return the server's group named *name*; none for no name."""
         if not name:
             return None
         return (
@@ -52,6 +53,15 @@ class CollectionRepository:
             )
         ).first()
 
+    async def ensure_group(self, server_type: ServerType, name: str) -> CollectionGroup:
+        """Return the server's group named *name*, added without defaults if new."""
+        group = await self.group(server_type, name)
+        if group is None:
+            group = CollectionGroup(server_type=server_type, name=name)
+            self.session.add(group)
+            await self.session.flush()
+        return group
+
     async def get(self, collection_id: int) -> MediaCollection | None:
         """Return a collection row, listed or not."""
         return (
@@ -60,18 +70,13 @@ class CollectionRepository:
             )
         ).first()
 
-    async def group_members(
-        self, server_type: ServerType, name: str
-    ) -> list[MediaCollection]:
+    async def group_members(self, group: CollectionGroup) -> list[MediaCollection]:
         """Include unlisted collections so group operations leave no orphaned data."""
         return list(
             (
                 await self.session.exec(
                     select(MediaCollection)
-                    .where(
-                        col(MediaCollection.server_type) == server_type,
-                        col(MediaCollection.collection_group) == name,
-                    )
+                    .where(col(MediaCollection.group_id) == group.id)
                     .order_by(col(MediaCollection.id))
                 )
             ).all()
@@ -149,9 +154,10 @@ class CollectionRepository:
         if collection_ids is not None:
             stmt = stmt.where(col(MediaCollection.id).in_(collection_ids))
         if collection_groups is not None:
-            stmt = stmt.where(
-                col(MediaCollection.collection_group).in_(collection_groups)
-            )
+            stmt = stmt.join(
+                CollectionGroup,
+                col(MediaCollection.group_id) == col(CollectionGroup.id),
+            ).where(col(CollectionGroup.name).in_(collection_groups))
         if not include_unmonitored:
             stmt = stmt.where(col(MediaCollection.monitored).is_(True))
         return list(
@@ -166,6 +172,7 @@ class CollectionRepository:
         """Return the visible stored items a collection holds."""
         stmt = (
             select(MediaItem)
+            .options(WITH_TERMS)
             .join(
                 MediaCollectionMember,
                 col(MediaCollectionMember.media_item_id) == col(MediaItem.id),
@@ -309,6 +316,7 @@ class CollectionRepository:
             (
                 await self.session.exec(
                     select(MediaItem)
+                    .options(WITH_TERMS)
                     .where(
                         col(MediaItem.media_type) == media_type,
                         col(MediaItem.library_id) == library_id,
@@ -320,8 +328,13 @@ class CollectionRepository:
             ).all()
         )
 
-    async def titles_by_item(self, library_id: str) -> dict[int, list[str]]:
-        """The titles of the listed collections each item of a library belongs to."""
+    async def titles_by_item(
+        self, library_id: str, excluding: int | None = None
+    ) -> dict[int, list[str]]:
+        """The titles of the listed collections each item of a library belongs to.
+
+        The collection *excluding* names is left out.
+        """
         stmt = (
             select(col(MediaCollectionMember.media_item_id), col(MediaCollection.title))
             .join(
@@ -334,6 +347,7 @@ class CollectionRepository:
             .where(
                 col(MediaItem.library_id) == library_id,
                 col(MediaCollection.last_synced_at).is_not(None),
+                col(MediaCollection.id) != (excluding or 0),
             )
         )
         titles: dict[int, list[str]] = {}

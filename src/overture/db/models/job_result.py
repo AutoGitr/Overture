@@ -5,6 +5,8 @@ lazy from typing import Any, ClassVar
 
 lazy from sqlmodel import JSON, Field, Index, SQLModel
 
+lazy from ..columns import typed_columns
+
 
 class JobRun(SQLModel, table=True):
     """One run of a background job, with its summary."""
@@ -45,3 +47,8 @@ class JobLogLine(SQLModel, table=True):
     ordinal: int = Field(primary_key=True)
     outcome: str
     entry: dict[str, Any] = Field(sa_type=JSON)
+
+
+typed_columns(JobRun)
+typed_columns(JobResult)
+typed_columns(JobLogLine)

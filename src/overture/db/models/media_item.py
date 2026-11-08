@@ -1,20 +1,61 @@
 """MediaItem model - movies and shows."""
 
 lazy from datetime import datetime
-lazy from typing import Any, ClassVar
+lazy from typing import Any, ClassVar, Optional
 
-lazy from sqlmodel import JSON, Field, Index, Relationship, SQLModel
+lazy from sqlmodel import (
+    CheckConstraint,
+    Field,
+    ForeignKeyConstraint,
+    Index,
+    Relationship,
+    UniqueConstraint,
+)
 
-lazy from ...domain import MediaType, ThemeIdSource
-lazy from ..columns import enum_columns, enum_type
+lazy from ...domain import MediaType, TermKind, ThemeIdSource
+lazy from ..columns import enum_type, typed_columns
 lazy from .art import ArtSlot
 lazy from .download_job import DownloadJob
+lazy from .library import Library
 lazy from .season import Season
+lazy from .shared import ThemeColumns
+lazy from .term import MediaItemTerm
 
 
-class MediaItemBase(SQLModel):
-    """Base model holding media item fields."""
+class MediaItem(ThemeColumns, table=True):
+    """A movie or TV show of the media server's libraries."""
 
+    __tablename__: ClassVar[Any] = "media_items"
+    __table_args__ = (
+        # Movies and shows share the table; each keeps the other's fields empty.
+        CheckConstraint(
+            "media_type = 'movie' OR (tmdb_collection_id IS NULL AND edition IS NULL"
+            " AND versions IS NULL AND director_etag IS NULL)",
+            name="ck_media_items_movie_fields",
+        ),
+        CheckConstraint(
+            "media_type = 'show' OR (show_status IS NULL AND last_aired IS NULL)",
+            name="ck_media_items_show_fields",
+        ),
+        ForeignKeyConstraint(
+            ["library_id", "media_type"],
+            ["libraries.id", "libraries.media_type"],
+            ondelete="RESTRICT",
+            name="fk_media_items_library",
+        ),
+        # The key seasons reference, so only a show can have them.
+        UniqueConstraint("id", "media_type", name="uq_media_items_typed"),
+        Index("ix_media_items_server_identity", "media_type", "server_item_id"),
+        Index("ix_media_items_tmdb_identity", "media_type", "tmdb_id"),
+        Index("ix_media_items_tvdb_identity", "media_type", "tvdb_id"),
+        Index("ix_media_items_imdb_identity", "media_type", "imdb_id"),
+        Index("ix_media_items_title_year", "media_type", "title", "year"),
+        Index("ix_media_items_visible_title", "server_removed_at", "title"),
+        Index("ix_media_items_visible_library", "server_removed_at", "library_id"),
+        Index("ix_media_items_monitored_library", "monitored", "library_id"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
     media_type: MediaType = Field(sa_type=enum_type(MediaType), index=True)
     title: str = Field(nullable=False, index=True)
     #: The server's sort title, which orders titles as the server does.
@@ -29,32 +70,18 @@ class MediaItemBase(SQLModel):
     folder_path: str | None = Field(default=None, index=True)
 
     server_item_id: str | None = Field(default=None, index=True)
-    server_link: str | None = None
     server_verified_at: datetime | None = None
-    # Provider library ID, used for library-based filtering.
+    #: The library holding it; none for a title chosen from TMDB alone.
     library_id: str | None = Field(default=None, index=True)
 
     monitored: bool = Field(default=True, nullable=False)
 
-    youtube_id: str | None = None
+    #: How the selected video was established.
     youtube_id_source: ThemeIdSource | None = Field(
         default=None, sa_type=enum_type(ThemeIdSource)
     )
-    youtube_title: str | None = None
-    youtube_duration: int | None = Field(
-        default=None, description="Duration in seconds"
-    )
-    theme_file_hash: str | None = None
 
-    directors: list[str] = Field(default_factory=list[str], sa_type=JSON)
     studio: str | None = None
-    genres: list[str] = Field(default_factory=list, sa_type=JSON)
-    actors: list[str] = Field(default_factory=list, sa_type=JSON)
-    writers: list[str] = Field(default_factory=list, sa_type=JSON)
-    producers: list[str] = Field(default_factory=list, sa_type=JSON)
-    countries: list[str] = Field(default_factory=list, sa_type=JSON)
-    #: Plex labels or Jellyfin and Emby tags.
-    labels: list[str] = Field(default_factory=list, sa_type=JSON)
     content_rating: str | None = None
     edition: str | None = None
     resolution: str | None = None
@@ -73,14 +100,8 @@ class MediaItemBase(SQLModel):
 
     # What TMDB says about the title, read by TMDB enrichment.
     original_language: str | None = None
-    origin_countries: list[str] = Field(default_factory=list, sa_type=JSON)
     tmdb_rating: float | None = None
     tmdb_votes: int | None = None
-    tmdb_keywords: list[str] = Field(default_factory=list, sa_type=JSON)
-    companies: list[str] = Field(default_factory=list, sa_type=JSON)
-    networks: list[str] = Field(default_factory=list, sa_type=JSON)
-    #: Subscription services streaming the title in the configured region.
-    streaming: list[str] = Field(default_factory=list, sa_type=JSON)
     show_status: str | None = None
     last_aired: str | None = None
 
@@ -90,40 +111,26 @@ class MediaItemBase(SQLModel):
     server_added_at: datetime | None = None
     server_removed_at: datetime | None = None
 
-
-class MediaItem(MediaItemBase, table=True):
-    """A movie or TV show of the media server's libraries."""
-
-    __tablename__: ClassVar[Any] = "media_items"
-    __table_args__ = (
-        Index("ix_media_items_server_identity", "media_type", "server_item_id"),
-        Index("ix_media_items_tmdb_identity", "media_type", "tmdb_id"),
-        Index("ix_media_items_tvdb_identity", "media_type", "tvdb_id"),
-        Index("ix_media_items_imdb_identity", "media_type", "imdb_id"),
-        Index("ix_media_items_title_year", "media_type", "title", "year"),
-        Index("ix_media_items_visible_title", "server_removed_at", "title"),
-        Index("ix_media_items_visible_library", "server_removed_at", "library_id"),
-        Index("ix_media_items_monitored_library", "monitored", "library_id"),
-    )
-
-    id: int | None = Field(default=None, primary_key=True)
-
     # Media-server metadata version the stored directors were read at, for
     # servers whose listings omit directors (Jellyfin and Emby).
     director_etag: str | None = None
-    theme_file_mtime_ns: int | None = None
-    theme_file_size: int | None = None
-    #: Seconds, read from the file at the revision above.
-    theme_file_duration: int | None = None
     theme_provenance_cleared: bool = Field(default=False, nullable=False)
     #: The tmdb_id the TMDB fields describe; a different tmdb_id means they
     #: have to be looked up again, as does an old lookup.
     tmdb_checked_id: int | None = None
     tmdb_checked_at: datetime | None = None
 
+    # Read only: an item's media type is its own, which the key shares.
+    library: Optional["Library"] = Relationship(
+        sa_relationship_kwargs={"lazy": "raise", "viewonly": True}
+    )
     # Relationships. Foreign keys cascade in the database, so a deleted
-    # item cannot leave seasons, artwork, or jobs behind whether the delete goes
-    # through the ORM or straight to SQL.
+    # item cannot leave seasons, artwork, values or jobs behind whether the
+    # delete goes through the ORM or straight to SQL.
+    terms: list["MediaItemTerm"] = Relationship(
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "raise", "order_by": "MediaItemTerm.position"},
+    )
     seasons: list["Season"] = Relationship(
         back_populates="media_item",
         cascade_delete=True,
@@ -144,6 +151,12 @@ class MediaItem(MediaItemBase, table=True):
         super().__init__(**data)
         if "art_slots" not in data:
             self.art_slots = []
+        if "terms" not in data:
+            self.terms = []
+
+    def values(self, kind: TermKind) -> list[str]:
+        """The item's values of *kind*, in order; its terms must be loaded."""
+        return [link.term.name for link in self.terms if link.term.kind is kind]
 
 
-enum_columns(MediaItem)
+typed_columns(MediaItem)

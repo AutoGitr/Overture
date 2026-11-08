@@ -159,7 +159,11 @@ def test_art_source_label_names_known_sources_then_sites(url: str, label: str) -
 def test_art_sources_are_the_catalog_sources_overturedb_and_uploads() -> None:
     hosts = {art_source(f"https://{host}/") for host in ART_HOSTS}
 
-    assert hosts == set(ArtSource) - {ArtSource.OVERTUREDB, ArtSource.UPLOAD}
+    assert hosts == set(ArtSource) - {
+        ArtSource.OVERTUREDB,
+        ArtSource.UPLOAD,
+        ArtSource.GENERATED,
+    }
 
 
 @pytest.mark.parametrize(

@@ -32,12 +32,14 @@ lazy from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+lazy from sqlmodel import insert
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.dataset_contract.contract import ART_HOSTS
 lazy from overture.db import metadata
 lazy from overture.db.models.download_job import DownloadJob
+lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.schedule import TaskSchedule
@@ -209,6 +211,40 @@ def media_root(tmp_path: Path) -> Path:
     return root
 
 
+#: Libraries of both types that a sync once recorded, so items and collections
+#: can be filed under them. None is listed; a test that needs the server's
+#: current libraries records its provider's sections, as a sync does.
+TEST_LIBRARIES = (
+    "1",
+    "2",
+    "3",
+    "5",
+    "9",
+    "elsewhere",
+    "extra",
+    "jelly-movies",
+    "jf-home-lib",
+    "jf-movies-lib",
+    "l1",
+    "lib",
+    "lib-1",
+    "lib-shows",
+    "lib1",
+    "lib2",
+    "library",
+    "library-1",
+    "m",
+    "m2",
+    "movies",
+    "other",
+    "plex-lib-1",
+    "s",
+    "shows",
+    "tv",
+    "x",
+)
+
+
 @pytest.fixture
 async def isolated_engine(
     tmp_path: Path,
@@ -226,6 +262,19 @@ async def isolated_engine(
 
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
+        await conn.execute(
+            insert(Library),
+            [
+                {
+                    "id": key,
+                    "media_type": media_type,
+                    "title": key,
+                    "removed_at": datetime(2020, 1, 1, tzinfo=UTC),
+                }
+                for key in TEST_LIBRARIES
+                for media_type in MediaType
+            ],
+        )
 
     try:
         yield engine

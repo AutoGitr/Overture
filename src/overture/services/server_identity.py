@@ -60,9 +60,6 @@ async def resolve_owner_server_id(
     parent_id = item.server_item_id or await provider.find_item_id(item)
     if not parent_id:
         return None
-    link = (
-        await provider.build_item_link(parent_id) if not item.server_item_id else None
-    )
     server_id = (
         await provider.find_season_id(parent_id, season.season_num)
         if season is not None
@@ -70,14 +67,13 @@ async def resolve_owner_server_id(
     )
 
     return await _save_identity(
-        item_id, parent_id, link, season, server_id, database=database
+        item_id, parent_id, season, server_id, database=database
     )
 
 
 async def _save_identity(
     item_id: int,
     parent_id: str,
-    link: str | None,
     season: Season | None,
     server_id: str | None,
     *,
@@ -94,7 +90,6 @@ async def _save_identity(
         if not current.server_item_id:
             current.server_item_id = parent_id
             current.server_verified_at = utc_now()
-            current.server_link = link
         if season is None:
             return current.server_item_id
         if season.id is None:

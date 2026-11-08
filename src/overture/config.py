@@ -260,6 +260,9 @@ class Settings(RuntimeSettings):
     SONARR_URL: Annotated[str, AfterValidator(_sonarr_url)] = ""
     SONARR_API_KEY: SecretStr = SecretStr("")
     SONARR_VERIFY_TLS: bool = True
+    #: Where a failed run is announced: one webhook or Apprise API URL, which
+    #: may hold its own credentials.
+    NOTIFY_URL: SecretStr = SecretStr("")
     # Jellyfin's collections metadata folder, mounted into Overture, where it
     # writes each collection's theme.mp3.
     JELLYFIN_COLLECTIONS_PATH: Path | None = None
@@ -284,6 +287,15 @@ class Settings(RuntimeSettings):
 
     _plex_secure_origin: str | None = PrivateAttr(default=None)
 
+    @field_validator("NOTIFY_URL")
+    @classmethod
+    def validate_notify_url(cls, value: SecretStr) -> SecretStr:
+        """Accept an absolute HTTP or HTTPS URL, or none."""
+        url = value.get_secret_value().strip()
+        if url and urlsplit(url).scheme.lower() not in {"http", "https"}:
+            raise ValueError("NOTIFY_URL must be an absolute HTTP or HTTPS URL")
+        return SecretStr(url)
+
     @field_validator("OIDC_ISSUER_URL", mode="before")
     @classmethod
     def empty_issuer(cls, value: object) -> object:
@@ -295,7 +307,7 @@ class Settings(RuntimeSettings):
         return [
             value.get_secret_value()
             for value in self.model_dump().values()
-            if isinstance(value, SecretStr)
+            if isinstance(value, SecretStr) and value.get_secret_value()
         ]
 
     @property

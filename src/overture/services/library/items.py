@@ -15,10 +15,11 @@ lazy from ...db.models.public_dataset import PublicDatasetItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import ArtType, AspectRatioTolerance, MediaType
+lazy from ...domain import ArtType, AspectRatioTolerance, MediaType, TermKind
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...repositories.seasons import SeasonRepository
+lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.library import (
     MediaItemRead,
     SeasonRead,
@@ -134,9 +135,9 @@ async def media_item_reads_with_public_dataset_status(
         db, items, public_items, trust_no_theme=trust_no_theme
     )
 
-    collections = await CollectionRepository(db).collection_ids_by_item(
-        [item.id for item in items if item.id is not None]
-    )
+    item_ids = [item.id for item in items if item.id is not None]
+    collections = await CollectionRepository(db).collection_ids_by_item(item_ids)
+    directors = await TermRepository(db).values_by_item(item_ids, TermKind.DIRECTOR)
     reads: list[MediaItemRead] = []
     for item in items:
         if item.id is None:
@@ -154,6 +155,7 @@ async def media_item_reads_with_public_dataset_status(
                 public_dataset_themerrdb=item.id in themerrdb_item_ids,
                 library_collection_id=next(iter(collections.get(item.id, [])), None),
                 seasons=seasons,
+                directors=directors.get(item.id, ()),
                 has_incorrect_aspect_ratio=_has_incorrect_aspect_ratio(
                     item, seasons, tolerance
                 ),

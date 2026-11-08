@@ -21,9 +21,6 @@ async def test_season_resolution_recovers_parent_without_tmdb(
             calls.append(("item", item.tvdb_id))
             return "show-1"
 
-        async def build_item_link(self, server_id: str) -> str:
-            return f"https://server/{server_id}"
-
         async def find_season_id(self, server_id: str, season_num: int) -> str:
             calls.append(("season", server_id, season_num))
             return "season-1"

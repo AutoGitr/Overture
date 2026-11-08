@@ -79,6 +79,17 @@ class ServerSection:
 
 
 @dataclass(slots=True, frozen=True)
+class ServerWebLinks:
+    """Where the server's web app opens an item or a collection.
+
+    ``{id}`` in each stands for the item's or collection's server ID.
+    """
+
+    item: str
+    collection: str
+
+
+@dataclass(slots=True, frozen=True)
 class ServerTheme:
     """One theme song the media server plays for an item.
 
@@ -115,7 +126,6 @@ class ServerItem:
     media_type: MediaType
     poster_url: str | None
     background_url: str | None
-    server_link: str
     library_id: str = ""
     folder_path: str | None = None
     directors: tuple[str, ...] = ()
@@ -161,7 +171,6 @@ class ServerCollection:
     id: str
     title: str
     member_ids: tuple[str, ...]
-    server_link: str
     media_type: MediaType | None = None
     library_id: str | None = None
     summary: str | None = None

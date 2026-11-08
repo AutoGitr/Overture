@@ -43,6 +43,7 @@ class CollectionPolicy:
     minimum_items: int
     delete_below_minimum: bool
     auto_match_art: bool
+    auto_generate_art: bool
     auto_match_theme: bool
     collection_mode: CollectionMode
     order_type: CollectionOrder
@@ -89,6 +90,11 @@ def resolve_policy(
             rule.auto_match_art if rule else None,
             group.auto_match_art if group else None,
             defaults.collection_auto_match_art,
+        ),
+        auto_generate_art=inherit(
+            rule.auto_generate_art if rule else None,
+            group.auto_generate_art if group else None,
+            defaults.collection_auto_generate_art,
         ),
         auto_match_theme=inherit(
             rule.auto_match_theme if rule else None,

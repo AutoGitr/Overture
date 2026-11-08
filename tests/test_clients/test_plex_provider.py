@@ -135,7 +135,6 @@ async def test_a_movie_row_is_normalised(app_config: Settings) -> None:
     assert alien.background_url == f"{BASE}/art.jpg"
     assert alien.folder_path == "/movies/Alien (1979)"
     assert (alien.directors, alien.studio) == (("Ridley Scott", "Second Unit"), None)
-    assert "machine" in alien.server_link
     assert (odd.poster_url, odd.background_url, odd.folder_path) == (None, None, None)
 
 

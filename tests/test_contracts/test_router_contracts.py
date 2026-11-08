@@ -153,6 +153,7 @@ class TestRestResponseContracts:
             "/library/items/{item_id}/local-image/{art_type}",
             "/collections/{collection_id}/image/{art_type}",
             "/collections/{collection_id}/local-image/{art_type}",
+            "/collections/{collection_id}/art/{art_type}/generated/{style}",
         }
         routes = [
             route
@@ -319,7 +320,6 @@ class TestCollectionResponseMappers:
             thumb_url="provider-thumb",
             art_url="provider-art",
             child_count=3,
-            server_link="https://server/collection/abc",
             server_theme_id="/themes/abc",
             youtube_id="abcDEF12345",
             youtube_title="Collection Theme",
@@ -445,15 +445,21 @@ class TestArtRequestContract:
         assert set(SaveArtRequest.model_fields) == {
             "url",
             "upload_hash",
+            "generated",
             "width",
             "height",
         }
 
     @pytest.mark.parametrize(
-        "body", [{}, {"url": "https://img.test/a.jpg", "upload_hash": "a" * 64}]
+        "body",
+        [
+            {},
+            {"url": "https://img.test/a.jpg", "upload_hash": "a" * 64},
+            {"url": "https://img.test/a.jpg", "generated": "dark"},
+        ],
     )
     def test_save_body_names_exactly_one_picture(self, body: dict[str, str]) -> None:
-        with pytest.raises(ValidationError, match="link or an uploaded image"):
+        with pytest.raises(ValidationError, match="a link, an uploaded image or"):
             SaveArtRequest.model_validate(body)
 
 

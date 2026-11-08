@@ -27,6 +27,16 @@ class ServerLibraryRead(StrictBaseModel):
         return cls(key=section.key, title=section.title, media_type=section.media_type)
 
 
+class ServerWebLinksRead(StrictBaseModel):
+    """Where the server's web app opens an item or a collection.
+
+    ``{id}`` in each stands for the item's or collection's server ID.
+    """
+
+    item: str
+    collection: str
+
+
 class MediaServerStatus(StrictBaseModel):
     """Whether the media server answered Overture's last request."""
 

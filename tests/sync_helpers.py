@@ -11,6 +11,7 @@ lazy from overture.media_servers.adapters import (
 )
 lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
 lazy from overture.services.sync.staging import StagedListing
+lazy from tests.runtime_helpers import server_sections
 
 
 async def sync_full(
@@ -24,9 +25,11 @@ async def sync_full(
 ) -> SyncResult:
     """Stage *server_items* as one complete listing and reconcile it.
 
-    Items missing from the listing are marked removed, within *library_ids*
-    when given, exactly as after a full sync.
+    The server lists the libraries its items are filed under. Items missing
+    from the listing are marked removed, within *library_ids* when given,
+    exactly as after a full sync.
     """
+    await reconciler.record_libraries(server_sections(server_items))
     tally = tally if tally is not None else SyncTally()
     tally.total = len(server_items)
     with tempfile.TemporaryDirectory() as directory:

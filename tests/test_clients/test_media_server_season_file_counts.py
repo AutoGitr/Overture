@@ -556,9 +556,6 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
     assert show.background_url == (
         "http://emby.test:8096/emby/Items/show1/Images/Backdrop"
     )
-    assert show.server_link == (
-        "http://emby.test:8096/web/index.html#!/item?id=show1&serverId=server-1"
-    )
     assert show.seasons[0].file_count == 1
     assert movie.year == 1982
     assert movie.folder_path == "/media/movies/Movie"
@@ -566,7 +563,9 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
     assert movie.director_etag == "movie-etag"
     assert show.director_etag is None
     assert await provider.get_directors(["movie1"]) == {"movie1": ("John Carpenter",)}
-    assert movie.server_link.endswith("item?id=movie1&serverId=server-1")
+    assert (await provider.web_links()).item == (
+        "http://emby.test:8096/web/index.html#!/item?id={id}&serverId=server-1"
+    )
 
 
 async def test_people_lookups_keep_their_urls_short(*, app_config: Settings) -> None:

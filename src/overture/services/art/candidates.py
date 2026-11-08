@@ -253,9 +253,9 @@ class ArtCandidates:
             (
                 condition.source.person_id
                 for part in collection.libraries
-                if part.criteria_json is not None
-                for condition in FilterGroup.model_validate_json(
-                    part.criteria_json
+                if part.criteria is not None
+                for condition in FilterGroup.model_validate(
+                    part.criteria
                 ).source_conditions()
                 if isinstance(condition.source, TmdbPersonSource)
             ),

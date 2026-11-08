@@ -1,7 +1,9 @@
 """Criteria evaluation, member order, Plex queries and sets."""
 
 lazy from collections import Counter
+lazy from collections.abc import Sequence
 lazy from datetime import UTC, datetime
+lazy from typing import cast
 
 lazy import pytest
 lazy from pydantic import ValidationError
@@ -14,6 +16,7 @@ lazy from overture.domain import (
     MediaType,
     ServerType,
     SetDimension,
+    TermKind,
 )
 lazy from overture.schemas.collections import (
     CollectionGeneratorBase,
@@ -43,6 +46,7 @@ lazy from overture.services.collections.plex_query import (
 lazy from overture.services.collections.sets import count_values, set_values
 lazy from overture.services.collections.sources import condition_label
 lazy from tests.collection_helpers import library_rule
+lazy from tests.term_helpers import holding
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 
@@ -57,19 +61,24 @@ def _item(item_id: int = 1, **kwargs: object) -> MediaItem:
         "critic_rating": 8.6,
         "duration_seconds": 121 * 60 + 59,
         "studio": "Lucasfilm",
-        "directors": ["Irvin Kershner", "George Lucas"],
         "content_rating": "PG",
         "resolution": "4k",
-        "genres": ["Action", "Sci-Fi"],
-        "actors": ["Mark Hamill"],
-        "countries": ["United States of America"],
-        "labels": ["Classic"],
         "plays": 0,
         "unplayed": True,
         "server_added_at": datetime(2026, 10, 1, tzinfo=UTC),
     }
+    held: dict[str, Sequence[str]] = {
+        "director": ["Irvin Kershner", "George Lucas"],
+        "genre": ["Action", "Sci-Fi"],
+        "actor": ["Mark Hamill"],
+        "country": ["United States of America"],
+        "label": ["Classic"],
+    }
+    for kind in TermKind:
+        if kind in kwargs:
+            held[kind] = cast("Sequence[str]", kwargs.pop(kind))
     values.update(kwargs)
-    return MediaItem(**values)
+    return holding(MediaItem(**values), **held)
 
 
 def _field(
@@ -134,7 +143,7 @@ def test_field_conditions_match_synced_metadata(
 
 
 def test_groups_combine_conditions_sources_and_collections() -> None:
-    first, second = _item(1), _item(2, title="Alien", genres=["Horror"], year=1979)
+    first, second = _item(1), _item(2, title="Alien", genre=["Horror"], year=1979)
     franchise = SourceCondition(source=TmdbCollectionSource(collection_id=10))
     excluded = SourceCondition(
         operator=FilterOperator.IS_NOT, source=MdblistSource(identifiers=["a/b"])
@@ -476,10 +485,10 @@ def test_fields_adapt_to_the_server_and_evaluation() -> None:
 
 def test_sets_count_filter_rank_and_title_values() -> None:
     items = [
-        _item(1, year=1977, genres=["Action", "Sci-Fi"]),
-        _item(2, year=1979, genres=["Horror", "Sci-Fi"], unplayed=False),
-        _item(3, year=1994, genres=["Drama"], tmdb_collection_id=10),
-        _item(4, year=None, genres=[], tmdb_collection_id=10),
+        _item(1, year=1977, genre=["Action", "Sci-Fi"]),
+        _item(2, year=1979, genre=["Horror", "Sci-Fi"], unplayed=False),
+        _item(3, year=1994, genre=["Drama"], tmdb_collection_id=10),
+        _item(4, year=None, genre=[], tmdb_collection_id=10),
     ]
     decades = CollectionGeneratorBase(
         dimension=SetDimension.DECADE, title_format="{value}s"

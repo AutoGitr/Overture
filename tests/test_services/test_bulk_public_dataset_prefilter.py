@@ -460,7 +460,9 @@ async def test_checked_stamper_writes_items_and_seasons_in_one_batch(
     database: Database,
 ) -> None:
 
-    item = _movie(media_item_factory, "Stamped", tmdb_id=12)
+    item = media_item_factory(
+        id=None, media_type=MediaType.SHOW, title="Stamped", tmdb_id=12
+    )
     db_session.add(item)
     await db_session.commit()
     season = season_factory(id=None, media_item_id=row_id(item), season_num=1)

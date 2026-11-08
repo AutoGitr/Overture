@@ -59,7 +59,6 @@ def _server_item(folder: Path) -> ServerItem:
         media_type=MediaType.MOVIE,
         poster_url="https://image.tmdb.org/t/p/original/server-poster.jpg",
         background_url="https://image.tmdb.org/t/p/original/server-bg.jpg",
-        server_link="https://server.test/603",
         library_id="lib-1",
         folder_path=str(folder),
     )

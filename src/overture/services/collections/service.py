@@ -32,6 +32,7 @@ lazy from .post_sync import (
 lazy from .reader import CollectionReader
 lazy from .rule_sync import RuleSync
 lazy from .schedule import CollectionSchedule
+lazy from .separators import CollectionSeparators
 lazy from .set_runner import CollectionSets
 lazy from .sources import SourceResolver
 lazy from .themes import CollectionThemes
@@ -131,6 +132,9 @@ class CollectionsService:
             editor=self.editor,
             sets=self.sets,
             rules=self.rules,
+            separators=CollectionSeparators(
+                access=access, editor=self.editor, rules=self.rules
+            ),
         )
         self.bulk = CollectionBulk(access=access, editor=self.editor)
         self.schedule = CollectionSchedule(

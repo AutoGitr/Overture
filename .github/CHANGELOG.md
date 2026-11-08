@@ -9,6 +9,11 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Collections:** an **In a collection** condition; **In a collection is false** makes a catch-all of every title no other collection holds, and a collection never counts itself.
+- **Artwork:** collection art drawn from the title, in a dark, light or accent style, offered as **Generated** candidates for posters and backgrounds and filterable as the **Generated** art source; **Generated poster** draws one after a sync for a collection still without a poster, and drawn art is drawn again when the title or group changes.
+- **Collections:** a Plex group can have a **Separator**, an empty collection titled after the group with a drawn poster, sorted before the group's collections by the group's sort title template.
+- **Notifications:** `NOTIFY_URL` receives each failed library sync, asset run, server audit, OvertureDB sync and backup, as JSON Apprise's API and other webhooks accept.
+- **API:** `GET /api/media-server/links` returns where the server's web app opens items and collections; `GET /api/collections/{id}/art/{art_type}/generated/{style}` returns art drawn from the collection's title; the database record lists a title's values, such as genres and people.
 - **Collections:** a collection can span several libraries, of movies, shows or both, with its own criteria for each. Jellyfin and Emby hold one collection for them all; Plex holds one in each library, which Overture keeps alike. The libraries of a saved collection can change, and a set makes one collection per value across its libraries.
 - **Collections:** the icon beside Movies and Shows in the library sidebar lists movie and show collections together, with a **Holds** filter: its first click opens the last view used, Groups or Collections, and later clicks switch between them.
 - **Collections:** movie and show collections share groups. On upgrade, same-named groups merge; where their settings differ, the show group is kept as `<name> (Shows)`.
@@ -36,6 +41,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Database:** the library sync records the server's libraries, so their names show while the server cannot be reached; titles hold their genres, people, labels and TMDB facts as shared values; movies and shows keep only their own fields and only shows have seasons; collections reference their group and every group is kept until deleted; JSON settings are checked to be valid JSON. The upgrade converts existing data.
+- **Collections:** a group stays listed after its last collection leaves it, until it is deleted in **Collection groups**.
+- **Interface:** links that open a title or collection in the media server follow the server's current address.
 - **Backups:** **Back up now** says which older backups the retention removed, saving **Backups to keep** applies it to the existing backups at once, the backup list shows where backups are saved and dates each backup by the time in its name, the same time retention uses.
 - **Interface:** the sidebar's Movies, Shows and Collections tabs always show their icon, name and count, at any width.
 - **Interface:** the filters popup lines every filter's name up in one column with its choices filling the rest of the row, puts filters offering the same choices together, the most used first, and on a phone moves a filter's choices under its name rather than cutting them short.
@@ -85,6 +93,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Artwork:** automatic art no longer replaces an uploaded collection image after a sync, and a new server copy of a collection receives its uploaded image.
+- **Artwork:** collections without a TMDB collection ID offer the art of the person their criteria list.
+- **Collections:** TMDB facts no longer give movies a show status, last air date or networks.
 - **Interface:** the reset button beside active filters no longer covers the outline around them, and a section header no longer covers its accent rule while hovered.
 - **Collections:** **Delete group** in Collection groups asks what happens to the group's collections instead of doing nothing.
 - **Artwork:** an uploaded poster, background or season poster can be cleared like a linked one.

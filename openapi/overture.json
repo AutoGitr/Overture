@@ -107,6 +107,11 @@
             "$ref": "#/components/schemas/AutoUnmonitor",
             "default": "art_and_theme"
           },
+          "collection_auto_generate_art": {
+            "default": false,
+            "title": "Collection Auto Generate Art",
+            "type": "boolean"
+          },
           "collection_auto_match_art": {
             "default": false,
             "title": "Collection Auto Match Art",
@@ -380,6 +385,7 @@
           "collection_minimum_items",
           "collection_delete_below_minimum",
           "collection_auto_match_art",
+          "collection_auto_generate_art",
           "collection_auto_match_theme",
           "collection_sort_title_format",
           "collection_summary_format",
@@ -479,6 +485,17 @@
                 "type": "null"
               }
             ]
+          },
+          "collection_auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Auto Generate Art"
           },
           "collection_auto_match_art": {
             "anyOf": [
@@ -906,6 +923,16 @@
               }
             ]
           },
+          "generated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hamming": {
             "anyOf": [
               {
@@ -1009,7 +1036,8 @@
           "title",
           "art_type",
           "hamming",
-          "perfect_match"
+          "perfect_match",
+          "generated"
         ],
         "title": "ArtCandidate",
         "type": "object"
@@ -1085,6 +1113,7 @@
         "enum": [
           "overturedb",
           "upload",
+          "generated",
           "tmdb",
           "tpdb",
           "fanart",
@@ -1126,6 +1155,16 @@
         ],
         "title": "ArtSourcesResponse",
         "type": "object"
+      },
+      "ArtStyle": {
+        "description": "How Overture draws artwork it generates from a title.",
+        "enum": [
+          "dark",
+          "light",
+          "accent"
+        ],
+        "title": "ArtStyle",
+        "type": "string"
       },
       "ArtType": {
         "description": "One artwork slot an owner can hold.",
@@ -3441,6 +3480,17 @@
               }
             ]
           },
+          "auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generate Art"
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -3638,6 +3688,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_match_art",
+          "auto_generate_art",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -4047,7 +4098,7 @@
             ],
             "title": "Server Background Version"
           },
-          "server_link": {
+          "server_item_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -4056,7 +4107,7 @@
                 "type": "null"
               }
             ],
-            "title": "Server Link"
+            "title": "Server Item Id"
           },
           "server_poster_version": {
             "anyOf": [
@@ -4295,7 +4346,7 @@
           "library_ids",
           "server_added_at",
           "server_type",
-          "server_link",
+          "server_item_id",
           "has_theme",
           "youtube_id",
           "youtube_title",
@@ -4730,6 +4781,17 @@
               }
             ]
           },
+          "auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generate Art"
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -4861,6 +4923,11 @@
             ],
             "title": "Request Missing"
           },
+          "separator": {
+            "default": false,
+            "title": "Separator",
+            "type": "boolean"
+          },
           "sort_title_format": {
             "anyOf": [
               {
@@ -4982,6 +5049,17 @@
                 "type": "null"
               }
             ]
+          },
+          "auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generate Art"
           },
           "auto_match_art": {
             "anyOf": [
@@ -5114,6 +5192,11 @@
             ],
             "title": "Request Missing"
           },
+          "separator": {
+            "default": false,
+            "title": "Separator",
+            "type": "boolean"
+          },
           "sort_title_format": {
             "anyOf": [
               {
@@ -5204,6 +5287,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_match_art",
+          "auto_generate_art",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -5222,7 +5306,8 @@
           "home_order",
           "sync_schedule",
           "sync_enabled",
-          "generator"
+          "generator",
+          "separator"
         ],
         "title": "CollectionGroupPolicy",
         "type": "object"
@@ -5286,7 +5371,8 @@
         "description": "How a collection's membership is maintained on the media server.",
         "enum": [
           "regular",
-          "smart"
+          "smart",
+          "separator"
         ],
         "title": "CollectionKind",
         "type": "string"
@@ -5702,6 +5788,17 @@
         "additionalProperties": false,
         "description": "A rule whose criteria to preview in each of its libraries.",
         "properties": {
+          "collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id"
+          },
           "rule": {
             "$ref": "#/components/schemas/CollectionRuleWrite-Input"
           }
@@ -6049,7 +6146,7 @@
             ],
             "title": "Server Background Version"
           },
-          "server_link": {
+          "server_item_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -6058,7 +6155,7 @@
                 "type": "null"
               }
             ],
-            "title": "Server Link"
+            "title": "Server Item Id"
           },
           "server_poster_version": {
             "anyOf": [
@@ -6259,7 +6356,7 @@
           "library_ids",
           "server_added_at",
           "server_type",
-          "server_link",
+          "server_item_id",
           "has_theme",
           "youtube_id",
           "youtube_title",
@@ -6383,6 +6480,17 @@
                 "type": "null"
               }
             ]
+          },
+          "auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generate Art"
           },
           "auto_match_art": {
             "anyOf": [
@@ -6634,6 +6742,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_match_art",
+          "auto_generate_art",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -6693,6 +6802,17 @@
                 "type": "null"
               }
             ]
+          },
+          "auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generate Art"
           },
           "auto_match_art": {
             "anyOf": [
@@ -6946,6 +7066,17 @@
               }
             ]
           },
+          "auto_generate_art": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Generate Art"
+          },
           "auto_match_art": {
             "anyOf": [
               {
@@ -7163,6 +7294,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_match_art",
+          "auto_generate_art",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -7793,10 +7925,21 @@
             },
             "title": "Stored",
             "type": "array"
+          },
+          "values": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "object"
           }
         },
         "required": [
           "stored",
+          "values",
           "derived"
         ],
         "title": "DatabaseRecord",
@@ -8216,6 +8359,7 @@
           "last_played",
           "unplayed",
           "in_progress",
+          "in_collection",
           "versions",
           "folder",
           "original_language",
@@ -9466,17 +9610,6 @@
             ],
             "title": "Server Item Id"
           },
-          "server_link": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Link"
-          },
           "server_removed_at": {
             "anyOf": [
               {
@@ -9655,7 +9788,6 @@
           "library_collection_id",
           "folder_path",
           "server_item_id",
-          "server_link",
           "server_verified_at",
           "library_id",
           "monitored",
@@ -10679,8 +10811,18 @@
       },
       "SaveArtRequest": {
         "additionalProperties": false,
-        "description": "The chosen artwork for one slot: a link, or an uploaded image.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
+        "description": "The chosen artwork for one slot: a link, an uploaded image or one to draw.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
         "properties": {
+          "generated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "height": {
             "anyOf": [
               {
@@ -11197,6 +11339,26 @@
         ],
         "title": "ServerType",
         "type": "string"
+      },
+      "ServerWebLinksRead": {
+        "additionalProperties": false,
+        "description": "Where the server's web app opens an item or a collection.\n\n``{id}`` in each stands for the item's or collection's server ID.",
+        "properties": {
+          "collection": {
+            "title": "Collection",
+            "type": "string"
+          },
+          "item": {
+            "title": "Item",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "collection"
+        ],
+        "title": "ServerWebLinksRead",
+        "type": "object"
       },
       "SetCollectionThemeRequest": {
         "additionalProperties": false,
@@ -17896,6 +18058,106 @@
         ]
       }
     },
+    "/api/collections/{collection_id}/art/{art_type}/generated/{style}": {
+      "get": {
+        "description": "Return the art Overture would draw for the collection in *style*.",
+        "operationId": "get_generated_collection_art",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "in": "path",
+            "name": "style",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtStyle"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Generated Collection Art",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/collections/{collection_id}/art/{art_type}/match": {
       "post": {
         "description": "Rank collection art using the shared perceptual hash matcher.",
@@ -21119,6 +21381,100 @@
           }
         },
         "summary": "List Server Libraries",
+        "tags": [
+          "media-server"
+        ]
+      }
+    },
+    "/api/media-server/links": {
+      "get": {
+        "description": "Return where the server's web app opens items and collections.",
+        "operationId": "get_server_web_links",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerWebLinksRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaServerErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaServerErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Server Web Links",
         "tags": [
           "media-server"
         ]

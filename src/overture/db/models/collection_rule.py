@@ -3,18 +3,13 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
-lazy from sqlmodel import Field, SQLModel
+lazy from sqlmodel import Field
 
-lazy from ...domain import (
-    CollectionFiltering,
-    CollectionMode,
-    CollectionOrder,
-    SyncMode,
-)
-lazy from ..columns import enum_columns, enum_type
+lazy from ..columns import typed_columns
+lazy from .shared import PolicyOverrides
 
 
-class CollectionRule(SQLModel, table=True):
+class CollectionRule(PolicyOverrides, table=True):
     """How a collection's criteria are evaluated, and nullable policy overrides.
 
     Each library's criteria are stored with that library.
@@ -30,36 +25,10 @@ class CollectionRule(SQLModel, table=True):
     smart: bool = False
     #: The most members taken from each library.
     item_limit: int | None = None
-    sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
-    minimum_items: int | None = None
-    delete_below_minimum: bool | None = None
-    collection_mode: CollectionMode | None = Field(
-        default=None, sa_type=enum_type(CollectionMode)
-    )
-    order_type: CollectionOrder | None = Field(
-        default=None, sa_type=enum_type(CollectionOrder)
-    )
-    collection_filtering: CollectionFiltering | None = Field(
-        default=None, sa_type=enum_type(CollectionFiltering)
-    )
-    visible_home: bool | None = None
-    visible_shared: bool | None = None
-    visible_library: bool | None = None
-    sort_title_format: str | None = None
-    summary_format: str | None = None
-    active_start_mmdd: str | None = None
-    active_end_mmdd: str | None = None
-    delete_when_inactive: bool | None = None
-    auto_match_art: bool | None = None
-    auto_match_theme: bool | None = None
-    request_missing: bool | None = None
-    member_label: str | None = None
-    arr_tag: str | None = None
-    home_order: int | None = None
     #: The description of the first list the criteria use, for summaries.
     source_summary: str | None = None
     last_synced_at: datetime | None = None
     last_error: str | None = None
 
 
-enum_columns(CollectionRule)
+typed_columns(CollectionRule)

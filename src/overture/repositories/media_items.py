@@ -6,9 +6,9 @@ lazy from itertools import batched
 lazy from pathlib import Path
 lazy from typing import Any, NamedTuple, cast
 
-lazy from sqlalchemy.orm import QueryableAttribute, raiseload
+lazy from sqlalchemy.orm import QueryableAttribute, raiseload, selectinload
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import case, col, delete, func, or_, select, update
+lazy from sqlmodel import case, col, delete, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import SelectOfScalar
 
@@ -17,9 +17,11 @@ lazy from ..db.completion import HOLDS_FILES
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
+lazy from ..db.models.term import MediaItemTerm
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import (
     MediaType,
+    TermKind,
     guid_int,
     guid_text,
     media_sort_key,
@@ -37,16 +39,22 @@ class ServerItemFacts(NamedTuple):
     tmdb_collection_id: int | None
 
 
-def _matching(load_art: bool) -> SelectOfScalar[MediaItem]:
-    """Select media items, with their artwork slots unless *load_art* is off.
+#: Load option giving queried titles their values, such as genres and people.
+WITH_TERMS = selectinload(
+    cast("QueryableAttribute[list[MediaItemTerm]]", MediaItem.terms)
+)
 
-    A lookup that only identifies the row skips loading its slots; reading
-    them from such a row raises rather than finding none.
+
+def _matching(for_update: bool) -> SelectOfScalar[MediaItem]:
+    """Select media items, with their artwork slots and values for an update.
+
+    A lookup that only identifies the row skips loading them; reading them
+    from such a row raises rather than finding none.
     """
     stmt = select(MediaItem)
     return (
-        stmt
-        if load_art
+        stmt.options(WITH_TERMS)
+        if for_update
         else stmt.options(
             raiseload(cast("QueryableAttribute[list[ArtSlot]]", MediaItem.art_slots))
         )
@@ -86,10 +94,10 @@ class MediaItemRepository:
         media_type: str,
         *,
         exclude_item_ids: set[int] | None = None,
-        load_art: bool = True,
+        for_update: bool = True,
     ) -> MediaItem | None:
         """Return a media item by media-server ID and type."""
-        stmt = _matching(load_art).where(
+        stmt = _matching(for_update).where(
             col(MediaItem.server_item_id) == server_item_id,
             col(MediaItem.media_type) == media_type,
         )
@@ -106,7 +114,7 @@ class MediaItemRepository:
         *,
         server_item_id: str | None = None,
         exclude_item_ids: set[int] | None = None,
-        load_art: bool = True,
+        for_update: bool = True,
     ) -> MediaItem | None:
         """Return a media item by external GUIDs, preferring TMDB then TVDB.
 
@@ -132,7 +140,7 @@ class MediaItemRepository:
             return None
 
         priority = case(*((clause, rank) for rank, clause in matches), else_=None)
-        stmt = _matching(load_art).where(
+        stmt = _matching(for_update).where(
             col(MediaItem.media_type) == media_type,
             or_(*(clause for _rank, clause in matches)),
         )
@@ -179,21 +187,23 @@ class MediaItemRepository:
         """Return stored movie directors keyed by server ID and director Etag."""
         if not server_item_ids:
             return {}
-        result = await self.session.exec(
-            select(
-                MediaItem.server_item_id,
-                MediaItem.director_etag,
-                col(MediaItem.directors),
-            ).where(
-                col(MediaItem.media_type) == MediaType.MOVIE,
-                col(MediaItem.server_item_id).in_(server_item_ids),
-                col(MediaItem.director_etag).is_not(None),
+        movies = (
+            await self.session.exec(
+                select(MediaItem)
+                .options(WITH_TERMS)
+                .where(
+                    col(MediaItem.media_type) == MediaType.MOVIE,
+                    col(MediaItem.server_item_id).in_(server_item_ids),
+                    col(MediaItem.director_etag).is_not(None),
+                )
             )
-        )
+        ).all()
         return {
-            (server_id, etag): tuple(directors)
-            for server_id, etag, directors in result.all()
-            if server_id is not None and etag is not None
+            (movie.server_item_id, movie.director_etag): tuple(
+                movie.values(TermKind.DIRECTOR)
+            )
+            for movie in movies
+            if movie.server_item_id is not None and movie.director_etag is not None
         }
 
     async def find_by_folder_path(
@@ -202,10 +212,10 @@ class MediaItemRepository:
         media_type: str,
         *,
         exclude_item_ids: set[int] | None = None,
-        load_art: bool = True,
+        for_update: bool = True,
     ) -> MediaItem | None:
         """Return a media item by filesystem folder path and type."""
-        stmt = _matching(load_art).where(
+        stmt = _matching(for_update).where(
             col(MediaItem.folder_path).in_(_folder_variants(folder_path)),
             col(MediaItem.media_type) == media_type,
         )
@@ -225,7 +235,7 @@ class MediaItemRepository:
         if not wanted:
             return {}
         rows = await self.session.exec(
-            _matching(load_art=False)
+            _matching(for_update=False)
             .where(
                 col(MediaItem.folder_path).in_(
                     {
@@ -353,7 +363,7 @@ class MediaItemRepository:
 
     async def facts_by_server_id(self) -> dict[str, ServerItemFacts]:
         """Return the visible linked items by media-server ID, without artwork."""
-        stmt = _matching(load_art=False).where(
+        stmt = _matching(for_update=False).where(
             col(MediaItem.server_item_id).is_not(None),
             col(MediaItem.server_removed_at).is_(None),
         )
@@ -371,7 +381,7 @@ class MediaItemRepository:
         identities: list[tuple[str, int | str]] | None = None,
     ) -> dict[tuple[str, int | str], int]:
         """Return visible item IDs keyed by each ``(field, value)`` they carry."""
-        stmt = _matching(load_art=False).where(
+        stmt = _matching(for_update=False).where(
             col(MediaItem.media_type) == media_type,
             col(MediaItem.server_removed_at).is_(None),
         )
@@ -445,27 +455,6 @@ class MediaItemRepository:
             .order_by(col(MediaItem.id))
         )
         return list(result.all())
-
-    async def library_counts(
-        self, media_type: MediaType | None = None
-    ) -> dict[str, tuple[MediaType, int]]:
-        """Return what each media-server library holds, and how many visible items."""
-        stmt = (
-            select(MediaItem.library_id, MediaItem.media_type, func.count())
-            .where(
-                col(MediaItem.library_id).is_not(None),
-                col(MediaItem.server_removed_at).is_(None),
-            )
-            .group_by(col(MediaItem.library_id), col(MediaItem.media_type))
-        )
-        if media_type:
-            stmt = stmt.where(col(MediaItem.media_type) == media_type)
-
-        result = await self.session.exec(stmt)
-        return {
-            str(library_id): (MediaType(held), count)
-            for library_id, held, count in result.all()
-        }
 
     async def folder_paths(self) -> list[str]:
         """Return every stored media item folder path."""

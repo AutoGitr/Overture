@@ -32,13 +32,13 @@ def test_plex_deep_links_encode_metadata_and_collection_keys(
     app_config.MEDIA_SERVER_URL = "http://plex.local:32400"
 
     assert (
-        plex_web_link("metadata", "123", "machine", app_config=app_config)
-        == "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123"
+        plex_web_link("metadata", "machine", app_config=app_config)
+        == "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F{id}"
     )
     assert (
-        plex_web_link("collections", "456", None, app_config=app_config)
+        plex_web_link("collections", None, app_config=app_config)
         == "http://plex.local:32400/web/index.html"
-        "#!/server/details?key=%2Flibrary%2Fcollections%2F456"
+        "#!/server/details?key=%2Flibrary%2Fcollections%2F{id}"
     )
 
 
@@ -625,7 +625,6 @@ def test_server_item_defaults_are_safe_for_mapping() -> None:
         media_type=MediaType.MOVIE,
         poster_url=None,
         background_url=None,
-        server_link="http://server/item/1",
     )
 
     assert item.id == "1"

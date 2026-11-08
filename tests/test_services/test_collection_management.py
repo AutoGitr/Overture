@@ -10,7 +10,13 @@ lazy import pytest
 lazy from pydantic import SecretStr, ValidationError
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts, record_art_file, select_art
+lazy from overture.db.art_slots import (
+    ArtFileFacts,
+    clear_art_selection,
+    record_art_file,
+    select_art,
+    select_upload,
+)
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
@@ -30,6 +36,7 @@ lazy from overture.domain import (
     SetDimension,
     SourceType,
     SyncMode,
+    TermKind,
     TmdbChart,
     TmdbPersonRole,
 )
@@ -54,6 +61,8 @@ lazy from overture.media_servers.adapters import ServerCollection, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.repositories.collections import CollectionRepository
+lazy from overture.repositories.libraries import LibraryRepository
+lazy from overture.repositories.media_items import WITH_TERMS
 lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtRequest
 lazy from overture.schemas.collections import (
     BulkCollectionOperation,
@@ -104,6 +113,7 @@ lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.collection_helpers import library_rule
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
+lazy from tests.term_helpers import assign, holding
 lazy from tests.test_services.test_collections_service import (
     FakeDownloads,
     FakePublisher,
@@ -148,7 +158,6 @@ class Provider(PlexProvider):
             identity,
             title,
             tuple(member_ids),
-            "https://server.test/collection",
             media_type=media_type,
             library_id=section_key,
         )
@@ -167,7 +176,6 @@ class Provider(PlexProvider):
             identity,
             title,
             (),
-            "https://server.test/collection",
             media_type=media_type,
             library_id=section_key,
             smart=True,
@@ -383,12 +391,11 @@ class Tmdb(TMDBClient):
 class Art(CollectionArtService):
     def __init__(self) -> None:
         self.selections: list[ArtType] = []
+        self.generated: list[ArtType] = []
         self.fail = False
 
     @override
-    async def sources(
-        self, collection_id: int, art_type: ArtType
-    ) -> ArtSourcesResponse:
+    async def found(self, collection_id: int, art_type: ArtType) -> ArtSourcesResponse:
         if self.fail:
             raise PublicServiceError(502, "Artwork source unavailable")
         return ArtSourcesResponse(
@@ -403,6 +410,8 @@ class Art(CollectionArtService):
         body: SaveArtRequest,
     ) -> StatusResponse:
         self.selections.append(art_type)
+        if body.generated is not None:
+            self.generated.append(art_type)
         return StatusResponse(status=Status.OK)
 
 
@@ -538,6 +547,10 @@ async def manager(database: Database, app_config: Settings) -> Manager:
     downloads = FakeDownloads()
     radarr = FakeArrClient(1, "4k")
     async with database.write_session() as session:
+        # A sync records the server's libraries before anything else.
+        await LibraryRepository(session).record(
+            await provider.get_sections(), utc_now()
+        )
         # Groups are optional here; the tests about requiring one turn it on.
         await session.merge(settings_row())
         items = [
@@ -550,26 +563,25 @@ async def manager(database: Database, app_config: Settings) -> Manager:
                 server_item_id=f"m{index}",
                 library_id="movies",
                 studio="Studio",
-                genres=["Action"],
                 tmdb_collection_id=10,
             )
             for index, (title, year) in enumerate(
                 (("First", 1995), ("Second", 2005), ("Manual", 2006))
             )
         ]
-        session.add_all(items)
-        session.add(
-            MediaItem(
-                media_type=MediaType.SHOW,
-                title="Anime Series",
-                year=2020,
-                tmdb_id=11,
-                server_item_id="s1",
-                library_id="shows",
-                studio="Studio",
-                genres=["Animation"],
-            )
+        show = MediaItem(
+            media_type=MediaType.SHOW,
+            title="Anime Series",
+            year=2020,
+            tmdb_id=11,
+            server_item_id="s1",
+            library_id="shows",
+            studio="Studio",
         )
+        session.add_all([*items, show])
+        for item in items:
+            await assign(session, item, genre=["Action"])
+        await assign(session, show, genre=["Animation"])
         await session.flush()
         ids = [item.id or 0 for item in items]
     service = CollectionsService(
@@ -699,11 +711,11 @@ async def test_group_deletion_targets(
         assert row is None
     elif target == "orphan":
         assert row is not None
-        assert row.collection_group is None
+        assert row.group_name is None
         assert rule is None
     else:
         assert row is not None
-        assert row.collection_group == ("Evenings" if target == "move" else "Ungrouped")
+        assert row.group_name == ("Evenings" if target == "move" else "Ungrouped")
 
 
 async def test_group_deletion_never_leaves_collections_without_a_required_group(
@@ -1569,7 +1581,11 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
         labelled = await CollectionRepository(session).library_items(
             MediaType.MOVIE, "movies"
         )
-    assert [label in item.labels for item in labelled] == [True, True, False]
+    assert [label in item.values(TermKind.LABEL) for item in labelled] == [
+        True,
+        True,
+        False,
+    ]
 
     manager.lists.ids = [13]
     result = await manager.service.rules.sync(detail.id)
@@ -1921,10 +1937,13 @@ async def test_keyword_values_list_the_common_first_and_add_tmdb_matches(
 ) -> None:
     async with database.write_session() as session:
         for index, item_id in enumerate(manager.ids):
-            item = await session.get(MediaItem, item_id)
+            item = await session.get(MediaItem, item_id, options=[WITH_TERMS])
             assert item is not None
-            item.tmdb_keywords = ["christmas eve", *(["sequel"] if index else [])]
-            session.add(item)
+            await assign(
+                session,
+                item,
+                tmdb_keyword=["christmas eve", *(["sequel"] if index else [])],
+            )
 
     every = await manager.service.discovery.field_values(
         MediaType.MOVIE, "movies", FilterField.TMDB_KEYWORD
@@ -2036,9 +2055,7 @@ async def test_sync_due_runs_due_sets_and_rules(
         "Due Collection"
     }
     async with database.write_session() as session:
-        group = await CollectionRepository(session).group_policy(
-            ServerType.PLEX, "Franchises"
-        )
+        group = await CollectionRepository(session).group(ServerType.PLEX, "Franchises")
         assert group is not None
         # A New Year has passed since, so the yearly schedule is due.
         group.generated_at = utc_now() - timedelta(days=400)
@@ -2912,13 +2929,15 @@ async def test_source_summary_follows_the_first_list(manager: Manager) -> None:
 
 
 def test_tmdb_facts_are_tested_like_other_metadata() -> None:
-    item = MediaItem(
-        media_type=MediaType.SHOW,
-        title="Show",
-        tmdb_keywords=["christmas"],
-        original_language="Japanese",
-        tmdb_votes=500,
-        last_aired=utc_now().date().isoformat(),
+    item = holding(
+        MediaItem(
+            media_type=MediaType.SHOW,
+            title="Show",
+            original_language="Japanese",
+            tmdb_votes=500,
+            last_aired=utc_now().date().isoformat(),
+        ),
+        tmdb_keyword=["christmas"],
         streaming=["Netflix"],
     )
     context = CriteriaContext(sources={}, collections={}, now=utc_now())
@@ -3027,7 +3046,8 @@ async def test_orphan_reverses_adoption_keeping_the_server_copy(
     assert detail.collection_group is None
     assert not detail.withheld
     assert detail.member_ids == manager.ids
-    assert await manager.service.groups.names() == ["Ungrouped"]
+    # The group outlives its last collection, until it is deleted.
+    assert await manager.service.groups.names() == ["Sagas", "Ungrouped"]
     with pytest.raises(PublicServiceError, match="does not manage"):
         await manager.service.editor.orphan(identity)
     refused = await manager.service.bulk.run(
@@ -3671,3 +3691,100 @@ async def test_monitoring_tells_clients_only_the_new_flag(manager: Manager) -> N
     assert manager.publisher.broadcasts == [
         ("collection.monitored", {"collection_id": identity, "monitored": False})
     ]
+
+
+async def test_a_catch_all_collection_holds_what_no_other_collection_does(
+    manager: Manager,
+) -> None:
+    await create(manager, [manager.ids[0]])
+    collectionless = FilterGroup(
+        conditions=[
+            FieldCondition(
+                field=FilterField.IN_COLLECTION, operator=FilterOperator.IS, value=False
+            )
+        ]
+    )
+    catch_all = await manager.service.editor.create(
+        CollectionCreate(
+            title="Everything else", rule=library_rule(criteria=collectionless)
+        )
+    )
+    assert catch_all.member_ids == manager.ids[1:]
+
+    # Its own members never count as held elsewhere, so a sync keeps them.
+    await manager.service.rules.sync(catch_all.id)
+    detail = await manager.service.reader.get(catch_all.id)
+    assert detail.member_ids == manager.ids[1:]
+
+
+async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity, CollectionOptions(title="Saga", collection_group="Sagas")
+    )
+    manager.art.selections.clear()
+
+    await manager.service.groups.save_policy(
+        "Sagas",
+        CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
+    )
+
+    listed = await manager.service.reader.listed()
+    [separator] = [row for row in listed if row.kind is CollectionKind.SEPARATOR]
+    assert (separator.title, separator.collection_group) == ("Sagas", "Sagas")
+    assert separator.child_count == 0
+    assert separator.server_item_id is not None
+    # Its sort title is the group's with no title, so it sorts first.
+    assert manager.provider.sort_titles[separator.server_item_id] == "Sagas"
+    assert ArtType.POSTER in manager.art.selections
+    with pytest.raises(PublicServiceError, match="group keeps the separator"):
+        await manager.service.editor.update(
+            separator.id, CollectionOptions(title="Other")
+        )
+
+    await manager.service.groups.save_policy(
+        "Sagas", CollectionGroupPolicy(sort_title_format="{group} {title}")
+    )
+    assert not [
+        row
+        for row in await manager.service.reader.listed()
+        if row.kind is CollectionKind.SEPARATOR
+    ]
+
+
+async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_auto_match_art=True, collection_auto_generate_art=True
+            )
+        )
+        row = await CollectionRepository(session).get(identity)
+        assert row is not None
+        select_upload(row, ArtType.BACKGROUND, "b" * 64)
+        session.add(row)
+    manager.art.selections.clear()
+
+    await manager.service.rules.sync(identity)
+
+    # Only the empty poster is matched; the uploaded background stays chosen.
+    assert manager.art.selections == [ArtType.POSTER]
+    manager.art.fail = True
+    manager.art.selections.clear()
+    await manager.service.groups.save_policy(
+        "Ungrouped", CollectionGroupPolicy(auto_match_art=False)
+    )
+    async with database.write_session() as session:
+        row = await CollectionRepository(session).get(identity)
+        assert row is not None
+        clear_art_selection(row, ArtType.POSTER)
+        session.add(row)
+    manager.art.fail = False
+    await manager.service.rules.sync(identity)
+    assert manager.art.selections == [ArtType.POSTER]
+    assert manager.art.generated == [ArtType.POSTER]

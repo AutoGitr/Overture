@@ -15,16 +15,18 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import MediaType, ServerAsset
+lazy from overture.domain import MediaType, ServerAsset, TermKind
 lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerItem, SyncItemResult
 lazy from overture.media_servers.jellyfin import JellyfinProvider
+lazy from overture.repositories.media_items import WITH_TERMS
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.audio import ThemeAudioMetadata
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopDownloads, make_local_assets
 lazy from tests.sync_helpers import sync_full
+lazy from tests.term_helpers import assign
 
 
 class Provider(JellyfinProvider):
@@ -87,7 +89,6 @@ def _server_item(
         media_type=media_type,
         poster_url=None,
         background_url=None,
-        server_link=f"https://server/items/{item_id}",
         library_id=library_id,
         directors=directors,
         director_etag=director_etag,
@@ -102,24 +103,18 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
     database: Database,
 ) -> None:
     async with isolated_session_factory() as session:
-        session.add_all(
-            [
-                MediaItem(
-                    media_type=MediaType.MOVIE,
-                    title="Brazil",
-                    server_item_id="same",
-                    directors=["Terry Gilliam"],
-                    director_etag="v1",
-                ),
-                MediaItem(
-                    media_type=MediaType.MOVIE,
-                    title="Alien",
-                    server_item_id="changed",
-                    directors=["Someone Else"],
-                    director_etag="v1",
-                ),
-            ]
-        )
+        for title, server_id, director in (
+            ("Brazil", "same", "Terry Gilliam"),
+            ("Alien", "changed", "Someone Else"),
+        ):
+            movie = MediaItem(
+                media_type=MediaType.MOVIE,
+                title=title,
+                server_item_id=server_id,
+                director_etag="v1",
+            )
+            session.add(movie)
+            await assign(session, movie, director=[director])
         await session.commit()
     provider = DirectorProvider(
         {
@@ -142,7 +137,7 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
         _server_item("new", "The Thing", director_etag="v1"),
         _server_item("gone", "Gone", director_etag="v1"),
         _server_item("inline", "Inline", directors=("Plex Director",)),
-        _server_item("show", "Show", media_type=MediaType.SHOW),
+        _server_item("show", "Show", library_id="lib-shows", media_type=MediaType.SHOW),
     ]
 
     await reconciler.fill_deferred_directors(provider, items)
@@ -160,8 +155,13 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
     await sync_full(reconciler, items)
     async with isolated_session_factory() as session:
         stored = {
-            item.server_item_id: (item.directors, item.director_etag)
-            for item in (await session.exec(select(MediaItem))).all()
+            item.server_item_id: (
+                item.values(TermKind.DIRECTOR),
+                item.director_etag,
+            )
+            for item in (
+                await session.exec(select(MediaItem).options(WITH_TERMS))
+            ).all()
         }
     assert stored["changed"] == (["Ridley Scott"], "v2")
     assert stored["new"] == (["John Carpenter", "Tommy Lee Wallace"], "v1")
@@ -394,7 +394,6 @@ async def test_sync_emits_targeted_upserts_and_removals(
                     title="Skipped",
                     year=1979,
                     server_item_id="skipped",
-                    server_link="https://server/items/skipped",
                     library_id="lib1",
                 ),
                 MediaItem(
@@ -404,18 +403,17 @@ async def test_sync_emits_targeted_upserts_and_removals(
                     server_item_id="out-of-scope",
                     library_id="lib2",
                 ),
-                MediaItem(
+                preserved := MediaItem(
                     id=6,
                     media_type=MediaType.MOVIE,
                     title="Preserved Year",
                     year=1980,
-                    directors=("Existing Director",),
                     server_item_id="preserved-year",
-                    server_link="https://server/items/preserved-year",
                     library_id="lib1",
                 ),
             ]
         )
+        await assign(session, preserved, director=["Existing Director"])
         await session.commit()
 
     provider = Provider(
@@ -452,9 +450,9 @@ async def test_sync_emits_targeted_upserts_and_removals(
     async with isolated_session_factory() as session:
         removed = await session.get(MediaItem, 1)
         revived = await session.get(MediaItem, 2)
-        changed = await session.get(MediaItem, 3)
+        changed = await session.get(MediaItem, 3, options=[WITH_TERMS])
         out_of_scope = await session.get(MediaItem, 5)
-        preserved_year = await session.get(MediaItem, 6)
+        preserved_year = await session.get(MediaItem, 6, options=[WITH_TERMS])
 
     assert stats.tally.added == 1
     assert stats.tally.errors == 0
@@ -481,11 +479,11 @@ async def test_sync_emits_targeted_upserts_and_removals(
     assert revived is not None
     assert revived.server_removed_at is None
     assert changed is not None
-    assert changed.directors == ["Ridley Scott"]
+    assert changed.values(TermKind.DIRECTOR) == ["Ridley Scott"]
     assert changed.year == 1979
     assert preserved_year is not None
     assert preserved_year.year == 1980
-    assert preserved_year.directors == ["Existing Director"]
+    assert preserved_year.values(TermKind.DIRECTOR) == ["Existing Director"]
     assert out_of_scope is not None
     assert out_of_scope.server_removed_at is None
 
@@ -559,7 +557,6 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
                 tmdb_id=123,
                 folder_path=str(movie_dir),
                 server_item_id="movie",
-                server_link="https://server/items/movie",
                 library_id="lib1",
             )
         )

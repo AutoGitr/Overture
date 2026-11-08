@@ -7,26 +7,24 @@ lazy from .art import (
 lazy from .auth_session import AuthSession
 lazy from .collection_group import CollectionGroup
 lazy from .collection_rule import CollectionRule
-lazy from .download_job import DownloadJob, DownloadJobBase
+lazy from .download_job import DownloadJob
 lazy from .job_result import JobResult, JobRun
+lazy from .library import Library
 lazy from .media_collection import (
     CollectionLibrary,
     MediaCollection,
-    MediaCollectionBase,
     MediaCollectionMember,
 )
-lazy from .media_item import MediaItem, MediaItemBase
+lazy from .media_item import MediaItem
 lazy from .public_dataset import (
     PublicDatasetCollection,
     PublicDatasetDraft,
     PublicDatasetItem,
-    PublicDatasetItemBase,
     PublicDatasetSeason,
-    PublicDatasetSeasonBase,
 )
-lazy from .saved_schedule import SavedSchedule, SavedScheduleBase
-lazy from .schedule import TaskSchedule, TaskScheduleBase
-lazy from .season import Season, SeasonBase
+lazy from .saved_schedule import SavedSchedule
+lazy from .schedule import TaskSchedule
+lazy from .season import Season
 lazy from .settings import (
     MAX_THEME_FORMAT_LENGTH,
     SETTINGS_ROW_ID,
@@ -47,25 +45,18 @@ __all__ = [
     "CollectionLibrary",
     "CollectionRule",
     "DownloadJob",
-    "DownloadJobBase",
     "JobResult",
     "JobRun",
+    "Library",
     "MediaCollection",
-    "MediaCollectionBase",
     "MediaCollectionMember",
     "MediaItem",
-    "MediaItemBase",
     "PublicDatasetCollection",
     "PublicDatasetDraft",
     "PublicDatasetItem",
-    "PublicDatasetItemBase",
     "PublicDatasetSeason",
-    "PublicDatasetSeasonBase",
     "SavedSchedule",
-    "SavedScheduleBase",
     "Season",
-    "SeasonBase",
     "TaskSchedule",
-    "TaskScheduleBase",
     "get_app_settings",
 ]

@@ -595,10 +595,12 @@ describe("collection criteria", () => {
     let putBody: CollectionGroupPolicyOutput | null = null;
     let synced = false;
     const groupPolicy: CollectionGroupPolicyOutput = {
+      separator: false,
       sync_mode: null,
       minimum_items: 2,
       delete_below_minimum: null,
       auto_match_art: null,
+      auto_generate_art: null,
       auto_match_theme: null,
       delete_when_inactive: null,
       collection_mode: null,

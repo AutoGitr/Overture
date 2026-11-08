@@ -24,6 +24,7 @@ lazy from ..adapters import (
     ServerItem,
     ServerSeason,
     ServerSection,
+    ServerWebLinks,
     server_path,
     video_resolution,
 )
@@ -180,7 +181,6 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                 if metadata.get("BackdropImageTags", [])
                 else None
             ),
-            server_link=self.server_link(item_id),
             library_id=section_id,
             folder_path=_media_browser_item_folder(metadata, media_type),
             director_etag=etag if movie else None,
@@ -292,15 +292,10 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         await self.client.refresh_item(item_id)
 
     @override
-    async def build_item_link(self, server_item_id: str) -> str:
-        """Return a web link for an item."""
-        return self.server_link(server_item_id)
-
-    def server_link(self, server_item_id: str) -> str:
-        """Return a web link for an item."""
-        return (
-            f"{self.client.web_base_url}/web/index.html#!/details?id={server_item_id}"
-        )
+    async def web_links(self) -> ServerWebLinks:
+        """Return Jellyfin web links, which open items and collections alike."""
+        link = f"{self.client.web_base_url}/web/index.html#!/details?id={{id}}"
+        return ServerWebLinks(item=link, collection=link)
 
     @override
     async def _image_request(
@@ -359,7 +354,6 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                     member_ids=tuple(
                         await self.client.get_boxset_member_ids(boxset_id)
                     ),
-                    server_link=self.server_link(boxset_id),
                     summary=boxset.get("Overview") or None,
                     thumb_url=_media_browser_image_url(
                         self.client,
@@ -392,7 +386,6 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             id=collection_id,
             title=title,
             member_ids=tuple(member_ids),
-            server_link=await self.build_item_link(collection_id),
             library_id=section_key,
             media_type=media_type,
             path=metadata.get("Path"),

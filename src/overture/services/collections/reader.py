@@ -62,7 +62,6 @@ class CollectionReader:
                 row for row in await repo.list_listed() if row.server_type is server
             ]
             defaults = await get_app_settings(session)
-            groups = {group.name: group for group in await repo.group_policies(server)}
             rules = {rule.collection_id: rule for rule in await repo.rules()}
             catalog = await catalog_collections(
                 session,
@@ -93,9 +92,7 @@ class CollectionReader:
             )
             for row in rows
             for rule in (rules.get(row.id or 0),)
-            for policy in (
-                resolve_policy(defaults, groups.get(row.collection_group or ""), rule),
-            )
+            for policy in (resolve_policy(defaults, row.group, rule),)
         ]
 
     async def record(self, collection_id: int) -> DatabaseRecord:
@@ -115,7 +112,7 @@ class CollectionReader:
             members = display_order(
                 await CollectionRepository(session).members(row.id or 0), row.order_type
             )
-            policy = await self._access.policy(session, row.collection_group, saved)
+            policy = await self._access.policy(session, row.group, saved)
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
@@ -148,7 +145,9 @@ class CollectionReader:
     async def inherited_policy(self, name: str | None = None) -> CollectionDefaults:
         """Expose resolved defaults for form placeholders without duplicating rules."""
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, name)
+            policy = await self._access.policy(
+                session, await self._access.group(session, name)
+            )
         return CollectionDefaults.model_validate(
             {key: getattr(policy, key) for key in CollectionDefaults.model_fields}
         )

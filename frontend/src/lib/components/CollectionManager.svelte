@@ -26,6 +26,7 @@
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
+  import Notice from "./Notice.svelte";
   import CollectionAdopt from "./CollectionAdopt.svelte";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
@@ -39,6 +40,7 @@
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import { collectionArtDisplayUrl } from "../utils/artDisplay";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
+  import { createServerLinks } from "../rest/queries";
   import { setSectionView } from "../stores/sectionState.svelte";
 
   let {
@@ -55,6 +57,8 @@
     libraries: LibrarySectionRead[];
   } = $props();
   setSectionView("collection");
+  const serverLinks = createServerLinks();
+  let serverLink = $derived(serverLinks.collection(collection?.server_item_id));
 
   function currentCollection(): CollectionDetail {
     if (!collection) throw new Error("The saved collection must remain mounted");
@@ -93,8 +97,8 @@
   posterUrl={collectionArtDisplayUrl(collection, "poster")}
   showPoster={!!collection}
   backgroundUrl={collectionArtDisplayUrl(collection, "background")}
-  posterHref={collection?.server_link}
-  posterLinkTitle={collection?.server_link
+  posterHref={serverLink}
+  posterLinkTitle={collection && serverLink
     ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
     : null}
   tabs={collection && actions ? tabs : undefined}
@@ -106,6 +110,10 @@
       <span>{collection.child_count} items</span>
       {#if collection.kind === "smart"}
         <span class="badge badge-accent">Smart</span>
+      {:else if collection.kind === "separator"}
+        <span class="badge badge-muted" title="Heads its group's collections on Plex"
+          >Separator</span
+        >
       {/if}
       {#if collection.generated_value !== null}
         <span class="badge badge-muted" title="Created and kept up to date by its group's set"
@@ -213,6 +221,12 @@
   {#snippet content()}
     {#if collection && !editor}
       <CollectionAdopt {collection} {groups} />
+    {:else if managing && collection?.kind === "separator"}
+      <Notice
+        tone="info"
+        title="Kept by its group"
+        message={`The ${collection.collection_group} group keeps this separator. Its title, libraries and sort title follow the group; turn it off in the group's settings.`}
+      />
     {:else if managing && editor}
       {#if editor instanceof CollectionDraft && editor.request.error}<DataStatus
           label="collection creation"

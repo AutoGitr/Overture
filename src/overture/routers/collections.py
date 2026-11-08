@@ -18,7 +18,12 @@ lazy from ..dependencies import (
     CollectionThemesDep,
     require_media_server,
 )
-lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX, FilterField
+lazy from ..domain import (
+    MATCH_THRESHOLD_DEFAULT,
+    MATCH_THRESHOLD_MAX,
+    ArtStyle,
+    FilterField,
+)
 lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.collections import (
     ArrTagRead,
@@ -494,6 +499,25 @@ async def get_collection_art_sources(
 ) -> ArtSourcesResponse:
     """Browse shared collection artwork sources."""
     return await art.sources(collection_id, art_type)
+
+
+@router.get(
+    "/{collection_id}/art/{art_type}/generated/{style}",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+async def get_generated_collection_art(
+    collection_id: CollectionIdPath,
+    art_type: ArtTypePath,
+    style: ArtStyle,
+    art: CollectionArtDep,
+) -> Response:
+    """Return the art Overture would draw for the collection in *style*."""
+    return Response(
+        await art.drawn(collection_id, art_type, style),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.put("/{collection_id}/art/{art_type}")

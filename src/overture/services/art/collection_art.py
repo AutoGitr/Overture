@@ -21,17 +21,26 @@ lazy from ...db.session import Database
 lazy from ...domain import (
     ITEM_ART_TYPES,
     UNMANAGED_REFUSAL,
+    ArtSource,
+    ArtStyle,
     ArtType,
+    CollectionKind,
     ImageSize,
 )
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
+lazy from ...schemas.art import (
+    ArtCandidate,
+    ArtMatchResponse,
+    ArtSourcesResponse,
+    SaveArtRequest,
+)
 lazy from ...schemas.collections import CollectionArtwork, collection_artwork
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.generated_art import render_art
 lazy from ...utils.image import fetch_image, inspect_saved_image
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.threads import owned_thread
@@ -43,6 +52,11 @@ lazy from .candidates import ArtCandidates, CandidatePolicy
 lazy from .choice import ArtSelector, require_valid_aspect_ratio
 lazy from .matcher import ArtMatcher
 lazy from .uploads import ArtUploads
+
+
+def _subtitle(row: MediaCollection) -> str | None:
+    """The group drawn above a collection's title; a separator is its group."""
+    return None if row.kind is CollectionKind.SEPARATOR else row.group_name
 
 
 class CollectionArtService:
@@ -98,10 +112,8 @@ class CollectionArtService:
             raise PublicServiceError(409, UNMANAGED_REFUSAL)
         return row
 
-    async def sources(
-        self, collection_id: int, art_type: ArtType
-    ) -> ArtSourcesResponse:
-        """Offer collection art through the shared candidate and slot pipeline."""
+    async def found(self, collection_id: int, art_type: ArtType) -> ArtSourcesResponse:
+        """Offer the collection art its sources have, best first."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
             policy = CandidatePolicy.of(await get_app_settings(db))
@@ -110,15 +122,76 @@ class CollectionArtService:
             sources=sources.by_source, current_url=read_art_slot(row, art_type).url
         )
 
+    async def sources(
+        self, collection_id: int, art_type: ArtType
+    ) -> ArtSourcesResponse:
+        """Offer what sources have, and art drawn from the title in each style."""
+        found = await self.found(collection_id, art_type)
+        drawn = [
+            ArtCandidate(
+                url=f"/api/collections/{collection_id}/art/{art_type}/generated/{style}",
+                source=ArtSource.GENERATED,
+                art_type=art_type,
+                generated=style,
+            )
+            for style in ArtStyle
+        ]
+        return found.model_copy(
+            update={"sources": {**found.sources, ArtSource.GENERATED: drawn}}
+        )
+
+    async def drawn(
+        self, collection_id: int, art_type: ArtType, style: ArtStyle
+    ) -> bytes:
+        """Return the PNG choosing *style* would draw for the collection now."""
+        async with self._database.read_session() as db:
+            row = await self._require(db, collection_id, art_type)
+        return await owned_thread(
+            render_art, art_type, row.title, _subtitle(row), style
+        )
+
     async def save(
         self,
         collection_id: int,
         art_type: ArtType,
         body: SaveArtRequest,
     ) -> StatusResponse:
-        """Upload validated bytes and record their art slot."""
+        """Upload validated bytes and record their art slot.
+
+        Art to draw is drawn from the collection's title and group, kept like
+        an upload, and recorded as generated so a new title draws it again.
+        """
         async with self._database.read_session() as db:
-            await self._require(db, collection_id, art_type, managed=True)
+            row = await self._require(db, collection_id, art_type, managed=True)
+        if body.generated is not None:
+            drawn = await self._draw(row, art_type, body.generated)
+            await self._choose(
+                collection_id,
+                art_type,
+                SaveArtRequest(upload_hash=drawn),
+                generated=body.generated,
+            )
+        else:
+            await self._choose(collection_id, art_type, body)
+        return StatusResponse(status=Status.OK)
+
+    async def _draw(
+        self, row: MediaCollection, art_type: ArtType, style: ArtStyle
+    ) -> str:
+        """Draw the collection's art in *style* and keep it; return its hash."""
+        drawn = await self._uploads.store(
+            await owned_thread(render_art, art_type, row.title, _subtitle(row), style)
+        )
+        return drawn.upload_hash
+
+    async def _choose(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        body: SaveArtRequest,
+        *,
+        generated: ArtStyle | None = None,
+    ) -> None:
         selection = await self._selector.prepare(art_type, body)
         if isinstance(selection.source, ArtFileFacts):
             facts = selection.source
@@ -128,7 +201,7 @@ class CollectionArtService:
 
         def record(row: MediaCollection) -> None:
             if isinstance(selection.source, ArtFileFacts):
-                select_upload(row, art_type, facts.file_hash)
+                select_upload(row, art_type, facts.file_hash, generated=generated)
             elif selection.stored_url:
                 select_art(row, art_type, selection.stored_url)
             else:
@@ -137,7 +210,24 @@ class CollectionArtService:
             record_art_file(row, art_type, facts)
 
         await self._send(collection_id, art_type, data, media_type, record)
-        return StatusResponse(status=Status.OK)
+
+    async def redraw(
+        self, collection_id: int, art_type: ArtType, *, resend: bool
+    ) -> None:
+        """Draw generated art again if what it shows changed, or *resend* it."""
+        async with self._database.read_session() as db:
+            row = await self._require(db, collection_id, art_type, managed=True)
+        style = read_art_slot(row, art_type).generated_style
+        if style is None:
+            return
+        drawn = await self._draw(row, art_type, style)
+        if resend or drawn != read_art_slot(row, art_type).upload_hash:
+            await self._choose(
+                collection_id,
+                art_type,
+                SaveArtRequest(upload_hash=drawn),
+                generated=style,
+            )
 
     async def reupload(self, collection_id: int, art_type: ArtType) -> None:
         """Send the server the image Overture last uploaded to it, again.
@@ -330,7 +420,7 @@ class CollectionArtService:
             params=request.params,
         )
         reference = await self._matcher.phash.compute_from_bytes(fetched.data)
-        sources = await self.sources(collection_id, art_type)
+        sources = await self.found(collection_id, art_type)
         candidates = list(
             {
                 candidate.url: candidate

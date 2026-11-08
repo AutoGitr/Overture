@@ -29,7 +29,7 @@ lazy from ...utils.collection_formats import (
     validate_summary_format,
 )
 lazy from ...utils.cron import validate_cron_expression
-lazy from ..columns import enum_columns, enum_type
+lazy from ..columns import enum_type, typed_columns
 
 #: The settings row is a singleton; pinning its key makes that a database rule
 #: rather than a convention two concurrent writers could break.
@@ -64,6 +64,7 @@ class AppSettingsBase(SQLModel):
     collection_minimum_items: int = Field(default=2, ge=1, le=100)
     collection_delete_below_minimum: bool = True
     collection_auto_match_art: bool = False
+    collection_auto_generate_art: bool = False
     collection_auto_match_theme: bool = False
     collection_sort_title_format: str = Field(default="", max_length=200)
     collection_summary_format: str = Field(default="", max_length=2000)
@@ -72,11 +73,8 @@ class AppSettingsBase(SQLModel):
     collection_sync_enabled: bool = False
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
-    #: OvertureDB's No theme flag counts a title's theme as complete.
     overturedb_no_theme: bool = True
-    #: The sidebar offers browsing the OvertureDB catalog.
     overturedb_browse: bool = True
-    #: The country whose charts and streaming services TMDB reports.
     tmdb_region: str = Field(default="US", min_length=2, max_length=2)
     radarr_root_folder: str = Field(default="", max_length=500)
     radarr_quality_profile_id: int | None = Field(default=None, ge=1)
@@ -156,7 +154,7 @@ class AppSettings(AppSettingsBase, table=True):
     updated_at: datetime | None = None
 
 
-enum_columns(AppSettings)
+typed_columns(AppSettings)
 
 
 async def get_app_settings(session: AsyncSession) -> AppSettings:

@@ -70,6 +70,7 @@ export function defaultRule(): CollectionRuleWriteInput {
     minimum_items: null,
     delete_below_minimum: null,
     auto_match_art: null,
+    auto_generate_art: null,
     auto_match_theme: null,
     collection_mode: null,
     collection_filtering: null,
@@ -387,8 +388,13 @@ export class CollectionEditor {
     );
   }
 
+  /** The saved collection this edits. */
+  get collectionId(): number {
+    return this.current().id;
+  }
+
   private get target() {
-    return { path: { collection_id: this.current().id } };
+    return { path: { collection_id: this.collectionId } };
   }
 
   /** Writes that stay in Overture until the collection is synced. */
@@ -872,7 +878,11 @@ export class CriteriaPreview {
   run() {
     const form = this.form();
     this.request.mutate({
-      body: { rule: { ...ruleBody(form), limit: form.rule.limit ?? null } },
+      body: {
+        rule: { ...ruleBody(form), limit: form.rule.limit ?? null },
+        // A saved collection never counts as another one holding a title.
+        collection_id: form instanceof CollectionEditor ? form.collectionId : null,
+      },
     });
   }
 }
@@ -883,6 +893,7 @@ const RULE_POLICY = [
   "minimum_items",
   "delete_below_minimum",
   "auto_match_art",
+  "auto_generate_art",
   "auto_match_theme",
   "request_missing",
   "member_label",

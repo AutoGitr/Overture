@@ -261,6 +261,7 @@ its [settings file](#native-service-settings). Empty values count as unset.
 | `SONARR_URL`                | No                 |                           | Sonarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:8989`); enables Sonarr tag collection builders |
 | `SONARR_API_KEY`            | If using Sonarr    |                           | Sonarr API key; kept on the backend                                                                                         |
 | `SONARR_VERIFY_TLS`         | No                 | `true`                    | Set to `false` only for self-signed certificates                                                                            |
+| `NOTIFY_URL`                | No                 |                           | Webhook or Apprise API URL that receives each failed run; see [Notifications](#notifications)                               |
 | `AUTH_MODE`                 | No                 | `password`                | Authentication mode: `password`, `oidc`, `both`, or `none`                                                                  |
 | `APP_PASSWORD_HASH`         | `password`, `both` |                           | [Password](#password) hash; required for `password` and `both` modes                                                        |
 | `OIDC_ISSUER_URL`           | `oidc`, `both`     |                           | Exact [OIDC](#sso-with-openid-connect) issuer, with any path and trailing slash (Authentik: `.../application/o/overture/`)  |
@@ -637,6 +638,30 @@ tag. Choose where requested titles go under
 Plex filter until you choose **Replace the Plex filter with these criteria**.
 Failed list lookups keep existing members.
 
+**In a collection** tests whether another collection Overture lists holds a
+title, so **In a collection is false** makes a catch-all collection of
+everything no other collection holds. A collection never counts itself, so a
+catch-all keeps what it caught on its next sync, and **Preview members** of a
+saved collection leaves it out too.
+
+**Art drawn from the title**: every collection's poster and background
+candidates end with a **Generated** row, one image per style (dark, light and
+accent) showing its title under its group's name. Choosing one keeps it in the
+image cache and uploads it like any other art, and its source shows as
+**Generated**. **Generated poster** in Settings draws a dark poster after a
+sync for a collection still without one once automatic art found nothing, and
+art drawn either way is drawn again when the collection's title or group
+changes.
+
+**Separator**, a Plex group setting in **Collection groups**, heads the group
+with an empty collection titled after it, with a drawn poster, in each library
+its collections use. Its sort title is the group's sort title template with an
+empty title, so a template that puts the group first, such as
+`{group} {title}`, sorts the separator right before the group's collections.
+The group keeps it: renaming the group renames it, turning the setting off or
+deleting the group removes it. Jellyfin and Emby keep no empty collections, so
+they have no separators.
+
 **Collection groups**, opened from **Manage groups** in the collection sidebar or
 **Create new group** in Setup's Group list, creates groups and edits a group's
 collection set, Settings and Schedule; Setup only assigns a group. **Save**
@@ -663,6 +688,16 @@ Media files are always kept.
 
 Bulk group assignment offers the existing groups. Status filters use aligned,
 full-width controls and stack their labels above the controls on small screens.
+
+#### Notifications
+
+Set `NOTIFY_URL` and Overture posts each failed run there: a library sync,
+asset run, server audit or its fix, OvertureDB sync or backup. Each post is
+JSON with `title`, `body` (the error, without any configured secret) and
+`type` (`failure`), which [Apprise's API](https://github.com/caronc/apprise-api)
+takes as is, so one Apprise URL reaches Discord, ntfy, email and the rest;
+other webhooks read the same fields. A post that fails is logged, without the
+URL, and never holds up the run.
 
 ### Operations
 

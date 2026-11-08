@@ -180,7 +180,9 @@ async def test_art_target_looks_up_season_for_season_poster(
     *,
     app_config: Settings,
 ) -> None:
-    item = media_item_factory(id=None, server_item_id="s1", library_id="l1")
+    item = media_item_factory(
+        id=None, media_type=MediaType.SHOW, server_item_id="s1", library_id="l1"
+    )
     db_session.add(item)
     await db_session.commit()
     season = season_factory(id=None, media_item_id=item.id)

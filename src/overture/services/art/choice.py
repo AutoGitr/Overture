@@ -129,7 +129,14 @@ class ArtSelector:
         return width, height
 
     async def prepare(self, art_type: ArtType, body: SaveArtRequest) -> ArtSelection:
-        """Validate the chosen artwork before anything is recorded."""
+        """Validate the chosen artwork before anything is recorded.
+
+        Raises:
+            PublicServiceError: 422 for art to draw, which only a collection
+                has a title for; its service draws it and chooses the upload.
+        """
+        if body.generated is not None:
+            raise PublicServiceError(422, "Only collections have generated art")
         if body.upload_hash is not None:
             upload = await self._uploads.facts(body.upload_hash)
             async with self._database.read_session() as db:

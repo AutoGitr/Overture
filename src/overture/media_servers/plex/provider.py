@@ -26,6 +26,7 @@ lazy from ..adapters import (
     ServerItem,
     ServerSeason,
     ServerSection,
+    ServerWebLinks,
     UploadThemes,
     server_path,
 )
@@ -164,11 +165,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             app_config=app_config,
         )
 
-    def _item_link(self, rating_key: str, machine_id: str | None) -> str:
-        return plex_web_link(
-            "metadata", rating_key, machine_id, app_config=self._app_config
-        )
-
     @override
     async def _list_sections(self) -> list[ServerSection]:
         """Return Plex's movie and show sections."""
@@ -207,7 +203,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         media_type: MediaType,
         section_key: str,
         plex_base: str,
-        machine_id: str | None,
         in_progress: Collection[str],
     ) -> ServerItem:
         """Normalize one Plex row, without a show's folder or seasons.
@@ -231,7 +226,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             guids=_plex_guids(metadata),
             poster_url=_plex_absolute_url(metadata.get("thumb"), plex_base),
             background_url=_plex_absolute_url(metadata.get("art"), plex_base),
-            server_link=self._item_link(rating_key, machine_id),
             library_id=section_key,
             folder_path=(
                 _plex_location_path(metadata) or _plex_movie_file_parent(metadata)
@@ -280,7 +274,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         A poll drops unchanged items first, so it reads the metadata of the
         items it reports and no others.
         """
-        machine_id = await self.client.get_machine_identifier()
         plex_base = await self.client.base_url()
         for section in await self.select_sections(library_ids):
             show = section.media_type is MediaType.SHOW
@@ -295,7 +288,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                 media_type=section.media_type,
                 section_key=section.key,
                 plex_base=plex_base,
-                machine_id=machine_id,
                 in_progress=in_progress,
             )
 
@@ -336,10 +328,14 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         )
 
     @override
-    async def build_item_link(self, server_item_id: str) -> str:
-        """Return a Plex web link for a metadata rating key."""
-        return self._item_link(
-            server_item_id, await self.client.get_machine_identifier()
+    async def web_links(self) -> ServerWebLinks:
+        """Return Plex web links, through plex.tv when the server is known there."""
+        machine_id = await self.client.get_machine_identifier()
+        return ServerWebLinks(
+            item=plex_web_link("metadata", machine_id, app_config=self._app_config),
+            collection=plex_web_link(
+                "collections", machine_id, app_config=self._app_config
+            ),
         )
 
     @override
@@ -408,15 +404,14 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     @override
     async def list_collections(self) -> list[ServerCollection]:
         """Return the collections of every movie and show library."""
-        machine_id = await self.client.get_machine_identifier()
         return [
-            await self._server_collection(item, section, machine_id)
+            await self._server_collection(item, section)
             for section in await self.get_sections()
             for item in await self.client.get_collections(section.key)
         ]
 
     async def _server_collection(
-        self, item: PlexMetadata, section: ServerSection, machine_id: str | None
+        self, item: PlexMetadata, section: ServerSection
     ) -> ServerCollection:
         rating_key = str(item["ratingKey"])
         thumb, art, theme = item.get("thumb"), item.get("art"), item.get("theme")
@@ -426,9 +421,6 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             id=rating_key,
             title=item.get("title") or "",
             member_ids=tuple(await self.client.get_collection_member_ids(rating_key)),
-            server_link=plex_web_link(
-                "collections", rating_key, machine_id, app_config=self._app_config
-            ),
             media_type=section.media_type,
             library_id=section.key,
             summary=item.get("summary") or None,
@@ -469,9 +461,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             section_key, title, media_type, member_ids
         )
         section = ServerSection(key=section_key, title="", media_type=media_type)
-        return await self._server_collection(
-            item, section, await self.client.get_machine_identifier()
-        )
+        return await self._server_collection(item, section)
 
     @override
     async def create_smart_collection(
@@ -485,9 +475,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             section_key, title, media_type, filter_query
         )
         section = ServerSection(key=section_key, title="", media_type=media_type)
-        return await self._server_collection(
-            item, section, await self.client.get_machine_identifier()
-        )
+        return await self._server_collection(item, section)
 
     @override
     async def update_smart_collection_filter(

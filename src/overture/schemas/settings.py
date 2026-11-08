@@ -76,6 +76,7 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_minimum_items: int | None = None
     collection_delete_below_minimum: bool | None = None
     collection_auto_match_art: bool | None = None
+    collection_auto_generate_art: bool | None = None
     collection_auto_match_theme: bool | None = None
     collection_sort_title_format: str | None = None
     collection_summary_format: str | None = None

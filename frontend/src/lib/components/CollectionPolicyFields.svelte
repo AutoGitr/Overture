@@ -12,6 +12,7 @@
     minimum_items?: number | null;
     delete_below_minimum?: boolean | null;
     auto_match_art?: boolean | null;
+    auto_generate_art?: boolean | null;
     auto_match_theme?: boolean | null;
     request_missing?: boolean | null;
     member_label?: string | null;
@@ -150,6 +151,14 @@
     inherited={defaults?.auto_match_art}
     options={ON_OFF}
     hint="Picks art after a sync when none is chosen."
+  />
+  <InheritedSelect
+    label="Generated poster"
+    {inherits}
+    bind:value={policy.auto_generate_art}
+    inherited={defaults?.auto_generate_art}
+    options={ON_OFF}
+    hint="Draws a poster from the title after a sync when none is chosen or found."
   />
   <InheritedSelect
     label="Automatic theme"

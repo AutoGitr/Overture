@@ -27,6 +27,7 @@ lazy from .editor import CollectionEditor
 lazy from .fields import DIMENSIONS
 lazy from .rule_sync import RuleSync
 lazy from .rules import generator, group_name
+lazy from .separators import CollectionSeparators
 lazy from .set_runner import CollectionSets
 lazy from .validation import CollectionValidator
 
@@ -42,38 +43,25 @@ class CollectionGroups:
         editor: CollectionEditor,
         sets: CollectionSets,
         rules: RuleSync,
+        separators: CollectionSeparators,
     ) -> None:
         self._access = access
         self._validator = validator
         self._editor = editor
         self._sets = sets
         self._rules = rules
+        self._separators = separators
 
     async def names(self) -> list[str]:
-        """Return the stored groups: those with defaults or managed collections.
-
-        Unmanaged collections belong to no group until they are adopted.
-        """
-        server = self._access.server_type
+        """Return the active server's groups, Ungrouped always among them."""
         async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
-            rows = [
-                row for row in await repo.list_listed() if row.server_type is server
-            ]
-            policies = await repo.group_policies(server)
-            managed = {rule.collection_id for rule in await repo.rules()}
-        return sorted(
-            {UNGROUPED_GROUP}
-            | {group.name for group in policies}
-            | {
-                row.collection_group
-                for row in rows
-                if row.collection_group and row.id in managed
-            }
-        )
+            groups = await CollectionRepository(session).groups(
+                self._access.server_type
+            )
+        return sorted({UNGROUPED_GROUP} | {group.name for group in groups})
 
     async def rename(self, name: str, replacement: str) -> StatusResponse:
-        """Rename defaults and every member atomically, including unlisted rows."""
+        """Rename a group; its collections hold it by key, so they follow."""
         name, replacement = name.strip(), group_name(replacement)
         if UNGROUPED_GROUP.casefold() in {name.casefold(), replacement.casefold()}:
             raise PublicServiceError(
@@ -85,24 +73,19 @@ class CollectionGroups:
             self._access.database.write_session() as session,
         ):
             repo = CollectionRepository(session)
-            group = await repo.group_policy(server, name)
-            rows = await repo.group_members(server, name)
-            if group is None and not rows:
+            group = await repo.group(server, name)
+            if group is None:
                 raise PublicServiceError(404, "Collection group not found")
-            if replacement != name and (
-                await repo.group_policy(server, replacement) is not None
-                or await repo.group_members(server, replacement)
-            ):
+            if replacement != name and await repo.group(server, replacement):
                 raise PublicServiceError(
                     409, "A collection group with this name already exists"
                 )
-            if group is not None:
-                group.name = replacement
-                session.add(group)
-            for row in rows:
-                row.collection_group = replacement
+            group.name = replacement
+            session.add(group)
+            for row in await repo.group_members(group):
                 row.updated_at = utc_now()
                 session.add(row)
+        await self._separators.apply(replacement)
         await self._access.changed()
         return StatusResponse(status=Status.OK)
 
@@ -125,10 +108,11 @@ class CollectionGroups:
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
             async with self._access.database.read_session() as session:
                 repo = CollectionRepository(session)
-                rows = await repo.group_members(server, name)
-                group = await repo.group_policy(server, name)
-            if group is None and not rows:
+                group = await repo.group(server, name)
+                rows = await repo.group_members(group) if group else []
+            if group is None:
                 raise PublicServiceError(404, "Collection group not found")
+            rows = await self._separators.discard(rows)
             if body.collections in {"orphan", "both"}:
                 for row in rows:
                     identity = row.id or 0
@@ -150,13 +134,15 @@ class CollectionGroups:
             if not result.errors:
                 async with self._access.database.write_session() as session:
                     repo = CollectionRepository(session)
-                    for row in await repo.group_members(server, name):
-                        row.collection_group = target
-                        row.generated_value = None
-                        row.updated_at = utc_now()
-                        session.add(row)
-                    group = await repo.group_policy(server, name)
+                    group = await repo.group(server, name)
                     if group is not None:
+                        moved_to = await repo.ensure_group(server, target)
+                        for row in await repo.group_members(group):
+                            row.group = moved_to
+                            row.generated_value = None
+                            row.updated_at = utc_now()
+                            session.add(row)
+                        await session.flush()
                         await session.delete(group)
         await self._access.changed()
         return result
@@ -164,7 +150,7 @@ class CollectionGroups:
     async def sets(self) -> list[CollectionSetSummary]:
         """Return the groups that are sets, by name."""
         async with self._access.database.read_session() as session:
-            policies = await CollectionRepository(session).group_policies(
+            policies = await CollectionRepository(session).groups(
                 self._access.server_type
             )
         return [
@@ -180,7 +166,7 @@ class CollectionGroups:
     async def policy(self, name: str) -> CollectionGroupPolicy:
         """Return nullable group overrides, including for a new group."""
         async with self._access.database.read_session() as session:
-            row = await CollectionRepository(session).group_policy(
+            row = await CollectionRepository(session).group(
                 self._access.server_type, name.strip()
             )
         if row is None:
@@ -206,11 +192,11 @@ class CollectionGroups:
         name = group_name(name)
         server = self._access.server_type
         async with self._access.database.read_session() as session:
+            repo = CollectionRepository(session)
+            group = await repo.group(server, name)
             held = {
                 media_type
-                for row in await CollectionRepository(session).group_members(
-                    server, name
-                )
+                for row in (await repo.group_members(group) if group else [])
                 for media_type in row.media_types
             }
         if body.generator is not None:
@@ -232,7 +218,7 @@ class CollectionGroups:
             if body.generator.smart and body.order_type is CollectionOrder.CUSTOM:
                 raise PublicServiceError(422, SMART_CUSTOM_ORDER)
         async with self._access.database.write_session() as session:
-            row = await CollectionRepository(session).group_policy(server, name)
+            row = await CollectionRepository(session).group(server, name)
             if new_set and (current := generator(row)) is not None:
                 raise PublicServiceError(
                     409,
@@ -243,10 +229,13 @@ class CollectionGroups:
             if row is None:
                 row = CollectionGroup(server_type=server, name=name)
             row.sqlmodel_update(body.model_dump(exclude={"generator"}))
-            row.generator_json = (
-                body.generator.model_dump_json() if body.generator is not None else None
+            row.generator = (
+                body.generator.model_dump(mode="json")
+                if body.generator is not None
+                else None
             )
             session.add(row)
+        await self._separators.apply(name)
         await self._access.changed()
         return body
 
@@ -259,11 +248,11 @@ class CollectionGroups:
         server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            policy = await repo.group_policy(server, name)
+            policy = await repo.group(server, name)
             rows = [
                 row
                 for row in await repo.list_listed()
-                if row.collection_group == name
+                if row.group_name == name
                 and row.server_type is server
                 and row.id is not None
             ]
@@ -281,7 +270,7 @@ class CollectionGroups:
                     async with self._access.database.read_session() as session:
                         row = await self._access.require(session, collection_id)
                         rule = await CollectionRepository(session).rule(collection_id)
-                    if row.collection_group != name:
+                    if row.group_name != name:
                         continue
                     await self._editor.update_locked(row, saved_options(row, rule))
                 result.collection_ids.append(collection_id)
@@ -301,7 +290,7 @@ class CollectionGroups:
         name = name.strip()
         server = self._access.server_type
         async with self._access.database.read_session() as session:
-            group = await CollectionRepository(session).group_policy(server, name)
+            group = await CollectionRepository(session).group(server, name)
         result = CollectionGroupSyncResult()
         set_generator = generator(group)
         if (
@@ -318,15 +307,23 @@ class CollectionGroups:
                 row
                 for row in await repo.list_listed()
                 if row.server_type is server
-                and row.collection_group == name
+                and row.group_name == name
                 and (library_ids is None or set(library_ids) & set(row.library_ids))
             ]
             managed = {rule.collection_id for rule in await repo.rules()}
         for row in rows:
-            if row.id in managed and row.id not in result.created:
+            if (
+                row.id in managed
+                and row.id not in result.created
+                and row.kind is not CollectionKind.SEPARATOR
+            ):
                 try:
                     await self._rules.sync(row.id or 0)
                     result.synced += 1
                 except Exception as exc:
                     result.errors[row.title] = str(exc)
+        try:
+            await self._separators.apply(name)
+        except Exception as exc:
+            result.errors[name] = str(exc)
         return result

@@ -9,6 +9,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
+lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
@@ -16,6 +17,7 @@ lazy from ...db.session import Database
 lazy from ...domain import UNMANAGED_REFUSAL, MediaType, ServerType
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import CollectionLibraryCriteria, FilterGroup
 lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
@@ -33,6 +35,9 @@ class LibraryScope:
     media_type: MediaType
     criteria: FilterGroup
     items: list[MediaItem]
+    #: The collection the criteria select for, which never counts as another
+    #: collection holding an item; none for one not saved yet.
+    collection_id: int | None = None
 
 
 class CollectionAccess:
@@ -123,17 +128,19 @@ class CollectionAccess:
             raise PublicServiceError(409, UNMANAGED_REFUSAL)
         return row
 
+    async def group(
+        self, session: AsyncSession, name: str | None
+    ) -> CollectionGroup | None:
+        """Return the active server's group named *name*, if it has one."""
+        return await CollectionRepository(session).group(self.server_type, name)
+
     async def policy(
         self,
         session: AsyncSession,
-        group: str | None,
+        group: CollectionGroup | None,
         rule: RuleOrPolicy = None,
     ) -> CollectionPolicy:
-        return resolve_policy(
-            await get_app_settings(session),
-            await CollectionRepository(session).group_policy(self.server_type, group),
-            rule,
-        )
+        return resolve_policy(await get_app_settings(session), group, rule)
 
     async def library_types(self, library_ids: Iterable[str]) -> dict[str, MediaType]:
         """What each of the server's libraries holds.
@@ -141,16 +148,16 @@ class CollectionAccess:
         Raises:
             PublicServiceError: 422 when the server has no such library.
         """
-        sections = {
-            section.key: section.media_type
-            for section in await self.provider().get_sections()
-        }
-        try:
-            return {library_id: sections[library_id] for library_id in library_ids}
-        except KeyError as exc:
-            raise PublicServiceError(
-                422, "Select one of the server's libraries"
-            ) from exc
+        requested = list(library_ids)
+        wanted = set(requested)
+        async with self.database.read_session() as session:
+            types = {
+                library.id: library.media_type
+                for library in await LibraryRepository(session).listed(wanted)
+            }
+        if wanted - types.keys():
+            raise PublicServiceError(422, "Select one of the server's libraries")
+        return {library_id: types[library_id] for library_id in requested}
 
     async def library_items(
         self, library_id: str, media_type: MediaType
@@ -166,7 +173,9 @@ class CollectionAccess:
             )
 
     async def scopes(
-        self, libraries: Sequence[CollectionLibraryCriteria]
+        self,
+        libraries: Sequence[CollectionLibraryCriteria],
+        collection_id: int | None = None,
     ) -> list[LibraryScope]:
         """Each library's criteria with the items it selects from."""
         types = await self.library_types(entry.library_id for entry in libraries)
@@ -180,13 +189,18 @@ class CollectionAccess:
                     items=await repo.library_items(
                         types[entry.library_id], entry.library_id
                     ),
+                    collection_id=collection_id,
                 )
                 for entry in libraries
             ]
 
-    async def collection_titles(self, library_id: str) -> dict[int, list[str]]:
+    async def collection_titles(
+        self, library_id: str, excluding: int | None
+    ) -> dict[int, list[str]]:
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).titles_by_item(library_id)
+            return await CollectionRepository(session).titles_by_item(
+                library_id, excluding
+            )
 
     async def region(self) -> str:
         """The region TMDB charts and streaming services are read for."""

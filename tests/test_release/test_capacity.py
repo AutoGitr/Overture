@@ -78,7 +78,6 @@ async def test_first_sync_stays_within_time_and_memory_budgets(
             media_type=MediaType.MOVIE,
             poster_url=None,
             background_url=None,
-            server_link=f"https://server.test/movie/{index}",
             library_id="movies",
         )
         for index in range(item_count)

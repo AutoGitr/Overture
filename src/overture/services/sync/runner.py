@@ -156,6 +156,7 @@ async def _sync_with_provider(
     async def on_progress(entry: JobLogEntry) -> None:
         await job.progress(log=entry)
 
+    await reconciler.record_libraries(await provider.get_sections())
     with operation_directory(config_dir) as directory:
         async with StagedListing(directory / "provider.sqlite") as listing:
             async for batch in provider.iter_items(library_ids=library_ids):

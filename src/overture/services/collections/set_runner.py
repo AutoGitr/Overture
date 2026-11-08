@@ -69,7 +69,11 @@ class CollectionSets:
         async with self._access.database.read_session() as session:
             minimum = (
                 body.minimum_items
-                or (await self._access.policy(session, body.group)).minimum_items
+                or (
+                    await self._access.policy(
+                        session, await self._access.group(session, body.group)
+                    )
+                ).minimum_items
             )
             listed = [
                 row
@@ -80,13 +84,13 @@ class CollectionSets:
             row.generated_value: row.id
             for row in listed
             if body.group
-            and row.collection_group == body.group
+            and row.group_name == body.group
             and row.generated_value is not None
         }
         taken = {
             (library_id, row.title.casefold()): row.id
             for row in listed
-            if row.generated_value is None or row.collection_group != body.group
+            if row.generated_value is None or row.group_name != body.group
             for library_id in row.library_ids
         }
         types = await self._access.library_types(body.generator.library_ids)
@@ -130,7 +134,7 @@ class CollectionSets:
         """
         server = self._access.server_type
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, group.name)
+            policy = await self._access.policy(session, group)
             listed = [
                 row
                 for row in await CollectionRepository(session).list_listed()
@@ -143,12 +147,12 @@ class CollectionSets:
         members = {
             row.generated_value: row
             for row in listed
-            if row.collection_group == group.name and row.generated_value is not None
+            if row.group_id == group.id and row.generated_value is not None
         }
         titles = {
             (library_id, row.title.casefold())
             for row in listed
-            if row.generated_value is None or row.collection_group != group.name
+            if row.generated_value is None or row.group_id != group.id
             for library_id in row.library_ids
         }
         types = await self._access.library_types(generator.library_ids)
@@ -192,9 +196,7 @@ class CollectionSets:
             except Exception as exc:
                 result.errors[row.title] = str(exc)
         async with self._access.database.write_session() as session:
-            saved = await CollectionRepository(session).group_policy(
-                group.server_type, group.name
-            )
+            saved = await session.get(CollectionGroup, group.id)
             if saved is not None:
                 saved.generated_at = utc_now()
                 session.add(saved)
@@ -250,6 +252,7 @@ class CollectionSets:
                     *(value.criteria for value in generator.custom_values),
                 ],
                 items,
+                collection_id=None,
             )
             counts = count_values(generator, items, context)
         names: dict[str, str] = {}
@@ -314,7 +317,7 @@ class CollectionSets:
             outside = [
                 row
                 for row in await repo.list_listed()
-                if row.collection_group != group and row.server_type is server
+                if row.group_name != group and row.server_type is server
             ]
         return {
             row.tmdb_collection_id

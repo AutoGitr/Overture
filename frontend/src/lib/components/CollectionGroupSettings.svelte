@@ -19,6 +19,7 @@
   } from "../../generated/rest/types.gen";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { defaultGenerator, type SetGenerator } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
   import { CollectionOptions } from "../utils/libraries.svelte";
@@ -28,6 +29,7 @@
   import CollectionSetEditor from "./CollectionSetEditor.svelte";
   import DataStatus from "./DataStatus.svelte";
   import DetailForm from "./DetailForm.svelte";
+  import FieldRow from "./FieldRow.svelte";
 
   let {
     group,
@@ -233,6 +235,15 @@
       {arr}
       memberLabels={capabilities?.member_labels ?? false}
     />
+    <!-- Only Plex keeps empty collections, which a separator is. -->
+    {#if group !== UNGROUPED_GROUP && settingsState.current.media_server === "plex"}
+      <FieldRow
+        label="Separator"
+        hint="An empty collection titled after the group, with drawn art. A sort title that puts the group first, such as {'{group} {title}'}, sorts it right before the group's collections."
+      >
+        <input type="checkbox" aria-label="Separator" bind:checked={form.separator} />
+      </FieldRow>
+    {/if}
   </DetailForm>
   <DetailForm
     collapsible

@@ -1,6 +1,6 @@
-"""Single write surface for an item's theme selection and local theme file.
+"""Single write surface for a theme selection and a local theme file.
 
-A media item carries two kinds of theme state: the selection (which YouTube
+Items and collections carry two kinds of theme state: the selection (which YouTube
 video the theme is, and how that was established) and the facts about the
 local ``theme.mp3`` (its hash, present only while a file is recorded, and the
 stat revision it was inspected at). Each kind is written only here, as a
@@ -10,8 +10,8 @@ whole, so the columns of one kind can never describe different things.
 lazy from dataclasses import dataclass
 
 lazy from ..domain import ThemeIdSource
-lazy from .models.media_collection import MediaCollection
 lazy from .models.media_item import MediaItem
+lazy from .models.shared import ThemeColumns
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +29,7 @@ class ThemeFileFacts:
     duration: int | None
 
 
-def theme_file_facts(item: MediaItem | MediaCollection) -> ThemeFileFacts | None:
+def theme_file_facts(item: ThemeColumns) -> ThemeFileFacts | None:
     """Return the recorded facts of the item's local theme file, or ``None``."""
     if item.theme_file_hash is None:
         return None
@@ -42,7 +42,7 @@ def theme_file_facts(item: MediaItem | MediaCollection) -> ThemeFileFacts | None
 
 
 def theme_file_columns(
-    item: MediaItem | MediaCollection | ThemeFileFacts | None,
+    item: ThemeColumns | ThemeFileFacts | None,
 ) -> tuple[str | None, int | None, int | None, int | None]:
     """Return the theme file columns an item holds, or would hold for *facts*.
 
@@ -60,9 +60,7 @@ def theme_file_columns(
     )
 
 
-def record_theme_file(
-    item: MediaItem | MediaCollection, facts: ThemeFileFacts | None
-) -> None:
+def record_theme_file(item: ThemeColumns, facts: ThemeFileFacts | None) -> None:
     """Record the item's local theme file, or its absence."""
     item.theme_file_hash = facts.file_hash if facts else None
     item.theme_file_mtime_ns = facts.file_mtime_ns if facts else None

@@ -45,6 +45,7 @@ lazy from .services.downloads.theme import DownloadThemeHandler
 lazy from .services.health import get_service_status
 lazy from .services.library.service import LibraryService
 lazy from .services.local_assets.service import LocalAssets
+lazy from .services.notifications import FailureNotifier, NotifyingPublisher
 lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.scheduler import SchedulerService
@@ -116,6 +117,7 @@ class RuntimeServices:
     tmdb_items: TmdbItemsService
     asset_manager: AssetManagerService
     stats: StatsService
+    notifier: FailureNotifier
     config_dir: Path
     connectivity_probe: Callable[
         [ProviderRegistry, TMDBClient], Awaitable[ConnectivityStatusResponse]
@@ -272,6 +274,7 @@ class RuntimeServices:
             if service.name in self._started:
                 await self._shutdown_step(service.name, service.stop)
                 self._started.discard(service.name)
+        await self._shutdown_step("notifications", self.notifier.close)
         await self._shutdown_step("websockets", self.websockets.close)
         await self._shutdown_step("authentication", self.auth.close)
         await self._shutdown_step("art matcher", self.art_matcher.close)
@@ -405,7 +408,10 @@ def build_runtime(
     database = database if database is not None else Database(database_url(config_dir))
     redactor = Redactor(app_config.secret_values())
     websockets = ConnectionManager()
-    events: protocols.EventPublisher = WebSocketEventEmitter(websockets)
+    notifier = FailureNotifier(app_config=app_config)
+    events: protocols.EventPublisher = NotifyingPublisher(
+        WebSocketEventEmitter(websockets), notifier
+    )
     phash = PhashService(app_config=app_config)
     asset_storage = AssetStorage(app_config=app_config)
     image_cache = ImageCache(image_cache_path(config_dir))
@@ -570,6 +576,7 @@ def build_runtime(
     )
 
     return RuntimeServices(
+        notifier=notifier,
         app_settings=app_config,
         database=database,
         auth=AuthService(app_config, database),

@@ -352,8 +352,9 @@ class CollectionRead(CollectionArtwork):
     library_ids: list[str]
     server_added_at: str | None = None
     server_type: ServerType
-    #: Opens the server's copy; none while the server holds no copy.
-    server_link: str | None = None
+    #: The server copy that stands for the collection, which its link opens;
+    #: none while the server holds no copy.
+    server_item_id: str | None = None
     #: The media server holds a theme for the collection.
     has_theme: bool = False
     youtube_id: str | None = None
@@ -453,7 +454,7 @@ def collection_read(
         sort_title=row.sort_title,
         sort_title_format=row.sort_title_format,
         summary_format=row.summary_format,
-        collection_group=row.collection_group,
+        collection_group=row.group_name,
         collection_mode=row.collection_mode,
         order_type=row.order_type,
         collection_filtering=row.collection_filtering,
@@ -478,7 +479,7 @@ def collection_read(
         if row.server_added_at
         else None,
         server_type=row.server_type,
-        server_link=row.server_link if row.server_item_id is not None else None,
+        server_item_id=row.server_item_id,
         has_theme=has_theme,
         youtube_id=row.youtube_id,
         youtube_title=row.youtube_title,
@@ -545,6 +546,8 @@ class CollectionPolicyBase(StrictBaseModel):
     minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
     delete_below_minimum: bool | None = None
     auto_match_art: bool | None = None
+    #: Draw a poster from the title when a sync leaves the collection without one.
+    auto_generate_art: bool | None = None
     auto_match_theme: bool | None = None
     delete_when_inactive: bool | None = None
     collection_mode: CollectionMode | None = None
@@ -775,6 +778,9 @@ class CollectionGroupPolicy(CollectionPolicyBase):
     sync_enabled: bool | None = None
 
     generator: CollectionGenerator | None = None
+    #: Head the group's collections with an empty one titled after the group;
+    #: Plex only, the one server that keeps empty collections.
+    separator: bool = False
 
 
 class CollectionDefaults(CollectionPolicyBase):
@@ -944,6 +950,9 @@ class CollectionPreviewRequest(StrictBaseModel):
     """A rule whose criteria to preview in each of its libraries."""
 
     rule: CollectionRuleWrite
+    #: The saved collection being edited, which never counts as another
+    #: collection holding a title.
+    collection_id: int | None = None
 
 
 class CollectionGroupSyncResult(StrictBaseModel):

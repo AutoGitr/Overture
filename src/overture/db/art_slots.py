@@ -9,7 +9,7 @@ outside this module builds slot rows by hand.
 lazy from dataclasses import asdict, dataclass, fields
 lazy from operator import attrgetter
 
-lazy from ..domain import ArtSource, ArtType
+lazy from ..domain import ArtSource, ArtStyle, ArtType
 lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
 lazy from .models.art import ArtSlot
 lazy from .models.media_collection import MediaCollection
@@ -165,6 +165,8 @@ def saved_art(slot: ArtSlot | None) -> SavedArt | None:
 
 def slot_art_source(slot: ArtSlot) -> ArtSource | None:
     """Return where the slot's selected artwork comes from, if it selects any."""
+    if slot.generated_style:
+        return ArtSource.GENERATED
     return ArtSource.UPLOAD if slot.upload_hash else selected_art_source(slot.url)
 
 
@@ -196,16 +198,25 @@ def select_art(
     slot = art_slot(owner, art_type)
     slot.url = url
     slot.upload_hash = None
+    slot.generated_style = None
     return slot
 
 
 def select_upload(
-    owner: MediaItem | Season | MediaCollection, art_type: ArtType, upload_hash: str
+    owner: MediaItem | Season | MediaCollection,
+    art_type: ArtType,
+    upload_hash: str,
+    *,
+    generated: ArtStyle | None = None,
 ) -> ArtSlot:
-    """Record the uploaded image *upload_hash* as the slot's selected artwork."""
+    """Record the kept image *upload_hash* as the slot's selected artwork.
+
+    *generated* names the style Overture drew it in, for an image it made.
+    """
     slot = art_slot(owner, art_type)
     slot.url = None
     slot.upload_hash = upload_hash
+    slot.generated_style = generated
     return slot
 
 
@@ -218,6 +229,7 @@ def clear_art_selection(
         return
     slot.url = None
     slot.upload_hash = None
+    slot.generated_style = None
     _drop_if_empty(owner, slot)
 
 

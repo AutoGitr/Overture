@@ -13,7 +13,7 @@ lazy from typing import Any, cast, get_args, get_origin
 
 # SQLModel re-exports no ``event``; the listener coerces enum constructor arguments.
 lazy from sqlalchemy import event
-lazy from sqlmodel import CheckConstraint, SQLModel, Table, inspect
+lazy from sqlmodel import JSON, CheckConstraint, SQLModel, Table, inspect
 lazy from sqlmodel import Enum as SAEnum
 
 
@@ -25,7 +25,7 @@ def _enum_values(enum_type: type[StrEnum]) -> list[str]:
 def enum_type(enum_cls: type[StrEnum]) -> type[Any]:
     """Return an SAEnum type storing *enum_cls* members by value.
 
-    The database constraint comes from :func:`enum_columns`, which names it.
+    The database constraint comes from :func:`typed_columns`, which names it.
     """
     return cast(
         "type[Any]",
@@ -49,16 +49,19 @@ def _enum_annotation(annotation: Any) -> type[StrEnum] | None:
     return None
 
 
-def enum_columns(model: type[SQLModel]) -> None:
-    """Make a table model's enum columns hold their enums, in Python and in SQL.
+def typed_columns(model: type[SQLModel]) -> None:
+    """Make a table model's enum and JSON columns hold only what their type does.
 
     Every enum column gets a CHECK constraint, ``ck_<table>_<column>``,
-    admitting its values. Table models skip Pydantic validation, so a plain
-    string handed to the constructor would sit in the attribute until the
-    database round-tripped it - close enough to work, different enough to
-    surprise; constructor arguments are coerced to the enum instead.
+    admitting its values, and every JSON column one, ``ck_<table>_<column>_json``,
+    admitting valid JSON, so neither depends on the code that writes it. Table
+    models skip Pydantic validation, so a plain string handed to the constructor
+    would sit in the attribute until the database round-tripped it - close
+    enough to work, different enough to surprise; constructor arguments are
+    coerced to the enum instead.
     """
-    table = inspect(model).local_table
+    mapper = inspect(model)
+    table = mapper.local_table
     if not isinstance(table, Table):
         raise TypeError(f"{model.__name__} is not mapped to a table")
     enum_fields = {
@@ -71,6 +74,14 @@ def enum_columns(model: type[SQLModel]) -> None:
         table.append_constraint(
             CheckConstraint(f"{name} IN ({values})", name=f"ck_{table.name}_{name}")
         )
+    for column in mapper.columns:
+        if isinstance(column.type, JSON):
+            table.append_constraint(
+                CheckConstraint(
+                    f"json_valid({column.name})",
+                    name=f"ck_{table.name}_{column.name}_json",
+                )
+            )
 
     def _coerce(
         _target: object, _args: Sequence[object], kwargs: dict[str, Any]

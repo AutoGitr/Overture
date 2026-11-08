@@ -35,17 +35,17 @@ def library_criteria(row: MediaCollection) -> list[CollectionLibraryCriteria]:
     return [
         CollectionLibraryCriteria(
             library_id=part.library_id,
-            criteria=FilterGroup.model_validate_json(part.criteria_json),
+            criteria=FilterGroup.model_validate(part.criteria),
         )
         for part in row.libraries
-        if part.criteria_json is not None
+        if part.criteria is not None
     ]
 
 
 def criteria_of(part: CollectionLibrary) -> FilterGroup:
-    if part.criteria_json is None:
+    if part.criteria is None:
         raise RuntimeError("A library leaving its collection has no criteria")
-    return FilterGroup.model_validate_json(part.criteria_json)
+    return FilterGroup.model_validate(part.criteria)
 
 
 def apply_libraries(
@@ -62,17 +62,17 @@ def apply_libraries(
     for part in list(row.libraries):
         entry = chosen.pop(part.library_id, None)
         if entry is not None:
-            part.criteria_json = entry.criteria.model_dump_json()
+            part.criteria = entry.criteria.model_dump(mode="json")
         elif part.server_item_id is None:
             row.libraries.remove(part)
         else:
-            part.criteria_json = None
+            part.criteria = None
     row.libraries.extend(
         CollectionLibrary(
             collection_id=row.id or 0,
             library_id=library_id,
             media_type=types[library_id],
-            criteria_json=entry.criteria.model_dump_json(),
+            criteria=entry.criteria.model_dump(mode="json"),
         )
         for library_id, entry in chosen.items()
     )
@@ -167,9 +167,9 @@ def group_name(name: str) -> str:
 
 
 def generator(group: CollectionGroup | None) -> CollectionGenerator | None:
-    if group is None or not group.generator_json:
+    if group is None or group.generator is None:
         return None
-    return CollectionGenerator.model_validate_json(group.generator_json)
+    return CollectionGenerator.model_validate(group.generator)
 
 
 def franchise_ids(libraries: Sequence[CollectionLibraryCriteria]) -> set[int]:

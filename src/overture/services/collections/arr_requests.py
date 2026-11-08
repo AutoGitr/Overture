@@ -69,7 +69,7 @@ class CollectionArr:
         truncated = False
         region = await self._access.region()
         for part in row.libraries:
-            if part.criteria_json is None:
+            if part.criteria is None:
                 continue
             missing = await self._effects.missing(
                 criteria_of(part),
@@ -96,7 +96,7 @@ class CollectionArr:
         result = CollectionRequestResult()
         for part in row.libraries:
             media_type = part.media_type
-            if part.criteria_json is None or (
+            if part.criteria is None or (
                 titles is not None and media_type not in wanted
             ):
                 continue

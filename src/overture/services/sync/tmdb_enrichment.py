@@ -5,16 +5,19 @@ lazy import logging
 lazy from datetime import timedelta
 lazy from itertools import batched
 
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import MediaType
+lazy from ...domain import MediaType, TermKind
 lazy from ...integrations.tmdb import TMDBClient, TmdbFacts
 lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import SyncTally
-lazy from ...repositories.media_items import MediaItemRepository
+lazy from ...repositories.media_items import WITH_TERMS, MediaItemRepository
+lazy from ...repositories.terms import TermRepository
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.time import utc_now
 
@@ -26,20 +29,33 @@ _CONCURRENCY = 4
 REFRESH_AFTER = timedelta(days=7)
 
 
-def record_tmdb_facts(item: MediaItem, facts: TmdbFacts | None) -> None:
-    """Store a title's TMDB facts; ``None`` clears them for a title TMDB lacks."""
+async def record_tmdb_facts(
+    session: AsyncSession, item: MediaItem, facts: TmdbFacts | None
+) -> None:
+    """Store a title's TMDB facts; ``None`` clears them for a title TMDB lacks.
+
+    The item is new, or loaded with its terms.
+    """
+    show = facts if item.media_type is MediaType.SHOW else None
+    await TermRepository(session).assign(
+        item,
+        {
+            TermKind.ORIGIN_COUNTRY: facts.origin_countries if facts else (),
+            TermKind.TMDB_KEYWORD: facts.keywords if facts else (),
+            TermKind.COMPANY: facts.companies if facts else (),
+            TermKind.STREAMING: facts.streaming if facts else (),
+            TermKind.NETWORK: show.networks if show else (),
+        },
+    )
     item.original_language = facts.original_language if facts else None
-    item.origin_countries = list(facts.origin_countries) if facts else []
     item.tmdb_rating = facts.rating if facts else None
     item.tmdb_votes = facts.votes if facts else None
-    item.tmdb_keywords = list(facts.keywords) if facts else []
-    item.companies = list(facts.companies) if facts else []
-    item.networks = list(facts.networks) if facts else []
-    item.streaming = list(facts.streaming) if facts else []
-    item.show_status = facts.status if facts else None
-    item.last_aired = facts.last_aired if facts else None
+    item.show_status = show.status if show else None
+    item.last_aired = show.last_aired if show else None
     # Jellyfin names a movie's collection itself; keep that when TMDB is silent.
-    if facts is None or facts.collection_id is not None:
+    if item.media_type is MediaType.MOVIE and (
+        facts is None or facts.collection_id is not None
+    ):
         item.tmdb_collection_id = facts.collection_id if facts else None
     # The media server's IDs win; TMDB fills those it does not name, which
     # lists, Radarr, Sonarr and OvertureDB match titles by.
@@ -114,11 +130,11 @@ class TmdbEnrichment:
                     if isinstance(result, BaseException):
                         failures.append(sanitise_error(str(result)))
                         continue
-                    item = await session.get(MediaItem, item_id)
+                    item = await session.get(MediaItem, item_id, options=[WITH_TERMS])
                     # The title may have been rematched while TMDB answered.
                     if item is None or item.tmdb_id != tmdb_id:
                         continue
-                    record_tmdb_facts(item, result)
+                    await record_tmdb_facts(session, item, result)
                     item.tmdb_checked_id = tmdb_id
                     item.tmdb_checked_at = now
                     session.add(item)

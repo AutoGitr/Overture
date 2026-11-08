@@ -1,9 +1,10 @@
 """Age out rows and files nothing reads any more.
 
 Download jobs and items the media server has dropped both accumulate for as
-long as Overture runs. Deleting a media item takes its seasons, artwork, and
-download jobs with it through the cascading foreign keys, so the rows are two
-statements. Cached images that no artwork slot records any more go with them.
+long as Overture runs. Deleting a media item takes its seasons, artwork, values
+and download jobs with it through the cascading foreign keys; the values no
+title holds any more go after it. Cached images that no artwork slot records
+any more go with them.
 """
 
 lazy import logging
@@ -20,6 +21,7 @@ lazy from ..db.session import Database
 lazy from ..domain import JobStatus
 lazy from ..repositories.downloads import DownloadJobRepository
 lazy from ..repositories.media_items import MediaItemRepository
+lazy from ..repositories.terms import TermRepository
 lazy from ..utils.time import utc_now
 lazy from .storage.image_cache import ImageCache
 
@@ -42,29 +44,33 @@ class RetentionResult:
 
     download_jobs: int = 0
     media_items: int = 0
+    terms: int = 0
 
     @property
     def total(self) -> int:
-        """Return the number of rows deleted across both sweeps."""
-        return self.download_jobs + self.media_items
+        """Return the number of rows deleted across the sweeps."""
+        return self.download_jobs + self.media_items + self.terms
 
 
 async def prune(session: AsyncSession) -> RetentionResult:
-    """Delete aged-out download jobs and long-removed media items."""
+    """Delete aged-out download jobs, long-removed media items and unused values."""
     now = utc_now()
     await session.exec(
         delete(JobRun).where(col(JobRun.finished_at) < now - FINISHED_JOB_RETENTION)
     )
-    result = RetentionResult(
-        download_jobs=await DownloadJobRepository(session).delete_finished_before(
-            now - FINISHED_JOB_RETENTION
-        ),
-        media_items=await MediaItemRepository(session).delete_removed_before(
-            now - REMOVED_ITEM_RETENTION
-        ),
+    jobs = await DownloadJobRepository(session).delete_finished_before(
+        now - FINISHED_JOB_RETENTION
     )
+    items = await MediaItemRepository(session).delete_removed_before(
+        now - REMOVED_ITEM_RETENTION
+    )
+    # The deleted items' values go first, so the terms they held are unused.
     await session.flush()
-    return result
+    return RetentionResult(
+        download_jobs=jobs,
+        media_items=items,
+        terms=await TermRepository(session).prune(),
+    )
 
 
 async def prune_image_cache(*, database: Database, image_cache: ImageCache) -> int:
@@ -107,8 +113,10 @@ async def run_retention_pass(
 
     if result.total:
         logger.info(
-            "Retention removed %d finished downloads and %d removed media items",
+            "Retention removed %d finished downloads, %d removed media items "
+            "and %d unused metadata values",
             result.download_jobs,
             result.media_items,
+            result.terms,
         )
     return result

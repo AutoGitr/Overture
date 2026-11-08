@@ -57,13 +57,13 @@ class CollectionSchedule:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rules = await repo.rules()
-            groups = await repo.group_policies(server)
+            groups = await repo.groups(server)
         for group in groups:
             set_generator = generator(group)
             if set_generator is None:
                 continue
             async with self._access.database.read_session() as session:
-                policy = await self._access.policy(session, group.name)
+                policy = await self._access.policy(session, group)
             # A set runs on its schedule once it has been synced by hand.
             if group.generated_at is None or not is_due(group.generated_at, policy):
                 continue
@@ -76,7 +76,7 @@ class CollectionSchedule:
                 row = await CollectionRepository(session).get(rule.collection_id)
                 if row is None or row.server_type is not server or never_created(row):
                     continue
-                policy = await self._access.policy(session, row.collection_group, rule)
+                policy = await self._access.policy(session, row.group, rule)
             if not is_due(rule.last_synced_at, policy):
                 continue
             try:

@@ -51,7 +51,7 @@ async def _seed(database: Database) -> None:
                 media_type=MediaType.MOVIE,
                 library_id="movies",
                 title=f"Collection {collection_id}",
-                collection_group=group,
+                group=group,
                 last_synced_at=utc_now(),
             )
             session.add(row)

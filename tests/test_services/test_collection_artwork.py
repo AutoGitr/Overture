@@ -17,6 +17,7 @@ lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtSource,
+    ArtStyle,
     ArtType,
     CatalogMediaType,
     ImageSize,
@@ -42,6 +43,7 @@ lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.generated_art import render_art
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.collection_helpers import managing_rule, stored_collection
@@ -371,3 +373,77 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
         await candidates.gather_collection(row, ArtType.POSTER, policy)
         == CandidateSources()
     )
+
+
+async def test_drawn_collection_art_is_offered_chosen_and_drawn_again_for_a_new_title(
+    tmp_path: Path, database: Database, app_config: Settings
+) -> None:
+    provider = ArtProvider(app_config)
+    async with database.write_session() as session:
+        session.add(
+            stored_collection(
+                id=1,
+                server_item_id="box",
+                server_type=ServerType.PLEX,
+                media_type=MediaType.MOVIE,
+                title="Saga",
+                group="Franchises",
+                last_synced_at=utc_now(),
+            )
+        )
+        await session.flush()
+        session.add(managing_rule(1))
+    service = ArtService(
+        app_config=app_config,
+        database=database,
+        asset_storage=AssetStorage(app_config=app_config),
+        matcher=Matcher(),
+        phash=PhashService(app_config=app_config),
+        downloads=unused(DownloadService),
+        publisher=FakePublisher(),
+        provider_registry=NoopProviderRegistry(provider),
+        candidates=Candidates(),
+        image_clients=unused(ProxyClientManager),
+        image_cache=ImageCache(tmp_path / "images"),
+    )
+
+    offered = (await service.collections.sources(1, ArtType.POSTER)).sources
+    assert [candidate.generated for candidate in offered[ArtSource.GENERATED]] == list(
+        ArtStyle
+    )
+    # What matching compares never includes art to draw.
+    assert (
+        ArtSource.GENERATED
+        not in (await service.collections.found(1, ArtType.POSTER)).sources
+    )
+    preview = await service.collections.drawn(1, ArtType.POSTER, ArtStyle.DARK)
+    assert Image.open(BytesIO(preview)).size == (1000, 1500)
+
+    await service.collections.save(
+        1, ArtType.POSTER, SaveArtRequest(generated=ArtStyle.DARK)
+    )
+    assert provider.uploads == [(ArtType.POSTER, preview, "image/png")]
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        assert collection_artwork(row).poster_source == ArtSource.GENERATED
+
+    # The same title draws the same image, which stays on the server as it is.
+    await service.collections.redraw(1, ArtType.POSTER, resend=False)
+    assert len(provider.uploads) == 1
+    async with database.write_session() as session:
+        renamed = await CollectionRepository(session).get(1)
+        assert renamed is not None
+        renamed.title = "Trilogy"
+        session.add(renamed)
+    await service.collections.redraw(1, ArtType.POSTER, resend=False)
+    assert len(provider.uploads) == 2
+    assert provider.uploads[-1][1] != preview
+
+
+def test_drawn_art_is_the_same_for_the_same_title() -> None:
+    first = render_art(ArtType.BACKGROUND, "Studio Ghibli", "Studios", ArtStyle.LIGHT)
+    assert first == render_art(
+        ArtType.BACKGROUND, "Studio Ghibli", "Studios", ArtStyle.LIGHT
+    )
+    assert Image.open(BytesIO(first)).size == (3840, 2160)

@@ -3,8 +3,16 @@
 lazy from collections.abc import Sequence
 
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import CollectionOrder, FilterField, FilterOperator, MediaType
+lazy from ...domain import (
+    CollectionOrder,
+    FilterField,
+    FilterOperator,
+    MediaType,
+    TermKind,
+)
 lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.media_items import WITH_TERMS
+lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.collections import FilterGroup
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
@@ -48,6 +56,10 @@ def stored_ids(server_ids: list[str], items: Sequence[MediaItem]) -> list[int]:
     ]
 
 
+#: The fields that test which other collections hold a title.
+_COLLECTION_FIELDS = frozenset({FilterField.COLLECTION, FilterField.IN_COLLECTION})
+
+
 class Membership:
     """Resolve criteria into members, locally or as a Plex smart filter."""
 
@@ -61,8 +73,13 @@ class Membership:
         library_id: str,
         criteria: Sequence[FilterGroup],
         items: list[MediaItem],
+        *,
+        collection_id: int | None,
     ) -> tuple[CriteriaContext, dict[str, list[int]]]:
-        """Resolve each source once, and the collections the criteria test."""
+        """Resolve each source once, and the other collections the criteria test.
+
+        *collection_id* is the collection the criteria select for, if saved.
+        """
         resolved: dict[str, list[int]] = {}
         for condition in (
             found for group in criteria for found in group.source_conditions()
@@ -75,9 +92,9 @@ class Membership:
                     region=await self._access.region(),
                 )
         collections = (
-            await self._access.collection_titles(library_id)
+            await self._access.collection_titles(library_id, collection_id)
             if any(
-                condition.field is FilterField.COLLECTION
+                condition.field in _COLLECTION_FIELDS
                 for group in criteria
                 for condition in group.field_conditions()
             )
@@ -99,13 +116,14 @@ class Membership:
         *,
         order: CollectionOrder,
         limit: int | None,
+        collection_id: int | None,
     ) -> list[MediaItem]:
         """The members criteria select, ordered, up to the limit.
 
         A custom order follows the first source the criteria include.
         """
         context, resolved = await self.context(
-            media_type, library_id, [criteria], items
+            media_type, library_id, [criteria], items, collection_id=collection_id
         )
         source_order = next(
             (
@@ -138,6 +156,7 @@ class Membership:
                 scope.items,
                 order=order,
                 limit=limit,
+                collection_id=scope.collection_id,
             )
             for scope in scopes
         }
@@ -155,11 +174,14 @@ class Membership:
         labeled = {
             item.id or 0
             for item in items
-            if any(existing.casefold() == folded for existing in item.labels)
+            if any(
+                existing.casefold() == folded
+                for existing in item.values(TermKind.LABEL)
+            )
         }
         by_id = {item.id or 0: item for item in items}
         add = {
-            server_id: by_id[i].labels
+            server_id: by_id[i].values(TermKind.LABEL)
             for i in wanted_ids - labeled
             if i in by_id and (server_id := by_id[i].server_item_id)
         }
@@ -177,13 +199,20 @@ class Membership:
             ((wanted_ids - labeled) & by_id.keys()) | (labeled - wanted_ids)
         )
         async with self._access.database.write_session() as session:
+            terms = TermRepository(session)
             for item_id in changed:
-                item = await session.get(MediaItem, item_id)
+                item = await session.get(MediaItem, item_id, options=[WITH_TERMS])
                 if item is None:
                     continue
-                kept = [entry for entry in item.labels if entry.casefold() != folded]
-                item.labels = [*kept, label] if item_id in wanted_ids else kept
-                session.add(item)
+                kept = [
+                    entry
+                    for entry in item.values(TermKind.LABEL)
+                    if entry.casefold() != folded
+                ]
+                await terms.assign(
+                    item,
+                    {TermKind.LABEL: [*kept, label] if item_id in wanted_ids else kept},
+                )
 
     def labels(self, media_type: MediaType, criteria: FilterGroup) -> dict[str, str]:
         """The label a smart collection tests for each condition Plex cannot.
@@ -215,14 +244,14 @@ class Membership:
                 for row in await repo.list_all()
                 if row.id in smart
                 for part in row.libraries
-                if part.library_id == library_id and part.criteria_json is not None
+                if part.library_id == library_id and part.criteria is not None
                 for label in self.labels(media_type, criteria_of(part)).values()
             }
             items = await repo.library_items(media_type, library_id)
         stale = {
             label
             for item in items
-            for label in item.labels
+            for label in item.values(TermKind.LABEL)
             if label.startswith(SOURCE_LABEL_PREFIX) and label not in used
         }
         for label in sorted(stale):
@@ -237,7 +266,11 @@ class Membership:
         labels = self.labels(media_type, criteria)
         if labels:
             context, resolved = await self.context(
-                media_type, library_id, [criteria], items
+                media_type,
+                library_id,
+                [criteria],
+                items,
+                collection_id=scope.collection_id,
             )
             fields = {
                 condition.key: condition for condition in criteria.field_conditions()

@@ -13,13 +13,13 @@ lazy from overture.config import Settings, media_server_identity
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
-lazy from overture.domain import MediaType, ServerType
+lazy from overture.domain import MediaType, ServerType, TermKind
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.media_servers.adapters import ServerItem, ServerSection
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.protocols import CollectionGroups
-lazy from overture.repositories.media_items import MediaItemRepository
+lazy from overture.repositories.media_items import WITH_TERMS, MediaItemRepository
 lazy from overture.schemas.sync import SyncScheduleConfig, SyncScheduleWrite
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.schedule_store import (
@@ -41,6 +41,7 @@ lazy from tests.runtime_helpers import (
     unused,
 )
 lazy from tests.sync_helpers import sync_full
+lazy from tests.term_helpers import assign
 
 
 def _make_server_item(
@@ -50,7 +51,6 @@ def _make_server_item(
     media_type: MediaType = MediaType.MOVIE,
     year: int = 2020,
     guids: dict[str, str] | None = None,
-    server_link: str = "",
     library_id: str = "lib-1",
     folder_path: str | None = None,
     directors: tuple[str, ...] = (),
@@ -64,7 +64,6 @@ def _make_server_item(
         media_type=media_type,
         poster_url=None,
         background_url=None,
-        server_link=server_link or f"https://server.test/items/{item_id}",
         library_id=library_id,
         folder_path=folder_path,
         directors=directors,
@@ -72,14 +71,14 @@ def _make_server_item(
     )
 
 
-async def test_switch_media_server_updates_link_and_verified_timestamp(
+async def test_switch_media_server_updates_identity_and_verified_timestamp(
     isolated_session_factory: async_sessionmaker[AsyncSession],
     *,
     app_config: Settings,
     database: Database,
 ) -> None:
     """Switching from Plex to Jellyfin correlates via TMDB ID and updates
-    server_link and verified timestamp.
+    the server ID and verified timestamp.
     """
     old_verified = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
     async with isolated_session_factory() as session:
@@ -90,7 +89,6 @@ async def test_switch_media_server_updates_link_and_verified_timestamp(
             tmdb_id=603,
             imdb_id="tt0133093",
             server_item_id="plex-101",
-            server_link="https://app.plex.tv/desktop/#!/server/abc/details?key=101",
             server_verified_at=old_verified,
             library_id="1",
         )
@@ -112,7 +110,6 @@ async def test_switch_media_server_updates_link_and_verified_timestamp(
             "The Matrix",
             year=1999,
             guids={"tmdb": "603", "imdb": "tt0133093"},
-            server_link="http://jellyfin.local:8096/web/index.html#!/details?id=jf-uuid-603",
             library_id="jf-movies-lib",
         )
     ]
@@ -129,10 +126,6 @@ async def test_switch_media_server_updates_link_and_verified_timestamp(
 
         assert updated.id == item_id
         assert updated.server_item_id == "jf-uuid-603"
-        assert (
-            updated.server_link
-            == "http://jellyfin.local:8096/web/index.html#!/details?id=jf-uuid-603"
-        )
         assert updated.library_id == "jf-movies-lib"
         assert updated.server_verified_at is not None
         verified_at = parse_utc_datetime(updated.server_verified_at)
@@ -160,7 +153,6 @@ async def test_id_collision_immunity_across_servers(
                     year=1979,
                     tmdb_id=348,
                     server_item_id="1",  # Plex ratingKey "1" is Alien
-                    server_link="https://plex/1",
                     library_id="lib1",
                 ),
                 MediaItem(
@@ -170,7 +162,6 @@ async def test_id_collision_immunity_across_servers(
                     year=1995,
                     tmdb_id=862,
                     server_item_id="2",  # Plex ratingKey "2" is Toy Story
-                    server_link="https://plex/2",
                     library_id="lib1",
                 ),
             ]
@@ -192,14 +183,12 @@ async def test_id_collision_immunity_across_servers(
             "Toy Story",
             year=1995,
             guids={"tmdb": "862"},
-            server_link="http://emby/item/1",
         ),
         _make_server_item(
             "2",
             "Alien",
             year=1979,
             guids={"tmdb": "348"},
-            server_link="http://emby/item/2",
         ),
     ]
 
@@ -215,13 +204,11 @@ async def test_id_collision_immunity_across_servers(
         assert alien.title == "Alien"
         assert alien.tmdb_id == 348
         assert alien.server_item_id == "2"  # Correctly matched Emby item "2"
-        assert alien.server_link == "http://emby/item/2"
 
         assert toy_story is not None
         assert toy_story.title == "Toy Story"
         assert toy_story.tmdb_id == 862
         assert toy_story.server_item_id == "1"  # Correctly matched Emby item "1"
-        assert toy_story.server_link == "http://emby/item/1"
 
 
 async def test_unmatched_media_migrates_via_folder_path(
@@ -242,7 +229,6 @@ async def test_unmatched_media_migrates_via_folder_path(
                 title="Summer Vacation",
                 folder_path=folder,
                 server_item_id="plex-video-42",
-                server_link="https://plex/video/42",
             )
         )
         await session.commit()
@@ -261,7 +247,6 @@ async def test_unmatched_media_migrates_via_folder_path(
             "Summer Vacation",
             guids={},  # No external IDs
             folder_path=folder,
-            server_link="http://jellyfin/items/jf-video-99",
         )
     ]
 
@@ -273,7 +258,6 @@ async def test_unmatched_media_migrates_via_folder_path(
         item = await session.get(MediaItem, 50)
         assert item is not None
         assert item.server_item_id == "jf-video-99"
-        assert item.server_link == "http://jellyfin/items/jf-video-99"
         assert item.server_removed_at is None
 
 
@@ -295,7 +279,6 @@ async def test_multiple_editions_with_same_tmdb_id_do_not_overwrite(
                     title="Blade Runner (Theatrical)",
                     tmdb_id=78,
                     server_item_id="cut-1",
-                    server_link="https://server/cut-1",
                 ),
                 MediaItem(
                     id=102,
@@ -303,7 +286,6 @@ async def test_multiple_editions_with_same_tmdb_id_do_not_overwrite(
                     title="Blade Runner (Final Cut)",
                     tmdb_id=78,
                     server_item_id="cut-2",
-                    server_link="https://server/cut-2",
                 ),
             ]
         )
@@ -322,13 +304,11 @@ async def test_multiple_editions_with_same_tmdb_id_do_not_overwrite(
             "cut-1",
             "Blade Runner (Theatrical)",
             guids={"tmdb": "78"},
-            server_link="https://server/cut-1",
         ),
         _make_server_item(
             "cut-2",
             "Blade Runner (Final Cut)",
             guids={"tmdb": "78"},
-            server_link="https://server/cut-2",
         ),
     ]
 
@@ -468,7 +448,6 @@ async def test_server_item_id_collision_with_conflicting_guids_creates_new_item(
             year=1972,
             tmdb_id=238,
             server_item_id="42",  # Old Plex ratingKey
-            server_link="https://app.plex.tv/details?key=42",
             folder_path="/media/movies/The Godfather (1972)",
             library_id="1",
         )
@@ -602,12 +581,11 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
             tmdb_id=63,
             tvdb_id=1234,
             server_item_id="plex-12",
-            server_link="https://app.plex.tv/desktop/#!/server/abc/details?key=12",
             library_id="plex-lib-1",
-            directors=["T. Gilliam"],
             studio="Universal",
         )
         session.add(plex_item)
+        await assign(session, plex_item, director=["T. Gilliam"])
         await session.commit()
         item_id = plex_item.id
 
@@ -625,7 +603,6 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
             "Twelve Monkeys",
             year=1996,
             guids={"tmdb": "63", "imdb": "tt0114746"},
-            server_link="http://jellyfin.local:8096/web/index.html#!/details?id=jf-uuid-twelve-monkeys",
             library_id="jf-movies-lib",
             directors=("Terry Gilliam",),
             studio="Universal Pictures",
@@ -638,21 +615,17 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
     assert stats.created_item_ids == []
 
     async with isolated_session_factory() as session:
-        updated = await session.get(MediaItem, item_id)
+        updated = await session.get(MediaItem, item_id, options=[WITH_TERMS])
         assert updated is not None
         assert updated.id == item_id
         assert updated.title == "Twelve Monkeys"
         assert updated.year == 1996
-        assert updated.directors == ["Terry Gilliam"]
+        assert updated.values(TermKind.DIRECTOR) == ["Terry Gilliam"]
         assert updated.studio == "Universal Pictures"
         assert updated.server_item_id == "jf-uuid-twelve-monkeys"
         assert updated.imdb_id == "tt0114746"
         assert updated.tmdb_id == 63
         assert updated.tvdb_id == 1234
-        assert (
-            updated.server_link
-            == "http://jellyfin.local:8096/web/index.html#!/details?id=jf-uuid-twelve-monkeys"
-        )
         assert updated.library_id == "jf-movies-lib"
 
 
@@ -670,10 +643,10 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
             year=2020,
             tvdb_id=999,
             server_item_id="old-server-show",
-            directors=["Accidental Director"],
             library_id="lib-shows",
         )
         session.add(existing_show)
+        await assign(session, existing_show, director=["Accidental Director"])
         await session.commit()
         show_id = existing_show.id
 
@@ -710,14 +683,14 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
     assert stats.tally.errors == 0
 
     async with isolated_session_factory() as session:
-        updated_show = await session.get(MediaItem, show_id)
+        updated_show = await session.get(MediaItem, show_id, options=[WITH_TERMS])
         assert updated_show is not None
-        assert updated_show.directors == []
+        assert updated_show.values(TermKind.DIRECTOR) == []
 
         repo = MediaItemRepository(session)
         created_show = await repo.find_by_server_id("brand-new-show", "show")
         assert created_show is not None
-        assert created_show.directors == []
+        assert created_show.values(TermKind.DIRECTOR) == []
 
 
 async def test_sync_isolates_item_level_runtime_error_resource_unavailable(

@@ -20,11 +20,12 @@ lazy from ...domain import (
     media_sort_key,
 )
 lazy from ...integrations.proxy import ProxyClientManager
-lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.records import RecordRepository
 lazy from ...repositories.seasons import SeasonRepository
+lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.common import MonitoredResponse
 lazy from ...schemas.library import (
     BulkItemOperation,
@@ -139,34 +140,20 @@ class LibraryService:
     async def get_libraries(
         self, media_type: MediaType | None
     ) -> list[LibrarySectionRead]:
-        """Return all distinct libraries for a media type, movies first, then by title.
-
-        Libraries are named as the media server names them; while it cannot
-        be reached, by their IDs.
-        """
+        """Return the libraries of a media type, movies first, then by title."""
         async with self._database.read_session() as db:
-            counts = await MediaItemRepository(db).library_counts(media_type)
-
-        try:
-            titles = {
-                section.key: section.title
-                for section in await self._provider_registry.provider.get_sections()
-            }
-        except MediaServerError as exc:
-            logger.debug("Could not read the media server's library names: %s", exc)
-            titles = {}
-
+            counts = await LibraryRepository(db).counts(media_type)
         return [
             LibrarySectionRead(
-                id=library_id,
-                title=titles.get(library_id, library_id),
-                media_type=held,
+                id=library.id,
+                title=library.title,
+                media_type=library.media_type,
                 count=count,
             )
-            for library_id, (held, count) in sorted(
-                counts.items(),
+            for library, count in sorted(
+                counts,
                 key=lambda entry: media_sort_key(
-                    entry[1][0], titles.get(entry[0], entry[0]), entry[0]
+                    entry[0].media_type, entry[0].title, entry[0].id
                 ),
             )
         ]
@@ -200,7 +187,8 @@ class LibraryService:
             item = await require_item(db, item_id)
             read = (await media_item_reads_with_public_dataset_status(db, [item]))[0]
             stored = await RecordRepository(db).rows(MediaItem, item_id)
-        return DatabaseRecord.of(stored, read)
+            values = await TermRepository(db).values_of(item_id)
+        return DatabaseRecord.of(stored, read, values)
 
     async def set_monitored(self, item_id: int, monitored: bool) -> MonitoredResponse:
         """Set whether an item is monitored."""

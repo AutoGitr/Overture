@@ -2,6 +2,7 @@
 
 lazy from typing import Any
 
+lazy from overture.db.models.collection_group import CollectionGroup
 lazy from overture.db.models.collection_rule import CollectionRule
 lazy from overture.db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from overture.domain import MediaType
@@ -28,17 +29,20 @@ def stored_collection(
     server_item_id: str | None = None,
     media_type: MediaType = MediaType.MOVIE,
     library_id: str | None = None,
+    group: str | None = None,
     **fields: Any,
 ) -> MediaCollection:
     """A collection held by one library, as a sync or a save stores it."""
     row = MediaCollection(**fields)
+    if group is not None:
+        row.group = CollectionGroup(server_type=row.server_type, name=group)
     row.libraries = [
         CollectionLibrary(
             collection_id=0,
             library_id=library_id or "library",
             media_type=media_type,
             server_item_id=server_item_id,
-            criteria_json=_CRITERIA.model_dump_json(),
+            criteria=_CRITERIA.model_dump(mode="json"),
         )
     ]
     return row

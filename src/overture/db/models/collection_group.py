@@ -3,61 +3,36 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
-lazy from sqlmodel import Field, SQLModel, UniqueConstraint
+lazy from sqlmodel import JSON, Field, UniqueConstraint
 
 lazy from ...domain import (
-    CollectionFiltering,
-    CollectionMode,
-    CollectionOrder,
     ServerType,
-    SyncMode,
 )
-lazy from ..columns import enum_columns, enum_type
+lazy from ..columns import enum_type, typed_columns
+lazy from .shared import PolicyOverrides
 
 
-class CollectionGroup(SQLModel, table=True):
+class CollectionGroup(PolicyOverrides, table=True):
     """A collection group's defaults, kept apart from each collection's own choices."""
 
     __tablename__: ClassVar[Any] = "collection_groups"
     __table_args__ = (
         UniqueConstraint("server_type", "name", name="uq_collection_group"),
+        # The key collections reference, so each joins a group of its server.
+        UniqueConstraint("id", "server_type", name="uq_collection_groups_typed"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
     server_type: ServerType = Field(sa_type=enum_type(ServerType))
     name: str
-    sync_mode: SyncMode | None = Field(default=None, sa_type=enum_type(SyncMode))
-    minimum_items: int | None = None
-    delete_below_minimum: bool | None = None
-    collection_mode: CollectionMode | None = Field(
-        default=None, sa_type=enum_type(CollectionMode)
-    )
-    order_type: CollectionOrder | None = Field(
-        default=None, sa_type=enum_type(CollectionOrder)
-    )
-    collection_filtering: CollectionFiltering | None = Field(
-        default=None, sa_type=enum_type(CollectionFiltering)
-    )
-    visible_home: bool | None = None
-    visible_shared: bool | None = None
-    visible_library: bool | None = None
-    sort_title_format: str | None = None
-    summary_format: str | None = None
-    active_start_mmdd: str | None = None
-    active_end_mmdd: str | None = None
-    delete_when_inactive: bool | None = None
-    auto_match_art: bool | None = None
-    auto_match_theme: bool | None = None
     sync_schedule: str | None = None
     sync_enabled: bool | None = None
-    request_missing: bool | None = None
-    member_label: str | None = None
-    arr_tag: str | None = None
-    home_order: int | None = None
     #: A ``CollectionGenerator`` that makes the group a collection set.
-    generator_json: str | None = None
+    generator: dict[str, Any] | None = Field(default=None, sa_type=JSON)
     #: When the set last created and updated its collections.
     generated_at: datetime | None = None
+    #: An empty collection titled after the group heads its collections.
+    separator: bool = Field(default=False, nullable=False)
 
 
-enum_columns(CollectionGroup)
+typed_columns(CollectionGroup)

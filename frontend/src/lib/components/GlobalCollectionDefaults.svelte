@@ -20,6 +20,7 @@
     minimum_items: "collection_minimum_items",
     delete_below_minimum: "collection_delete_below_minimum",
     auto_match_art: "collection_auto_match_art",
+    auto_generate_art: "collection_auto_generate_art",
     auto_match_theme: "collection_auto_match_theme",
     request_missing: "collection_request_missing",
     collection_mode: "collection_mode_default",

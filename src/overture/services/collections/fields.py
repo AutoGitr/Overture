@@ -157,6 +157,10 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             _EVERY_SERVER,
             PlexField("collection", "tag"),
         ),
+        # Overture knows every collection's members, so Plex tests it by label.
+        FilterField.IN_COLLECTION: FieldSpec(
+            "In a collection", FieldKind.BOOLEAN, _ALL_MEDIA, _EVERY_SERVER, None
+        ),
         FilterField.CONTENT_RATING: FieldSpec(
             "Content rating",
             FieldKind.TAG,

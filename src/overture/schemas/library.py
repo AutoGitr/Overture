@@ -36,7 +36,6 @@ class MediaItemRead(StrictBaseModel):
     library_collection_id: int | None = None
     folder_path: str | None = None
     server_item_id: str | None = None
-    server_link: str | None = None
     server_verified_at: datetime | None = None
     library_id: str | None = None
     monitored: bool = True
@@ -155,6 +154,7 @@ def media_item_read_from_model(
     public_dataset_complete: bool = False,
     public_dataset_themerrdb: bool = False,
     seasons: Sequence[Season],
+    directors: Sequence[str] = (),
     has_incorrect_aspect_ratio: bool = False,
     catalog_no_theme: bool = False,
     catalog_entry_key: str | None = None,
@@ -164,7 +164,7 @@ def media_item_read_from_model(
     """Map a persisted media item to the public library item response.
 
     *seasons* are the item's tracked seasons, which a show's artwork status
-    depends on; callers load them in bulk.
+    depends on, and *directors* a movie's; callers load both in bulk.
     """
     poster = read_art_slot(item, ArtType.POSTER)
     background = read_art_slot(item, ArtType.BACKGROUND)
@@ -172,6 +172,7 @@ def media_item_read_from_model(
         {
             # Item metadata stays internal: it serves collection criteria only.
             **item.model_dump(include=set(MediaItemRead.model_fields)),
+            "directors": list(directors),
             **flattened_art(poster, "poster"),
             **flattened_art(background, "background"),
             # Only a remote poster is shown in place of a file, at preview size.
@@ -186,9 +187,6 @@ def media_item_read_from_model(
             "public_dataset_complete": public_dataset_complete,
             "public_dataset_themerrdb": public_dataset_themerrdb,
             "library_collection_id": library_collection_id,
-            "server_link": item.server_link
-            if item.server_item_id is not None and item.server_removed_at is None
-            else None,
             "public_dataset_ids": public_dataset_ids,
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
@@ -203,7 +201,7 @@ def season_read_from_model(season: Season, *, files: bool) -> SeasonRead:
     poster = read_art_slot(season, ArtType.SEASON_POSTER)
     return SeasonRead.model_validate(
         {
-            **season.model_dump(),
+            **season.model_dump(include=set(SeasonRead.model_fields)),
             "poster_status": slot_status(poster, files=files),
             **flattened_art(poster, "poster"),
             "poster_preview_url": _preview_url(poster, ArtType.SEASON_POSTER),

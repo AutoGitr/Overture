@@ -192,7 +192,7 @@ class CollectionDiscovery:
         if field_available(field, server, media_type, smart=False):
             items = await self._access.library_items(library_id, media_type)
             collections = (
-                await self._access.collection_titles(library_id)
+                await self._access.collection_titles(library_id, None)
                 if field is FilterField.COLLECTION
                 else {}
             )
@@ -268,7 +268,7 @@ class CollectionDiscovery:
     async def preview(self, body: CollectionPreviewRequest) -> CollectionPreview:
         """What each library's criteria select now."""
         rule = body.rule
-        scopes = await self._access.scopes(rule.libraries)
+        scopes = await self._access.scopes(rule.libraries, body.collection_id)
         async with self._access.database.read_session() as session:
             policy = await self._access.policy(session, None, rule)
         return CollectionPreview(
@@ -312,7 +312,13 @@ class CollectionDiscovery:
                 422, "Save the collection to preview Plex filters with lists"
             )
         wanted = await self._membership.wanted(
-            media_type, library_id, criteria, items, order=order, limit=rule.limit
+            media_type,
+            library_id,
+            criteria,
+            items,
+            order=order,
+            limit=rule.limit,
+            collection_id=scope.collection_id,
         )
         tests_tmdb = any(
             FIELDS[condition.field].tmdb for condition in criteria.field_conditions()

@@ -8,12 +8,12 @@ lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass
 lazy from typing import Protocol
 
-lazy from ...db.art_slots import read_art_slot
+lazy from ...db.art_slots import read_art_slot, saved_art
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings, get_app_settings
-lazy from ...domain import ArtType, MediaType
+lazy from ...domain import ArtStyle, ArtType, CollectionKind, MediaType
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.art import SaveArtRequest
 lazy from ...schemas.collections import SetCollectionThemeRequest
@@ -29,6 +29,9 @@ lazy from .reader import catalog_collections
 lazy from .rules import criteria_of
 lazy from .sources import SourceResolver
 lazy from .themes import CollectionThemes
+
+#: The style a poster drawn automatically takes.
+AUTOMATIC_ART_STYLE = ArtStyle.DARK
 
 
 @dataclass(slots=True, frozen=True)
@@ -69,7 +72,12 @@ class PostSyncStep(Protocol):
 
 
 class AutoAssets:
-    """Match art from the franchise or a listed person, and the catalog's theme."""
+    """Match or draw art, and match the catalog's theme.
+
+    Art comes from the franchise or a listed person; a poster still missing is
+    drawn from the title when the policy says so, and art drawn earlier is
+    drawn again when the title or group it shows changed.
+    """
 
     name = "Automatic assets"
 
@@ -89,25 +97,49 @@ class AutoAssets:
 
     async def run(self, synced: SyncedCollection) -> None:
         row, policy = synced.row, synced.policy
+        collection_id = synced.collection_id
         for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
-            url = read_art_slot(row, art_type).url
-            if url and synced.new_copies:
-                await self._art.save(
-                    synced.collection_id, art_type, SaveArtRequest(url=url)
+            slot = read_art_slot(row, art_type)
+            saved = saved_art(slot)
+            if slot.generated_style is not None:
+                await self._art.redraw(
+                    collection_id, art_type, resend=synced.new_copies
                 )
-            elif not url and policy.auto_match_art:
-                sources = await self._art.sources(synced.collection_id, art_type)
-                candidates = [
-                    candidate
-                    for group in sources.sources.values()
-                    for candidate in group
-                ]
-                if candidates:
+            elif saved is not None:
+                if synced.new_copies and saved.url:
                     await self._art.save(
-                        synced.collection_id,
-                        art_type,
-                        SaveArtRequest(url=candidates[0].url),
+                        collection_id, art_type, SaveArtRequest(url=saved.url)
                     )
+                elif synced.new_copies:
+                    await self._art.reupload(collection_id, art_type)
+            elif policy.auto_match_art and (
+                url := await self._matched(collection_id, art_type)
+            ):
+                await self._art.save(collection_id, art_type, SaveArtRequest(url=url))
+            elif art_type is ArtType.POSTER and (
+                policy.auto_generate_art or row.kind is CollectionKind.SEPARATOR
+            ):
+                await self._art.save(
+                    collection_id,
+                    art_type,
+                    SaveArtRequest(generated=AUTOMATIC_ART_STYLE),
+                )
+        await self._theme(synced)
+
+    async def _matched(self, collection_id: int, art_type: ArtType) -> str | None:
+        """The best art a source offers for the slot."""
+        sources = await self._art.found(collection_id, art_type)
+        return next(
+            (
+                candidate.url
+                for group in sources.sources.values()
+                for candidate in group
+            ),
+            None,
+        )
+
+    async def _theme(self, synced: SyncedCollection) -> None:
+        row, policy = synced.row, synced.policy
         if row.youtube_id:
             if synced.new_copies and self._themes.unavailable() is None:
                 await self._themes.queue(
@@ -144,7 +176,7 @@ class MemberLabel:
         label = format_member_tag(
             synced.policy.member_label or "",
             title=synced.row.title,
-            group=synced.row.collection_group,
+            group=synced.row.group_name,
         )
         for part in synced.row.libraries:
             await self._membership.sync_label(
@@ -206,7 +238,6 @@ class MemberTag:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             defaults = await get_app_settings(session)
-            groups = {group.name: group for group in await repo.group_policies(server)}
             rules = {rule.collection_id: rule for rule in await repo.rules()}
             members: list[MediaItem] = []
             for row in await repo.list_listed():
@@ -217,16 +248,14 @@ class MemberTag:
                     or row.server_type is not server
                 ):
                     continue
-                template = resolve_policy(
-                    defaults, groups.get(row.collection_group or ""), rule
-                ).arr_tag
+                template = resolve_policy(defaults, row.group, rule).arr_tag
                 if template and _arr_tag(row, template) == tag:
                     members.extend(await repo.members(row.id or 0))
         return members
 
 
 def _arr_tag(row: MediaCollection, template: str) -> str:
-    return format_arr_tag(template, title=row.title, group=row.collection_group)
+    return format_arr_tag(template, title=row.title, group=row.group_name)
 
 
 class RequestMissing:
@@ -291,7 +320,7 @@ class HomeOrder:
                 if held is None:
                     continue
                 policy = await self._access.policy(
-                    session, row.collection_group, rules.get(row.id or 0)
+                    session, row.group, rules.get(row.id or 0)
                 )
                 if policy.home_order is not None and (
                     row.visible_home or row.visible_shared or row.visible_library
@@ -324,7 +353,7 @@ class PostSync:
             synced = SyncedCollection(
                 row=row,
                 rule=rule,
-                policy=await self._access.policy(session, row.collection_group, rule),
+                policy=await self._access.policy(session, row.group, rule),
                 members=await repo.members(collection_id),
                 library_items={
                     part.library_id: await repo.library_items(

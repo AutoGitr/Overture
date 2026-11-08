@@ -558,3 +558,296 @@ def test_slots_select_uploads_and_lose_them_on_downgrade() -> None:
             ]
     finally:
         engine.dispose()
+
+
+def test_movies_and_shows_keep_only_their_own_fields_and_seasons_need_a_show() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "f3b8d2a61c47")
+            for item_id, media_type in ((1, "movie"), (2, "show")):
+                conn.exec_driver_sql(
+                    "INSERT INTO media_items (id, media_type, title, monitored, "  # noqa: S608 -- literal test values
+                    "genres, actors, writers, producers, countries, labels, "
+                    "origin_countries, tmdb_keywords, companies, networks, streaming, "
+                    "theme_provenance_cleared, directors, show_status, last_aired, "
+                    "edition, versions, tmdb_collection_id) VALUES "
+                    f"({item_id}, '{media_type}', 'Title', 1, '[]', '[]', '[]', '[]', "
+                    "'[]', '[]', '[]', '[]', '[]', '[\"HBO\"]', '[]', 0, '[]', "
+                    "'Released', '2020-01-01', 'Cut', 2, 10)"
+                )
+            conn.exec_driver_sql(
+                "INSERT INTO seasons (id, media_item_id, season_num, file_count) "
+                "VALUES (1, 2, 1, 0)"
+            )
+
+            command.upgrade(config, "a4d7c1e93f20")
+            assert conn.exec_driver_sql(
+                "SELECT show_status, last_aired, networks, edition, versions, "
+                "tmdb_collection_id FROM media_items ORDER BY id"
+            ).all() == [
+                (None, None, "[]", "Cut", 2, 10),
+                ("Released", "2020-01-01", '["HBO"]', None, None, None),
+            ]
+            assert conn.exec_driver_sql("SELECT media_type FROM seasons").all() == [
+                ("show",)
+            ]
+            # A movie's season references no show.
+            conn.exec_driver_sql(
+                "INSERT INTO seasons (id, media_item_id, season_num, file_count) "
+                "VALUES (2, 1, 1, 0)"
+            )
+            assert conn.exec_driver_sql("PRAGMA foreign_key_check(seasons)").all()
+            conn.exec_driver_sql("DELETE FROM seasons WHERE id = 2")
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "UPDATE media_items SET edition = 'Cut' WHERE id = 2"
+                )
+
+            command.downgrade(config, "f3b8d2a61c47")
+            assert conn.exec_driver_sql("SELECT COUNT(*) FROM seasons").all() == [(1,)]
+    finally:
+        engine.dispose()
+
+
+def test_stored_server_links_are_dropped_and_come_back_empty() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "a4d7c1e93f20")
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, server_type, kind, "
+                "title, order_type, visible_home, visible_shared, visible_library, "
+                "child_count, monitored, unsynced, deselected, server_link) VALUES "
+                "(1, 'plex', 'regular', 'Saga', 'release.asc', 0, 0, 0, 0, "
+                "1, 0, 0, 'https://server/1')"
+            )
+
+            command.upgrade(config, "b8e3f5a0c612")
+            columns = {
+                table: {column["name"] for column in inspect(conn).get_columns(table)}
+                for table in ("media_items", "media_collections")
+            }
+            assert all("server_link" not in names for names in columns.values())
+
+            command.downgrade(config, "a4d7c1e93f20")
+            assert conn.exec_driver_sql(
+                "SELECT title, server_link FROM media_collections"
+            ).all() == [("Saga", None)]
+    finally:
+        engine.dispose()
+
+
+def test_collections_reference_group_rows_and_name_them_again_on_downgrade() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "b8e3f5a0c612")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, minimum_items) "
+                "VALUES (7, 'plex', 'Sagas', 3)"
+            )
+            for collection_id, group in (
+                (1, "'Sagas'"),
+                (2, "'Studios'"),
+                (3, "NULL"),
+                (4, "'Leftover'"),
+            ):
+                conn.exec_driver_sql(
+                    "INSERT INTO media_collections (id, server_type, kind, title, "  # noqa: S608 -- literal test values
+                    "order_type, visible_home, visible_shared, visible_library, "
+                    "child_count, monitored, unsynced, deselected, collection_group) "
+                    f"VALUES ({collection_id}, 'plex', 'regular', 'C{collection_id}', "
+                    f"'release.asc', 0, 0, 0, 0, 1, 0, 0, {group})"
+                )
+            # Collections 1-3 are managed; 4 is not, so it belongs to no group.
+            for collection_id in (1, 2, 3):
+                conn.exec_driver_sql(
+                    "INSERT INTO collection_rules (collection_id, smart) "  # noqa: S608 -- literal test values
+                    f"VALUES ({collection_id}, 0)"
+                )
+
+            command.upgrade(config, "c2f9a7d4e815")
+            assert conn.exec_driver_sql(
+                "SELECT c.id, g.name, g.minimum_items FROM media_collections AS c "
+                "LEFT JOIN collection_groups AS g ON g.id = c.group_id ORDER BY c.id"
+            ).all() == [
+                (1, "Sagas", 3),
+                (2, "Studios", None),
+                (3, "Ungrouped", None),
+                (4, None, None),
+            ]
+            # A group its collections still reference cannot go.
+            conn.exec_driver_sql("DELETE FROM collection_groups WHERE id = 7")
+            assert conn.exec_driver_sql(
+                "PRAGMA foreign_key_check(media_collections)"
+            ).all()
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, minimum_items) "
+                "VALUES (7, 'plex', 'Sagas', 3)"
+            )
+
+            command.downgrade(config, "b8e3f5a0c612")
+            assert conn.exec_driver_sql(
+                "SELECT collection_group FROM media_collections ORDER BY id"
+            ).all() == [("Sagas",), ("Studios",), ("Ungrouped",), (None,)]
+    finally:
+        engine.dispose()
+
+
+def test_items_and_collections_reference_a_library_row_for_each_key() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c2f9a7d4e815")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "genres, actors, writers, producers, countries, labels, "
+                "origin_countries, tmdb_keywords, companies, networks, streaming, "
+                "theme_provenance_cleared, directors, library_id) VALUES "
+                "(1, 'movie', 'Movie', 1, '[]', '[]', '[]', '[]', '[]', '[]', '[]', "
+                "'[]', '[]', '[]', '[]', 0, '[]', 'films')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, server_type, kind, title, "
+                "order_type, visible_home, visible_shared, visible_library, "
+                "child_count, monitored, unsynced, deselected) VALUES "
+                "(1, 'plex', 'regular', 'Saga', 'release.asc', 0, 0, 0, 0, 1, 0, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_libraries (collection_id, library_id, "
+                "media_type) VALUES (1, 'series', 'show')"
+            )
+
+            command.upgrade(config, "d6a1b3c8f957")
+            # Titled by key until the next sync names them.
+            assert conn.exec_driver_sql(
+                "SELECT id, media_type, title, removed_at FROM libraries ORDER BY id"
+            ).all() == [
+                ("films", "movie", "films", None),
+                ("series", "show", "series", None),
+            ]
+            assert not conn.exec_driver_sql("PRAGMA foreign_key_check").all()
+
+            command.downgrade(config, "c2f9a7d4e815")
+            assert "libraries" not in inspect(conn).get_table_names()
+    finally:
+        engine.dispose()
+
+
+def test_list_columns_become_shared_terms_in_order_and_come_back() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "d6a1b3c8f957")
+            for item_id, media_type, genres, directors in (
+                (1, "movie", '["Drama", "Action", "Drama", ""]', '["Lead"]'),
+                (2, "show", '["Action"]', '["Ignored"]'),
+            ):
+                conn.exec_driver_sql(
+                    "INSERT INTO media_items (id, media_type, title, monitored, "  # noqa: S608 -- literal test values
+                    "genres, actors, writers, producers, countries, labels, "
+                    "origin_countries, tmdb_keywords, companies, networks, streaming, "
+                    "theme_provenance_cleared, directors) VALUES "
+                    f"({item_id}, '{media_type}', 'Title', 1, '{genres}', '[]', '[]', "
+                    "'[]', '[]', '[]', '[]', '[]', '[]', '[]', '[]', 0, "
+                    f"'{directors}')"
+                )
+
+            command.upgrade(config, "e5b2d8f1a346")
+            assert conn.exec_driver_sql(
+                "SELECT l.media_item_id, t.kind, t.name, l.position "
+                "FROM media_item_terms AS l JOIN terms AS t ON t.id = l.term_id "
+                "ORDER BY l.media_item_id, t.kind, l.position"
+            ).all() == [
+                (1, "director", "Lead", 0),
+                (1, "genre", "Drama", 0),
+                (1, "genre", "Action", 1),
+                (2, "genre", "Action", 0),
+            ]
+            assert conn.exec_driver_sql("SELECT COUNT(*) FROM terms").all() == [(3,)]
+
+            command.downgrade(config, "d6a1b3c8f957")
+            assert conn.exec_driver_sql(
+                "SELECT genres, directors FROM media_items ORDER BY id"
+            ).all() == [('["Drama","Action"]', '["Lead"]'), ('["Action"]', "[]")]
+    finally:
+        engine.dispose()
+
+
+def test_json_columns_are_renamed_typed_and_hold_only_valid_json() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "e5b2d8f1a346")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, generator_json) "
+                "VALUES (1, 'plex', 'Decades', '{\"dimension\": \"decade\"}')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO task_schedule (task_name, enabled, cron_expression, "
+                "payload_json) VALUES ('backup', 1, '0 3 * * *', '{\"a\": 1}')"
+            )
+
+            command.upgrade(config, "f7c4a9e2b158")
+            assert conn.exec_driver_sql(
+                "SELECT generator FROM collection_groups"
+            ).all() == [('{"dimension": "decade"}',)]
+            assert conn.exec_driver_sql("SELECT payload FROM task_schedule").all() == [
+                ('{"a": 1}',)
+            ]
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql("UPDATE task_schedule SET payload = 'not json'")
+
+            command.downgrade(config, "e5b2d8f1a346")
+            assert conn.exec_driver_sql(
+                "SELECT generator_json FROM collection_groups"
+            ).all() == [('{"dimension": "decade"}',)]
+    finally:
+        engine.dispose()
+
+
+def test_drawn_art_and_separators_are_added_and_separators_go_on_downgrade() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "f7c4a9e2b158")
+            command.upgrade(config, "a8d3e6f0c271")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, separator) "
+                "VALUES (1, 'plex', 'Sagas', 1)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, server_type, kind, title, "
+                "order_type, visible_home, visible_shared, visible_library, "
+                "child_count, monitored, unsynced, deselected, group_id) VALUES "
+                "(1, 'plex', 'separator', 'Sagas', 'release.asc', 0, 0, 0, 0, 1, 0, "
+                "0, 1)"
+            )
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "INSERT INTO art_slots (collection_id, art_type, url, "
+                    "generated_style) VALUES (1, 'poster', 'https://x.test/p.jpg', "
+                    "'dark')"
+                )
+
+            command.downgrade(config, "f7c4a9e2b158")
+            assert conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM media_collections"
+            ).all() == [(0,)]
+    finally:
+        engine.dispose()

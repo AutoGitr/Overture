@@ -100,7 +100,9 @@
         art_type: artType,
       },
     }),
-    enabled: slot.kind === "collection" && slot.tmdbId !== null,
+    // Without a TMDB collection there may still be a listed person's art, and
+    // there is always art to draw from the title.
+    enabled: slot.kind === "collection",
   }));
   let sourcesQuery = $derived(
     slot.kind === "collection"
@@ -133,6 +135,7 @@
               perfect_match: null,
               preview_url: null,
               title: null,
+              generated: null,
             },
           ]
         : [];
@@ -417,7 +420,7 @@
   />
   {#if slot.kind === "collection" && slot.tmdbId === null}
     <p class="text-muted">
-      Set a TMDB collection ID to browse artwork candidates, or paste custom artwork.
+      Set a TMDB collection ID to browse its artwork too, or paste custom artwork.
     </p>
   {/if}
   {#if sources}
@@ -440,7 +443,13 @@
         disabled={saving}
         {showSource}
         onSelect={(art) =>
-          saveArt({ url: art.url, width: art.width, height: art.height }, candidateImageUrl(art))}
+          saveArt(
+            // A drawn candidate is drawn again on saving, from the current title.
+            art.generated
+              ? { generated: art.generated }
+              : { url: art.url, width: art.width, height: art.height },
+            candidateImageUrl(art),
+          )}
       />
     {/each}
   </ImageGrid>

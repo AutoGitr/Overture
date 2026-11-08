@@ -26,6 +26,25 @@ class MediaType(StrEnum):
     SHOW = "show"
 
 
+class TermKind(StrEnum):
+    """A kind of metadata a title holds several values of, such as its genres."""
+
+    GENRE = "genre"
+    ACTOR = "actor"
+    DIRECTOR = "director"
+    WRITER = "writer"
+    PRODUCER = "producer"
+    COUNTRY = "country"
+    #: Plex labels or Jellyfin and Emby tags.
+    LABEL = "label"
+    TMDB_KEYWORD = "tmdb_keyword"
+    COMPANY = "company"
+    NETWORK = "network"
+    #: Subscription services streaming the title in the configured region.
+    STREAMING = "streaming"
+    ORIGIN_COUNTRY = "origin_country"
+
+
 class CatalogMediaType(StrEnum):
     """Kind of OvertureDB catalog entry: a movie, a show or a movie collection."""
 
@@ -105,6 +124,8 @@ class CollectionKind(StrEnum):
 
     REGULAR = "regular"
     SMART = "smart"
+    #: An empty collection heading its group's collections, kept by the group.
+    SEPARATOR = "separator"
 
 
 class CollectionFiltering(StrEnum):
@@ -191,6 +212,8 @@ class FilterField(StrEnum):
     LAST_PLAYED = "last_played"
     UNPLAYED = "unplayed"
     IN_PROGRESS = "in_progress"
+    #: Whether another listed collection holds the title; false is a catch-all.
+    IN_COLLECTION = "in_collection"
     VERSIONS = "versions"
     FOLDER = "folder"
     ORIGINAL_LANGUAGE = "original_language"
@@ -386,6 +409,14 @@ THUMB_BOUNDS: tuple[int, int] = (
 ITEM_ART_TYPES: tuple[ArtType, ...] = (ArtType.POSTER, ArtType.BACKGROUND)
 
 
+class ArtStyle(StrEnum):
+    """How Overture draws artwork it generates from a title."""
+
+    DARK = "dark"
+    LIGHT = "light"
+    ACCENT = "accent"
+
+
 class ArtSource(StrEnum):
     """Where selected artwork comes from.
 
@@ -397,6 +428,8 @@ class ArtSource(StrEnum):
 
     OVERTUREDB = "overturedb"
     UPLOAD = "upload"
+    #: Drawn by Overture from the collection's title.
+    GENERATED = "generated"
     TMDB = "tmdb"
     TPDB = "tpdb"
     FANART = "fanart"
@@ -406,7 +439,13 @@ class ArtSource(StrEnum):
     @property
     def label(self) -> str:
         """How the source is named to people."""
-        return "Upload" if self is ArtSource.UPLOAD else ART_SOURCE_LABELS[self.value]
+        match self:
+            case ArtSource.UPLOAD:
+                return "Upload"
+            case ArtSource.GENERATED:
+                return "Generated"
+            case _:
+                return ART_SOURCE_LABELS[self.value]
 
 
 class ImageSize(StrEnum):

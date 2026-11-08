@@ -6,6 +6,7 @@ lazy from collections.abc import (
     Awaitable,
     Callable,
     Generator,
+    Iterable,
     Sequence,
 )
 lazy from contextlib import asynccontextmanager, contextmanager
@@ -34,6 +35,7 @@ lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.registry import BackgroundJobRegistry
 lazy from overture.jobs.runner import JobContext
 lazy from overture.jobs.slot import ManagedBackgroundJob
+lazy from overture.media_servers.adapters import ServerItem, ServerSection
 lazy from overture.media_servers.health import MediaServerHealthTracker
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import RuntimeServices
@@ -70,6 +72,7 @@ lazy from overture.services.health import get_service_status
 lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.named_schedules import NamedSchedules
+lazy from overture.services.notifications import FailureNotifier
 lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.public_dataset.service import PublicDatasetService
 lazy from overture.services.scheduler import SchedulerService
@@ -641,6 +644,7 @@ def make_runtime(
     )
 
     return RuntimeServices(
+        notifier=FailureNotifier(app_config=app_config),
         app_settings=app_config,
         database=database,
         auth=AuthService(app_config, database),
@@ -904,3 +908,13 @@ class NoTmdbFacts(TmdbEnrichment):
     @override
     async def read_new(self, item_ids: list[int]) -> int:
         return 0
+
+
+def server_sections(items: Iterable[ServerItem]) -> list[ServerSection]:
+    """The libraries a fake server lists: those its items are filed under."""
+    return [
+        ServerSection(key, key, media_type)
+        for key, media_type in dict.fromkeys(
+            (item.library_id, item.media_type) for item in items if item.library_id
+        )
+    ]

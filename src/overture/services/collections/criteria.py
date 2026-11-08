@@ -8,7 +8,13 @@ lazy from dataclasses import dataclass
 lazy from datetime import date, datetime, timedelta
 
 lazy from ...db.models.media_item import MediaItem
-lazy from ...domain import CollectionOrder, FieldKind, FilterField, FilterOperator
+lazy from ...domain import (
+    CollectionOrder,
+    FieldKind,
+    FilterField,
+    FilterOperator,
+    TermKind,
+)
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
 lazy from .fields import FIELDS, order_field
 
@@ -21,7 +27,8 @@ class CriteriaContext:
 
     #: The items each source holds, keyed by ``SourceCondition.key``.
     sources: Mapping[str, frozenset[int]]
-    #: The titles of the collections each item belongs to.
+    #: The titles of the other collections each item belongs to; never the
+    #: collection being evaluated, so a catch-all keeps what it caught.
     collections: Mapping[int, Sequence[str]]
     now: datetime
 
@@ -60,13 +67,13 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.IMDB_ID: lambda item: _one(item.imdb_id),
     FilterField.STUDIO: lambda item: item.studio,
     FilterField.EDITION: lambda item: item.edition,
-    FilterField.GENRE: lambda item: item.genres,
-    FilterField.ACTOR: lambda item: item.actors,
-    FilterField.DIRECTOR: lambda item: item.directors,
-    FilterField.WRITER: lambda item: item.writers,
-    FilterField.PRODUCER: lambda item: item.producers,
-    FilterField.COUNTRY: lambda item: item.countries,
-    FilterField.LABEL: lambda item: item.labels,
+    FilterField.GENRE: lambda item: item.values(TermKind.GENRE),
+    FilterField.ACTOR: lambda item: item.values(TermKind.ACTOR),
+    FilterField.DIRECTOR: lambda item: item.values(TermKind.DIRECTOR),
+    FilterField.WRITER: lambda item: item.values(TermKind.WRITER),
+    FilterField.PRODUCER: lambda item: item.values(TermKind.PRODUCER),
+    FilterField.COUNTRY: lambda item: item.values(TermKind.COUNTRY),
+    FilterField.LABEL: lambda item: item.values(TermKind.LABEL),
     FilterField.CONTENT_RATING: lambda item: _one(item.content_rating),
     FilterField.RESOLUTION: lambda item: _one(item.resolution),
     FilterField.YEAR: lambda item: item.year,
@@ -83,14 +90,14 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.IN_PROGRESS: lambda item: item.in_progress,
     FilterField.VERSIONS: lambda item: item.versions,
     FilterField.FOLDER: lambda item: item.folder_path,
-    FilterField.NETWORK: lambda item: item.networks,
+    FilterField.NETWORK: lambda item: item.values(TermKind.NETWORK),
     FilterField.ORIGINAL_LANGUAGE: lambda item: _one(item.original_language),
-    FilterField.ORIGIN_COUNTRY: lambda item: item.origin_countries,
+    FilterField.ORIGIN_COUNTRY: lambda item: item.values(TermKind.ORIGIN_COUNTRY),
     FilterField.TMDB_RATING: lambda item: item.tmdb_rating,
     FilterField.TMDB_VOTES: lambda item: item.tmdb_votes,
-    FilterField.TMDB_KEYWORD: lambda item: item.tmdb_keywords,
-    FilterField.COMPANY: lambda item: item.companies,
-    FilterField.STREAMING: lambda item: item.streaming,
+    FilterField.TMDB_KEYWORD: lambda item: item.values(TermKind.TMDB_KEYWORD),
+    FilterField.COMPANY: lambda item: item.values(TermKind.COMPANY),
+    FilterField.STREAMING: lambda item: item.values(TermKind.STREAMING),
     FilterField.SHOW_STATUS: lambda item: _one(item.show_status),
     FilterField.LAST_AIRED: lambda item: _iso_day(item.last_aired),
 }
@@ -103,6 +110,8 @@ def field_value(
     """The item's synced value of a field; lists for tag fields."""
     if field is FilterField.COLLECTION:
         return collections
+    if field is FilterField.IN_COLLECTION:
+        return bool(collections)
     getter = _VALUES.get(field)
     return getter(item) if getter else None
 

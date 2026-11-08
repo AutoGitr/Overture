@@ -107,22 +107,15 @@ def _filter_key(key: str) -> str:
 
 def plex_web_link(
     kind: Literal["metadata", "collections"],
-    rating_key: str,
     machine_id: str | None,
     *,
     app_config: Settings,
 ) -> str:
-    """Return the Plex web link of an item or collection."""
-    key = f"/library/{kind}/{rating_key}"
+    """Return the Plex web link of an item or collection, ``{id}`` for its key."""
+    key = urllib.parse.quote(f"/library/{kind}/", safe="") + "{id}"
     if machine_id:
-        return (
-            "https://app.plex.tv/desktop/#!/server/"
-            f"{machine_id}/details?key={urllib.parse.quote(key, safe='')}"
-        )
-    return (
-        f"{app_config.MEDIA_SERVER_URL}/web/index.html"
-        f"#!/server/details?key={urllib.parse.quote(key, safe='')}"
-    )
+        return f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key}"
+    return f"{app_config.MEDIA_SERVER_URL}/web/index.html#!/server/details?key={key}"
 
 
 def _owned_servers(resources: list[PlexResource]) -> list[PlexResource]:
@@ -697,7 +690,11 @@ class PlexClient(MediaServerHttpClient):
         machine_id = await self.get_machine_identifier()
         if not machine_id:
             raise MediaServerError("Plex returned no server identity")
-        return f"server://{machine_id}/com.plexapp.plugins.library/library/metadata/{','.join(member_ids)}"
+        items = f"/{','.join(member_ids)}" if member_ids else ""
+        # Without items Plex makes an empty collection, as a separator is.
+        return (
+            f"server://{machine_id}/com.plexapp.plugins.library/library/metadata{items}"
+        )
 
     async def _smart_collection_uri(
         self, section_key: str, media_type: MediaType, filter_query: str

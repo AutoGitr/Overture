@@ -50,7 +50,7 @@ class RuleSync:
                 repo = CollectionRepository(session)
                 row = await self._access.require(session, collection_id)
                 rule = await repo.rule(collection_id)
-                policy = await self._access.policy(session, row.collection_group, rule)
+                policy = await self._access.policy(session, row.group, rule)
                 current = await repo.members(collection_id)
                 scopes = [
                     LibraryScope(
@@ -60,9 +60,10 @@ class RuleSync:
                         items=await repo.library_items(
                             part.media_type, part.library_id
                         ),
+                        collection_id=collection_id,
                     )
                     for part in row.libraries
-                    if part.criteria_json is not None
+                    if part.criteria is not None
                 ]
             if rule is None:
                 raise PublicServiceError(409, UNMANAGED_REFUSAL)
@@ -116,9 +117,27 @@ class RuleSync:
                 return CollectionSyncResponse(withheld=True)
             await self._editor.withhold_locked(row)
             return CollectionSyncResponse(withheld=True, removed=len(current))
+        if row.kind is CollectionKind.SEPARATOR:
+            return await self._sync_separator(row, rule)
         if rule.smart:
             return await self._sync_smart(row, rule, policy, current, scopes)
         return await self._sync_regular(row, rule, policy, current, scopes)
+
+    async def _sync_separator(
+        self, row: MediaCollection, rule: CollectionRule
+    ) -> CollectionSyncResponse:
+        """Keep an empty copy in each library, whatever the minimum."""
+        provider = self._access.provider()
+        for copy in self._access.copies(row):
+            if copy.server_item_id is None:
+                lead = copy.lead
+                server = await provider.create_collection(
+                    lead.library_id, row.title, lead.media_type, []
+                )
+                copy.place(server.id)
+        await self._save_placement(row)
+        await self._editor.update_locked(row, saved_options(row, rule))
+        return CollectionSyncResponse()
 
     async def _sync_smart(
         self,
@@ -141,7 +160,6 @@ class RuleSync:
                     lead.library_id, row.title, lead.media_type, query
                 )
                 copy.place(server.id)
-                row.server_link = row.server_link or server.server_link
             else:
                 await provider.update_smart_collection_filter(
                     copy.server_item_id, lead.library_id, lead.media_type, query
@@ -158,7 +176,6 @@ class RuleSync:
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
             await CollectionRepository(session).replace_members(row.id or 0, members)
-            saved.server_link = row.server_link
             saved.kind = CollectionKind.SMART
             saved.child_count = len(remote_ids)
             saved.updated_at = utc_now()

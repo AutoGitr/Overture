@@ -26,6 +26,7 @@ lazy from .adapters import (
     ServerItem,
     ServerSection,
     ServerTheme,
+    ServerWebLinks,
 )
 lazy from .http_client import MediaServerHttpClient
 
@@ -255,8 +256,8 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """
 
     @abstractmethod
-    async def build_item_link(self, server_item_id: str) -> str:
-        """Return a provider web link for a media-server item."""
+    async def web_links(self) -> ServerWebLinks:
+        """Return where the server's web app opens items and collections."""
 
     @abstractmethod
     async def _image_request(

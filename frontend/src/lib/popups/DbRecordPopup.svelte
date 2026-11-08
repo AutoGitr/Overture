@@ -145,6 +145,9 @@
         <section class="option-card">
           <h3 class="form-label">Stored in {own.table}</h3>
           {@render fieldTable(dbRecordFields(own.values), "own:")}
+          {#if Object.keys(record.values).length > 0}
+            {@render rows("values", "Values, such as genres and people", dbRecordFields(record.values))}
+          {/if}
           {#each related as row, index (index)}
             {@render rows(
               `related-${index}`,

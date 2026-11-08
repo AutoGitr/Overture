@@ -87,6 +87,10 @@ export type AppSettingsRead = {
     auto_match_art: boolean;
     auto_unmonitor: AutoUnmonitor;
     /**
+     * Collection Auto Generate Art
+     */
+    collection_auto_generate_art: boolean;
+    /**
      * Collection Auto Match Art
      */
     collection_auto_match_art: boolean;
@@ -267,6 +271,10 @@ export type AppSettingsUpdate = {
     auto_match_art?: boolean | null;
     auto_unmonitor?: AutoUnmonitor | null;
     /**
+     * Collection Auto Generate Art
+     */
+    collection_auto_generate_art?: boolean | null;
+    /**
      * Collection Auto Match Art
      */
     collection_auto_match_art?: boolean | null;
@@ -423,6 +431,7 @@ export type ArtBulkSource = 'overturedb' | 'local_art_matching';
  */
 export type ArtCandidate = {
     art_type: ArtType | null;
+    generated: ArtStyle | null;
     /**
      * Hamming
      */
@@ -501,7 +510,7 @@ export type ArtMatchResponse = {
  * source whose host serves it. A test keeps the hosts in step with the
  * catalog contract's art sources.
  */
-export type ArtSource = 'overturedb' | 'upload' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex';
+export type ArtSource = 'overturedb' | 'upload' | 'generated' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex';
 
 /**
  * ArtSourcesResponse
@@ -520,6 +529,13 @@ export type ArtSourcesResponse = {
         [key: string]: Array<ArtCandidate>;
     };
 };
+
+/**
+ * ArtStyle
+ *
+ * How Overture draws artwork it generates from a title.
+ */
+export type ArtStyle = 'dark' | 'light' | 'accent';
 
 /**
  * ArtType
@@ -1633,6 +1649,10 @@ export type CollectionDefaults = {
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
     /**
+     * Auto Generate Art
+     */
+    auto_generate_art: boolean | null;
+    /**
      * Auto Match Art
      */
     auto_match_art: boolean | null;
@@ -1842,9 +1862,9 @@ export type CollectionDetail = {
      */
     server_background_version: string | null;
     /**
-     * Server Link
+     * Server Item Id
      */
-    server_link: string | null;
+    server_item_id: string | null;
     /**
      * Server Poster Version
      */
@@ -2143,6 +2163,10 @@ export type CollectionGroupPolicyInput = {
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
     /**
+     * Auto Generate Art
+     */
+    auto_generate_art?: boolean | null;
+    /**
      * Auto Match Art
      */
     auto_match_art?: boolean | null;
@@ -2175,6 +2199,10 @@ export type CollectionGroupPolicyInput = {
      * Request Missing
      */
     request_missing?: boolean | null;
+    /**
+     * Separator
+     */
+    separator?: boolean;
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
     /**
@@ -2209,6 +2237,10 @@ export type CollectionGroupPolicyOutput = {
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
     /**
+     * Auto Generate Art
+     */
+    auto_generate_art: boolean | null;
+    /**
      * Auto Match Art
      */
     auto_match_art: boolean | null;
@@ -2241,6 +2273,10 @@ export type CollectionGroupPolicyOutput = {
      * Request Missing
      */
     request_missing: boolean | null;
+    /**
+     * Separator
+     */
+    separator: boolean;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
     /**
@@ -2303,7 +2339,7 @@ export type CollectionGroupSyncResult = {
  *
  * How a collection's membership is maintained on the media server.
  */
-export type CollectionKind = 'regular' | 'smart';
+export type CollectionKind = 'regular' | 'smart' | 'separator';
 
 /**
  * CollectionKindRequest
@@ -2508,6 +2544,10 @@ export type CollectionPreview = {
  * A rule whose criteria to preview in each of its libraries.
  */
 export type CollectionPreviewRequest = {
+    /**
+     * Collection Id
+     */
+    collection_id?: number | null;
     rule: CollectionRuleWriteInput;
 };
 
@@ -2651,9 +2691,9 @@ export type CollectionRead = {
      */
     server_background_version: string | null;
     /**
-     * Server Link
+     * Server Item Id
      */
-    server_link: string | null;
+    server_item_id: string | null;
     /**
      * Server Poster Version
      */
@@ -2781,6 +2821,10 @@ export type CollectionRuleRead = {
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
     /**
+     * Auto Generate Art
+     */
+    auto_generate_art: boolean | null;
+    /**
      * Auto Match Art
      */
     auto_match_art: boolean | null;
@@ -2860,6 +2904,10 @@ export type CollectionRuleWriteInput = {
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
     /**
+     * Auto Generate Art
+     */
+    auto_generate_art?: boolean | null;
+    /**
      * Auto Match Art
      */
     auto_match_art?: boolean | null;
@@ -2929,6 +2977,10 @@ export type CollectionRuleWriteOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
+    /**
+     * Auto Generate Art
+     */
+    auto_generate_art: boolean | null;
     /**
      * Auto Match Art
      */
@@ -3336,6 +3388,12 @@ export type DatabaseRecord = {
      * Stored
      */
     stored: Array<StoredRow>;
+    /**
+     * Values
+     */
+    values: {
+        [key: string]: Array<string>;
+    };
 };
 
 /**
@@ -3538,7 +3596,7 @@ export type FieldKind = 'text' | 'tag' | 'number' | 'date' | 'boolean';
  *
  * Item metadata a collection condition tests.
  */
-export type FilterField = 'title' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
+export type FilterField = 'title' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
 
 /**
  * FilterGroup
@@ -4205,10 +4263,6 @@ export type MediaItemRead = {
      */
     server_item_id: string | null;
     /**
-     * Server Link
-     */
-    server_link: string | null;
-    /**
      * Server Removed At
      */
     server_removed_at: string | null;
@@ -4796,12 +4850,13 @@ export type RenameStatus = 'renamed' | 'conflict' | 'error';
 /**
  * SaveArtRequest
  *
- * The chosen artwork for one slot: a link, or an uploaded image.
+ * The chosen artwork for one slot: a link, an uploaded image or one to draw.
  *
  * Which slot it is comes from the request path and query, so the body only
  * carries the picture itself.
  */
 export type SaveArtRequest = {
+    generated?: ArtStyle | null;
     /**
      * Height
      */
@@ -5066,6 +5121,24 @@ export type ServerLibraryRead = {
  * Media server that supplied a record.
  */
 export type ServerType = 'plex' | 'jellyfin' | 'emby';
+
+/**
+ * ServerWebLinksRead
+ *
+ * Where the server's web app opens an item or a collection.
+ *
+ * ``{id}`` in each stands for the item's or collection's server ID.
+ */
+export type ServerWebLinksRead = {
+    /**
+     * Collection
+     */
+    collection: string;
+    /**
+     * Item
+     */
+    item: string;
+};
 
 /**
  * SetCollectionThemeRequest
@@ -8290,6 +8363,49 @@ export type SaveCollectionArtResponses = {
 
 export type SaveCollectionArtResponse = SaveCollectionArtResponses[keyof SaveCollectionArtResponses];
 
+export type GetGeneratedCollectionArtData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+        style: ArtStyle;
+    };
+    query?: never;
+    url: '/api/collections/{collection_id}/art/{art_type}/generated/{style}';
+};
+
+export type GetGeneratedCollectionArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetGeneratedCollectionArtError = GetGeneratedCollectionArtErrors[keyof GetGeneratedCollectionArtErrors];
+
+export type GetGeneratedCollectionArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type MatchCollectionArtData = {
     body?: never;
     headers?: {
@@ -9734,6 +9850,47 @@ export type ListServerLibrariesResponses = {
 };
 
 export type ListServerLibrariesResponse = ListServerLibrariesResponses[keyof ListServerLibrariesResponses];
+
+export type GetServerWebLinksData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/media-server/links';
+};
+
+export type GetServerWebLinksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Bad Gateway
+     */
+    502: MediaServerErrorResponse;
+    /**
+     * Service Unavailable
+     */
+    503: MediaServerErrorResponse;
+};
+
+export type GetServerWebLinksError = GetServerWebLinksErrors[keyof GetServerWebLinksErrors];
+
+export type GetServerWebLinksResponses = {
+    /**
+     * Successful Response
+     */
+    200: ServerWebLinksRead;
+};
+
+export type GetServerWebLinksResponse = GetServerWebLinksResponses[keyof GetServerWebLinksResponses];
 
 export type ListCatalogEntriesData = {
     body?: never;

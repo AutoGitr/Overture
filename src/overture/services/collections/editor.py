@@ -143,12 +143,13 @@ class CollectionEditor:
         scopes = await self._access.scopes(rule.libraries)
         types = {scope.library_id: scope.media_type for scope in scopes}
         self._validator.display(body, set(types.values()), smart=smart)
-        body = body.model_copy(
-            update={"collection_group": collection_group(body.collection_group)}
-        )
+        group = collection_group(body.collection_group)
+        body = body.model_copy(update={"collection_group": group})
         _require_movies(body.tmdb_collection_id, types.values())
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, body.collection_group, rule)
+            policy = await self._access.policy(
+                session, await self._access.group(session, body.collection_group), rule
+            )
         self._validator.rule(types, rule, policy)
         if "order_type" not in body.model_fields_set:
             body = body.model_copy(update={"order_type": policy.order_type})
@@ -184,7 +185,7 @@ class CollectionEditor:
                 last_synced_at=now,
                 created_at=now,
                 updated_at=now,
-                **body.model_dump(exclude={"rule"}),
+                **body.model_dump(exclude={"rule", "collection_group"}),
             )
             apply_libraries(row, rule.libraries, types)
             if sync and not withhold:
@@ -197,6 +198,9 @@ class CollectionEditor:
                     row.tmdb_collection_id = min(
                         franchise_ids(rule.libraries), default=None
                     )
+                row.group = await CollectionRepository(session).ensure_group(
+                    server, group
+                )
                 session.add(row)
                 await session.flush()
                 await CollectionRepository(session).replace_members(
@@ -227,7 +231,9 @@ class CollectionEditor:
             effective = await self._display.push(
                 row, body, rule, source_summary=source_summary
             )
-            row.sqlmodel_update(effective.model_dump(exclude={"rule"}))
+            row.sqlmodel_update(
+                effective.model_dump(exclude={"rule", "collection_group"})
+            )
             if smart:
                 return
             for copy in self._access.copies(row):
@@ -298,7 +304,6 @@ class CollectionEditor:
                         lead.library_id, body.title, lead.media_type, ids
                     )
                 copy.place(server.id)
-                row.server_link = row.server_link or server.server_link
                 row.server_path = row.server_path or server.path
         except Exception:
             for server_id in row.server_ids:
@@ -320,6 +325,10 @@ class CollectionEditor:
             if row.generated_value is not None and body.title != row.title:
                 raise PublicServiceError(
                     422, "Its collection set titles this collection; edit the set"
+                )
+            if row.kind is CollectionKind.SEPARATOR:
+                raise PublicServiceError(
+                    422, "Its group keeps the separator; change the group instead"
                 )
             await self.update_locked(row, body, push=sync)
         await self._access.updated(collection_id)
@@ -343,17 +352,21 @@ class CollectionEditor:
         display = body.model_dump(include=body.model_fields_set & DISPLAY_OVERRIDES)
         async with self._access.database.read_session() as session:
             rule = await CollectionRepository(session).rule(row.id or 0)
+        group = collection_group(body.collection_group) if rule is not None else None
         if rule is not None:
-            body = body.model_copy(
-                update={"collection_group": collection_group(body.collection_group)}
-            )
+            body = body.model_copy(update={"collection_group": group})
             rule.sqlmodel_update(display)
         effective = await self._display.push(row, body, rule, push=push)
         summary_source = row.summary_source
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
-            fields = effective.model_dump()
+            fields = effective.model_dump(exclude={"collection_group"})
             fields["summary_source"] = summary_source
+            # Only a managed collection belongs to a group.
+            if group is not None:
+                saved.group = await CollectionRepository(session).ensure_group(
+                    saved.server_type, group
+                )
             if "tmdb_collection_id" not in body.model_fields_set:
                 fields.pop("tmdb_collection_id")
             saved.sqlmodel_update(fields)
@@ -406,7 +419,7 @@ class CollectionEditor:
 
     async def retire_libraries(self, row: MediaCollection) -> None:
         """Finish removing libraries a save took out of the collection."""
-        leaving = [part for part in row.libraries if part.criteria_json is None]
+        leaving = [part for part in row.libraries if part.criteria is None]
         if not leaving:
             return
         staying = {part.server_item_id for part in row.libraries} - {
@@ -483,7 +496,6 @@ class CollectionEditor:
                     copy.lead.library_id, row.title, copy.lead.media_type, ids
                 )
                 target = server.id
-                row.server_link = row.server_link or server.server_link
                 row.server_path = row.server_path or server.path
             elif not ids and not append:
                 await self.delete_server_ids([target])
@@ -505,7 +517,6 @@ class CollectionEditor:
             current = await self._access.require(session, row.id or 0)
             await CollectionRepository(session).replace_members(row.id or 0, members)
             save_placement(current, row)
-            current.server_link = row.server_link
             current.server_path = row.server_path
             current.kind = CollectionKind.REGULAR
             current.child_count = len(server_ids)
@@ -601,7 +612,7 @@ class CollectionEditor:
         )
         async with self._access.database.read_session() as session:
             existing = await CollectionRepository(session).rule(collection_id)
-            policy = await self._access.policy(session, row.collection_group, body)
+            policy = await self._access.policy(session, row.group, body)
         self._validator.rule(types, body, policy)
         # A new rule keeps the order of a list it selects from, where it can.
         keep_source_order = (
@@ -707,11 +718,13 @@ class CollectionEditor:
     ) -> CollectionDetail:
         """Give a collection made outside Overture the rule its plan keeps."""
         plan = await self.adoption_plan(collection_id)
-        body = body.model_copy(update={"group": collection_group(body.group)})
+        group = collection_group(body.group)
         async with self._access.locked(collection_id):
             async with self._access.database.write_session() as session:
                 stored = await self._access.require(session, collection_id)
-                stored.collection_group = body.group
+                stored.group = await CollectionRepository(session).ensure_group(
+                    stored.server_type, group
+                )
                 stored.tmdb_collection_id = plan.tmdb_collection_id
                 session.add(stored)
             await self.save_rule_locked(stored, plan.rule)
@@ -760,7 +773,7 @@ class CollectionEditor:
             if rule.smart and any(
                 self._membership.labels(part.media_type, criteria_of(part))
                 for part in row.libraries
-                if part.criteria_json is not None
+                if part.criteria is not None
             ):
                 raise PublicServiceError(
                     409,
@@ -770,9 +783,9 @@ class CollectionEditor:
             await session.delete(rule)
             row.libraries = [p for p in row.libraries if p.server_item_id == lead]
             for part in row.libraries:
-                part.criteria_json = None
+                part.criteria = None
                 session.add(part)
-            row.collection_group = None
+            row.group = None
             row.generated_value = None
             row.unsynced = False
             row.active_start_mmdd = None

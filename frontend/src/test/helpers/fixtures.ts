@@ -86,7 +86,6 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     season_posters_status: "missing",
     server_added_at: null,
     server_item_id: null,
-    server_link: null,
     server_removed_at: null,
     server_verified_at: null,
     studio: null,
@@ -181,8 +180,8 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     media_types: ["movie"],
     monitored: false,
     server_added_at: null,
-    server_link: null,
     server_type: "plex",
+    server_item_id: null,
     summary: null,
     server_poster_version: null,
     theme_status: "missing",
@@ -198,6 +197,7 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
   return {
     active_end_mmdd: null,
     active_start_mmdd: null,
+    auto_generate_art: null,
     auto_match_art: null,
     auto_match_theme: null,
     libraries: [
@@ -579,6 +579,7 @@ export function appSettings(overrides: Partial<AppSettingsRead> = {}): AppSettin
 export function artCandidate(overrides: Partial<ArtCandidate> = {}): ArtCandidate {
   return {
     art_type: "poster",
+    generated: null,
     hamming: null,
     height: 1500,
     iso_639_1: null,

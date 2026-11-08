@@ -1,9 +1,17 @@
 """MediaCollection model - media-server collections and their members."""
 
 lazy from datetime import datetime
-lazy from typing import Any, ClassVar
+lazy from typing import Any, ClassVar, Optional
 
-lazy from sqlmodel import Field, Index, Relationship, SQLModel, UniqueConstraint
+lazy from sqlmodel import (
+    JSON,
+    Field,
+    ForeignKeyConstraint,
+    Index,
+    Relationship,
+    SQLModel,
+    UniqueConstraint,
+)
 
 lazy from ...domain import (
     ArtType,
@@ -15,13 +23,28 @@ lazy from ...domain import (
     ServerType,
     ThemeBulkSource,
 )
-lazy from ..columns import enum_columns, enum_type
+lazy from ..columns import enum_type, typed_columns
 lazy from .art import ArtSlot
+lazy from .collection_group import CollectionGroup
+lazy from .library import Library
+lazy from .shared import ThemeColumns
 
 
-class MediaCollectionBase(SQLModel):
-    """Base model holding media-server collection fields."""
+class MediaCollection(ThemeColumns, table=True):
+    """One collection as Overture shows it, across every library it spans."""
 
+    __tablename__: ClassVar[Any] = "media_collections"
+    __table_args__ = (
+        # A group of the collection's own server; one holding collections stays.
+        ForeignKeyConstraint(
+            ["group_id", "server_type"],
+            ["collection_groups.id", "collection_groups.server_type"],
+            ondelete="RESTRICT",
+            name="fk_media_collections_group",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
     # Which media server supplied this collection
     server_type: ServerType = Field(sa_type=enum_type(ServerType))
 
@@ -34,7 +57,8 @@ class MediaCollectionBase(SQLModel):
     sort_title: str | None = None
     sort_title_format: str | None = None
     summary_format: str | None = None
-    collection_group: str | None = Field(default=None, index=True)
+    #: The group of a managed collection; an unmanaged one has none.
+    group_id: int | None = Field(default=None, index=True)
     collection_mode: CollectionMode | None = Field(
         default=None, sa_type=enum_type(CollectionMode)
     )
@@ -55,7 +79,6 @@ class MediaCollectionBase(SQLModel):
     # cache version.
     thumb_url: str | None = None
     art_url: str | None = None
-    server_link: str | None = None
     # The server's folder for the collection (Jellyfin BoxSets).
     server_path: str | None = None
     server_added_at: datetime | None = None
@@ -66,20 +89,13 @@ class MediaCollectionBase(SQLModel):
     #: The value its group's collection set created it for.
     generated_value: str | None = None
 
-    # Source metadata for the theme installed through Overture.
-    youtube_id: str | None = None
+    #: Where the theme Overture installed was found.
     youtube_id_source: ThemeBulkSource | None = Field(
         default=None, sa_type=enum_type(ThemeBulkSource)
     )
-    youtube_title: str | None = None
-    youtube_duration: int | None = None
 
     # Plex's uploaded theme identity. Folder themes use local file facts.
     server_theme_id: str | None = None
-    theme_file_hash: str | None = None
-    theme_file_mtime_ns: int | None = None
-    theme_file_size: int | None = None
-    theme_file_duration: int | None = None
     last_matched_at: datetime | None = None
 
     # Whether the collection is included in theme workflows.
@@ -95,14 +111,15 @@ class MediaCollectionBase(SQLModel):
     last_synced_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-class MediaCollection(MediaCollectionBase, table=True):
-    """One collection as Overture shows it, across every library it spans."""
-
-    __tablename__: ClassVar[Any] = "media_collections"
-
-    id: int | None = Field(default=None, primary_key=True)
+    # Only the group key is written; the server type is the collection's own.
+    group: Optional["CollectionGroup"] = Relationship(
+        sa_relationship_kwargs={
+            "lazy": "joined",
+            "primaryjoin": "and_(MediaCollection.group_id == CollectionGroup.id, "
+            "MediaCollection.server_type == CollectionGroup.server_type)",
+            "foreign_keys": "[MediaCollection.group_id]",
+        }
+    )
     art_slots: list["ArtSlot"] = Relationship(
         back_populates="collection",
         cascade_delete=True,
@@ -113,6 +130,10 @@ class MediaCollection(MediaCollectionBase, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin", "order_by": "CollectionLibrary.id"},
     )
+
+    @property
+    def group_name(self) -> str | None:
+        return self.group.name if self.group else None
 
     @property
     def server_ids(self) -> list[str]:
@@ -154,6 +175,12 @@ class CollectionLibrary(SQLModel, table=True):
     __tablename__: ClassVar[Any] = "collection_libraries"
     __table_args__ = (
         UniqueConstraint("collection_id", "library_id", name="uq_collection_library"),
+        ForeignKeyConstraint(
+            ["library_id", "media_type"],
+            ["libraries.id", "libraries.media_type"],
+            ondelete="RESTRICT",
+            name="fk_collection_libraries_library",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -167,8 +194,12 @@ class CollectionLibrary(SQLModel, table=True):
     #: A ``FilterGroup`` of field and source conditions. Null on a collection
     #: Overture does not manage, and on a library leaving a managed collection
     #: until the next sync removes it from the server.
-    criteria_json: str | None = None
+    criteria: dict[str, Any] | None = Field(default=None, sa_type=JSON)
     collection: "MediaCollection" = Relationship(back_populates="libraries")
+    # Read only: the media type is the part's own, which the key shares.
+    library: Optional["Library"] = Relationship(
+        sa_relationship_kwargs={"lazy": "raise", "viewonly": True}
+    )
 
 
 class MediaCollectionMember(SQLModel, table=True):
@@ -186,5 +217,5 @@ class MediaCollectionMember(SQLModel, table=True):
     )
 
 
-enum_columns(MediaCollection)
-enum_columns(CollectionLibrary)
+typed_columns(MediaCollection)
+typed_columns(CollectionLibrary)

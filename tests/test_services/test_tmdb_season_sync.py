@@ -1,6 +1,6 @@
 """Full sync refreshes saved, unconnected TMDB shows without losing selections."""
 
-lazy from collections.abc import AsyncIterator
+lazy from collections.abc import AsyncIterator, Sequence
 lazy from pathlib import Path
 lazy from typing import override
 
@@ -20,7 +20,7 @@ lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.runner import run_managed_job
 lazy from overture.jobs.tally import SyncTally
-lazy from overture.media_servers.adapters import ServerItem
+lazy from overture.media_servers.adapters import ServerItem, ServerSection
 lazy from overture.repositories.seasons import SeasonRepository
 lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
 lazy from overture.services.sync.runner import run_sync
@@ -122,6 +122,9 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
     class EmptyServer:
         server_type = ServerType.PLEX
 
+        async def get_sections(self) -> list[ServerSection]:
+            return []
+
         async def iter_items(
             self, library_ids: list[str] | None = None
         ) -> AsyncIterator[list[ServerItem]]:
@@ -131,6 +134,10 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
     class NothingToReconcile(LibraryReconciler):
         def __init__(self) -> None:
             pass
+
+        @override
+        async def record_libraries(self, sections: Sequence[ServerSection]) -> None:
+            """Record nothing; the test reconciles no database."""
 
         @override
         async def sync_staged(self, *_args: object, **_kwargs: object) -> SyncResult:

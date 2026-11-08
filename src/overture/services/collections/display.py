@@ -29,7 +29,7 @@ def saved_options(
     """The options a stored collection was saved with."""
     options = CollectionOptions(
         title=row.title,
-        collection_group=row.collection_group,
+        collection_group=row.group_name,
         tmdb_collection_id=row.tmdb_collection_id,
         sort_title_format=row.sort_title_format,
         summary_format=row.summary_format,
@@ -128,7 +128,11 @@ class CollectionDisplay:
         async with self._access.database.read_session() as session:
             if rule is None and row.id is not None:
                 rule = await CollectionRepository(session).rule(row.id)
-            policy = await self._access.policy(session, options.collection_group, rule)
+            policy = await self._access.policy(
+                session,
+                await self._access.group(session, options.collection_group),
+                rule,
+            )
         sort_title = inherited_sort_title(options, policy)
         template = (
             options.summary_format

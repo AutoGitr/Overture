@@ -313,7 +313,7 @@ test("Emby collections clearly explain unsupported themes", async ({ page }) => 
   await expect(page.getByLabel("Search collection themes")).toHaveCount(0);
 });
 
-test("groups hide collections until opened, preserve browsing on asset navigation, and skip unidentified artwork candidates", async ({
+test("groups hide collections until opened, preserve browsing on asset navigation, and offer art without a TMDB ID", async ({
   page,
 }) => {
   const grouped = collectionDetail({
@@ -330,7 +330,7 @@ test("groups hide collections until opened, preserve browsing on asset navigatio
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped, loose] }));
   await page.route("**/api/collections/12{,?*}", (route) => route.fulfill({ json: grouped }));
-  await page.route("**/api/collections/12/art/*/sources?*", (route) => {
+  await page.route("**/api/collections/12/art/*/sources{,?*}", (route) => {
     candidateRequests += 1;
     return route.fulfill({ json: { sources: {}, current_url: null } });
   });
@@ -341,14 +341,11 @@ test("groups hide collections until opened, preserve browsing on asset navigatio
   await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Select collection Loose saga" })).toHaveCount(0);
   await page.getByRole("button", { name: "Open art for Grouped saga" }).click();
-  await expect(
-    page.getByText(/Set a TMDB collection ID to browse artwork candidates/),
-  ).toBeVisible();
+  await expect(page.getByText(/Set a TMDB collection ID to browse its artwork too/)).toBeVisible();
   await page.getByRole("tab", { name: "Background", exact: true }).click();
-  await expect(
-    page.getByText(/Set a TMDB collection ID to browse artwork candidates/),
-  ).toBeVisible();
-  expect(candidateRequests).toBe(0);
+  await expect(page.getByText(/Set a TMDB collection ID to browse its artwork too/)).toBeVisible();
+  // Without a TMDB collection there is still art to draw, so both tabs ask.
+  await expect.poll(() => candidateRequests).toBe(2);
   await page.reload();
   if (await page.getByRole("button", { name: "Toggle sidebar" }).isVisible())
     await page.getByRole("button", { name: "Toggle sidebar" }).click();

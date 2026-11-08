@@ -49,7 +49,8 @@ async def test_boxsets_carry_their_folder_tmdb_collection_and_members(
     assert saga.art_url is None
     assert saga.added_at is not None
     assert (custom.tmdb_id, custom.member_ids) == (None, ())
-    assert custom.server_link.endswith("details?id=custom")
+    links = await provider.web_links()
+    assert links.collection == "https://jellyfin.test/web/index.html#!/details?id={id}"
 
 
 async def test_created_boxset_immediately_has_its_theme_folder(

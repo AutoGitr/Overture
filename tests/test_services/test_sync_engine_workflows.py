@@ -2,7 +2,7 @@
 
 lazy import asyncio
 lazy import threading
-lazy from collections.abc import AsyncIterator, Callable
+lazy from collections.abc import AsyncIterator, Callable, Sequence
 lazy from dataclasses import replace
 lazy from datetime import UTC, datetime
 lazy from pathlib import Path
@@ -30,6 +30,7 @@ lazy from overture.media_servers.adapters import (
     ServerCollection,
     ServerItem,
     ServerSeason,
+    ServerSection,
     SyncProgressCallback,
     SyncStopCheck,
 )
@@ -60,6 +61,7 @@ lazy from tests.runtime_helpers import (
     NoTmdbFacts,
     RecordingPublisher,
     make_local_assets,
+    server_sections,
     unused,
 )
 lazy from tests.sync_helpers import sync_full
@@ -77,7 +79,6 @@ def normalized_items() -> list[ServerItem]:
             media_type=MediaType.MOVIE,
             poster_url=None,
             background_url=None,
-            server_link="https://server.test/42",
             library_id="1",
         )
     ]
@@ -93,6 +94,9 @@ class FakeProvider:
 
     async def list_collections(self) -> list[ServerCollection]:
         return self.collections
+
+    async def get_sections(self) -> list[ServerSection]:
+        return server_sections(self.items)
 
     async def iter_items(
         self,
@@ -272,7 +276,6 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
                     year=unchanged.year,
                     tmdb_id=42,
                     server_item_id=unchanged.id,
-                    server_link=unchanged.server_link,
                     library_id=unchanged.library_id,
                 ),
                 MediaItem(
@@ -281,7 +284,6 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
                     title="Old title",
                     year=changed.year,
                     server_item_id=changed.id,
-                    server_link=changed.server_link,
                     library_id=changed.library_id,
                 ),
             ]
@@ -379,6 +381,10 @@ class NoTmdbShows(TmdbSeasonSync):
 class FakeReconciler(LibraryReconciler):
     def __init__(self) -> None:
         pass
+
+    @override
+    async def record_libraries(self, sections: Sequence[ServerSection]) -> None:
+        """Record nothing; these tests reconcile no database."""
 
     @override
     async def sync_staged(
@@ -809,7 +815,6 @@ async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
                 ServerCollection(
                     id="saga",
                     title="Saga",
-                    server_link="https://server.test/saga",
                     member_ids=("server-42",),
                     media_type=MediaType.MOVIE,
                 )

@@ -7,7 +7,7 @@ lazy from typing import Any, ClassVar, Optional
 lazy from sqlmodel import Field, Index, Relationship, SQLModel
 
 lazy from ...domain import ArtType, JobStatus, JobType
-lazy from ..columns import enum_columns, enum_type
+lazy from ..columns import enum_type, typed_columns
 lazy from .media_item import MediaItem
 lazy from .season import Season
 
@@ -17,9 +17,24 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
-class DownloadJobBase(SQLModel):
-    """Base model holding download job fields."""
+class DownloadJob(SQLModel, table=True):
+    """A queued, running or finished artwork or theme download."""
 
+    __tablename__: ClassVar[Any] = "download_jobs"
+    __table_args__ = (
+        Index(
+            "ix_download_jobs_active_equivalent",
+            "media_item_id",
+            "job_type",
+            "art_type",
+            "target_url",
+            "season_id",
+            "status",
+        ),
+        Index("ix_download_jobs_status_created", "status", "created_at"),
+    )
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
     media_item_id: int | None = Field(
         default=None,
         foreign_key="media_items.id",
@@ -51,26 +66,6 @@ class DownloadJobBase(SQLModel):
     created_at: datetime = Field(nullable=False)
     completed_at: datetime | None = None
 
-
-class DownloadJob(DownloadJobBase, table=True):
-    """A queued, running or finished artwork or theme download."""
-
-    __tablename__: ClassVar[Any] = "download_jobs"
-    __table_args__ = (
-        Index(
-            "ix_download_jobs_active_equivalent",
-            "media_item_id",
-            "job_type",
-            "art_type",
-            "target_url",
-            "season_id",
-            "status",
-        ),
-        Index("ix_download_jobs_status_created", "status", "created_at"),
-    )
-
-    id: str = Field(default_factory=_uuid, primary_key=True)
-
     media_item: Optional["MediaItem"] = Relationship(
         back_populates="download_jobs",
         sa_relationship_kwargs={"lazy": "raise"},
@@ -81,4 +76,4 @@ class DownloadJob(DownloadJobBase, table=True):
     )
 
 
-enum_columns(DownloadJob)
+typed_columns(DownloadJob)

@@ -17,9 +17,9 @@ lazy from sqlmodel import (
     UniqueConstraint,
 )
 
-lazy from ...domain import ArtType
+lazy from ...domain import ArtStyle, ArtType
 lazy from ...utils.art_urls import PublicArtUrl
-lazy from ..columns import enum_columns, enum_type
+lazy from ..columns import enum_type, typed_columns
 lazy from .media_collection import MediaCollection
 lazy from .media_item import MediaItem
 lazy from .season import Season
@@ -37,6 +37,10 @@ class ArtSlot(SQLModel, table=True):
         ),
         CheckConstraint(
             "url IS NULL OR upload_hash IS NULL", name="ck_art_slots_selection"
+        ),
+        CheckConstraint(
+            "generated_style IS NULL OR upload_hash IS NOT NULL",
+            name="ck_art_slots_generated",
         ),
         UniqueConstraint("collection_id", "art_type", name="uq_art_slots_collection"),
         UniqueConstraint("media_item_id", "art_type", name="uq_art_slots_media_item"),
@@ -72,6 +76,9 @@ class ArtSlot(SQLModel, table=True):
     #: The selection is an image someone uploaded, kept in the image cache
     #: under this hash. A slot selects a link or an upload, never both.
     upload_hash: str | None = None
+    #: The selected upload is one Overture drew in this style from the
+    #: owner's title, and draws again when the title changes.
+    generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
     file_hash: str | None = None
     phash: str | None = None
     width: int | None = None
@@ -84,4 +91,4 @@ class ArtSlot(SQLModel, table=True):
     collection: Optional["MediaCollection"] = Relationship(back_populates="art_slots")
 
 
-enum_columns(ArtSlot)
+typed_columns(ArtSlot)

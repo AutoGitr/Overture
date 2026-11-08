@@ -17,6 +17,8 @@ const STALE_TIME_BY_OPERATION: Readonly<Record<string, number>> = {
   getCollectionArtSources: EXPENSIVE_STALE_TIME,
   // What the server offers changes only with Overture's configuration.
   getCollectionCapabilities: EXPENSIVE_STALE_TIME,
+  // Where the server's web app opens titles changes only with the server.
+  getServerWebLinks: EXPENSIVE_STALE_TIME,
   listCollectionFieldValues: LIST_STALE_TIME,
   getPublicDatasetStatus: STATUS_STALE_TIME,
   getPublicDatasetRecord: LIST_STALE_TIME,

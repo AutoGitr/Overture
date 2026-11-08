@@ -73,9 +73,6 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
             await discovery_release.wait()
             return "parent"
 
-        async def build_item_link(self, server_item_id: str) -> str:
-            return f"https://server.test/{server_item_id}"
-
         async def find_season_id(self, server_item_id: str, season_num: int) -> str:
             assert (server_item_id, season_num) == ("parent", 0)
             return "season"
@@ -203,9 +200,6 @@ async def test_discovery_rereads_before_persisting(
                 else:
                     current.title = "Edited while discovering"
             return "discovered"
-
-        async def build_item_link(self, server_item_id: str) -> str:
-            return f"https://server.test/{server_item_id}"
 
     result = await asyncio.wait_for(
         resolve_server_item_id(

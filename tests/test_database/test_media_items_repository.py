@@ -13,6 +13,7 @@ lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType
 lazy from overture.repositories.media_items import MediaItemRepository
 lazy from tests.factories import seed_art_slot
+lazy from tests.term_helpers import assign
 
 
 async def test_a_match_only_lookup_finds_the_row_but_refuses_its_artwork(
@@ -33,11 +34,11 @@ async def test_a_match_only_lookup_finds_the_row_but_refuses_its_artwork(
         repo = MediaItemRepository(session)
         found = [
             await repo.find_by_folder_path(
-                "/media/Movie/", MediaType.MOVIE, load_art=False
+                "/media/Movie/", MediaType.MOVIE, for_update=False
             ),
-            await repo.find_by_server_id("server-1", MediaType.MOVIE, load_art=False),
+            await repo.find_by_server_id("server-1", MediaType.MOVIE, for_update=False),
             await repo.find_by_external_guids(
-                {"tmdb": "603"}, MediaType.MOVIE, load_art=False
+                {"tmdb": "603"}, MediaType.MOVIE, for_update=False
             ),
         ]
     async with database.read_session() as session:
@@ -63,7 +64,7 @@ async def populated_repository(
     removed = datetime(2026, 1, 1, tzinfo=UTC)
     db_session.add_all(
         [
-            MediaItem(
+            zulu := MediaItem(
                 id=1,
                 title="Zulu",
                 media_type=MediaType.MOVIE,
@@ -73,7 +74,6 @@ async def populated_repository(
                 tmdb_id=10,
                 tvdb_id=20,
                 imdb_id="tt30",
-                directors=["Director", "Co-Director"],
                 director_etag="v1",
             ),
             MediaItem(
@@ -93,7 +93,6 @@ async def populated_repository(
                 folder_path=str(tmp_path / "shows" / "Show"),
                 server_item_id="three",
                 tmdb_id=10,
-                director_etag="v1",
             ),
             MediaItem(
                 id=4,
@@ -116,6 +115,7 @@ async def populated_repository(
             MediaItem(id=6, title="Unconnected", media_type=MediaType.SHOW, tmdb_id=11),
         ]
     )
+    await assign(db_session, zulu, director=["Director", "Co-Director"])
     await db_session.commit()
     return MediaItemRepository(db_session)
 
@@ -239,11 +239,6 @@ async def test_counts_folders_and_visible_lists_respect_removal(
     populated_repository: MediaItemRepository, tmp_path: Path
 ) -> None:
     repo = populated_repository
-    assert await repo.library_counts() == {
-        "movies": (MediaType.MOVIE, 3),
-        "shows": (MediaType.SHOW, 1),
-    }
-    assert await repo.library_counts(MediaType.SHOW) == {"shows": (MediaType.SHOW, 1)}
     assert [item.id for item in await repo.list_visible(MediaType.MOVIE)] == [2, 5, 1]
     assert [item.id for item in await repo.list_visible()] == [2, 5, 1, 3, 6]
     assert sorted(await repo.folder_paths()) == sorted(

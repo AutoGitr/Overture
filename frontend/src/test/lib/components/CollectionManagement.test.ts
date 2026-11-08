@@ -20,6 +20,7 @@ import {
   collectionDetail,
   collectionRule,
   mediaItem,
+  artCandidate,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
@@ -324,7 +325,7 @@ describe("collection management", () => {
     ).toMatchObject({ tmdb_collection_id: 99 });
   });
 
-  it("shows collection artwork status, clears a selected slot, and skips candidates without an ID", async () => {
+  it("shows collection artwork status, clears a selected slot, and offers drawn art without an ID", async () => {
     const selected = {
       ...detail,
       poster_url: "https://example.test/poster.jpg",
@@ -337,14 +338,31 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/12": selected,
-      "/api/collections/12/art/poster": {
-        poster_url: null,
-        poster_source: null,
-        background_url: null,
-        poster_status: "partial",
-        background_status: "missing",
-        art_status: "partial",
+      "/api/collections/12/art/poster/sources": {
+        sources: {
+          generated: [
+            artCandidate({
+              url: "/api/collections/12/art/poster/generated/dark",
+              source: "generated",
+              generated: "dark",
+            }),
+          ],
+        },
+        current_url: null,
       },
+      "/api/collections/12/art/poster": ({ init }: { init: RequestInit }) =>
+        Response.json(
+          init.method === "PUT"
+            ? { status: "ok" }
+            : {
+                poster_url: null,
+                poster_source: null,
+                background_url: null,
+                poster_status: "partial",
+                background_status: "missing",
+                art_status: "partial",
+              },
+        ),
     });
     goToCollectionView(detail, "art");
     renderWithQueryClient(CollectionPage);
@@ -353,8 +371,17 @@ describe("collection management", () => {
     await fireEvent.click(clear);
     await answerConfirmation(true);
     await waitFor(() => expect(calls.some((call) => call.init.method === "DELETE")).toBe(true));
-    expect(calls.some((call) => call.url.includes("/sources"))).toBe(false);
     expect(await screen.findByText(/Set a TMDB collection ID to browse/)).toBeVisible();
+    // Choosing drawn art sends its style, which the server draws from the title.
+    await fireEvent.click(await screen.findByRole("button", { name: /generated/i }));
+    await waitFor(() =>
+      expect(
+        calls.find(
+          (call) =>
+            call.init.method === "PUT" && call.url.endsWith("/api/collections/12/art/poster"),
+        )?.init.body,
+      ).toBe(JSON.stringify({ generated: "dark" })),
+    );
   });
 
   it("creates a collection from explicit TMDB IDs", async () => {
@@ -880,6 +907,27 @@ describe("collection management", () => {
       delete_below_minimum: false,
       sort_title_format: "+{title}",
     });
+  });
+
+  it("offers a separator for a Plex group and saves it with the group", async () => {
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    const { calls } = mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/groups": ["Weekend"],
+      "/api/library/libraries": [],
+      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : {}),
+    });
+    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
+    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "Separator" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(
+        JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
+      ).toMatchObject({ separator: true }),
+    );
   });
 
   it("keeps group edits when the group is fetched again", async () => {

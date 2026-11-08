@@ -399,7 +399,6 @@ class CollectionSync:
                 ),
                 "thumb_url": collection.thumb_url,
                 "art_url": collection.art_url,
-                "server_link": collection.server_link,
                 "server_path": collection.path,
                 "server_added_at": collection.added_at,
                 "provider_tmdb_id": collection.tmdb_id,

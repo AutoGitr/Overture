@@ -243,6 +243,7 @@ class SyncEngine:
         created: list[int] = []
         queued = QueuedDownloads()
         try:
+            await self.reconciler.record_libraries(await provider.get_sections())
             async for recent_items in provider.iter_items_since(
                 since=since, library_ids=library_ids
             ):

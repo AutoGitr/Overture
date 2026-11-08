@@ -23,6 +23,7 @@ const alienRecord: DatabaseRecord = {
     { table: "media_items", values: { id: 7, title: "Alien", tmdb_id: 348 } },
     { table: "seasons", values: { id: 3, media_item_id: 7, season_num: 1 } },
   ],
+  values: { genre: ["Horror", "Sci-Fi"] },
   derived: { art_status: "missing" },
 };
 
@@ -71,6 +72,10 @@ describe("DbRecordPopup", () => {
     expect(screen.getByRole("dialog", { name: "Database record - Alien" })).toBeVisible();
     expect(field("title")).toHaveTextContent("Alien");
     expect(screen.getByRole("button", { name: "seasons 3", expanded: false })).toBeInTheDocument();
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Values, such as genres and people", expanded: false }),
+    );
+    expect(screen.getByText('["Horror","Sci-Fi"]')).toBeVisible();
     expect(screen.getByRole("heading", { name: "Derived by the API" })).toBeInTheDocument();
     expect(field("art_status")).toHaveTextContent("missing");
     expect(calls.map((call) => call.url)).toContain("/api/library/items/7/record");
@@ -153,6 +158,7 @@ describe("DbRecordPopup", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/12/record": {
         stored: [{ table: "media_collections", values: { id: 12, title: "Action" } }],
+        values: {},
         derived: {},
       },
       "/api/public-dataset/collections/12/record": {

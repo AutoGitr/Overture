@@ -35,7 +35,7 @@ lazy from overture.domain import (
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
-lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.schemas.library import BulkItemOperation
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.library import service as library_module
@@ -46,6 +46,7 @@ lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.file import compute_file_hash
+lazy from overture.utils.time import utc_now
 lazy from tests.factories import seed_art_slot
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -1018,16 +1019,10 @@ async def test_bulk_set_monitored(
 
 
 class ArtServer:
-    """A media server that names its libraries and serves item art."""
+    """A media server that serves item art."""
 
-    def __init__(self, sections: list[ServerSection] | None = None) -> None:
-        self.sections = sections
+    def __init__(self) -> None:
         self.art_requests: list[tuple[str, ArtType, ImageSize | None]] = []
-
-    async def get_sections(self) -> list[ServerSection]:
-        if self.sections is None:
-            raise MediaServerError("Media server unreachable")
-        return self.sections
 
     async def build_provider_art_request(
         self, server_item_id: str, art_type: ArtType, size: ImageSize | None
@@ -1068,29 +1063,27 @@ async def _add_items(database: Database, *items: MediaItem) -> None:
         session.add_all(items)
 
 
-@pytest.mark.parametrize(
-    ("sections", "listed"),
-    [
-        (
-            [
-                ServerSection("2", "Kids Movies", MediaType.MOVIE),
-                ServerSection("1", "Classic Movies", MediaType.MOVIE),
-            ],
-            [("9", "9", 1), ("1", "Classic Movies", 2), ("2", "Kids Movies", 1)],
-        ),
-        (None, [("1", "1", 2), ("2", "2", 1), ("9", "9", 1)]),
-    ],
-)
-async def test_libraries_are_named_by_the_media_server_while_it_answers(
+async def _record(database: Database, *sections: ServerSection) -> None:
+    async with database.write_session() as session:
+        await LibraryRepository(session).record(sections, utc_now())
+
+
+async def test_libraries_are_the_ones_the_last_sync_recorded_with_their_counts(
     database: Database,
-    sections: list[ServerSection] | None,
-    listed: list[tuple[str, str, int]],
 ) -> None:
+    await _record(
+        database,
+        ServerSection("2", "Kids Movies", MediaType.MOVIE),
+        ServerSection("1", "Classic Movies", MediaType.MOVIE),
+        ServerSection("3", "Empty", MediaType.MOVIE),
+        ServerSection("5", "Shows", MediaType.SHOW),
+    )
     await _add_items(
         database,
         MediaItem(id=1, media_type=MediaType.MOVIE, title="A", library_id="1"),
         MediaItem(id=2, media_type=MediaType.MOVIE, title="B", library_id="1"),
         MediaItem(id=3, media_type=MediaType.MOVIE, title="C", library_id="2"),
+        # A library the server no longer lists is not offered.
         MediaItem(id=4, media_type=MediaType.MOVIE, title="D", library_id="9"),
         MediaItem(id=5, media_type=MediaType.SHOW, title="E", library_id="5"),
         MediaItem(
@@ -1102,27 +1095,25 @@ async def test_libraries_are_named_by_the_media_server_while_it_answers(
         ),
     )
 
-    libraries = await _service(database, ArtServer(sections)).get_libraries(
-        MediaType.MOVIE
-    )
+    # Recorded, so named while the server cannot be reached.
+    libraries = await _service(database, ArtServer()).get_libraries(MediaType.MOVIE)
 
-    assert [(row.id, row.title, row.count) for row in libraries] == listed
+    assert [(row.id, row.title, row.count) for row in libraries] == [
+        ("1", "Classic Movies", 2),
+        ("3", "Empty", 0),
+        ("2", "Kids Movies", 1),
+    ]
 
 
 async def test_libraries_list_movies_first_then_by_title(database: Database) -> None:
-    await _add_items(
+    await _record(
         database,
-        MediaItem(id=1, media_type=MediaType.SHOW, title="A", library_id="1"),
-        MediaItem(id=2, media_type=MediaType.MOVIE, title="B", library_id="2"),
-        MediaItem(id=3, media_type=MediaType.MOVIE, title="C", library_id="3"),
-    )
-    sections = [
         ServerSection("1", "Anime", MediaType.SHOW),
         ServerSection("2", "Movies", MediaType.MOVIE),
         ServerSection("3", "Kids Movies", MediaType.MOVIE),
-    ]
+    )
 
-    libraries = await _service(database, ArtServer(sections)).get_libraries(None)
+    libraries = await _service(database, ArtServer()).get_libraries(None)
 
     assert [row.title for row in libraries] == ["Kids Movies", "Movies", "Anime"]
 

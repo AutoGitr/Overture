@@ -30,6 +30,7 @@ lazy from overture.domain import (
     IncrementalThemeOrder,
     MediaType,
     ServerType,
+    TermKind,
 )
 lazy from overture.integrations.tmdb import TMDBClient, TmdbFacts
 lazy from overture.jobs.kinds import JobKind
@@ -40,6 +41,7 @@ lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.repositories.collections import CollectionRepository
+lazy from overture.repositories.media_items import WITH_TERMS
 lazy from overture.services.collections.theme_files import (
     collection_folder,
     inspect_theme_file,
@@ -98,7 +100,6 @@ def _collection(
         id=server_id,
         title=f"Collection {server_id}",
         member_ids=members,
-        server_link=f"https://server.test/{server_id}",
         media_type=media_type,
         library_id=library_id,
         theme_id=theme_id,
@@ -366,16 +367,23 @@ async def test_enrichment_reads_new_rematched_and_old_titles_once(
     assert sorted(asked) == [1, 2, 4, 5]
     async with database.read_session() as session:
         items = {
-            item.title: item for item in (await session.exec(select(MediaItem))).all()
+            item.title: item
+            for item in (
+                await session.exec(select(MediaItem).options(WITH_TERMS))
+            ).all()
         }
     assert items["A"].tmdb_collection_id == 10
-    assert items["A"].tmdb_keywords == ["christmas"]
+    assert items["A"].values(TermKind.TMDB_KEYWORD) == ["christmas"]
     # TMDB completes the IDs a title lacks and never replaces the server's.
     assert items["A"].imdb_id == "tt0000001"
     assert items["B"].imdb_id == "tt9"
-    assert items["Checked"].tmdb_keywords == []
+    assert items["Checked"].values(TermKind.TMDB_KEYWORD) == []
     show = items["Show"]
-    assert (show.networks, show.last_aired, show.streaming) == (
+    assert (
+        show.values(TermKind.NETWORK),
+        show.last_aired,
+        show.values(TermKind.STREAMING),
+    ) == (
         ["HBO"],
         "2020-05-01",
         ["Netflix"],
@@ -611,7 +619,6 @@ async def test_imported_literal_expressions_follow_server_metadata(
         ServerCollection(
             id="literal",
             title="Literal",
-            server_link="https://server.test/collections/literal",
             member_ids=("m0",),
             summary="An {overview}",
             sort_title="01_{literal}",
