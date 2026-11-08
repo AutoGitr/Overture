@@ -3,11 +3,11 @@
 lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import asdict
 lazy from datetime import datetime
-lazy from typing import Any, Literal
+lazy from typing import Literal
 
 lazy from pydantic import Field
 
-lazy from ..db.art_slots import read_art_slot, slot_art_source
+lazy from ..db.art_slots import flattened_art, read_art_slot
 lazy from ..db.completion import art_completion, slot_status, theme_status
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
@@ -144,23 +144,6 @@ class FolderRootsResponse(StrictBaseModel):
     shows: list[str]
 
 
-def _art_slot_fields(slot: ArtSlot, prefix: str) -> dict[str, Any]:
-    """Flatten one artwork slot into the ``<prefix>_*`` response fields.
-
-    The public contract still exposes artwork as flat, prefixed fields even
-    though storage is normalized, so the prefix is applied here in one place
-    instead of being re-derived by every caller.
-    """
-    return {
-        f"{prefix}_url": slot.url,
-        f"{prefix}_source": slot_art_source(slot),
-        f"{prefix}_hash": slot.file_hash,
-        f"{prefix}_phash": slot.phash,
-        f"{prefix}_width": slot.width,
-        f"{prefix}_height": slot.height,
-    }
-
-
 def _preview_url(slot: ArtSlot, art_type: ArtType) -> str | None:
     """Return the smaller rendition of the slot's selected artwork, if any."""
     return slot.url and art_preview_url(slot.url, art_type)
@@ -189,8 +172,8 @@ def media_item_read_from_model(
         {
             # Item metadata stays internal: it serves collection criteria only.
             **item.model_dump(include=set(MediaItemRead.model_fields)),
-            **_art_slot_fields(poster, "poster"),
-            **_art_slot_fields(background, "background"),
+            **flattened_art(poster, "poster"),
+            **flattened_art(background, "background"),
             # Only a remote poster is shown in place of a file, at preview size.
             "poster_preview_url": _preview_url(poster, ArtType.POSTER),
             **asdict(art_completion(item, seasons)),
@@ -222,7 +205,7 @@ def season_read_from_model(season: Season, *, files: bool) -> SeasonRead:
         {
             **season.model_dump(),
             "poster_status": slot_status(poster, files=files),
-            **_art_slot_fields(poster, "poster"),
+            **flattened_art(poster, "poster"),
             "poster_preview_url": _preview_url(poster, ArtType.SEASON_POSTER),
         }
     )

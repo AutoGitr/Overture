@@ -26,7 +26,7 @@
   function isSelected(video: ThemeSearchResultItem): boolean {
     return (
       currentYoutubeId === video.id ||
-      Boolean(video.badges?.some((b) => b.label === "Currently Selected"))
+      Boolean(video.badges?.some((b) => b.label === "Currently selected"))
     );
   }
 
@@ -77,7 +77,7 @@
               <div class="theme-card-badges">
                 {#each video.badges as badge (badge.label)}
                   <span class="badge {getBadgeClass(badge.variant)}">
-                    {#if badge.label === "Currently Selected"}
+                    {#if badge.label === "Currently selected"}
                       <Check size={11} strokeWidth={2.5} />
                     {/if}
                     {badge.label}

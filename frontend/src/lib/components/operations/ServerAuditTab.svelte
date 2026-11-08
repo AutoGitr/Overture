@@ -258,7 +258,7 @@
         pendingLabel="Starting..."
       >
         <ShieldCheck size={15} />
-        Audit Server
+        Audit server
       </PendingButton>
     {/snippet}
     {#snippet runningNote()}

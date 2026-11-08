@@ -45,9 +45,10 @@ async def test_a_live_backup_restores_data_and_starts_at_schema_head(
             await session.commit()
 
         backup_dir = tmp_path / "backups"
-        backup_name = await BackupStore(source_path, backup_dir).create(
+        created = await BackupStore(source_path, backup_dir).create(
             retention=BackupRetention()
         )
+        backup_name = created.filename
 
         restored_path = tmp_path / "restored" / "overture.db"
         restored_path.parent.mkdir()

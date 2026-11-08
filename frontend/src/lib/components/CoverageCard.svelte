@@ -46,7 +46,7 @@
 
   <div class="metrics-row">
     <div class="metric-item">
-      <span class="metric-label">Local Files</span>
+      <span class="metric-label">Local files</span>
       <span class="metric-val">
         {coverage.local_files.toLocaleString()} / {coverage.total.toLocaleString()}
       </span>
@@ -58,12 +58,12 @@
       </span>
     </div>
     <div class="metric-item">
-      <span class="metric-label">Total Size</span>
+      <span class="metric-label">Total size</span>
       <span class="metric-val">{formatBytes(coverage.total_size_bytes)}</span>
     </div>
     {#if showAverage}
       <div class="metric-item">
-        <span class="metric-label">Average Size</span>
+        <span class="metric-label">Average size</span>
         <span class="metric-val">{formatBytes(coverage.avg_size_bytes)}</span>
       </div>
     {/if}

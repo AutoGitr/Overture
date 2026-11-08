@@ -103,7 +103,7 @@ export function mergeThemeResults({
       item.youtube_title?.trim() || (item.title ? `${item.title} Theme` : "Current theme");
     addOrUpdateBadge(
       currentId,
-      { label: "Currently Selected", variant: "success" },
+      { label: "Currently selected", variant: "success" },
       title,
       item.youtube_duration ?? null,
     );

@@ -681,7 +681,7 @@ describe("collection management", () => {
           .getAllByRole("button")
           .map((button) => button.title),
       ).toEqual([
-        "Open Database Record",
+        "Open database record",
         "Unmonitored - click to monitor",
         "Orphan collection: stop managing it, keeping it on the server",
         "Delete collection",

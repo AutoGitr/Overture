@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { flushSync, type Snippet } from "svelte";
-  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import type { Snippet } from "svelte";
   import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import Disclosure from "./Disclosure.svelte";
+
   let {
     title,
     description,
@@ -18,80 +19,73 @@
   } = $props();
   const view = getSectionView();
   // The store owns the choice, so neither a remount nor a new default undoes it.
-  let open = $derived(!collapsible || sectionState.isOpen(view, title, expanded));
-  const bodyId = $props.id();
-
-  function setOpen(value: boolean) {
-    sectionState.setOpen(view, title, value);
-  }
+  let open = $derived(sectionState.isOpen(view, title, expanded));
 </script>
 
 <section class="detail-section" aria-label={title}>
-  <header>
-    <h3 class="section-heading">
-      {#if collapsible}
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={bodyId}
-          onclick={() => setOpen(!open)}
-        >
-          {title}<ChevronDown size={18} class={open ? "expanded" : ""} />
-        </button>
-      {:else}{title}{/if}
-    </h3>
-    <p class="text-muted">{description}</p>
-  </header>
-  <div
-    id={bodyId}
-    class="section-body"
-    hidden={!open}
-    oninvalidcapture={() => {
-      // Native validation focuses the invalid control before Svelte's next flush.
-      if (!open) flushSync(() => setOpen(true));
-    }}
-  >
-    {@render children()}
-  </div>
+  {#if collapsible}
+    <Disclosure
+      heading
+      {title}
+      {description}
+      {open}
+      ontoggle={(value) => sectionState.setOpen(view, title, value)}
+      --disclosure-padding="var(--section-header-padding, var(--space-3) var(--space-4))"
+      --disclosure-body-padding="var(--section-padding, var(--space-4))"
+      --disclosure-hover="var(--bg-hover)"
+      --disclosure-radius="0"
+      --disclosure-title-size="var(--text-lg)"
+      --disclosure-gap="var(--space-3)"
+      --disclosure-divider="var(--section-header-border, var(--border-subtle))"
+    >
+      {@render children()}
+    </Disclosure>
+  {:else}
+    <header>
+      <h3 class="title">{title}</h3>
+      <p class="description">{description}</p>
+    </header>
+    <div class="section-body">
+      {@render children()}
+    </div>
+  {/if}
 </section>
 
 <style>
+  /* The accent rule along the top parts sections however they are framed; a
+     border, unlike an inset shadow, stays above the header's hover fill. */
   .detail-section {
     border: var(--section-border, var(--border-subtle));
-    border-bottom: var(--section-divider, var(--border-subtle));
+    border-top: 2px solid var(--section-accent, var(--accent));
     border-radius: var(--section-radius, var(--radius-lg));
     background: var(--section-background, var(--bg-secondary));
     overflow: hidden;
   }
+
   header {
-    padding: var(--section-header-padding, var(--space-4));
     border-bottom: var(--section-header-border, var(--border-subtle));
-  }
-  h3 {
-    margin-bottom: var(--space-2);
-  }
-  h3 button {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    width: 100%;
-    padding: 0;
-    border: 0;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--section-header-padding, var(--space-3) var(--space-4));
   }
-  h3 button :global(.expanded) {
-    transform: rotate(180deg);
-  }
-  p {
+
+  .title {
     margin: 0;
-    font-size: var(--text-sm);
+    font-size: var(--text-lg);
+    font-weight: 600;
   }
+
+  .description {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
   .section-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
     padding: var(--section-padding, var(--space-4));
   }
 </style>

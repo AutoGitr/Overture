@@ -320,7 +320,7 @@
       type="button"
       class="tab-item"
       onclick={() => uiState.openPopupByName("database")}
-      title="Open Database Record"
+      title="Open database record"
     >
       <Database size={16} />
     </button>

@@ -33,7 +33,7 @@
       type="button"
       class="item-badge"
       aria-label={`Open themes for ${title}`}
-      title="Theme Music"
+      title="Theme music"
       data-status={themeStatus ?? "danger"}
       onclick={onthemes}><Music size={18} /></button
     >

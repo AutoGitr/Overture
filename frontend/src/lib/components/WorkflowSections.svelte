@@ -8,8 +8,6 @@
 <style>
   .workflow-sections {
     --section-border: 0;
-    /* Each heading's accent rule already parts the sections. */
-    --section-divider: 0;
     --section-radius: 0;
     --section-background: transparent;
     --section-header-padding: var(--space-4) 0;

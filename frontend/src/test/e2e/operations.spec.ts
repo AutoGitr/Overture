@@ -78,7 +78,7 @@ test("assets keeps every part of its results in place while downloads come and g
   emitRun("completed", 3, "Casablanca");
   await expect(downloads).toHaveCount(0);
   await expect(art.getByTitle("Downloads waiting or still running")).toHaveText(/^queued\s*0$/);
-  await expect(dialog.getByRole("button", { name: "Clear Results" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Clear results" })).toBeVisible();
   // Finished downloads give their rows back; the popup stays centred.
   const finalBox = await dialog.locator(".popup-content").boundingBox();
   expect(finalBox!.height).toBeLessThan(dialogBox!.height + 3 * 24);
@@ -103,7 +103,7 @@ test("the operations popup stays centred, as tall as each tab needs", async ({
     return [box.x, box.width];
   };
   const columns = await placement();
-  for (const tab of ["Sync", "Renamer", "Server Audit", "Assets"]) {
+  for (const tab of ["Sync", "Renamer", "Server audit", "Assets"]) {
     await dialog.getByRole("tab", { name: tab }).click();
     expect(await placement()).toEqual(columns);
     expect(await body.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
@@ -177,7 +177,7 @@ test("restart restores stopped results and active download blocks sync", async (
   });
   await dialog.getByRole("tab", { name: /Sync/ }).click();
   await expect(dialog.getByText("Wait for downloads to finish.")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Run Now", exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Run now", exact: true })).toBeDisabled();
 });
 
 test("assets runs only the current sidebar search results", async ({ page }) => {
@@ -223,8 +223,8 @@ test("assets runs only the current sidebar search results", async ({ page }) => 
     .getByRole("region", { name: "Art", exact: true })
     .getByRole("checkbox", { name: "Enabled" })
     .uncheck();
-  await expect(dialog.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Run Now" }).click();
+  await expect(dialog.getByRole("button", { name: "Save schedule" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Run now" }).click();
   await expect.poll(() => requestBody).toMatchObject({ library_ids: [], item_ids: [1], art: null });
 });
 
@@ -258,13 +258,13 @@ test("a refused assets run never flashes the operations popup", async ({ page })
     };
     requestAnimationFrame(sample);
   });
-  await dialog.getByRole("button", { name: "Run Now" }).click();
+  await dialog.getByRole("button", { name: "Run now" }).click();
   await expect(page.getByRole("alert")).toContainText("Wait for full sync to finish");
   const frames = await page.evaluate(() => (window as unknown as { frames_: string[] }).frames_);
 
   expect(frames.length).toBeGreaterThan(0);
   expect(new Set(frames).size).toBe(1);
-  await expect(dialog.getByRole("button", { name: "Run Now" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Run now" })).toBeEnabled();
 });
 
 test("assets waits for a running full sync and says why", async ({ page, realtime }) => {
@@ -276,7 +276,7 @@ test("assets waits for a running full sync and says why", async ({ page, realtim
     data: { job: { kind: "sync", status: "running" }, total: 10 },
   });
   const dialog = await openSidebarAssets(page);
-  await expect(dialog.getByRole("button", { name: "Run Now" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Run now" })).toBeDisabled();
   await expect(dialog.getByText("Wait for the full sync to finish.")).toBeVisible();
 
   realtime.emit({
@@ -285,7 +285,7 @@ test("assets waits for a running full sync and says why", async ({ page, realtim
     event: "sync.completed",
     data: { job: { kind: "sync", status: "completed" }, total: 10, done: 10 },
   });
-  await expect(dialog.getByRole("button", { name: "Run Now" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Run now" })).toBeEnabled();
   await expect(dialog.getByText("Wait for the full sync to finish.")).toHaveCount(0);
 });
 
@@ -320,8 +320,8 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
     .getByRole("region", { name: "Art", exact: true })
     .getByRole("checkbox", { name: "Enabled" })
     .uncheck();
-  await expect(dialog.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Run Now" }).click();
+  await expect(dialog.getByRole("button", { name: "Save schedule" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Run now" }).click();
   await expect
     .poll(() => requestBody)
     .toMatchObject({ library_ids: [], collection_ids: [12], art: null });

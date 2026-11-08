@@ -175,6 +175,10 @@
 </div>
 
 <style>
+  .picker {
+    flex: 1;
+  }
+
   .picker,
   ul {
     display: flex;

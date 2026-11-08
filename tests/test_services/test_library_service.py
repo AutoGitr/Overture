@@ -14,6 +14,10 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import select_art
+lazy from overture.db.models.media_collection import (
+    MediaCollection,
+    MediaCollectionMember,
+)
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import (
     PublicDatasetItem,
@@ -22,7 +26,13 @@ lazy from overture.db.models.public_dataset import (
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, AspectRatioTolerance, ImageSize, MediaType
+lazy from overture.domain import (
+    ArtType,
+    AspectRatioTolerance,
+    ImageSize,
+    MediaType,
+    ServerType,
+)
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
@@ -1178,10 +1188,13 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
         await session.flush()
         select_art(season, ArtType.SEASON_POSTER, PublicArtUrl("https://x/s1.jpg"))
         select_art(show, ArtType.POSTER, PublicArtUrl("https://x/p.jpg"))
+        session.add(MediaCollection(id=5, server_type=ServerType.PLEX, title="Saga"))
+        await session.flush()
+        session.add(MediaCollectionMember(collection_id=5, media_item_id=1))
 
     record = await _service(database, ArtServer()).item_record(1)
 
-    # Each row is followed by the rows referring to it.
+    # Each row is followed by the rows referring to it; link rows add nothing.
     assert [row.table for row in record.stored] == [
         "media_items",
         "seasons",
@@ -1189,5 +1202,7 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
         "art_slots",
     ]
     assert record.stored[0].values["title"] == "Show"
-    assert "poster_url" in record.derived
+    # The artwork row already shows what the flat poster fields copy.
+    assert "poster_url" not in record.derived
+    assert "poster_preview_url" in record.derived
     assert not record.derived.keys() & record.stored[0].values.keys()

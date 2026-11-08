@@ -16,7 +16,10 @@ class RecordRepository:
         self.session = session
 
     async def rows(self, model: type[SQLModel], key: int) -> list[StoredRow]:
-        """The row of *model* with primary key *key*, then the rows referring to it."""
+        """The row of *model* with primary key *key*, then the rows referring to it.
+
+        Rows of link tables, which only pair two records, are left out.
+        """
         table_models()
         table = table_of(model)
         (primary,) = table.primary_key.columns
@@ -38,6 +41,10 @@ class RecordRepository:
                 continue
             key = row[primary[0].name]
             for child in SQLModel.metadata.sorted_tables:
+                # A link table only pairs two records; each record's own view
+                # shows the pairing, so its rows add nothing here.
+                if len(child.primary_key.columns) > 1:
+                    continue
                 for foreign in child.foreign_keys:
                     if foreign.column is primary[0]:
                         found.extend(await self._rows(child, foreign.parent == key))

@@ -203,7 +203,7 @@
         <span class="form-label">Themes</span>
         <div class="options-col">
           <div class="form-row">
-            <label for="theme-search-format">Theme Search Query</label>
+            <label for="theme-search-format">Theme search query</label>
             <input
               id="theme-search-format"
               type="text"
@@ -218,7 +218,7 @@
           </span>
           <div class="duration-range">
             <div class="duration-field">
-              <label for="min-theme-duration">Min Theme Duration (seconds)</label>
+              <label for="min-theme-duration">Shortest theme (seconds)</label>
               <input
                 id="min-theme-duration"
                 type="number"
@@ -228,7 +228,7 @@
               />
             </div>
             <div class="duration-field">
-              <label for="max-theme-duration">Max Theme Duration (seconds)</label>
+              <label for="max-theme-duration">Longest theme (seconds)</label>
               <input
                 id="max-theme-duration"
                 type="number"
@@ -273,10 +273,10 @@
             />
           </label>
           <div class="form-row justify-between">
-            <label for="accent-color">Accent Color</label>
+            <label for="accent-color">Accent color</label>
             <ColorInput
               id="accent-color"
-              label="Accent Color"
+              label="Accent color"
               bind:value={appearance.accentColor}
               disabled={!canEdit || showSaving.current}
             />

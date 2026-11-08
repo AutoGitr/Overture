@@ -797,7 +797,11 @@ function issuesPredicate<T>(
     : (row) => checks.every((applies) => applies(row));
 }
 
-/** Every filter section, placed by ``order``, which follows ``FILTER_GROUPS``. */
+/**
+ * Every filter section, placed by ``order``, which follows ``FILTER_GROUPS``.
+ * Within a group the most used come first, and filters offering the same
+ * choices sit together.
+ */
 export const FILTERS = {
   libraries: {
     label: "Libraries",
@@ -823,7 +827,7 @@ export const FILTERS = {
   collectionHolds: {
     label: "Holds",
     group: "status",
-    order: 85,
+    order: 130,
     collections: (filters) => {
       const { collectionHolds: holds } = filters;
       if (holds === "all") return null;
@@ -850,7 +854,7 @@ export const FILTERS = {
   aspectRatio: {
     label: "Aspect ratio",
     group: "status",
-    order: 40,
+    order: 70,
     library: (filters) =>
       triState(filters.aspectRatio, "incorrect", (item) => item.has_incorrect_aspect_ratio),
     collections: (filters) =>
@@ -873,7 +877,7 @@ export const FILTERS = {
   theme: {
     label: "Theme complete",
     group: "status",
-    order: 50,
+    order: 40,
     library: (filters) =>
       triState(filters.theme, "complete", (item) => item.theme_status === "complete"),
     collections: (filters) =>
@@ -905,7 +909,7 @@ export const FILTERS = {
   overtureDb: {
     label: "OvertureDB",
     group: "status",
-    order: 60,
+    order: 50,
     needsDataset: true,
     library: (filters, datasetEnabled) =>
       datasetEnabled
@@ -919,7 +923,7 @@ export const FILTERS = {
   themerrDb: {
     label: "ThemerrDB",
     group: "status",
-    order: 70,
+    order: 60,
     needsDataset: true,
     library: (filters, datasetEnabled) =>
       datasetEnabled
@@ -942,13 +946,13 @@ export const FILTERS = {
   collectionMembers: {
     label: "Management",
     group: "status",
-    order: 80,
+    order: 110,
     collections: (filters) => triState(filters.collectionMembers, "managed", (row) => row.managed),
   },
   collectionKind: {
     label: "Kind",
     group: "status",
-    order: 90,
+    order: 120,
     needsSmart: true,
     collections: (filters) =>
       triState(filters.collectionKind, "smart", (row) => row.kind === "smart"),
@@ -956,7 +960,7 @@ export const FILTERS = {
   collectionSync: {
     label: "Last sync",
     group: "status",
-    order: 100,
+    order: 90,
     // Only collections with criteria sync.
     collections: (filters) =>
       filters.collectionSync === "all"
@@ -967,7 +971,7 @@ export const FILTERS = {
   collectionSize: {
     label: "Size",
     group: "status",
-    order: 110,
+    order: 100,
     collections: (filters) =>
       filters.collectionSize === "empty"
         ? (row) => row.child_count === 0
@@ -978,7 +982,7 @@ export const FILTERS = {
   mediaServer: {
     label: "Media server",
     group: "status",
-    order: 120,
+    order: 80,
     // Items the server removed are not listed, so only unlinked ones are missing.
     library: (filters) => triState(filters.mediaServer, "missing", (item) => !item.server_item_id),
     collections: (filters) => triState(filters.mediaServer, "missing", (row) => row.withheld),

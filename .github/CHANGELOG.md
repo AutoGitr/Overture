@@ -36,6 +36,14 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Backups:** **Back up now** says which older backups the retention removed, saving **Backups to keep** applies it to the existing backups at once, the backup list shows where backups are saved and dates each backup by the time in its name, the same time retention uses.
+- **Interface:** the sidebar's Movies, Shows and Collections tabs always show their icon, name and count, at any width.
+- **Interface:** the filters popup lines every filter's name up in one column with its choices filling the rest of the row, puts filters offering the same choices together, the most used first, and on a phone moves a filter's choices under its name rather than cutting them short.
+- **Interface:** every collapsible section, filter section, database record row and saved schedule opens and closes from anywhere across its header; a saved schedule's summary line replaces its eye button.
+- **Interface:** collection settings fill as many columns as the page has room for, a collection condition on a phone gives its field a row of its own, and labels and buttons use sentence case throughout.
+- **Interface:** the database record leaves out link rows, such as which collections hold an item, and the artwork fields that only repeat the art slot rows shown above them.
+- **API:** `POST /api/backups` also returns `removed`, the backups the retention removed; `GET /api/backups` also returns `directory`; collection responses carry `poster_phash` and `background_phash` like item responses.
+- **Packaging:** Overture installs only the parts of uvicorn's `standard` extra it uses, so PyYAML and watchfiles are no longer installed.
 - **Collections:** the sidebar's Groups, Collections and Items mode switches are gone; the collections icon beside Movies and Shows replaces them and the separate Collections tab.
 - **Collections:** the libraries of a new collection list movie libraries, then show libraries, and a collection's members are listed by library, reordered only within one.
 - **Collections:** deleting a collection leaves the sidebar where it was, such as inside its group.
@@ -45,7 +53,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **API:** collection and group endpoints no longer take `media_type`. A rule holds `libraries`, each with its `library_id` and `criteria`; a collection reports `media_types` and `library_ids`; and `/collections/preview` answers per library.
 - **Collections:** only Setup and Content open by default on a collection's page and no section does in a group, and neither remembers what was open.
 - **Collections:** sort options that say nothing about a collection are gone: art size and shape, theme length, Group inside a group, and Home order outside Plex.
-- **Operations:** Clear Results sits on the right of the footer.
+- **Operations:** **Clear results** sits on the right of the footer.
 - **Filters:** Collection operations no longer offer Sync; sync a collection from its page or a group from **Collection groups**.
 
 - **Collections:** a new collection starts from **Create**, then, for a set, **Split by**, which names the group and its title template and fills in the names and order that suit its values, adding no minimum or **Most common only** of its own; **Start from** and **Save as preset** are gone, and the migration drops saved presets.
@@ -77,6 +85,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Interface:** the reset button beside active filters no longer covers the outline around them, and a section header no longer covers its accent rule while hovered.
 - **Collections:** **Delete group** in Collection groups asks what happens to the group's collections instead of doing nothing.
 - **Artwork:** an uploaded poster, background or season poster can be cleared like a linked one.
 - **Artwork:** a season's local poster shows even when its show has no media folder.

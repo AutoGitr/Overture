@@ -35,7 +35,12 @@ dependencies = [
     "sqlalchemy[asyncio]==2.1.8",
     "sqlmodel==0.0.48",
     "tzdata==2026.6",
-    "uvicorn[standard]==0.54.0",
+    # uvicorn's "standard" extra without PyYAML and watchfiles, which only
+    # YAML log configs and --reload use.
+    "httptools==0.9.0",
+    "uvicorn==0.54.0",
+    "uvloop==0.23.0; sys_platform != 'win32' and sys_platform != 'cygwin' and platform_python_implementation != 'PyPy'",
+    "websockets==17.3",
     "yt-dlp[default]==2026.10.26",
 ]
 
@@ -45,6 +50,8 @@ dev = [
     "pytest==9.2.0",
     "pytest-asyncio==1.4.1",
     "pytest-cov==7.1.0",
+    # The release tests read the GitHub workflow files.
+    "pyyaml==6.0.3",
     "ruff==0.17.3",
     "types-jsonschema==4.26.0.20261006",
 ]
@@ -55,7 +62,8 @@ script_location = "%(here)s/src/overture/migrations"
 [tool.uv]
 required-version = "0.13.7"
 
-# PyYAML publishes no CPython 3.15 wheels yet; its pure-Python build needs no compiler.
+# PyYAML, which only the tests use, publishes no CPython 3.15 wheels yet; its
+# pure-Python build needs no compiler.
 [tool.uv.extra-build-variables]
 pyyaml = { PYYAML_FORCE_LIBYAML = "0" }
 

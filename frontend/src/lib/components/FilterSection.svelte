@@ -1,78 +1,43 @@
 <script lang="ts">
-  import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import type { Snippet } from "svelte";
   import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import Disclosure from "./Disclosure.svelte";
 
   let {
     label,
-    control,
+    description,
     children,
   }: {
     label: string;
-    /** A control beside the heading, such as which artwork the section tests. */
-    control?: Snippet;
+    /** What the section applies to, under its heading. */
+    description?: string;
     children: Snippet;
   } = $props();
 
   const view = getSectionView();
-  const bodyId = $props.id();
   let open = $derived(sectionState.isOpen(view, label, true));
 </script>
 
-<section class="option-card filter-section" aria-label={label}>
-  <div class="heading-row">
-    <h3 class="form-label">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onclick={() => sectionState.setOpen(view, label, !open)}
-      >
-        <ChevronDown size={14} class={open ? "" : "collapsed"} />{label}
-      </button>
-    </h3>
-    {#if open}{@render control?.()}{/if}
-  </div>
-  <div id={bodyId} class="body" hidden={!open}>
+<section class="filter-section" aria-label={label}>
+  <Disclosure
+    heading
+    title={label}
+    {open}
+    ontoggle={(value) => sectionState.setOpen(view, label, value)}
+    {description}
+    --disclosure-padding="var(--space-3) var(--popup-pad)"
+    --disclosure-body-padding="0 var(--popup-pad) var(--space-3)"
+    --disclosure-hover="var(--bg-hover)"
+    --disclosure-radius="0"
+  >
     {@render children()}
-  </div>
+  </Disclosure>
 </section>
 
 <style>
+  /* The toggle spans the column edge to edge, so the section gives up its padding. */
   .filter-section {
+    --card-padding: 0;
     --segmented-margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  h3 {
-    margin: 0;
-  }
-
-  button {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 0;
-    border: 0;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    cursor: pointer;
-  }
-
-  button :global(.collapsed) {
-    transform: rotate(-90deg);
-  }
-
-  .body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .body[hidden] {
-    display: none;
   }
 </style>

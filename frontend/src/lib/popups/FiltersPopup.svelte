@@ -149,6 +149,22 @@
       .filter(([, keys]) => keys.length > 0);
   });
 
+  /** Splits *keys* into runs of neighbours offering the same choices. */
+  function choiceRuns(keys: readonly sidebarDomain.FilterKey[]): sidebarDomain.FilterKey[][] {
+    const runs: sidebarDomain.FilterKey[][] = [];
+    for (const key of keys) {
+      const run = runs.at(-1);
+      const previous = run?.at(-1);
+      if (run && previous && choicesOf(previous) === choicesOf(key)) run.push(key);
+      else runs.push([key]);
+    }
+    return runs;
+  }
+
+  function choicesOf(key: sidebarDomain.FilterKey) {
+    return key in CHOICES ? CHOICES[key as keyof typeof CHOICES].options : key;
+  }
+
   let filters = $derived<FilterState>({
     ...draft,
     libraryIds: librariesQuery.isSuccess
@@ -317,12 +333,17 @@
 {/snippet}
 
 <PopupShell title="Filters & operations" onclose={() => uiState.closePopup()}>
-  <!-- Every choice keeps its name beside it, at one width with equal options. -->
+  <!-- Names share one column and every control fills the rest of the row,
+       with its options at equal widths; where that leaves a control too
+       narrow for its options, it moves under its name. -->
   <CardColumn
-    --field-segmented-width="min(20rem, 58vw)"
+    --field-label-flex="0 0 clamp(7rem, 30%, 11rem)"
+    --field-control-flex="1 1 0"
+    --field-control-min="min(100%, 17rem)"
+    --field-segmented-width="100%"
+    --field-input-flex="1 1 auto"
     --segment-flex="1 1 0"
     --segmented-wrap="nowrap"
-    --field-wrap="nowrap"
   >
     {#if uiState.sidebarSource === "overturedb"}
       <FilterSection label={sidebarDomain.FILTER_GROUPS.status}>
@@ -344,8 +365,12 @@
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
         {#if title}
           <FilterSection label={title}>
-            {#each keys as key (key)}
-              {@render filter(key)}
+            {#each choiceRuns(keys) as run (run[0])}
+              <div class="choice-run">
+                {#each run as key (key)}
+                  {@render filter(key)}
+                {/each}
+              </div>
             {/each}
           </FilterSection>
         {:else}
@@ -359,14 +384,12 @@
                 <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
               </FilterSection>
             {:else if libraries.length > 1}
-              <FilterSection label={sidebarDomain.FILTERS.libraries.label}>
-                {#snippet control()}
-                  <span class="hint"
-                    >{filters.libraryIds.length === 0
-                      ? "All libraries"
-                      : `${filters.libraryIds.length} of ${libraries.length} selected`}</span
-                  >
-                {/snippet}
+              <FilterSection
+                label={sidebarDomain.FILTERS.libraries.label}
+                description={filters.libraryIds.length === 0
+                  ? "All libraries"
+                  : `${filters.libraryIds.length} of ${libraries.length} selected`}
+              >
                 <CheckboxList
                   options={libraries.map((library) => ({
                     value: library.id,
@@ -405,3 +428,17 @@
     >
   {/snippet}
 </PopupShell>
+
+<style>
+  .choice-run {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* Filters offering the same choices read as one block. */
+  .choice-run + .choice-run {
+    padding-top: var(--space-2);
+    border-top: var(--border-subtle);
+  }
+</style>

@@ -179,7 +179,7 @@ describe("summary formatters", () => {
       "Movies, missing",
     );
     expect(sourceSummary(["overturedb"], { overturedb: "OvertureDB" })).toBe("OvertureDB");
-    expect(artTypeSummary(["poster", "season_poster"])).toBe("Poster, Season Poster");
+    expect(artTypeSummary(["poster", "season_poster"])).toBe("Poster, Season poster");
     expect(workflowSummary({ art: {}, themes: null } as never)).toBe("Art");
     expect(workflowSummary({ art: {}, themes: {} } as never)).toBe("Art + Themes");
   });

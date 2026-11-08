@@ -32,6 +32,7 @@ const schedule = {
   updated_at: null,
 };
 const backups = {
+  directory: "/config/backups",
   backups: [
     { filename: "overture-backup.zip", size_bytes: 2048, created_at: "2026-09-04T10:00:00Z" },
   ],
@@ -44,13 +45,13 @@ describe("BackupPopup", () => {
     getBackupSchedule.mockResolvedValue({ data: schedule });
     listBackups.mockResolvedValue({ data: backups });
     updateBackupSchedule.mockResolvedValue({ data: schedule });
-    createBackup.mockResolvedValue({ data: { status: "ok", filename: "overture-backup.zip" } });
+    createBackup.mockResolvedValue({ data: { filename: "overture-backup.zip", removed: [] } });
   });
 
   it("keeps the schedule locked until a failed read is successfully retried", async () => {
     getBackupSchedule.mockRejectedValue(new ApiError("Schedule unavailable", 403));
     renderWithQueryClient(BackupPopup);
-    expect(screen.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save schedule" })).toBeDisabled();
     expect(await screen.findByRole("alert")).toHaveTextContent("Schedule unavailable");
     expect(screen.getByLabelText("Cron expression")).toBeDisabled();
     getBackupSchedule.mockResolvedValue({ data: schedule });
@@ -59,7 +60,7 @@ describe("BackupPopup", () => {
     await fireEvent.input(screen.getByLabelText("Cron expression"), {
       target: { value: "0 6 * * *" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save schedule" }));
     await waitFor(() =>
       expect(updateBackupSchedule).toHaveBeenCalledWith({
         body: {
@@ -80,7 +81,7 @@ describe("BackupPopup", () => {
     await fireEvent.input(screen.getByRole("spinbutton", { name: "Weekly" }), {
       target: { value: "0" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save schedule" }));
     await waitFor(() =>
       expect(updateBackupSchedule).toHaveBeenCalledWith({
         body: {
@@ -98,7 +99,7 @@ describe("BackupPopup", () => {
     renderWithQueryClient(BackupPopup);
     expect(await screen.findByRole("alert")).toHaveTextContent("Backups unavailable");
     expect(screen.queryByText("No backups yet.")).not.toBeInTheDocument();
-    listBackups.mockResolvedValue({ data: { backups: [] } });
+    listBackups.mockResolvedValue({ data: { directory: "/config/backups", backups: [] } });
     await fireEvent.click(screen.getByRole("button", { name: "Retry backups" }));
     expect(await screen.findByText("No backups yet.")).toBeInTheDocument();
   });
@@ -123,10 +124,40 @@ describe("BackupPopup", () => {
   it("reports a backup failure safely and permits an explicit retry", async () => {
     createBackup.mockRejectedValueOnce(new ApiError("Backups are unavailable", 503));
     renderWithQueryClient(BackupPopup);
-    await fireEvent.click(screen.getByRole("button", { name: "Backup Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Back up now" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Backups are unavailable");
-    await fireEvent.click(screen.getByRole("button", { name: "Backup Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Back up now" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Saved overture-backup.zip.");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("BackupPopup retention feedback", () => {
+  beforeEach(() => {
+    queryClient.clear();
+    backupState.reset();
+    getBackupSchedule.mockResolvedValue({ data: schedule });
+    listBackups.mockResolvedValue({ data: backups });
+  });
+
+  it("says which backups the retention removed and where backups are saved", async () => {
+    createBackup.mockResolvedValue({
+      data: { filename: "overture_new.db", removed: ["overture_old.db"] },
+    });
+    renderWithQueryClient(BackupPopup);
+    expect(await screen.findByText("/config/backups")).toBeVisible();
+    await fireEvent.click(screen.getByRole("button", { name: "Back up now" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Saved overture_new.db. Retention removed overture_old.db.",
+    );
+  });
+
+  it("refreshes the backup list after saving, because saving applies the retention", async () => {
+    updateBackupSchedule.mockResolvedValue({ data: schedule });
+    renderWithQueryClient(BackupPopup);
+    await screen.findByText("overture-backup.zip");
+    listBackups.mockClear();
+    await fireEvent.click(screen.getByRole("button", { name: "Save schedule" }));
+    await waitFor(() => expect(listBackups).toHaveBeenCalled());
   });
 });

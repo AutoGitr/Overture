@@ -6,7 +6,8 @@
 
 <!-- A popup's sections, one under another across the popup's full width,
      parted by hairlines. A section that sets `--section-accent` is marked
-     with that colour along its left edge. -->
+     with that colour along its left edge, and one that spans the column edge
+     to edge, such as a full-width toggle, sets `--card-padding: 0`. -->
 <div class="card-column">
   {@render children()}
 </div>
@@ -30,7 +31,7 @@
   .card-column > :global(*) {
     min-width: 0;
     margin: 0;
-    padding: var(--space-3) var(--popup-pad);
+    padding: var(--card-padding, var(--space-3) var(--popup-pad));
     background: none;
     border: 0;
     border-radius: 0;

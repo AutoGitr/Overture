@@ -265,7 +265,7 @@ test("items and collections share record actions and fit a narrow viewport", asy
     await expect(actions.getByRole("button")).toHaveCount(count);
     await expect(actions.getByRole("button").nth(0)).toHaveAttribute(
       "title",
-      "Open Database Record",
+      "Open database record",
     );
     await expect(actions.getByRole("button").nth(1)).toHaveAttribute(
       "title",

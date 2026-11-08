@@ -39,22 +39,20 @@
   .unavailable {
     opacity: 0.55;
   }
-  /* Settings sit in a two-column grid; everything else, such as editors, lists
-     and actions, spans both columns. */
+  /* Settings fill as many columns of a readable width as the form has room
+     for; everything else, such as headings, editors, lists and actions,
+     spans the whole row. */
   .fields {
     --field-direction: column;
     --field-align: stretch;
     --field-input-flex: 1 1 0;
     --field-segmented-width: 100%;
+    --field-control-justify: flex-start;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
     align-items: start;
-    gap: var(--space-4) var(--space-6);
+    gap: var(--space-3) var(--space-5);
     padding: var(--form-padding, var(--space-4));
-
-    @media (max-width: 640px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
   .fields > :global(:not(.field)) {
     grid-column: 1 / -1;

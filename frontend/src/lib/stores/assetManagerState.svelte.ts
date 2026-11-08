@@ -4,12 +4,12 @@ import type { AssetIssue, AssetScanProgressEvent } from "../../generated/ws";
 import { ASSET_LABELS } from "../utils/artTypes";
 import { CollectingJobState, type Selectable } from "./collectingJobState.svelte";
 
-export const FALSE_POSITIVE_LABEL = "Possible False Positive";
+export const FALSE_POSITIVE_LABEL = "Possible false positive";
 
 /** Where an issue stands, the most pressing first. */
 const ISSUE_STATUSES = {
   renamed: "Renamed",
-  failed: "Rename Failed",
+  failed: "Rename failed",
   conflict: "Conflict",
   false_positive: FALSE_POSITIVE_LABEL,
   ready: "Ready",

@@ -227,7 +227,7 @@ describe("SettingsPopup", () => {
     updateSettings.mockResolvedValue({ data: { workflow: "art" } });
     renderWithQueryClient(SettingsPopup);
 
-    const accentInput = screen.getByLabelText("Accent Color hex value");
+    const accentInput = screen.getByLabelText("Accent color hex value");
     await fireEvent.focus(accentInput);
     await fireEvent.input(accentInput, { target: { value: "ff0055" } });
     await fireEvent.blur(accentInput);
@@ -266,6 +266,6 @@ describe("SettingsPopup", () => {
       min_duration_seconds: 45,
     });
     await waitFor(() => expect(screen.getByLabelText("Workflow")).toHaveValue("themes"));
-    expect(screen.getByLabelText("Min Theme Duration (seconds)")).toHaveValue(30);
+    expect(screen.getByLabelText("Shortest theme (seconds)")).toHaveValue(30);
   });
 });

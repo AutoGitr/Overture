@@ -66,7 +66,7 @@ export const OPERATIONS: Readonly<Record<OperationsTab, Operation>> = {
     },
   },
   audit: {
-    label: "Server Audit",
+    label: "Server audit",
     icon: ShieldCheck,
     about:
       "Checks that your media server shows the same art and themes as your local files, " +

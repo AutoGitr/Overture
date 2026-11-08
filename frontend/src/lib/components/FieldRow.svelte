@@ -50,8 +50,11 @@
     gap: var(--space-2) var(--space-3);
   }
 
+  /* A parent lines rows up in columns with --field-label-flex: 0 0 <width>
+     and lets controls fill the rest with --field-control-flex: 1 1 0; with
+     --field-control-min a control too narrow beside its name moves under it. */
   .row-label {
-    flex: 1 1 auto;
+    flex: var(--field-label-flex, 1 1 auto);
     min-width: 0;
     font-size: var(--text-sm);
     font-weight: 500;
@@ -59,13 +62,13 @@
   }
 
   .control {
-    flex: 0 1 auto;
+    flex: var(--field-control-flex, 0 1 auto);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: var(--field-control-justify, flex-end);
     gap: var(--space-2);
-    min-width: 0;
+    min-width: var(--field-control-min, 0);
     max-width: 100%;
   }
 

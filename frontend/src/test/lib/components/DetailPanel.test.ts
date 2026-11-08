@@ -121,7 +121,7 @@ describe("DetailPanel", () => {
       "href",
       "https://www.imdb.com/title/tt0133093/",
     );
-    expect(screen.queryByTitle("Open Database Record")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Open database record")).not.toBeInTheDocument();
     expect(screen.queryByTitle("Delete item from database")).not.toBeInTheDocument();
     // An unsaved title has missing selections, while TMDB artwork remains a preview.
     expect(screen.getByRole("tab", { name: "Art" }).querySelector("[data-status]")).toHaveAttribute(
@@ -159,7 +159,7 @@ describe("DetailPanel", () => {
   it("offers the record controls once the item is stored", () => {
     renderWithQueryClient(DetailPanel, { item: mediaItem({ id: 7, title: "The Matrix" }) });
 
-    expect(screen.getByTitle("Open Database Record")).toBeInTheDocument();
+    expect(screen.getByTitle("Open database record")).toBeInTheDocument();
     expect(screen.getByTitle("Delete item from database")).toBeInTheDocument();
     const controls = screen.getByRole("group", { name: "Record actions" });
     expect(within(controls).getAllByRole("button")).toHaveLength(3);

@@ -91,7 +91,7 @@ async def test_concurrent_writes_reads_and_live_backups_remain_consistent(
             *(write(worker) for worker in range(workers)),
             backup(),
         )
-        final_backup = await backup_store.create(retention=BackupRetention())
+        final_backup = (await backup_store.create(retention=BackupRetention())).filename
     finally:
         stop_reading.set()
         await reader

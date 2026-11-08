@@ -3,7 +3,6 @@
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import { createMutation } from "@tanstack/svelte-query";
   import { createBackupMutation } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { invalidateTags } from "../rest/cache";
   import { backupState } from "../stores/jobStates.svelte";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { uiState } from "../stores/uiState.svelte";
@@ -24,9 +23,12 @@
     if (backingUp) return;
     feedback.clear();
     try {
-      const { filename } = await backupNowRequest.mutateAsync({});
-      feedback.success(`Saved ${filename}.`, { title: "Backup complete" });
-      await invalidateTags(["backups"]);
+      const { filename, removed } = await backupNowRequest.mutateAsync({});
+      const pruned =
+        removed.length > 0
+          ? ` Retention removed ${removed.length === 1 ? removed[0] : `${removed.length} older backups`}.`
+          : "";
+      feedback.success(`Saved ${filename}.${pruned}`, { title: "Backup complete" });
     } catch (e) {
       feedback.error(errorMessage(e, "Backup failed"));
     }
@@ -35,9 +37,9 @@
 
 <PopupShell title="Backup" onclose={() => uiState.closePopup()}>
   <CardColumn>
-    <BackupSection icon={DatabaseBackup} title="Manual Backup">
+    <BackupSection icon={DatabaseBackup} title="Manual backup">
       <p class="hint">
-        Backups are saved to <code>/config/backups/</code>.
+        Every backup applies the retention below, so older backups it no longer keeps are removed.
       </p>
       <div class="actions-row backup-now-row">
         <button
@@ -51,7 +53,7 @@
             Backing up...
           {:else}
             <DatabaseBackup size={15} />
-            Backup Now
+            Back up now
           {/if}
         </button>
       </div>

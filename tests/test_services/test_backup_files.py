@@ -66,7 +66,8 @@ async def test_create_backup_copies_database_and_applies_retention(
     for name in ("overture_20000101_000001.db", "overture_20000101_000002.db"):
         (store.directory / name).write_bytes(b"old")
 
-    filename = await store.create(retention=_LATEST_TWO)
+    created = await store.create(retention=_LATEST_TWO)
+    filename = created.filename
     backups = sorted(path.name for path in store.directory.iterdir())
 
     assert filename.startswith("overture_")
@@ -74,6 +75,7 @@ async def test_create_backup_copies_database_and_applies_retention(
     assert len(backups) == 2
     assert filename in backups
     assert "overture_20000101_000001.db" not in backups
+    assert created.removed == ["overture_20000101_000001.db"]
 
     copied = sqlite3.connect(store.directory / filename)
     try:
@@ -98,7 +100,7 @@ async def test_backup_without_retention_keeps_existing_backups(tmp_path: Path) -
     for name in old:
         (store.directory / name).write_bytes(b"old")
 
-    filename = await store.create(retention=None)
+    filename = (await store.create(retention=None)).filename
 
     assert sorted(path.name for path in store.directory.iterdir()) == sorted(
         [*old, filename]
@@ -126,8 +128,8 @@ async def test_create_backup_filenames_do_not_collide(
 
     monkeypatch.setattr("overture.services.backup.files.datetime", FrozenDateTime)
 
-    first = await store.create(retention=_LATEST_TWO)
-    second = await store.create(retention=_LATEST_TWO)
+    first = (await store.create(retention=_LATEST_TWO)).filename
+    second = (await store.create(retention=_LATEST_TWO)).filename
 
     assert first == "overture_20260102_030405_000006.db"
     assert second == "overture_20260102_030405_000006_1.db"
@@ -151,8 +153,8 @@ async def test_create_backup_honors_configured_timezone(
 
     monkeypatch.setattr("overture.services.backup.files.datetime", FrozenDateTime)
 
-    filename = await store.create(retention=_LATEST_TWO)
-    assert filename == "overture_20260919_030000_018122.db"
+    created = await store.create(retention=_LATEST_TWO)
+    assert created.filename == "overture_20260919_030000_018122.db"
 
 
 def test_list_backups_returns_newest_first_and_ignores_other_files(
@@ -174,10 +176,11 @@ def test_list_backups_returns_newest_first_and_ignores_other_files(
         "overture_20000101_000001.db",
     ]
     assert result[0].size_bytes == 2
-    assert result[0].created_at
+    # Dated by its name, the same time retention uses, whatever its mtime.
+    assert result[0].created_at == "2000-01-01T00:00:02+00:00"
 
 
-def test_prune_backups_keeps_requested_newest_files(tmp_path: Path) -> None:
+async def test_prune_backups_keeps_requested_newest_files(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.directory.mkdir()
     for index in range(4):
@@ -186,8 +189,12 @@ def test_prune_backups_keeps_requested_newest_files(tmp_path: Path) -> None:
     # Never pruned: Overture did not name it, so it cannot be dated.
     (store.directory / "overture_manual.db").write_bytes(b"x")
 
-    store.prune(_LATEST_TWO)
+    removed = await store.prune(_LATEST_TWO)
 
+    assert removed == [
+        "overture_20000101_000001_000000.db",
+        "overture_20000101_000000_000000.db",
+    ]
     assert sorted(path.name for path in store.directory.iterdir()) == [
         "overture_20000101_000002_000000.db",
         "overture_20000101_000003_000000.db",

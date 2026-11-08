@@ -14,6 +14,7 @@
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
   import LibraryChecklist from "../LibraryChecklist.svelte";
+  import FieldRow from "../FieldRow.svelte";
   import Schedules from "../Schedules.svelte";
   import {
     createSyncScheduleMutation,
@@ -316,20 +317,18 @@
     >
       {#snippet settings()}
         <div class="schedule-config">
-          <div class="form-row">
-            <label for={scheduleTypeId}>Schedule type</label>
-            {#if scheduleMode === "incremental"}
-              <span class="hint">adds new items only; Run Now always syncs fully</span>
-            {/if}
-            <select
-              id={scheduleTypeId}
-              class="select-compact type-select"
-              bind:value={scheduleMode}
-            >
+          <FieldRow
+            label="Schedule type"
+            for={scheduleTypeId}
+            hint={scheduleMode === "incremental"
+              ? "Adds new items only; Run now always syncs fully."
+              : undefined}
+          >
+            <select id={scheduleTypeId} bind:value={scheduleMode}>
               <option value="full">{MODE_LABELS.full}</option>
               <option value="incremental">{MODE_LABELS.incremental}</option>
             </select>
-          </div>
+          </FieldRow>
           {#if scheduleMode === "incremental"}
             <label
               class={[
@@ -453,7 +452,7 @@
           createScheduleRequest.isPending ||
           updateScheduleRequest.isPending}
       >
-        {scheduleController.isEditing ? "Update Schedule" : "Save Schedule"}
+        {scheduleController.isEditing ? "Update schedule" : "Save schedule"}
       </button>
       <PendingButton
         class="btn btn-primary"
@@ -463,7 +462,7 @@
         pendingLabel="Starting..."
       >
         <RefreshCw size={15} />
-        Run Now
+        Run now
       </PendingButton>
     {/snippet}
   </JobFooter>
@@ -474,9 +473,5 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-  }
-
-  .type-select {
-    margin-left: auto;
   }
 </style>

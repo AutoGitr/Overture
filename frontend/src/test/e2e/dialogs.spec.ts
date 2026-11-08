@@ -141,18 +141,25 @@ test("filters dialog stays inside the viewport and scrolls its body", async ({ p
     ["Monitor status", "Art complete", "Theme complete"].map(async (name) => {
       const group = dialog.getByRole("group", { name, exact: true });
       const label = await group.locator(".row-label").boundingBox();
-      const control = await group.getByRole("radiogroup", { name, exact: true }).boundingBox();
-      return { label, control };
+      const radios = group.getByRole("radiogroup", { name, exact: true });
+      const control = await radios.boundingBox();
+      // Every option reads in full: none is cut off with an ellipsis.
+      const clipped = await radios
+        .locator("span")
+        .evaluateAll((spans) => spans.filter((span) => span.scrollWidth > span.clientWidth).length);
+      return { label, control, clipped };
     }),
   );
   const firstRightEdge = statusControls[0]!.control!.x + statusControls[0]!.control!.width;
-  for (const { label, control } of statusControls) {
+  for (const { label, control, clipped } of statusControls) {
     expect(label).not.toBeNull();
     expect(control).not.toBeNull();
+    expect(clipped).toBe(0);
     expect(control!.x + control!.width).toBeCloseTo(firstRightEdge, 0);
-    expect(
-      Math.abs(label!.y + label!.height / 2 - (control!.y + control!.height / 2)),
-    ).toBeLessThan(8);
+    // A name sits beside its control where both fit, else right above it.
+    const beside = Math.abs(label!.y + label!.height / 2 - (control!.y + control!.height / 2)) < 8;
+    const above = label!.y + label!.height <= control!.y + 1 && control!.y - label!.y < 48;
+    expect(beside || above).toBe(true);
     expect(control!.height).toBeGreaterThanOrEqual(24);
     expect(control!.height).toBeLessThan(34);
   }
@@ -380,7 +387,7 @@ test("short screens give popups nearly all their safe height and scroll content 
   });
   expect(await body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   expect(await tabs.boundingBox()).toEqual(tabBox);
-  await expect(operations.getByRole("button", { name: "Run Now", exact: true })).toBeInViewport();
+  await expect(operations.getByRole("button", { name: "Run now", exact: true })).toBeInViewport();
   await operations.getByRole("button", { name: "Close popup" }).click();
   await page.getByLabel("Open menu").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();

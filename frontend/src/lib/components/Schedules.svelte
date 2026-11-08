@@ -1,6 +1,4 @@
 <script lang="ts" generics="TConfig, TSchedule extends SavedSchedule<TConfig>">
-  import Eye from "@lucide/svelte/icons/eye";
-  import EyeOff from "@lucide/svelte/icons/eye-off";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import Pencil from "@lucide/svelte/icons/pencil";
   import Play from "@lucide/svelte/icons/play";
@@ -9,6 +7,8 @@
   import type { CronPreset } from "../utils/cronPresets";
   import CronScheduleField from "./CronScheduleField.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import Disclosure from "./Disclosure.svelte";
+  import FieldRow from "./FieldRow.svelte";
   import {
     formatRunSummary,
     formatScheduleDate,
@@ -49,12 +49,25 @@
     settings?: Snippet;
   } = $props();
 
+  const nameId = $props.id();
   let editing = $derived(
     controller.schedules.find((schedule) => schedule.id === controller.editingId),
   );
 
   function checkedFromEvent(event: Event & { currentTarget: HTMLInputElement }) {
     return event.currentTarget.checked;
+  }
+
+  function summary(schedule: TSchedule): string {
+    return [
+      schedule.cron_expression,
+      `Next: ${formatScheduleDate(schedule.next_run, schedule.timezone)}`,
+      schedule.last_run_at &&
+        `Last run: ${formatScheduleDate(schedule.last_run_at, schedule.timezone)}`,
+      schedule.last_run && `Result: ${formatRunSummary(schedule.last_run)}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   function runLabel(schedule: TSchedule): string {
@@ -71,7 +84,7 @@
   }
 </script>
 
-<section class="option-card" aria-label="Schedules">
+<section class="option-card schedules" aria-label="Schedules">
   <div class="heading-row">
     <span class="form-label">
       {editing ? `Editing "${editing.name}"` : "New schedule"}
@@ -80,15 +93,15 @@
   {#if unavailable}
     <p class="hint">{unavailable}</p>
   {:else}
-    <label class="form-row">
-      <span class="field-label">Name</span>
+    <FieldRow label="Name" for={nameId}>
       <input
+        id={nameId}
         type="text"
         class="text-input"
         bind:value={controller.name}
         placeholder={namePlaceholder}
       />
-    </label>
+    </FieldRow>
     {@render settings?.()}
     <CronScheduleField value={cronExpression} onchange={oncronchange} {presets} />
   {/if}
@@ -113,7 +126,6 @@
     {#if !controller.loading && controller.schedules.length > 0}
       <div class="schedule-list">
         {#each controller.schedules as schedule (schedule.id)}
-          {@const expanded = controller.isExpanded(schedule.id)}
           {@const running = schedule.run_status === "running"}
           {@const isEdited = controller.editingId === schedule.id}
           <div class={["schedule-row", { edited: isEdited }]}>
@@ -145,37 +157,21 @@
                   >
                 {/if}
               </div>
-              <div class="schedule-meta">
-                <span>{schedule.cron_expression}</span>
-                <span>Next: {formatScheduleDate(schedule.next_run, schedule.timezone)}</span>
-                {#if schedule.last_run_at}
-                  <span>Last run: {formatScheduleDate(schedule.last_run_at, schedule.timezone)}</span>
-                {/if}
-                {#if schedule.last_run}
-                  <span>Result: {formatRunSummary(schedule.last_run)}</span>
-                {/if}
-              </div>
-              {#if expanded}
+              <Disclosure
+                title={summary(schedule)}
+                open={controller.isExpanded(schedule.id)}
+                ontoggle={() => controller.toggleExpanded(schedule.id)}
+                --disclosure-padding="var(--space-1) 0"
+                --disclosure-title-size="var(--text-xs)"
+                --disclosure-title-weight="400"
+                --disclosure-title-color="var(--text-tertiary)"
+              >
                 <div class="schedule-details">
                   {@render details(schedule)}
                 </div>
-              {/if}
+              </Disclosure>
             </div>
             <div class="schedule-actions">
-              <button
-                type="button"
-                class={["btn btn-ghost btn-icon", { active: expanded }]}
-                title={expanded ? "Hide schedule" : "View schedule"}
-                aria-label={expanded ? "Hide schedule" : "View schedule"}
-                aria-expanded={expanded}
-                onclick={() => controller.toggleExpanded(schedule.id)}
-              >
-                {#if expanded}
-                  <EyeOff size={15} />
-                {:else}
-                  <Eye size={15} />
-                {/if}
-              </button>
               <button
                 type="button"
                 class={["btn btn-ghost btn-icon", { active: isEdited }]}
@@ -228,9 +224,13 @@
     border-top: var(--border-subtle);
   }
 
-  /* As wide as the cron field's label, so both inputs start together. */
-  .field-label {
-    min-width: 8.5em;
+  /* Every setting's name shares one column and its control fills the rest,
+     including those the schedule kind adds. */
+  .schedules {
+    --field-label-flex: 0 0 8.5em;
+    --field-control-flex: 1 1 0;
+    --field-input-flex: 1 1 auto;
+    --field-control-justify: flex-start;
   }
 
   .schedule-list {
@@ -271,24 +271,12 @@
     font-weight: 600;
   }
 
-  .schedule-meta,
-  .schedule-details {
-    color: var(--text-tertiary);
-    font-size: var(--text-xs);
-  }
-
-  .schedule-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-    margin-top: var(--space-1);
-  }
-
   .schedule-details {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    margin-top: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
   }
 
   .schedule-actions .btn.active {

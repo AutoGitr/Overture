@@ -16,7 +16,7 @@
 
 <div class="range">
   <div class="field">
-    <label class="form-label" for="{id}-min">{minLabel}</label>
+    <label for="{id}-min">{minLabel}</label>
     <input
       id="{id}-min"
       type="number"
@@ -27,7 +27,7 @@
     />
   </div>
   <div class="field">
-    <label class="form-label" for="{id}-max">{maxLabel}</label>
+    <label for="{id}-max">{maxLabel}</label>
     <input
       id="{id}-max"
       type="number"
@@ -51,6 +51,13 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-1) var(--space-2);
+  }
+
+  /* Named like a field row's label, as the bounds of the setting above. */
+  label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
   }
 
   .number-input {

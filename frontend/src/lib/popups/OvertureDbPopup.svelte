@@ -247,7 +247,7 @@
         </div>
       </div>
       <div class="option-card">
-        <span class="form-label">Synced File</span>
+        <span class="form-label">Synced file</span>
         {#if stats}
           <div class="stats-grid">
             {#each [["Movies", stats.movies], ["Shows", stats.shows], ["Collections", stats.collections], ["Seasons", stats.seasons], ["Errors", stats.errors]] as const as [label, count] (label)}

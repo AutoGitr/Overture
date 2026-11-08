@@ -235,7 +235,7 @@ export class AssetsForm {
     this.config.collectionGroups = choice.groups;
   }
 
-  /** Select All covers every collection; clearing it clears the groups too. */
+  /** "Select all" covers every collection; clearing it clears the groups too. */
   selectAllCollections(checked: boolean): void {
     this.config.useSidebarItems = false;
     this.config.allCollections = checked;

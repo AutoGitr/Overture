@@ -9,6 +9,7 @@
     BackupRetentionOutput,
     BackupScheduleResponse,
   } from "../../../generated/rest/types.gen";
+  import { invalidateTags } from "../../rest/cache";
   import { createNotifier } from "../../stores/notificationState.svelte";
   import { DEFAULT_CRON_EXPRESSION } from "../../utils/cronPresets";
   import { errorMessage } from "../../utils/errors";
@@ -60,6 +61,8 @@
       });
       queryClient.setQueryData(getBackupScheduleOptions().queryKey, updated);
       loadDraft(updated);
+      // Saving applies the retention to the existing backups at once.
+      await invalidateTags(["backups"]);
       feedback.success("Backup schedule saved.");
     } catch (e) {
       feedback.error(errorMessage(e, "Failed to save backup schedule"));
@@ -67,7 +70,7 @@
   }
 </script>
 
-<BackupSection icon={Clock} title="Scheduled Backups">
+<BackupSection icon={Clock} title="Scheduled backups">
   <DataStatus
     label="backup schedule"
     error={scheduleQuery.error}
@@ -92,7 +95,7 @@
         <legend>Backups to keep</legend>
         <p class="hint">
           The latest backups, plus the newest backup of each recent day, week and month. 0 turns a
-          period off.
+          period off. Saving applies it to the existing backups.
         </p>
         {#if retention}
           <div class="retention-fields">
@@ -132,7 +135,7 @@
         pending={saveScheduleRequest.isPending}
         pendingLabel="Saving..."
       >
-        Save Schedule
+        Save schedule
       </PendingButton>
     </div>
   </fieldset>
@@ -148,6 +151,9 @@
   }
 
   .schedule-fields {
+    --field-label-flex: 0 0 8.5em;
+    --field-control-flex: 1 1 0;
+    --field-input-flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);

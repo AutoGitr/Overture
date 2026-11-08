@@ -75,8 +75,8 @@ class BackupService:
         self.store = store
         self._lock = asyncio.Lock()
 
-    async def _backup(self, *, scheduled: bool) -> str:
-        """Write one backup, announcing it as it goes; return its file name.
+    async def _backup(self, *, scheduled: bool) -> BackupCreatedResponse:
+        """Write one backup, announcing it as it goes.
 
         Raises:
             BackupInProgressError: When a manual backup finds one running.
@@ -86,7 +86,7 @@ class BackupService:
         async with self._lock:
             return await self._create_backup(scheduled=scheduled)
 
-    async def _create_backup(self, *, scheduled: bool) -> str:
+    async def _create_backup(self, *, scheduled: bool) -> BackupCreatedResponse:
         context = self.events.context(
             scheduled=scheduled, started_at=utc_now_iso(), database=self._database
         )
@@ -96,7 +96,7 @@ class BackupService:
                     session, BACKUP_SCHEDULE, timezone=self._app_config.TZ
                 )
             await context.publish_lifecycle("started", scheduled=scheduled)
-            filename = await self.store.create(
+            created = await self.store.create(
                 retention=schedule.payload.retention, reject_if_busy=not scheduled
             )
         except asyncio.CancelledError:
@@ -118,28 +118,29 @@ class BackupService:
             "completed",
             scheduled=scheduled,
             finished_at=utc_now_iso(),
-            filename=filename,
+            filename=created.filename,
             snapshot=True,
         )
-        return filename
+        return created
 
     async def backup_now(self) -> BackupCreatedResponse:
         """Back the database up now, refusing to queue behind a running backup."""
         try:
-            filename = await self._backup(scheduled=False)
+            return await self._backup(scheduled=False)
         except _BACKUP_ERRORS as exc:
             status_code = 409 if isinstance(exc, BackupInProgressError) else 500
             raise PublicServiceError(status_code, str(exc)) from exc
-        return BackupCreatedResponse(filename=filename)
 
     async def backup_before_upgrade(self) -> None:
         """Keep the previous schema restorable; the next scheduled backup prunes."""
-        filename = await self.store.create(retention=None)
-        logger.info("Backed up the database before upgrading it: %s", filename)
+        created = await self.store.create(retention=None)
+        logger.info("Backed up the database before upgrading it: %s", created.filename)
 
     def list_backups(self) -> BackupListResponse:
         """Return all existing backups, newest first."""
-        return BackupListResponse(backups=self.store.list_backups())
+        return BackupListResponse(
+            directory=str(self.store.directory), backups=self.store.list_backups()
+        )
 
     async def get_schedule(self) -> BackupScheduleResponse:
         """Return the current backup schedule configuration."""
@@ -154,7 +155,7 @@ class BackupService:
         self,
         body: BackupScheduleUpdate,
     ) -> BackupScheduleResponse:
-        """Update the backup schedule configuration."""
+        """Update the backup schedule; a new retention applies at once."""
         async with self._database.write_session() as session:
             updated = await save_schedule(
                 session,
@@ -171,6 +172,8 @@ class BackupService:
         self._schedule_job(
             enabled=updated.enabled, cron_expression=updated.cron_expression
         )
+        if body.retention is not None:
+            await self.store.prune(updated.payload.retention)
         runtime = self.get_schedule_info()
         return backup_schedule_response(updated, next_run=runtime.next_run)
 

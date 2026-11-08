@@ -47,12 +47,14 @@
     title={next ? `Showing ${label.toLowerCase()}, click to show ${next.label.toLowerCase()}` : label}
     {onclick}
   >
-    <span class="icon" aria-hidden="true">
-      <span class="current"><Icon size={16} /></span>
-      {#if next}<span class="next"><next.Icon size={16} /></span>{/if}
+    <span class="summary">
+      <span class="icon" aria-hidden="true">
+        <span class="current"><Icon size={15} /></span>
+        {#if next}<span class="next"><next.Icon size={15} /></span>{/if}
+      </span>
+      <span class="count">{count}</span>
     </span>
     <span class="label">{label}</span>
-    <span class="count">{count}</span>
   </button>
 {/snippet}
 
@@ -85,21 +87,30 @@
     display: grid;
     grid-auto-columns: 1fr;
     grid-auto-flow: column;
-    container-type: inline-size;
     border-bottom: var(--border-subtle);
   }
 
+  /* Two fixed rows fit the widest label and a five-digit count in a third of
+     the narrowest sidebar, so every tab shows all three at any width. */
   .tab {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
+    gap: 2px;
     min-width: 0;
-    padding: var(--space-3) var(--space-2);
-    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-1);
+    font-size: var(--text-xs);
     font-weight: 500;
+    line-height: 1.2;
     color: var(--text-tertiary);
     border-bottom: 2px solid transparent;
+  }
+
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
   }
 
   .tab:hover {
@@ -132,21 +143,16 @@
   }
 
   .label {
-    display: none;
-  }
-
-  @container (min-width: 440px) {
-    .label {
-      display: inline;
-    }
+    white-space: nowrap;
   }
 
   .count {
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    background: var(--bg-tertiary);
-    padding: 1px 6px;
-    border-radius: var(--radius-full);
+    font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
+  }
+
+  .active .count {
+    color: var(--accent);
   }
 </style>

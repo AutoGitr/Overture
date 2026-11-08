@@ -168,6 +168,27 @@ def slot_art_source(slot: ArtSlot) -> ArtSource | None:
     return ArtSource.UPLOAD if slot.upload_hash else selected_art_source(slot.url)
 
 
+#: The slot columns responses show, by the name after their prefix.
+_FLATTENED_COLUMNS = {
+    "url": attrgetter("url"),
+    "hash": attrgetter("file_hash"),
+    "phash": attrgetter("phash"),
+    "width": attrgetter("width"),
+    "height": attrgetter("height"),
+    "source": slot_art_source,
+}
+
+
+def flattened_art(slot: ArtSlot, prefix: str) -> dict[str, object]:
+    """Return the slot as the ``<prefix>_*`` fields responses carry."""
+    return {f"{prefix}_{name}": read(slot) for name, read in _FLATTENED_COLUMNS.items()}
+
+
+def flattened_art_names(prefix: str) -> set[str]:
+    """Return the names of the fields ``flattened_art`` gives under *prefix*."""
+    return {f"{prefix}_{name}" for name in _FLATTENED_COLUMNS}
+
+
 def select_art(
     owner: MediaItem | Season | MediaCollection, art_type: ArtType, url: PublicArtUrl
 ) -> ArtSlot:

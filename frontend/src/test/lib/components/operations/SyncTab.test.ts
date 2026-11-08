@@ -100,13 +100,13 @@ describe("Sync tab", () => {
     libraries.mockRejectedValueOnce(new Error("Media server is unavailable"));
     renderWithQueryClient(OperationsPopup);
     expect(await screen.findByText("Media server is unavailable")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(localStorage.getItem("syncPopup_selectedLibraries")).toBe('["1"]');
 
     await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("checkbox", { name: "Movies" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Shows" })).not.toBeChecked();
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(
         { body: { include_collections: true, items: true, library_ids: ["1"] } },
@@ -124,7 +124,7 @@ describe("Sync tab", () => {
     await fireEvent.input(screen.getByPlaceholderText("Hourly sync"), {
       target: { value: "Sagas nightly" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save schedule" }));
     await waitFor(() =>
       expect(createSchedule).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -139,7 +139,7 @@ describe("Sync tab", () => {
       ),
     );
 
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
 
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(
@@ -160,7 +160,7 @@ describe("Sync tab", () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     await renderSync();
     await fireEvent.click(screen.getByRole("checkbox", { name: "All collections" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(
         { body: { library_ids: ["1", "2"], include_collections: false, items: true } },
@@ -174,8 +174,8 @@ describe("Sync tab", () => {
     await renderSync();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Movies" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Shows" }));
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(
         { body: { library_ids: [], include_collections: true, items: false } },
@@ -188,7 +188,7 @@ describe("Sync tab", () => {
     libraries.mockResolvedValue([]);
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("No libraries found on media server.");
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
   });
 
   it("runs a full TMDB season refresh without server libraries", async () => {
@@ -197,8 +197,8 @@ describe("Sync tab", () => {
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("No libraries found on media server.");
 
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(
         { body: { include_collections: true, items: true, library_ids: [] } },
@@ -210,9 +210,9 @@ describe("Sync tab", () => {
   it("still requires a library selection when server libraries exist", async () => {
     settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
     await renderSync();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect All" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all" }));
 
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -222,13 +222,13 @@ describe("Sync tab", () => {
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("Media server is unavailable");
 
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(run).not.toHaveBeenCalled();
   });
 
   it("saves a named full sync schedule for the selected libraries", async () => {
     await renderSync();
-    const save = screen.getByRole("button", { name: "Save Schedule" });
+    const save = screen.getByRole("button", { name: "Save schedule" });
     expect(save).toBeDisabled();
 
     await fireEvent.input(screen.getByPlaceholderText("Hourly sync"), {
@@ -284,7 +284,7 @@ describe("Sync tab", () => {
     await fireEvent.input(screen.getByPlaceholderText("Hourly sync"), {
       target: { value: "Poll" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save schedule" }));
 
     await waitFor(() =>
       expect(createSchedule).toHaveBeenCalledWith(
@@ -312,12 +312,12 @@ describe("Sync tab", () => {
       target: { value: "Nightly" },
     });
     await within(screen.getByRole("tabpanel")).findByText("Dataset status unavailable");
-    expect(screen.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save schedule" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
 
     await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Save Schedule" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Save schedule" })).toBeEnabled(),
     );
   });
 
@@ -328,17 +328,18 @@ describe("Sync tab", () => {
     expect(await screen.findByText("New media")).toBeInTheDocument();
     expect(screen.getByText("New-media polling", { selector: ".badge" })).toBeInTheDocument();
     // The last run is shown without expanding the schedule.
-    expect(screen.getByText(/^Last run: /)).toBeInTheDocument();
-    expect(screen.getByText("Result: 1.3s, 3 added, 2 queued")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: "View schedule" }));
-    const hide = screen.getByRole("button", { name: "Hide schedule" });
-    expect(hide).toHaveAttribute("aria-expanded", "true");
+    const summary = screen.getByRole("button", {
+      name: /Last run: .* · Result: 1.3s, 3 added, 2 queued$/,
+    });
+    expect(summary).toHaveAttribute("aria-expanded", "false");
+    await fireEvent.click(summary);
+    expect(summary).toHaveAttribute("aria-expanded", "true");
 
     await fireEvent.click(screen.getByRole("button", { name: "Edit schedule" }));
     expect(screen.getByRole("combobox", { name: "Schedule type" })).toHaveValue("incremental");
     expect(screen.getByRole("checkbox", { name: "Movies" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Shows" })).toBeChecked();
-    await fireEvent.click(screen.getByRole("button", { name: "Update Schedule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Update schedule" }));
 
     await waitFor(() =>
       expect(updateSchedule).toHaveBeenCalledWith(
@@ -369,12 +370,12 @@ describe("Sync tab", () => {
 
     await fireEvent.click(screen.getByRole("button", { name: "Edit schedule" }));
     expect(screen.getByText('Editing "New media"')).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Update Schedule" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update schedule" })).toBeInTheDocument();
     const pencil = screen.getByRole("button", { name: "Cancel editing" });
     expect(pencil).toHaveAttribute("aria-pressed", "true");
     await fireEvent.click(pencil);
     expect(screen.queryByText('Editing "New media"')).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save Schedule" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save schedule" })).toBeInTheDocument();
   });
 
   it("queues a saved schedule to run now", async () => {
@@ -411,11 +412,11 @@ describe("Sync tab", () => {
     localStorage.setItem("syncPopup_selectedLibraries", JSON.stringify(["1"]));
     matchState.markStartAccepted();
     await renderSync();
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(screen.getByText("Wait for Assets to finish.")).toBeInTheDocument();
 
     matchState.handleCompleted({});
-    await waitFor(() => expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
     expect(run).not.toHaveBeenCalled();
   });
 });

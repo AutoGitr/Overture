@@ -41,7 +41,7 @@
     collections?: CollectionChoice;
     /** Every collection (`null`) or one group was toggled. */
     oncollectiontoggle?: (group: string | null) => void;
-    /** Select All also covers collections: choose them all, or none. */
+    /** Select all also covers collections: choose them all, or none. */
     oncollectionsall?: (checked: boolean) => void;
   } = $props();
 

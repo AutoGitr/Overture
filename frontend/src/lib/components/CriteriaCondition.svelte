@@ -243,13 +243,22 @@
 </div>
 
 <style>
+  /* Field, operator, value and actions share one row; on a phone the field,
+     the longest of them, takes a row of its own, the operator sits beside the
+     actions and the value gets the whole row under them. */
   .condition {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.6fr) auto;
     gap: var(--space-2);
     align-items: start;
     @media (max-width: 640px) {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+  }
+
+  .condition > select:first-child {
+    @media (max-width: 640px) {
+      grid-column: 1 / -1;
     }
   }
 
@@ -260,21 +269,19 @@
   .row-actions {
     display: flex;
     gap: 2px;
-  }
-
-  .condition > :global(.source-fields),
-  .condition > .hint {
     @media (max-width: 640px) {
-      grid-column: 1 / -1;
       grid-row: 2;
+      grid-column: 2;
     }
   }
 
+  .condition > :global(.source-fields),
+  .condition > .hint,
   .condition > input,
   .condition > select:nth-of-type(3) {
     @media (max-width: 640px) {
       grid-column: 1 / -1;
-      grid-row: 2;
+      grid-row: 3;
     }
   }
 </style>

@@ -13,12 +13,16 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import CardColumn from "../components/CardColumn.svelte";
   import DataStatus from "../components/DataStatus.svelte";
+  import Disclosure from "../components/Disclosure.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import { routedCatalogEntry, routedCollectionId, routedItemId } from "../router/routes";
   import { createNotifier } from "../stores/notificationState.svelte";
+  import { sectionState, setSectionView } from "../stores/sectionState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { dbRecordFields, type DisplayField } from "../utils/dbRecordFields";
 
+  const VIEW = "db-record";
+  setSectionView(VIEW);
   let catalogEntry = $derived(routedCatalogEntry());
   let collectionId = $derived(catalogEntry ? null : routedCollectionId());
   let itemId = $derived(catalogEntry || collectionId !== null ? null : routedItemId());
@@ -37,7 +41,7 @@
   let record = $derived(catalogEntry ? null : (recordQuery.data ?? null));
   let subjectTitle = $derived(catalogEntry?.entry_key ?? record?.stored[0]?.values.title);
   let recordTitle = $derived(
-    subjectTitle ? `Database Record - ${String(subjectTitle)}` : "Database Record",
+    subjectTitle ? `Database record - ${String(subjectTitle)}` : "Database record",
   );
   const feedback = createNotifier();
   let copiedField = $state<string | null>(null);
@@ -95,6 +99,18 @@
   let publicDatasetSeasons = $derived(publicDatasetRecord?.seasons ?? []);
 </script>
 
+{#snippet rows(key: string, title: string, fields: DisplayField[])}
+  <Disclosure
+    {title}
+    open={sectionState.isOpen(VIEW, key, false)}
+    ontoggle={(open) => sectionState.setOpen(VIEW, key, open)}
+    --disclosure-title-weight="500"
+    --disclosure-title-color="var(--text-secondary)"
+  >
+    {@render fieldTable(fields, `${key}:`)}
+  </Disclosure>
+{/snippet}
+
 {#snippet fieldTable(fields: DisplayField[], scope = "")}
   <div class="db-table">
     {#each fields as field (field.key)}
@@ -130,12 +146,11 @@
           <h3 class="form-label">Stored in {own.table}</h3>
           {@render fieldTable(dbRecordFields(own.values), "own:")}
           {#each related as row, index (index)}
-            <details class="db-details">
-              <summary
-                >{row.table}{row.values.id === undefined ? "" : ` ${String(row.values.id)}`}</summary
-              >
-              {@render fieldTable(dbRecordFields(row.values), `${index}:`)}
-            </details>
+            {@render rows(
+              `related-${index}`,
+              row.values.id === undefined ? row.table : `${row.table} ${String(row.values.id)}`,
+              dbRecordFields(row.values),
+            )}
           {/each}
         </section>
       {/if}
@@ -178,10 +193,11 @@
           <section class="option-card">
             <h3 class="form-label">OvertureDB Seasons</h3>
             {#each publicDatasetSeasons as season (season.season_num)}
-              <details class="db-details">
-                <summary>Season {season.season_num}</summary>
-                {@render fieldTable(dbRecordFields(season), `od-${season.season_num}:`)}
-              </details>
+              {@render rows(
+                `od-${season.season_num}`,
+                `Season ${season.season_num}`,
+                dbRecordFields(season),
+              )}
             {/each}
           </section>
         {/if}
@@ -236,16 +252,5 @@
     min-width: 0;
     font-family: var(--font-mono);
     color: var(--text-secondary);
-  }
-
-  .db-details summary {
-    cursor: pointer;
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    padding: var(--space-1) 0;
-  }
-
-  .db-details summary:hover {
-    color: var(--text-primary);
   }
 </style>

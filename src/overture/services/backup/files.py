@@ -12,7 +12,11 @@ lazy from datetime import UTC, date, datetime, tzinfo
 lazy from pathlib import Path
 lazy from typing import NamedTuple
 
-lazy from ...schemas.backup import BackupFileInfo, BackupRetention
+lazy from ...schemas.backup import (
+    BackupCreatedResponse,
+    BackupFileInfo,
+    BackupRetention,
+)
 lazy from ...utils.file import sync_directory
 lazy from ...utils.threads import owned_thread
 
@@ -87,7 +91,7 @@ class BackupStore:
 
     async def create(
         self, *, retention: BackupRetention | None, reject_if_busy: bool = False
-    ) -> str:
+    ) -> BackupCreatedResponse:
         """Create a backup in a worker thread with instance-wide coordination.
 
         Without *retention*, no existing backup is pruned.
@@ -118,7 +122,7 @@ class BackupStore:
             ):
                 candidate.unlink()
 
-    def _create(self, retention: BackupRetention | None) -> str:
+    def _create(self, retention: BackupRetention | None) -> BackupCreatedResponse:
         """Copy the database into the backup directory."""
         if not self.database_path.exists():
             raise RuntimeError(f"Database not found at {self.database_path}")
@@ -162,9 +166,8 @@ class BackupStore:
             sync_directory(self.directory)
 
             logger.info("Wrote backup %s", destination)
-            if retention is not None:
-                self._prune(retention)
-            return filename
+            removed = self._prune(retention) if retention is not None else []
+            return BackupCreatedResponse(filename=filename, removed=removed)
 
     def _next_destination(self) -> tuple[str, Path]:
         timestamp = datetime.now(self.timezone).strftime("%Y%m%d_%H%M%S_%f")
@@ -178,10 +181,14 @@ class BackupStore:
             suffix += 1
         return filename, destination
 
-    def prune(self, retention: BackupRetention) -> None:
-        """Delete the backups *retention* does not keep."""
+    async def prune(self, retention: BackupRetention) -> list[str]:
+        """Delete the backups *retention* does not keep; return their names."""
+        async with self._async_lock:
+            return await owned_thread(self._locked_prune, retention)
+
+    def _locked_prune(self, retention: BackupRetention) -> list[str]:
         with self._thread_lock:
-            self._prune(retention)
+            return self._prune(retention)
 
     def _dated_backups(self) -> list[DatedBackup]:
         """Return the backups this store named, newest first."""
@@ -201,40 +208,33 @@ class BackupStore:
             reverse=True,
         )
 
-    def _prune(self, retention: BackupRetention) -> None:
+    def _prune(self, retention: BackupRetention) -> list[str]:
+        removed: list[str] = []
         try:
             backups = self._dated_backups()
             kept = retained_backups(backups, retention)
             for backup in backups:
                 if backup.path not in kept:
                     backup.path.unlink()
+                    removed.append(backup.path.name)
                     logger.info("Removed old backup %s", backup.path)
         except OSError as exc:
             logger.warning("Could not remove old backups: %s", exc)
+        return removed
 
     def list_backups(self) -> list[BackupFileInfo]:
-        """Return backups sorted newest-first."""
+        """Return backups newest first, dated by the time in their name."""
         try:
             with self._thread_lock:
                 self.directory.mkdir(parents=True, exist_ok=True)
-                paths = sorted(
-                    (
-                        path
-                        for path in self.directory.iterdir()
-                        if _BACKUP_NAME.fullmatch(path.name)
-                    ),
-                    reverse=True,
-                )
-                return [self._file_info(path) for path in paths]
+                return [
+                    BackupFileInfo(
+                        filename=backup.path.name,
+                        size_bytes=backup.path.stat().st_size,
+                        created_at=backup.taken_at.isoformat(),
+                    )
+                    for backup in self._dated_backups()
+                ]
         except OSError as exc:
             logger.warning("Could not list backups: %s", exc)
             return []
-
-    @staticmethod
-    def _file_info(path: Path) -> BackupFileInfo:
-        stat = path.stat()
-        return BackupFileInfo(
-            filename=path.name,
-            size_bytes=stat.st_size,
-            created_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
-        )

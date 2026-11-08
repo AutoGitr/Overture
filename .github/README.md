@@ -677,7 +677,7 @@ finished.
 | Renamer   | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                      |
 | Audit     | Compares local assets, and optionally the images Overture uploaded to collections, with the server; fixes selected differences and checks whether the changes took effect. |
 
-A run you start keeps its results on screen until you choose **Clear Results**
+A run you start keeps its results on screen until you choose **Clear results**
 or the next run starts. A scheduled run, including an incremental poll, never
 leaves results to clear, whatever its outcome: the schedule's **Last run** sums
 it up.
@@ -861,6 +861,13 @@ Backups go to `backups` in the config folder (`config/backups` for Docker,
 menu. Overture also makes one before every database upgrade. They hold your
 library and choices; your media folders hold the files. Copy backups off the
 host now and then.
+
+**Backups to keep** decides which backups stay: the latest few, plus the
+newest backup of each recent day, week and month. Every backup, scheduled or
+manual, applies it once it is written, and so does saving it, so a new backup
+can leave the count unchanged when it replaces one the rules no longer keep.
+**Back up now** names any backup it removed. Backups made before an upgrade
+never remove others.
 
 To restore, stop Overture, copy a backup over `overture.db` and delete its
 `-wal` and `-shm` files. Copy the current database first if you may need it.

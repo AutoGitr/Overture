@@ -7,11 +7,11 @@ describe("ColorInput", () => {
     render(ColorInput, {
       value: "#6366f1",
       id: "accent-color",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const textInput = screen.getByLabelText("Accent Color hex value");
-    const swatchInput = screen.getByLabelText("Accent Color picker");
+    const textInput = screen.getByLabelText("Accent color hex value");
+    const swatchInput = screen.getByLabelText("Accent color picker");
 
     expect(textInput).toHaveValue("#6366f1");
     expect(swatchInput).toHaveValue("#6366f1");
@@ -20,11 +20,11 @@ describe("ColorInput", () => {
   it("updates value and hex text when native color swatch fires input event", async () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const swatchInput = screen.getByLabelText("Accent Color picker");
-    const textInput = screen.getByLabelText("Accent Color hex value");
+    const swatchInput = screen.getByLabelText("Accent color picker");
+    const textInput = screen.getByLabelText("Accent color hex value");
 
     await fireEvent.input(swatchInput, { target: { value: "#10b981" } });
 
@@ -35,11 +35,11 @@ describe("ColorInput", () => {
   it("updates bound value and swatch in real time when valid hex is typed", async () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const textInput = screen.getByLabelText("Accent Color hex value");
-    const swatchInput = screen.getByLabelText("Accent Color picker");
+    const textInput = screen.getByLabelText("Accent color hex value");
+    const swatchInput = screen.getByLabelText("Accent color picker");
 
     await fireEvent.focus(textInput);
     await fireEvent.input(textInput, { target: { value: "ff0055" } });
@@ -54,11 +54,11 @@ describe("ColorInput", () => {
   it("expands 3-digit shorthand to 6 digits on blur", async () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const textInput = screen.getByLabelText("Accent Color hex value");
-    const swatchInput = screen.getByLabelText("Accent Color picker");
+    const textInput = screen.getByLabelText("Accent color hex value");
+    const swatchInput = screen.getByLabelText("Accent color picker");
 
     await fireEvent.focus(textInput);
     await fireEvent.input(textInput, { target: { value: "#f05" } });
@@ -72,11 +72,11 @@ describe("ColorInput", () => {
   it("reverts invalid hex text on blur to the last valid color", async () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const textInput = screen.getByLabelText("Accent Color hex value");
-    const swatchInput = screen.getByLabelText("Accent Color picker");
+    const textInput = screen.getByLabelText("Accent color hex value");
+    const swatchInput = screen.getByLabelText("Accent color picker");
 
     await fireEvent.focus(textInput);
     await fireEvent.input(textInput, { target: { value: "not-a-color" } });
@@ -90,10 +90,10 @@ describe("ColorInput", () => {
   it("blurs and normalizes when Enter is pressed", async () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const textInput = screen.getByLabelText("Accent Color hex value");
+    const textInput = screen.getByLabelText("Accent color hex value");
     await fireEvent.focus(textInput);
     await fireEvent.input(textInput, { target: { value: "123456" } });
 
@@ -104,11 +104,11 @@ describe("ColorInput", () => {
   it("reverts to pre-focus value when Escape is pressed", async () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
     });
 
-    const textInput = screen.getByLabelText("Accent Color hex value");
-    const swatchInput = screen.getByLabelText("Accent Color picker");
+    const textInput = screen.getByLabelText("Accent color hex value");
+    const swatchInput = screen.getByLabelText("Accent color picker");
 
     await fireEvent.focus(textInput);
     await fireEvent.input(textInput, { target: { value: "#ff0000" } });
@@ -122,11 +122,11 @@ describe("ColorInput", () => {
   it("respects disabled prop on both swatch and text inputs", () => {
     render(ColorInput, {
       value: "#6366f1",
-      label: "Accent Color",
+      label: "Accent color",
       disabled: true,
     });
 
-    expect(screen.getByLabelText("Accent Color hex value")).toBeDisabled();
-    expect(screen.getByLabelText("Accent Color picker")).toBeDisabled();
+    expect(screen.getByLabelText("Accent color hex value")).toBeDisabled();
+    expect(screen.getByLabelText("Accent color picker")).toBeDisabled();
   });
 });

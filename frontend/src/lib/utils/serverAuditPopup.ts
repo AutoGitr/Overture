@@ -4,13 +4,13 @@ import type { SelectableServerAuditResult } from "../stores/serverAuditState.sve
 export const AUDIT_STATUS_LABELS: Record<AuditStatus, string> = {
   phash_match: "d=0 Match",
   phash_mismatch: "Mismatch",
-  local_missing: "Local Missing",
-  server_missing: "Server Missing",
+  local_missing: "Local missing",
+  server_missing: "Server missing",
   unresolved_server_id: "No Server ID",
-  theme_match: "Theme Match",
-  theme_mismatch: "Theme Mismatch",
-  theme_server_missing: "Theme Missing",
-  theme_unknown: "Theme Unknown",
+  theme_match: "Theme match",
+  theme_mismatch: "Theme mismatch",
+  theme_server_missing: "Theme missing",
+  theme_unknown: "Theme unknown",
   error: "Error",
 };
 

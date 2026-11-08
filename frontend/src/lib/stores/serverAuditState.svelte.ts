@@ -1,4 +1,4 @@
-/** State for the Server Audit job. */
+/** State for the server audit job. */
 import type { ServerAuditProgressEvent, ServerAuditResult } from "../../generated/ws";
 import { ASSET_LABELS } from "../utils/artTypes";
 import { AUDIT_STATUS_LABELS, auditRowKey } from "../utils/serverAuditPopup";

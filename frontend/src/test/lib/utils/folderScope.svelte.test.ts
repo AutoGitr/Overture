@@ -45,7 +45,7 @@ describe.each([
     state: serverAuditState,
     start: startServerAudit,
     stop: stopServerAudit,
-    startLabel: "Audit Server",
+    startLabel: "Audit server",
     selectionKey: "serverAudit_selectedMovieFolders",
     sidebarKey: "serverAudit_useSidebarItems",
   },

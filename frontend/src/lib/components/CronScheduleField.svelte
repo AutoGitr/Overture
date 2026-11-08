@@ -4,6 +4,7 @@
     ROUTINE_CRON_PRESETS,
     type CronPreset,
   } from "../utils/cronPresets";
+  import FieldRow from "./FieldRow.svelte";
 
   let {
     value,
@@ -20,11 +21,13 @@
     label?: string;
     placeholder?: string;
   } = $props();
+
+  const id = $props.id();
 </script>
 
-<label class="form-row">
-  <span class="cron-label">{label}</span>
+<FieldRow {label} for={id}>
   <input
+    {id}
     type="text"
     class="text-input text-input-mono"
     {value}
@@ -32,7 +35,7 @@
     {disabled}
     oninput={(event) => onchange(event.currentTarget.value)}
   />
-</label>
+</FieldRow>
 
 <div class="preset-row">
   {#each presets as preset (preset.value)}
@@ -48,10 +51,6 @@
 </div>
 
 <style>
-  .cron-label {
-    min-width: 8.5em;
-  }
-
   .preset-row {
     display: flex;
     align-items: center;

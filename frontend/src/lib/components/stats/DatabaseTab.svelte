@@ -25,7 +25,7 @@
     <span class="form-label">SQLite Engine & Storage</span>
   </div>
   <div class="metrics-row">
-    {@render metric("Database File", formatBytes(stats.database.file_size_bytes))}
+    {@render metric("Database file", formatBytes(stats.database.file_size_bytes))}
     {#if stats.database.wal_size_bytes > 0}
       {@render metric("WAL File", formatBytes(stats.database.wal_size_bytes))}
     {/if}
@@ -73,10 +73,10 @@
     <span class="form-label">Backups</span>
   </div>
   <div class="metrics-row">
-    {@render metric("Total Backups", String(stats.backups.total_backups))}
-    {@render metric("Backup Storage", formatBytes(stats.backups.total_size_bytes))}
+    {@render metric("Total backups", String(stats.backups.total_backups))}
+    {@render metric("Backup storage", formatBytes(stats.backups.total_size_bytes))}
     {@render metric(
-      "Latest Backup",
+      "Latest backup",
       stats.backups.latest_backup_at
         ? formatDateInTimezone(stats.backups.latest_backup_at, "UTC")
         : "None",

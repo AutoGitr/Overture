@@ -17,7 +17,11 @@ lazy from overture.db.session import Database
 lazy from overture.jobs import results as job_results
 lazy from overture.jobs.kinds import INTERRUPTED_MESSAGE, JobKind
 lazy from overture.runtime import RuntimeServices
-lazy from overture.schemas.backup import BackupRetention, BackupScheduleUpdate
+lazy from overture.schemas.backup import (
+    BackupCreatedResponse,
+    BackupRetention,
+    BackupScheduleUpdate,
+)
 lazy from overture.services.backup import service as backup_module
 lazy from overture.services.backup.events import BackupEvents
 lazy from overture.services.backup.files import (
@@ -63,12 +67,12 @@ async def test_scheduled_backup_is_independent_of_retention(
 
     async def create(
         *, retention: BackupRetention, reject_if_busy: bool = False
-    ) -> str:
+    ) -> BackupCreatedResponse:
         assert retention == BackupRetention()
         assert not reject_if_busy
         assert publisher.names() == ["backup.started"]
         operations.append("backup")
-        return "backup.db"
+        return BackupCreatedResponse(filename="backup.db")
 
     async def retention(*, database: Database, image_cache: ImageCache) -> None:
         del image_cache
@@ -110,7 +114,7 @@ async def test_manual_backup_rejects_busy_storage_with_409(
 
     async def create(
         *, retention: BackupRetention, reject_if_busy: bool = False
-    ) -> str:
+    ) -> BackupCreatedResponse:
         del retention
         assert reject_if_busy
         raise BackupInProgressError("busy")
@@ -150,7 +154,9 @@ async def test_manual_backup_success_announces_and_lists_the_saved_file(
 ) -> None:
     publisher = RecordingPublisher()
     backup_service.events = BackupEvents(publisher)
-    create = AsyncMock(return_value="overture_20260101_030000.db")
+    create = AsyncMock(
+        return_value=BackupCreatedResponse(filename="overture_20260101_030000.db")
+    )
     monkeypatch.setattr(backup_service.store, "create", create)
     backup_service.store.directory.mkdir()
     (backup_service.store.directory / "overture_20260101_030000.db").write_bytes(
@@ -185,10 +191,10 @@ async def test_inflight_backup_snapshot_and_durable_terminal_state(
 ) -> None:
     entered, release = asyncio.Event(), asyncio.Event()
 
-    async def create(**_kwargs: Any) -> str:
+    async def create(**_kwargs: Any) -> BackupCreatedResponse:
         entered.set()
         await release.wait()
-        return "backup.db"
+        return BackupCreatedResponse(filename="backup.db")
 
     monkeypatch.setattr(backup_service.store, "create", create)
     runtime: RuntimeServices = test_app.state.runtime
@@ -257,7 +263,7 @@ async def test_backup_failure_is_announced_and_manual_calls_raise(
 async def test_pre_upgrade_backup_never_applies_retention(
     backup_service: BackupService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    create = AsyncMock(return_value="before-upgrade.db")
+    create = AsyncMock(return_value=BackupCreatedResponse(filename="before-upgrade.db"))
     monkeypatch.setattr(backup_service.store, "create", create)
     await backup_service.backup_before_upgrade()
     create.assert_awaited_once_with(retention=None)
@@ -340,6 +346,10 @@ async def test_backup_update_schedule_validates_and_applies_saved_values(
         lambda: ScheduledJobInfo(enabled=True, next_run="2026-01-01T03:00:00+00:00"),
     )
 
+    store.directory.mkdir()
+    for index in range(7):
+        (store.directory / f"overture_20000101_00000{index}.db").write_bytes(b"x")
+
     updated = await backup_service.update_schedule(
         BackupScheduleUpdate(
             enabled=True,
@@ -347,6 +357,9 @@ async def test_backup_update_schedule_validates_and_applies_saved_values(
             retention=BackupRetention(latest=5, monthly=0),
         ),
     )
+
+    # A saved retention applies at once, not only from the next backup.
+    assert len(list(store.directory.iterdir())) == 5
 
     assert updated.enabled is True
     assert updated.retention == BackupRetention(latest=5, monthly=0)

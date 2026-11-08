@@ -121,16 +121,16 @@
 <div class="kpi-grid">
   {@render kpi(
     HardDrive,
-    "Total Footprint",
+    "Total footprint",
     formatBytes(stats.storage.total_footprint_bytes),
     footprintSub,
     true,
   )}
   {@render kpi(Image, "Artwork", formatBytes(stats.storage.artwork_size_bytes), artworkSub)}
-  {@render kpi(Music, "Theme Music", formatBytes(stats.storage.themes_size_bytes), themeSub)}
+  {@render kpi(Music, "Theme music", formatBytes(stats.storage.themes_size_bytes), themeSub)}
   {@render kpi(
     Images,
-    "Image Cache",
+    "Image cache",
     formatBytes(stats.storage.image_cache_size_bytes),
     imageCacheSub,
   )}
@@ -143,7 +143,7 @@
 </div>
 
 <section class="option-card">
-  <span class="form-label">Storage Distribution</span>
+  <span class="form-label">Storage distribution</span>
   <div class="multi-progress-bar" aria-label="Storage allocation bar">
     {#each storageSegments as segment (segment.label)}
       <div
@@ -164,7 +164,7 @@
 </section>
 
 <section class="option-card">
-  <span class="form-label">Library Breakdown</span>
+  <span class="form-label">Library breakdown</span>
   <div class="library-grid">
     {@render libraryStat(MEDIA_ICONS.movie, "Movies", stats.library.total_movies, movieDetails)}
     {@render libraryStat(MEDIA_ICONS.show, "TV Shows", stats.library.total_shows, showDetails)}

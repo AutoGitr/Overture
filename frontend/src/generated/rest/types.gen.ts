@@ -661,6 +661,10 @@ export type BackupCreatedResponse = {
      * Filename
      */
     filename: string;
+    /**
+     * Removed
+     */
+    removed: Array<string>;
 };
 
 /**
@@ -693,6 +697,10 @@ export type BackupListResponse = {
      * Backups
      */
     backups: Array<BackupFileInfo>;
+    /**
+     * Directory
+     */
+    directory: string;
 };
 
 /**
@@ -1475,6 +1483,10 @@ export type CollectionArtwork = {
      * Background Height
      */
     background_height: number | null;
+    /**
+     * Background Phash
+     */
+    background_phash: string | null;
     background_source: ArtSource | null;
     background_status: AssetStatus;
     /**
@@ -1493,6 +1505,10 @@ export type CollectionArtwork = {
      * Poster Height
      */
     poster_height: number | null;
+    /**
+     * Poster Phash
+     */
+    poster_phash: string | null;
     poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
@@ -1695,6 +1711,10 @@ export type CollectionDetail = {
      * Background Height
      */
     background_height: number | null;
+    /**
+     * Background Phash
+     */
+    background_phash: string | null;
     background_source: ArtSource | null;
     background_status: AssetStatus;
     /**
@@ -1790,6 +1810,10 @@ export type CollectionDetail = {
      * Poster Height
      */
     poster_height: number | null;
+    /**
+     * Poster Phash
+     */
+    poster_phash: string | null;
     poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
@@ -2510,6 +2534,10 @@ export type CollectionRead = {
      * Background Height
      */
     background_height: number | null;
+    /**
+     * Background Phash
+     */
+    background_phash: string | null;
     background_source: ArtSource | null;
     background_status: AssetStatus;
     /**
@@ -2592,6 +2620,10 @@ export type CollectionRead = {
      * Poster Height
      */
     poster_height: number | null;
+    /**
+     * Poster Phash
+     */
+    poster_phash: string | null;
     poster_source: ArtSource | null;
     poster_status: AssetStatus;
     /**
@@ -3291,7 +3323,7 @@ export type CustomSetValueOutput = {
  *
  * ``stored`` is the record's own row first, then every row that refers to
  * it through a foreign key, and theirs in turn. ``derived`` holds what the
- * API shows that no column stores.
+ * API shows that no column stores, so not the fields copied from artwork rows.
  */
 export type DatabaseRecord = {
     /**

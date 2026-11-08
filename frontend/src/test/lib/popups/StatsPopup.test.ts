@@ -113,9 +113,9 @@ describe("StatsPopup", () => {
     renderWithQueryClient(StatsPopup);
 
     expect(await screen.findByRole("heading", { name: "Statistics" })).toBeInTheDocument();
-    expect(await screen.findByText("Total Footprint")).toBeInTheDocument();
-    expect(screen.getByText("Storage Distribution")).toBeInTheDocument();
-    expect(screen.getByText("Library Breakdown")).toBeInTheDocument();
+    expect(await screen.findByText("Total footprint")).toBeInTheDocument();
+    expect(screen.getByText("Storage distribution")).toBeInTheDocument();
+    expect(screen.getByText("Library breakdown")).toBeInTheDocument();
     expect(screen.getByText("120")).toBeInTheDocument(); // total movies
     expect(screen.getByText("45")).toBeInTheDocument(); // total shows
   });
@@ -125,10 +125,10 @@ describe("StatsPopup", () => {
 
     await fireEvent.click(await screen.findByRole("tab", { name: "Artwork" }));
 
-    expect(screen.getByText("Overall Artwork Coverage")).toBeInTheDocument();
+    expect(screen.getByText("Overall artwork coverage")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Posters" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Backgrounds" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Season Posters" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Season posters" })).toBeInTheDocument();
     expect(screen.getByText("150 / 165")).toBeInTheDocument(); // posters configured
   });
 
@@ -137,10 +137,10 @@ describe("StatsPopup", () => {
 
     await fireEvent.click(await screen.findByRole("tab", { name: "Themes" }));
 
-    expect(screen.getByText("Overall Theme Audio Coverage")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Movie Themes" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "TV Show Themes" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Collection Themes" })).toBeInTheDocument();
+    expect(screen.getByText("Overall theme coverage")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Movie themes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "TV Show themes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Collection themes" })).toBeInTheDocument();
     expect(screen.getByText("60 / 120")).toBeInTheDocument(); // movie themes configured
   });
 
@@ -158,7 +158,7 @@ describe("StatsPopup", () => {
 
     await fireEvent.click(screen.getByRole("tab", { name: "Themes" }));
 
-    expect(screen.getByRole("heading", { name: "Collection Themes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Collection themes" })).toBeInTheDocument();
     expect(
       screen.getByText("Unavailable: the media server could not list its collections."),
     ).toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("StatsPopup", () => {
     getStats.mockResolvedValue({ data: mockStats });
     await fireEvent.click(screen.getByRole("button", { name: "Retry statistics" }));
 
-    expect(await screen.findByText("Total Footprint")).toBeInTheDocument();
+    expect(await screen.findByText("Total footprint")).toBeInTheDocument();
   });
 
   it("closes popup when close button is clicked", async () => {

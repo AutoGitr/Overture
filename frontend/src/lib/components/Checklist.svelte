@@ -50,7 +50,7 @@
         disabled={selectAllDisabled}
         onchange={(event) => ontoggleall(event.currentTarget.checked)}
       />
-      <span>{allSelected ? "Deselect All" : "Select All"}</span>
+      <span>{allSelected ? "Deselect all" : "Select all"}</span>
     </label>
   </div>
   {#if notice}

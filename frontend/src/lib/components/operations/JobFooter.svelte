@@ -4,7 +4,7 @@
 
   /**
    * The footer every operation tab shares: what starts a run, Stop while one
-   * runs, and Clear Results once it has finished. A tab supplies only the
+   * runs, and Clear results once it has finished. A tab supplies only the
    * buttons that differ.
    */
   let {
@@ -53,6 +53,6 @@
     pending={clear.isPending}
     pendingLabel="Clearing..."
   >
-    Clear Results
+    Clear results
   </PendingButton>
 {/if}

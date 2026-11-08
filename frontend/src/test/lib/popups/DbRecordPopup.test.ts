@@ -47,7 +47,7 @@ async function openItem(item: MediaItemRead) {
 
 async function renderPopup() {
   const view = renderWithQueryClient(DbRecordPopup);
-  await screen.findByRole("dialog", { name: /^Database Record/ });
+  await screen.findByRole("dialog", { name: /^Database record/ });
   return view;
 }
 
@@ -68,9 +68,9 @@ describe("DbRecordPopup", () => {
     expect(
       await screen.findByRole("heading", { name: "Stored in media_items" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Database Record - Alien" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Database record - Alien" })).toBeVisible();
     expect(field("title")).toHaveTextContent("Alien");
-    expect(screen.getByText("seasons 3", { selector: "summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "seasons 3", expanded: false })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Derived by the API" })).toBeInTheDocument();
     expect(field("art_status")).toHaveTextContent("missing");
     expect(calls.map((call) => call.url)).toContain("/api/library/items/7/record");
@@ -143,7 +143,7 @@ describe("DbRecordPopup", () => {
 
     expect(await screen.findByRole("heading", { name: "OvertureDB Item" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "OvertureDB Seasons" })).toBeInTheDocument();
-    expect(screen.getByText("Season 2", { selector: "summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Season 2", expanded: false })).toBeInTheDocument();
   });
 
   it("shows the selected collection and its OvertureDB record, never an item's", async () => {
@@ -168,7 +168,7 @@ describe("DbRecordPopup", () => {
     expect(
       await screen.findByRole("heading", { name: "Stored in media_collections" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Database Record - Action" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Database record - Action" })).toBeVisible();
     expect(
       await screen.findByRole("heading", { name: "OvertureDB Collection" }),
     ).toBeInTheDocument();

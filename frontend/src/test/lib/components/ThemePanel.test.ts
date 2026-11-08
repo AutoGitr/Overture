@@ -254,7 +254,7 @@ describe("ThemePanel search", () => {
     ]);
 
     // Check badges
-    expect(screen.getByText("Currently Selected")).toHaveClass("badge", "badge-success");
+    expect(screen.getByText("Currently selected")).toHaveClass("badge", "badge-success");
     expect(screen.getByText("OvertureDB")).toHaveClass("badge", "badge-accent");
     expect(screen.getByText("ThemerrDB")).toHaveClass("badge", "badge-warning");
 

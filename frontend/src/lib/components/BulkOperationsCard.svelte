@@ -377,14 +377,12 @@
   }
 </script>
 
-<FilterSection label="Bulk operations">
-  {#snippet control()}
-    <span class="hint">
-      {resultsReady
-        ? `For the ${matchCount} ${noun} the filters and search match. Local files are kept.`
-        : `Matching ${noun} are unavailable or still loading.`}
-    </span>
-  {/snippet}
+<FilterSection
+  label="Bulk operations"
+  description={resultsReady
+    ? `For the ${matchCount} ${noun} the filters and search match. Local files are kept.`
+    : `Matching ${noun} are unavailable or still loading.`}
+>
   <div class="action-card-buttons">
     <button
       type="button"
@@ -471,10 +469,10 @@
 </FilterSection>
 
 {#if !forItems}
-  <FilterSection label="Collection operations">
-    {#snippet control()}
-      <span class="hint">For the collections the filters, search and open group match.</span>
-    {/snippet}
+  <FilterSection
+    label="Collection operations"
+    description="For the collections the filters, search and open group match."
+  >
     <FieldRow label="Operation" for={`${id}-operation`}>
       <select
         id={`${id}-operation`}

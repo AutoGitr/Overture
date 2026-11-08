@@ -482,7 +482,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     expect(view.queryByRole("button", { name: /delete group/i })).toBeNull();
   });
 
-  it("groups collection filters: status inline together, then art, theme, bulk and collection operations", async () => {
+  it("groups collection filters: status first, then art, theme, metadata, bulk and collection operations", async () => {
     await navigate("/collections");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     queryClient.setQueryData(listCollectionsOptions().queryKey, []);
@@ -493,20 +493,31 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const view = renderWithQueryClient(FiltersPopup);
     await view.findByRole("radiogroup", { name: "Kind" });
 
-    const headings = view
-      .getAllByRole("heading", { level: 3 })
-      .map((heading) => heading.textContent?.trim());
-    expect(headings).toEqual([
+    for (const name of [
       "Status",
       "Art",
       "Theme music",
       "Metadata issues",
       "Bulk operations",
       "Collection operations",
-    ]);
+    ])
+      expect(view.getByRole("button", { name, expanded: true })).toBeInTheDocument();
     const status = within(view.getByRole("region", { name: "Status" }));
-    for (const name of ["Holds", "Management", "Kind", "Size", "Media server"])
-      expect(status.getByRole("group", { name })).toBeInTheDocument();
+    // The most used first, and filters with the same choices side by side.
+    expect(
+      status.getAllByRole("radiogroup").map((group) => group.getAttribute("aria-label")),
+    ).toEqual([
+      "Monitor status",
+      "Art complete",
+      "Theme complete",
+      "Aspect ratio",
+      "Media server",
+      "Last sync",
+      "Size",
+      "Management",
+      "Kind",
+      "Holds",
+    ]);
     expect(
       within(view.getByRole("region", { name: "Art" })).getByRole("group", {
         name: "Art resolution",

@@ -42,7 +42,7 @@
       {/if}
 
       {#if art.perfect_match}
-        <span class="badge badge-success">Perfect Match</span>
+        <span class="badge badge-success">Perfect match</span>
       {:else if art.hamming !== undefined && art.hamming !== null}
         <span
           class={[

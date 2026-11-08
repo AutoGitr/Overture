@@ -78,7 +78,7 @@ describe("OperationsPopup tab navigation", () => {
     await fireEvent.click(screen.getByRole("tab", { name: /Sync/i }));
 
     expect(screen.getByText("Wait for downloads to finish.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
   });
 
   it("renders with the initial tab and allows switching between all tabs", async () => {
@@ -87,7 +87,7 @@ describe("OperationsPopup tab navigation", () => {
     const assetsTab = screen.getByRole("tab", { name: /Assets/i });
     const syncTab = screen.getByRole("tab", { name: /Sync/i });
     const renamerTab = screen.getByRole("tab", { name: /Renamer/i });
-    const auditTab = screen.getByRole("tab", { name: /Server Audit/i });
+    const auditTab = screen.getByRole("tab", { name: /Server audit/i });
 
     expect(assetsTab).toHaveAttribute("aria-selected", "true");
     expect(syncTab).toHaveAttribute("aria-selected", "false");
@@ -106,7 +106,7 @@ describe("OperationsPopup tab navigation", () => {
     expect(syncTab).toHaveAttribute("aria-selected", "false");
     expect(uiState.operationsTab).toBe("renamer");
 
-    // Switch to Server Audit
+    // Switch to Server audit
     await fireEvent.click(auditTab);
     expect(auditTab).toHaveAttribute("aria-selected", "true");
     expect(renamerTab).toHaveAttribute("aria-selected", "false");

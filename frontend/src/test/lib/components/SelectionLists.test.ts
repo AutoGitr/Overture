@@ -31,12 +31,12 @@ describe("selection lists", () => {
       ontoggleall: vi.fn(),
     });
     expect(screen.getByRole("checkbox", { name: "Films" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Select All" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select all" })).not.toBeChecked();
     await rerender({ selectedIds: ["shows"] });
     expect(screen.getByRole("checkbox", { name: "Films" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Series" })).toBeChecked();
     await rerender({ selectedIds: ["movies", "shows"] });
-    expect(screen.getByRole("checkbox", { name: "Deselect All" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Deselect all" })).toBeChecked();
   });
   it("keeps collection choices separate from library IDs and includes them in select-all", async () => {
     const ontoggle = vi.fn();
@@ -60,7 +60,7 @@ describe("selection lists", () => {
     await fireEvent.click(screen.getByRole("checkbox", { name: "All collections" }));
     expect(oncollectiontoggle).toHaveBeenLastCalledWith(null);
     await rerender({ collections: { all: false, groups: ["Sagas"] } });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect All" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all" }));
     expect(ontoggleall).toHaveBeenCalledWith(false);
     expect(oncollectionsall).toHaveBeenLastCalledWith(false);
     expect(ontoggle).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe("selection lists", () => {
       ontoggleall,
       oncollectionsall,
     });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select All" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     expect(ontoggleall).toHaveBeenCalledWith(true);
     expect(oncollectionsall).not.toHaveBeenCalled();
     expect(screen.queryByRole("checkbox", { name: "Collections" })).toBeNull();

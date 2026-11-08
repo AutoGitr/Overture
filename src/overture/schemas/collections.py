@@ -6,7 +6,7 @@ lazy from typing import Annotated, Literal, Self
 
 lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
 
-lazy from ..db.art_slots import read_art_slot, slot_art_source
+lazy from ..db.art_slots import flattened_art, read_art_slot
 lazy from ..db.completion import collection_art_completion, collection_theme_status
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection
@@ -284,6 +284,8 @@ class CollectionArtwork(StrictBaseModel):
     #: The cached image Overture last uploaded to the server, which views show.
     poster_hash: str | None = None
     background_hash: str | None = None
+    poster_phash: str | None = None
+    background_phash: str | None = None
     poster_width: int | None = None
     poster_height: int | None = None
     background_width: int | None = None
@@ -298,20 +300,14 @@ def collection_artwork(row: MediaCollection) -> CollectionArtwork:
     completion = collection_art_completion(row)
     poster = read_art_slot(row, ArtType.POSTER)
     background = read_art_slot(row, ArtType.BACKGROUND)
-    return CollectionArtwork(
-        poster_url=poster.url,
-        background_url=background.url,
-        poster_source=slot_art_source(poster),
-        background_source=slot_art_source(background),
-        poster_hash=poster.file_hash,
-        background_hash=background.file_hash,
-        poster_width=poster.width,
-        poster_height=poster.height,
-        background_width=background.width,
-        background_height=background.height,
-        poster_status=completion.poster_status,
-        background_status=completion.background_status,
-        art_status=completion.art_status,
+    return CollectionArtwork.model_validate(
+        {
+            **flattened_art(poster, "poster"),
+            **flattened_art(background, "background"),
+            "poster_status": completion.poster_status,
+            "background_status": completion.background_status,
+            "art_status": completion.art_status,
+        }
     )
 
 

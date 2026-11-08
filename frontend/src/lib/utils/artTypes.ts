@@ -5,7 +5,7 @@ import { SEASON_ART_TYPES } from "../../generated/settings";
 export const ASSET_LABELS: Record<ServerAsset, string> = {
   poster: "Poster",
   background: "Background",
-  season_poster: "Season Poster",
+  season_poster: "Season poster",
   theme: "Theme",
 };
 

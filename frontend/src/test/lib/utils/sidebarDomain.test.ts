@@ -259,7 +259,7 @@ describe("sidebar item filters", () => {
 
   it("filters items by themerrdb status only while the public dataset is enabled", () => {
     const items = [
-      mediaItem({ id: 1, title: "Theme Match", public_dataset_themerrdb: true }),
+      mediaItem({ id: 1, title: "Theme match", public_dataset_themerrdb: true }),
       mediaItem({ id: 2, title: "No Theme", public_dataset_themerrdb: false }),
     ];
 
@@ -268,7 +268,7 @@ describe("sidebar item filters", () => {
         filters: withFilters({ themerrDb: "complete" }),
         publicDatasetEnabled: true,
       }),
-    ).toEqual(["Theme Match"]);
+    ).toEqual(["Theme match"]);
     expect(
       filterItems(items, {
         filters: withFilters({ themerrDb: "incomplete" }),

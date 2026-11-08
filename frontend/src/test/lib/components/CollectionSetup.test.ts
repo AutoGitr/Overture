@@ -421,7 +421,12 @@ describe("collection setup flow", () => {
     mockPage();
     await createPage();
     const expanded = () =>
-      screen.getAllByRole("button", { expanded: true }).map((button) => button.textContent?.trim());
+      screen
+        .getAllByRole("button", { expanded: true })
+        .map(
+          (button) =>
+            document.getElementById(button.getAttribute("aria-labelledby") ?? "")?.textContent,
+        );
     expect(expanded()).toEqual(["Setup", "Content"]);
 
     await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));

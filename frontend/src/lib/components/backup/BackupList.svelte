@@ -16,7 +16,7 @@
   let timezone = $derived(scheduleQuery.data?.timezone ?? "UTC");
 </script>
 
-<BackupSection icon={HardDrive} title="Existing Backups" count={backups.length}>
+<BackupSection icon={HardDrive} title="Existing backups" count={backups.length}>
   <DataStatus
     label="backups"
     error={backupsQuery.error}
@@ -24,6 +24,9 @@
     hasData={backupsQuery.data !== undefined}
     onretry={() => backupsQuery.refetch()}
   />
+  {#if backupsQuery.data}
+    <p class="hint">Saved in <code>{backupsQuery.data.directory}</code>.</p>
+  {/if}
   {#if backupsQuery.isSuccess && backups.length === 0}
     <p class="hint">No backups yet.</p>
   {:else if backups.length > 0}

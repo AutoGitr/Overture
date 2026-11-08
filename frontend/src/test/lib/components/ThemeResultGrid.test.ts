@@ -60,7 +60,7 @@ describe("ThemeResultGrid", () => {
       {
         ...results[0]!,
         badges: [
-          { label: "Currently Selected", variant: "success" },
+          { label: "Currently selected", variant: "success" },
           { label: "OvertureDB", variant: "accent" },
         ],
       },
@@ -77,7 +77,7 @@ describe("ThemeResultGrid", () => {
       },
     });
 
-    const selectedBadge = screen.getByText("Currently Selected");
+    const selectedBadge = screen.getByText("Currently selected");
     expect(selectedBadge).toBeInTheDocument();
     expect(selectedBadge).toHaveClass("badge", "badge-success");
 

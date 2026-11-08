@@ -114,7 +114,7 @@
     run: runScheduleRequest,
   });
 
-  /** Why Run Now cannot start, or null when it can. */
+  /** Why Run now cannot start, or null when it can. */
   let runBlocker = $derived(libraryGate.blocked("assets") ?? form.blocker);
   /** Why the schedule cannot be saved, or null when it can. */
   let scheduleBlocker = $derived(
@@ -232,7 +232,7 @@
           createScheduleRequest.isPending ||
           updateScheduleRequest.isPending}
       >
-        {scheduleController.isEditing ? "Update Schedule" : "Save Schedule"}
+        {scheduleController.isEditing ? "Update schedule" : "Save schedule"}
       </button>
       <PendingButton
         class="btn btn-primary"
@@ -243,7 +243,7 @@
         pendingLabel="Starting..."
       >
         <Image size={15} />
-        Run Now
+        Run now
       </PendingButton>
     {/snippet}
   </JobFooter>

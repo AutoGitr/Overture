@@ -57,7 +57,7 @@ describe("themeSearch helpers", () => {
 
       expect(merged).toHaveLength(5);
       expect(merged[0]?.id).toBe("selected_yt");
-      expect(merged[0]?.badges).toEqual([{ label: "Currently Selected", variant: "success" }]);
+      expect(merged[0]?.badges).toEqual([{ label: "Currently selected", variant: "success" }]);
       expect(merged[0]?.title).toBe("Alien Main Title");
 
       expect(merged[1]?.id).toBe("overture_yt");
@@ -89,7 +89,7 @@ describe("themeSearch helpers", () => {
       expect(merged).toHaveLength(2);
       expect(merged[0]?.id).toBe("shared_yt");
       expect(merged[0]?.badges).toEqual([
-        { label: "Currently Selected", variant: "success" },
+        { label: "Currently selected", variant: "success" },
         { label: "OvertureDB", variant: "accent" },
       ]);
       expect(merged[1]?.id).toBe("themerr_yt");
@@ -132,7 +132,7 @@ describe("themeSearch helpers", () => {
       expect(merged[0]?.title).toBe("Alien Opening Credits");
       expect(merged[0]?.channel).toBe("Fox Music");
       expect(merged[0]?.duration).toBe(155);
-      expect(merged[0]?.badges).toEqual([{ label: "Currently Selected", variant: "success" }]);
+      expect(merged[0]?.badges).toEqual([{ label: "Currently selected", variant: "success" }]);
 
       // OvertureDB second
       expect(merged[1]?.id).toBe("overture_yt");

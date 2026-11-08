@@ -83,7 +83,7 @@
       {#if activeTab === "overview"}
         <OverviewTab stats={data} />
       {:else if activeTab === "art"}
-        <CoverageCard title="Overall Artwork Coverage" icon={Images} coverage={data.art.overall} />
+        <CoverageCard title="Overall artwork coverage" icon={Images} coverage={data.art.overall} />
         <CoverageCard
           title="Posters"
           icon={Image}
@@ -105,14 +105,14 @@
           ]}
         />
         <CoverageCard
-          title="Season Posters"
+          title="Season posters"
           icon={MEDIA_ICONS.season}
           coverage={data.art.season_poster}
           showAverage
         />
         {#if data.art.collections}
           <CoverageCard
-            title="Collection Artwork"
+            title="Collection artwork"
             icon={MEDIA_ICONS.collection}
             coverage={data.art.collections}
             showAverage
@@ -120,21 +120,21 @@
         {/if}
       {:else if activeTab === "themes"}
         <CoverageCard
-          title="Overall Theme Audio Coverage"
+          title="Overall theme coverage"
           icon={Music}
           coverage={data.themes.overall}
         />
-        <CoverageCard title="Movie Themes" icon={MEDIA_ICONS.movie} coverage={data.themes.movies} />
-        <CoverageCard title="TV Show Themes" icon={MEDIA_ICONS.show} coverage={data.themes.shows} />
+        <CoverageCard title="Movie themes" icon={MEDIA_ICONS.movie} coverage={data.themes.movies} />
+        <CoverageCard title="TV Show themes" icon={MEDIA_ICONS.show} coverage={data.themes.shows} />
         {#if data.themes.collections}
           <CoverageCard
-            title="Collection Themes"
+            title="Collection themes"
             icon={MEDIA_ICONS.collection}
             coverage={data.themes.collections}
           />
         {:else}
           <section class="option-card">
-            <h3 class="form-label">Collection Themes</h3>
+            <h3 class="form-label">Collection themes</h3>
             <p class="text-muted">Unavailable: the media server could not list its collections.</p>
           </section>
         {/if}

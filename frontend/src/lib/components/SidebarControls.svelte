@@ -241,21 +241,24 @@
     border-bottom: var(--border-subtle);
   }
 
-  /* Active filters and their reset share one outlined control. */
+  /* Active filters and their reset share one outlined control. A border,
+     unlike an inset shadow, keeps the buttons' hover fill inside the outline. */
   .filters {
     display: flex;
     flex-shrink: 0;
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
   }
 
   .filters.active {
     color: var(--accent);
     background: var(--accent-muted);
-    box-shadow: inset 0 0 0 1px var(--accent);
+    border-color: var(--accent);
   }
 
   .filters .btn {
     color: inherit;
+    border-radius: calc(var(--radius-sm) - 1px);
   }
 
   .filter-btn {

@@ -33,10 +33,10 @@
   }
 </script>
 
-<FilterSection label="Bulk operations">
-  {#snippet control()}
-    <span class="hint">For the {entries.length} entries the filters and search match.</span>
-  {/snippet}
+<FilterSection
+  label="Bulk operations"
+  description={`For the ${entries.length} entries the filters and search match.`}
+>
   <button
     type="button"
     class="btn btn-danger btn-sm"

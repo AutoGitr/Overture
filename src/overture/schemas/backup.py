@@ -39,6 +39,8 @@ class BackupCreatedResponse(StrictBaseModel):
     """The backup that was just written."""
 
     filename: str
+    #: Backups the retention removed once this one was safely written.
+    removed: list[str] = Field(default_factory=list[str])
 
 
 class BackupFileInfo(StrictBaseModel):
@@ -52,6 +54,8 @@ class BackupFileInfo(StrictBaseModel):
 class BackupListResponse(StrictBaseModel):
     """Backup list response."""
 
+    #: Where the server writes backups.
+    directory: str
     backups: list[BackupFileInfo] = Field(default_factory=list[BackupFileInfo])
 
 

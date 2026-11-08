@@ -102,7 +102,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
     await fireEvent.click(await assetsPanel().findByRole("checkbox", { name: "Sagas" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
 
     await waitFor(() =>
       expect(startBulkAssets).toHaveBeenCalledWith(
@@ -123,7 +123,9 @@ describe("AssetsPopup", () => {
       }),
     ];
     renderWithQueryClient(OperationsPopup);
-    await fireEvent.click(await assetsPanel().findByRole("button", { name: "View schedule" }));
+    await fireEvent.click(
+      await assetsPanel().findByRole("button", { name: / · Next: /, expanded: false }),
+    );
 
     expect(assetsPanel().getByText("Collections: All collections")).toBeInTheDocument();
     expect(assetsPanel().queryByText(/Libraries:/)).not.toBeInTheDocument();
@@ -140,7 +142,7 @@ describe("AssetsPopup", () => {
     expect(assetsPanel().getByRole("region", { name: "Theme downloads" })).toHaveTextContent(
       "Movies collection",
     );
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeInTheDocument();
     expect(
       screen.getByRole("tab", { name: /Assets/i }).querySelector(".tab-badge"),
     ).not.toBeInTheDocument();
@@ -156,11 +158,11 @@ describe("AssetsPopup", () => {
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));
     expect(assetsPanel().getByText("3 movies")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Movies/ })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Season Poster" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Season poster" })).toBeDisabled();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
     expect(screen.queryByPlaceholderText("Nightly assets")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save Schedule" })).toBeDisabled();
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    expect(screen.getByRole("button", { name: "Save schedule" })).toBeDisabled();
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(startBulkAssets).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -187,19 +189,19 @@ describe("AssetsPopup", () => {
         name: "Enabled",
       }),
     );
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() => expect(themeJobState.running).toBe(true));
     themeJobState.handleCompleted({ total: 2, done: 2, finished_at: "2026-09-09T12:00:00Z" });
     popup.unmount();
 
     sidebarState.current = { type: "movie", itemIds: [25] };
     renderWithQueryClient(OperationsPopup);
-    await fireEvent.click(await screen.findByRole("button", { name: "Clear Results" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Clear results" }));
     const sidebarCheckbox = await screen.findByRole("checkbox", { name: /Current sidebar items/ });
     expect(sidebarCheckbox).toBeChecked();
     expect(sidebarCheckbox).toHaveAccessibleName("Current sidebar items 1 movie");
     expect(screen.getByRole("checkbox", { name: /Movies/ })).not.toBeChecked();
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(startBulkAssets).toHaveBeenLastCalledWith(
         expect.objectContaining({ library_ids: [], item_ids: [25] }),
@@ -214,15 +216,15 @@ describe("AssetsPopup", () => {
     await screen.findByRole("checkbox", { name: /Movies/ });
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));
     expect(assetsPanel().getByText("1 show")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Season Poster" }));
-    expect(screen.getByRole("checkbox", { name: "Season Poster" })).toBeChecked();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Season poster" }));
+    expect(screen.getByRole("checkbox", { name: "Season poster" })).toBeChecked();
     await fireEvent.click(screen.getByRole("checkbox", { name: /Movies/ }));
     expect(screen.getByRole("checkbox", { name: /Movies/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Current sidebar items/ })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Season Poster" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Season Poster" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Season poster" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Season poster" })).toBeDisabled();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(startBulkAssets).toHaveBeenCalledWith(expect.objectContaining({ library_ids: ["1"] })),
     );
@@ -240,13 +242,13 @@ describe("AssetsPopup", () => {
         name: "Enabled",
       }),
     );
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
     sidebarState.current = { type: "movie", itemIds: [] };
-    await waitFor(() => expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled());
     expect(assetsPanel().getByText("0 movies")).toBeInTheDocument();
     sidebarState.current = null;
     await waitFor(() => expect(assetsPanel().queryByText("0 movies")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(startBulkAssets).not.toHaveBeenCalled();
   });
 
@@ -266,7 +268,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByRole("checkbox", { name: /Movies/ });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select All" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
 
     const skipInput = screen.getByRole("spinbutton");
@@ -274,7 +276,7 @@ describe("AssetsPopup", () => {
     await fireEvent.change(screen.getByRole("combobox"), {
       target: { value: "days" },
     });
-    await fireEvent.click(screen.getByText("Run Now"));
+    await fireEvent.click(screen.getByText("Run now"));
 
     await waitFor(() => {
       expect(startBulkAssets).toHaveBeenCalledWith(
@@ -309,7 +311,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByRole("checkbox", { name: /Movies/ });
-    await fireEvent.click(screen.getByText("Run Now"));
+    await fireEvent.click(screen.getByText("Run now"));
 
     await waitFor(() => {
       expect(startBulkAssets).toHaveBeenCalledWith(
@@ -346,7 +348,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByRole("checkbox", { name: /Movies/ });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select All" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
     await fireEvent.input(screen.getByPlaceholderText("Nightly assets"), {
       target: { value: "Nightly" },
@@ -357,7 +359,7 @@ describe("AssetsPopup", () => {
       target: { value: "0 5 * * *" },
     });
 
-    await fireEvent.click(screen.getByText("Save Schedule"));
+    await fireEvent.click(screen.getByText("Save schedule"));
 
     await waitFor(() => {
       expect(createBulkAssetsSchedule).toHaveBeenCalledWith(
@@ -379,10 +381,10 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
 
-    const save = screen.getByText("Save Schedule");
+    const save = screen.getByText("Save schedule");
     expect(save).toBeDisabled();
 
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select All" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
     expect(save).toBeDisabled();
 
@@ -404,12 +406,12 @@ describe("AssetsPopup", () => {
       expect(screen.getByRole("spinbutton")).toHaveValue(4);
     });
     // The saved config disabled themes, so its card is gone from the form.
-    expect(screen.queryByText(/Theme Search Query/)).not.toBeInTheDocument();
-    expect(screen.getByText("Update Schedule")).toBeInTheDocument();
+    expect(screen.queryByText(/Theme search query/)).not.toBeInTheDocument();
+    expect(screen.getByText("Update schedule")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Include unmonitored items" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Replace existing" })).toBeChecked();
     expect(screen.getByText("Replace existing: Yes")).toBeInTheDocument();
-    await fireEvent.click(screen.getByText("Update Schedule"));
+    await fireEvent.click(screen.getByText("Update schedule"));
     await waitFor(() =>
       expect(updateBulkAssetsSchedule).toHaveBeenCalledWith(
         5,
@@ -442,8 +444,8 @@ describe("AssetsPopup", () => {
       await screen.findByRole("checkbox", { name: "Include unmonitored items" }),
     ).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Replace existing" })).toBeChecked();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled());
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(startBulkAssets).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -470,12 +472,12 @@ describe("AssetsPopup", () => {
     reads.getLibraries.mockRejectedValueOnce(new Error("Libraries unavailable"));
     renderWithQueryClient(OperationsPopup);
     expect(await screen.findByRole("alert")).toHaveTextContent("Libraries unavailable");
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(localStorage.getItem("assetsPopup_selectedLibraries")).toBe('["1"]');
     expect(localStorage.getItem("assetsPopup_artTypes")).toBe('["poster"]');
     await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("checkbox", { name: /Movies/ })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
   });
 
   it("preserves preferred sources while dataset status is unavailable", async () => {
@@ -493,7 +495,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByRole("checkbox", { name: /Movies/ });
-    const runButton = screen.getByRole("button", { name: "Run Now" });
+    const runButton = screen.getByRole("button", { name: "Run now" });
     await fireEvent.click(runButton);
 
     await waitFor(() => expect(startBulkAssets).toHaveBeenCalled());
@@ -518,7 +520,7 @@ describe("AssetsPopup", () => {
         if (record.type === "attributes" && body.classList.contains("fill")) changes.push("fill");
         for (const node of record.removedNodes) if (node.contains(library)) changes.push("form");
         for (const node of record.addedNodes) {
-          if (/Starting|Stop|Clear Results/.test(node.textContent ?? "")) changes.push("results");
+          if (/Starting|Stop|Clear results/.test(node.textContent ?? "")) changes.push("results");
         }
       }
     });
@@ -529,27 +531,27 @@ describe("AssetsPopup", () => {
       attributeFilter: ["class"],
     });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Wait for full sync to finish");
     observer.disconnect();
 
     expect(changes).toEqual([]);
     expect(library).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
   });
 
-  it("holds Run Now while a full sync runs and says why", async () => {
+  it("holds Run now while a full sync runs and says why", async () => {
     localStorage.setItem("assetsPopup_selectedLibraries", '["1"]');
     localStorage.setItem("assetsPopup_artTypes", '["poster"]');
     syncState.markStartAccepted();
     renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
 
-    expect(screen.getByRole("button", { name: "Run Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("Wait for the full sync to finish.");
 
     syncState.handleCompleted({});
-    await waitFor(() => expect(screen.getByRole("button", { name: "Run Now" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
     expect(screen.queryByText("Wait for the full sync to finish.")).not.toBeInTheDocument();
   });
 
@@ -566,7 +568,7 @@ describe("AssetsPopup", () => {
     expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
 
     matchState.handleStopped({});
-    expect(await screen.findByRole("button", { name: "Clear Results" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Clear results" })).toBeEnabled();
   });
 
   it("closes cleanly and returns focus to the control that opened it", async () => {
