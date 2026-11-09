@@ -2,6 +2,7 @@
 
 lazy from collections.abc import Collection, Sequence
 lazy from datetime import datetime
+lazy from typing import Protocol
 
 lazy from sqlmodel import col, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -9,7 +10,19 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ..db.models.library import Library
 lazy from ..db.models.media_item import MediaItem
 lazy from ..domain import MediaType
-lazy from ..media_servers.adapters import ServerSection
+
+
+class ListedLibrary(Protocol):
+    """What a sync records of each library the server lists."""
+
+    @property
+    def key(self) -> str: ...
+
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def media_type(self) -> MediaType: ...
 
 
 class LibraryRepository:
@@ -18,7 +31,7 @@ class LibraryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def record(self, sections: Sequence[ServerSection], now: datetime) -> None:
+    async def record(self, sections: Sequence[ListedLibrary], now: datetime) -> None:
         """Store the libraries the server lists; mark the rest removed at *now*."""
         listed = {(section.key, section.media_type): section for section in sections}
         for library in (await self.session.exec(select(Library))).all():

@@ -1,3 +1,4 @@
+import { followLibrary } from "../../../lib/realtime/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getItemOptions,
@@ -67,6 +68,9 @@ function seedLibrary(movies: MediaItemRead[] = [], shows: MediaItemRead[] = []) 
     total: shows.length,
   });
 }
+
+// What follows the library, as the app registers it when it starts.
+followLibrary();
 
 describe("REST cache helpers", () => {
   beforeEach(async () => {

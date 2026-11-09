@@ -1,5 +1,6 @@
 import { createRouter, searchParams } from "sv-router";
-import type { ArtType, CatalogMediaType } from "../../generated/rest/types.gen";
+import type { ArtType } from "../../generated/rest/types.gen";
+import type { CatalogTarget } from "../rest/cache";
 import { settingsState } from "../stores/settingsState.svelte";
 import type { SidebarMode, SidebarSource, SidebarTab } from "../utils/sidebarDomain";
 import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../utils/slug";
@@ -180,8 +181,6 @@ export function routeScope(): { source: SidebarSource; tab: SidebarTab; mode: Si
     mode: parts[offset + 1] === "collections" ? "collections" : "items",
   };
 }
-
-export type CatalogTarget = { media_type: CatalogMediaType; entry_key: string };
 
 export function routedCatalogEntry(): CatalogTarget | null {
   const scope = routeScope();

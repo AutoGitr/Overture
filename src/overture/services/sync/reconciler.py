@@ -34,7 +34,7 @@ lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...services.library.items import (
     emit_library_item_removed,
-    emit_library_item_upserted,
+    emit_library_items_upserted,
 )
 lazy from ...utils.time import utc_now
 lazy from ..downloads.selections import queue_saved_selection_downloads
@@ -189,24 +189,27 @@ class LibraryReconciler:
             Whether the run was asked to stop before the batch was done.
         """
         auto_unmonitor = await self._auto_unmonitor()
+        changed: list[int] = []
+        stopped = False
         async with self._stamping() as synced:
             for server_item in server_items:
                 if stop_check and stop_check():
-                    return True
+                    stopped = True
+                    break
                 outcome = await self._reconcile_one(
                     server_item, claimed, auto_unmonitor=auto_unmonitor
                 )
                 if isinstance(outcome, SyncItemResult) and outcome.item_id is not None:
                     synced.add(outcome.item_id)
                     await on_reconciled(server_item, outcome.item_id)
-                await self._report(
-                    server_item,
-                    outcome,
-                    stats,
-                    event_source=event_source,
-                    progress_cb=progress_cb,
-                )
-        return False
+                    if outcome.visible_changed:
+                        changed.append(outcome.item_id)
+                await self._report(server_item, outcome, stats, progress_cb=progress_cb)
+        # Told after the stamp, since an upsert versions server artwork by it.
+        await emit_library_items_upserted(
+            changed, event_source, self.publisher, database=self._database
+        )
+        return stopped
 
     @asynccontextmanager
     async def _stamping(self) -> AsyncGenerator[set[int]]:
@@ -230,8 +233,7 @@ class LibraryReconciler:
         """Stamp reconciled items as synced in one write.
 
         Doing it per batch keeps an unchanged item's own transaction empty, so
-        a re-sync writes once per batch instead of once per item. A changed
-        item is stamped again here, harmlessly, after its own stamp.
+        a re-sync writes once per batch instead of once per item.
         """
         if item_ids:
             async with self._database.write_session() as session:
@@ -270,19 +272,12 @@ class LibraryReconciler:
         after_id = 0
         while True:
             async with self._database.read_session() as session:
-                candidates = await MediaItemRepository(
-                    session
-                ).list_visible_with_server_ids(
+                current = await MediaItemRepository(session).server_identities(
                     library_ids, after_id=after_id, limit=PAGE_SIZE
                 )
-                current = [
-                    (item.id, item.media_type, item.server_item_id)
-                    for item in candidates
-                    if item.id is not None and item.server_item_id is not None
-                ]
-            if not candidates:
+            if not current:
                 return
-            after_id = max(item.id or 0 for item in candidates)
+            after_id = current[-1][0]
             listed = await listing.mappings(
                 [(media_type, server_id) for _, media_type, server_id in current]
             )
@@ -319,7 +314,7 @@ class LibraryReconciler:
                     await emit_library_item_removed(
                         item.id, item.media_type, "sync", self.publisher
                     )
-            if len(candidates) < PAGE_SIZE:
+            if len(current) < PAGE_SIZE:
                 return
 
     async def sync_recent(
@@ -447,14 +442,6 @@ class LibraryReconciler:
                     )
                 ):
                     result.changes = (*result.changes, "saved selections downloading")
-            # The upsert a change emits versions server artwork by the sync
-            # time, so a changed item is stamped before it is reported.
-            if (
-                result.visible_changed
-                and not result.created
-                and result.item_id is not None
-            ):
-                await self._mark_synced([result.item_id])
             return result
         except Exception as exc:
             return _item_failure(server_item, exc)
@@ -502,23 +489,13 @@ class LibraryReconciler:
         outcome: SyncItemResult | str,
         stats: SyncResult,
         *,
-        event_source: str,
         progress_cb: SyncProgressCallback | None,
     ) -> None:
-        """Record outcome, append log message, and notify subscribers."""
-        changed_item_id: int | None = None
+        """Record the outcome and append its log message."""
         if isinstance(outcome, str):
             status, reason = JobOutcome.ERROR, outcome
         else:
             if outcome.created and outcome.item_id is not None:
                 stats.created_item_ids.append(outcome.item_id)
             status, reason = _sync_outcome(outcome)
-            changed_item_id = outcome.item_id if outcome.visible_changed else None
         await self._log(stats, status, server_item.title, reason, progress_cb)
-        if changed_item_id is not None:
-            await emit_library_item_upserted(
-                changed_item_id,
-                event_source,
-                self.publisher,
-                database=self._database,
-            )

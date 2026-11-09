@@ -1,6 +1,6 @@
 """Database record REST schemas."""
 
-lazy from collections.abc import Mapping
+lazy from collections.abc import Mapping, Sequence
 
 lazy from pydantic import BaseModel, Field
 
@@ -34,11 +34,12 @@ class DatabaseRecord(StrictBaseModel):
     @classmethod
     def of(
         cls,
-        stored: list[StoredRow],
+        rows: Sequence[tuple[str, dict[str, JsonValue]]],
         read: BaseModel,
         values: Mapping[TermKind, list[str]] | None = None,
     ) -> DatabaseRecord:
         """The stored rows, and what *read* shows beyond the record's own columns."""
+        stored = [StoredRow(table=table, values=values) for table, values in rows]
         shown = set(stored[0].values) if stored else set[str]()
         for row in stored:
             if row.table == ArtSlot.__tablename__:

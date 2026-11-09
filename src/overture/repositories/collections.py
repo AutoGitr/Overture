@@ -1,5 +1,6 @@
 """Media-server collection query helpers."""
 
+lazy import asyncio
 lazy from collections.abc import Collection, Iterable, Mapping, Sequence
 lazy from dataclasses import dataclass, field
 lazy from datetime import datetime
@@ -71,6 +72,9 @@ class CollectionItem(NamedTuple):
         """Its values of *kind*, which must have been read."""
         return self.terms[kind]
 
+
+#: Values converted between letting other requests run, for reads of whole kinds.
+_ROWS_PER_TURN = 10_000
 
 #: The stored columns of a :class:`CollectionItem`, in its field order.
 _ITEM_COLUMNS = [
@@ -283,6 +287,26 @@ class CollectionRepository:
             for row in (await self.session.exec(stmt)).all()
         ]
 
+    async def members_of(self, collection_ids: Collection[int]) -> list[CollectionItem]:
+        """Return the visible stored items these collections hold, each once."""
+        found: dict[int, CollectionItem] = {}
+        for batch in batched(collection_ids, CHUNK_SIZE, strict=False):
+            rows = await self.session.exec(
+                _select_items()
+                .join(
+                    MediaCollectionMember,
+                    col(MediaCollectionMember.media_item_id) == col(MediaItem.id),
+                )
+                .where(
+                    col(MediaCollectionMember.collection_id).in_(batch),
+                    col(MediaItem.server_removed_at).is_(None),
+                )
+            )
+            found.update(
+                {row[0]: CollectionItem._make((*row, {})) for row in rows.all()}
+            )
+        return list(found.values())
+
     async def collection_ids_by_item(
         self, item_ids: Collection[int]
     ) -> dict[int, list[int]]:
@@ -478,8 +502,10 @@ class CollectionRepository:
                     col(MediaItemTerm.position),
                 )
             )
-            for item_id, kind, name in rows.all():
-                found.setdefault(item_id, {}).setdefault(kind, []).append(name)
+            for part in rows.partitions(_ROWS_PER_TURN):
+                for item_id, kind, name in part:
+                    found.setdefault(item_id, {}).setdefault(kind, []).append(name)
+                await asyncio.sleep(0)
         return found
 
     async def term_counts(

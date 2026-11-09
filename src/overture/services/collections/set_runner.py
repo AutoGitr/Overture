@@ -21,13 +21,13 @@ lazy from ...schemas.collections import (
     FieldCondition,
     FilterGroup,
 )
+lazy from ...utils.collection_fields import DIMENSIONS, FIELDS, smart_only_dimension
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess
 lazy from .criteria import TERM_FIELDS, criteria_terms
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
-lazy from .fields import DIMENSIONS, FIELDS, smart_only_dimension
 lazy from .membership import Membership
 lazy from .post_sync import PostSync
 lazy from .rules import TITLE_TAKEN, franchise_ids, library_criteria, rule_read

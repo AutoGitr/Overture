@@ -24,6 +24,7 @@ import type {
   CollectionLibraryCriteriaInput,
   DeleteCollectionData,
   CollectionFiltering,
+  SyncMode,
   CollectionGeneratorInput,
   CollectionMode,
   CollectionOptions,
@@ -37,8 +38,6 @@ import type {
   TmdbCollectionResponse,
 } from "../../generated/rest/types.gen";
 import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
-import type { PolicyData } from "../components/CollectionPolicyFields.svelte";
-import type { ScheduleData } from "../components/CollectionScheduleFields.svelte";
 import { queryClient } from "../rest/queryClient";
 import { closeCollection, goToCollection, goToCollectionsList } from "../router/routes";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
@@ -51,6 +50,37 @@ import {
 } from "./collectionCriteria";
 import { errorMessage } from "./errors";
 import { CollectionOptions as Capabilities } from "./libraries.svelte";
+
+/** Collection policy as a collection, a group and the global defaults hold it. */
+export type PolicyData = {
+  sync_mode?: SyncMode | null;
+  minimum_items?: number | null;
+  delete_below_minimum?: boolean | null;
+  auto_match_art?: boolean | null;
+  auto_generate_art?: boolean | null;
+  auto_match_theme?: boolean | null;
+  request_missing?: boolean | null;
+  member_label?: string | null;
+  arr_tag?: string | null;
+  collection_filtering?: CollectionFiltering | null;
+  collection_mode?: CollectionMode | null;
+  order_type?: CollectionOrder | null;
+  visible_home?: boolean | null;
+  visible_shared?: boolean | null;
+  visible_library?: boolean | null;
+  home_order?: number | null;
+  sort_title_format?: string | null;
+  summary_format?: string | null;
+};
+
+/** When collections sync and are active, at any level. */
+export type ScheduleData = {
+  sync_enabled?: boolean | null;
+  sync_schedule?: string | null;
+  active_start_mmdd?: string | null;
+  active_end_mmdd?: string | null;
+  delete_when_inactive?: boolean | null;
+};
 
 /** Make the criteria Plex's live filter or Overture's, dropping an order the new kind cannot keep. */
 export function switchKind(form: CollectionEditor | CollectionDraft, smart: boolean) {

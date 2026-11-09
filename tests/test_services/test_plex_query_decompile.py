@@ -10,7 +10,6 @@ lazy from overture.domain import (
     MediaType,
 )
 lazy from overture.schemas.collections import FieldCondition, FilterGroup
-lazy from overture.services.collections.fields import FIELDS
 lazy from overture.services.collections.plex_query import (
     UnmappableFilterError,
     choice_keys,
@@ -18,6 +17,7 @@ lazy from overture.services.collections.plex_query import (
     decompile_plex_query,
     plex_field,
 )
+lazy from overture.utils.collection_fields import FIELDS
 
 _VALUES: dict[FieldKind, tuple[FilterOperator, str | int | bool]] = {
     FieldKind.TEXT: (FilterOperator.STARTS_WITH, "Alien"),

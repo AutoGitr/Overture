@@ -8,7 +8,7 @@ Plex smart collections are evaluated by Plex, which tests its own fields.
 lazy from dataclasses import dataclass
 lazy from typing import Literal
 
-lazy from ...domain import (
+lazy from ..domain import (
     CollectionOrder,
     FieldKind,
     FilterField,

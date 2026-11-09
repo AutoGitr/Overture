@@ -5,28 +5,7 @@
     CollectionOrder,
     SyncMode,
   } from "../../generated/rest/types.gen";
-
-  /** Collection policy as a collection, a group and the global defaults hold it. */
-  export type PolicyData = {
-    sync_mode?: SyncMode | null;
-    minimum_items?: number | null;
-    delete_below_minimum?: boolean | null;
-    auto_match_art?: boolean | null;
-    auto_generate_art?: boolean | null;
-    auto_match_theme?: boolean | null;
-    request_missing?: boolean | null;
-    member_label?: string | null;
-    arr_tag?: string | null;
-    collection_filtering?: CollectionFiltering | null;
-    collection_mode?: CollectionMode | null;
-    order_type?: CollectionOrder | null;
-    visible_home?: boolean | null;
-    visible_shared?: boolean | null;
-    visible_library?: boolean | null;
-    home_order?: number | null;
-    sort_title_format?: string | null;
-    summary_format?: string | null;
-  };
+  import type { PolicyData } from "../utils/collectionForms.svelte";
 
   /**
    * Where settings are edited. Global defaults always hold a value; groups and

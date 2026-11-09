@@ -25,10 +25,7 @@ lazy from ...schemas.collections import (
     KindRecommendation,
     MdblistListRead,
 )
-lazy from ...utils.errors import PublicServiceError
-lazy from .access import CollectionAccess, LibraryScope
-lazy from .criteria import TERM_FIELDS, field_value
-lazy from .fields import (
+lazy from ...utils.collection_fields import (
     DIMENSIONS,
     FIELDS,
     available_orders,
@@ -40,6 +37,9 @@ lazy from .fields import (
     plex_tests,
     smart_only_dimension,
 )
+lazy from ...utils.errors import PublicServiceError
+lazy from .access import CollectionAccess, LibraryScope
+lazy from .criteria import TERM_FIELDS, field_value
 lazy from .membership import Membership
 lazy from .recommend import recommend_kind
 lazy from .sources import SOURCE_LABELS, SourceResolver, selects_media

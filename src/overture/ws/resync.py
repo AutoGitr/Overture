@@ -3,8 +3,7 @@
 lazy import logging
 
 lazy from ..protocols import ClientConnection
-lazy from ..services.realtime import RealtimeSnapshotBuilder
-lazy from .connection_manager import ConnectionManager
+lazy from .connection_manager import ConnectionManager, SnapshotBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 async def send_client_resync(
     websocket: ClientConnection,
     websockets: ConnectionManager,
-    snapshot: RealtimeSnapshotBuilder,
+    snapshot: SnapshotBuilder,
 ) -> None:
     """Send one coherent realtime snapshot to a reconnecting client.
 

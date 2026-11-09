@@ -10,7 +10,7 @@ import type {
   TmdbSeasonPreview,
 } from "../../generated/rest/types.gen";
 import { storeCatalogDetail } from "../rest/cache";
-import type { CatalogTarget } from "../router/routes";
+import type { CatalogTarget } from "../rest/cache";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
 

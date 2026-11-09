@@ -1,6 +1,6 @@
 """Media item query helpers."""
 
-lazy from collections.abc import Collection
+lazy from collections.abc import Collection, Iterable
 lazy from datetime import datetime
 lazy from itertools import batched
 lazy from pathlib import Path
@@ -10,7 +10,7 @@ lazy from sqlalchemy.orm import QueryableAttribute, raiseload
 lazy from sqlalchemy.sql.elements import ColumnElement
 lazy from sqlmodel import case, col, delete, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
-lazy from sqlmodel.sql.expression import SelectOfScalar
+lazy from sqlmodel.sql.expression import Select, SelectOfScalar
 
 lazy from ..dataset_contract.contract import IDENTITY_FIELDS
 lazy from ..db.completion import HOLDS_FILES
@@ -19,6 +19,7 @@ lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import (
+    BulkItemOperationKind,
     MediaType,
     TermKind,
     guid_int,
@@ -26,7 +27,6 @@ lazy from ..domain import (
     media_sort_key,
     text_sort_key,
 )
-lazy from ..schemas.library import BulkItemOperation
 lazy from .terms import TermRepository
 
 
@@ -332,42 +332,50 @@ class MediaItemRepository:
         result = await self.session.exec(stmt)
         return list(result.all())
 
-    async def list_visible_with_server_ids(
-        self,
-        library_ids: list[str] | None = None,
-        *,
-        after_id: int = 0,
-        limit: int | None = None,
-    ) -> list[MediaItem]:
-        """Return visible media items that have media-server IDs."""
-        stmt = select(MediaItem).where(
-            col(MediaItem.server_item_id).is_not(None),
-            col(MediaItem.server_removed_at).is_(None),
+    async def server_identities(
+        self, library_ids: list[str] | None, *, after_id: int, limit: int
+    ) -> list[tuple[int, MediaType, str]]:
+        """Return a page of visible items' IDs, media types and media-server IDs."""
+        stmt = (
+            select(
+                col(MediaItem.id),
+                col(MediaItem.media_type),
+                col(MediaItem.server_item_id),
+            )
+            .where(
+                col(MediaItem.server_item_id).is_not(None),
+                col(MediaItem.server_removed_at).is_(None),
+                col(MediaItem.id) > after_id,
+            )
+            .order_by(col(MediaItem.id))
+            .limit(limit)
         )
         if library_ids:
             stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
-        if after_id:
-            stmt = stmt.where(col(MediaItem.id) > after_id)
-        if limit is not None:
-            stmt = stmt.order_by(col(MediaItem.id)).limit(limit)
-        result = await self.session.exec(stmt)
-        return sorted(
-            result.all(),
-            key=lambda item: media_sort_key(item.media_type, item.title, item.id),
-        )
+        return [
+            (item_id, media_type, server_id)
+            for item_id, media_type, server_id in await self.session.exec(stmt)
+            if item_id is not None and server_id is not None
+        ]
 
     async def facts_by_server_id(self) -> dict[str, ServerItemFacts]:
-        """Return the visible linked items by media-server ID, without artwork."""
-        stmt = _matching(for_update=False).where(
+        """Return what collections need of the visible linked items, by server ID."""
+        columns: list[Any] = [
+            MediaItem.server_item_id,
+            MediaItem.id,
+            MediaItem.media_type,
+            MediaItem.library_id,
+            MediaItem.tmdb_collection_id,
+        ]
+        stmt = cast("Select[Any]", select(*columns)).where(
             col(MediaItem.server_item_id).is_not(None),
             col(MediaItem.server_removed_at).is_(None),
         )
+        rows = cast("Iterable[Any]", await self.session.exec(stmt))
         return {
-            item.server_item_id: ServerItemFacts(
-                item.id, item.media_type, item.library_id, item.tmdb_collection_id
-            )
-            for item in await self.session.exec(stmt)
-            if item.server_item_id is not None and item.id is not None
+            server_id: ServerItemFacts(item_id, media_type, library_id, franchise)
+            for server_id, item_id, media_type, library_id, franchise in rows
+            if server_id is not None and item_id is not None
         }
 
     async def visible_ids_by_identity(
@@ -376,7 +384,8 @@ class MediaItemRepository:
         identities: list[tuple[str, int | str]] | None = None,
     ) -> dict[tuple[str, int | str], int]:
         """Return visible item IDs keyed by each ``(field, value)`` they carry."""
-        stmt = _matching(for_update=False).where(
+        columns = [col(getattr(MediaItem, field)) for field in IDENTITY_FIELDS]
+        stmt = cast("Select[Any]", select(col(MediaItem.id), *columns)).where(
             col(MediaItem.media_type) == media_type,
             col(MediaItem.server_removed_at).is_(None),
         )
@@ -392,11 +401,10 @@ class MediaItemRepository:
                 )
             )
         found: dict[tuple[str, int | str], int] = {}
-        for item in await self.session.exec(stmt):
-            for field in IDENTITY_FIELDS:
-                value = getattr(item, field)
-                if value is not None and item.id is not None:
-                    found.setdefault((field, value), item.id)
+        for item_id, *values in await self.session.exec(stmt):
+            for field, value in zip(IDENTITY_FIELDS, values, strict=True):
+                if value is not None:
+                    found.setdefault((field, value), item_id)
         return found
 
     async def tmdb_collection_ids(self, item_ids: list[int]) -> list[int | None]:
@@ -529,10 +537,12 @@ class MediaItemRepository:
             .values(server_verified_at=when, last_synced_at=when)
         )
 
-    async def bulk_operate(self, body: BulkItemOperation) -> list[int]:
+    async def bulk_operate(
+        self, item_ids: Collection[int], operation: BulkItemOperationKind
+    ) -> list[int]:
         """Use set-based statements, bounded to SQLite's parameter limit."""
         affected: list[int] = []
-        for batch in batched(dict.fromkeys(body.item_ids), CHUNK_SIZE, strict=False):
+        for batch in batched(dict.fromkeys(item_ids), CHUNK_SIZE, strict=False):
             ids = [
                 item_id
                 for item_id in (
@@ -546,7 +556,7 @@ class MediaItemRepository:
                 continue
             affected.extend(ids)
             target = col(MediaItem.id).in_(ids)
-            if body.operation == "artwork":
+            if operation == "artwork":
                 # Forget selections only: local files stay, and so do the facts
                 # recorded about them. Rows left describing nothing are dropped.
                 seasons = select(Season.id).where(col(Season.media_item_id).in_(ids))
@@ -565,9 +575,9 @@ class MediaItemRepository:
                     .where(owned, col(ArtSlot.file_hash).is_(None))
                     .execution_options(synchronize_session=False)
                 )
-            elif body.operation == "delete":
+            elif operation == "delete":
                 await self.session.exec(delete(MediaItem).where(target))
-            elif body.operation == "themes":
+            elif operation == "themes":
                 # Mirrors clear_theme_selection: the local file and its facts stay.
                 await self.session.exec(
                     update(MediaItem)
@@ -584,7 +594,7 @@ class MediaItemRepository:
                 await self.session.exec(
                     update(MediaItem)
                     .where(target)
-                    .values(monitored=body.operation == "monitor")
+                    .values(monitored=operation == "monitor")
                 )
         return affected
 

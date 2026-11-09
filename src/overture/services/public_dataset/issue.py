@@ -18,8 +18,8 @@ lazy from ...db.session import Database
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.public_dataset import ContributionIssue
 lazy from ...utils.errors import PublicServiceError
-lazy from .browse import catalog_collection_entry, catalog_item_entry
 lazy from .catalog import PUBLIC_DATASET_REPO_URL
+lazy from .entries import catalog_collection_entry, catalog_item_entry
 lazy from .export import collection_entry, item_entry, refused_art
 lazy from .lookup import find_public_item
 

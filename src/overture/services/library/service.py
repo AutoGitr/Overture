@@ -14,6 +14,7 @@ lazy from ...db.session import Database
 lazy from ...domain import (
     ArtType,
     AssetScope,
+    BulkItemOperationKind,
     ImageSize,
     JobType,
     MediaType,
@@ -29,7 +30,6 @@ lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.common import MonitoredResponse
 lazy from ...schemas.library import (
     BulkItemOperation,
-    BulkItemOperationKind,
     BulkItemOperationResult,
     FolderRootsResponse,
     LibrarySectionRead,
@@ -213,7 +213,9 @@ class LibraryService:
         async with self._database.write_session() as db:
             if cancelled:
                 await self._downloads.cancel_items(db, body.item_ids, cancelled)
-            ids = await MediaItemRepository(db).bulk_operate(body)
+            ids = await MediaItemRepository(db).bulk_operate(
+                body.item_ids, body.operation
+            )
         await self._downloads.committed(db)
         result = BulkItemOperationResult(item_ids=ids, operation=body.operation)
         if ids:

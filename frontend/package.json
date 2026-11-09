@@ -29,7 +29,9 @@
     "test:e2e": "bun run build && playwright test",
     "test:oidc": "bun run build && playwright test --config playwright.oidc.config.ts",
     "verify": "bun run typecheck && bun run test:unit && bun run build",
-    "ci": "bun run typecheck && bun run lint && bun run format:check && bun run test:coverage && bun run build",
+    "lint:deps": "depcruise src --config .dependency-cruiser.mjs",
+    "check:bundle": "bun scripts/check-bundle.ts",
+    "ci": "bun run typecheck && bun run lint && bun run lint:deps && bun run format:check && bun run test:coverage && bun run build && bun run check:bundle",
     "ci:e2e": "bun run test:e2e"
   },
   "dependencies": {
@@ -54,6 +56,7 @@
     "@tsconfig/svelte": "5.0.8",
     "@types/node": "26.6.6",
     "@vitest/coverage-v8": "5.0.5",
+    "dependency-cruiser": "18.7.2",
     "eslint": "10.14.0",
     "eslint-plugin-svelte": "3.23.1",
     "globals": "17.14.0",

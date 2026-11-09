@@ -178,6 +178,25 @@ got there. History belongs in commit messages and the changelog.
 - Run `bun run test:e2e` after changing layout or styles; it checks desktop and
   mobile.
 
+### Guards
+
+These fail when a change costs more or reaches across a layer. Fix the cause;
+raise a budget or add an allowed edge only for a change that earns it.
+
+- `tests/conftest.py` fails any test that makes a network request, starts
+  blocking work or takes an asset lock inside a write transaction.
+- `tests/test_architecture/test_layers.py` holds which layer may import which,
+  and that only services open transactions.
+- `tests/test_architecture/test_workloads.py` and `test_route_costs.py` measure
+  statements, ORM entities and write size with `tests/workload.py`. An operation
+  costs the same at twice the titles, and reads no large table end to end. Add a
+  new write path or background operation to `OPERATIONS`; every GET route is
+  covered by itself.
+- `tests/test_release/test_capacity.py` holds time, memory and event-loop budgets.
+- `frontend/.dependency-cruiser.mjs` holds the frontend's import rules,
+  `frontend/scripts/check-bundle.ts` its download budget, and
+  `src/test/e2e/performance.spec.ts` how long a large library may block the page.
+
 ## Database migrations
 
 Every change that needs a migration must ship with one:

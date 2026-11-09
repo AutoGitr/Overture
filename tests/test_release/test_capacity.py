@@ -6,6 +6,7 @@ lazy import os
 lazy import time
 lazy import tracemalloc
 lazy from collections.abc import Mapping
+lazy from itertools import batched
 lazy from pathlib import Path
 lazy from typing import Any, cast
 
@@ -18,15 +19,31 @@ lazy from overture import protocols
 lazy from overture.config import Settings
 lazy from overture.dataset_contract.contract import SCHEMA_VERSION
 lazy from overture.db import metadata
+lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import (
     PublicDatasetItem,
     PublicDatasetSeason,
 )
 lazy from overture.db.session import as_writer, configure_sqlite
-lazy from overture.domain import MediaType
+lazy from overture.domain import (
+    CollectionOrder,
+    FilterField,
+    FilterOperator,
+    MediaType,
+    TermKind,
+)
 lazy from overture.media_servers.adapters import ServerItem
+lazy from overture.repositories.collections import CollectionItem, CollectionRepository
+lazy from overture.repositories.terms import TermRepository
+lazy from overture.schemas.collections import FieldCondition, FilterGroup
 lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
+lazy from overture.services.collections.criteria import (
+    CriteriaContext,
+    criteria_terms,
+    evaluate,
+    order_items,
+)
 lazy from overture.services.public_dataset import catalog, staging
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.time import utc_now
@@ -39,6 +56,7 @@ lazy from tests.test_services.test_public_dataset_edges import (
     catalog_jsonl,
     catalog_payload,
 )
+lazy from tests.workload import watching_the_event_loop
 
 
 def _count(name: str, default: int) -> int:
@@ -270,3 +288,98 @@ async def test_large_realtime_snapshot_has_a_serialization_budget() -> None:
     assert elapsed <= 2
     assert peak <= 64 * 1024 * 1024
     assert len(socket.message.encode()) <= 2 * 1024 * 1024
+
+
+async def _rule_library(sessions: async_sessionmaker[AsyncSession], count: int) -> None:
+    """Store a library whose titles hold as many values as real ones do."""
+    per_title = {
+        TermKind.ACTOR: 55,
+        TermKind.GENRE: 3,
+        TermKind.TMDB_KEYWORD: 12,
+        TermKind.WRITER: 3,
+        TermKind.PRODUCER: 4,
+    }
+    async with sessions() as session:
+        session.add(Library(id="rules", media_type=MediaType.MOVIE, title="Rules"))
+        await session.flush()
+        session.add_all(
+            MediaItem(
+                id=item_id,
+                media_type=MediaType.MOVIE,
+                title=f"Title {item_id}",
+                year=2000 + item_id % 25,
+                server_item_id=f"server-{item_id}",
+                library_id="rules",
+            )
+            for item_id in range(1, count + 1)
+        )
+        await session.flush()
+        repo = TermRepository(session)
+        for batch in batched(range(1, count + 1), 200, strict=False):
+            await repo.assign_many(
+                {
+                    item_id: {
+                        kind: [
+                            f"{kind} {(item_id * 7 + place) % (count * 4)}"
+                            for place in range(places)
+                        ]
+                        for kind, places in per_title.items()
+                    }
+                    for item_id in batch
+                }
+            )
+        await session.commit()
+
+
+async def test_resolving_a_rule_stays_within_time_memory_and_stall_budgets(
+    tmp_path: Path,
+) -> None:
+    item_count = _count("OVERTURE_SYNC_CAPACITY_ITEMS", 1_000)
+    time_budget = float(os.environ.get("OVERTURE_RULE_BUDGET_SECONDS", "2"))
+    stall_budget = float(os.environ.get("OVERTURE_RULE_STALL_SECONDS", "0.5"))
+    memory_budget = 64 * 1024 * 1024
+    engine = await _database(tmp_path / "rules.db")
+    sessions = async_sessionmaker(
+        as_writer(engine), class_=AsyncSession, expire_on_commit=False
+    )
+    database = database_for(sessions)
+    criteria = FilterGroup(
+        conditions=[
+            FieldCondition(
+                field=FilterField.ACTOR,
+                operator=FilterOperator.IS,
+                value=f"{TermKind.ACTOR} 21",
+            )
+        ]
+    )
+    context = CriteriaContext(sources={}, collections={}, now=utc_now())
+
+    async def resolve() -> list[CollectionItem]:
+        async with database.read_session() as session:
+            items = await CollectionRepository(session).library_items(
+                MediaType.MOVIE, "rules", criteria_terms([criteria])
+            )
+        return order_items(
+            evaluate(items, criteria, context), CollectionOrder.TITLE_ASC
+        )
+
+    try:
+        await _rule_library(sessions, item_count)
+        started = time.perf_counter()
+        async with watching_the_event_loop() as stall:
+            matched = await resolve()
+        elapsed = time.perf_counter() - started
+
+        tracemalloc.start()
+        try:
+            await resolve()
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+        assert matched
+        assert elapsed <= time_budget, (elapsed, time_budget, item_count)
+        assert stall.longest <= stall_budget, (stall.longest, item_count)
+        assert peak <= memory_budget, (peak, memory_budget, item_count)
+    finally:
+        await engine.dispose()

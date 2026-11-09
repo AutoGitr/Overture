@@ -10,6 +10,7 @@ import {
 import type {
   BulkItemOperation,
   CatalogEntryDetail,
+  CatalogMediaType,
   CatalogEntryRow,
   CollectionDetail,
   CollectionRead,
@@ -18,11 +19,23 @@ import type {
   MediaItemRead,
 } from "../../generated/rest/types.gen";
 import type { ApiTag, SchedulesChangedEvent } from "../../generated/ws";
-import { goToLibrary, routedItemId } from "../router/routes";
-import type { CatalogTarget } from "../router/routes";
-import { artPreviewState } from "../stores/artPreviewState.svelte";
-import { uiState } from "../stores/uiState.svelte";
 import { queryClient, queryOperationId } from "./queryClient";
+
+export type CatalogTarget = { media_type: CatalogMediaType; entry_key: string };
+
+/** What outside the query cache follows the library's items. */
+export type LibraryObserver = {
+  itemUpdated(item: MediaItemRead): void;
+  /** Items are gone; *isGone* says which. */
+  itemsRemoved(isGone: (itemId: number) => boolean): void;
+};
+
+let observer: LibraryObserver | null = null;
+
+/** Register what follows the library, so this layer stays below stores and routes. */
+export function observeLibrary(next: LibraryObserver): void {
+  observer = next;
+}
 
 type TaggedQueryKey = readonly [
   {
@@ -113,18 +126,12 @@ export function upsertLibraryItem(item: MediaItemRead): void {
     queryKey: getPublicDatasetItemIssueQueryKey({ path: { item_id: item.id } }),
     exact: true,
   });
-  artPreviewState.itemUpdated(item);
+  observer?.itemUpdated(item);
   if (added) outdateTmdbMatches();
 }
 
-/** Leave the open item's view when the item it shows is gone. */
-function closeRemovedItem(removed: (itemId: number) => boolean): void {
-  const openId = routedItemId();
-  if (openId !== null && removed(openId)) goToLibrary(uiState.sidebarTab);
-}
-
 export function removeLibraryItem(itemId: number): void {
-  closeRemovedItem((openId) => openId === itemId);
+  observer?.itemsRemoved((id) => id === itemId);
   let removed = false;
   patchLibraryQueries((response) => {
     const items = response.items.filter((item) => item.id !== itemId);
@@ -255,7 +262,7 @@ export function applyBulkItemOperation({ item_ids, operation }: BulkItemOperatio
   const targets = (queryKey: readonly unknown[], id: string) =>
     isTaggedQuery(queryKey, id) && ids.has(queryKey[0].path?.item_id ?? -1);
   if (operation === "delete") {
-    closeRemovedItem((openId) => ids.has(openId));
+    observer?.itemsRemoved((openId) => ids.has(openId));
     outdateTmdbMatches();
     queryClient.removeQueries({
       predicate: ({ queryKey }) => targets(queryKey, "getItem") || targets(queryKey, "getSeasons"),

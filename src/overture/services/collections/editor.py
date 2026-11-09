@@ -33,6 +33,7 @@ lazy from ...schemas.common import (
     Status,
     StatusResponse,
 )
+lazy from ...utils.collection_fields import available_orders
 lazy from ...utils.collection_formats import literal_template
 lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
@@ -42,7 +43,6 @@ lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess, LibraryScope
 lazy from .criteria import order_items
 lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay, saved_options
-lazy from .fields import available_orders
 lazy from .membership import Membership, resolve_members
 lazy from .plex_query import (
     UnmappableFilterError,

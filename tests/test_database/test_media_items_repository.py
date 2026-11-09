@@ -13,7 +13,6 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtStyle, ArtType, MediaType
 lazy from overture.repositories.media_items import MediaItemRepository
-lazy from overture.schemas.library import BulkItemOperation
 lazy from tests.factories import seed_art_slot
 lazy from tests.term_helpers import assign
 
@@ -223,17 +222,13 @@ async def test_visible_folder_queries_intersect_filters_and_include_unmonitored(
     assert await repo.list_visible_with_folder_paths(library_ids=[]) == []
     assert await repo.list_visible_with_folder_paths(item_ids=[]) == []
     assert [
-        item.id
-        for item in await repo.list_visible_with_server_ids(
-            ["movies"], after_id=1, limit=1
-        )
+        identity[0]
+        for identity in await repo.server_identities(["movies"], after_id=1, limit=1)
     ] == [2]
-    assert [item.id for item in await repo.list_visible_with_server_ids()] == [
-        2,
-        5,
-        1,
-        3,
-    ]
+    assert [
+        identity[0]
+        for identity in await repo.server_identities(None, after_id=0, limit=10)
+    ] == [1, 2, 3, 5]
     assert [item.id for item in await repo.list_unconnected_tmdb_shows()] == [6]
 
 
@@ -309,9 +304,7 @@ async def test_bulk_operate_clears_artwork_selections(
 
     async with database.write_session() as session:
         repo = MediaItemRepository(session)
-        affected = await repo.bulk_operate(
-            BulkItemOperation(operation="artwork", item_ids=[100])
-        )
+        affected = await repo.bulk_operate([100], "artwork")
     assert affected == [100]
 
     async with database.read_session() as session:

@@ -21,11 +21,11 @@ lazy from ...repositories.collections import (
 )
 lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.collections import FilterGroup
+lazy from ...utils.collection_fields import labelled_field
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess, LibraryScope
 lazy from .criteria import CriteriaContext, evaluate, order_items
-lazy from .fields import labelled_field
 lazy from .plex_query import choice_keys, compile_plex_query, tag_keys
 lazy from .rules import criteria_of
 lazy from .sources import (
@@ -91,16 +91,15 @@ class Membership:
 
         *collection_id* is the collection the criteria select for, if saved.
         """
-        resolved: dict[str, list[int]] = {}
-        for condition in (
+        conditions = [
             found for group in criteria for found in group.source_conditions()
-        ):
+        ]
+        region = await self._access.region() if conditions else ""
+        resolved: dict[str, list[int]] = {}
+        for condition in conditions:
             if condition.key not in resolved:
                 resolved[condition.key] = await self._sources.resolve(
-                    condition.source,
-                    media_type,
-                    items,
-                    region=await self._access.region(),
+                    condition.source, media_type, items, region=region
                 )
         collections = (
             await self._access.collection_titles(library_id, collection_id)

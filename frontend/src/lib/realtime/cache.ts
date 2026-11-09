@@ -6,15 +6,30 @@ import {
   invalidateReconnectData,
   invalidateSeasons,
   invalidateTags,
+  observeLibrary,
   patchCollection,
   refreshItem,
   removeLibraryItem,
   upsertLibraryItem,
 } from "../rest/cache";
 import { queryClient } from "../rest/queryClient";
+import { goToLibrary, routedItemId } from "../router/routes";
+import { artPreviewState } from "../stores/artPreviewState.svelte";
 import { syncState } from "../stores/jobStates.svelte";
 import { realtimeConnectionState } from "../stores/realtimeConnectionState.svelte";
+import { uiState } from "../stores/uiState.svelte";
 import { errorMessage, isAbortError } from "../utils/errors";
+
+/** Keep the art preview and the open item in step with the library. */
+export function followLibrary(): void {
+  observeLibrary({
+    itemUpdated: (item) => artPreviewState.itemUpdated(item),
+    itemsRemoved: (isGone) => {
+      const openId = routedItemId();
+      if (openId !== null && isGone(openId)) goToLibrary(uiState.sidebarTab);
+    },
+  });
+}
 
 export function reportRefreshFailure(error: unknown): void {
   if (!isAbortError(error)) {

@@ -11,6 +11,7 @@ generated frontend client turns into a named type.
 lazy from collections.abc import Mapping
 lazy from dataclasses import dataclass
 lazy from enum import StrEnum
+lazy from typing import Literal
 
 lazy from .dataset_contract.contract import (
     ART_SOURCE_LABELS,
@@ -670,3 +671,9 @@ MATCH_THRESHOLD_MAX = 10
 PERFECT_MATCH_ONLY = -1
 #: Unattended Assets runs adopt only byte-identical local art unless told otherwise.
 ASSETS_MATCH_THRESHOLD_DEFAULT = PERFECT_MATCH_ONLY
+
+
+#: What a bulk operation changes on item records.
+type BulkItemOperationKind = Literal[
+    "artwork", "themes", "delete", "monitor", "unmonitor"
+]

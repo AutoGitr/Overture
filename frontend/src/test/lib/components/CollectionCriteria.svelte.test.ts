@@ -1,3 +1,4 @@
+import type { PolicyData } from "../../../lib/utils/collectionForms.svelte";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
@@ -7,9 +8,7 @@ import type {
   FieldConditionInput,
 } from "../../../generated/rest/types.gen";
 import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
-import CollectionPolicyFields, {
-  type PolicyData,
-} from "../../../lib/components/CollectionPolicyFields.svelte";
+import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
 import CollectionSetEditor from "../../../lib/components/CollectionSetEditor.svelte";
 import GlobalCollectionDefaults from "../../../lib/components/GlobalCollectionDefaults.svelte";
 import CriteriaEditor from "../../../lib/components/CriteriaEditor.svelte";

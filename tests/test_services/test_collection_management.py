@@ -100,13 +100,13 @@ lazy from overture.schemas.collections import (
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.collections.criteria import CriteriaContext, evaluate
-lazy from overture.services.collections.fields import FIELDS
 lazy from overture.services.collections.recommend import recommend_kind
 lazy from overture.services.collections.rules import member_criteria
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.art_urls import PublicArtUrl
+lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset

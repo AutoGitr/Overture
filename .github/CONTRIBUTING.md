@@ -63,6 +63,7 @@ changes, without tests or builds.
 | Backend tests | `uv run python -m pytest` |
 | Frontend checks, in `frontend/` | `bun run format:fix`, `typecheck`, `lint`, `test:unit` |
 | End-to-end tests, in `frontend/` | `bun run test:e2e`, and `test:oidc` for sign-in |
+| Import rules and bundle budget, in `frontend/` | `bun run lint:deps`, and `bun run check:bundle` after a build |
 
 ### Checking Overture against real media servers
 

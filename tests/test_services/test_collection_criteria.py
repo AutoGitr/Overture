@@ -37,13 +37,6 @@ lazy from overture.services.collections.criteria import (
     evaluate,
     order_items,
 )
-lazy from overture.services.collections.fields import (
-    DIMENSIONS,
-    available_orders,
-    dimension_available,
-    field_available,
-    field_label,
-)
 lazy from overture.services.collections.plex_query import (
     choice_keys,
     compile_plex_query,
@@ -51,6 +44,13 @@ lazy from overture.services.collections.plex_query import (
 )
 lazy from overture.services.collections.sets import count_values, set_values
 lazy from overture.services.collections.sources import SourceResolver, condition_label
+lazy from overture.utils.collection_fields import (
+    DIMENSIONS,
+    available_orders,
+    dimension_available,
+    field_available,
+    field_label,
+)
 lazy from tests.collection_helpers import library_rule
 lazy from tests.runtime_helpers import unused
 lazy from tests.term_helpers import holding

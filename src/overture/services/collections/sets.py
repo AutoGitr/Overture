@@ -13,9 +13,9 @@ lazy from ...schemas.collections import (
     SourceCondition,
     TmdbCollectionSource,
 )
+lazy from ...utils.collection_fields import DIMENSIONS
 lazy from ...utils.collection_formats import format_set_title, strip_affixes
 lazy from .criteria import CriteriaContext, evaluate, field_value
-lazy from .fields import DIMENSIONS
 
 
 @dataclass(slots=True, frozen=True)

@@ -8,9 +8,11 @@ lazy import asyncio
 lazy import os
 lazy import shutil
 lazy import socket
+lazy import traceback
 lazy from collections import deque
+lazy from contextlib import asynccontextmanager
 lazy from datetime import UTC, datetime
-lazy from typing import Any
+lazy from typing import Any, cast
 
 os.environ.setdefault(
     "APP_PASSWORD_HASH",
@@ -20,7 +22,7 @@ os.environ.setdefault("MEDIA_SERVER", "plex")
 os.environ.setdefault("MEDIA_SERVER_URL", "http://127.0.0.1:32400")
 os.environ.setdefault("MEDIA_SERVER_API_KEY", "x" * 32)
 
-lazy from collections.abc import AsyncGenerator, Generator
+lazy from collections.abc import AsyncGenerator, Callable, Generator
 lazy from pathlib import Path
 
 lazy import pytest
@@ -54,6 +56,7 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.auth import AuthService
 lazy from overture.utils import image, rate_limit
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
+lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.rate_limit import RateLimitPause
 lazy from tests.factories import (
     AppSettingsFactory,
@@ -67,6 +70,7 @@ lazy from tests.factories import (
 )
 lazy from tests.pause_clock import PauseClock
 lazy from tests.runtime_helpers import TEMP_IMAGE_CACHES
+lazy from tests.workload import WRITING
 
 
 @pytest.fixture
@@ -122,6 +126,57 @@ def pause_clock(monkeypatch: pytest.MonkeyPatch) -> PauseClock:
     monkeypatch.setattr(rate_limit, "monotonic", clock.monotonic)
     monkeypatch.setattr(rate_limit, "sleep", clock.sleep)
     return clock
+
+
+@pytest.fixture(autouse=True)
+def _write_transactions_stay_short(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[None]:
+    """Fail any test whose code waits on something else while holding the writer.
+
+    SQLite has one write lock, so a network call, blocking work or an asset
+    lock inside a write transaction stalls every other writer behind it. The
+    failures are collected, since the code under test may catch what it hits.
+    """
+    violations: list[str] = []
+    write_session = Database.write_session
+
+    @asynccontextmanager
+    async def tracked(self: Database) -> AsyncGenerator[AsyncSession]:
+        async with write_session(self) as session:
+            token = WRITING.set(True)
+            try:
+                yield session
+            finally:
+                WRITING.reset(token)
+
+    def note(what: str) -> None:
+        if WRITING.get():
+            frames = traceback.format_stack(limit=8)[:-2]
+            violations.append(f"{what} in a write transaction:\n{''.join(frames)}")
+
+    send = AsyncClient.send
+    to_thread = asyncio.to_thread
+    acquire: Callable[..., Any] = cast("Any", KeyedLock).acquire
+
+    async def checked_send(self: AsyncClient, *args: Any, **kwargs: Any) -> Any:
+        note("a network request")
+        return await send(self, *args, **kwargs)
+
+    def checked_to_thread(function: Any, /, *args: Any, **kwargs: Any) -> Any:
+        note("blocking work")
+        return to_thread(function, *args, **kwargs)
+
+    def checked_acquire(self: KeyedLock[Any], key: Any) -> Any:
+        note("an asset lock")
+        return acquire(self, key)
+
+    monkeypatch.setattr(Database, "write_session", tracked)
+    monkeypatch.setattr(AsyncClient, "send", checked_send)
+    monkeypatch.setattr(asyncio, "to_thread", checked_to_thread)
+    monkeypatch.setattr(KeyedLock, "acquire", checked_acquire)
+    yield
+    assert not violations, "\n".join(violations)
 
 
 @pytest.fixture(autouse=True)

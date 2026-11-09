@@ -22,7 +22,12 @@ lazy from ...domain import (
     MediaType,
 )
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
-lazy from .fields import FIELDS, PlexField, PlexFieldType, order_field
+lazy from ...utils.collection_fields import (
+    FIELDS,
+    PlexField,
+    PlexFieldType,
+    order_field,
+)
 
 #: A key no Plex tag has, for names the section does not list.
 _MISSING_TAG = "-1"

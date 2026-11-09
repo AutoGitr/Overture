@@ -32,7 +32,7 @@ lazy from ..domain import (
     TmdbPersonRole,
 )
 lazy from ..integrations.mdblist import mdblist_identifier
-lazy from ..services.collections.fields import FIELDS, OPERATORS
+lazy from ..utils.collection_fields import FIELDS, OPERATORS
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
     MemberTagFormat,

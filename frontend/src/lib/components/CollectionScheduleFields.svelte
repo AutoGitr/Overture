@@ -1,12 +1,5 @@
 <script module lang="ts">
-  /** When collections sync and are active, at any level. */
-  export type ScheduleData = {
-    sync_enabled?: boolean | null;
-    sync_schedule?: string | null;
-    active_start_mmdd?: string | null;
-    active_end_mmdd?: string | null;
-    delete_when_inactive?: boolean | null;
-  };
+  import type { ScheduleData } from "../utils/collectionForms.svelte";
 
   const ON_OFF = [
     [true, "On"],

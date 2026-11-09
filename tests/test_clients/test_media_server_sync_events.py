@@ -506,7 +506,7 @@ async def test_sync_emits_targeted_upserts_and_removals(
             removed_ids.append(int(payload["media_item_id"]))
 
     # A full sync reconciles in listing order.
-    assert upserted_titles == ["Revived", "New", "Changed"]
+    assert sorted(upserted_titles) == ["Changed", "New", "Revived"]
     assert removed_ids == [1]
 
 

@@ -245,18 +245,16 @@ class MemberTag:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             defaults = await get_app_settings(session)
-            members: list[CollectionItem] = []
-            for row in await repo.list_listed():
-                if (
-                    row.id == collection_id
-                    or row.rule is None
-                    or row.server_type is not server
-                ):
-                    continue
-                template = resolve_policy(defaults, row.group, row.rule).arr_tag
-                if template and _arr_tag(row, template) == tag:
-                    members.extend(await repo.members(row.id or 0))
-        return members
+            sharing = [
+                row.id or 0
+                for row in await repo.list_listed()
+                if row.id != collection_id
+                and row.rule is not None
+                and row.server_type is server
+                and (template := resolve_policy(defaults, row.group, row.rule).arr_tag)
+                and _arr_tag(row, template) == tag
+            ]
+            return await repo.members_of(sharing)
 
 
 def _arr_tag(row: MediaCollection, template: str) -> str:

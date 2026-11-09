@@ -39,9 +39,8 @@ lazy from ...utils.art_urls import art_preview_url, refused_art_host
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from .entries import Entry, catalog_collection_entry, catalog_item_entry
 lazy from .issue import contribution_issue
-
-type Entry = dict[str, Any]
 
 
 def _draft_entries(
@@ -54,38 +53,6 @@ def _draft_entries(
         for field in IDENTITY_FIELDS
         if (value := getattr(draft, field)) is not None
     }
-
-
-def catalog_item_entry(
-    item: PublicDatasetItem, season_posters: dict[int, str]
-) -> Entry:
-    """Return a stored movie or show as the contract spells the entry."""
-    entry: Entry = {
-        name: getattr(item, name)
-        for name in entry_fields(item.media_type)
-        if name != "seasons"
-    }
-    if item.no_theme:
-        entry["no_theme"] = True
-    if item.media_type is MediaType.SHOW:
-        entry["seasons"] = [
-            {"season_num": number, "poster_url": url}
-            for number, url in sorted(season_posters.items())
-        ]
-    return entry
-
-
-def catalog_collection_entry(collection: PublicDatasetCollection) -> Entry:
-    """Return a stored collection as the contract spells the entry."""
-    entry: Entry = {
-        name: CatalogMediaType.COLLECTION.value
-        if name == "media_type"
-        else getattr(collection, name)
-        for name in entry_fields(CatalogMediaType.COLLECTION)
-    }
-    if collection.no_theme:
-        entry["no_theme"] = True
-    return entry
 
 
 def _with_theme_flag(entry: Entry) -> Entry:

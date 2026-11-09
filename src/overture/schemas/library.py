@@ -12,7 +12,14 @@ lazy from ..db.completion import art_completion, slot_status, theme_status
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
-lazy from ..domain import ArtSource, ArtType, AssetStatus, MediaType, ThemeIdSource
+lazy from ..domain import (
+    ArtSource,
+    ArtType,
+    AssetStatus,
+    BulkItemOperationKind,
+    MediaType,
+    ThemeIdSource,
+)
 lazy from ..utils.art_urls import art_preview_url
 lazy from .base import StrictBaseModel
 lazy from .common import SaveSelectionResponse
@@ -215,12 +222,6 @@ def folder_roots_response(roots: Mapping[str, Sequence[str]]) -> FolderRootsResp
         movies=list(roots.get("movies", [])),
         shows=list(roots.get("shows", [])),
     )
-
-
-#: What a bulk operation changes on item records.
-type BulkItemOperationKind = Literal[
-    "artwork", "themes", "delete", "monitor", "unmonitor"
-]
 
 
 class BulkItemOperation(StrictBaseModel):

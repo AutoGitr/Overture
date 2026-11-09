@@ -50,6 +50,10 @@ class RuleSync:
                 row = await self._access.require(session, collection_id)
                 rule = row.rule
                 policy = await self._access.policy(session, row.group, rule)
+                if rule is None:
+                    raise PublicServiceError(409, UNMANAGED_REFUSAL)
+                if scheduled and not is_due(rule.last_synced_at, policy):
+                    return CollectionSyncResponse(skipped=True)
                 current = await repo.members(collection_id)
                 scopes = [
                     await self._access.scope(
@@ -58,15 +62,11 @@ class RuleSync:
                         part.media_type,
                         criteria_of(part),
                         collection_id=collection_id,
-                        smart=rule is not None and rule.smart,
+                        smart=rule.smart,
                     )
                     for part in row.libraries
                     if part.criteria is not None
                 ]
-            if rule is None:
-                raise PublicServiceError(409, UNMANAGED_REFUSAL)
-            if scheduled and not is_due(rule.last_synced_at, policy):
-                return CollectionSyncResponse(skipped=True)
             await self._refresh_source_summary(rule, row)
             had_copies = set(row.server_ids)
             error = None

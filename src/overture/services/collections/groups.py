@@ -17,6 +17,7 @@ lazy from ...schemas.collections import (
     CollectionSetSummary,
 )
 lazy from ...schemas.common import Status, StatusResponse
+lazy from ...utils.collection_fields import DIMENSIONS
 lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
@@ -24,7 +25,6 @@ lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
-lazy from .fields import DIMENSIONS
 lazy from .rule_sync import RuleSync
 lazy from .rules import generator, group_name
 lazy from .separators import CollectionSeparators

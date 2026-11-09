@@ -6,7 +6,10 @@ lazy from sqlmodel import SQLModel, Table
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.tables import table_models, table_of
-lazy from ..schemas.records import StoredRow
+lazy from ..utils.types import JsonValue
+
+#: One stored row: its table's name and its values.
+type StoredValues = tuple[str, dict[str, JsonValue]]
 
 
 class RecordRepository:
@@ -15,7 +18,7 @@ class RecordRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def rows(self, model: type[SQLModel], key: int) -> list[StoredRow]:
+    async def rows(self, model: type[SQLModel], key: int) -> list[StoredValues]:
         """The row of *model* with primary key *key*, then the rows referring to it.
 
         Rows of link tables, which only pair two records, are left out.
@@ -27,15 +30,13 @@ class RecordRepository:
 
     async def _rows(
         self, table: Table, condition: ColumnElement[bool]
-    ) -> list[StoredRow]:
+    ) -> list[StoredValues]:
         connection = await self.session.connection()
-        found: list[StoredRow] = []
+        found: list[StoredValues] = []
         for row in (
             await connection.execute(table.select().where(condition))
         ).mappings():
-            found.append(
-                StoredRow(table=table.name, values=to_jsonable_python(dict(row)))
-            )
+            found.append((table.name, to_jsonable_python(dict(row))))
             primary = list(table.primary_key.columns)
             if len(primary) != 1:
                 continue

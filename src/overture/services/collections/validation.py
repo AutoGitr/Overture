@@ -21,9 +21,7 @@ lazy from ...schemas.collections import (
     FilterGroup,
     TmdbChartSource,
 )
-lazy from ...utils.errors import PublicServiceError
-lazy from .access import CollectionAccess
-lazy from .fields import (
+lazy from ...utils.collection_fields import (
     DIMENSIONS,
     available_orders,
     dimension_available,
@@ -33,6 +31,8 @@ lazy from .fields import (
     labelled_field,
     smart_only_dimension,
 )
+lazy from ...utils.errors import PublicServiceError
+lazy from .access import CollectionAccess
 lazy from .policy import CollectionPolicy
 lazy from .sources import SourceResolver
 

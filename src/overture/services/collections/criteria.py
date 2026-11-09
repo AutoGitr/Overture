@@ -17,7 +17,7 @@ lazy from ...domain import (
 )
 lazy from ...repositories.collections import CollectionItem, TermSelection
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
-lazy from .fields import FIELDS, order_field
+lazy from ...utils.collection_fields import FIELDS, order_field
 
 type FieldValue = str | float | date | bool | Sequence[str] | None
 

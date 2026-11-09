@@ -6,8 +6,9 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { AppSettingsUpdate, MediaType } from "../../generated/rest/types.gen";
   import { settingsState } from "../stores/settingsState.svelte";
-  import CollectionPolicyFields, { type PolicyData } from "./CollectionPolicyFields.svelte";
-  import CollectionScheduleFields, { type ScheduleData } from "./CollectionScheduleFields.svelte";
+  import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
+  import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
+  import type { PolicyData, ScheduleData } from "../utils/collectionForms.svelte";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
 

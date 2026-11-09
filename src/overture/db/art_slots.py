@@ -7,6 +7,7 @@ outside this module builds slot rows by hand.
 """
 
 lazy from dataclasses import asdict, dataclass, fields
+lazy from functools import cache
 lazy from operator import attrgetter
 
 lazy from ..domain import ArtSource, ArtStyle, ArtType
@@ -31,6 +32,12 @@ def _empty_slot(
     if isinstance(owner, Season):
         return ArtSlot(season_id=owner.id, art_type=art_type)
     return ArtSlot(media_item_id=owner.id, art_type=art_type)
+
+
+@cache
+def _blank_slot(art_type: ArtType) -> ArtSlot:
+    """A slot holding nothing: a library list reads one per title lacking art."""
+    return ArtSlot(art_type=art_type)
 
 
 def find_art_slot(
@@ -62,10 +69,10 @@ def read_art_slot(
 ) -> ArtSlot:
     """Return the slot for *art_type* without attaching a row to the session.
 
-    Use this on read paths; it hands back a detached, empty slot when the
-    owner has never had artwork of that type.
+    Use this on read paths; it hands back a shared, empty slot when the owner
+    has never had artwork of that type, which must not be written to.
     """
-    return find_art_slot(owner, art_type) or _empty_slot(owner, art_type)
+    return find_art_slot(owner, art_type) or _blank_slot(art_type)
 
 
 def _write_art_slot(

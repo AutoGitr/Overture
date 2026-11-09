@@ -7,7 +7,12 @@ lazy from ...schemas.collections import (
     FilterGroup,
     KindRecommendation,
 )
-lazy from .fields import FIELDS, field_available, field_operators, plex_tests
+lazy from ...utils.collection_fields import (
+    FIELDS,
+    field_available,
+    field_operators,
+    plex_tests,
+)
 
 
 def _tests(

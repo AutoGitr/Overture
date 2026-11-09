@@ -7,6 +7,7 @@
     getSettingsOptions,
     listItemsOptions,
   } from "./generated/rest/@tanstack/svelte-query.gen";
+  import { followLibrary } from "./lib/realtime/cache";
   import { realtimeTransport } from "./lib/realtime/transport";
   import type { NoticeTone } from "./lib/stores/notificationState.svelte";
   import { mediaServerState } from "./lib/stores/mediaServerState.svelte";
@@ -110,6 +111,7 @@
   onMount(() => {
     let cancelled = false;
     void revealWhenInitialLayoutSettles(() => cancelled);
+    followLibrary();
     realtimeTransport.connect();
     return () => {
       cancelled = true;
