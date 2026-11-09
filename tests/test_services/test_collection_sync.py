@@ -41,7 +41,7 @@ lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.repositories.collections import CollectionRepository
-lazy from overture.repositories.media_items import WITH_TERMS
+lazy from overture.repositories.terms import TermRepository
 lazy from overture.services.collections.theme_files import (
     collection_folder,
     inspect_theme_file,
@@ -367,22 +367,23 @@ async def test_enrichment_reads_new_rematched_and_old_titles_once(
     assert sorted(asked) == [1, 2, 4, 5]
     async with database.read_session() as session:
         items = {
-            item.title: item
-            for item in (
-                await session.exec(select(MediaItem).options(WITH_TERMS))
-            ).all()
+            item.title: item for item in (await session.exec(select(MediaItem))).all()
+        }
+        values = {
+            title: await TermRepository(session).values_of(item.id or 0)
+            for title, item in items.items()
         }
     assert items["A"].tmdb_collection_id == 10
-    assert items["A"].values(TermKind.TMDB_KEYWORD) == ["christmas"]
+    assert values["A"][TermKind.TMDB_KEYWORD] == ["christmas"]
     # TMDB completes the IDs a title lacks and never replaces the server's.
     assert items["A"].imdb_id == "tt0000001"
     assert items["B"].imdb_id == "tt9"
-    assert items["Checked"].values(TermKind.TMDB_KEYWORD) == []
+    assert TermKind.TMDB_KEYWORD not in values["Checked"]
     show = items["Show"]
     assert (
-        show.values(TermKind.NETWORK),
+        values["Show"][TermKind.NETWORK],
         show.last_aired,
-        show.values(TermKind.STREAMING),
+        values["Show"][TermKind.STREAMING],
     ) == (
         ["HBO"],
         "2020-05-01",

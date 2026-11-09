@@ -3,11 +3,11 @@
 lazy import random
 lazy import re
 lazy import unicodedata
-lazy from collections.abc import Callable, Mapping, Sequence
+lazy from collections.abc import Callable, Iterable, Mapping, Sequence
 lazy from dataclasses import dataclass
 lazy from datetime import date, datetime, timedelta
+lazy from itertools import chain
 
-lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import (
     CollectionOrder,
     FieldKind,
@@ -15,6 +15,7 @@ lazy from ...domain import (
     FilterOperator,
     TermKind,
 )
+lazy from ...repositories.collections import CollectionItem, TermSelection
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
 lazy from .fields import FIELDS, order_field
 
@@ -44,12 +45,12 @@ def _day(value: datetime | None) -> date | None:
     return value.date() if value else None
 
 
-def _last_played(item: MediaItem) -> date:
+def _last_played(item: CollectionItem) -> date:
     """A title never played was last played before any date."""
     return item.last_played_at.date() if item.last_played_at else date.min
 
 
-def _minutes(item: MediaItem) -> int | None:
+def _minutes(item: CollectionItem) -> int | None:
     seconds = item.duration_seconds
     return seconds // 60 if seconds is not None else None
 
@@ -58,10 +59,51 @@ def _one(value: str | None) -> list[str]:
     return [value] if value else []
 
 
-type _Getter = Callable[[MediaItem], FieldValue]
+type _Getter = Callable[[CollectionItem], FieldValue]
+
+#: The kind of value each tag field reads from an item's terms.
+TERM_FIELDS: Mapping[FilterField, TermKind] = {
+    FilterField.GENRE: TermKind.GENRE,
+    FilterField.ACTOR: TermKind.ACTOR,
+    FilterField.DIRECTOR: TermKind.DIRECTOR,
+    FilterField.WRITER: TermKind.WRITER,
+    FilterField.PRODUCER: TermKind.PRODUCER,
+    FilterField.COUNTRY: TermKind.COUNTRY,
+    FilterField.LABEL: TermKind.LABEL,
+    FilterField.NETWORK: TermKind.NETWORK,
+    FilterField.ORIGIN_COUNTRY: TermKind.ORIGIN_COUNTRY,
+    FilterField.TMDB_KEYWORD: TermKind.TMDB_KEYWORD,
+    FilterField.COMPANY: TermKind.COMPANY,
+    FilterField.STREAMING: TermKind.STREAMING,
+}
+
+
+def _terms_of(kind: TermKind) -> _Getter:
+    return lambda item: item.values(kind)
+
+
+def criteria_terms(
+    criteria: Iterable[FilterGroup], complete: Iterable[TermKind] = ()
+) -> TermSelection:
+    """The values evaluating *criteria* tests, and the *complete* kinds wholly.
+
+    A tag condition only asks whether a title holds its value, so that value
+    is all that needs reading.
+    """
+    matching: dict[TermKind, set[str]] = {}
+    for group in criteria:
+        for condition in group.field_conditions():
+            if (kind := TERM_FIELDS.get(condition.field)) is not None:
+                matching.setdefault(kind, set()).add(str(condition.value).casefold())
+    return TermSelection(
+        kinds=frozenset(complete),
+        matching={kind: frozenset(values) for kind, values in matching.items()},
+    )
+
 
 #: Each field's synced value; fields missing here only Plex evaluates.
 _GETTERS: dict[FilterField, _Getter] = {
+    **{field: _terms_of(kind) for field, kind in TERM_FIELDS.items()},
     FilterField.TITLE: lambda item: item.title,
     FilterField.TMDB_ID: lambda item: _one(
         str(item.tmdb_id) if item.tmdb_id is not None else None
@@ -72,13 +114,6 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.IMDB_ID: lambda item: _one(item.imdb_id),
     FilterField.STUDIO: lambda item: item.studio,
     FilterField.EDITION: lambda item: item.edition,
-    FilterField.GENRE: lambda item: item.values(TermKind.GENRE),
-    FilterField.ACTOR: lambda item: item.values(TermKind.ACTOR),
-    FilterField.DIRECTOR: lambda item: item.values(TermKind.DIRECTOR),
-    FilterField.WRITER: lambda item: item.values(TermKind.WRITER),
-    FilterField.PRODUCER: lambda item: item.values(TermKind.PRODUCER),
-    FilterField.COUNTRY: lambda item: item.values(TermKind.COUNTRY),
-    FilterField.LABEL: lambda item: item.values(TermKind.LABEL),
     FilterField.CONTENT_RATING: lambda item: _one(item.content_rating),
     FilterField.RESOLUTION: lambda item: _one(item.resolution),
     FilterField.YEAR: lambda item: item.year,
@@ -95,14 +130,9 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.IN_PROGRESS: lambda item: item.in_progress,
     FilterField.VERSIONS: lambda item: item.versions,
     FilterField.FOLDER: lambda item: item.folder_path,
-    FilterField.NETWORK: lambda item: item.values(TermKind.NETWORK),
     FilterField.ORIGINAL_LANGUAGE: lambda item: _one(item.original_language),
-    FilterField.ORIGIN_COUNTRY: lambda item: item.values(TermKind.ORIGIN_COUNTRY),
     FilterField.TMDB_RATING: lambda item: item.tmdb_rating,
     FilterField.TMDB_VOTES: lambda item: item.tmdb_votes,
-    FilterField.TMDB_KEYWORD: lambda item: item.values(TermKind.TMDB_KEYWORD),
-    FilterField.COMPANY: lambda item: item.values(TermKind.COMPANY),
-    FilterField.STREAMING: lambda item: item.values(TermKind.STREAMING),
     FilterField.SHOW_STATUS: lambda item: _one(item.show_status),
     FilterField.LAST_AIRED: lambda item: _iso_day(item.last_aired),
 }
@@ -110,7 +140,7 @@ _VALUES: frozendict[FilterField, _Getter] = frozendict(_GETTERS)  # pyright: ign
 
 
 def field_value(
-    item: MediaItem, field: FilterField, collections: Sequence[str] = ()
+    item: CollectionItem, field: FilterField, collections: Sequence[str] = ()
 ) -> FieldValue:
     """The item's synced value of a field; lists for tag fields."""
     if field is FilterField.COLLECTION:
@@ -180,11 +210,9 @@ def _date(
 
 
 def _matches_field(
-    item: MediaItem, condition: FieldCondition, context: CriteriaContext
+    item: CollectionItem, condition: FieldCondition, context: CriteriaContext
 ) -> bool:
-    value = field_value(
-        item, condition.field, context.collections.get(item.id or 0, ())
-    )
+    value = field_value(item, condition.field, context.collections.get(item.id, ()))
     operator, target = condition.operator, condition.value
     match FIELDS[condition.field].kind:
         case FieldKind.TEXT:
@@ -208,21 +236,23 @@ def _matches_field(
 
 
 def _matches_source(
-    item: MediaItem, condition: SourceCondition, context: CriteriaContext
+    item: CollectionItem, condition: SourceCondition, context: CriteriaContext
 ) -> bool:
-    found = (item.id or 0) in context.sources.get(condition.key, ())
+    found = (item.id) in context.sources.get(condition.key, ())
     return found if condition.operator is FilterOperator.IS else not found
 
 
-def _matches(item: MediaItem, group: FilterGroup, context: CriteriaContext) -> bool:
-    results = (
-        *(
+def _matches(
+    item: CollectionItem, group: FilterGroup, context: CriteriaContext
+) -> bool:
+    results = chain(
+        (
             _matches_source(item, condition, context)
             if isinstance(condition, SourceCondition)
             else _matches_field(item, condition, context)
             for condition in group.conditions
         ),
-        *(
+        (
             _matches(item, nested, context)
             for nested in group.groups
             if not nested.is_empty()
@@ -232,8 +262,8 @@ def _matches(item: MediaItem, group: FilterGroup, context: CriteriaContext) -> b
 
 
 def evaluate(
-    items: Sequence[MediaItem], criteria: FilterGroup, context: CriteriaContext
-) -> list[MediaItem]:
+    items: Sequence[CollectionItem], criteria: FilterGroup, context: CriteriaContext
+) -> list[CollectionItem]:
     """Return the items matching the criteria, keeping their order."""
     if criteria.is_empty():
         return []
@@ -244,7 +274,7 @@ _DIGITS = re.compile(r"(\d+)", re.ASCII)
 _LEADING_PUNCTUATION = re.compile(r"^\W+")
 
 
-def title_key(item: MediaItem) -> tuple[str | int, ...]:
+def title_key(item: CollectionItem) -> tuple[str | int, ...]:
     """Order titles by sort title, numbers by their value.
 
     Case, accents and leading punctuation are ignored, so ``'71`` sorts
@@ -259,7 +289,7 @@ def title_key(item: MediaItem) -> tuple[str | int, ...]:
 type _SortKey = tuple[str | int, ...] | float | date
 
 
-def _sort_key(item: MediaItem, field: FilterField) -> _SortKey | None:
+def _sort_key(item: CollectionItem, field: FilterField) -> _SortKey | None:
     if field is FilterField.TITLE:
         return title_key(item)
     if field is FilterField.DURATION:
@@ -271,12 +301,12 @@ def _sort_key(item: MediaItem, field: FilterField) -> _SortKey | None:
 
 
 def order_items(
-    items: Sequence[MediaItem],
+    items: Sequence[CollectionItem],
     order: CollectionOrder,
     *,
     source_order: Sequence[int] = (),
     limit: int | None = None,
-) -> list[MediaItem]:
+) -> list[CollectionItem]:
     """Order members, then keep the first *limit* of them.
 
     ``custom`` keeps the source's order and then the given order. Items without
@@ -287,13 +317,13 @@ def order_items(
         ordered = random.sample(list(items), len(items))
     elif order is CollectionOrder.CUSTOM:
         rank = {item_id: index for index, item_id in enumerate(source_order)}
-        ordered = sorted(items, key=lambda item: rank.get(item.id or 0, len(rank)))
+        ordered = sorted(items, key=lambda item: rank.get(item.id, len(rank)))
     else:
         field = order_field(order)
         if field is None:
             raise ValueError(f"No sort field for {order}")
         descending = order.value.endswith(".desc")
-        by_title = sorted(items, key=lambda item: (title_key(item), item.id or 0))
+        by_title = sorted(items, key=lambda item: (title_key(item), item.id))
         keyed = [(_sort_key(item, field), item) for item in by_title]
         known = [(key, item) for key, item in keyed if key is not None]
         unknown = [item for key, item in keyed if key is None]

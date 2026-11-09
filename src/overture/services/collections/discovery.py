@@ -27,7 +27,7 @@ lazy from ...schemas.collections import (
 )
 lazy from ...utils.errors import PublicServiceError
 lazy from .access import CollectionAccess, LibraryScope
-lazy from .criteria import field_value
+lazy from .criteria import TERM_FIELDS, field_value
 lazy from .fields import (
     DIMENSIONS,
     FIELDS,
@@ -191,18 +191,23 @@ class CollectionDiscovery:
         server = self._access.server_type
         counts: Counter[str] = Counter()
         if field_available(field, server, media_type, smart=False):
-            items = await self._access.library_items(library_id, media_type)
-            collections = (
-                await self._access.collection_titles(library_id, None)
-                if field is FilterField.COLLECTION
-                else {}
-            )
-            for item in items:
-                value = field_value(item, field, collections.get(item.id or 0, ()))
-                if isinstance(value, str):
-                    counts[value] += 1
-                elif isinstance(value, list | tuple):
-                    counts.update({str(entry) for entry in value})
+            if (kind := TERM_FIELDS.get(field)) is not None:
+                counts.update(
+                    await self._access.term_counts(library_id, media_type, kind)
+                )
+            else:
+                items = await self._access.library_items(library_id, media_type)
+                collections = (
+                    await self._access.collection_titles(library_id, None)
+                    if field is FilterField.COLLECTION
+                    else {}
+                )
+                for item in items:
+                    value = field_value(item, field, collections.get(item.id, ()))
+                    if isinstance(value, str):
+                        counts[value] += 1
+                    elif isinstance(value, list | tuple):
+                        counts.update({str(entry) for entry in value})
         else:
             plex = FIELDS[field].plex
             if (
@@ -269,7 +274,9 @@ class CollectionDiscovery:
     async def preview(self, body: CollectionPreviewRequest) -> CollectionPreview:
         """What each library's criteria select."""
         rule = body.rule
-        scopes = await self._access.scopes(rule.libraries, body.collection_id)
+        scopes = await self._access.scopes(
+            rule.libraries, body.collection_id, smart=rule.smart
+        )
         async with self._access.database.read_session() as session:
             group = (
                 (await self._access.require(session, body.collection_id)).group

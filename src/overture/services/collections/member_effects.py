@@ -2,11 +2,11 @@
 
 lazy from collections.abc import Sequence
 
-lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings
 lazy from ...domain import FilterOperator, MediaType
 lazy from ...integrations.arr import ArrRequest, ArrTitle
 lazy from ...integrations.tmdb import TMDBClient
+lazy from ...repositories.collections import CollectionItem
 lazy from ...schemas.collections import (
     CollectionMissing,
     CollectionMissingTitle,
@@ -33,7 +33,7 @@ class MemberEffects:
         self,
         criteria: FilterGroup,
         media_type: MediaType,
-        items: Sequence[MediaItem],
+        items: Sequence[CollectionItem],
         *,
         region: str,
     ) -> list[int]:
@@ -61,7 +61,7 @@ class MemberEffects:
         self,
         criteria: FilterGroup,
         media_type: MediaType,
-        items: Sequence[MediaItem],
+        items: Sequence[CollectionItem],
         *,
         region: str,
     ) -> CollectionMissing:
@@ -120,7 +120,7 @@ class MemberEffects:
         return result
 
     async def tag(
-        self, media_type: MediaType, tag: str, members: Sequence[MediaItem]
+        self, media_type: MediaType, tag: str, members: Sequence[CollectionItem]
     ) -> None:
         """Give the tag to exactly the members among Radarr's or Sonarr's titles."""
         arr = self._sources.arr(media_type)

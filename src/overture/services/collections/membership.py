@@ -1,8 +1,12 @@
 """Which items criteria select, and the labels and queries Plex evaluates them by."""
 
 lazy from collections.abc import Sequence
+lazy from itertools import batched
+
+lazy from sqlmodel import col, select
 
 lazy from ...db.models.media_item import MediaItem
+lazy from ...db.session import CHUNK_SIZE
 lazy from ...domain import (
     CollectionOrder,
     FilterField,
@@ -10,8 +14,11 @@ lazy from ...domain import (
     MediaType,
     TermKind,
 )
-lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.media_items import WITH_TERMS
+lazy from ...repositories.collections import (
+    CollectionItem,
+    CollectionRepository,
+    TermSelection,
+)
 lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.collections import FilterGroup
 lazy from ...utils.errors import PublicServiceError
@@ -29,7 +36,9 @@ lazy from .sources import (
 )
 
 
-def resolve_members(ids: list[int], items: list[MediaItem]) -> list[MediaItem]:
+def resolve_members(
+    ids: list[int], items: list[CollectionItem]
+) -> list[CollectionItem]:
     by_id = {item.id: item for item in items}
     if len(set(ids)) != len(ids) or any(item_id not in by_id for item_id in ids):
         raise PublicServiceError(
@@ -39,14 +48,16 @@ def resolve_members(ids: list[int], items: list[MediaItem]) -> list[MediaItem]:
     return [by_id[item_id] for item_id in ids]
 
 
-def display_order(items: list[MediaItem], order: CollectionOrder) -> list[MediaItem]:
+def display_order(
+    items: list[CollectionItem], order: CollectionOrder
+) -> list[CollectionItem]:
     """Show members as the server orders them; stored order is the custom one."""
     if order in {CollectionOrder.CUSTOM, CollectionOrder.RANDOM}:
         return items
     return order_items(items, order)
 
 
-def stored_ids(server_ids: list[str], items: Sequence[MediaItem]) -> list[int]:
+def stored_ids(server_ids: list[str], items: Sequence[CollectionItem]) -> list[int]:
     """Overture's IDs of the server's items, in the server's order."""
     by_server_id = {item.server_item_id: item for item in items if item.server_item_id}
     return [
@@ -72,7 +83,7 @@ class Membership:
         media_type: MediaType,
         library_id: str,
         criteria: Sequence[FilterGroup],
-        items: list[MediaItem],
+        items: list[CollectionItem],
         *,
         collection_id: int | None,
     ) -> tuple[CriteriaContext, dict[str, list[int]]]:
@@ -112,12 +123,12 @@ class Membership:
         media_type: MediaType,
         library_id: str,
         criteria: FilterGroup,
-        items: list[MediaItem],
+        items: list[CollectionItem],
         *,
         order: CollectionOrder,
         limit: int | None,
         collection_id: int | None,
-    ) -> list[MediaItem]:
+    ) -> list[CollectionItem]:
         """The members criteria select, ordered, up to the limit.
 
         A custom order follows the first source the criteria include.
@@ -146,7 +157,7 @@ class Membership:
         *,
         order: CollectionOrder,
         limit: int | None,
-    ) -> dict[str, list[MediaItem]]:
+    ) -> dict[str, list[CollectionItem]]:
         """The members each library's criteria select, by library."""
         return {
             scope.library_id: await self.wanted(
@@ -167,21 +178,21 @@ class Membership:
         media_type: MediaType,
         label: str,
         wanted_ids: set[int],
-        items: list[MediaItem],
+        items: list[CollectionItem],
     ) -> None:
         """Put the label on exactly the wanted items, on Plex and locally."""
         folded = label.casefold()
         labeled = {
-            item.id or 0
+            item.id
             for item in items
             if any(
                 existing.casefold() == folded
                 for existing in item.values(TermKind.LABEL)
             )
         }
-        by_id = {item.id or 0: item for item in items}
+        by_id = {item.id: item for item in items}
         add = {
-            server_id: by_id[i].values(TermKind.LABEL)
+            server_id: list(by_id[i].values(TermKind.LABEL))
             for i in wanted_ids - labeled
             if i in by_id and (server_id := by_id[i].server_item_id)
         }
@@ -198,20 +209,28 @@ class Membership:
         changed = sorted(
             ((wanted_ids - labeled) & by_id.keys()) | (labeled - wanted_ids)
         )
-        async with self._access.database.write_session() as session:
-            terms = TermRepository(session)
-            for item_id in changed:
-                item = await session.get(MediaItem, item_id, options=[WITH_TERMS])
-                if item is None:
-                    continue
-                kept = [
-                    entry
-                    for entry in item.values(TermKind.LABEL)
-                    if entry.casefold() != folded
-                ]
-                await terms.assign(
-                    item,
-                    {TermKind.LABEL: [*kept, label] if item_id in wanted_ids else kept},
+        for batch in batched(changed, CHUNK_SIZE, strict=False):
+            async with self._access.database.write_session() as session:
+                terms = TermRepository(session)
+                held = await terms.values_by_item(batch, TermKind.LABEL)
+                stored = await session.exec(
+                    select(col(MediaItem.id)).where(col(MediaItem.id).in_(batch))
+                )
+                await terms.assign_many(
+                    {
+                        item_id: {
+                            TermKind.LABEL: [
+                                *(
+                                    entry
+                                    for entry in held.get(item_id, ())
+                                    if entry.casefold() != folded
+                                ),
+                                *([label] if item_id in wanted_ids else []),
+                            ]
+                        }
+                        for item_id in stored.all()
+                        if item_id is not None
+                    }
                 )
 
     def labels(self, media_type: MediaType, criteria: FilterGroup) -> dict[str, str]:
@@ -246,7 +265,9 @@ class Membership:
                 if part.library_id == library_id and part.criteria is not None
                 for label in self.labels(media_type, criteria_of(part)).values()
             }
-            items = await repo.library_items(media_type, library_id)
+            items = await repo.library_items(
+                media_type, library_id, TermSelection(frozenset({TermKind.LABEL}))
+            )
         stale = {
             label
             for item in items
@@ -277,7 +298,7 @@ class Membership:
             for key, label in labels.items():
                 wanted = (
                     {
-                        item.id or 0
+                        item.id
                         for item in evaluate(
                             items, FilterGroup(conditions=[fields[key]]), context
                         )

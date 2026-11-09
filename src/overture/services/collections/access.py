@@ -10,13 +10,16 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.models.collection_group import CollectionGroup
-lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.media_item import MediaItem
+lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import UNMANAGED_REFUSAL, MediaType, ServerType
+lazy from ...domain import UNMANAGED_REFUSAL, MediaType, ServerType, TermKind
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
-lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.collections import (
+    CollectionItem,
+    CollectionRepository,
+    TermSelection,
+)
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import CollectionLibraryCriteria, FilterGroup
 lazy from ...utils.collection_formats import is_within_active_window
@@ -24,6 +27,7 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
 lazy from . import COLLECTIONS_LOCK
 lazy from .copies import ServerCopy, server_copies
+lazy from .criteria import criteria_terms
 lazy from .policy import CollectionPolicy, RuleOrPolicy, resolve_policy
 
 
@@ -34,7 +38,7 @@ class LibraryScope:
     library_id: str
     media_type: MediaType
     criteria: FilterGroup
-    items: list[MediaItem]
+    items: list[CollectionItem]
     #: The collection the criteria select for, which never counts as another
     #: collection holding an item; none for one not saved yet.
     collection_id: int | None = None
@@ -159,37 +163,88 @@ class CollectionAccess:
             raise PublicServiceError(422, "Select one of the server's libraries")
         return {library_id: types[library_id] for library_id in requested}
 
-    async def library_items(
-        self, library_id: str, media_type: MediaType
-    ) -> list[MediaItem]:
-        """The stored items of one of the server's libraries of this media type."""
+    async def _require_type(self, library_id: str, media_type: MediaType) -> None:
         if (await self.library_types([library_id]))[library_id] is not media_type:
             raise PublicServiceError(
                 422, "Select a library of the collection's media type"
             )
+
+    async def library_items(
+        self,
+        library_id: str,
+        media_type: MediaType,
+        terms: TermSelection | None = None,
+    ) -> list[CollectionItem]:
+        """The stored items of one of the server's libraries of this media type."""
+        await self._require_type(library_id, media_type)
         async with self.database.read_session() as session:
             return await CollectionRepository(session).library_items(
-                media_type, library_id
+                media_type, library_id, terms
             )
+
+    async def part_items(
+        self, part: CollectionLibrary, terms: TermSelection | None = None
+    ) -> list[CollectionItem]:
+        """The stored items of a library a collection spans, listed or not."""
+        async with self.database.read_session() as session:
+            return await CollectionRepository(session).library_items(
+                part.media_type, part.library_id, terms
+            )
+
+    async def term_counts(
+        self, library_id: str, media_type: MediaType, kind: TermKind
+    ) -> dict[str, int]:
+        """How many of the items of one of the server's libraries hold each value."""
+        await self._require_type(library_id, media_type)
+        async with self.database.read_session() as session:
+            return await CollectionRepository(session).term_counts(
+                media_type, library_id, kind
+            )
+
+    async def scope(
+        self,
+        repo: CollectionRepository,
+        library_id: str,
+        media_type: MediaType,
+        criteria: FilterGroup,
+        *,
+        collection_id: int | None,
+        smart: bool,
+    ) -> LibraryScope:
+        """A library's criteria, with its items holding the values they test.
+
+        Syncing a smart collection compares every label on Plex too.
+        """
+        labels = (TermKind.LABEL,) if smart and self.plex else ()
+        return LibraryScope(
+            library_id=library_id,
+            media_type=media_type,
+            criteria=criteria,
+            items=await repo.library_items(
+                media_type, library_id, criteria_terms([criteria], labels)
+            ),
+            collection_id=collection_id,
+        )
 
     async def scopes(
         self,
         libraries: Sequence[CollectionLibraryCriteria],
         collection_id: int | None = None,
+        *,
+        smart: bool = False,
     ) -> list[LibraryScope]:
         """Each library's criteria with the items it selects from."""
         types = await self.library_types(entry.library_id for entry in libraries)
         async with self.database.read_session() as session:
             repo = CollectionRepository(session)
             return [
-                LibraryScope(
-                    library_id=entry.library_id,
-                    media_type=types[entry.library_id],
-                    criteria=entry.criteria,
-                    items=await repo.library_items(
-                        types[entry.library_id], entry.library_id
-                    ),
+                await self.scope(
+                    repo,
+                    entry.library_id,
+                    types[entry.library_id],
+                    entry.criteria,
                     collection_id=collection_id,
+                    smart=smart,
                 )
                 for entry in libraries
             ]

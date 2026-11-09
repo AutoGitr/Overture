@@ -16,7 +16,7 @@ lazy from ...integrations.tmdb import TMDBClient, TmdbFacts
 lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import SyncTally
-lazy from ...repositories.media_items import WITH_TERMS, MediaItemRepository
+lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...utils.security import sanitise_error
 lazy from ...utils.time import utc_now
@@ -34,11 +34,11 @@ async def record_tmdb_facts(
 ) -> None:
     """Store a title's TMDB facts; ``None`` clears them for a title TMDB lacks.
 
-    The item is new, or loaded with its terms.
+    The item is stored.
     """
     show = facts if item.media_type is MediaType.SHOW else None
     await TermRepository(session).assign(
-        item,
+        item.id or 0,
         {
             TermKind.ORIGIN_COUNTRY: facts.origin_countries if facts else (),
             TermKind.TMDB_KEYWORD: facts.keywords if facts else (),
@@ -130,7 +130,7 @@ class TmdbEnrichment:
                     if isinstance(result, BaseException):
                         failures.append(sanitise_error(str(result)))
                         continue
-                    item = await session.get(MediaItem, item_id, options=[WITH_TERMS])
+                    item = await session.get(MediaItem, item_id)
                     # The title may have been rematched while TMDB answered.
                     if item is None or item.tmdb_id != tmdb_id:
                         continue

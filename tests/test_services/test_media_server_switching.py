@@ -19,7 +19,8 @@ lazy from overture.jobs.gate import LibraryGate
 lazy from overture.media_servers.adapters import ServerItem, ServerSection
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.protocols import CollectionGroups
-lazy from overture.repositories.media_items import WITH_TERMS, MediaItemRepository
+lazy from overture.repositories.media_items import MediaItemRepository
+lazy from overture.repositories.terms import TermRepository
 lazy from overture.schemas.sync import SyncScheduleConfig, SyncScheduleWrite
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.schedule_store import (
@@ -42,6 +43,13 @@ lazy from tests.runtime_helpers import (
 )
 lazy from tests.sync_helpers import sync_full
 lazy from tests.term_helpers import assign
+
+
+async def _directors(session: AsyncSession, item_id: int) -> list[str]:
+    directors = await TermRepository(session).values_by_item(
+        [item_id], TermKind.DIRECTOR
+    )
+    return directors.get(item_id, [])
 
 
 def _make_server_item(
@@ -614,12 +622,14 @@ async def test_switch_media_server_updates_title_year_director_and_guids(
     assert stats.created_item_ids == []
 
     async with isolated_session_factory() as session:
-        updated = await session.get(MediaItem, item_id, options=[WITH_TERMS])
+        updated = await session.get(MediaItem, item_id)
         assert updated is not None
         assert updated.id == item_id
         assert updated.title == "Twelve Monkeys"
         assert updated.year == 1996
-        assert updated.values(TermKind.DIRECTOR) == ["Terry Gilliam"]
+        assert await TermRepository(session).values_by_item(
+            [item_id or 0], TermKind.DIRECTOR
+        ) == {item_id: ["Terry Gilliam"]}
         assert updated.studio == "Universal Pictures"
         assert updated.server_item_id == "jf-uuid-twelve-monkeys"
         assert updated.imdb_id == "tt0114746"
@@ -682,14 +692,14 @@ async def test_sync_clears_or_omits_director_for_tv_shows(
     assert stats.tally.errors == 0
 
     async with isolated_session_factory() as session:
-        updated_show = await session.get(MediaItem, show_id, options=[WITH_TERMS])
+        updated_show = await session.get(MediaItem, show_id)
         assert updated_show is not None
-        assert updated_show.values(TermKind.DIRECTOR) == []
+        assert await _directors(session, show_id or 0) == []
 
         repo = MediaItemRepository(session)
         created_show = await repo.find_by_server_id("brand-new-show", "show")
         assert created_show is not None
-        assert created_show.values(TermKind.DIRECTOR) == []
+        assert await _directors(session, created_show.id or 0) == []
 
 
 async def test_sync_isolates_item_level_runtime_error_resource_unavailable(

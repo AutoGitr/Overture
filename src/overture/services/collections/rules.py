@@ -5,8 +5,8 @@ lazy from collections.abc import Mapping, Sequence
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
-lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import FilterField, FilterOperator, MediaType, SourceType
+lazy from ...repositories.collections import CollectionItem
 lazy from ...schemas.collections import (
     CollectionGenerator,
     CollectionLibraryCriteria,
@@ -110,7 +110,7 @@ def never_created(row: MediaCollection) -> bool:
 
 
 def member_criteria(
-    row: MediaCollection, members: list[MediaItem], *, franchise: int | None
+    row: MediaCollection, members: list[CollectionItem], *, franchise: int | None
 ) -> FilterGroup:
     """Criteria that select a collection's current members.
 
@@ -136,7 +136,7 @@ def member_criteria(
     return FilterGroup(mode="any", conditions=conditions)
 
 
-def _member_condition(item: MediaItem) -> FieldCondition:
+def _member_condition(item: CollectionItem) -> FieldCondition:
     """Name a member without a TMDB ID by its TVDB or IMDb ID, else its title."""
     if item.tvdb_id is not None:
         return FieldCondition(field=FilterField.TVDB_ID, value=str(item.tvdb_id))
@@ -145,7 +145,7 @@ def _member_condition(item: MediaItem) -> FieldCondition:
     return FieldCondition(field=FilterField.TITLE, value=item.title)
 
 
-def shared_franchise(members: list[MediaItem]) -> int | None:
+def shared_franchise(members: list[CollectionItem]) -> int | None:
     """The TMDB collection every member belongs to, when they share one."""
     franchises = {item.tmdb_collection_id for item in members}
     return next(iter(franchises)) if len(franchises) == 1 else None

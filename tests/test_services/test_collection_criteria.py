@@ -22,6 +22,7 @@ lazy from overture.domain import (
 )
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.tmdb import TMDBClient
+lazy from overture.repositories.collections import CollectionItem
 lazy from overture.schemas.collections import (
     CollectionGeneratorBase,
     FieldCondition,
@@ -32,6 +33,7 @@ lazy from overture.schemas.collections import (
 )
 lazy from overture.services.collections.criteria import (
     CriteriaContext,
+    criteria_terms,
     evaluate,
     order_items,
 )
@@ -56,7 +58,7 @@ lazy from tests.term_helpers import holding
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 
 
-def _item(item_id: int = 1, **kwargs: object) -> MediaItem:
+def _item(item_id: int = 1, **kwargs: object) -> CollectionItem:
     values: dict[str, object] = {
         "id": item_id,
         "media_type": MediaType.MOVIE,
@@ -102,7 +104,9 @@ def _context(
     )
 
 
-def _matches(item: MediaItem, *conditions: FieldCondition, mode: str = "all") -> bool:
+def _matches(
+    item: CollectionItem, *conditions: FieldCondition, mode: str = "all"
+) -> bool:
     group = FilterGroup.model_validate(
         {"mode": mode, "conditions": [c.model_dump() for c in conditions]}
     )
@@ -148,6 +152,30 @@ def test_field_conditions_match_synced_metadata(
     condition: FieldCondition, expected: bool
 ) -> None:
     assert _matches(_item(), condition) is expected
+
+
+def test_criteria_read_only_the_values_they_test() -> None:
+    criteria = FilterGroup(
+        conditions=[
+            _field(FilterField.ACTOR, FilterOperator.IS, "Mark Hamill"),
+            _field(FilterField.ACTOR, FilterOperator.IS_NOT, "Harrison Ford"),
+            _field(FilterField.YEAR, FilterOperator.GT, 1990),
+        ],
+        groups=[
+            FilterGroup(
+                conditions=[_field(FilterField.GENRE, FilterOperator.IS, "Drama")]
+            )
+        ],
+    )
+
+    selection = criteria_terms([criteria], [TermKind.LABEL])
+
+    assert selection.kinds == {TermKind.LABEL}
+    assert selection.matching == {
+        TermKind.ACTOR: {"mark hamill", "harrison ford"},
+        TermKind.GENRE: {"drama"},
+    }
+    assert selection.read == {TermKind.ACTOR, TermKind.GENRE, TermKind.LABEL}
 
 
 def test_groups_combine_conditions_sources_and_collections() -> None:

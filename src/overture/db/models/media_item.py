@@ -11,7 +11,7 @@ lazy from sqlmodel import (
     Relationship,
 )
 
-lazy from ...domain import MediaType, TermKind, ThemeIdSource
+lazy from ...domain import MediaType, ThemeIdSource
 lazy from ..columns import enum_type, typed_columns
 lazy from .art import ArtSlot
 lazy from .download_job import DownloadJob
@@ -19,7 +19,6 @@ lazy from .library import Library
 lazy from .media_collection import MediaCollectionMember
 lazy from .season import Season
 lazy from .shared import ThemeColumns
-lazy from .term import MediaItemTerm
 
 
 class MediaItem(ThemeColumns, table=True):
@@ -125,11 +124,6 @@ class MediaItem(ThemeColumns, table=True):
     # Relationships. Foreign keys cascade in the database, so a deleted
     # item cannot leave seasons, artwork, values or jobs behind whether the
     # delete goes through the ORM or straight to SQL.
-    terms: list["MediaItemTerm"] = Relationship(
-        back_populates="media_item",
-        cascade_delete=True,
-        sa_relationship_kwargs={"lazy": "raise", "order_by": "MediaItemTerm.position"},
-    )
     seasons: list["Season"] = Relationship(
         back_populates="media_item",
         cascade_delete=True,
@@ -155,12 +149,6 @@ class MediaItem(ThemeColumns, table=True):
         super().__init__(**data)
         if "art_slots" not in data:
             self.art_slots = []
-        if "terms" not in data:
-            self.terms = []
-
-    def values(self, kind: TermKind) -> list[str]:
-        """The item's values of *kind*, in order; its terms must be loaded."""
-        return [link.term.name for link in self.terms if link.term.kind is kind]
 
 
 typed_columns(MediaItem)

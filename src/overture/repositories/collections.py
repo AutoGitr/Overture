@@ -1,11 +1,15 @@
 """Media-server collection query helpers."""
 
-lazy from collections.abc import Collection, Sequence
+lazy from collections.abc import Collection, Iterable, Mapping, Sequence
+lazy from dataclasses import dataclass, field
 lazy from datetime import datetime
 lazy from itertools import batched
+lazy from typing import Any, NamedTuple, cast
 
-lazy from sqlmodel import col, delete, select, update
+lazy from sqlalchemy.sql.elements import ColumnElement
+lazy from sqlmodel import col, delete, func, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
+lazy from sqlmodel.sql.expression import Select
 
 lazy from ..db.models.collection_group import CollectionGroup
 lazy from ..db.models.collection_rule import CollectionRule
@@ -15,9 +19,98 @@ lazy from ..db.models.media_collection import (
     MediaCollectionMember,
 )
 lazy from ..db.models.media_item import MediaItem
+lazy from ..db.models.term import MediaItemTerm, Term
 lazy from ..db.session import CHUNK_SIZE
-lazy from ..domain import MediaType, ServerType
-lazy from .media_items import WITH_TERMS
+lazy from ..domain import MediaType, ServerType, TermKind
+
+
+class CollectionItem(NamedTuple):
+    """What collection rules read of a stored title.
+
+    A whole library is read for each rule, so this holds plain column values
+    rather than an entity per title.
+    """
+
+    id: int
+    media_type: MediaType
+    title: str
+    sort_title: str | None
+    library_id: str | None
+    server_item_id: str | None
+    tmdb_id: int | None
+    tvdb_id: int | None
+    imdb_id: str | None
+    tmdb_collection_id: int | None
+    tmdb_checked_id: int | None
+    year: int | None
+    folder_path: str | None
+    studio: str | None
+    content_rating: str | None
+    edition: str | None
+    resolution: str | None
+    critic_rating: float | None
+    audience_rating: float | None
+    user_rating: float | None
+    duration_seconds: int | None
+    plays: int | None
+    last_played_at: datetime | None
+    unplayed: bool | None
+    in_progress: bool | None
+    release_date: str | None
+    versions: int | None
+    original_language: str | None
+    tmdb_rating: float | None
+    tmdb_votes: int | None
+    show_status: str | None
+    last_aired: str | None
+    server_added_at: datetime | None
+    #: The values read for it, by kind; see :class:`TermSelection`.
+    terms: Mapping[TermKind, Sequence[str]]
+
+    def values(self, kind: TermKind) -> Sequence[str]:
+        """Its values of *kind*, which must have been read."""
+        return self.terms[kind]
+
+
+#: The stored columns of a :class:`CollectionItem`, in its field order.
+_ITEM_COLUMNS = [
+    col(getattr(MediaItem, name)) for name in CollectionItem._fields if name != "terms"
+]
+
+
+@dataclass(slots=True, frozen=True)
+class TermSelection:
+    """Which of a library's values to read with its items.
+
+    Only what evaluation looks at is read: titles hold dozens of values each,
+    and a rule naming one actor tests for that actor alone.
+    """
+
+    #: Kinds read completely.
+    kinds: frozenset[TermKind] = frozenset()
+    #: Kinds of which only these case-folded values are read.
+    matching: Mapping[TermKind, frozenset[str]] = field(
+        default_factory=dict[TermKind, frozenset[str]]
+    )
+
+    @property
+    def read(self) -> frozenset[TermKind]:
+        """Every kind an item read this way can answer for."""
+        return self.kinds | self.matching.keys()
+
+
+def _select_items() -> Select[Any]:
+    return cast("Select[Any]", select(*_ITEM_COLUMNS))
+
+
+def _in_library(media_type: MediaType, library_id: str) -> list[ColumnElement[bool]]:
+    """Match the active server items of one library."""
+    return [
+        col(MediaItem.media_type) == media_type,
+        col(MediaItem.library_id) == library_id,
+        col(MediaItem.server_removed_at).is_(None),
+        col(MediaItem.server_item_id).is_not(None),
+    ]
 
 
 class CollectionRepository:
@@ -168,11 +261,10 @@ class CollectionRepository:
             ).all()
         )
 
-    async def members(self, collection_id: int) -> list[MediaItem]:
+    async def members(self, collection_id: int) -> list[CollectionItem]:
         """Return the visible stored items a collection holds."""
         stmt = (
-            select(MediaItem)
-            .options(WITH_TERMS)
+            _select_items()
             .join(
                 MediaCollectionMember,
                 col(MediaCollectionMember.media_item_id) == col(MediaItem.id),
@@ -186,7 +278,10 @@ class CollectionRepository:
                 col(MediaCollectionMember.media_item_id),
             )
         )
-        return list((await self.session.exec(stmt)).all())
+        return [
+            CollectionItem._make((*row, {}))
+            for row in (await self.session.exec(stmt)).all()
+        ]
 
     async def collection_ids_by_item(
         self, item_ids: Collection[int]
@@ -308,25 +403,100 @@ class CollectionRepository:
             updated += result.rowcount or 0
         return updated
 
-    async def library_items(
-        self, media_type: MediaType, library_id: str
-    ) -> list[MediaItem]:
-        """Return active server items in one library, with deterministic order."""
-        return list(
-            (
-                await self.session.exec(
-                    select(MediaItem)
-                    .options(WITH_TERMS)
-                    .where(
-                        col(MediaItem.media_type) == media_type,
-                        col(MediaItem.library_id) == library_id,
-                        col(MediaItem.server_removed_at).is_(None),
-                        col(MediaItem.server_item_id).is_not(None),
-                    )
-                    .order_by(col(MediaItem.id))
+    async def item_ids_by_server_id(
+        self, server_ids: Collection[str]
+    ) -> dict[str, int]:
+        """Return Overture item IDs by media-server item ID."""
+        found: dict[str, int] = {}
+        for batch in batched(server_ids, CHUNK_SIZE, strict=False):
+            rows = await self.session.exec(
+                select(MediaItem.server_item_id, MediaItem.id).where(
+                    col(MediaItem.server_item_id).in_(batch),
+                    col(MediaItem.server_removed_at).is_(None),
                 )
-            ).all()
+            )
+            found.update(
+                {
+                    server_id: item_id
+                    for server_id, item_id in rows.all()
+                    if server_id is not None and item_id is not None
+                }
+            )
+        return found
+
+    async def library_items(
+        self,
+        media_type: MediaType,
+        library_id: str,
+        terms: TermSelection | None = None,
+    ) -> list[CollectionItem]:
+        """Return active server items in one library, with deterministic order.
+
+        Only the values *terms* selects are read; asking for another kind raises.
+        """
+        selection = terms or TermSelection()
+        library = _in_library(media_type, library_id)
+        values = await self._selected_terms(library, selection)
+        blank = dict.fromkeys(selection.read, ())
+        rows = await self.session.exec(
+            _select_items().where(*library).order_by(col(MediaItem.id))
         )
+        return [
+            CollectionItem._make(
+                (*row, {**blank, **held} if (held := values.get(row[0])) else blank)
+            )
+            for row in rows.all()
+        ]
+
+    async def _selected_terms(
+        self, library: Iterable[ColumnElement[bool]], selection: TermSelection
+    ) -> dict[int, dict[TermKind, list[str]]]:
+        """Read the selected values of a library's items, by item and kind."""
+        reads: list[ColumnElement[bool]] = [
+            col(MediaItemTerm.term_id).in_(
+                select(Term.id).where(
+                    col(Term.kind) == kind, func.casefold(Term.name).in_(values)
+                )
+            )
+            for kind, values in selection.matching.items()
+            if kind not in selection.kinds
+        ]
+        if selection.kinds:
+            reads.append(col(MediaItemTerm.kind).in_(selection.kinds))
+        found: dict[int, dict[TermKind, list[str]]] = {}
+        for read in reads:
+            rows = await self.session.exec(
+                select(
+                    col(MediaItemTerm.media_item_id), col(MediaItemTerm.kind), Term.name
+                )
+                .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
+                .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
+                .where(*library, read)
+                .order_by(
+                    col(MediaItemTerm.media_item_id),
+                    col(MediaItemTerm.kind),
+                    col(MediaItemTerm.position),
+                )
+            )
+            for item_id, kind, name in rows.all():
+                found.setdefault(item_id, {}).setdefault(kind, []).append(name)
+        return found
+
+    async def term_counts(
+        self, media_type: MediaType, library_id: str, kind: TermKind
+    ) -> dict[str, int]:
+        """How many of a library's items hold each value of *kind*."""
+        rows = await self.session.exec(
+            select(Term.name, func.count())
+            .select_from(MediaItemTerm)
+            .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
+            .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
+            .where(
+                *_in_library(media_type, library_id), col(MediaItemTerm.kind) == kind
+            )
+            .group_by(col(Term.id))
+        )
+        return dict(rows.all())
 
     async def titles_by_item(
         self, library_id: str, excluding: int | None = None

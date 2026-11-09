@@ -20,7 +20,7 @@ lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerItem, SyncItemResult
 lazy from overture.media_servers.jellyfin import JellyfinProvider
-lazy from overture.repositories.media_items import WITH_TERMS
+lazy from overture.repositories.terms import TermRepository
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.audio import ThemeAudioMetadata
 lazy from tests.publishers import NullEventPublisher
@@ -154,14 +154,13 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
 
     await sync_full(reconciler, items)
     async with isolated_session_factory() as session:
+        items = (await session.exec(select(MediaItem))).all()
+        directors = await TermRepository(session).values_by_item(
+            [item.id or 0 for item in items], TermKind.DIRECTOR
+        )
         stored = {
-            item.server_item_id: (
-                item.values(TermKind.DIRECTOR),
-                item.director_etag,
-            )
-            for item in (
-                await session.exec(select(MediaItem).options(WITH_TERMS))
-            ).all()
+            item.server_item_id: (directors.get(item.id or 0, []), item.director_etag)
+            for item in items
         }
     assert stored["changed"] == (["Ridley Scott"], "v2")
     assert stored["new"] == (["John Carpenter", "Tommy Lee Wallace"], "v1")
@@ -450,9 +449,12 @@ async def test_sync_emits_targeted_upserts_and_removals(
     async with isolated_session_factory() as session:
         removed = await session.get(MediaItem, 1)
         revived = await session.get(MediaItem, 2)
-        changed = await session.get(MediaItem, 3, options=[WITH_TERMS])
+        changed = await session.get(MediaItem, 3)
         out_of_scope = await session.get(MediaItem, 5)
-        preserved_year = await session.get(MediaItem, 6, options=[WITH_TERMS])
+        preserved_year = await session.get(MediaItem, 6)
+        directors = await TermRepository(session).values_by_item(
+            [3, 6], TermKind.DIRECTOR
+        )
 
     assert stats.tally.added == 1
     assert stats.tally.errors == 0
@@ -479,11 +481,11 @@ async def test_sync_emits_targeted_upserts_and_removals(
     assert revived is not None
     assert revived.server_removed_at is None
     assert changed is not None
-    assert changed.values(TermKind.DIRECTOR) == ["Ridley Scott"]
+    assert directors[3] == ["Ridley Scott"]
     assert changed.year == 1979
     assert preserved_year is not None
     assert preserved_year.year == 1980
-    assert preserved_year.values(TermKind.DIRECTOR) == ["Existing Director"]
+    assert directors[6] == ["Existing Director"]
     assert out_of_scope is not None
     assert out_of_scope.server_removed_at is None
 

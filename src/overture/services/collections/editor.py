@@ -6,7 +6,6 @@ lazy from contextlib import suppress
 
 lazy from ...db.art_slots import clear_art_selection
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import (
     ITEM_ART_TYPES,
     AssetScope,
@@ -15,7 +14,7 @@ lazy from ...domain import (
     MediaType,
 )
 lazy from ...media_servers.errors import MediaServerError
-lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.collections import CollectionItem, CollectionRepository
 lazy from ...schemas.collections import (
     CollectionAdoption,
     CollectionAdoptionPlan,
@@ -44,7 +43,7 @@ lazy from .access import CollectionAccess, LibraryScope
 lazy from .criteria import order_items
 lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay, saved_options
 lazy from .fields import available_orders
-lazy from .membership import Membership, resolve_members, stored_ids
+lazy from .membership import Membership, resolve_members
 lazy from .plex_query import (
     UnmappableFilterError,
     decompile_plex_query,
@@ -77,7 +76,7 @@ def _require_movies(
 
 
 def _server_ids(
-    wanted: Mapping[str, list[MediaItem]], library_ids: Collection[str]
+    wanted: Mapping[str, list[CollectionItem]], library_ids: Collection[str]
 ) -> list[str]:
     """The server's IDs of what these libraries hold, in their order."""
     return [
@@ -140,7 +139,7 @@ class CollectionEditor:
         body = body.model_copy(update={"rule": body.rule.model_copy(update=overrides)})
         rule = body.rule
         smart = rule.smart
-        scopes = await self._access.scopes(rule.libraries)
+        scopes = await self._access.scopes(rule.libraries, smart=smart)
         types = {scope.library_id: scope.media_type for scope in scopes}
         self._validator.display(body, set(types.values()), smart=smart)
         group = collection_group(body.collection_group)
@@ -205,7 +204,7 @@ class CollectionEditor:
                 await session.flush()
                 await CollectionRepository(session).replace_members(
                     row.id or 0,
-                    [item.id or 0 for items in wanted.values() for item in items],
+                    [item.id for items in wanted.values() for item in items],
                 )
                 saved_rule = rule_row(row.id or 0, rule)
                 saved_rule.source_summary = source_summary
@@ -218,7 +217,7 @@ class CollectionEditor:
         row: MediaCollection,
         body: CollectionCreate,
         rule: CollectionRuleWrite,
-        wanted: Mapping[str, list[MediaItem]],
+        wanted: Mapping[str, list[CollectionItem]],
         *,
         smart: bool,
         source_summary: str | None,
@@ -251,7 +250,7 @@ class CollectionEditor:
 
     async def _initial_members(
         self, body: CollectionCreate, scopes: Sequence[LibraryScope]
-    ) -> dict[str, list[MediaItem]]:
+    ) -> dict[str, list[CollectionItem]]:
         """What the criteria select; Plex fills a smart collection itself."""
         if body.rule.smart:
             return {scope.library_id: [] for scope in scopes}
@@ -263,9 +262,9 @@ class CollectionEditor:
         self,
         row: MediaCollection,
         body: CollectionCreate,
-        wanted: Mapping[str, list[MediaItem]],
+        wanted: Mapping[str, list[CollectionItem]],
         scopes: Sequence[LibraryScope],
-    ) -> dict[str, list[MediaItem]]:
+    ) -> dict[str, list[CollectionItem]]:
         """Create the server's collections; Plex decides a smart one's members.
 
         A library with nothing to hold gets no server collection until it has.
@@ -470,7 +469,7 @@ class CollectionEditor:
     async def set_members_locked(
         self,
         row: MediaCollection,
-        wanted: Mapping[str, list[MediaItem]],
+        wanted: Mapping[str, list[CollectionItem]],
         order: CollectionOrder,
         *,
         append: bool = False,
@@ -503,13 +502,14 @@ class CollectionEditor:
                 target, ids, order=order, append=append
             )
         async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
-            items = [
-                item
-                for part in row.libraries
-                for item in await repo.library_items(part.media_type, part.library_id)
-            ]
-        members = stored_ids(server_ids, items)
+            by_server_id = await CollectionRepository(session).item_ids_by_server_id(
+                server_ids
+            )
+        members = [
+            by_server_id[identity]
+            for identity in server_ids
+            if identity in by_server_id
+        ]
         async with self._access.database.write_session() as session:
             current = await self._access.require(session, row.id or 0)
             await CollectionRepository(session).replace_members(row.id or 0, members)
@@ -525,7 +525,7 @@ class CollectionEditor:
 
     async def _chosen_members(
         self, row: MediaCollection, body: CollectionMembersUpdate
-    ) -> dict[str, list[MediaItem]]:
+    ) -> dict[str, list[CollectionItem]]:
         """The members chosen by hand, in their order, by library."""
         items = [
             item
@@ -534,7 +534,9 @@ class CollectionEditor:
                 part.library_id, part.media_type
             )
         ]
-        wanted: dict[str, list[MediaItem]] = {p.library_id: [] for p in row.libraries}
+        wanted: dict[str, list[CollectionItem]] = {
+            p.library_id: [] for p in row.libraries
+        }
         for item in order_items(
             resolve_members(body.member_ids, items), body.order_type
         ):
@@ -569,11 +571,11 @@ class CollectionEditor:
     async def _store_members(
         self,
         row: MediaCollection,
-        wanted: Mapping[str, list[MediaItem]],
+        wanted: Mapping[str, list[CollectionItem]],
         order: CollectionOrder,
     ) -> None:
         """Save members in Overture only; the next sync sends them."""
-        ids = [item.id or 0 for items in wanted.values() for item in items]
+        ids = [item.id for items in wanted.values() for item in items]
         async with self._access.database.write_session() as session:
             current = await self._access.require(session, row.id or 0)
             await CollectionRepository(session).replace_members(row.id or 0, ids)

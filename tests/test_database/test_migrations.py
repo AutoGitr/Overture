@@ -771,6 +771,46 @@ def test_list_columns_become_shared_terms_in_order_and_come_back() -> None:
         engine.dispose()
 
 
+def test_term_links_state_their_kind_are_clustered_and_come_back() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "a8d3e6f0c271")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "theme_provenance_cleared) VALUES (1, 'movie', 'Title', 1, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO terms (id, kind, name) VALUES "
+                "(1, 'genre', 'Drama'), (2, 'genre', 'Action'), (3, 'actor', 'Lead')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_item_terms (media_item_id, term_id, position) "
+                "VALUES (1, 2, 1), (1, 1, 0), (1, 3, 0)"
+            )
+
+            command.upgrade(config, "c9e4f1b7a2d3")
+            assert conn.exec_driver_sql(
+                "SELECT media_item_id, kind, position, term_id FROM media_item_terms "
+                "ORDER BY media_item_id, kind, position"
+            ).all() == [(1, "actor", 0, 3), (1, "genre", 0, 1), (1, "genre", 1, 2)]
+            assert conn.exec_driver_sql("PRAGMA index_list(media_item_terms)").all()
+            assert not conn.exec_driver_sql(
+                "SELECT 1 FROM sqlite_schema WHERE name = 'media_item_terms' "
+                "AND sql NOT LIKE '%WITHOUT ROWID%'"
+            ).all()
+
+            command.downgrade(config, "a8d3e6f0c271")
+            assert conn.exec_driver_sql(
+                "SELECT media_item_id, term_id, position FROM media_item_terms "
+                "ORDER BY term_id"
+            ).all() == [(1, 1, 0), (1, 2, 1), (1, 3, 0)]
+    finally:
+        engine.dispose()
+
+
 def test_json_columns_are_renamed_typed_and_hold_only_valid_json() -> None:
     engine = create_engine("sqlite://")
     try:

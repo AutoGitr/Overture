@@ -4,11 +4,11 @@ lazy import hashlib
 lazy from collections.abc import Sequence
 
 lazy from ...config import Settings
-lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import FilterOperator, MediaType, SourceType
 lazy from ...integrations.arr import ArrClient
 lazy from ...integrations.mdblist import MDBListClient, MdblistList
 lazy from ...integrations.tmdb import TMDBClient
+lazy from ...repositories.collections import CollectionItem
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionLibraryCriteria,
@@ -221,7 +221,7 @@ class SourceResolver:
         self,
         source: CollectionSource,
         media_type: MediaType,
-        items: Sequence[MediaItem],
+        items: Sequence[CollectionItem],
         *,
         region: str,
     ) -> list[int]:
@@ -241,7 +241,7 @@ class SourceResolver:
                 set(matches.imdb_ids),
             )
             return [
-                item.id or 0
+                item.id
                 for item in items
                 if item.tmdb_id in tmdb or item.tvdb_id in tvdb or item.imdb_id in imdb
             ]
@@ -250,10 +250,10 @@ class SourceResolver:
         for index, tmdb_id in enumerate(ranked):
             rank.setdefault(tmdb_id, index)
         return [
-            item.id or 0
+            item.id
             for item in sorted(
                 (item for item in items if item.tmdb_id in rank),
-                key=lambda item: (rank[item.tmdb_id or 0], item.id or 0),
+                key=lambda item: (rank[item.tmdb_id or 0], item.id),
             )
         ]
 

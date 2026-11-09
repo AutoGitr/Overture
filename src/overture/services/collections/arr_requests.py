@@ -1,8 +1,8 @@
 """Missing titles of a collection's lists, and requesting them from Radarr or Sonarr."""
 
-lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings, get_app_settings
 lazy from ...domain import MediaType
+lazy from ...repositories.collections import CollectionItem
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionArrOptions,
@@ -128,7 +128,7 @@ class CollectionArr:
         self,
         media_type: MediaType,
         criteria: FilterGroup,
-        items: list[MediaItem],
+        items: list[CollectionItem],
         settings: AppSettings,
         tmdb_ids: list[int] | None = None,
     ) -> CollectionRequestResult:

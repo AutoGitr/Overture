@@ -77,6 +77,9 @@ def _on_connect(dbapi_conn: DBAPIConnection, _connection_record: object) -> None
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
     cursor.close()
+    # Criteria compare values case-insensitively by Unicode, which the database
+    # cannot do itself; deterministic so a query may fold each value only once.
+    dbapi_conn.create_function("casefold", 1, str.casefold, deterministic=True)
 
 
 def _begin(conn: Connection) -> None:

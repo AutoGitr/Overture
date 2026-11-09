@@ -5,9 +5,8 @@ lazy from collections.abc import Mapping
 
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import UNMANAGED_REFUSAL, CollectionKind, SyncMode
-lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.collections import CollectionItem, CollectionRepository
 lazy from ...schemas.collections import CollectionSyncResponse
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
@@ -53,14 +52,13 @@ class RuleSync:
                 policy = await self._access.policy(session, row.group, rule)
                 current = await repo.members(collection_id)
                 scopes = [
-                    LibraryScope(
-                        library_id=part.library_id,
-                        media_type=part.media_type,
-                        criteria=criteria_of(part),
-                        items=await repo.library_items(
-                            part.media_type, part.library_id
-                        ),
+                    await self._access.scope(
+                        repo,
+                        part.library_id,
+                        part.media_type,
+                        criteria_of(part),
                         collection_id=collection_id,
+                        smart=rule is not None and rule.smart,
                     )
                     for part in row.libraries
                     if part.criteria is not None
@@ -100,7 +98,7 @@ class RuleSync:
         row: MediaCollection,
         rule: CollectionRule,
         policy: CollectionPolicy,
-        current: list[MediaItem],
+        current: list[CollectionItem],
         scopes: list[LibraryScope],
     ) -> CollectionSyncResponse:
         """Withhold a collection its set or season leaves out, else sync it."""
@@ -144,7 +142,7 @@ class RuleSync:
         row: MediaCollection,
         rule: CollectionRule,
         policy: CollectionPolicy,
-        current: list[MediaItem],
+        current: list[CollectionItem],
         scopes: list[LibraryScope],
     ) -> CollectionSyncResponse:
         provider = self._access.provider()
@@ -184,7 +182,7 @@ class RuleSync:
         if rule.last_synced_at is None:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
-        old_ids = {item.id or 0 for item in current}
+        old_ids = {item.id for item in current}
         return CollectionSyncResponse(
             added=len(set(members) - old_ids),
             removed=len(old_ids - set(members)),
@@ -195,7 +193,7 @@ class RuleSync:
         row: MediaCollection,
         rule: CollectionRule,
         policy: CollectionPolicy,
-        current: list[MediaItem],
+        current: list[CollectionItem],
         scopes: list[LibraryScope],
     ) -> CollectionSyncResponse:
         was_smart = row.kind is CollectionKind.SMART
@@ -235,7 +233,7 @@ class RuleSync:
     async def _member_count(
         self,
         row: MediaCollection,
-        wanted: Mapping[str, list[MediaItem]],
+        wanted: Mapping[str, list[CollectionItem]],
         *,
         append: bool,
     ) -> int:

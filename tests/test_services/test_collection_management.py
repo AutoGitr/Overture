@@ -60,9 +60,8 @@ lazy from overture.integrations.tmdb import (
 lazy from overture.media_servers.adapters import ServerCollection, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
-lazy from overture.repositories.collections import CollectionRepository
+lazy from overture.repositories.collections import CollectionRepository, TermSelection
 lazy from overture.repositories.libraries import LibraryRepository
-lazy from overture.repositories.media_items import WITH_TERMS
 lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtRequest
 lazy from overture.schemas.collections import (
     BulkCollectionOperation,
@@ -1579,7 +1578,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
     )
     async with database.read_session() as session:
         labelled = await CollectionRepository(session).library_items(
-            MediaType.MOVIE, "movies"
+            MediaType.MOVIE, "movies", TermSelection(frozenset({TermKind.LABEL}))
         )
     assert [label in item.values(TermKind.LABEL) for item in labelled] == [
         True,
@@ -1937,7 +1936,7 @@ async def test_keyword_values_list_the_common_first_and_add_tmdb_matches(
 ) -> None:
     async with database.write_session() as session:
         for index, item_id in enumerate(manager.ids):
-            item = await session.get(MediaItem, item_id, options=[WITH_TERMS])
+            item = await session.get(MediaItem, item_id)
             assert item is not None
             await assign(
                 session,
@@ -3005,12 +3004,16 @@ async def test_adoption_names_members_that_share_no_franchise(
 
 def test_adoption_names_members_by_tmdb_then_tvdb_then_imdb_then_title() -> None:
     members = [
-        MediaItem(id=1, media_type=MediaType.SHOW, title="A", tmdb_id=7, tvdb_id=70),
-        MediaItem(
-            id=2, media_type=MediaType.SHOW, title="B", tvdb_id=80, imdb_id="tt8"
+        holding(
+            MediaItem(id=1, media_type=MediaType.SHOW, title="A", tmdb_id=7, tvdb_id=70)
         ),
-        MediaItem(id=3, media_type=MediaType.SHOW, title="C", imdb_id="tt9"),
-        MediaItem(id=4, media_type=MediaType.SHOW, title="D"),
+        holding(
+            MediaItem(
+                id=2, media_type=MediaType.SHOW, title="B", tvdb_id=80, imdb_id="tt8"
+            )
+        ),
+        holding(MediaItem(id=3, media_type=MediaType.SHOW, title="C", imdb_id="tt9")),
+        holding(MediaItem(id=4, media_type=MediaType.SHOW, title="D")),
     ]
     row = MediaCollection(server_type=ServerType.PLEX, title="Saga")
 

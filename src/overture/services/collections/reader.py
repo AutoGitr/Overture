@@ -128,7 +128,7 @@ class CollectionReader:
             )
             .model_dump(),
             effective_sync_mode=policy.sync_mode,
-            member_ids=[member.id or 0 for member in members],
+            member_ids=[member.id for member in members],
             rule=rule_read(saved, row),
             theme_unavailable=reason,
             theme_writable=reason is None,

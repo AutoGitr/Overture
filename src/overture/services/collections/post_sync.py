@@ -4,17 +4,20 @@ Each step decides from the synced collection whether it applies, so a new
 step is a new :class:`PostSyncStep`, not a change to the sync itself.
 """
 
-lazy from collections.abc import Mapping, Sequence
+lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass
 lazy from typing import Protocol
 
 lazy from ...db.art_slots import read_art_slot, saved_art
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings, get_app_settings
-lazy from ...domain import ArtStyle, ArtType, CollectionKind, MediaType
-lazy from ...repositories.collections import CollectionRepository
+lazy from ...domain import ArtStyle, ArtType, CollectionKind, MediaType, TermKind
+lazy from ...repositories.collections import (
+    CollectionItem,
+    CollectionRepository,
+    TermSelection,
+)
 lazy from ...schemas.art import SaveArtRequest
 lazy from ...schemas.collections import SetCollectionThemeRequest
 lazy from ...utils.collection_formats import format_arr_tag, format_member_tag
@@ -41,8 +44,7 @@ class SyncedCollection:
     row: MediaCollection
     rule: CollectionRule | None
     policy: CollectionPolicy
-    members: list[MediaItem]
-    library_items: Mapping[str, list[MediaItem]]
+    members: list[CollectionItem]
     settings: AppSettings
     plex: bool
     #: The sync made a server copy the collection's saved assets are not on yet.
@@ -56,7 +58,7 @@ class SyncedCollection:
     def on_server(self) -> bool:
         return bool(self.row.server_ids)
 
-    def members_of(self, media_type: MediaType) -> list[MediaItem]:
+    def members_of(self, media_type: MediaType) -> list[CollectionItem]:
         return [item for item in self.members if item.media_type is media_type]
 
 
@@ -166,7 +168,8 @@ class MemberLabel:
 
     name = "Member label"
 
-    def __init__(self, *, membership: Membership) -> None:
+    def __init__(self, *, access: CollectionAccess, membership: Membership) -> None:
+        self._access = access
         self._membership = membership
 
     def applies(self, synced: SyncedCollection) -> bool:
@@ -184,11 +187,13 @@ class MemberLabel:
                 part.media_type,
                 label,
                 {
-                    member.id or 0
+                    member.id
                     for member in synced.members
                     if member.library_id == part.library_id
                 },
-                synced.library_items[part.library_id],
+                await self._access.part_items(
+                    part, TermSelection(frozenset({TermKind.LABEL}))
+                ),
             )
 
 
@@ -232,13 +237,15 @@ class MemberTag:
                     ],
                 )
 
-    async def _sharing_members(self, collection_id: int, tag: str) -> list[MediaItem]:
+    async def _sharing_members(
+        self, collection_id: int, tag: str
+    ) -> list[CollectionItem]:
         """The stored members of the other managed collections with *tag*."""
         server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             defaults = await get_app_settings(session)
-            members: list[MediaItem] = []
+            members: list[CollectionItem] = []
             for row in await repo.list_listed():
                 if (
                     row.id == collection_id
@@ -261,7 +268,14 @@ class RequestMissing:
 
     name = "Request missing"
 
-    def __init__(self, *, sources: SourceResolver, arr: CollectionArr) -> None:
+    def __init__(
+        self,
+        *,
+        access: CollectionAccess,
+        sources: SourceResolver,
+        arr: CollectionArr,
+    ) -> None:
+        self._access = access
         self._sources = sources
         self._arr = arr
 
@@ -281,7 +295,7 @@ class RequestMissing:
                 await self._arr.request(
                     part.media_type,
                     criteria_of(part),
-                    synced.library_items[part.library_id],
+                    await self._access.part_items(part),
                     synced.settings,
                 )
 
@@ -350,12 +364,6 @@ class PostSync:
                 rule=rule,
                 policy=await self._access.policy(session, row.group, rule),
                 members=await repo.members(collection_id),
-                library_items={
-                    part.library_id: await repo.library_items(
-                        part.media_type, part.library_id
-                    )
-                    for part in row.libraries
-                },
                 settings=await get_app_settings(session),
                 plex=self._access.plex,
                 new_copies=new_copies,

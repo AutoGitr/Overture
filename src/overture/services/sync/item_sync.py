@@ -47,7 +47,6 @@ class ItemReconciler:
             item.server_item_id,
             item.library_id,
             item.monitored,
-            tuple(item.values(TermKind.DIRECTOR)),
             item.studio,
             item.last_matched_at,
             item.created_at,
@@ -105,13 +104,17 @@ class ItemReconciler:
 
         before_snapshot = await self.visible_item_snapshot(session, item)
         before_fields = self.visible_item_fields(item)
-        art_pulled = await self.update_item(
+        art_pulled, directors_changed = await self.update_item(
             session, item, server_item, resolved, auto_unmonitor=auto_unmonitor
         )
         changes = tuple(
             change
             for change, happened in (
-                ("metadata", before_fields != self.visible_item_fields(item)),
+                (
+                    "metadata",
+                    directors_changed
+                    or before_fields != self.visible_item_fields(item),
+                ),
                 ("artwork selection from the server", art_pulled),
             )
             if happened
@@ -196,10 +199,10 @@ class ItemReconciler:
             monitored=True,
             created_at=utc_now(),
         )
-        await apply_server_metadata(session, item, server_item)
-        await apply_provider_collection(session, item, server_item)
         session.add(item)
         await session.flush()
+        await apply_server_metadata(session, item, server_item)
+        await apply_provider_collection(session, item, server_item)
 
         item.server_verified_at = utc_now()
         item.last_synced_at = utc_now()
@@ -230,7 +233,7 @@ class ItemReconciler:
         resolved: ResolvedArtUrls,
         *,
         auto_unmonitor: AutoUnmonitor,
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         """Update an existing local item from a provider item.
 
         Only values that differ are written, so an unchanged item commits an
@@ -242,7 +245,8 @@ class ItemReconciler:
         selection it holds then is one to download.
 
         Returns:
-            Whether the server's artwork selection was saved.
+            Whether the server's artwork selection was saved, and whether the
+            title's directors changed.
         """
         if item.folder_path is None and server_item.folder_path is not None:
             resolved = {}
@@ -270,7 +274,7 @@ class ItemReconciler:
             if server_item.media_type == MediaType.MOVIE
             else None
         )
-        await apply_server_metadata(session, item, server_item)
+        changed = await apply_server_metadata(session, item, server_item)
 
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
         item.tvdb_id = item.tvdb_id or guid_int(server_item.guids, "tvdb")
@@ -292,18 +296,18 @@ class ItemReconciler:
 
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
         session.add(item)
-        return art_pulled
+        return art_pulled, TermKind.DIRECTOR in changed
 
 
 async def apply_server_metadata(
     session: AsyncSession, item: MediaItem, server_item: ServerItem
-) -> None:
+) -> frozenset[TermKind]:
     """Copy the metadata the server owns, which collection criteria evaluate.
 
-    Only movies have directors.
+    Only movies have directors. Returns the kinds of values that changed.
     """
-    await TermRepository(session).assign(
-        item,
+    changed = await TermRepository(session).assign(
+        item.id or 0,
         {
             TermKind.GENRE: server_item.genres,
             TermKind.ACTOR: server_item.actors,
@@ -332,6 +336,7 @@ async def apply_server_metadata(
     item.in_progress = server_item.in_progress
     item.release_date = server_item.release_date
     item.versions = server_item.versions
+    return changed
 
 
 async def apply_provider_collection(

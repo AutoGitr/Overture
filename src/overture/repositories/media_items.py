@@ -6,7 +6,7 @@ lazy from itertools import batched
 lazy from pathlib import Path
 lazy from typing import Any, NamedTuple, cast
 
-lazy from sqlalchemy.orm import QueryableAttribute, raiseload, selectinload
+lazy from sqlalchemy.orm import QueryableAttribute, raiseload
 lazy from sqlalchemy.sql.elements import ColumnElement
 lazy from sqlmodel import case, col, delete, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -17,7 +17,6 @@ lazy from ..db.completion import HOLDS_FILES
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
-lazy from ..db.models.term import MediaItemTerm
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import (
     MediaType,
@@ -40,21 +39,15 @@ class ServerItemFacts(NamedTuple):
     tmdb_collection_id: int | None
 
 
-#: Load option giving queried titles their values, such as genres and people.
-WITH_TERMS = selectinload(
-    cast("QueryableAttribute[list[MediaItemTerm]]", MediaItem.terms)
-)
-
-
 def _matching(for_update: bool) -> SelectOfScalar[MediaItem]:
-    """Select media items, with their artwork slots and values for an update.
+    """Select media items, with their artwork slots for an update.
 
     A lookup that only identifies the row skips loading them; reading them
     from such a row raises rather than finding none.
     """
     stmt = select(MediaItem)
     return (
-        stmt.options(WITH_TERMS)
+        stmt
         if for_update
         else stmt.options(
             raiseload(cast("QueryableAttribute[list[ArtSlot]]", MediaItem.art_slots))

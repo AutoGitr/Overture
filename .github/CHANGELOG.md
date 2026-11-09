@@ -94,6 +94,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Performance:** collection syncs, previews and library loading read only the values they need, so a collection syncs in moments instead of minutes and large libraries no longer run the app out of memory. Upgrading rebuilds the stored genre and people links once.
 - **Artwork:** automatic art no longer replaces an uploaded collection image after a sync, and a new server copy of a collection receives its uploaded image.
 - **Artwork:** collections without a TMDB collection ID offer the art of the person their criteria list.
 - **Collections:** TMDB facts no longer give movies a show status, last air date or networks.

@@ -4,8 +4,8 @@ lazy from collections import Counter
 lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass
 
-lazy from ...db.models.media_item import MediaItem
 lazy from ...domain import FilterOperator, SetDimension
+lazy from ...repositories.collections import CollectionItem
 lazy from ...schemas.collections import (
     CollectionGeneratorBase,
     FieldCondition,
@@ -52,7 +52,7 @@ def alias_names(generator: CollectionGeneratorBase) -> dict[str, str]:
 
 def count_values(
     generator: CollectionGeneratorBase,
-    items: Sequence[MediaItem],
+    items: Sequence[CollectionItem],
     context: CriteriaContext,
 ) -> Counter[str]:
     """Count the items holding each value, among those the set's criteria match."""
@@ -76,7 +76,7 @@ def count_values(
                 else set[str]()
             )
         else:
-            value = field_value(item, field, context.collections.get(item.id or 0, ()))
+            value = field_value(item, field, context.collections.get(item.id, ()))
             if isinstance(value, str):
                 found = {value}
             elif isinstance(value, int | float) and not isinstance(value, bool):

@@ -24,6 +24,7 @@ lazy from ...schemas.collections import (
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess
+lazy from .criteria import TERM_FIELDS, criteria_terms
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
 lazy from .fields import DIMENSIONS, FIELDS, smart_only_dimension
@@ -244,14 +245,25 @@ class CollectionSets:
         if smart_only_dimension(generator.dimension, server, media_type):
             counts = await self._plex_counts(media_type, generator, library_id)
         else:
-            items = await self._access.library_items(library_id, media_type)
+            field = DIMENSIONS[generator.dimension].field
+            criteria = [
+                generator.criteria,
+                *(value.criteria for value in generator.custom_values),
+            ]
+            items = await self._access.library_items(
+                library_id,
+                media_type,
+                criteria_terms(
+                    criteria,
+                    [TERM_FIELDS[field]]
+                    if field is not None and field in TERM_FIELDS
+                    else [],
+                ),
+            )
             context, _ = await self._membership.context(
                 media_type,
                 library_id,
-                [
-                    generator.criteria,
-                    *(value.criteria for value in generator.custom_values),
-                ],
+                criteria,
                 items,
                 collection_id=None,
             )
