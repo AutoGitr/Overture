@@ -1026,4 +1026,33 @@ describe("collection management", () => {
       expect(requested).toEqual({ titles: [{ tmdb_id: 99, media_type: "movie" }] }),
     );
   });
+
+  it("asks for a TMDB key rather than saying the library holds every title", async () => {
+    settingsState.load(
+      appSettings({
+        media_server: "plex",
+        collections_supported: true,
+        tmdb_configured: false,
+      }),
+    );
+    const rule = collectionRule();
+    mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
+      "/api/collections/12": { ...detail, rule },
+      "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: members, total: 2 },
+      "/api/collections/12/missing": { titles: [], truncated: false, requestable: true },
+    });
+    renderWithQueryClient(CollectionPage);
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Missing" }));
+    const missing = within(screen.getByRole("region", { name: "Missing" }));
+    expect(
+      await missing.findByText("Set TMDB_API_KEY to list the titles the library lacks."),
+    ).toBeInTheDocument();
+    expect(missing.queryByText("The library holds every title the lists do.")).toBeNull();
+  });
 });

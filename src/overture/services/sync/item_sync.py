@@ -247,8 +247,7 @@ class ItemReconciler:
         if item.folder_path is None and server_item.folder_path is not None:
             resolved = {}
         if item.folder_path != server_item.folder_path:
-            # Files recorded at the old path are not the files at the new one;
-            # the refresh that follows records what the new folder holds.
+            # Changing folder path invalidates local asset records until refreshed.
             item.folder_path = server_item.folder_path
             record_theme_file(item, None)
             for art_type in ITEM_ART_TYPES:

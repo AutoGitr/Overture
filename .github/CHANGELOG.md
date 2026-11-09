@@ -31,6 +31,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** the item filters can show only the titles of one collection.
 - **Collections:** TMDB title and MDBList conditions, and a collection's TMDB collection ID, can be searched by name.
 - **Collections:** adopting a collection names members without a TMDB ID by their TVDB or IMDb ID before their title, through new **TVDB ID** and **IMDb ID** conditions.
+- **Collections:** a **TMDB ID** condition, and **TMDB title list** conditions take IDs and links without `TMDB_API_KEY`.
 - **Collections:** creating a set refuses a group that already is one and warns when another set splits the same libraries alike or the group already holds collections; the set preview names values whose title another collection already has.
 - **Collections:** a copied condition or group pastes into any criteria that can test it, in another library, collection or set.
 - **Statistics:** the storage footprint includes the image cache, with its originals, uploads and thumbnails, and artwork coverage and sizes include collection posters, backgrounds and themes.
@@ -45,7 +46,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** a group stays listed after its last collection leaves it, until it is deleted in **Collection groups**.
 - **Interface:** links that open a title or collection in the media server follow the server's current address.
 - **Backups:** **Back up now** says which older backups the retention removed, saving **Backups to keep** applies it to the existing backups at once, the backup list shows where backups are saved and dates each backup by the time in its name, the same time retention uses.
-- **Interface:** the sidebar's Movies, Shows and Collections tabs always show their icon, name and count, at any width.
+- **Interface:** the sidebar's Movies, Shows and Collections tabs display their name above their icon and count, at any width.
 - **Interface:** the filters popup lines every filter's name up in one column with its choices filling the rest of the row, puts filters offering the same choices together, the most used first, and on a phone moves a filter's choices under its name rather than cutting them short.
 - **Interface:** every collapsible section, filter section, database record row and saved schedule opens and closes from anywhere across its header; a saved schedule's summary line replaces its eye button.
 - **Interface:** collection settings fill as many columns as the page has room for, a collection condition on a phone gives its field a row of its own, and labels and buttons use sentence case throughout.
@@ -79,7 +80,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** regular collections now evaluate and order criteria as Plex does: an unknown number or release date matches no condition (`is not` included), a title never played counts as last played before any date, durations compare whole minutes on both sides, titles sort by the server's sort title with numbers by value, and items without a value sort lowest.
 - **Collections:** a show is in progress when one of its episodes is partly played, as Plex's filter tests.
 - **Interface:** save, run and create buttons sit at the lower right of their row or popup, with resets at the left; Copy comes before Duplicate; the filters and Collection groups remember their open sections, while each collection opens with only Setup and Content expanded; Rename or delete is the last section of a group.
-- **Interface:** the criteria field list calls its list and tag sources External.
+- **Interface:** the criteria field list groups its list and tag sources under **Lists & tags**.
 - **Collections:** deleting a group offers **Orphan them** for its collections, as orphaning one collection does, instead of removing them from Overture; collections a set made can be neither deleted nor orphaned while the set exists.
 - **Collections:** Radarr and Sonarr tags are written as Radarr and Sonarr accept them, in lowercase letters, digits and dashes, and collections whose tags come out the same share the tag instead of taking it from each other's members.
 - **Library:** libraries are listed movies first, then by name, everywhere; a collection's criteria follow that order whatever order its libraries were chosen in.

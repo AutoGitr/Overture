@@ -83,4 +83,16 @@ describe("sidebar tabs", () => {
 
     expect(uiState.searchQuery).toBe("Star Wars");
   });
+
+  it("renders the label above the summary icon and count", () => {
+    settingsState.load(appSettings({ collections_supported: true }));
+    renderWithQueryClient(SidebarTabs, { totalMovies: 5, totalShows: 3, totalCollections: 2 });
+
+    const movieButton = screen.getByRole("button", { name: "Movies (5)" });
+    const label = movieButton.querySelector(".label");
+    const summary = movieButton.querySelector(".summary");
+    expect(label).not.toBeNull();
+    expect(summary).not.toBeNull();
+    expect(label!.compareDocumentPosition(summary!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
 });

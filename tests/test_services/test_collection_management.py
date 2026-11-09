@@ -3788,3 +3788,133 @@ async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
     await manager.service.rules.sync(identity)
     assert manager.art.selections == [ArtType.POSTER]
     assert manager.art.generated == [ArtType.POSTER]
+
+
+async def test_deleting_group_with_separator_discards_separator(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity, CollectionOptions(title="Saga", collection_group="Sagas")
+    )
+    await manager.service.groups.save_policy(
+        "Sagas",
+        CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
+    )
+    listed = await manager.service.reader.listed()
+    assert any(row.kind is CollectionKind.SEPARATOR for row in listed)
+
+    result = await manager.service.groups.delete(
+        "Sagas", CollectionGroupDelete(collections="both")
+    )
+    assert not result.errors
+    listed_after = await manager.service.reader.listed()
+    assert not listed_after
+
+
+async def test_separator_apply_raises_title_taken_on_collision(
+    manager: Manager,
+) -> None:
+    await manager.service.editor.create(
+        CollectionCreate(title="Sagas", collection_group="Other", rule=chosen(manager))
+    )
+    await manager.service.editor.create(
+        CollectionCreate(title="Part 2", collection_group="Sagas", rule=chosen(manager))
+    )
+    with pytest.raises(
+        PublicServiceError, match="A collection with this title already exists"
+    ):
+        await manager.service.groups.save_policy(
+            "Sagas", CollectionGroupPolicy(separator=True)
+        )
+    async with manager.database.read_session() as session:
+        group = await CollectionRepository(session).group(ServerType.PLEX, "Sagas")
+    assert group is not None
+    assert not group.separator
+
+
+async def test_renaming_a_separated_group_to_a_taken_title_changes_nothing(
+    manager: Manager,
+) -> None:
+    await manager.service.editor.create(
+        CollectionCreate(title="Sagas", collection_group="Other", rule=chosen(manager))
+    )
+    await manager.service.editor.create(
+        CollectionCreate(title="Part 2", collection_group="Parts", rule=chosen(manager))
+    )
+    await manager.service.groups.save_policy(
+        "Parts", CollectionGroupPolicy(separator=True)
+    )
+    with pytest.raises(
+        PublicServiceError, match="A collection with this title already exists"
+    ):
+        await manager.service.groups.rename("Parts", "Sagas")
+    async with manager.database.read_session() as session:
+        repo = CollectionRepository(session)
+        assert await repo.group(ServerType.PLEX, "Parts") is not None
+        assert await repo.group(ServerType.PLEX, "Sagas") is None
+
+
+async def test_sync_due_skips_a_collection_deleted_during_the_run(
+    manager: Manager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await manager.service.groups.save_policy(
+        "Yearly", CollectionGroupPolicy(sync_schedule="0 0 1 1 *")
+    )
+    first, second = [
+        await manager.service.editor.create(
+            CollectionCreate(
+                title=title, collection_group="Yearly", rule=chosen(manager)
+            )
+        )
+        for title in ("First", "Second")
+    ]
+    synced: list[int] = []
+
+    async def sync_deleting_second(collection_id: int, *, scheduled: bool) -> None:
+        assert scheduled
+        synced.append(collection_id)
+        await manager.service.editor.delete(second.id)
+
+    monkeypatch.setattr(manager.service.rules, "sync", sync_deleting_second)
+    await manager.service.schedule.sync_due()
+    assert synced == [first.id]
+
+
+async def test_preview_smart_collection_with_labelled_fields_evaluates_locally(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    await manager.service.groups.save_policy(
+        "Ungrouped", CollectionGroupPolicy(order_type=CollectionOrder.RELEASE_ASC)
+    )
+    preview = await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            collection_id=identity,
+            rule=library_rule(
+                criteria=where(FilterField.TMDB_ID, FilterOperator.IS, "11"),
+                smart=True,
+            ),
+        )
+    )
+    assert len(preview.libraries) == 1
+    assert preview.libraries[0].member_count == 1
+    assert preview.libraries[0].members == ["First"]
+
+
+async def test_generator_validation_rejects_sources_when_plex_counts(
+    manager: Manager,
+) -> None:
+    generator = CollectionGenerator(
+        dimension=SetDimension.AUDIO_LANGUAGE,
+        library_ids=["movies"],
+        smart=True,
+        criteria=sources(TmdbCollectionSource(collection_id=10)),
+    )
+    with pytest.raises(
+        PublicServiceError,
+        match="every collection's conditions must be ones Plex tests itself",
+    ):
+        await manager.service.groups.save_policy(
+            "Languages", CollectionGroupPolicy(generator=generator)
+        )

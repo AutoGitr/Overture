@@ -1265,7 +1265,7 @@ export type CatalogDraftsDiscard = {
 /**
  * CatalogDraftsDiscarded
  *
- * How many of the named entries had a draft that is now gone.
+ * How many named entries had their draft discarded.
  */
 export type CatalogDraftsDiscarded = {
     /**
@@ -2373,7 +2373,7 @@ export type CollectionLibraryCriteriaOutput = {
 /**
  * CollectionLibraryPreview
  *
- * What one library's criteria select now.
+ * What one library's criteria select.
  */
 export type CollectionLibraryPreview = {
     /**
@@ -2529,7 +2529,7 @@ export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title
 /**
  * CollectionPreview
  *
- * What a collection's criteria select now, before it is saved.
+ * What a collection's criteria select before it is saved.
  */
 export type CollectionPreview = {
     /**
@@ -3596,7 +3596,7 @@ export type FieldKind = 'text' | 'tag' | 'number' | 'date' | 'boolean';
  *
  * Item metadata a collection condition tests.
  */
-export type FilterField = 'title' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
+export type FilterField = 'title' | 'tmdb_id' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
 
 /**
  * FilterGroup
@@ -3810,7 +3810,7 @@ export type ItemDownloadTarget = {
 /**
  * ItemSelectionResponse
  *
- * A recorded selection, and the item as it now stands.
+ * A recorded selection and its updated item.
  */
 export type ItemSelectionResponse = {
     item: MediaItemRead;

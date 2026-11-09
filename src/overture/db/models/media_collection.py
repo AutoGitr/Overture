@@ -26,7 +26,10 @@ lazy from ...domain import (
 lazy from ..columns import enum_type, typed_columns
 lazy from .art import ArtSlot
 lazy from .collection_group import CollectionGroup
+lazy from .collection_rule import CollectionRule
+lazy from .download_job import DownloadJob
 lazy from .library import Library
+lazy from .media_item import MediaItem
 lazy from .shared import ThemeColumns
 
 
@@ -34,15 +37,6 @@ class MediaCollection(ThemeColumns, table=True):
     """One collection as Overture shows it, across every library it spans."""
 
     __tablename__: ClassVar[Any] = "media_collections"
-    __table_args__ = (
-        # A group of the collection's own server; one holding collections stays.
-        ForeignKeyConstraint(
-            ["group_id", "server_type"],
-            ["collection_groups.id", "collection_groups.server_type"],
-            ondelete="RESTRICT",
-            name="fk_media_collections_group",
-        ),
-    )
 
     id: int | None = Field(default=None, primary_key=True)
     # Which media server supplied this collection
@@ -58,7 +52,12 @@ class MediaCollection(ThemeColumns, table=True):
     sort_title_format: str | None = None
     summary_format: str | None = None
     #: The group of a managed collection; an unmanaged one has none.
-    group_id: int | None = Field(default=None, index=True)
+    group_id: int | None = Field(
+        default=None,
+        foreign_key="collection_groups.id",
+        ondelete="RESTRICT",
+        index=True,
+    )
     collection_mode: CollectionMode | None = Field(
         default=None, sa_type=enum_type(CollectionMode)
     )
@@ -100,8 +99,8 @@ class MediaCollection(ThemeColumns, table=True):
 
     # Whether the collection is included in theme workflows.
     monitored: bool = Field(default=True, nullable=False)
-    #: Its set no longer selects its value, so it stays off the server until
-    #: the set selects it again; Overture keeps it until it is deleted.
+    #: Excluded by its collection set; kept off the server until selected again
+    #: or deleted.
     deselected: bool = Field(default=False, nullable=False)
     # Saved in Overture and not yet sent to the server. Library syncs keep the
     # saved choices, and the scheduler never creates a collection still unsynced.
@@ -111,14 +110,14 @@ class MediaCollection(ThemeColumns, table=True):
     last_synced_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    # Only the group key is written; the server type is the collection's own.
     group: Optional["CollectionGroup"] = Relationship(
-        sa_relationship_kwargs={
-            "lazy": "joined",
-            "primaryjoin": "and_(MediaCollection.group_id == CollectionGroup.id, "
-            "MediaCollection.server_type == CollectionGroup.server_type)",
-            "foreign_keys": "[MediaCollection.group_id]",
-        }
+        back_populates="collections",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
+    rule: Optional["CollectionRule"] = Relationship(
+        back_populates="collection",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "joined", "uselist": False},
     )
     art_slots: list["ArtSlot"] = Relationship(
         back_populates="collection",
@@ -129,6 +128,19 @@ class MediaCollection(ThemeColumns, table=True):
         back_populates="collection",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin", "order_by": "CollectionLibrary.id"},
+    )
+    download_jobs: list["DownloadJob"] = Relationship(
+        back_populates="collection",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
+    memberships: list["MediaCollectionMember"] = Relationship(
+        back_populates="collection",
+        cascade_delete=True,
+        sa_relationship_kwargs={
+            "lazy": "raise",
+            "order_by": "MediaCollectionMember.position",
+        },
     )
 
     @property
@@ -214,6 +226,15 @@ class MediaCollectionMember(SQLModel, table=True):
     )
     media_item_id: int = Field(
         foreign_key="media_items.id", ondelete="CASCADE", primary_key=True
+    )
+
+    collection: "MediaCollection" = Relationship(
+        back_populates="memberships",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
+    media_item: "MediaItem" = Relationship(
+        back_populates="memberships",
+        sa_relationship_kwargs={"lazy": "raise"},
     )
 
 

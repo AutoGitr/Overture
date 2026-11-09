@@ -265,7 +265,7 @@
     }
     const target = { mediaItemId: slot.itemId, artType, seasonId: slot.seasonId };
     const advanceContext = beginAutoAdvance();
-    // The art the detail page shows now; a preview stands in for exactly that.
+    // A preview stands in for what the detail page shows.
     const shownItem = item;
     const detailArtType = artType === "poster" || artType === "background" ? artType : null;
     try {

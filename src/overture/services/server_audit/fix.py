@@ -94,7 +94,7 @@ class RowFix:
     error: str | None = None
 
 
-#: A fix is under way, so the row's earlier outcome no longer applies.
+#: A fix is under way.
 PENDING = RowFix()
 VERIFIED = RowFix(verified=True)
 

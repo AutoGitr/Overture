@@ -113,11 +113,9 @@ async def media_item_reads_with_public_dataset_status(
     if not items:
         return []
 
-    # --- Batch-load settings once (needed for aspect-ratio tolerance) ---
     settings_row = await get_app_settings(db)
     tolerance = settings_row.aspect_ratio_tolerance
 
-    # --- Batch-load seasons for all show items in one query ---
     show_ids = [
         item.id
         for item in items
@@ -194,7 +192,7 @@ async def emit_library_item_upserted(
     *,
     database: Database,
 ) -> MediaItemRead | None:
-    """Broadcast the item as it is stored now, or its removal once hidden.
+    """Broadcast the item as stored, or its removal once hidden.
 
     Returns:
         The broadcast item, or ``None`` when it is gone or hidden.
@@ -212,7 +210,7 @@ async def emit_library_items_upserted(
     *,
     database: Database,
 ) -> list[MediaItemRead]:
-    """Broadcast each item as it is stored now, or its removal once hidden.
+    """Broadcast each item as stored, or its removal once hidden.
 
     The items are read afresh and together, so an event never carries a row a
     closed transaction left behind, and a batch costs the queries of one item.

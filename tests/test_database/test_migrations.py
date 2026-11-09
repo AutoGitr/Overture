@@ -560,7 +560,7 @@ def test_slots_select_uploads_and_lose_them_on_downgrade() -> None:
         engine.dispose()
 
 
-def test_movies_and_shows_keep_only_their_own_fields_and_seasons_need_a_show() -> None:
+def test_movies_and_shows_keep_only_their_own_fields() -> None:
     engine = create_engine("sqlite://")
     try:
         with engine.begin() as conn:
@@ -578,10 +578,6 @@ def test_movies_and_shows_keep_only_their_own_fields_and_seasons_need_a_show() -
                     "'[]', '[]', '[]', '[]', '[]', '[\"HBO\"]', '[]', 0, '[]', "
                     "'Released', '2020-01-01', 'Cut', 2, 10)"
                 )
-            conn.exec_driver_sql(
-                "INSERT INTO seasons (id, media_item_id, season_num, file_count) "
-                "VALUES (1, 2, 1, 0)"
-            )
 
             command.upgrade(config, "a4d7c1e93f20")
             assert conn.exec_driver_sql(
@@ -591,23 +587,13 @@ def test_movies_and_shows_keep_only_their_own_fields_and_seasons_need_a_show() -
                 (None, None, "[]", "Cut", 2, 10),
                 ("Released", "2020-01-01", '["HBO"]', None, None, None),
             ]
-            assert conn.exec_driver_sql("SELECT media_type FROM seasons").all() == [
-                ("show",)
-            ]
-            # A movie's season references no show.
-            conn.exec_driver_sql(
-                "INSERT INTO seasons (id, media_item_id, season_num, file_count) "
-                "VALUES (2, 1, 1, 0)"
-            )
-            assert conn.exec_driver_sql("PRAGMA foreign_key_check(seasons)").all()
-            conn.exec_driver_sql("DELETE FROM seasons WHERE id = 2")
             with pytest.raises(IntegrityError):
                 conn.exec_driver_sql(
                     "UPDATE media_items SET edition = 'Cut' WHERE id = 2"
                 )
 
             command.downgrade(config, "f3b8d2a61c47")
-            assert conn.exec_driver_sql("SELECT COUNT(*) FROM seasons").all() == [(1,)]
+            conn.exec_driver_sql("UPDATE media_items SET edition = 'Cut' WHERE id = 2")
     finally:
         engine.dispose()
 

@@ -6,6 +6,7 @@ lazy from sqlmodel import Field, Index, Relationship, SQLModel, UniqueConstraint
 
 lazy from ...domain import TermKind
 lazy from ..columns import enum_type, typed_columns
+lazy from .media_item import MediaItem
 
 
 class Term(SQLModel, table=True):
@@ -17,6 +18,11 @@ class Term(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     kind: TermKind = Field(sa_type=enum_type(TermKind))
     name: str
+
+    links: list["MediaItemTerm"] = Relationship(
+        back_populates="term",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
 
 
 class MediaItemTerm(SQLModel, table=True):
@@ -35,7 +41,14 @@ class MediaItemTerm(SQLModel, table=True):
     #: Where the value comes among the title's values of its kind.
     position: int = 0
 
-    term: Term = Relationship(sa_relationship_kwargs={"lazy": "joined"})
+    media_item: "MediaItem" = Relationship(
+        back_populates="terms",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
+    term: Term = Relationship(
+        back_populates="links",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
 
 
 typed_columns(Term)

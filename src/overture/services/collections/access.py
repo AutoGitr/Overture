@@ -124,7 +124,7 @@ class CollectionAccess:
             PublicServiceError: 409 when the collection has not been adopted.
         """
         row = await self.require(session, collection_id)
-        if await CollectionRepository(session).rule(collection_id) is None:
+        if row.rule is None:
             raise PublicServiceError(409, UNMANAGED_REFUSAL)
         return row
 

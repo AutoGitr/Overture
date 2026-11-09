@@ -3,7 +3,7 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
-lazy from sqlmodel import JSON, Field, Index, SQLModel
+lazy from sqlmodel import JSON, Field, Index, Relationship, SQLModel
 
 lazy from ..columns import typed_columns
 
@@ -23,6 +23,17 @@ class JobRun(SQLModel, table=True):
     log_total: int = 0
     cleared: bool = False
 
+    results: list["JobResult"] = Relationship(
+        back_populates="run",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "raise", "order_by": "JobResult.ordinal"},
+    )
+    log_lines: list["JobLogLine"] = Relationship(
+        back_populates="run",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "raise", "order_by": "JobLogLine.ordinal"},
+    )
+
 
 class JobResult(SQLModel, table=True):
     """One finding of a scan or audit run, in the order it was found."""
@@ -32,6 +43,11 @@ class JobResult(SQLModel, table=True):
     run_id: str = Field(primary_key=True, foreign_key="job_runs.id", ondelete="CASCADE")
     ordinal: int = Field(primary_key=True)
     payload: dict[str, Any] = Field(sa_type=JSON)
+
+    run: "JobRun" = Relationship(
+        back_populates="results",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
 
 
 class JobLogLine(SQLModel, table=True):
@@ -47,6 +63,11 @@ class JobLogLine(SQLModel, table=True):
     ordinal: int = Field(primary_key=True)
     outcome: str
     entry: dict[str, Any] = Field(sa_type=JSON)
+
+    run: "JobRun" = Relationship(
+        back_populates="log_lines",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
 
 
 typed_columns(JobRun)

@@ -259,7 +259,7 @@ class ItemUpdatedEvent(StrictBaseModel):
 
 
 class ItemSelectionResponse(StrictBaseModel):
-    """A recorded selection, and the item as it now stands."""
+    """A recorded selection and its updated item."""
 
     selection: SaveSelectionResponse
     item: MediaItemRead

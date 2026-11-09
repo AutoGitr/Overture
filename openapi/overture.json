@@ -2546,7 +2546,7 @@
       },
       "CatalogDraftsDiscarded": {
         "additionalProperties": false,
-        "description": "How many of the named entries had a draft that is now gone.",
+        "description": "How many named entries had their draft discarded.",
         "properties": {
           "discarded": {
             "title": "Discarded",
@@ -5429,7 +5429,7 @@
       },
       "CollectionLibraryPreview": {
         "additionalProperties": false,
-        "description": "What one library's criteria select now.",
+        "description": "What one library's criteria select.",
         "properties": {
           "library_id": {
             "title": "Library Id",
@@ -5768,7 +5768,7 @@
       },
       "CollectionPreview": {
         "additionalProperties": false,
-        "description": "What a collection's criteria select now, before it is saved.",
+        "description": "What a collection's criteria select before it is saved.",
         "properties": {
           "libraries": {
             "items": {
@@ -8322,6 +8322,7 @@
         "description": "Item metadata a collection condition tests.",
         "enum": [
           "title",
+          "tmdb_id",
           "tvdb_id",
           "imdb_id",
           "studio",
@@ -8740,7 +8741,7 @@
       },
       "ItemSelectionResponse": {
         "additionalProperties": false,
-        "description": "A recorded selection, and the item as it now stands.",
+        "description": "A recorded selection and its updated item.",
         "properties": {
           "item": {
             "$ref": "#/components/schemas/MediaItemRead"

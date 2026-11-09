@@ -9,7 +9,6 @@ lazy from sqlmodel import (
     ForeignKeyConstraint,
     Index,
     Relationship,
-    UniqueConstraint,
 )
 
 lazy from ...domain import MediaType, TermKind, ThemeIdSource
@@ -17,6 +16,7 @@ lazy from ..columns import enum_type, typed_columns
 lazy from .art import ArtSlot
 lazy from .download_job import DownloadJob
 lazy from .library import Library
+lazy from .media_collection import MediaCollectionMember
 lazy from .season import Season
 lazy from .shared import ThemeColumns
 lazy from .term import MediaItemTerm
@@ -43,8 +43,6 @@ class MediaItem(ThemeColumns, table=True):
             ondelete="RESTRICT",
             name="fk_media_items_library",
         ),
-        # The key seasons reference, so only a show can have them.
-        UniqueConstraint("id", "media_type", name="uq_media_items_typed"),
         Index("ix_media_items_server_identity", "media_type", "server_item_id"),
         Index("ix_media_items_tmdb_identity", "media_type", "tmdb_id"),
         Index("ix_media_items_tvdb_identity", "media_type", "tvdb_id"),
@@ -128,6 +126,7 @@ class MediaItem(ThemeColumns, table=True):
     # item cannot leave seasons, artwork, values or jobs behind whether the
     # delete goes through the ORM or straight to SQL.
     terms: list["MediaItemTerm"] = Relationship(
+        back_populates="media_item",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "raise", "order_by": "MediaItemTerm.position"},
     )
@@ -142,6 +141,11 @@ class MediaItem(ThemeColumns, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
     download_jobs: list["DownloadJob"] = Relationship(
+        back_populates="media_item",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
+    memberships: list["MediaCollectionMember"] = Relationship(
         back_populates="media_item",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "raise"},

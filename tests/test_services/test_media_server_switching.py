@@ -351,7 +351,6 @@ async def test_media_server_switch_resets_schedule_filters(
             groups=unused(CollectionGroups),
         )
 
-    # Pre-seed schedules saved against the old server
     async with isolated_session_factory() as session:
         await save_schedule(
             session,

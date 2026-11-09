@@ -1,7 +1,6 @@
-"""The single read/write surface for normalised artwork slots.
+"""The single read/write surface for artwork slots.
 
-Artwork lives in ``media_item_art`` and ``season_art``, one row per owner and
-art type, so ``art_type`` selects a row instead of a column-name prefix.
+Artwork lives in ``art_slots``, one row per owner and art type.
 """
 
 lazy from overture.db.art_slots import (
@@ -62,7 +61,7 @@ def test_writing_creates_exactly_one_slot_and_reuses_it(
 def test_slots_of_different_types_do_not_collide(
     media_item_factory: MediaItemFactory,
 ) -> None:
-    """The bug the parallel columns existed to avoid, now enforced by the key."""
+    """Different art types do not collide on the same item."""
     item = media_item_factory(id=1)
 
     select_art(item, ArtType.POSTER, PublicArtUrl("https://cdn.test/p.jpg"))

@@ -238,11 +238,10 @@ class Membership:
         """Remove Overture's labels no smart collection in the library filters on."""
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            smart = {rule.collection_id for rule in await repo.rules() if rule.smart}
             used = {
                 label
                 for row in await repo.list_all()
-                if row.id in smart
+                if row.rule is not None and row.rule.smart
                 for part in row.libraries
                 if part.library_id == library_id and part.criteria is not None
                 for label in self.labels(media_type, criteria_of(part)).values()

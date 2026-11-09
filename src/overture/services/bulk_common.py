@@ -418,7 +418,7 @@ async def report_downloads[TallyT: BulkAssetTally](
                 job.context.stop_event.set()
                 await stopper
                 # A match already in flight may queue a job after the first
-                # cancellation. Matching is now over, so this is the final set.
+                # cancellation. Matching is over, so this is the final set.
                 await downloads.cancel_watch(watch)
             await reporter
     finally:
@@ -430,9 +430,8 @@ async def report_downloads[TallyT: BulkAssetTally](
 class CheckedStamper:
     """Buffers ``last_matched_at`` stamps and writes them a batch at a time.
 
-    Stamping each target as the runner passed it meant a write transaction per
-    target - twice per item on a two-art-type run, and once more for each of
-    its seasons. Targets accumulate here and leave as one statement per table.
+    Targets accumulate here and leave as one statement per table, rather than
+    opening a write transaction per target.
     """
 
     def __init__(self, *, database: Database) -> None:

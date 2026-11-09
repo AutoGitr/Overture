@@ -8,10 +8,12 @@ lazy from sqlalchemy.exc import InvalidRequestError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.art_slots import find_art_slot
+lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType
+lazy from overture.domain import ArtStyle, ArtType, MediaType
 lazy from overture.repositories.media_items import MediaItemRepository
+lazy from overture.schemas.library import BulkItemOperation
 lazy from tests.factories import seed_art_slot
 lazy from tests.term_helpers import assign
 
@@ -277,3 +279,45 @@ async def test_stamps_only_update_the_requested_rows(
         1,
         3,
     }
+
+
+async def test_directors_by_version_keeps_each_movies_order(
+    populated_repository: MediaItemRepository,
+) -> None:
+    repo = populated_repository
+    assert await repo.directors_by_version([]) == {}
+    directors = await repo.directors_by_version(["one", "five", "unknown"])
+    assert directors == {
+        ("one", "v1"): ("Director", "Co-Director"),
+        ("five", "v2"): (),
+    }
+
+
+async def test_bulk_operate_clears_artwork_selections(
+    db_session: AsyncSession, database: Database
+) -> None:
+    item = MediaItem(id=100, media_type=MediaType.MOVIE, title="With Generated Art")
+    slot = ArtSlot(
+        media_item_id=100,
+        art_type=ArtType.POSTER,
+        upload_hash="genhash123",
+        generated_style=ArtStyle.DARK,
+        file_hash="filehash123",
+    )
+    db_session.add_all([item, slot])
+    await db_session.commit()
+
+    async with database.write_session() as session:
+        repo = MediaItemRepository(session)
+        affected = await repo.bulk_operate(
+            BulkItemOperation(operation="artwork", item_ids=[100])
+        )
+    assert affected == [100]
+
+    async with database.read_session() as session:
+        loaded = await session.get(ArtSlot, slot.id)
+        assert loaded is not None
+        assert loaded.upload_hash is None
+        assert loaded.generated_style is None
+        assert loaded.url is None
+        assert loaded.file_hash == "filehash123"

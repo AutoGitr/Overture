@@ -87,8 +87,7 @@
   /** Suggestions shown at once; a library can hold thousands of values. */
   const MAX_SUGGESTIONS = 50;
   // Any value can be typed, such as a TMDB keyword no title has yet; the
-  // library's values are only suggestions. Matching what is typed keeps the
-  // list short: rendering every value in a datalist made each condition slow.
+  // library's values are suggestions filtered to what is typed to keep the list short.
   let suggestions = $derived.by(() => {
     const lower = typed.toLocaleLowerCase();
     const matching = lower
@@ -120,7 +119,7 @@
         <option value={`field:${entry.field}`}>{entry.label}</option>
       {/each}
     </optgroup>
-    <optgroup label="External">
+    <optgroup label="Lists & tags">
       {#each sources as entry (entry.type)}
         <option value={`source:${entry.type}`} disabled={!!entry.unavailable}
           >{entry.label}{entry.unavailable ? ` (${entry.unavailable})` : ""}</option

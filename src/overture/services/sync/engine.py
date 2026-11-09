@@ -260,7 +260,7 @@ class SyncEngine:
                 )
         except (httpx2.HTTPError, SQLAlchemyError, OSError, ValueError) as exc:
             raise RuntimeError("Incremental sync failed") from exc
-        # New titles get their TMDB facts now, so criteria match them before
+        # New titles get their TMDB facts immediately, so criteria match them before
         # the next full sync.
         await self._enrichment.read_new(created)
         duration = max(0.0, time.monotonic() - start_time)

@@ -13,6 +13,7 @@
     TmdbPersonRole,
   } from "../../generated/rest/types.gen";
   import { splitList } from "../utils/collectionCriteria";
+  import { settingsState } from "../stores/settingsState.svelte";
   import IdListInput from "./IdListInput.svelte";
   import { toggleSelectedValue } from "../utils/popupSelection";
   import SourcePicker from "./SourcePicker.svelte";
@@ -104,15 +105,17 @@
         if (source.type === "tmdb_item") source.tmdb_ids = ids;
       }}
     />
-    <SourcePicker
-      kind="title"
-      {label}
-      {mediaType}
-      onpick={(id) => {
-        if (source.type === "tmdb_item" && !source.tmdb_ids.includes(id))
-          source.tmdb_ids = [...source.tmdb_ids, id];
-      }}
-    />
+    {#if settingsState.current.tmdb_configured}
+      <SourcePicker
+        kind="title"
+        {label}
+        {mediaType}
+        onpick={(id) => {
+          if (source.type === "tmdb_item" && !source.tmdb_ids.includes(id))
+            source.tmdb_ids = [...source.tmdb_ids, id];
+        }}
+      />
+    {/if}
   {:else if source.type === "tmdb_person"}
     <SourcePicker
       kind="person"

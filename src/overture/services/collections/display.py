@@ -3,7 +3,6 @@
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import CollectionFiltering, CollectionKind
-lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import CollectionOptions
 lazy from ...utils.collection_formats import format_sort_title, format_summary
 lazy from ...utils.errors import PublicServiceError
@@ -125,9 +124,9 @@ class CollectionDisplay:
         source_summary: str | None = None,
     ) -> CollectionOptions:
         """Return the effective options, sent to the server copy when *push*."""
+        if rule is None:
+            rule = row.rule
         async with self._access.database.read_session() as session:
-            if rule is None and row.id is not None:
-                rule = await CollectionRepository(session).rule(row.id)
             policy = await self._access.policy(
                 session,
                 await self._access.group(session, options.collection_group),

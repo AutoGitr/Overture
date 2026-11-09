@@ -4,17 +4,14 @@ lazy from datetime import datetime
 lazy from typing import Any, ClassVar, Optional
 
 lazy from sqlmodel import (
-    CheckConstraint,
     Field,
-    ForeignKeyConstraint,
     Index,
     Relationship,
     SQLModel,
     UniqueConstraint,
 )
 
-lazy from ...domain import MediaType
-lazy from ..columns import enum_type, typed_columns
+lazy from ..columns import typed_columns
 lazy from .art import ArtSlot
 lazy from .download_job import DownloadJob
 lazy from .media_item import MediaItem
@@ -25,13 +22,6 @@ class Season(SQLModel, table=True):
 
     __tablename__: ClassVar[Any] = "seasons"
     __table_args__ = (
-        ForeignKeyConstraint(
-            ["media_item_id", "media_type"],
-            ["media_items.id", "media_items.media_type"],
-            ondelete="CASCADE",
-            name="fk_seasons_show",
-        ),
-        CheckConstraint("media_type = 'show'", name="ck_seasons_show"),
         UniqueConstraint("media_item_id", "season_num", name="uq_season"),
         Index("ix_seasons_item_files", "media_item_id", "file_count"),
         Index(
@@ -43,12 +33,8 @@ class Season(SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    media_item_id: int = Field(index=True)
-    #: Always a show: with the item's ID it references a show, never a movie.
-    media_type: MediaType = Field(
-        default=MediaType.SHOW,
-        sa_type=enum_type(MediaType),
-        sa_column_kwargs={"server_default": MediaType.SHOW.value},
+    media_item_id: int = Field(
+        foreign_key="media_items.id", ondelete="CASCADE", index=True
     )
     season_num: int = Field(nullable=False)  # 0 = specials
     title: str | None = None

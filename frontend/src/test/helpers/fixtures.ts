@@ -340,7 +340,7 @@ export function collectionCapabilities(
     sources: [
       { type: "tmdb_collection", label: "TMDB franchise", unavailable: null },
       { type: "tmdb_list", label: "TMDB list", unavailable: null },
-      { type: "tmdb_item", label: "TMDB titles", unavailable: null },
+      { type: "tmdb_item", label: "TMDB title list", unavailable: null },
       { type: "tmdb_person", label: "TMDB person", unavailable: null },
       { type: "mdblist", label: "MDBList", unavailable: null },
       { type: "radarr_tag", label: "Radarr tags", unavailable: null },

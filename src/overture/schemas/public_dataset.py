@@ -231,7 +231,7 @@ class CatalogDraftsDiscard(StrictBaseModel):
 
 
 class CatalogDraftsDiscarded(StrictBaseModel):
-    """How many of the named entries had a draft that is now gone."""
+    """How many named entries had their draft discarded."""
 
     discarded: int
 

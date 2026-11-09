@@ -224,7 +224,7 @@ class ManagedJob[TallyT: JobTally]:
         return self.context.stop_requested()
 
     async def started(self, **payload: Any) -> None:
-        """Publish the ``started`` lifecycle event; the run is now planning."""
+        """Publish the ``started`` lifecycle event."""
         await self._publish("started", payload)
 
     async def planned(self, total: int, **payload: Any) -> None:

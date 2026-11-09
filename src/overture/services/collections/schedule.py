@@ -56,8 +56,14 @@ class CollectionSchedule:
         server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            rules = await repo.rules()
             groups = await repo.groups(server)
+            managed = [
+                row.id
+                for row in await repo.list_all()
+                if row.id is not None
+                and row.server_type is server
+                and row.rule is not None
+            ]
         for group in groups:
             set_generator = generator(group)
             if set_generator is None:
@@ -71,15 +77,16 @@ class CollectionSchedule:
                 await self._sets.run(group, set_generator, CollectionGroupSyncResult())
             except Exception as exc:
                 logger.warning("Collection set %s failed: %s", group.name, exc)
-        for rule in rules:
+        for collection_id in managed:
+            # Earlier syncs can take minutes, so each collection is read at its turn.
             async with self._access.database.read_session() as session:
-                row = await CollectionRepository(session).get(rule.collection_id)
-                if row is None or row.server_type is not server or never_created(row):
+                row = await CollectionRepository(session).get(collection_id)
+                if row is None or row.rule is None or never_created(row):
                     continue
-                policy = await self._access.policy(session, row.group, rule)
-            if not is_due(rule.last_synced_at, policy):
+                policy = await self._access.policy(session, row.group, row.rule)
+            if not is_due(row.rule.last_synced_at, policy):
                 continue
             try:
-                await self._rules.sync(rule.collection_id, scheduled=True)
+                await self._rules.sync(collection_id, scheduled=True)
             except Exception as exc:
-                logger.warning("Collection rule %s failed: %s", rule.collection_id, exc)
+                logger.warning("Collection rule %s failed: %s", collection_id, exc)

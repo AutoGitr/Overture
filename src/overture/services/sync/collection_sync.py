@@ -170,8 +170,9 @@ class CollectionSync:
                     if row.server_type is provider.server_type
                 ]
                 managed_ids = {
-                    rule.collection_id
-                    for rule in await CollectionRepository(session).rules()
+                    row.id
+                    for row in rows
+                    if row.rule is not None and row.id is not None
                 }
             seen = {collection.id for collection in listed}
             newly_identified: list[int] = []

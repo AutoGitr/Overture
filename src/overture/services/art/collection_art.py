@@ -143,7 +143,7 @@ class CollectionArtService:
     async def drawn(
         self, collection_id: int, art_type: ArtType, style: ArtStyle
     ) -> bytes:
-        """Return the PNG choosing *style* would draw for the collection now."""
+        """Return the PNG choosing *style* would draw for the collection."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
         return await owned_thread(
@@ -163,6 +163,10 @@ class CollectionArtService:
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
+        if row.server_item_id is None:
+            raise PublicServiceError(
+                409, "The collection is inactive and has no server copy"
+            )
         if body.generated is not None:
             drawn = await self._draw(row, art_type, body.generated)
             await self._choose(
@@ -205,7 +209,7 @@ class CollectionArtService:
             elif selection.stored_url:
                 select_art(row, art_type, selection.stored_url)
             else:
-                # A media-server image has no link; the old one would mislead.
+                # A media-server image has no link, and a stored one names other art.
                 clear_art_selection(row, art_type)
             record_art_file(row, art_type, facts)
 
@@ -234,7 +238,7 @@ class CollectionArtService:
 
         Raises:
             PublicServiceError: 409 when Overture uploaded none, or the cache
-                no longer keeps it.
+                does not keep it.
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)

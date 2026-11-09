@@ -415,7 +415,7 @@ export class CollectionEditor {
 
   /** Save in Overture; with `sync`, then make the server match. */
   save(sync = false) {
-    // Read the form as it is now: the saved rule resets drafts, and saving can remount the view.
+    // Snapshot target and options before persistRule resets drafts or remounts the view.
     const { target } = this;
     const options = { ...this.localTarget, body: optionsBody(this) };
     return this.perform(async () => {
@@ -480,11 +480,12 @@ export class CollectionEditor {
     return this.setMembers(ids, "custom");
   }
 
-  /** Why Overture cannot stop managing it, or null when it can. */
   /** Why the collection cannot be deleted: its set would make it again. */
   get deleteBlocker(): string | null {
     return this.generated ? "Its group's set made it; remove its value from the set" : null;
   }
+
+  /** Why Overture cannot stop managing it, or null when it can. */
   get orphanBlocker(): string | null {
     if (this.collection.withheld) return "It is not on the media server; delete it instead";
     return this.deleteBlocker;
@@ -496,7 +497,7 @@ export class CollectionEditor {
       this.orphanBlocker ||
       !(await confirmAction({
         title: "Orphan collection?",
-        message: `Overture forgets the criteria, group and schedule of ${this.collection.title} and lists it under Unmanaged. The media server keeps it as it is now; adopt it again to manage it.`,
+        message: `Overture forgets the criteria, group and schedule of ${this.collection.title} and lists it under Unmanaged. The media server keeps it as it is; adopt it again to manage it.`,
         confirmLabel: "Orphan",
       }))
     )
@@ -834,7 +835,7 @@ export class CollectionDraft {
 }
 
 /**
- * Shows what a form's criteria select now, before anything is saved, and
+ * Shows what a form's criteria select before anything is saved, and
  * which collection kind suits them as they are edited.
  */
 export class CriteriaPreview {

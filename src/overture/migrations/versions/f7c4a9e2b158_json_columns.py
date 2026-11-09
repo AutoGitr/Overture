@@ -18,7 +18,7 @@ down_revision: str | Sequence[str] | None = "e5b2d8f1a346"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-#: Each table's JSON columns: the stored name before, and the name now.
+#: Each table's JSON columns, from their prior name to their current one.
 _RENAMED = {
     "collection_libraries": {"criteria_json": "criteria"},
     "collection_groups": {"generator_json": "generator"},

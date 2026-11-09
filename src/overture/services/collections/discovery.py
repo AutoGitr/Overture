@@ -1,4 +1,4 @@
-"""What criteria the media server can evaluate, and what they select now."""
+"""What criteria the media server can evaluate, and what they select."""
 
 lazy from collections import Counter
 
@@ -36,6 +36,7 @@ lazy from .fields import (
     field_available,
     field_label,
     field_operators,
+    labelled_field,
     plex_tests,
     smart_only_dimension,
 )
@@ -266,11 +267,16 @@ class CollectionDiscovery:
         )
 
     async def preview(self, body: CollectionPreviewRequest) -> CollectionPreview:
-        """What each library's criteria select now."""
+        """What each library's criteria select."""
         rule = body.rule
         scopes = await self._access.scopes(rule.libraries, body.collection_id)
         async with self._access.database.read_session() as session:
-            policy = await self._access.policy(session, None, rule)
+            group = (
+                (await self._access.require(session, body.collection_id)).group
+                if body.collection_id is not None
+                else None
+            )
+            policy = await self._access.policy(session, group, rule)
         return CollectionPreview(
             libraries=[
                 await self._preview_library(scope, rule, policy.order_type)
@@ -291,8 +297,13 @@ class CollectionDiscovery:
             for condition in criteria.field_conditions()
         )
         # Plex answers for a smart collection, so the preview is what it shows;
-        # a list only becomes a label Plex can test once the collection is saved.
-        if rule.smart and not criteria.source_conditions():
+        # lists and fields Plex lacks only become labels Plex can test once the
+        # collection is saved.
+        plex_native = not criteria.source_conditions() and not any(
+            labelled_field(condition.field, server, media_type)
+            for condition in criteria.field_conditions()
+        )
+        if rule.smart and plex_native:
             total, ids = await self._access.provider().find_matching(
                 library_id,
                 media_type,
@@ -309,7 +320,9 @@ class CollectionDiscovery:
             )
         if rule.smart and not local:
             raise PublicServiceError(
-                422, "Save the collection to preview Plex filters with lists"
+                422,
+                "Save the collection to preview Plex filters with lists or "
+                "fields Plex lacks",
             )
         wanted = await self._membership.wanted(
             media_type,

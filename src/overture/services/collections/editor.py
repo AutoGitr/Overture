@@ -90,7 +90,7 @@ def _server_ids(
 
 
 def save_placement(saved: MediaCollection, row: MediaCollection) -> None:
-    """Store which server collection now holds each library."""
+    """Store which server collection holds each library."""
     placed = {part.library_id: part.server_item_id for part in row.libraries}
     for part in saved.libraries:
         part.server_item_id = placed.get(part.library_id)
@@ -209,7 +209,7 @@ class CollectionEditor:
                 )
                 saved_rule = rule_row(row.id or 0, rule)
                 saved_rule.source_summary = source_summary
-                session.add(saved_rule)
+                row.rule = saved_rule
         await self._access.changed()
         return await self._reader.get(row.id or 0)
 
@@ -350,8 +350,7 @@ class CollectionEditor:
         if body.summary is not None:
             row.summary_source = body.summary
         display = body.model_dump(include=body.model_fields_set & DISPLAY_OVERRIDES)
-        async with self._access.database.read_session() as session:
-            rule = await CollectionRepository(session).rule(row.id or 0)
+        rule = row.rule
         group = collection_group(body.collection_group) if rule is not None else None
         if rule is not None:
             body = body.model_copy(update={"collection_group": group})
@@ -374,11 +373,9 @@ class CollectionEditor:
             if not push:
                 saved.unsynced = outdates_server(saved)
             session.add(saved)
-            if rule is not None and display:
-                saved_rule = await CollectionRepository(session).rule(row.id or 0)
-                if saved_rule is not None:
-                    saved_rule.sqlmodel_update(display)
-                    session.add(saved_rule)
+            if saved.rule is not None and display:
+                saved.rule.sqlmodel_update(display)
+                session.add(saved.rule)
 
     # Removing
 
@@ -611,12 +608,11 @@ class CollectionEditor:
             library.library_id for library in body.libraries
         )
         async with self._access.database.read_session() as session:
-            existing = await CollectionRepository(session).rule(collection_id)
             policy = await self._access.policy(session, row.group, body)
         self._validator.rule(types, body, policy)
         # A new rule keeps the order of a list it selects from, where it can.
         keep_source_order = (
-            existing is None
+            row.rule is None
             and body.order_type is None
             and all(
                 CollectionOrder.CUSTOM
@@ -643,10 +639,10 @@ class CollectionEditor:
         franchise = min(franchise_ids(body.libraries), default=None)
         async with self._access.database.write_session() as session:
             saved_row = await self._access.require(session, collection_id)
-            rule = await CollectionRepository(session).rule(collection_id)
+            rule = saved_row.rule
             new_rule = rule_row(collection_id, body)
             if rule is None:
-                rule = new_rule
+                rule = saved_row.rule = new_rule
             else:
                 rule.sqlmodel_update(
                     new_rule.model_dump(exclude={"id", "collection_id"})
@@ -688,7 +684,7 @@ class CollectionEditor:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             row = await self._access.require(session, collection_id)
-            if await repo.rule(collection_id) is not None:
+            if row.rule is not None:
                 raise PublicServiceError(409, "Overture already manages it")
             members = await repo.members(collection_id)
         franchise = shared_franchise(members)
@@ -753,12 +749,12 @@ class CollectionEditor:
     ) -> None:
         """Orphan a collection whose locks the caller holds.
 
-        *set_removed* is for a group deleted with its set, which can no longer
-        recreate what it made.
+        *set_removed* is for a group deleted with its set, so nothing
+        recreates what the set made.
         """
         async with self._access.database.write_session() as session:
             row = await self._access.require(session, collection_id)
-            rule = await CollectionRepository(session).rule(collection_id)
+            rule = row.rule
             if rule is None:
                 raise PublicServiceError(409, "Overture does not manage it")
             lead = row.server_item_id
@@ -780,7 +776,7 @@ class CollectionEditor:
                     "Its Plex filter reads labels only Overture keeps; "
                     "make it a regular collection first",
                 )
-            await session.delete(rule)
+            row.rule = None
             row.libraries = [p for p in row.libraries if p.server_item_id == lead]
             for part in row.libraries:
                 part.criteria = None

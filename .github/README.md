@@ -559,10 +559,11 @@ missing membership uses **Ungrouped**. The sidebar's **Groups** view organises
 collections by these groups and keeps unmanaged server collections separate.
 
 **Criteria** decide a collection's members. A condition tests item metadata,
-such as Genre is Action or Date added in the last 30 days, or a list: a TMDB
-franchise, list, chart, titles or person's credits, MDBList lists, or Radarr and
-Sonarr tags. Conditions sit in groups that match **all** or **any** of them, and
-groups nest. With `TMDB_API_KEY`, Full Sync also stores what TMDB says about
+such as Genre is Action, Date added in the last 30 days or a TMDB, TVDB or IMDb
+ID, or a list, offered under **Lists & tags**: a TMDB franchise, list, chart,
+title list or person's credits, MDBList lists, or Radarr and Sonarr tags.
+Conditions sit in groups that match **all** or **any** of them, and groups nest.
+With `TMDB_API_KEY`, Full Sync also stores what TMDB says about
 each title, read again weekly: original language, origin country, TMDB rating
 and votes, keywords, production companies, streaming services in the TMDB
 region, and for shows their network, status and last air date; the same
@@ -572,9 +573,11 @@ typed, with the library's most common values suggested first; a TMDB keyword
 also suggests the keywords TMDB knows, so one no title has yet can be used too. A TMDB person or franchise is one field: type a name and search,
 then pick a result, whose ID takes its place, or type the ID. Radarr tags and
 TMDB franchises are offered for movie collections only, Sonarr tags for show
-collections only. TMDB titles and MDBList lists can be searched by name too
-(MDBList search needs `MDBLIST_API_KEY`); each result picked is added to the
-condition. TMDB has no list search, so TMDB lists take IDs or links. Each
+collections only. TMDB title lists take IDs or links without any key, and with
+`TMDB_API_KEY` can be searched by name, as MDBList lists can with
+`MDBLIST_API_KEY`; each result picked is added to the condition. Listing the
+titles a collection's lists hold that its libraries lack needs `TMDB_API_KEY`.
+TMDB has no list search, so TMDB lists take IDs or links. Each
 condition and group can be duplicated, or copied and pasted into any criteria
 that can test it: those of another library, collection or set, as long as they
 offer its field and operator or its list. TMDB title IDs and charts paste only

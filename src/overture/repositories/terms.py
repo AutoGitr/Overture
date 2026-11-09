@@ -3,7 +3,7 @@
 lazy from collections.abc import Collection, Iterable, Mapping
 lazy from itertools import batched
 
-lazy from sqlmodel import col, delete, exists, select, tuple_
+lazy from sqlmodel import col, delete, exists, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.media_item import MediaItem
@@ -50,16 +50,20 @@ class TermRepository:
         self, wanted: Collection[tuple[TermKind, str]]
     ) -> dict[tuple[TermKind, str], Term]:
         """Return the terms *wanted* names, adding those not stored yet."""
+        names: dict[TermKind, list[str]] = {}
+        for kind, name in wanted:
+            names.setdefault(kind, []).append(name)
         found: dict[tuple[TermKind, str], Term] = {}
-        for batch in batched(wanted, CHUNK_SIZE, strict=False):
-            for term in (
-                await self.session.exec(
-                    select(Term).where(
-                        tuple_(col(Term.kind), col(Term.name)).in_(batch)
+        for kind, kind_names in names.items():
+            for batch in batched(kind_names, CHUNK_SIZE, strict=False):
+                for term in (
+                    await self.session.exec(
+                        select(Term).where(
+                            col(Term.kind) == kind, col(Term.name).in_(batch)
+                        )
                     )
-                )
-            ).all():
-                found[term.kind, term.name] = term
+                ).all():
+                    found[term.kind, term.name] = term
         for kind, name in set(wanted) - found.keys():
             term = Term(kind=kind, name=name)
             self.session.add(term)
@@ -106,4 +110,4 @@ class TermRepository:
                 ~exists().where(col(MediaItemTerm.term_id) == col(Term.id))
             )
         )
-        return result.rowcount
+        return result.rowcount or 0

@@ -8,6 +8,7 @@ lazy from typing import cast
 lazy import pytest
 lazy from pydantic import ValidationError
 
+lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import (
     CollectionOrder,
@@ -16,8 +17,11 @@ lazy from overture.domain import (
     MediaType,
     ServerType,
     SetDimension,
+    SourceType,
     TermKind,
 )
+lazy from overture.integrations.mdblist import MDBListClient
+lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.schemas.collections import (
     CollectionGeneratorBase,
     FieldCondition,
@@ -44,8 +48,9 @@ lazy from overture.services.collections.plex_query import (
     tag_keys,
 )
 lazy from overture.services.collections.sets import count_values, set_values
-lazy from overture.services.collections.sources import condition_label
+lazy from overture.services.collections.sources import SourceResolver, condition_label
 lazy from tests.collection_helpers import library_rule
+lazy from tests.runtime_helpers import unused
 lazy from tests.term_helpers import holding
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
@@ -66,6 +71,7 @@ def _item(item_id: int = 1, **kwargs: object) -> MediaItem:
         "plays": 0,
         "unplayed": True,
         "server_added_at": datetime(2026, 10, 1, tzinfo=UTC),
+        "tmdb_id": 11,
     }
     held: dict[str, Sequence[str]] = {
         "director": ["Irvin Kershner", "George Lucas"],
@@ -134,6 +140,8 @@ def _matches(item: MediaItem, *conditions: FieldCondition, mode: str = "all") ->
         (_field(FilterField.LAST_PLAYED, FilterOperator.BEFORE, "2000-01-01"), True),
         (_field(FilterField.UNPLAYED, FilterOperator.IS, True), True),
         (_field(FilterField.IN_PROGRESS, FilterOperator.IS_NOT, True), True),
+        (_field(FilterField.TMDB_ID, FilterOperator.IS, "11"), True),
+        (_field(FilterField.TMDB_ID, FilterOperator.IS_NOT, "11"), False),
     ],
 )
 def test_field_conditions_match_synced_metadata(
@@ -547,3 +555,18 @@ def test_dimensions_start_a_set_with_their_defaults() -> None:
     franchises = DIMENSIONS[SetDimension.FRANCHISE]
     assert (franchises.strip_prefix, franchises.strip_suffix) == ("The ", " Collection")
     assert franchises.order_type is CollectionOrder.RELEASE_ASC
+
+
+def test_tmdb_title_list_source_available_without_tmdb_key(
+    app_config: Settings,
+) -> None:
+    resolver = SourceResolver(
+        app_config=app_config,
+        tmdb=unused(TMDBClient),
+        mdblist=unused(MDBListClient),
+    )
+    assert resolver.unavailable(SourceType.TMDB_ITEM, MediaType.MOVIE) is None
+    assert (
+        resolver.unavailable(SourceType.TMDB_LIST, MediaType.MOVIE)
+        == "Set TMDB_API_KEY to use TMDB"
+    )

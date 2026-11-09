@@ -11,6 +11,7 @@
   } from "../../generated/rest/types.gen";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { errorMessage } from "../utils/errors";
   import DataStatus from "./DataStatus.svelte";
   import DetailSection from "./DetailSection.svelte";
@@ -94,8 +95,10 @@
           >
         </div>
       {/if}
-    {:else}
+    {:else if settingsState.current.tmdb_configured}
       <p class="text-muted">The library holds every title the lists do.</p>
+    {:else}
+      <p class="text-muted">Set TMDB_API_KEY to list the titles the library lacks.</p>
     {/if}
   {/if}
 </DetailSection>

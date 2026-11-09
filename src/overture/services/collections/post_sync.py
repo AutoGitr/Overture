@@ -238,17 +238,15 @@ class MemberTag:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             defaults = await get_app_settings(session)
-            rules = {rule.collection_id: rule for rule in await repo.rules()}
             members: list[MediaItem] = []
             for row in await repo.list_listed():
-                rule = rules.get(row.id or 0)
                 if (
                     row.id == collection_id
-                    or rule is None
+                    or row.rule is None
                     or row.server_type is not server
                 ):
                     continue
-                template = resolve_policy(defaults, row.group, rule).arr_tag
+                template = resolve_policy(defaults, row.group, row.rule).arr_tag
                 if template and _arr_tag(row, template) == tag:
                     members.extend(await repo.members(row.id or 0))
         return members
@@ -306,7 +304,6 @@ class HomeOrder:
     async def _order_library(self, library_id: str) -> None:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            rules = {rule.collection_id: rule for rule in await repo.rules()}
             ordered: list[tuple[int, str, str]] = []
             for row in await repo.list_listed():
                 held = next(
@@ -319,9 +316,7 @@ class HomeOrder:
                 )
                 if held is None:
                     continue
-                policy = await self._access.policy(
-                    session, row.group, rules.get(row.id or 0)
-                )
+                policy = await self._access.policy(session, row.group, row.rule)
                 if policy.home_order is not None and (
                     row.visible_home or row.visible_shared or row.visible_library
                 ):
@@ -349,7 +344,7 @@ class PostSync:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             row = await self._access.require(session, collection_id)
-            rule = await repo.rule(collection_id)
+            rule = row.rule
             synced = SyncedCollection(
                 row=row,
                 rule=rule,

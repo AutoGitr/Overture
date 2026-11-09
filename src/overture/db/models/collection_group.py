@@ -3,12 +3,13 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
-lazy from sqlmodel import JSON, Field, UniqueConstraint
+lazy from sqlmodel import JSON, Field, Relationship, UniqueConstraint
 
 lazy from ...domain import (
     ServerType,
 )
 lazy from ..columns import enum_type, typed_columns
+lazy from .media_collection import MediaCollection
 lazy from .shared import PolicyOverrides
 
 
@@ -18,8 +19,6 @@ class CollectionGroup(PolicyOverrides, table=True):
     __tablename__: ClassVar[Any] = "collection_groups"
     __table_args__ = (
         UniqueConstraint("server_type", "name", name="uq_collection_group"),
-        # The key collections reference, so each joins a group of its server.
-        UniqueConstraint("id", "server_type", name="uq_collection_groups_typed"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -33,6 +32,11 @@ class CollectionGroup(PolicyOverrides, table=True):
     generated_at: datetime | None = None
     #: An empty collection titled after the group heads its collections.
     separator: bool = Field(default=False, nullable=False)
+
+    collections: list["MediaCollection"] = Relationship(
+        back_populates="group",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
 
 
 typed_columns(CollectionGroup)

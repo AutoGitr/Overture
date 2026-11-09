@@ -65,3 +65,25 @@ async def test_reassigning_keeps_other_kinds_and_prune_drops_unheld_terms(
     assert loaded.values(TermKind.LABEL) == ["New", "Kept"]
     assert await repo.prune() == 1
     assert await _terms(db_session) == 3
+
+
+async def test_one_name_is_a_separate_term_of_each_kind_and_is_reused(
+    db_session: AsyncSession,
+) -> None:
+    repo = TermRepository(db_session)
+    first = MediaItem(id=1, media_type=MediaType.MOVIE, title="First")
+    second = MediaItem(id=2, media_type=MediaType.MOVIE, title="Second")
+    db_session.add_all([first, second])
+    names = {
+        TermKind.GENRE: ["Action", "Comedy"],
+        TermKind.ACTOR: ["Action", "Lead"],
+    }
+    assert await repo.assign(first, names)
+    await db_session.commit()
+    assert await _terms(db_session) == 4
+
+    assert await repo.assign(second, names)
+    await db_session.commit()
+    assert await _terms(db_session) == 4
+    assert second.values(TermKind.GENRE) == ["Action", "Comedy"]
+    assert second.values(TermKind.ACTOR) == ["Action", "Lead"]

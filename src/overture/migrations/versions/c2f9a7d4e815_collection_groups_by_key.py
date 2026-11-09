@@ -47,10 +47,6 @@ def upgrade() -> None:
         "collection_groups AS g WHERE g.server_type = c.server_type "
         "AND g.name = c.collection_group)"
     )
-    with op.batch_alter_table("collection_groups") as batch:
-        batch.create_unique_constraint(
-            "uq_collection_groups_typed", ["id", "server_type"]
-        )
     with op.batch_alter_table("media_collections") as batch:
         batch.add_column(sa.Column("group_id", sa.Integer(), nullable=True))
     op.execute(
@@ -65,8 +61,8 @@ def upgrade() -> None:
         batch.create_foreign_key(
             "fk_media_collections_group",
             "collection_groups",
-            ["group_id", "server_type"],
-            ["id", "server_type"],
+            ["group_id"],
+            ["id"],
             ondelete="RESTRICT",
         )
 
@@ -86,5 +82,3 @@ def downgrade() -> None:
         batch.create_index(
             "ix_media_collections_collection_group", ["collection_group"]
         )
-    with op.batch_alter_table("collection_groups") as batch:
-        batch.drop_constraint("uq_collection_groups_typed", type_="unique")

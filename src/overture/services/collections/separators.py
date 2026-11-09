@@ -2,6 +2,8 @@
 
 lazy from collections.abc import Sequence
 
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
@@ -9,14 +11,26 @@ lazy from ...domain import CollectionKind, MediaType, ServerType
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import CollectionLibraryCriteria, FilterGroup
 lazy from ...utils.collection_formats import format_sort_title, literal_template
+lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
+lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
 lazy from .editor import CollectionEditor
 lazy from .rule_sync import RuleSync
-lazy from .rules import apply_libraries
+lazy from .rules import TITLE_TAKEN, apply_libraries
 
 #: What a separator selects in each library: nothing, as it holds no members.
 _NOTHING = FilterGroup()
+
+
+def _held_libraries(rows: Sequence[MediaCollection]) -> dict[str, MediaType]:
+    return {
+        part.library_id: part.media_type
+        for row in rows
+        if row.kind is not CollectionKind.SEPARATOR
+        for part in row.libraries
+        if part.criteria is not None
+    }
 
 
 class CollectionSeparators:
@@ -37,53 +51,89 @@ class CollectionSeparators:
         self._rules = rules
 
     async def apply(self, name: str) -> None:
-        """Create, update or remove the separator of the group named *name*."""
+        """Create, update or remove the separator of the group named *name*.
+
+        Raises:
+            PublicServiceError: 409 when another collection in one of its
+                libraries already has the group's name.
+        """
         server = self._access.server_type
-        async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
-            group = await repo.group(server, name)
-            rows = await repo.group_members(group) if group else []
-            policy = await self._access.policy(session, group)
-        separator = next(
-            (row for row in rows if row.kind is CollectionKind.SEPARATOR), None
-        )
-        libraries: dict[str, MediaType] = {
-            part.library_id: part.media_type
-            for row in rows
-            if row.kind is not CollectionKind.SEPARATOR
-            for part in row.libraries
-            if part.criteria is not None
-        }
-        if (
-            group is None
-            or not group.separator
-            or server is not ServerType.PLEX
-            or not libraries
-        ):
-            if separator is not None:
-                await self._editor.delete(separator.id or 0)
-            return
-        sort_title_format = (
-            literal_template(
-                format_sort_title(
-                    policy.sort_title_format, title="", group=group.name
-                ).strip()
+        async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
+            async with self._access.database.read_session() as session:
+                repo = CollectionRepository(session)
+                group = await repo.group(server, name)
+                rows = await repo.group_members(group) if group else []
+                policy = await self._access.policy(session, group)
+                if group is not None:
+                    await self.refuse_taken(session, group)
+            separator = next(
+                (row for row in rows if row.kind is CollectionKind.SEPARATOR), None
             )
-            if policy.sort_title_format
-            else None
-        )
-        collection_id = await self._save(group, separator, libraries, sort_title_format)
+            libraries = _held_libraries(rows)
+            if (
+                group is None
+                or not group.separator
+                or server is not ServerType.PLEX
+                or not libraries
+            ):
+                if separator is not None:
+                    async with self._access.asset_locks.acquire(
+                        f"collection:{separator.id}"
+                    ):
+                        await self._editor.delete_locked(separator)
+                return
+            sort_title_format = (
+                literal_template(
+                    format_sort_title(
+                        policy.sort_title_format, title="", group=group.name
+                    ).strip()
+                )
+                if policy.sort_title_format
+                else None
+            )
+            if separator is None:
+                collection_id = await self._save(
+                    group, None, libraries, sort_title_format
+                )
+            else:
+                async with self._access.asset_locks.acquire(
+                    f"collection:{separator.id}"
+                ):
+                    collection_id = await self._save(
+                        group, separator, libraries, sort_title_format
+                    )
         await self._rules.sync(collection_id)
+
+    async def refuse_taken(self, session: AsyncSession, group: CollectionGroup) -> None:
+        """Refuse a separator whose title a collection in its libraries already has.
+
+        Raises:
+            PublicServiceError: 409 when the group's name is taken.
+        """
+        if not group.separator or group.server_type is not ServerType.PLEX:
+            return
+        repo = CollectionRepository(session)
+        libraries = _held_libraries(await repo.group_members(group))
+        if any(
+            row.server_type is group.server_type
+            and row.kind is not CollectionKind.SEPARATOR
+            and row.title.casefold() == group.name.casefold()
+            and not libraries.keys().isdisjoint(row.library_ids)
+            for row in await repo.list_listed()
+        ):
+            raise PublicServiceError(409, TITLE_TAKEN)
 
     async def discard(self, rows: Sequence[MediaCollection]) -> list[MediaCollection]:
         """Delete the separator among a group's *rows*; return the others.
 
         A separator heads its own group only, so it never moves to another.
+        The caller holds the listing lock.
         """
         kept: list[MediaCollection] = []
         for row in rows:
             if row.kind is CollectionKind.SEPARATOR:
-                await self._editor.delete(row.id or 0)
+                async with self._access.asset_locks.acquire(f"collection:{row.id}"):
+                    await self._editor.delete_locked(row)
             else:
                 kept.append(row)
         return kept

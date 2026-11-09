@@ -126,7 +126,7 @@ class CollectionSets:
         """Create the set's new collections, update the rest and deselect stale ones.
 
         A value makes one collection across every library that holds it. A
-        value no library holds any more, or the set no longer selects, is
+        value no library holds, or the set does not select, is
         deselected: its collection leaves the server until the set selects it
         again. Values below the minimum are left to the minimum policy, applied
         when each collection syncs. Overture keeps every collection until it
@@ -141,8 +141,9 @@ class CollectionSets:
                 if row.server_type is server
             ]
             rules = {
-                rule.collection_id: rule
-                for rule in await CollectionRepository(session).rules()
+                row.id: row.rule
+                for row in listed
+                if row.id is not None and row.rule is not None
             }
         members = {
             row.generated_value: row

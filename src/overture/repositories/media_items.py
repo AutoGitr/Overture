@@ -28,6 +28,7 @@ lazy from ..domain import (
     text_sort_key,
 )
 lazy from ..schemas.library import BulkItemOperation
+lazy from .terms import TermRepository
 
 
 class ServerItemFacts(NamedTuple):
@@ -185,25 +186,26 @@ class MediaItemRepository:
         self, server_item_ids: Collection[str]
     ) -> dict[tuple[str, str], tuple[str, ...]]:
         """Return stored movie directors keyed by server ID and director Etag."""
-        if not server_item_ids:
-            return {}
-        movies = (
-            await self.session.exec(
-                select(MediaItem)
-                .options(WITH_TERMS)
-                .where(
+        versions: dict[int, tuple[str, str]] = {}
+        for batch in batched(server_item_ids, CHUNK_SIZE, strict=False):
+            rows = await self.session.exec(
+                select(
+                    MediaItem.id, MediaItem.server_item_id, MediaItem.director_etag
+                ).where(
                     col(MediaItem.media_type) == MediaType.MOVIE,
-                    col(MediaItem.server_item_id).in_(server_item_ids),
+                    col(MediaItem.server_item_id).in_(batch),
                     col(MediaItem.director_etag).is_not(None),
                 )
             )
-        ).all()
+            for item_id, server_item_id, etag in rows.all():
+                if item_id is not None and server_item_id is not None and etag:
+                    versions[item_id] = (server_item_id, etag)
+        directors = await TermRepository(self.session).values_by_item(
+            versions, TermKind.DIRECTOR
+        )
         return {
-            (movie.server_item_id, movie.director_etag): tuple(
-                movie.values(TermKind.DIRECTOR)
-            )
-            for movie in movies
-            if movie.server_item_id is not None and movie.director_etag is not None
+            version: tuple(directors.get(item_id, ()))
+            for item_id, version in versions.items()
         }
 
     async def find_by_folder_path(
@@ -562,7 +564,7 @@ class MediaItemRepository:
                 await self.session.exec(
                     update(ArtSlot)
                     .where(owned)
-                    .values(url=None)
+                    .values(url=None, upload_hash=None, generated_style=None)
                     .execution_options(synchronize_session=False)
                 )
                 await self.session.exec(

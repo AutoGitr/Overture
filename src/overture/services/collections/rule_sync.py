@@ -49,7 +49,7 @@ class RuleSync:
             async with self._access.database.read_session() as session:
                 repo = CollectionRepository(session)
                 row = await self._access.require(session, collection_id)
-                rule = await repo.rule(collection_id)
+                rule = row.rule
                 policy = await self._access.policy(session, row.group, rule)
                 current = await repo.members(collection_id)
                 scopes = [
@@ -86,7 +86,7 @@ class RuleSync:
                         session.add(saved)
                 await self._access.updated(collection_id)
             # A skipped server copy still lacks the changes; a collection
-            # without one is now withheld until it is active or large enough.
+            # without one is withheld until it is active or large enough.
             if not result.skipped or not row.server_ids:
                 await self._mark_synced(collection_id)
         if not result.skipped and not result.withheld:

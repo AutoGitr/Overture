@@ -14,7 +14,7 @@ class Library(SQLModel, table=True):
 
     __tablename__: ClassVar[Any] = "libraries"
     __table_args__ = (
-        # The server lists each key once, whatever it held before.
+        # The server lists each key once.
         Index(
             "uq_libraries_listed",
             "id",

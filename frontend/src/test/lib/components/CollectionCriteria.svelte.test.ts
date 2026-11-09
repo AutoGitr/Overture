@@ -797,4 +797,40 @@ describe("collection criteria", () => {
       limit: 25,
     });
   });
+
+  it("groups criteria sources under Lists & tags", async () => {
+    const group = $state<FilterGroupInput>(emptyGroup());
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: capabilities.fields,
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      label: "Criteria",
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
+    const select = screen.getByLabelText("Criteria condition 1 field");
+    const optgroup = select.querySelector('optgroup[label="Lists & tags"]');
+    expect(optgroup).not.toBeNull();
+  });
+
+  it("offers manual TMDB IDs without TMDB configured and adds title search when configured", async () => {
+    settingsState.load(appSettings({ tmdb_configured: false }));
+    const source = $state<CollectionSourceInput>({
+      type: "tmdb_item",
+      tmdb_ids: [550],
+    });
+    const { rerender } = renderWithQueryClient(SourceFields, {
+      source,
+      mediaType: "movie",
+      label: "Title list",
+    });
+
+    expect(screen.getByLabelText("Title list TMDB IDs")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Search TMDB movies to add")).toBeNull();
+
+    settingsState.load(appSettings({ tmdb_configured: true }));
+    await rerender({});
+    expect(screen.getByPlaceholderText("Search TMDB movies to add")).toBeInTheDocument();
+  });
 });

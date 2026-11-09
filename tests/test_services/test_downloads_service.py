@@ -923,7 +923,6 @@ async def test_process_season_poster_job_updates_asset_and_parent_aggregates(
     season_poster = read_art_slot(season, ArtType.SEASON_POSTER)
     assert season_poster.file_hash
     assert season_poster.phash == "1" * PHASH_HEX_LENGTH
-    # Season aggregate flags are now computed on read (not stored on MediaItem)
     # A season poster is not the show's, so the show unlocks nothing.
     assert provider.refreshed == [("plex-show", ())]
     assert [event for event, _ in publisher.events] == [

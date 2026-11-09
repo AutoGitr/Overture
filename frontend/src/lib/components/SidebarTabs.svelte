@@ -47,6 +47,7 @@
     title={next ? `Showing ${label.toLowerCase()}, click to show ${next.label.toLowerCase()}` : label}
     {onclick}
   >
+    <span class="label">{label}</span>
     <span class="summary">
       <span class="icon" aria-hidden="true">
         <span class="current"><Icon size={15} /></span>
@@ -54,7 +55,6 @@
       </span>
       <span class="count">{count}</span>
     </span>
-    <span class="label">{label}</span>
   </button>
 {/snippet}
 

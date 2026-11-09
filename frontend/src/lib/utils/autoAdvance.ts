@@ -317,9 +317,9 @@ async function firstSelectionTarget(
  * Leave a TMDB title for the item its first selection stored, then advance as
  * after any other selection: same settings, targets, delay and next item.
  *
- * The item replaces the title's history entry, so Back never returns to a
- * title that is now stored; the advance then adds an entry as usual. Without
- * a target the item opens at once in the same view.
+ * The item replaces the title's history entry, so Back never returns to the
+ * TMDB page of a title Overture has stored; the advance then adds an entry as
+ * usual. Without a target the item opens at once in the same view.
  */
 export async function handleFirstSelectionAdvance(
   item: MediaItemRead,

@@ -82,6 +82,7 @@ class CollectionGroups:
                 )
             group.name = replacement
             session.add(group)
+            await self._separators.refuse_taken(session, group)
             for row in await repo.group_members(group):
                 row.updated_at = utc_now()
                 session.add(row)
@@ -217,7 +218,10 @@ class CollectionGroups:
                 self._validator.generator(media_type, body.generator)
             if body.generator.smart and body.order_type is CollectionOrder.CUSTOM:
                 raise PublicServiceError(422, SMART_CUSTOM_ORDER)
-        async with self._access.database.write_session() as session:
+        async with (
+            self._access.asset_locks.acquire(COLLECTIONS_LOCK),
+            self._access.database.write_session() as session,
+        ):
             row = await CollectionRepository(session).group(server, name)
             if new_set and (current := generator(row)) is not None:
                 raise PublicServiceError(
@@ -235,6 +239,8 @@ class CollectionGroups:
                 else None
             )
             session.add(row)
+            await session.flush()
+            await self._separators.refuse_taken(session, row)
         await self._separators.apply(name)
         await self._access.changed()
         return body
@@ -269,10 +275,9 @@ class CollectionGroups:
                 async with self._access.locked(collection_id):
                     async with self._access.database.read_session() as session:
                         row = await self._access.require(session, collection_id)
-                        rule = await CollectionRepository(session).rule(collection_id)
                     if row.group_name != name:
                         continue
-                    await self._editor.update_locked(row, saved_options(row, rule))
+                    await self._editor.update_locked(row, saved_options(row, row.rule))
                 result.collection_ids.append(collection_id)
                 await self._access.updated(collection_id)
             except Exception as exc:
@@ -302,18 +307,16 @@ class CollectionGroups:
         ):
             await self._sets.run(group, set_generator, result)
         async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
             rows = [
                 row
-                for row in await repo.list_listed()
+                for row in await CollectionRepository(session).list_listed()
                 if row.server_type is server
                 and row.group_name == name
                 and (library_ids is None or set(library_ids) & set(row.library_ids))
             ]
-            managed = {rule.collection_id for rule in await repo.rules()}
         for row in rows:
             if (
-                row.id in managed
+                row.rule is not None
                 and row.id not in result.created
                 and row.kind is not CollectionKind.SEPARATOR
             ):

@@ -262,9 +262,6 @@ describe("ThemePanel search", () => {
     expect(screen.getByRole("button", { name: "Overwrite" })).toBeInTheDocument();
     const selectButtons = screen.getAllByRole("button", { name: "Select" });
     expect(selectButtons).toHaveLength(3); // overture_yt, themerr_yt, search_yt
-
-    // Verify old public-theme container is removed
-    expect(document.querySelector(".public-theme")).not.toBeInTheDocument();
   });
 
   it("enriches ThemerrDB and OvertureDB selections with YouTube title, channel, and duration", async () => {

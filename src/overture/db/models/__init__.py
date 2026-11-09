@@ -8,7 +8,7 @@ lazy from .auth_session import AuthSession
 lazy from .collection_group import CollectionGroup
 lazy from .collection_rule import CollectionRule
 lazy from .download_job import DownloadJob
-lazy from .job_result import JobResult, JobRun
+lazy from .job_result import JobLogLine, JobResult, JobRun
 lazy from .library import Library
 lazy from .media_collection import (
     CollectionLibrary,
@@ -32,6 +32,7 @@ lazy from .settings import (
     AppSettingsBase,
     get_app_settings,
 )
+lazy from .term import MediaItemTerm, Term
 
 __all__ = [
     "MAX_THEME_FORMAT_LENGTH",
@@ -45,12 +46,14 @@ __all__ = [
     "CollectionLibrary",
     "CollectionRule",
     "DownloadJob",
+    "JobLogLine",
     "JobResult",
     "JobRun",
     "Library",
     "MediaCollection",
     "MediaCollectionMember",
     "MediaItem",
+    "MediaItemTerm",
     "PublicDatasetCollection",
     "PublicDatasetDraft",
     "PublicDatasetItem",
@@ -58,5 +61,6 @@ __all__ = [
     "SavedSchedule",
     "Season",
     "TaskSchedule",
+    "Term",
     "get_app_settings",
 ]

@@ -62,7 +62,6 @@ class CollectionReader:
                 row for row in await repo.list_listed() if row.server_type is server
             ]
             defaults = await get_app_settings(session)
-            rules = {rule.collection_id: rule for rule in await repo.rules()}
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id for row in rows if row.tmdb_collection_id},
@@ -72,7 +71,7 @@ class CollectionReader:
             collection_read(
                 row,
                 catalog.get(row.tmdb_collection_id or 0),
-                rule,
+                row.rule,
                 trust_no_theme=defaults.overturedb_no_theme,
             ).model_copy(
                 update={
@@ -91,8 +90,7 @@ class CollectionReader:
                 }
             )
             for row in rows
-            for rule in (rules.get(row.id or 0),)
-            for policy in (resolve_policy(defaults, row.group, rule),)
+            for policy in (resolve_policy(defaults, row.group, row.rule),)
         ]
 
     async def record(self, collection_id: int) -> DatabaseRecord:
@@ -108,7 +106,7 @@ class CollectionReader:
         """Return one collection with its members and catalog entry."""
         async with self._access.database.read_session() as session:
             row = await self._access.require(session, collection_id)
-            saved = await CollectionRepository(session).rule(collection_id)
+            saved = row.rule
             members = display_order(
                 await CollectionRepository(session).members(row.id or 0), row.order_type
             )

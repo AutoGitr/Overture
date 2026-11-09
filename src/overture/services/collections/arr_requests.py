@@ -3,7 +3,6 @@
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings, get_app_settings
 lazy from ...domain import MediaType
-lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionArrOptions,
@@ -54,16 +53,16 @@ class CollectionArr:
         )
 
     async def missing(self, collection_id: int) -> CollectionMissing:
-        """Titles the collection's lists hold that its libraries lack."""
+        """Titles the collection's lists hold that its libraries lack.
+
+        Each title is named from TMDB, so none are listed without a TMDB key.
+        """
         async with self._access.database.read_session() as session:
             row = await self._access.require(session, collection_id)
-            managed = (
-                await CollectionRepository(session).rule(collection_id) is not None
-            )
         requestable = any(
             self._sources.arr(media_type).configured for media_type in row.media_types
         )
-        if not managed:
+        if row.rule is None or not self._access.app_config.tmdb_configured:
             return CollectionMissing(titles=[], requestable=requestable)
         found: dict[tuple[MediaType, int], CollectionMissingTitle] = {}
         truncated = False

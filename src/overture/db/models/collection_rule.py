@@ -3,9 +3,10 @@
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
-lazy from sqlmodel import Field
+lazy from sqlmodel import Field, Relationship
 
 lazy from ..columns import typed_columns
+lazy from .media_collection import MediaCollection
 lazy from .shared import PolicyOverrides
 
 
@@ -29,6 +30,11 @@ class CollectionRule(PolicyOverrides, table=True):
     source_summary: str | None = None
     last_synced_at: datetime | None = None
     last_error: str | None = None
+
+    collection: "MediaCollection" = Relationship(
+        back_populates="rule",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
 
 
 typed_columns(CollectionRule)

@@ -215,9 +215,9 @@ class CollectionRepository:
                 )
                 .order_by(col(MediaCollection.id))
             )
-            for item_id, server_id in await self.session.exec(stmt):
-                if server_id is not None:
-                    found.setdefault(item_id, []).append(server_id)
+            for item_id, collection_id in await self.session.exec(stmt):
+                if collection_id is not None:
+                    found.setdefault(item_id, []).append(collection_id)
         return found
 
     async def replace_members(
@@ -305,7 +305,7 @@ class CollectionRepository:
                 )
                 .values(monitored=monitored, updated_at=timestamp)
             )
-            updated += result.rowcount
+            updated += result.rowcount or 0
         return updated
 
     async def library_items(
@@ -347,9 +347,10 @@ class CollectionRepository:
             .where(
                 col(MediaItem.library_id) == library_id,
                 col(MediaCollection.last_synced_at).is_not(None),
-                col(MediaCollection.id) != (excluding or 0),
             )
         )
+        if excluding is not None:
+            stmt = stmt.where(col(MediaCollection.id) != excluding)
         titles: dict[int, list[str]] = {}
         for item_id, title in await self.session.exec(stmt):
             titles.setdefault(item_id, []).append(title)
@@ -379,8 +380,3 @@ class CollectionRepository:
                 )
             )
         ).first()
-
-    async def rules(self) -> list[CollectionRule]:
-        """Return every rule in stable order."""
-        stmt = select(CollectionRule).order_by(col(CollectionRule.id))
-        return list((await self.session.exec(stmt)).all())

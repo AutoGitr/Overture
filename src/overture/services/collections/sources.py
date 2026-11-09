@@ -30,7 +30,7 @@ SOURCE_LABELS: frozendict[SourceType, str] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         SourceType.TMDB_COLLECTION: "TMDB franchise",
         SourceType.TMDB_LIST: "TMDB list",
-        SourceType.TMDB_ITEM: "TMDB titles",
+        SourceType.TMDB_ITEM: "TMDB title list",
         SourceType.TMDB_PERSON: "TMDB person",
         SourceType.TMDB_CHART: "TMDB chart",
         SourceType.MDBLIST: "MDBList",
@@ -140,7 +140,12 @@ class SourceResolver:
             return "Set RADARR_URL and RADARR_API_KEY to use Radarr"
         if source is SourceType.SONARR_TAG and not self._sonarr.configured:
             return "Set SONARR_URL and SONARR_API_KEY to use Sonarr"
-        if source.value.startswith("tmdb") and not self._config.tmdb_configured:
+        # A title list names TMDB IDs that sync already stores, so it reads nothing.
+        if (
+            source is not SourceType.TMDB_ITEM
+            and source.value.startswith("tmdb")
+            and not self._config.tmdb_configured
+        ):
             return "Set TMDB_API_KEY to use TMDB"
         return None
 

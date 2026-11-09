@@ -175,6 +175,7 @@ class FilterField(StrEnum):
     """Item metadata a collection condition tests."""
 
     TITLE = "title"
+    TMDB_ID = "tmdb_id"
     TVDB_ID = "tvdb_id"
     IMDB_ID = "imdb_id"
     STUDIO = "studio"

@@ -339,7 +339,7 @@ async def test_seasons_missing_from_new_data_are_zeroed_out(
     )
     _patch_apply_provider_art_url(monkeypatch)
 
-    # New sync payload no longer reports season 2 at all.
+    # Sync payload omits season 2.
     await synchronizer.upsert_seasons(
         db_session,
         item,

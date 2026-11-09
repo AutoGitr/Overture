@@ -300,6 +300,44 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
     assert provider.uploads[-1] == (ArtType.POSTER, image_bytes, "image/png")
 
 
+async def test_collection_art_save_refuses_inactive_collection(
+    database: Database, app_config: Settings, tmp_path: Path
+) -> None:
+    provider = ArtProvider(app_config)
+    async with database.write_session() as session:
+        session.add(
+            stored_collection(
+                id=2,
+                server_item_id=None,
+                server_type=ServerType.PLEX,
+                media_type=MediaType.MOVIE,
+                title="Inactive",
+                last_synced_at=utc_now(),
+            )
+        )
+        await session.flush()
+        session.add(managing_rule(2))
+    service = ArtService(
+        app_config=app_config,
+        database=database,
+        asset_storage=AssetStorage(app_config=app_config),
+        matcher=Matcher(),
+        phash=PhashService(app_config=app_config),
+        downloads=unused(DownloadService),
+        publisher=FakePublisher(),
+        provider_registry=NoopProviderRegistry(provider),
+        candidates=Candidates(),
+        image_clients=unused(ProxyClientManager),
+        image_cache=ImageCache(tmp_path / "images"),
+    )
+    with pytest.raises(
+        PublicServiceError, match="The collection is inactive and has no server copy"
+    ):
+        await service.collections.save(
+            2, ArtType.POSTER, SaveArtRequest(generated=ArtStyle.DARK)
+        )
+
+
 async def test_collection_candidates_share_source_policy_and_catalog_toggle(
     database: Database, app_config: Settings
 ) -> None:

@@ -427,14 +427,13 @@ class LibraryReconciler:
                         ):
                             changed = await self.local_assets.refresh(result.item_id)
                     else:
-                        # The row was just written under this item's lock.
+                        # Refreshed directly under the active item lock.
                         changed = await self.local_assets.refresh_row(current)
                     if changed:
                         result.visible_changed = True
                         if not result.created:
                             result.changes = (*result.changes, "local files")
-                # An item chosen from TMDB that now has a folder downloads
-                # what was chosen for it.
+                # A title with a newly discovered folder downloads its saved selections.
                 if (
                     expected_id is not None
                     and expected is not None

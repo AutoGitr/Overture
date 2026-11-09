@@ -924,7 +924,7 @@ class KindRecommendation(StrictBaseModel):
 
 
 class CollectionLibraryPreview(StrictBaseModel):
-    """What one library's criteria select now."""
+    """What one library's criteria select."""
 
     library_id: str
     member_count: int
@@ -935,7 +935,7 @@ class CollectionLibraryPreview(StrictBaseModel):
 
 
 class CollectionPreview(StrictBaseModel):
-    """What a collection's criteria select now, before it is saved."""
+    """What a collection's criteria select before it is saved."""
 
     libraries: list[CollectionLibraryPreview]
 

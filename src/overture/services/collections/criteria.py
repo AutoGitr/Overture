@@ -63,7 +63,12 @@ type _Getter = Callable[[MediaItem], FieldValue]
 #: Each field's synced value; fields missing here only Plex evaluates.
 _GETTERS: dict[FilterField, _Getter] = {
     FilterField.TITLE: lambda item: item.title,
-    FilterField.TVDB_ID: lambda item: _one(str(item.tvdb_id) if item.tvdb_id else None),
+    FilterField.TMDB_ID: lambda item: _one(
+        str(item.tmdb_id) if item.tmdb_id is not None else None
+    ),
+    FilterField.TVDB_ID: lambda item: _one(
+        str(item.tvdb_id) if item.tvdb_id is not None else None
+    ),
     FilterField.IMDB_ID: lambda item: _one(item.imdb_id),
     FilterField.STUDIO: lambda item: item.studio,
     FilterField.EDITION: lambda item: item.edition,

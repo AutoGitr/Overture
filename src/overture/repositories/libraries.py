@@ -29,7 +29,7 @@ class LibraryRepository:
                 library.title = section.title
                 library.removed_at = None
             self.session.add(library)
-        # A key now listed with the other type is marked removed before it is
+        # A key listed with the other type is marked removed before it is
         # added again, since the server lists each key once.
         await self.session.flush()
         self.session.add_all(
@@ -38,7 +38,7 @@ class LibraryRepository:
         )
 
     async def listed(self, ids: Collection[str] | None = None) -> list[Library]:
-        """Return the libraries the server lists now, all or those of *ids*."""
+        """Return the libraries the server lists, all or those of *ids*."""
         stmt = select(Library).where(col(Library.removed_at).is_(None))
         if ids is not None:
             stmt = stmt.where(col(Library.id).in_(ids))

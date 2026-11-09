@@ -8,6 +8,7 @@ lazy from sqlmodel import Field, Index, Relationship, SQLModel
 
 lazy from ...domain import ArtType, JobStatus, JobType
 lazy from ..columns import enum_type, typed_columns
+lazy from .media_collection import MediaCollection
 lazy from .media_item import MediaItem
 lazy from .season import Season
 
@@ -71,6 +72,10 @@ class DownloadJob(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "raise"},
     )
     season: Optional["Season"] = Relationship(
+        back_populates="download_jobs",
+        sa_relationship_kwargs={"lazy": "raise"},
+    )
+    collection: Optional["MediaCollection"] = Relationship(
         back_populates="download_jobs",
         sa_relationship_kwargs={"lazy": "raise"},
     )
