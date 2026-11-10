@@ -9,7 +9,7 @@ lazy from typing import Annotated, Any
 
 lazy from fastapi import APIRouter, Depends, Query, Request
 
-lazy from ..dependencies import ArtDep, ArtUploadsDep
+lazy from ..dependencies import ArtDep, ArtUploadsDep, RemoverDep
 lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
 lazy from ..schemas.art import (
     ArtMatchResponse,
@@ -19,6 +19,7 @@ lazy from ..schemas.art import (
 )
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.library import ItemSelectionResponse
+lazy from ..schemas.removal import AssetRemoval, RemovalOptions, RemovalTarget
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.image import MAX_IMAGE_BYTES
 lazy from .auth import require_auth
@@ -124,30 +125,31 @@ async def save_art(
 
 
 @router.delete("/{item_id}/{art_type}")
-async def clear_art(
+async def remove_art(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
+    removal: Annotated[AssetRemoval, Query()],
     art: ArtDep,
     season_id: Annotated[
         int | None,
-        Query(description="The season to clear; omit to clear every season's poster"),
+        Query(description="The season; omit to remove every season's poster"),
     ] = None,
 ) -> StatusResponse:
-    """Forget a slot's selected artwork.
-
-    A season poster without ``season_id`` forgets every season's.
-    """
-    return await art.clear(
-        item_id=item_id,
-        art_type=art_type,
-        season_id=season_id,
-    )
+    """Forget a slot's art, delete its local file or the server's copy."""
+    return await art.remove(item_id, art_type, removal, season_id)
 
 
 @router.delete("/{item_id}")
-async def clear_all_art(
-    item_id: ItemIdPath,
-    art: ArtDep,
+async def remove_all_art(
+    item_id: ItemIdPath, removal: Annotated[AssetRemoval, Query()], art: ArtDep
 ) -> StatusResponse:
-    """Clear every artwork slot across an item tree."""
-    return await art.clear_all(item_id)
+    """Remove every art slot of an item and its seasons."""
+    return await art.remove(item_id, "art", removal)
+
+
+@router.post("/removal-options")
+async def get_removal_options(
+    target: RemovalTarget, remover: RemoverDep
+) -> RemovalOptions:
+    """Say what each removal choice would change for items or collections."""
+    return await remover.options(target)

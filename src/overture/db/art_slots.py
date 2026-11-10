@@ -10,7 +10,7 @@ lazy from dataclasses import asdict, dataclass, fields
 lazy from functools import cache
 lazy from operator import attrgetter
 
-lazy from ..domain import ArtSource, ArtStyle, ArtType
+lazy from ..domain import ArtDrawing, ArtSource, ArtType
 lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
 lazy from .models.art import ArtSlot
 lazy from .models.media_collection import MediaCollection
@@ -206,6 +206,7 @@ def select_art(
     slot.url = url
     slot.upload_hash = None
     slot.generated_style = None
+    slot.generated_textless = False
     return slot
 
 
@@ -214,17 +215,25 @@ def select_upload(
     art_type: ArtType,
     upload_hash: str,
     *,
-    generated: ArtStyle | None = None,
+    generated: ArtDrawing | None = None,
 ) -> ArtSlot:
     """Record the kept image *upload_hash* as the slot's selected artwork.
 
-    *generated* names the style Overture drew it in, for an image it made.
+    *generated* says how Overture drew it, for an image it made.
     """
     slot = art_slot(owner, art_type)
     slot.url = None
     slot.upload_hash = upload_hash
-    slot.generated_style = generated
+    slot.generated_style = generated.style if generated else None
+    slot.generated_textless = generated.textless if generated else False
     return slot
+
+
+def art_drawing(slot: ArtSlot) -> ArtDrawing | None:
+    """Return how Overture drew the slot's art, if it drew it."""
+    if slot.generated_style is None:
+        return None
+    return ArtDrawing(slot.generated_style, textless=slot.generated_textless)
 
 
 def clear_art_selection(
@@ -237,6 +246,7 @@ def clear_art_selection(
     slot.url = None
     slot.upload_hash = None
     slot.generated_style = None
+    slot.generated_textless = False
     _drop_if_empty(owner, slot)
 
 

@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
-import { cancelPendingAutoAdvance, type AutoAdvanceSettings } from "../../../lib/utils/autoAdvance";
 import {
-  beginRecordAdvance,
+  beginAutoAdvance,
+  cancelPendingAutoAdvance,
+  type AutoAdvanceSettings,
+} from "../../../lib/utils/autoAdvance";
+import {
   handleRecordSelectionAdvance,
   nextRecordTarget,
   openNextRecord,
@@ -14,7 +17,10 @@ import { appSettings } from "../../helpers/fixtures";
 
 vi.mock("../../../lib/router/routes", () => ({
   route: { pathname: "/overturedb/movies/collections/tmdb-1/art/poster" },
+  routedItem: () => null,
   routedItemId: () => null,
+  routedCollectionId: () => null,
+  routedCatalogEntry: () => ({ media_type: "collection", entry_key: "tmdb-1" }),
   goToCatalogEntry: vi.fn(),
   goToCollectionView: vi.fn(),
 }));
@@ -44,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   cancelPendingAutoAdvance();
   sidebarState.records = null;
+  sidebarState.walk = null;
   settingsState.reset();
 });
 
@@ -104,7 +111,7 @@ describe("after a save", () => {
     vi.useFakeTimers();
     const rows = [record("a", {}, ["theme"]), record("b")];
     sidebarState.records = rows;
-    const context = beginRecordAdvance();
+    const context = beginAutoAdvance();
     sidebarState.records = [];
 
     handleRecordSelectionAdvance("a", "theme", context);
@@ -120,7 +127,7 @@ describe("after a save", () => {
     const page = record("a", {}, ["poster", "background", "season:1", "theme"]);
     sidebarState.records = [row];
 
-    handleRecordSelectionAdvance("a", "background", beginRecordAdvance(), page);
+    handleRecordSelectionAdvance("a", "background", beginAutoAdvance(), page);
     vi.runAllTimers();
     expect(page.open).toHaveBeenCalledWith("season:1");
     expect(row.open).not.toHaveBeenCalled();

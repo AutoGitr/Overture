@@ -24,6 +24,7 @@ lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.bulk_work import BulkArtWork
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatchOutcome
+lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import (
@@ -564,11 +565,8 @@ async def test_perfect_match_adoption_rechecks_the_file_before_saving_selection(
         ],
         total_compared=1,
     )
-    monkeypatch.setattr(
-        matcher,
-        "match_item_art",
-        AsyncMock(return_value=ArtMatchOutcome(response, local)),
-    )
+    match = AsyncMock(return_value=ArtMatchOutcome(response, local))
+    monkeypatch.setattr(matcher, "match_item_art", match)
     adopt = AsyncMock(return_value=adopted)
     emit = AsyncMock()
     queue = AsyncMock()
@@ -592,6 +590,8 @@ async def test_perfect_match_adoption_rechecks_the_file_before_saving_selection(
         database=database,
     )
 
+    # A preview can sit a step away from the original it is identical to.
+    assert match.call_args.kwargs["threshold"] == PERFECT_MATCH_MAX_DISTANCE
     adopt.assert_awaited_once()
     assert adopt.call_args.kwargs["verified"] == local
     assert adopt.call_args.kwargs["url"] == "https://images.test/perfect.jpg"

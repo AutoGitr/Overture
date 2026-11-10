@@ -8,7 +8,7 @@
   import PendingButton from "./PendingButton.svelte";
   import ThemeResultGrid from "./ThemeResultGrid.svelte";
 
-  const RESULT_LIMIT = 10;
+  const RESULT_LIMIT = 20;
 
   /**
    * A YouTube theme search for one subject. It searches for *initialQuery*

@@ -6,6 +6,7 @@ lazy import logging
 lazy import httpx2
 
 lazy from ...db.art_slots import ArtFileFacts
+lazy from ...domain import PERFECT_MATCH_ONLY
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.file import compute_bytes_hash
 lazy from .matcher_cache import ArtMatcherCache
@@ -15,6 +16,32 @@ lazy from .matcher_cache import ArtMatcherCache
 PERFECT_MATCH_MAX_DISTANCE = 1
 
 logger = logging.getLogger(__name__)
+
+
+def comparison_threshold(threshold: int) -> int:
+    """Return the pHash distance an Assets run with *threshold* compares within.
+
+    Every run compares as far as a perfect match can sit, so a byte-identical
+    original is found whatever distance the run accepts otherwise.
+    """
+    return max(threshold, PERFECT_MATCH_MAX_DISTANCE)
+
+
+def accepted_matches(matches: list[ArtCandidate], threshold: int) -> list[ArtCandidate]:
+    """Return the matches an Assets run with *threshold* accepts, in order.
+
+    A perfect match is always accepted; any other only within *threshold*.
+    """
+    return [
+        match
+        for match in matches
+        if match.perfect_match
+        or (
+            threshold != PERFECT_MATCH_ONLY
+            and match.hamming is not None
+            and match.hamming <= threshold
+        )
+    ]
 
 
 async def remote_matches_file(

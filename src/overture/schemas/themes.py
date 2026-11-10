@@ -7,12 +7,16 @@ lazy from pydantic import Field
 lazy from .base import StrictBaseModel
 lazy from .validators import UniqueList, YouTubeId
 
+#: The most videos one YouTube search reads.
+MAX_SEARCH_RESULTS = 50
+
 
 class SearchRequest(StrictBaseModel):
     """A YouTube theme search: free text, explicit video IDs, or both."""
 
     query: str = ""
-    limit: Annotated[int, Field(ge=1, le=50)] = 10
+    #: The most results to return, after the duration limits filter them.
+    limit: Annotated[int, Field(ge=1, le=MAX_SEARCH_RESULTS)] = 10
     video_ids: Annotated[UniqueList[YouTubeId], Field(max_length=20)] = Field(
         default_factory=list[str]
     )

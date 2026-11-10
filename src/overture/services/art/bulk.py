@@ -28,7 +28,7 @@ lazy from ...db.art_slots import ArtFileFacts, SavedArt, art_file_facts, saved_a
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
-lazy from ...domain import PERFECT_MATCH_ONLY, ArtBulkSource, ArtType
+lazy from ...domain import ArtBulkSource, ArtType
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import BulkAssetTally
@@ -59,6 +59,7 @@ lazy from .bulk_work import load_art_batch, plan_bulk_art
 lazy from .collection_art import CollectionArtService
 lazy from .collection_bulk import plan_collection_art, run_collection_art
 lazy from .matcher import ArtMatcher
+lazy from .perfect_match import accepted_matches, comparison_threshold
 lazy from .selection import adopt_art
 lazy from .targets import target_label
 
@@ -162,7 +163,7 @@ async def _from_local_matching(
         outcome = await run.art_matcher.match_item_art(
             item_id=item_id,
             art_type=art_type,
-            threshold=max(threshold, 0),
+            threshold=comparison_threshold(threshold),
             season_id=season_id,
             include_overturedb=False,
             refresh=False,
@@ -174,9 +175,7 @@ async def _from_local_matching(
     errors = list(match_result.errors)
     if failed := match_result.failed:
         errors.append(f"could not compare {failed} artwork candidates")
-    matches = match_result.matches
-    if threshold == PERFECT_MATCH_ONLY:
-        matches = [match for match in matches if match.perfect_match]
+    matches = accepted_matches(match_result.matches, threshold)
     if not matches:
         if errors:
             notes.errors.append(f"Local art matching: {'; '.join(errors)}")

@@ -66,6 +66,21 @@ describe("SettingsPopup", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
+  it("collapses a section and keeps it closed when the settings open again", async () => {
+    const { unmount } = renderWithQueryClient(SettingsPopup);
+    const collections = screen.getByRole("button", { name: /^Collections/ });
+    expect(collections).toHaveAttribute("aria-expanded", "true");
+
+    await fireEvent.click(collections);
+    unmount();
+    renderWithQueryClient(SettingsPopup);
+
+    expect(screen.getByRole("button", { name: /^Collections/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
   it("names the media server as users know it", async () => {
     renderWithQueryClient(SettingsPopup);
 
@@ -88,7 +103,7 @@ describe("SettingsPopup", () => {
       },
     });
     renderWithQueryClient(SettingsPopup);
-    await fireEvent.change(screen.getByLabelText("Workflow"), {
+    await fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), {
       target: { value: "art_and_themes" },
     });
     await fireEvent.change(screen.getByLabelText("Auto-unmonitor"), {
@@ -248,24 +263,30 @@ describe("SettingsPopup", () => {
     expect(await screen.findByRole("alert", {}, { timeout: 5000 })).toHaveTextContent(
       "Settings unavailable",
     );
-    expect(screen.getByLabelText("Workflow")).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Workflow" })).toBeDisabled();
     getSettings.mockResolvedValue({
       data: { ...settingsState.toUpdatePayload(), workflow: "themes" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Retry settings" }));
-    await waitFor(() => expect(screen.getByLabelText("Workflow")).toHaveValue("themes"));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Workflow" })).toHaveValue("themes"),
+    );
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
   it("keeps an in-progress settings draft when a background refresh arrives", async () => {
     renderWithQueryClient(SettingsPopup);
-    await fireEvent.change(screen.getByLabelText("Workflow"), { target: { value: "themes" } });
+    await fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), {
+      target: { value: "themes" },
+    });
     queryClient.setQueryData(getSettingsOptions().queryKey, {
       ...storedSettings(),
       min_duration_seconds: 45,
     });
-    await waitFor(() => expect(screen.getByLabelText("Workflow")).toHaveValue("themes"));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Workflow" })).toHaveValue("themes"),
+    );
     expect(screen.getByLabelText("Shortest theme (seconds)")).toHaveValue(30);
   });
 });

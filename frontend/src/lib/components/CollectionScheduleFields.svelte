@@ -1,10 +1,6 @@
 <script module lang="ts">
   import type { ScheduleData } from "../utils/collectionForms.svelte";
 
-  const ON_OFF = [
-    [true, "On"],
-    [false, "Off"],
-  ] as const;
   const REMOVE_KEEP = [
     [true, "Remove from server"],
     [false, "Keep on server"],
@@ -12,8 +8,6 @@
 </script>
 
 <script lang="ts">
-  import { ROUTINE_CRON_PRESETS } from "../utils/cronPresets";
-  import CronScheduleField from "./CronScheduleField.svelte";
   import FieldRow from "./FieldRow.svelte";
   import InheritedSelect from "./InheritedSelect.svelte";
   import type { PolicyLevel } from "./CollectionPolicyFields.svelte";
@@ -32,29 +26,6 @@
   let inherits = $derived(level !== "global");
 </script>
 
-<!-- Groups and the global defaults schedule syncs; a collection follows its group. -->
-{#if level !== "collection"}
-  <InheritedSelect
-    label="Scheduled sync"
-    {inherits}
-    bind:value={policy.sync_enabled}
-    inherited={defaults?.sync_enabled}
-    options={ON_OFF}
-  />
-  <div>
-    <CronScheduleField
-      label="Sync schedule"
-      value={policy.sync_schedule ?? ""}
-      placeholder={inherits
-        ? defaults?.sync_schedule
-          ? `Default (${defaults.sync_schedule})`
-          : "Default"
-        : ""}
-      presets={ROUTINE_CRON_PRESETS}
-      onchange={(value) => (policy.sync_schedule = value.trim() || null)}
-    />
-  </div>
-{/if}
 {#if level !== "global"}
   <FieldRow
     label="Active from (MM-DD)"

@@ -3,6 +3,8 @@
 lazy from sqlmodel import Field, SQLModel
 
 lazy from ...domain import (
+    ArtStyle,
+    AutoArt,
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
@@ -34,8 +36,9 @@ class PolicyOverrides(SQLModel):
     active_start_mmdd: str | None = None
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
-    auto_match_art: bool | None = None
-    auto_generate_art: bool | None = None
+    auto_art: AutoArt | None = Field(default=None, sa_type=enum_type(AutoArt))
+    drawn_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
+    backgrounds: bool | None = None
     auto_match_theme: bool | None = None
     request_missing: bool | None = None
     member_label: str | None = None

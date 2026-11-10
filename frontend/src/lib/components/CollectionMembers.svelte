@@ -39,19 +39,16 @@
     editor?.collection.member_ids.flatMap((id) => itemsById.get(id) ?? []) ?? [],
   );
   let orderable = $derived(!smart && editor?.collection.server_type === "plex");
+  /** Members by library, in the libraries' order: movies first, then by title. */
   let memberGroups = $derived.by(() => {
-    if (!editor) return [];
-    const collection = editor.collection;
-    const ids = [
-      ...new Set([
-        ...collection.library_ids,
-        ...held.map((member) => member.library_id ?? ""),
-      ]),
-    ];
-    return ids
-      .map((id) => ({
+    const known = new Set(libraries.map((library) => library.id));
+    const others = [...new Set(held.map((member) => member.library_id ?? ""))]
+      .filter((id) => !known.has(id))
+      .map((id) => ({ id, title: id }));
+    return [...libraries, ...others]
+      .map(({ id, title }) => ({
         id,
-        title: libraries.find((library) => library.id === id)?.title ?? id,
+        title,
         members: held.filter((member) => (member.library_id ?? "") === id),
       }))
       .filter((group) => group.members.length > 0);

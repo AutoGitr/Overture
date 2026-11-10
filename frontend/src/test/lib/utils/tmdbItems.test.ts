@@ -33,7 +33,11 @@ vi.mock("../../../lib/router/routes", () => ({
   goToSeason: vi.fn(),
   route: { pathname: "/movies/tmdb-603-matrix/art/poster" },
   routedItemId: () => null,
+  routedItem: () => ({ kind: "tmdb", tmdbId: 603 }),
   routedItemView: () => routed.view,
+  routeScope: () => ({ source: "library", tab: "movie", mode: "items" }),
+  routedCatalogEntry: () => null,
+  routedCollectionId: () => null,
 }));
 
 const stored = mediaItem({ id: 7, tmdb_id: 603, title: "The Matrix" });

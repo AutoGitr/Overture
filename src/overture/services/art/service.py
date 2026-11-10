@@ -20,10 +20,10 @@ lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import (
-    ITEM_ART_TYPES,
     ArtType,
     AssetScope,
     JobType,
+    ServerAsset,
 )
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
@@ -35,6 +35,7 @@ lazy from ...schemas.art import (
 )
 lazy from ...schemas.common import SaveSelectionResponse, Status, StatusResponse
 lazy from ...schemas.library import ItemSelectionResponse
+lazy from ...schemas.removal import AssetRemoval, ItemArtAsset
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import (
     RateLimitedError,
@@ -45,6 +46,7 @@ lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from ..library.items import emit_library_item_upserted, require_item
+lazy from ..removal import ITEM_ART, AssetRemover
 lazy from ..storage.assets import AssetStorage
 lazy from ..storage.image_cache import ImageCache
 lazy from .candidates import ArtCandidates, CandidatePolicy, CandidateSources
@@ -85,6 +87,28 @@ def _forget(item: MediaItem, target: MediaItem | Season, art_type: ArtType) -> N
         record_art_file(target, art_type, None)
 
 
+async def _art_owners(
+    db: AsyncSession,
+    item: MediaItem,
+    art_types: Sequence[ArtType],
+    season_id: int | None,
+) -> list[tuple[ArtType, list[MediaItem | Season]]]:
+    """Return who owns each slot: the item, its seasons, or the one season."""
+    owners: list[tuple[ArtType, list[MediaItem | Season]]] = []
+    for art_type in art_types:
+        if not art_type.owned_by_season:
+            owners.append((art_type, [item]))
+        elif season_id is None:
+            owners.append(
+                (art_type, list(await SeasonRepository(db).list_for_item(item.id or 0)))
+            )
+        else:
+            owners.append(
+                (art_type, [await _require_art_target(db, item, art_type, season_id)])
+            )
+    return owners
+
+
 class ArtService:
     """Artwork of library items and their seasons.
 
@@ -106,8 +130,10 @@ class ArtService:
         candidates: ArtCandidates,
         image_clients: ProxyClientManager,
         image_cache: ImageCache,
+        remover: AssetRemover,
     ) -> None:
         self._database = database
+        self._remover = remover
         self._asset_storage = asset_storage
         self._matcher = matcher
         self._downloads = downloads
@@ -133,6 +159,7 @@ class ArtService:
             image_cache=image_cache,
             selector=self.selector,
             uploads=self.uploads,
+            remover=remover,
         )
 
     async def _gather(
@@ -261,69 +288,66 @@ class ArtService:
             selection=SaveSelectionResponse.of(job_id, created=created), item=read
         )
 
-    async def clear(
+    async def remove(
         self,
         item_id: int,
-        art_type: ArtType,
+        asset: ItemArtAsset,
+        removal: AssetRemoval,
         season_id: int | None = None,
     ) -> StatusResponse:
-        """Forget one slot's selection; a local file and its facts stay.
+        """Forget an item's art, delete its local files or the server's copies.
 
-        A season poster without *season_id* forgets every season's at once.
+        ``art`` names every slot of the item and its seasons, and a season
+        poster without *season_id* every season's.
+
+        Raises:
+            PublicServiceError: 409 when the server cannot delete artwork.
         """
-        async with (
-            self._asset_storage.asset_locks.acquire(item_id),
-            self._database.write_session() as db,
-        ):
-            item = await require_item(db, item_id)
-            targets: Sequence[MediaItem | Season] = (
-                await SeasonRepository(db).list_for_item(item_id)
-                if art_type == ArtType.SEASON_POSTER and season_id is None
-                else [await _require_art_target(db, item, art_type, season_id)]
+        if removal.delete_from_server:
+            self._remover.require_art_deletion()
+        art_types = ITEM_ART[asset]
+        deleted: set[tuple[ArtType, type[MediaItem | Season], int | None]] = set()
+        async with self._asset_storage.asset_locks.acquire(item_id):
+            async with self._database.read_session() as db:
+                item = await require_item(db, item_id)
+                owners = await _art_owners(db, item, art_types, season_id)
+            for art_type, group in owners:
+                if removal.delete_from_server:
+                    await self._remover.delete_item_art_on_server(group, art_type)
+                if removal.delete_file:
+                    deleted.update(
+                        (art_type, type(owner), owner.id)
+                        for owner in await self._remover.delete_item_art_files(
+                            item, group, art_type
+                        )
+                    )
+            async with self._database.write_session() as db:
+                item = await require_item(db, item_id)
+                for art_type, group in await _art_owners(
+                    db, item, art_types, season_id
+                ):
+                    for owner in group:
+                        if removal.forget:
+                            _forget(item, owner, art_type)
+                        if (art_type, type(owner), owner.id) in deleted:
+                            record_art_file(owner, art_type, None)
+                        db.add(owner)
+                if removal.forget:
+                    await self._downloads.cancel_assets(
+                        db,
+                        AssetScope(
+                            item_id,
+                            job_type=JobType.ART,
+                            art_type=art_types[0] if len(art_types) == 1 else None,
+                            season_id=season_id,
+                        ),
+                    )
+            await self._downloads.committed(db)
+            await self._remover.refresh_item(
+                item, {ServerAsset(art_type) for art_type, _, _ in deleted}
             )
-            for target in targets:
-                _forget(item, target, art_type)
-                db.add(target)
-            await self._downloads.cancel_assets(
-                db,
-                AssetScope(
-                    item_id,
-                    job_type=JobType.ART,
-                    art_type=art_type,
-                    season_id=season_id,
-                ),
-            )
-
-        await self._downloads.committed(db)
         await emit_library_item_upserted(
-            item_id, "art.clear", self._publisher, database=self._database
-        )
-        return StatusResponse(status=Status.CLEARED)
-
-    async def clear_all(self, item_id: int) -> StatusResponse:
-        """Forget every artwork selection of an item and its seasons.
-
-        Local files are not touched, so their recorded facts stay as they are.
-        """
-        async with (
-            self._asset_storage.asset_locks.acquire(item_id),
-            self._database.write_session() as db,
-        ):
-            item = await require_item(db, item_id)
-            for art_type in ITEM_ART_TYPES:
-                _forget(item, item, art_type)
-            db.add(item)
-
-            for season in await SeasonRepository(db).list_for_item(item_id):
-                _forget(item, season, ArtType.SEASON_POSTER)
-                db.add(season)
-            await self._downloads.cancel_assets(
-                db, AssetScope(item_id, job_type=JobType.ART)
-            )
-
-        await self._downloads.committed(db)
-        await emit_library_item_upserted(
-            item_id, "art.clear_all", self._publisher, database=self._database
+            item_id, "art.remove", self._publisher, database=self._database
         )
         return StatusResponse(status=Status.CLEARED)
 

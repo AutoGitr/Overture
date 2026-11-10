@@ -31,6 +31,7 @@ lazy from overture.services.art.collection_bulk import (
     plan_collection_art,
     run_collection_art,
 )
+lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
@@ -133,6 +134,7 @@ class RecordingArt(CollectionArtService):
         self.saved: list[tuple[int, ArtType, str | None]] = []
         self.adopted: list[tuple[int, ArtType, str]] = []
         self.matches = matches or []
+        self.thresholds: list[int] = []
 
     @override
     async def match(
@@ -141,6 +143,7 @@ class RecordingArt(CollectionArtService):
         art_type: ArtType,
         threshold: int,
     ) -> ArtMatchResponse:
+        self.thresholds.append(threshold)
         return ArtMatchResponse(
             matches=self.matches, total_compared=1, reference="media_server"
         )
@@ -229,8 +232,10 @@ async def test_local_matching_compares_the_server_image_overture_did_not_upload(
         art_types=[ArtType.POSTER],
         source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
     )
-    art = RecordingArt([ArtCandidate(url=CATALOG_URL, hamming=0, perfect_match=True)])
+    # A preview can sit a step away from the original it is identical to.
+    art = RecordingArt([ArtCandidate(url=CATALOG_URL, hamming=1, perfect_match=True)])
 
     tally = await _run(params, art, app_config=app_config, database=database)
+    assert art.thresholds == [PERFECT_MATCH_MAX_DISTANCE]
     assert art.adopted == [(1, ArtType.POSTER, CATALOG_URL)]
     assert tally.adopted == 1

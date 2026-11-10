@@ -14,8 +14,10 @@ lazy from sqlmodel import CheckConstraint, Field, SQLModel
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...domain import (
+    ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
+    AutoArt,
     AutoUnmonitor,
     CollectionFiltering,
     CollectionMode,
@@ -28,7 +30,6 @@ lazy from ...utils.collection_formats import (
     validate_sort_title_format,
     validate_summary_format,
 )
-lazy from ...utils.cron import validate_cron_expression
 lazy from ..columns import enum_type, typed_columns
 
 #: The settings row is a singleton; pinning its key makes that a database rule
@@ -63,14 +64,17 @@ class AppSettingsBase(SQLModel):
     collection_visible_library: bool = False
     collection_minimum_items: int = Field(default=2, ge=1, le=100)
     collection_delete_below_minimum: bool = True
-    collection_auto_match_art: bool = False
-    collection_auto_generate_art: bool = False
+    collection_auto_art: AutoArt = Field(
+        default=AutoArt.OFF, sa_type=enum_type(AutoArt)
+    )
+    collection_drawn_style: ArtStyle = Field(
+        default=ArtStyle.DARK, sa_type=enum_type(ArtStyle)
+    )
+    collection_backgrounds: bool = True
     collection_auto_match_theme: bool = False
     collection_sort_title_format: str = Field(default="", max_length=200)
     collection_summary_format: str = Field(default="", max_length=2000)
     collection_delete_when_inactive: bool = True
-    collection_sync_schedule: str = Field(default="0 3 * * *", max_length=100)
-    collection_sync_enabled: bool = False
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
     overturedb_no_theme: bool = True
@@ -115,12 +119,6 @@ class AppSettingsBase(SQLModel):
     def valid_collection_sort_title_format(cls, value: str) -> str:
         """Use the same template syntax as generators and bulk operations."""
         return validate_sort_title_format(value)
-
-    @field_validator("collection_sync_schedule")
-    @classmethod
-    def valid_collection_sync_schedule(cls, value: str) -> str:
-        """Collections share the cron syntax of every other schedule."""
-        return validate_cron_expression(value)
 
     @field_validator("tmdb_region")
     @classmethod

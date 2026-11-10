@@ -4,10 +4,8 @@ lazy import urllib.parse
 lazy from collections.abc import Collection, Iterable, Mapping, Sequence
 lazy from contextlib import suppress
 
-lazy from ...db.art_slots import clear_art_selection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import (
-    ITEM_ART_TYPES,
     AssetScope,
     CollectionKind,
     CollectionOrder,
@@ -825,25 +823,6 @@ class CollectionEditor:
         )
 
     # Selections and flags
-
-    async def forget_selections(self, collection_id: int, *, artwork: bool) -> None:
-        """Forget saved art or theme choices; server images and files stay."""
-        async with (
-            self._access.asset_locks.acquire(f"collection:{collection_id}"),
-            self._access.database.write_session() as session,
-        ):
-            row = await self._access.require_managed(session, collection_id)
-            if artwork:
-                for art_type in ITEM_ART_TYPES:
-                    clear_art_selection(row, art_type)
-            else:
-                row.youtube_id = None
-                row.youtube_id_source = None
-                row.youtube_title = None
-                row.youtube_duration = None
-            row.updated_at = utc_now()
-            session.add(row)
-        await self._access.updated(collection_id)
 
     async def set_monitored(
         self, collection_id: int, monitored: bool

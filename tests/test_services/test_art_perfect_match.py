@@ -138,3 +138,31 @@ async def test_only_the_media_server_is_fetched_as_trusted_with_its_headers(
     )
 
     assert calls == [{"allow_private": trusted, "headers": headers}]
+
+
+@pytest.mark.parametrize(
+    ("threshold", "compared_within"),
+    [(-1, module.PERFECT_MATCH_MAX_DISTANCE), (0, 1), (1, 1), (5, 5)],
+)
+def test_runs_compare_as_far_as_a_perfect_match_can_sit(
+    threshold: int, compared_within: int
+) -> None:
+    assert module.comparison_threshold(threshold) == compared_within
+
+
+@pytest.mark.parametrize(
+    ("threshold", "accepted"),
+    [(-1, ["perfect"]), (0, ["perfect", "exact"]), (3, ["perfect", "exact", "near"])],
+)
+def test_runs_accept_perfect_matches_at_any_threshold(
+    threshold: int, accepted: list[str]
+) -> None:
+    matches = [
+        ArtCandidate(url="perfect", hamming=1, perfect_match=True),
+        ArtCandidate(url="exact", hamming=0),
+        ArtCandidate(url="near", hamming=3),
+    ]
+
+    assert [match.url for match in module.accepted_matches(matches, threshold)] == (
+        accepted
+    )

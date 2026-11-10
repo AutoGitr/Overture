@@ -445,6 +445,10 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             server_collection_id, art_type, image_bytes, mime_type
         )
 
+    @override
+    async def delete_art(self, server_id: str, art_type: ArtType) -> None:
+        await self.client.delete_image(server_id, art_type)
+
 
 class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
     """Adapt Jellyfin responses to the shared media-server contract."""

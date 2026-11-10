@@ -9,6 +9,8 @@ lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.art_slots import (
     ArtFileFacts,
+    art_drawing,
+    art_file_facts,
     clear_art_selection,
     read_art_slot,
     record_art_file,
@@ -21,6 +23,7 @@ lazy from ...db.session import Database
 lazy from ...domain import (
     ITEM_ART_TYPES,
     UNMANAGED_REFUSAL,
+    ArtDrawing,
     ArtSource,
     ArtStyle,
     ArtType,
@@ -36,8 +39,8 @@ lazy from ...schemas.art import (
     ArtSourcesResponse,
     SaveArtRequest,
 )
-lazy from ...schemas.collections import CollectionArtwork, collection_artwork
 lazy from ...schemas.common import Status, StatusResponse
+lazy from ...schemas.removal import AssetRemoval
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.generated_art import render_art
@@ -46,6 +49,7 @@ lazy from ...utils.locks import KeyedLock
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
+lazy from ..removal import NO_COLLECTION_ART_FILE, AssetRemover
 lazy from ..storage.image_cache import CachedOriginal, ImageCache
 lazy from ..storage.responses import cached_image_response
 lazy from .candidates import ArtCandidates, CandidatePolicy
@@ -54,9 +58,21 @@ lazy from .matcher import ArtMatcher
 lazy from .uploads import ArtUploads
 
 
-def _subtitle(row: MediaCollection) -> str | None:
-    """The group drawn above a collection's title; a separator is its group."""
-    return None if row.kind is CollectionKind.SEPARATOR else row.group_name
+def uploaded_image(row: MediaCollection, art_type: ArtType) -> ArtFileFacts | None:
+    """Return the facts of the image Overture last uploaded, if it can be compared."""
+    facts = art_file_facts(read_art_slot(row, art_type))
+    return facts if facts is not None and facts.phash is not None else None
+
+
+def _render(row: MediaCollection, art_type: ArtType, drawing: ArtDrawing) -> bytes:
+    """Draw a collection's art: its title under its group, unless textless.
+
+    A separator's title is its group, so it is drawn alone.
+    """
+    if drawing.textless:
+        return render_art(art_type, drawing.style)
+    subtitle = None if row.kind is CollectionKind.SEPARATOR else row.group_name
+    return render_art(art_type, drawing.style, row.title, subtitle)
 
 
 class CollectionArtService:
@@ -76,7 +92,9 @@ class CollectionArtService:
         image_cache: ImageCache,
         selector: ArtSelector,
         uploads: ArtUploads,
+        remover: AssetRemover,
     ) -> None:
+        self._remover = remover
         self._config = app_config
         self._database = database
         self._asset_locks = asset_locks
@@ -125,15 +143,18 @@ class CollectionArtService:
     async def sources(
         self, collection_id: int, art_type: ArtType
     ) -> ArtSourcesResponse:
-        """Offer what sources have, and art drawn from the title in each style."""
+        """Offer what sources have, and art drawn in each style, titled or not."""
         found = await self.found(collection_id, art_type)
         drawn = [
             ArtCandidate(
-                url=f"/api/collections/{collection_id}/art/{art_type}/generated/{style}",
+                url=f"/api/collections/{collection_id}/art/{art_type}/generated/{style}"
+                + ("?textless=true" if textless else ""),
                 source=ArtSource.GENERATED,
                 art_type=art_type,
                 generated=style,
+                textless=textless,
             )
+            for textless in (False, True)
             for style in ArtStyle
         ]
         return found.model_copy(
@@ -141,14 +162,12 @@ class CollectionArtService:
         )
 
     async def drawn(
-        self, collection_id: int, art_type: ArtType, style: ArtStyle
+        self, collection_id: int, art_type: ArtType, drawing: ArtDrawing
     ) -> bytes:
-        """Return the PNG choosing *style* would draw for the collection."""
+        """Return the PNG choosing *drawing* would draw for the collection."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
-        return await owned_thread(
-            render_art, art_type, row.title, _subtitle(row), style
-        )
+        return await owned_thread(_render, row, art_type, drawing)
 
     async def save(
         self,
@@ -163,28 +182,24 @@ class CollectionArtService:
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
-        if row.server_item_id is None:
-            raise PublicServiceError(
-                409, "The collection is inactive and has no server copy"
-            )
-        if body.generated is not None:
-            drawn = await self._draw(row, art_type, body.generated)
+        if (drawing := body.drawing) is not None:
+            drawn = await self._draw(row, art_type, drawing)
             await self._choose(
                 collection_id,
                 art_type,
                 SaveArtRequest(upload_hash=drawn),
-                generated=body.generated,
+                generated=drawing,
             )
         else:
             await self._choose(collection_id, art_type, body)
         return StatusResponse(status=Status.OK)
 
     async def _draw(
-        self, row: MediaCollection, art_type: ArtType, style: ArtStyle
+        self, row: MediaCollection, art_type: ArtType, drawing: ArtDrawing
     ) -> str:
-        """Draw the collection's art in *style* and keep it; return its hash."""
+        """Draw the collection's art as *drawing* says and keep it; return its hash."""
         drawn = await self._uploads.store(
-            await owned_thread(render_art, art_type, row.title, _subtitle(row), style)
+            await owned_thread(_render, row, art_type, drawing)
         )
         return drawn.upload_hash
 
@@ -194,7 +209,7 @@ class CollectionArtService:
         art_type: ArtType,
         body: SaveArtRequest,
         *,
-        generated: ArtStyle | None = None,
+        generated: ArtDrawing | None = None,
     ) -> None:
         selection = await self._selector.prepare(art_type, body)
         if isinstance(selection.source, ArtFileFacts):
@@ -221,16 +236,16 @@ class CollectionArtService:
         """Draw generated art again if what it shows changed, or *resend* it."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
-        style = read_art_slot(row, art_type).generated_style
-        if style is None:
+        drawing = art_drawing(read_art_slot(row, art_type))
+        if drawing is None:
             return
-        drawn = await self._draw(row, art_type, style)
+        drawn = await self._draw(row, art_type, drawing)
         if resend or drawn != read_art_slot(row, art_type).upload_hash:
             await self._choose(
                 collection_id,
                 art_type,
                 SaveArtRequest(upload_hash=drawn),
-                generated=style,
+                generated=drawing,
             )
 
     async def reupload(self, collection_id: int, art_type: ArtType) -> None:
@@ -256,24 +271,26 @@ class CollectionArtService:
         media_type: str,
         record: Callable[[MediaCollection], None],
     ) -> None:
-        """Upload an image to every server copy, then *record* it on the row."""
+        """Upload an image to every server copy, then *record* it on the row.
+
+        An inactive collection has no server copy, so the image is only
+        recorded; the sync that puts the collection back sends it.
+        """
         async with (
             self._asset_locks.acquire(COLLECTIONS_LOCK),
             self._asset_locks.acquire(f"collection:{collection_id}"),
         ):
             async with self._database.read_session() as db:
                 row = await self._require(db, collection_id, art_type)
-            if row.server_item_id is None:
-                raise PublicServiceError(
-                    409, "The collection is inactive and has no server copy"
-                )
             provider = self._provider_registry.provider
             for server_id in row.server_ids:
                 await provider.upload_collection_art(
                     server_id, art_type, data, media_type
                 )
-            server_url = await provider.get_collection_image_url(
-                row.server_item_id, art_type
+            server_url = (
+                await provider.get_collection_image_url(row.server_item_id, art_type)
+                if row.server_item_id is not None
+                else None
             )
             async with self._database.write_session() as db:
                 row = await self._require(db, collection_id, art_type)
@@ -308,6 +325,7 @@ class CollectionArtService:
             await require_valid_aspect_ratio(db, art_type, width, height)
         phash = await self._matcher.phash.compute_from_bytes(fetched.data)
         original = await self._image_cache.store_original(fetched.data)
+        await self._image_cache.thumb(original)
         stat = await owned_thread(original.path.stat)
         return (
             fetched.data,
@@ -375,55 +393,68 @@ class CollectionArtService:
         )
         return True
 
-    async def clear(
-        self, collection_id: int, art_type: ArtType | None
-    ) -> CollectionArtwork:
-        """Forget collection artwork selections while preserving server images."""
+    async def remove(
+        self, collection_id: int, art_type: ArtType | None, removal: AssetRemoval
+    ) -> StatusResponse:
+        """Forget a collection's art, or delete the server's image, or both.
+
+        Without *art_type* both slots are removed. Overture keeps no file of
+        collection art, so there is none to delete.
+
+        Raises:
+            PublicServiceError: 409 when a file is to be deleted, or the server
+                cannot delete artwork.
+        """
+        if removal.delete_file:
+            raise PublicServiceError(409, NO_COLLECTION_ART_FILE)
+        art_types = (art_type,) if art_type is not None else ITEM_ART_TYPES
         async with (
             self._asset_locks.acquire(COLLECTIONS_LOCK),
             self._asset_locks.acquire(f"collection:{collection_id}"),
-            self._database.write_session() as db,
         ):
-            row = await self._require(
-                db, collection_id, art_type or ArtType.POSTER, managed=True
-            )
-            for slot_type in (art_type,) if art_type is not None else ITEM_ART_TYPES:
-                clear_art_selection(row, slot_type)
-            row.updated_at = utc_now()
-            db.add(row)
-            result = collection_artwork(row)
+            async with self._database.read_session() as db:
+                row = await self._require(db, collection_id, art_types[0], managed=True)
+            if removal.delete_from_server:
+                for slot_type in art_types:
+                    await self._remover.delete_collection_art(row, slot_type)
+            async with self._database.write_session() as db:
+                row = await self._require(db, collection_id, art_types[0])
+                for slot_type in art_types:
+                    if removal.forget:
+                        clear_art_selection(row, slot_type)
+                    # What Overture uploaded is gone from the server too.
+                    if removal.delete_from_server:
+                        record_art_file(row, slot_type, None)
+                        if slot_type is ArtType.POSTER:
+                            row.thumb_url = None
+                        else:
+                            row.art_url = None
+                row.updated_at = utc_now()
+                db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
         )
-        return result
+        return StatusResponse(status=Status.OK)
 
     async def match(
         self, collection_id: int, art_type: ArtType, threshold: int
     ) -> ArtMatchResponse:
-        """Compare collection candidates using the shared pHash ranking and cache."""
+        """Compare collection candidates with the collection's image.
+
+        The image Overture last uploaded is the reference, as a local file is
+        an item's; without one the media server's image is.
+        """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
         if row.tmdb_collection_id is None:
             raise PublicServiceError(
                 422, "Set a TMDB collection ID before matching artwork"
             )
-        if row.server_item_id is None:
-            raise PublicServiceError(
-                409, "The collection is inactive and has no server copy"
-            )
-        if (current_url := row.server_image_url(art_type)) is None:
-            raise PublicServiceError(422, "The collection has no image to match")
-        request = await self._provider_registry.provider.build_collection_image_request(
-            row.server_item_id, art_type, ImageSize.DISPLAY, current_url=current_url
-        )
-        fetched = await fetch_image(
-            request.url,
-            await self._image_clients.get_client(request.url),
-            allow_private=True,
-            headers=request.headers,
-            params=request.params,
-        )
-        reference = await self._matcher.phash.compute_from_bytes(fetched.data)
+        facts = uploaded_image(row, art_type)
+        if facts is not None and facts.phash is not None:
+            reference, source = facts.phash, "local_file"
+        else:
+            reference, source = await self._server_phash(row, art_type), "media_server"
         sources = await self.found(collection_id, art_type)
         candidates = list(
             {
@@ -435,11 +466,41 @@ class CollectionArtService:
         comparison = await self._matcher.match_candidates(
             reference, candidates, threshold
         )
+        errors = list(comparison.errors)
+        if facts is not None:
+            errors.extend(
+                await self._matcher.annotate_perfect(facts, comparison.matches)
+            )
         return ArtMatchResponse(
-            matches=comparison.matches,
+            matches=sorted(
+                comparison.matches, key=lambda match: not match.perfect_match
+            ),
             total_compared=comparison.compared,
             prefiltered=comparison.prefiltered,
             failed=comparison.failed,
-            errors=comparison.errors,
-            reference="media_server",
+            errors=errors,
+            reference=source,
         )
+
+    async def _server_phash(self, row: MediaCollection, art_type: ArtType) -> str:
+        """Return the pHash of the image the media server shows for the slot.
+
+        Raises:
+            PublicServiceError: 422 when the server shows none.
+        """
+        if (
+            row.server_item_id is None
+            or (current_url := row.server_image_url(art_type)) is None
+        ):
+            raise PublicServiceError(422, "The collection has no image to match")
+        request = await self._provider_registry.provider.build_collection_image_request(
+            row.server_item_id, art_type, ImageSize.DISPLAY, current_url=current_url
+        )
+        fetched = await fetch_image(
+            request.url,
+            await self._image_clients.get_client(request.url),
+            allow_private=True,
+            headers=request.headers,
+            params=request.params,
+        )
+        return await self._matcher.phash.compute_from_bytes(fetched.data)

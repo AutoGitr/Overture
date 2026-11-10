@@ -189,7 +189,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         assert job.media_item_id == 1
     updates = events.payloads("library.item.upserted")
     assert [update["source"] for update in updates] == [
-        "art.clear",
+        "art.remove",
         "library.monitored",
     ]
     assert updates[-1]["item"]["monitored"] is False
@@ -220,6 +220,9 @@ async def test_http_domain_dependency_can_be_substituted(
         image_cache=unused(ImageCache),
         provider_registry=NoopProviderRegistry(),
         proxy_clients=unused(ProxyClientManager),
+        art=runtime.art,
+        themes=runtime.themes,
+        remover=runtime.remover,
     )
     app = create_app(runtime)
     app.dependency_overrides[get_library] = lambda: substitute

@@ -36,7 +36,7 @@ describe("notificationState", () => {
     const second = confirmAction({ title: "Second?", message: "Two." });
     await expect(first).resolves.toBe(false);
     expect(notificationState.confirmRequest?.title).toBe("Second?");
-    notificationState.settleConfirm("confirm");
+    notificationState.settleConfirm(["confirm"]);
     await expect(second).resolves.toBe(true);
     expect(notificationState.confirmRequest).toBeNull();
   });

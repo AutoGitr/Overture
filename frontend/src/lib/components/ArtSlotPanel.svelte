@@ -26,12 +26,14 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import { ArtMatch } from "../utils/artMatch.svelte";
   import { parseArtUrl } from "../utils/artUrls";
-  import { beginAutoAdvance, handleArtworkSelectionAdvance } from "../utils/autoAdvance";
   import {
-    beginRecordAdvance,
+    beginAutoAdvance,
     catalogKey,
-    catalogPageRecord,
     collectionKey,
+    handleArtworkSelectionAdvance,
+  } from "../utils/autoAdvance";
+  import {
+    catalogPageRecord,
     handleRecordSelectionAdvance,
     type RecordSlot,
   } from "../utils/recordAdvance";
@@ -136,6 +138,7 @@
               preview_url: null,
               title: null,
               generated: null,
+              textless: false,
             },
           ]
         : [];
@@ -188,7 +191,7 @@
     saving = true;
     feedback.clear();
     if (slot.kind === "collection") {
-      const advanceContext = beginRecordAdvance();
+      const advanceContext = beginAutoAdvance();
       try {
         await saveCollectionRequest.mutateAsync({
           body,
@@ -209,7 +212,7 @@
       // OvertureDB stores public links only, so it offers no upload.
       const url = body.url;
       if (!url) return false;
-      const advanceContext = beginRecordAdvance();
+      const advanceContext = beginAutoAdvance();
       try {
         let saved: boolean;
         let current: RecordSlot;
@@ -446,7 +449,7 @@
           saveArt(
             // A drawn candidate is drawn again on saving, from the current title.
             art.generated
-              ? { generated: art.generated }
+              ? { generated: art.generated, textless: art.textless }
               : { url: art.url, width: art.width, height: art.height },
             candidateImageUrl(art),
           )}

@@ -26,7 +26,6 @@
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
-  import Notice from "./Notice.svelte";
   import CollectionAdopt from "./CollectionAdopt.svelte";
   import ArtSlotPanel from "./ArtSlotPanel.svelte";
   import ArtCategoryTabs from "./ArtCategoryTabs.svelte";
@@ -110,10 +109,6 @@
       <span>{collection.child_count} items</span>
       {#if collection.kind === "smart"}
         <span class="badge badge-accent">Smart</span>
-      {:else if collection.kind === "separator"}
-        <span class="badge badge-muted" title="Heads its group's collections on Plex"
-          >Separator</span
-        >
       {/if}
       {#if collection.generated_value !== null}
         <span class="badge badge-muted" title="Created and kept up to date by its group's set"
@@ -197,8 +192,8 @@
           background: statusTone(collection.background_status, actions.clearingArt),
         }}
         clearable={{
-          poster: !!collection.poster_source,
-          background: !!collection.background_source,
+          poster: !!(collection.poster_source || collection.server_poster_version),
+          background: !!(collection.background_source || collection.server_background_version),
         }}
         clearDisabled={actions.clearingArt}
         onclear={(tab) => {
@@ -221,12 +216,6 @@
   {#snippet content()}
     {#if collection && !editor}
       <CollectionAdopt {collection} {groups} />
-    {:else if managing && collection?.kind === "separator"}
-      <Notice
-        tone="info"
-        title="Kept by its group"
-        message={`The ${collection.collection_group} group keeps this separator. Its title, libraries and sort title follow the group; turn it off in the group's settings.`}
-      />
     {:else if managing && editor}
       {#if editor instanceof CollectionDraft && editor.request.error}<DataStatus
           label="collection creation"
@@ -278,7 +267,10 @@
         : statusTone(collection.theme_status, actions.themeBusy)}
       onart={() => goToCollectionView(collection, "art", artType)}
       onthemes={() => goToCollectionView(collection, "themes")}
-      onclearart={collection.poster_source || collection.background_source
+      onclearart={collection.poster_source ||
+      collection.background_source ||
+      collection.server_poster_version ||
+      collection.server_background_version
         ? () => void actions.clearArt("all")
         : null}
       oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"

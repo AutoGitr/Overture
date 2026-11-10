@@ -2,6 +2,8 @@
 
 lazy from pathlib import Path
 
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
 lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.completion import collection_theme_status
@@ -62,9 +64,15 @@ async def theme_folder(
 async def collection_theme_unavailable(
     row: MediaCollection, *, provider: CollectionProvider | None, app_config: Settings
 ) -> str | None:
-    """Check the configured capability and this collection's mounted folder."""
+    """Check the configured capability and this collection's mounted folder.
+
+    An inactive collection keeps a chosen theme until a sync puts it back on
+    the server, so only the capability applies to it.
+    """
     if reason := collection_themes_unavailable(provider, app_config):
         return reason
+    if row.server_item_id is None:
+        return None
     if provider and isinstance(provider.collections, FolderThemes):
         root = app_config.JELLYFIN_COLLECTIONS_PATH
         if root is None or not row.server_path:
@@ -127,6 +135,21 @@ async def store_collection_theme(
     )
 
 
+async def collection_theme_source(
+    session: AsyncSession, row: MediaCollection, youtube_id: str | None
+) -> ThemeBulkSource:
+    """Return where a collection's theme video comes from: a catalog, else a search."""
+    catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
+        {row.tmdb_collection_id} if row.tmdb_collection_id else set()
+    )
+    entry = catalog.get(row.tmdb_collection_id or 0)
+    if entry and youtube_id == entry.youtube_id_themerrdb:
+        return ThemeBulkSource.THEMERRDB
+    if entry and youtube_id == entry.youtube_id_overturedb:
+        return ThemeBulkSource.OVERTUREDB
+    return ThemeBulkSource.YOUTUBE_SEARCH
+
+
 async def record_collection_theme(
     job: DownloadJob,
     *,
@@ -144,19 +167,12 @@ async def record_collection_theme(
         row = await session.get(MediaCollection, job.collection_id)
         if not stored_job or stored_job.status is not JobStatus.RUNNING or row is None:
             return
-        catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
-            {row.tmdb_collection_id} if row.tmdb_collection_id else set()
-        )
-        entry = catalog.get(row.tmdb_collection_id or 0)
-        source = ThemeBulkSource.YOUTUBE_SEARCH
-        if entry and job.target_url == entry.youtube_id_themerrdb:
-            source = ThemeBulkSource.THEMERRDB
-        elif entry and job.target_url == entry.youtube_id_overturedb:
-            source = ThemeBulkSource.OVERTUREDB
         row.sqlmodel_update(
             {
                 "youtube_id": job.target_url,
-                "youtube_id_source": source,
+                "youtube_id_source": await collection_theme_source(
+                    session, row, job.target_url
+                ),
                 "youtube_title": title,
                 "youtube_duration": duration,
                 "server_theme_id": server_theme_id,

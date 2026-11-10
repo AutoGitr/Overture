@@ -14,8 +14,10 @@ lazy from ..db.models.public_dataset import PublicDatasetCollection
 lazy from ..domain import (
     SMART_CUSTOM_ORDER,
     ArtSource,
+    ArtStyle,
     ArtType,
     AssetStatus,
+    AutoArt,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
@@ -43,7 +45,8 @@ lazy from ..utils.collection_formats import (
 )
 lazy from .base import PublicText, StrictBaseModel
 lazy from .common import StatusResponse
-lazy from .validators import CronExpression, GroupName, YouTubeId
+lazy from .removal import AssetRemoval
+lazy from .validators import GroupName, YouTubeId
 
 type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
 
@@ -293,11 +296,13 @@ class CollectionArtwork(StrictBaseModel):
     poster_status: AssetStatus = AssetStatus.MISSING
     background_status: AssetStatus = AssetStatus.MISSING
     art_status: AssetStatus = AssetStatus.MISSING
+    #: Its policy wants a background; without one, a poster completes its art.
+    backgrounds: bool = True
 
 
-def collection_artwork(row: MediaCollection) -> CollectionArtwork:
+def collection_artwork(row: MediaCollection, *, backgrounds: bool) -> CollectionArtwork:
     """Project the collection's art slots without exposing server URLs."""
-    completion = collection_art_completion(row)
+    completion = collection_art_completion(row, backgrounds=backgrounds)
     poster = read_art_slot(row, ArtType.POSTER)
     background = read_art_slot(row, ArtType.BACKGROUND)
     return CollectionArtwork.model_validate(
@@ -307,6 +312,7 @@ def collection_artwork(row: MediaCollection) -> CollectionArtwork:
             "poster_status": completion.poster_status,
             "background_status": completion.background_status,
             "art_status": completion.art_status,
+            "backgrounds": backgrounds,
         }
     )
 
@@ -409,6 +415,15 @@ class SetCollectionThemeRequest(StrictBaseModel):
     youtube_id: YouTubeId
 
 
+class SetCollectionThemeResponse(StrictBaseModel):
+    """A collection's chosen theme: its queued download, or a choice kept for later."""
+
+    #: ``None`` when the collection is inactive: the sync that puts it back on
+    #: the server downloads the theme.
+    job_id: str | None
+    theme_status: AssetStatus
+
+
 class DeleteCollectionThemeResponse(StatusResponse):
     """Collection theme delete response."""
 
@@ -435,18 +450,20 @@ def _server_image_version(server_url: str | None) -> str | None:
 def collection_read(
     row: MediaCollection,
     catalog: PublicDatasetCollection | None,
-    rule: CollectionRule | None = None,
+    rule: CollectionRule | None,
     *,
-    trust_no_theme: bool = True,
+    trust_no_theme: bool,
+    backgrounds: bool,
 ) -> CollectionRead:
     """Map a stored collection, its catalog entry and its rule to public output.
 
-    *trust_no_theme* lets the catalog's No theme flag count as a theme.
+    *trust_no_theme* lets the catalog's No theme flag count as a theme, and
+    *backgrounds* says whether its policy wants a background.
     """
-    has_theme = row.server_theme_id is not None or row.theme_file_hash is not None
+    has_theme = _has_theme(row)
     no_theme = trust_no_theme and catalog is not None and catalog.no_theme
     return CollectionRead(
-        **collection_artwork(row).model_dump(),
+        **collection_artwork(row, backgrounds=backgrounds).model_dump(),
         id=row.id or 0,
         kind=row.kind,
         title=row.title,
@@ -500,15 +517,20 @@ def collection_read(
     )
 
 
+def _has_theme(row: MediaCollection) -> bool:
+    """Whether the server holds the collection's theme, or its folder does."""
+    return row.server_theme_id is not None or row.theme_file_hash is not None
+
+
 def collection_theme_status_response(
-    collection: CollectionRead,
+    row: MediaCollection,
 ) -> CollectionThemeStatusResponse:
     """Project synchronized collection theme state."""
     return CollectionThemeStatusResponse(
-        has_theme=collection.has_theme,
-        youtube_id=collection.youtube_id,
-        youtube_title=collection.youtube_title,
-        youtube_duration=collection.youtube_duration,
+        has_theme=_has_theme(row),
+        youtube_id=row.youtube_id,
+        youtube_title=row.youtube_title,
+        youtube_duration=row.youtube_duration,
     )
 
 
@@ -545,9 +567,12 @@ class CollectionPolicyBase(StrictBaseModel):
     sync_mode: SyncMode | None = None
     minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
     delete_below_minimum: bool | None = None
-    auto_match_art: bool | None = None
-    #: Draw a poster from the title when a sync leaves the collection without one.
-    auto_generate_art: bool | None = None
+    #: What a sync chooses for a slot with no art chosen.
+    auto_art: AutoArt | None = None
+    #: The colours of art Overture draws for it automatically.
+    drawn_style: ArtStyle | None = None
+    #: Whether it needs a background; without one, a poster makes its art complete.
+    backgrounds: bool | None = None
     auto_match_theme: bool | None = None
     delete_when_inactive: bool | None = None
     collection_mode: CollectionMode | None = None
@@ -768,14 +793,7 @@ class CollectionGenerator(CollectionGeneratorBase):
 
 
 class CollectionGroupPolicy(CollectionPolicyBase):
-    """Nullable group defaults; null inherits the application setting.
-
-    Only groups and the application schedule syncs; a collection follows its group.
-    """
-
-    #: When scheduled syncs run, as a cron expression.
-    sync_schedule: CronExpression | None = None
-    sync_enabled: bool | None = None
+    """Nullable group defaults; null inherits the application setting."""
 
     generator: CollectionGenerator | None = None
     #: Head the group's collections with an empty one titled after the group;
@@ -785,9 +803,6 @@ class CollectionGroupPolicy(CollectionPolicyBase):
 
 class CollectionDefaults(CollectionPolicyBase):
     """The values a collection or group inherits, resolved for form placeholders."""
-
-    sync_schedule: CronExpression
-    sync_enabled: bool
 
 
 class CollectionAdoption(StrictBaseModel):
@@ -1059,8 +1074,8 @@ class BulkCollectionOperation(StrictBaseModel):
         "apply_sort_title_format",
         "adopt",
         "orphan",
-        "clear_artwork",
-        "clear_themes",
+        "remove_artwork",
+        "remove_themes",
         "delete",
     ]
     collection_mode: CollectionMode | None = None
@@ -1073,6 +1088,8 @@ class BulkCollectionOperation(StrictBaseModel):
     sort_title_format: SortTitleFormat | None = None
     #: Where ``delete`` removes the collections from.
     delete_target: CollectionDeleteTarget = "both"
+    #: What ``remove_artwork`` and ``remove_themes`` remove.
+    removal: AssetRemoval = Field(default_factory=AssetRemoval)
 
     @model_validator(mode="after")
     def validate_operation(self) -> Self:

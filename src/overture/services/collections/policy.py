@@ -1,20 +1,19 @@
 """Collection policy resolution, from explicit choices to global defaults."""
 
 lazy from dataclasses import dataclass
-lazy from datetime import datetime
 
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.settings import AppSettings
 lazy from ...domain import (
+    ArtStyle,
+    AutoArt,
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
     SyncMode,
 )
 lazy from ...schemas.collections import CollectionGroupPolicy, CollectionRuleWrite
-lazy from ...utils.cron import next_run_after
-lazy from ...utils.time import utc_now
 
 type RuleOrPolicy = CollectionRule | CollectionRuleWrite | None
 
@@ -42,8 +41,9 @@ class CollectionPolicy:
     sync_mode: SyncMode
     minimum_items: int
     delete_below_minimum: bool
-    auto_match_art: bool
-    auto_generate_art: bool
+    auto_art: AutoArt
+    drawn_style: ArtStyle
+    backgrounds: bool
     auto_match_theme: bool
     collection_mode: CollectionMode
     order_type: CollectionOrder
@@ -56,8 +56,6 @@ class CollectionPolicy:
     active_start_mmdd: str | None = None
     active_end_mmdd: str | None = None
     delete_when_inactive: bool = False
-    sync_schedule: str = "0 3 * * *"
-    sync_enabled: bool = True
     request_missing: bool = False
     member_label: str | None = None
     arr_tag: str | None = None
@@ -86,15 +84,20 @@ def resolve_policy(
             group.delete_below_minimum if group else None,
             defaults.collection_delete_below_minimum,
         ),
-        auto_match_art=inherit(
-            rule.auto_match_art if rule else None,
-            group.auto_match_art if group else None,
-            defaults.collection_auto_match_art,
+        auto_art=inherit(
+            rule.auto_art if rule else None,
+            group.auto_art if group else None,
+            defaults.collection_auto_art,
         ),
-        auto_generate_art=inherit(
-            rule.auto_generate_art if rule else None,
-            group.auto_generate_art if group else None,
-            defaults.collection_auto_generate_art,
+        drawn_style=inherit(
+            rule.drawn_style if rule else None,
+            group.drawn_style if group else None,
+            defaults.collection_drawn_style,
+        ),
+        backgrounds=inherit(
+            rule.backgrounds if rule else None,
+            group.backgrounds if group else None,
+            defaults.collection_backgrounds,
         ),
         auto_match_theme=inherit(
             rule.auto_match_theme if rule else None,
@@ -154,14 +157,6 @@ def resolve_policy(
             group.delete_when_inactive if group else None,
             defaults.collection_delete_when_inactive,
         ),
-        sync_schedule=inherit(
-            group.sync_schedule if group else None,
-            defaults.collection_sync_schedule,
-        ),
-        sync_enabled=inherit(
-            group.sync_enabled if group else None,
-            defaults.collection_sync_enabled,
-        ),
         request_missing=inherit(
             rule.request_missing if rule else None,
             group.request_missing if group else None,
@@ -179,12 +174,4 @@ def resolve_policy(
             rule.home_order if rule else None,
             group.home_order if group else None,
         ),
-    )
-
-
-def is_due(last_synced_at: datetime | None, policy: CollectionPolicy) -> bool:
-    """Whether the schedule has come round since the last sync."""
-    return policy.sync_enabled and (
-        last_synced_at is None
-        or utc_now() >= next_run_after(policy.sync_schedule, last_synced_at)
     )

@@ -26,6 +26,7 @@ lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.server_identity import resolve_server_item_id
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
@@ -141,6 +142,11 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
         ),
         image_clients=unused(ProxyClientManager),
         image_cache=unused(ImageCache),
+        remover=AssetRemover(
+            asset_storage=AssetStorage(app_config=app_config),
+            provider_registry=registry,
+            database=database,
+        ),
     )
 
     async def unrelated_write() -> None:

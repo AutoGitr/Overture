@@ -29,7 +29,11 @@ vi.mock("../../../lib/router/routes", () => {
     goToItemThemes: vi.fn(),
     goToSeason: vi.fn(),
     route,
+    routeScope: () => ({ source: "library", tab: "movie", mode: "items" }),
+    routedItem: () => ({ kind: "item", id: Number(/^\/\w+\/(\d+)-/.exec(route.pathname)?.[1]) }),
     routedItemId: () => Number(/^\/\w+\/(\d+)-/.exec(route.pathname)?.[1]),
+    routedCollectionId: () => null,
+    routedCatalogEntry: () => null,
   };
 });
 
@@ -59,6 +63,8 @@ function setLibrary(items: ReturnType<typeof mediaItem>[]) {
 beforeEach(() => {
   queryClient.clear();
   sidebarState.current = null;
+  sidebarState.walk = null;
+  sidebarState.view = null;
   settingsState.load(appSettings(baseSettings));
   route.pathname = "/movies/100-current/art/poster";
 });
@@ -284,6 +290,59 @@ describe("next item navigation", () => {
     handleThemeSelectionAdvance(current, context);
     vi.advanceTimersByTime(300);
     expect(goToItemThemes).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 200 }));
+  });
+});
+
+describe("the walk through the sidebar", () => {
+  // Sorted by poster shape: saving a poster makes it the right shape, which
+  // moves the item to the end of the list the user is working through.
+  it("keeps the order the item was reached in across its selections", () => {
+    vi.useFakeTimers();
+    setLibrary([mediaItem({ id: 200 }), mediaItem({ id: 300 })]);
+    beginAutoAdvance();
+    sidebarState.current = { type: "movie", itemIds: [200, 300, 100] };
+
+    handleThemeSelectionAdvance(current, beginAutoAdvance());
+    vi.advanceTimersByTime(300);
+
+    expect(goToItemArt).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 200 }),
+      "poster",
+    );
+  });
+
+  it("goes on from the item it advanced to in the same order", () => {
+    setLibrary([mediaItem({ id: 200 }), mediaItem({ id: 300 })]);
+    const first = beginAutoAdvance();
+    expect(advanceToNextItem(current, baseSettings, first.order)).toBe(true);
+    route.pathname = "/movies/200-next/art/poster";
+    sidebarState.current = { type: "movie", itemIds: [300, 100, 200] };
+
+    expect(beginAutoAdvance().order).toEqual(first.order);
+  });
+
+  it("starts again from the list shown when the item was opened by hand", () => {
+    setLibrary([mediaItem({ id: 200 }), mediaItem({ id: 300 })]);
+    beginAutoAdvance();
+    route.pathname = "/movies/300-other/art/poster";
+    sidebarState.current = { type: "movie", itemIds: [300, 200] };
+
+    expect(beginAutoAdvance().order).toEqual([
+      { kind: "item", id: 300 },
+      { kind: "item", id: 200 },
+    ]);
+  });
+
+  it("starts again when the sidebar's sort or filters change", () => {
+    setLibrary([mediaItem({ id: 200 })]);
+    beginAutoAdvance();
+    sidebarState.view = "another sort";
+    sidebarState.current = { type: "movie", itemIds: [200, 100] };
+
+    expect(beginAutoAdvance().order).toEqual([
+      { kind: "item", id: 200 },
+      { kind: "item", id: 100 },
+    ]);
   });
 });
 

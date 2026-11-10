@@ -21,13 +21,13 @@
     /** Opens the section; without it the tab only names the panel shown. */
     onselect?: () => void;
     clearLabel?: string;
-    /** Forgets the section's selections; null while there is nothing to forget. */
+    /** Removes the section's assets; null while there is nothing to remove. */
     onclear?: (() => void) | null;
     clearDisabled?: boolean;
   } = $props();
 </script>
 
-<!-- The icon carries the status. With something to forget it is its own
+<!-- The icon carries the status. With something to remove it is its own
      button, a cross on hover; otherwise it belongs to the label. Both forms
      are the same width, so the tab never moves. -->
 <div class={["tab-item status-tab", { active }]} role="presentation">

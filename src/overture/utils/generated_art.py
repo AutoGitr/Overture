@@ -109,13 +109,29 @@ def _fitted(
 
 
 def render_art(
-    art_type: ArtType, title: str, subtitle: str | None, style: ArtStyle
+    art_type: ArtType,
+    style: ArtStyle,
+    title: str | None = None,
+    subtitle: str | None = None,
 ) -> bytes:
-    """Draw *title*, under *subtitle* if given, as a PNG of *art_type*."""
-    size = _SIZES[art_type]
-    width, height = size
+    """Draw *title*, under *subtitle* if given, as a PNG of *art_type*.
+
+    Without a title the art is textless: the style's colours alone.
+    """
     palette = _PALETTES[style]
-    image = _gradient(size, palette)
+    image = _gradient(_SIZES[art_type], palette)
+    if title is not None:
+        _draw_title(image, palette, title, subtitle)
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
+def _draw_title(
+    image: Image.Image, palette: _Palette, title: str, subtitle: str | None
+) -> None:
+    """Draw *title* under *subtitle* and a rule, centred on *image*."""
+    width, height = image.size
     draw = ImageDraw.Draw(image)
     text_width = width * 0.8
     font, lines = _fitted(title.strip() or " ", text_width, round(height * 0.085))
@@ -145,6 +161,3 @@ def render_art(
     for line in lines:
         draw.text((width / 2, y), line, font=font, fill=palette.text, anchor="mt")
         y += line_height
-    output = io.BytesIO()
-    image.save(output, format="PNG", optimize=True)
-    return output.getvalue()

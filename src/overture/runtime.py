@@ -48,6 +48,7 @@ lazy from .services.local_assets.service import LocalAssets
 lazy from .services.notifications import FailureNotifier, NotifyingPublisher
 lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
+lazy from .services.removal import AssetRemover
 lazy from .services.scheduler import SchedulerService
 lazy from .services.server_audit.service import ServerAuditService
 lazy from .services.stats.service import StatsService
@@ -110,6 +111,7 @@ class RuntimeServices:
     assets: AssetsService
     public_dataset: PublicDatasetService
     art: ArtService
+    remover: AssetRemover
     library: LibraryService
     server_audit: ServerAuditService
     collections: CollectionsService
@@ -167,9 +169,6 @@ class RuntimeServices:
                 "public dataset",
                 self.public_dataset.start,
                 self.public_dataset.stop,
-            ),
-            LifecycleService(
-                "collection rules", self.collections.start, self.collections.stop
             ),
             LifecycleService("scheduler", self.scheduler.start, self.scheduler.stop),
         )
@@ -274,6 +273,7 @@ class RuntimeServices:
             if service.name in self._started:
                 await self._shutdown_step(service.name, service.stop)
                 self._started.discard(service.name)
+        await self._shutdown_step("collection sources", self.collections.close)
         await self._shutdown_step("notifications", self.notifier.close)
         await self._shutdown_step("websockets", self.websockets.close)
         await self._shutdown_step("authentication", self.auth.close)
@@ -485,6 +485,19 @@ def build_runtime(
         app_config=app_config,
         database=database,
     )
+    remover = AssetRemover(
+        asset_storage=asset_storage,
+        provider_registry=provider_registry,
+        database=database,
+    )
+    themes = ThemesService(
+        database=database,
+        asset_storage=asset_storage,
+        downloads=downloads,
+        publisher=events,
+        youtube_resolver=youtube,
+        remover=remover,
+    )
     art = ArtService(
         app_config=app_config,
         database=database,
@@ -497,6 +510,7 @@ def build_runtime(
         candidates=candidates,
         image_clients=proxy_clients,
         image_cache=image_cache,
+        remover=remover,
     )
     library = LibraryService(
         database=database,
@@ -506,6 +520,9 @@ def build_runtime(
         image_cache=image_cache,
         provider_registry=provider_registry,
         proxy_clients=proxy_clients,
+        art=art,
+        themes=themes,
+        remover=remover,
     )
     server_audit = ServerAuditService(
         background_jobs=background_jobs,
@@ -523,14 +540,13 @@ def build_runtime(
         tmdb=tmdb,
         mdblist=MDBListClient(app_config=app_config),
         art=art.collections,
-        scheduler=scheduler,
+        remover=remover,
         database=database,
         provider_registry=provider_registry,
         publisher=events,
         downloads=downloads,
         proxy_clients=proxy_clients,
         app_config=app_config,
-        library_gate=background_jobs.library_gate,
     )
     sync = SyncEngine(
         tmdb_client=tmdb,
@@ -544,13 +560,6 @@ def build_runtime(
         local_assets=local_assets,
         config_dir=config_dir,
         groups=collections.groups,
-    )
-    themes = ThemesService(
-        database=database,
-        asset_storage=asset_storage,
-        downloads=downloads,
-        publisher=events,
-        youtube_resolver=youtube,
     )
     asset_manager = AssetManagerService(
         background_jobs=background_jobs,
@@ -610,6 +619,7 @@ def build_runtime(
         ),
         public_dataset=public_dataset,
         art=art,
+        remover=remover,
         library=library,
         server_audit=server_audit,
         collections=collections,

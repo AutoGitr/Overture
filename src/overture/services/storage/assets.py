@@ -36,6 +36,25 @@ class StoredFile:
     size: int
 
 
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_JPEG_SIGNATURE = b"\xff\xd8\xff"
+
+
+def _is_managed(name: str, head: bytes) -> bool:
+    """Whether a file's name and leading bytes make it an image or MP3 theme."""
+    suffix = Path(name).suffix.lower()
+    if suffix == ".png":
+        return head.startswith(_PNG_SIGNATURE)
+    if suffix in IMAGE_EXTENSIONS:
+        return head.startswith(_JPEG_SIGNATURE)
+    if name.lower() == THEME_FILENAME:
+        # An ID3 tag, or straight away an MPEG audio frame's sync bits.
+        return head.startswith(b"ID3") or (
+            len(head) >= 2 and head[0] == 0xFF and head[1] & 0xE0 == 0xE0
+        )
+    return False
+
+
 class PathTraversalError(Exception):
     """Raised when a resolved path escapes allowed boundaries."""
 
@@ -428,6 +447,41 @@ class AssetStorage:
             return None
         stored = self.stored_file(target)
         return stored if stored is not None and stored.file_hash == file_hash else None
+
+    def delete_file(self, path: Path, trusted_root: str) -> bool:
+        """Delete the managed image or theme at *path* beneath *trusted_root*.
+
+        Only a regular file whose name and leading bytes say it is a JPEG or
+        PNG image, or an MP3 theme, is deleted: whatever else a media folder
+        holds stays. Returns whether there was a file to delete.
+
+        Raises:
+            PathTraversalError: When *path* escapes the root or names
+                anything but a managed image or theme.
+            OSError: When the file cannot be read or deleted.
+        """
+        root = Path(trusted_root).resolve(strict=True)
+        target = path.parent.resolve(strict=True) / path.name
+        if not target.is_relative_to(root):
+            raise PathTraversalError(f"Path {target} escapes the root {root}")
+        try:
+            info = target.lstat()
+        except FileNotFoundError:
+            return False
+        if not stat.S_ISREG(info.st_mode):
+            raise PathTraversalError(f"Asset is not a regular file: {target}")
+        with target.open("rb") as stream:
+            head = stream.read(len(_PNG_SIGNATURE))
+        if not _is_managed(target.name, head):
+            raise PathTraversalError(f"Not an image or MP3 theme: {target}")
+        target.unlink()
+        sync_directory(target.parent)
+        logger.info("Deleted %s", target)
+        return True
+
+    async def delete_file_async(self, path: Path, trusted_root: str) -> bool:
+        """Delete a managed asset without blocking the event loop."""
+        return await owned_thread(self.delete_file, path, trusted_root)
 
     async def file_hash_async(self, target_path: str | Path) -> str | None:
         """Hash an asset without blocking the event loop."""

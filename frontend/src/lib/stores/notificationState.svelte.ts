@@ -44,10 +44,19 @@ export interface ChooseOptions<T extends string> extends ConfirmOptions {
   choices: ConfirmChoice<T>[];
 }
 
+/** Choices to tick in any combination, at least one. */
+export interface SelectOptions<T extends string> extends ChooseOptions<T> {
+  /** Ticked when the dialog opens. */
+  initial?: T[];
+}
+
 export interface ConfirmRequest extends ConfirmOptions {
   choices?: ConfirmChoice[];
-  /** Settles with the confirmed choice, `"confirm"` without choices, or `null` on cancel. */
-  resolve: (choice: string | null) => void;
+  /** The choices combine: each is ticked or not, instead of one being picked. */
+  multiple?: boolean;
+  initial?: string[];
+  /** Settles with the confirmed choices, `["confirm"]` without any, or `null` on cancel. */
+  resolve: (chosen: string[] | null) => void;
 }
 
 /**
@@ -175,17 +184,19 @@ class NotificationState {
     };
   }
 
-  confirm(options: ConfirmOptions | ChooseOptions<string>): Promise<string | null> {
+  confirm(
+    options: ConfirmOptions | ChooseOptions<string> | (SelectOptions<string> & { multiple: true }),
+  ): Promise<string[] | null> {
     this.settleConfirm(null);
     return new Promise((resolve) => {
       this.confirmRequest = { ...options, resolve };
     });
   }
 
-  settleConfirm(choice: string | null) {
+  settleConfirm(chosen: string[] | null) {
     const request = this.confirmRequest;
     this.confirmRequest = null;
-    request?.resolve(choice);
+    request?.resolve(chosen);
   }
 }
 
@@ -237,6 +248,13 @@ export async function confirmAction(options: ConfirmOptions): Promise<boolean> {
 }
 
 /** Ask how to carry out an action; resolves the confirmed choice, or `null` on cancel. */
-export function chooseAction<T extends string>(options: ChooseOptions<T>): Promise<T | null> {
-  return notificationState.confirm(options) as Promise<T | null>;
+export async function chooseAction<T extends string>(options: ChooseOptions<T>): Promise<T | null> {
+  return ((await notificationState.confirm(options))?.[0] as T | undefined) ?? null;
+}
+
+/** Ask which parts of an action to carry out; resolves the ticked choices, or `null` on cancel. */
+export async function selectActions<T extends string>(
+  options: SelectOptions<T>,
+): Promise<T[] | null> {
+  return (await notificationState.confirm({ ...options, multiple: true })) as T[] | null;
 }

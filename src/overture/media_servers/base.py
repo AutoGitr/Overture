@@ -43,6 +43,9 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     #: The server keeps collections outside its libraries, so one can hold
     #: movies and shows from several; otherwise a library holds its own.
     collections_span_libraries: ClassVar[bool] = False
+    #: Why the server's API cannot delete an item's or collection's image,
+    #: or ``None`` when it can.
+    art_deletion_unavailable: ClassVar[str | None] = None
 
     async def list_collections(self) -> list[ServerCollection]:
         """Return collections when the provider declares support."""
@@ -155,6 +158,10 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     ) -> None:
         """Upload already validated artwork bytes."""
         raise NotImplementedError
+
+    async def delete_art(self, server_id: str, art_type: ArtType) -> None:
+        """Delete the image of an item, season or collection, where the API can."""
+        raise NotImplementedError(self.art_deletion_unavailable)
 
     async def upload_collection_theme(
         self, server_item_id: str, mp3_bytes: bytes

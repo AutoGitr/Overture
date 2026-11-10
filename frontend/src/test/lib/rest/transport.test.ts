@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { client } from "../../../generated/rest/client.gen";
 import {
-  deleteCollectionTheme,
+  removeCollectionTheme,
   getSettings,
   logout,
   updateBackupSchedule,
@@ -162,13 +162,14 @@ describe("REST transport", () => {
     const { calls } = mockFetch({ status: "ok" });
 
     await sdkData(
-      deleteCollectionTheme({
+      removeCollectionTheme({
         path: { collection_id: 12 },
+        query: { forget: true, delete_from_server: true },
         throwOnError: true,
       }),
     );
 
-    expect(calls[0]?.url).toBe("/api/collections/12/theme");
+    expect(calls[0]?.url).toBe("/api/collections/12/theme?forget=true&delete_from_server=true");
   });
 
   it("supports generated reads through the configured transport", async () => {

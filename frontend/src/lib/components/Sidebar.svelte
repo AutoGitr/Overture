@@ -220,6 +220,24 @@
     }),
   );
 
+  $effect(() => {
+    sidebarState.view = JSON.stringify([
+      uiState.sidebarSource,
+      uiState.sidebarMode,
+      uiState.sidebarTab,
+      sortScope,
+      sort,
+      currentGroup,
+      uiState.currentFilters,
+      uiState.catalogFilters,
+      uiState.searchQuery,
+      uiState.searchField,
+    ]);
+    return () => {
+      sidebarState.view = null;
+    };
+  });
+
   // Auto-advance follows the order the user sees.
   $effect(() => {
     sidebarState.current =

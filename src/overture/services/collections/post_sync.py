@@ -12,7 +12,13 @@ lazy from ...db.art_slots import read_art_slot, saved_art
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import AppSettings, get_app_settings
-lazy from ...domain import ArtStyle, ArtType, CollectionKind, MediaType, TermKind
+lazy from ...domain import (
+    ITEM_ART_TYPES,
+    ArtType,
+    CollectionKind,
+    MediaType,
+    TermKind,
+)
 lazy from ...repositories.collections import (
     CollectionItem,
     CollectionRepository,
@@ -32,9 +38,6 @@ lazy from .reader import catalog_collections
 lazy from .rules import criteria_of
 lazy from .sources import SourceResolver
 lazy from .themes import CollectionThemes
-
-#: The style a poster drawn automatically takes.
-AUTOMATIC_ART_STYLE = ArtStyle.DARK
 
 
 @dataclass(slots=True, frozen=True)
@@ -76,9 +79,12 @@ class PostSyncStep(Protocol):
 class AutoAssets:
     """Match or draw art, and match the catalog's theme.
 
-    Art comes from the franchise or a listed person; a poster still missing is
-    drawn from the title when the policy says so, and art drawn earlier is
-    drawn again when the title or group it shows changed.
+    A slot with no art chosen gets what the policy's Automatic art says: the
+    art of the franchise or a listed person, or art drawn in the policy's
+    style, a poster with the title and a background without. A collection
+    that needs no background gets none, and a separator's poster is always
+    drawn. Art drawn earlier is drawn again when the title or group it shows
+    changed.
     """
 
     name = "Automatic assets"
@@ -100,7 +106,7 @@ class AutoAssets:
     async def run(self, synced: SyncedCollection) -> None:
         row, policy = synced.row, synced.policy
         collection_id = synced.collection_id
-        for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
+        for art_type in ITEM_ART_TYPES:
             slot = read_art_slot(row, art_type)
             saved = saved_art(slot)
             if slot.generated_style is not None:
@@ -114,19 +120,28 @@ class AutoAssets:
                     )
                 elif synced.new_copies:
                     await self._art.reupload(collection_id, art_type)
-            elif policy.auto_match_art and (
+            elif art_type is ArtType.BACKGROUND and not policy.backgrounds:
+                continue
+            elif art_type is ArtType.POSTER and row.kind is CollectionKind.SEPARATOR:
+                await self._draw(synced, art_type)
+            elif policy.auto_art.matches and (
                 url := await self._matched(collection_id, art_type)
             ):
                 await self._art.save(collection_id, art_type, SaveArtRequest(url=url))
-            elif art_type is ArtType.POSTER and (
-                policy.auto_generate_art or row.kind is CollectionKind.SEPARATOR
-            ):
-                await self._art.save(
-                    collection_id,
-                    art_type,
-                    SaveArtRequest(generated=AUTOMATIC_ART_STYLE),
-                )
+            elif policy.auto_art.draws:
+                await self._draw(synced, art_type)
         await self._theme(synced)
+
+    async def _draw(self, synced: SyncedCollection, art_type: ArtType) -> None:
+        """Draw the slot's art in the policy's style; a background has no title."""
+        await self._art.save(
+            synced.collection_id,
+            art_type,
+            SaveArtRequest(
+                generated=synced.policy.drawn_style,
+                textless=art_type is ArtType.BACKGROUND,
+            ),
+        )
 
     async def _matched(self, collection_id: int, art_type: ArtType) -> str | None:
         """The best art a source offers for the slot."""

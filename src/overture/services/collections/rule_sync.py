@@ -14,7 +14,7 @@ lazy from .access import CollectionAccess, LibraryScope
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor, save_placement
 lazy from .membership import Membership, stored_ids
-lazy from .policy import CollectionPolicy, is_due
+lazy from .policy import CollectionPolicy
 lazy from .post_sync import PostSync
 lazy from .rules import criteria_of, library_criteria
 lazy from .sources import SourceResolver
@@ -40,9 +40,7 @@ class RuleSync:
         self._post_sync = post_sync
         self._sources = sources
 
-    async def sync(
-        self, collection_id: int, *, scheduled: bool = False
-    ) -> CollectionSyncResponse:
+    async def sync(self, collection_id: int) -> CollectionSyncResponse:
         """Resolve every source before changing any server membership."""
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
@@ -52,8 +50,6 @@ class RuleSync:
                 policy = await self._access.policy(session, row.group, rule)
                 if rule is None:
                     raise PublicServiceError(409, UNMANAGED_REFUSAL)
-                if scheduled and not is_due(rule.last_synced_at, policy):
-                    return CollectionSyncResponse(skipped=True)
                 current = await repo.members(collection_id)
                 scopes = [
                     await self._access.scope(

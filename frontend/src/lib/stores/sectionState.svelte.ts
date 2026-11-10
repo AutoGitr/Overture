@@ -4,7 +4,7 @@ import { readJson, writeJson } from "../utils/storage";
 
 const STORAGE_KEY = "sections_open_by_view";
 /** Views whose sections stay as the user left them across visits and reloads. */
-const REMEMBERED_VIEWS = new Set(["filters"]);
+const REMEMBERED_VIEWS = new Set(["filters", "settings"]);
 
 /** Names the view collapsible sections are shown in. */
 export const [getSectionView, setSectionView] = createContext<string>();

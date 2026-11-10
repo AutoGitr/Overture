@@ -32,6 +32,7 @@ lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
 lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
+lazy from .services.removal import AssetRemover
 lazy from .services.server_audit.service import ServerAuditService
 lazy from .services.stats.service import StatsService
 lazy from .services.sync.engine import SyncEngine
@@ -152,6 +153,11 @@ def get_collection_arr(runtime: RuntimeDep) -> CollectionArr:
     return runtime.collections.arr
 
 
+def get_remover(runtime: RuntimeDep) -> AssetRemover:
+    """Resolve what deletes managed asset files and server copies."""
+    return runtime.remover
+
+
 def get_themes(runtime: RuntimeDep) -> ThemesService:
     """Resolve the themes domain service."""
     return runtime.themes
@@ -218,6 +224,7 @@ def get_realtime_snapshot(runtime: RuntimeDep) -> RealtimeSnapshotBuilder:
 
 
 ArtDep = Annotated[ArtService, Depends(get_art)]
+RemoverDep = Annotated[AssetRemover, Depends(get_remover)]
 ArtUploadsDep = Annotated[ArtUploads, Depends(get_art_uploads)]
 CollectionArtDep = Annotated[CollectionArtService, Depends(get_collection_art)]
 LibraryDep = Annotated[LibraryService, Depends(get_library)]

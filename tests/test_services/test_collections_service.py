@@ -20,11 +20,13 @@ lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
     AssetScope,
+    AssetStatus,
     CollectionOrder,
     ImageSize,
     MediaType,
     ServerAsset,
     ServerType,
+    ThemeBulkSource,
 )
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
@@ -39,12 +41,12 @@ lazy from overture.schemas.collections import (
     SetCollectionThemeRequest,
 )
 lazy from overture.schemas.common import Status
+lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.collections import reader
 lazy from overture.services.collections import service as module
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
-lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
@@ -52,7 +54,7 @@ lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.factories import seed_art_slot
-lazy from tests.runtime_helpers import NoopProviderRegistry, unused
+lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
 
 
 class FakePlex(PlexProvider):
@@ -136,7 +138,11 @@ def _service(
     return module.CollectionsService(
         tmdb=unused(TMDBClient),
         mdblist=unused(MDBListClient),
-        scheduler=unused(SchedulerService),
+        remover=make_remover(
+            provider or FakePlex(app_config=app_config),
+            app_config=app_config,
+            database=database,
+        ),
         art=unused(CollectionArtService),
         database=database,
         provider_registry=NoopProviderRegistry(
@@ -150,7 +156,7 @@ def _service(
 
 
 async def _collection(
-    session: AsyncSession, server_id: str = "c1", **fields: Any
+    session: AsyncSession, server_id: str | None = "c1", **fields: Any
 ) -> MediaCollection:
     row = stored_collection(
         server_item_id=server_id,
@@ -286,6 +292,37 @@ async def test_set_collection_theme_enqueues_job(
     ]
 
 
+async def test_an_inactive_collection_keeps_its_theme_for_the_sync_that_restores_it(
+    db_session: AsyncSession, *, app_config: Settings, database: Database
+) -> None:
+    await _collection(db_session, server_id=None, server_theme_id="/t/old")
+    downloads = FakeDownloads()
+    publisher = FakePublisher()
+    service = _service(
+        app_config=app_config,
+        database=database,
+        downloads=downloads,
+        publisher=publisher,
+    )
+
+    result = await service.themes.queue(
+        1, SetCollectionThemeRequest(youtube_id="abcDEF123_4")
+    )
+
+    assert result.job_id is None
+    assert result.theme_status is AssetStatus.PARTIAL
+    assert downloads.targets == []
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+    assert row is not None
+    assert (row.youtube_id, row.youtube_id_source, row.server_theme_id) == (
+        "abcDEF123_4",
+        ThemeBulkSource.YOUTUBE_SEARCH,
+        None,
+    )
+    assert publisher.broadcasts[-1][0] == "collection.theme.updated"
+
+
 async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
@@ -316,7 +353,7 @@ async def test_delete_collection_theme_clears_row_and_broadcasts(
         publisher=publisher,
     )
 
-    result = await service.themes.delete(1)
+    result = await service.themes.remove(1, AssetRemoval(delete_from_server=True))
 
     assert result.status is Status.OK
     assert provider.deleted_theme_for == ["c1"]
@@ -339,7 +376,7 @@ async def test_delete_collection_theme_keeps_the_row_when_the_server_fails(
     )
 
     with pytest.raises(MediaServerError):
-        await service.themes.delete(1)
+        await service.themes.remove(1, AssetRemoval(delete_from_server=True))
 
     row = await CollectionRepository(db_session).get(1)
     assert row is not None
@@ -449,9 +486,9 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
     assert detail.theme_unavailable is not None
     folder = tmp_path / "Saga [boxset]"
     folder.mkdir()
-    (folder / "theme.mp3").write_bytes(b"audio")
+    (folder / "theme.mp3").write_bytes(b"ID3audio")
     assert (await service.reader.get(1)).theme_writable
-    await service.themes.delete(1)
+    await service.themes.remove(1, AssetRemoval(delete_file=True))
     assert not (folder / "theme.mp3").exists()
     assert refreshed == ["opaque-id"]
     async with database.read_session() as session:

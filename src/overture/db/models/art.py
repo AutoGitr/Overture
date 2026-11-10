@@ -42,6 +42,10 @@ class ArtSlot(SQLModel, table=True):
             "generated_style IS NULL OR upload_hash IS NOT NULL",
             name="ck_art_slots_generated",
         ),
+        CheckConstraint(
+            "NOT generated_textless OR generated_style IS NOT NULL",
+            name="ck_art_slots_generated_textless",
+        ),
         UniqueConstraint("collection_id", "art_type", name="uq_art_slots_collection"),
         UniqueConstraint("media_item_id", "art_type", name="uq_art_slots_media_item"),
         UniqueConstraint("season_id", "art_type", name="uq_art_slots_season"),
@@ -79,6 +83,8 @@ class ArtSlot(SQLModel, table=True):
     #: The selected upload is one Overture drew in this style from the
     #: owner's title, and draws again when the title changes.
     generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
+    #: The drawn art has the style's colours only, without the title.
+    generated_textless: bool = Field(default=False, nullable=False)
     file_hash: str | None = None
     phash: str | None = None
     width: int | None = None

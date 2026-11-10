@@ -7,6 +7,7 @@
     listItemsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
+    AssetRemoval,
     BulkCollectionOperation,
     BulkCollectionOperationResult,
     CollectionMode,
@@ -22,16 +23,16 @@
   import { sidebarGroup } from "../router/routes";
   import { runBulkCollections } from "../utils/bulkCollections";
   import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
+  import { askRemoval } from "../utils/assetRemoval";
   import { errorMessage } from "../utils/errors";
   import { UNGROUPED_GROUP } from "../../generated/settings";
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
-  import FilterSection from "./FilterSection.svelte";
+  import PopupSection from "./PopupSection.svelte";
   import {
     filterSidebarCollections,
     filterSidebarItems,
-    hasThemeAttributes,
     inCollectionGroup,
   } from "../utils/sidebarDomain";
 
@@ -131,7 +132,6 @@
   let matchCount = $derived(records.length);
   let monitoredCount = $derived(records.filter((record) => record.monitored).length);
   let unmonitoredCount = $derived(matchCount - monitoredCount);
-  let itemsWithThemes = $derived(items.filter(hasThemeAttributes));
 
   /** What a running request is doing, from the request itself. */
   let running = $derived.by(() => {
@@ -150,49 +150,44 @@
     return null;
   });
 
-  const CONFIRMATIONS: Record<
-    ItemOperation,
-    (target: string) => Parameters<typeof confirmAction>[0]
-  > = {
-    delete: (target) => ({
-      title: `Delete ${target}?`,
-      message:
-        "Their saved records will be removed from Overture. Local files and media server items will be kept. Items still on the media server may return after a sync.",
-      confirmLabel: "Delete",
-      destructive: true,
-    }),
-    artwork: (target) => ({
-      title: `Forget artwork for ${target}?`,
-      message:
-        "Saved artwork selections, including season posters, will be forgotten. Local artwork files and what Overture knows about them are kept.",
-      confirmLabel: "Forget artwork",
-      destructive: true,
-    }),
-    themes: (target) => ({
-      title: `Forget themes for ${target}?`,
-      message:
-        "Saved theme selections and YouTube details will be removed. Local theme files are kept.",
-      confirmLabel: "Forget themes",
-      destructive: true,
-    }),
-  };
+  /** What removing art or themes from the filtered records asks about, by operation. */
+  const REMOVED = { artwork: "art", themes: "theme" } as const;
 
   async function runItemOperation(operation: ItemOperation) {
     if (busy || !resultsReady || !forItems) return;
-    const ids = (operation === "themes" ? itemsWithThemes : items).map((item) => item.id);
+    const ids = items.map((item) => item.id);
     if (ids.length === 0) return;
-    if (!(await confirmAction(CONFIRMATIONS[operation](`${ids.length} filtered ${noun}`)))) return;
-
+    const target = `${ids.length} filtered ${noun}`;
     feedback.clear();
     try {
-      const result = await itemsRequest.mutateAsync({ body: { item_ids: ids, operation } });
+      let removal: AssetRemoval | null = null;
+      if (operation === "delete") {
+        const confirmed = await confirmAction({
+          title: `Delete ${target}?`,
+          message:
+            "Their saved records will be removed from Overture. Local files and media server items will be kept. Items still on the media server may return after a sync.",
+          confirmLabel: "Delete",
+          destructive: true,
+        });
+        if (!confirmed) return;
+      } else {
+        removal = await askRemoval(
+          { asset: REMOVED[operation], item_ids: ids },
+          `the ${operation === "artwork" ? "art, season posters included," : "themes"} of ${target}`,
+        );
+        if (!removal) return;
+      }
+      const result = await itemsRequest.mutateAsync({
+        body: { item_ids: ids, operation, ...(removal ? { removal } : {}) },
+      });
       applyBulkItemOperation(result);
       const count = result.item_ids.length;
       feedback.success(
         operation === "delete"
           ? `Deleted ${count} ${noun} from Overture.`
-          : `Cleared ${operation === "artwork" ? "artwork" : "theme"} selections for ${count} ${noun}.`,
+          : `Removed the ${operation === "artwork" ? "art" : "themes"} of ${count} ${noun}.`,
       );
+      for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
     } catch (err: unknown) {
       feedback.error(errorMessage(err, "Bulk operation failed"));
     }
@@ -242,29 +237,23 @@
       feedback.error(errorMessage(err, `Failed to ${actionWord.toLowerCase()}`));
     }
   }
-  let collectionsWithThemes = $derived(collections.filter(hasThemeAttributes));
-
-  /** Forget the art or theme choices of every matching collection. */
-  async function clearCollections(operation: "clear_artwork" | "clear_themes") {
-    const targets = operation === "clear_themes" ? collectionsWithThemes : collections;
-    if (busy || !resultsReady || forItems || !targets.length) return;
-    const target = `${targets.length} filtered collections`;
-    const confirmed = await confirmAction(
-      CONFIRMATIONS[operation === "clear_artwork" ? "artwork" : "themes"](target),
-    );
-    if (!confirmed) return;
+  /** Remove the art or themes of every matching collection. */
+  async function removeCollectionAssets(operation: "remove_artwork" | "remove_themes") {
+    if (busy || !resultsReady || forItems || !collections.length) return;
+    const ids = collections.map((collection) => collection.id);
+    const what = operation === "remove_artwork" ? "art" : "themes";
     feedback.clear();
     try {
+      const removal = await askRemoval(
+        { asset: operation === "remove_artwork" ? "art" : "theme", collection_ids: ids },
+        `the ${what} of ${ids.length} filtered collections`,
+      );
+      if (!removal) return;
       const result = await runBulkCollections(
-        {
-          collection_ids: targets.map((collection) => collection.id),
-          operation,
-        },
+        { collection_ids: ids, operation, removal },
         (body) => collectionsRequest.mutateAsync({ body }),
       );
-      feedback.success(
-        `Cleared ${operation === "clear_artwork" ? "artwork" : "theme"} selections for ${result.collection_ids.length} collections.`,
-      );
+      feedback.success(`Removed the ${what} of ${result.collection_ids.length} collections.`);
       for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
     } catch (error) {
       feedback.error(errorMessage(error, "Bulk operation failed"));
@@ -377,7 +366,7 @@
   }
 </script>
 
-<FilterSection
+<PopupSection
   label="Bulk operations"
   description={resultsReady
     ? `For the ${matchCount} ${noun} the filters and search match. Local files are kept.`
@@ -416,16 +405,15 @@
         onclick={() => runItemOperation("artwork")}
         disabled={matchCount === 0 || busy || !resultsReady}
       >
-        Clear artwork selections <span class="operation-count">{matchCount}</span>
+        Remove art <span class="operation-count">{matchCount}</span>
       </button>
       <button
         type="button"
         class="btn btn-secondary btn-sm"
-        title="Clears the saved YouTube details"
         onclick={() => runItemOperation("themes")}
-        disabled={itemsWithThemes.length === 0 || busy || !resultsReady}
+        disabled={matchCount === 0 || busy || !resultsReady}
       >
-        Clear theme selections <span class="operation-count">{itemsWithThemes.length}</span>
+        Remove themes <span class="operation-count">{matchCount}</span>
       </button>
       <button
         type="button"
@@ -439,19 +427,18 @@
       <button
         type="button"
         class="btn btn-secondary btn-sm"
-        onclick={() => void clearCollections("clear_artwork")}
+        onclick={() => void removeCollectionAssets("remove_artwork")}
         disabled={matchCount === 0 || busy || !resultsReady}
       >
-        Clear artwork selections <span class="operation-count">{matchCount}</span>
+        Remove art <span class="operation-count">{matchCount}</span>
       </button>
       <button
         type="button"
         class="btn btn-secondary btn-sm"
-        title="Clears the saved YouTube details"
-        onclick={() => void clearCollections("clear_themes")}
-        disabled={collectionsWithThemes.length === 0 || busy || !resultsReady}
+        onclick={() => void removeCollectionAssets("remove_themes")}
+        disabled={matchCount === 0 || busy || !resultsReady}
       >
-        Clear theme selections <span class="operation-count">{collectionsWithThemes.length}</span>
+        Remove themes <span class="operation-count">{matchCount}</span>
       </button>
     {/if}
   </div>
@@ -460,16 +447,16 @@
       {running.operation === "delete"
         ? `Deleting ${noun}`
         : forItems
-          ? `Clearing ${running.operation === "artwork" ? "artwork" : "theme"} selections`
+          ? `Removing ${running.operation === "artwork" ? "art" : "themes"}`
           : "Updating collections"}:
       {running.count}
       {noun}...
     </p>
   {/if}
-</FilterSection>
+</PopupSection>
 
 {#if !forItems}
-  <FilterSection
+  <PopupSection
     label="Collection operations"
     description="For the collections the filters, search and open group match."
   >
@@ -543,7 +530,7 @@
       onclick={() => void runCollectionOperation()}
       >Apply to <span class="operation-count">{operationTargets.length}</span> collections</button
     >
-  </FilterSection>
+  </PopupSection>
 {/if}
 
 <style>

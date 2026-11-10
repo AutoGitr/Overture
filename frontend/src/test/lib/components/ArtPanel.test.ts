@@ -59,6 +59,10 @@ vi.mock("../../../lib/router/routes", () => ({
   goToSeasonsList: vi.fn(),
   route: { pathname: "/movies/1-test/art/poster" },
   routedItemId: () => routed.itemId,
+  routedItem: () => ({ kind: "item", id: routed.itemId }),
+  routeScope: () => ({ source: "library", tab: "movie", mode: "items" }),
+  routedCatalogEntry: () => null,
+  routedCollectionId: () => null,
 }));
 vi.mock("../../../lib/stores/downloadState.svelte", () => ({
   downloadState: { trackQueuedItemJob },

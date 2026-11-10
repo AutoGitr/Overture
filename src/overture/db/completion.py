@@ -119,8 +119,14 @@ def art_completion(item: MediaItem, seasons: Sequence[Season]) -> ArtCompletion:
     )
 
 
-def collection_art_completion(collection: MediaCollection) -> ArtCompletion:
-    """Summarise selected collection art and the copies held by its server."""
+def collection_art_completion(
+    collection: MediaCollection, *, backgrounds: bool
+) -> ArtCompletion:
+    """Summarise selected collection art and the copies held by its server.
+
+    Without *backgrounds* the collection needs none, so its background is
+    complete as it is, as a theme the catalog says there is none of is.
+    """
 
     def status(art_type: ArtType, server_url: str | None) -> AssetStatus:
         slot = find_art_slot(collection, art_type)
@@ -130,7 +136,11 @@ def collection_art_completion(collection: MediaCollection) -> ArtCompletion:
         )
 
     poster = status(ArtType.POSTER, collection.thumb_url)
-    background = status(ArtType.BACKGROUND, collection.art_url)
+    background = (
+        status(ArtType.BACKGROUND, collection.art_url)
+        if backgrounds
+        else AssetStatus.COMPLETE
+    )
     return ArtCompletion(
         poster_status=poster,
         background_status=background,

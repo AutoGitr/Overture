@@ -253,6 +253,15 @@ class ArtMatcher:
         except (httpx2.HTTPError, OSError, ValueError) as exc:
             raise ValueError(f"could not compare with the local file: {exc!s}") from exc
 
+    async def annotate_perfect(
+        self, facts: ArtFileFacts, matches: list[ArtCandidate]
+    ) -> list[str]:
+        """Mark the close *matches* whose original bytes are the file *facts* name.
+
+        Returns the failures that kept a match from being verified.
+        """
+        return await annotate_perfect_matches(facts, matches, cache=self._cache)
+
     async def match_item_art(
         self,
         item_id: int,
@@ -323,11 +332,7 @@ class ArtMatcher:
 
         errors = list(comparison.errors)
         if facts is not None:
-            errors.extend(
-                await annotate_perfect_matches(
-                    facts, comparison.matches, cache=self._cache
-                )
-            )
+            errors.extend(await self.annotate_perfect(facts, comparison.matches))
 
         return ArtMatchOutcome(
             ArtMatchResponse(

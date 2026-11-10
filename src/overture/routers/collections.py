@@ -21,6 +21,7 @@ lazy from ..dependencies import (
 lazy from ..domain import (
     MATCH_THRESHOLD_DEFAULT,
     MATCH_THRESHOLD_MAX,
+    ArtDrawing,
     ArtStyle,
     FilterField,
 )
@@ -33,7 +34,6 @@ lazy from ..schemas.collections import (
     CollectionAdoption,
     CollectionAdoptionPlan,
     CollectionArrOptions,
-    CollectionArtwork,
     CollectionCapabilities,
     CollectionCreate,
     CollectionDefaults,
@@ -65,15 +65,16 @@ lazy from ..schemas.collections import (
     KindRecommendation,
     MdblistListRead,
     SetCollectionThemeRequest,
+    SetCollectionThemeResponse,
 )
 lazy from ..schemas.common import (
     BulkMonitorResponse,
-    EnqueuedJobResponse,
     MonitoredResponse,
     MonitorUpdate,
     StatusResponse,
 )
 lazy from ..schemas.records import DatabaseRecord
+lazy from ..schemas.removal import AssetRemoval
 lazy from .auth import READS_ONLY, require_auth
 lazy from .parameters import (
     ArtTypePath,
@@ -330,18 +331,19 @@ async def set_collection_theme(
     collection_id: CollectionIdPath,
     body: SetCollectionThemeRequest,
     themes: CollectionThemesDep,
-) -> EnqueuedJobResponse:
+) -> SetCollectionThemeResponse:
     """Queue a YouTube track to become the theme of a collection."""
     return await themes.queue(collection_id, body)
 
 
 @router.delete("/{collection_id}/theme")
-async def delete_collection_theme(
+async def remove_collection_theme(
     collection_id: CollectionIdPath,
+    removal: Annotated[AssetRemoval, Query()],
     themes: CollectionThemesDep,
 ) -> DeleteCollectionThemeResponse:
-    """Remove the theme from a collection and clear its stored record."""
-    return await themes.delete(collection_id)
+    """Forget a collection's theme, delete the server's copy or its file."""
+    return await themes.remove(collection_id, removal)
 
 
 @router.patch("/{collection_id}/monitored")
@@ -474,21 +476,24 @@ async def sync_collection(
 
 
 @router.delete("/{collection_id}/art")
-async def clear_all_collection_art(
-    collection_id: CollectionIdPath, art: CollectionArtDep
-) -> CollectionArtwork:
-    """Forget all selected collection artwork, preserving the server copies."""
-    return await art.clear(collection_id, None)
+async def remove_all_collection_art(
+    collection_id: CollectionIdPath,
+    removal: Annotated[AssetRemoval, Query()],
+    art: CollectionArtDep,
+) -> StatusResponse:
+    """Forget both of a collection's art slots, or delete the server's images."""
+    return await art.remove(collection_id, None, removal)
 
 
 @router.delete("/{collection_id}/art/{art_type}")
-async def clear_collection_art(
+async def remove_collection_art(
     collection_id: CollectionIdPath,
     art_type: ArtTypePath,
+    removal: Annotated[AssetRemoval, Query()],
     art: CollectionArtDep,
-) -> CollectionArtwork:
-    """Forget one selected collection artwork slot."""
-    return await art.clear(collection_id, art_type)
+) -> StatusResponse:
+    """Forget a collection's art slot, or delete the server's image."""
+    return await art.remove(collection_id, art_type, removal)
 
 
 @router.get("/{collection_id}/art/{art_type}/sources")
@@ -511,10 +516,11 @@ async def get_generated_collection_art(
     art_type: ArtTypePath,
     style: ArtStyle,
     art: CollectionArtDep,
+    textless: bool = False,
 ) -> Response:
     """Return the art Overture would draw for the collection in *style*."""
     return Response(
-        await art.drawn(collection_id, art_type, style),
+        await art.drawn(collection_id, art_type, ArtDrawing(style, textless=textless)),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},
     )

@@ -20,13 +20,12 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { errorMessage } from "../utils/errors";
-  import { beginAutoAdvance, handleThemeSelectionAdvance } from "../utils/autoAdvance";
   import {
-    beginRecordAdvance,
+    beginAutoAdvance,
     catalogKey,
-    catalogPageRecord,
-    handleRecordSelectionAdvance,
-  } from "../utils/recordAdvance";
+    handleThemeSelectionAdvance,
+  } from "../utils/autoAdvance";
+  import { catalogPageRecord, handleRecordSelectionAdvance } from "../utils/recordAdvance";
   import {
     buildCollectionThemeSearchQuery,
     buildThemeSearchQuery,
@@ -124,7 +123,7 @@
     context: CatalogContext,
     body: CatalogDraftUpdate,
   ): Promise<boolean> {
-    const advanceContext = beginRecordAdvance();
+    const advanceContext = beginAutoAdvance();
     const saved = await context.draft.save(body);
     if (saved)
       handleRecordSelectionAdvance(

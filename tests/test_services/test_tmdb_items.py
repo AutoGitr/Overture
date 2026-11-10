@@ -43,6 +43,7 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.public_dataset.browse import CatalogBrowser
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.themes.service import ThemesService
@@ -168,6 +169,11 @@ def _asset_services(
 ) -> tuple[art_module.ArtService, ThemesService]:
     asset_storage = AssetStorage(app_config=app_config)
     downloads_svc = downloads or unused(DownloadService)
+    remover = AssetRemover(
+        asset_storage=asset_storage,
+        provider_registry=NoopProviderRegistry(),
+        database=database,
+    )
     return (
         art_module.ArtService(
             app_config=app_config,
@@ -186,6 +192,7 @@ def _asset_services(
             ),
             image_clients=unused(ProxyClientManager),
             image_cache=unused(ImageCache),
+            remover=remover,
         ),
         ThemesService(
             database=database,
@@ -193,6 +200,7 @@ def _asset_services(
             downloads=downloads_svc,
             publisher=NullEventPublisher(),
             youtube_resolver=FakeYoutube(),
+            remover=remover,
         ),
     )
 

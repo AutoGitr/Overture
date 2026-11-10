@@ -24,8 +24,6 @@ class CollectionGroup(PolicyOverrides, table=True):
     id: int | None = Field(default=None, primary_key=True)
     server_type: ServerType = Field(sa_type=enum_type(ServerType))
     name: str
-    sync_schedule: str | None = None
-    sync_enabled: bool | None = None
     #: A ``CollectionGenerator`` that makes the group a collection set.
     generator: dict[str, Any] | None = Field(default=None, sa_type=JSON)
     #: When the set last created and updated its collections.

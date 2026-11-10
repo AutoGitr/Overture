@@ -13,11 +13,20 @@ import {
   goToItemView,
   goToSeason,
   route,
+  routeScope,
+  routedCatalogEntry,
+  routedCollectionId,
+  routedItem,
   routedItemId,
   routedItemView,
 } from "../router/routes";
 import { settingsState } from "../stores/settingsState.svelte";
-import { advanceOrder, type AdvanceEntry } from "../stores/sidebarState.svelte";
+import {
+  advanceOrder,
+  sidebarState,
+  type AdvanceEntry,
+  type AdvanceWalk,
+} from "../stores/sidebarState.svelte";
 import { itemDetailImageUrls } from "./artDisplay";
 import { preloadImages } from "./imagePreload";
 
@@ -155,7 +164,7 @@ function nextAdvanceEntry(
  */
 export function preloadNextItem(currentItem: MediaItemRead, settings: AutoAdvanceSettings): void {
   if (settings.auto_advance !== "slots_and_items") return;
-  const next = nextAdvanceEntry(currentItem, settings, advanceOrder());
+  const next = nextAdvanceEntry(currentItem, settings, ongoingWalk()?.items ?? advanceOrder());
   if (next?.candidate) {
     preloadImages(itemDetailImageUrls(next.candidate, settingsState.show_background_image), "next");
   }
@@ -170,6 +179,7 @@ export function advanceToNextItem(
   const next = nextAdvanceEntry(currentItem, settings, order);
   if (!next) return false;
   const { entry, candidate } = next;
+  continueWalk(entryKey(entry));
   const themesOnly = settings.workflow === "themes";
   if (entry.kind === "tmdb") {
     if (themesOnly) goToItemThemes(entry);
@@ -199,6 +209,60 @@ export function advanceToNextItem(
   return true;
 }
 
+export function collectionKey(id: number): string {
+  return `collection:${id}`;
+}
+
+export function catalogKey(target: { media_type: string; entry_key: string }): string {
+  return `catalog:${target.media_type}:${target.entry_key}`;
+}
+
+function entryKey(entry: AdvanceEntry): string {
+  return entry.kind === "item" ? `item:${entry.id}` : `tmdb:${entry.media_type}:${entry.tmdb_id}`;
+}
+
+/** The row the URL opens, keyed as its sidebar entry or record is. */
+function routedKey(): string | null {
+  const item = routedItem();
+  if (item)
+    return item.kind === "item" ? `item:${item.id}` : `tmdb:${routeScope().tab}:${item.tmdbId}`;
+  const collectionId = routedCollectionId();
+  if (collectionId !== null) return collectionKey(collectionId);
+  const entry = routedCatalogEntry();
+  return entry ? catalogKey(entry) : null;
+}
+
+/** The walk that reached the open row in the sidebar's current view, if any. */
+function ongoingWalk(): AdvanceWalk | null {
+  const walk = sidebarState.walk;
+  return walk?.key === routedKey() && walk.view === sidebarState.view ? walk : null;
+}
+
+/**
+ * The rows the sidebar showed when the walk reached the open row. A selection
+ * can change what the list sorts or filters by, such as a poster's shape, and
+ * move the row it was made on; the walk keeps the order the user was going
+ * through. It starts again from the live list when the user opens another row
+ * or changes the sidebar's view.
+ */
+function currentWalk(): AdvanceWalk {
+  const walk = ongoingWalk();
+  if (walk) return walk;
+  const started: AdvanceWalk = {
+    key: routedKey(),
+    view: sidebarState.view,
+    items: [...advanceOrder()],
+    records: [...(sidebarState.records ?? [])],
+  };
+  sidebarState.walk = started;
+  return started;
+}
+
+/** Auto-advance opened the row at *key*, so the walk goes on from it. */
+export function continueWalk(key: string): void {
+  if (sidebarState.walk) sidebarState.walk.key = key;
+}
+
 /** How long a saved selection shows before auto-advance moves on. */
 export const AUTO_ADVANCE_DELAY_MS = 300;
 
@@ -209,7 +273,8 @@ export type AutoAdvanceContext = {
   generation: number;
   itemId: number | null;
   pathname: string;
-  order: AdvanceEntry[];
+  order: readonly AdvanceEntry[];
+  records: AdvanceWalk["records"];
 };
 
 export function cancelPendingAutoAdvance(): void {
@@ -221,11 +286,13 @@ export function cancelPendingAutoAdvance(): void {
 /** Capture before the request so late responses cannot replace a newer selection. */
 export function beginAutoAdvance(): AutoAdvanceContext {
   cancelPendingAutoAdvance();
+  const { items, records } = currentWalk();
   return {
     generation: advanceGeneration,
     itemId: routedItemId(),
     pathname: route.pathname,
-    order: [...advanceOrder()],
+    order: items,
+    records,
   };
 }
 
@@ -332,6 +399,7 @@ export async function handleFirstSelectionAdvance(
   const target = await firstSelectionTarget(item, selection, settings).catch(() => null);
   scheduleAutoAdvance(
     () => {
+      continueWalk(`item:${item.id}`);
       goToItemView(item, routedItemView(), { replace: true });
       executeAutoAdvanceTarget(target, item, settings, context.order);
     },

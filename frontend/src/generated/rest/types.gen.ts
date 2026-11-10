@@ -86,18 +86,15 @@ export type AppSettingsRead = {
      */
     auto_match_art: boolean;
     auto_unmonitor: AutoUnmonitor;
-    /**
-     * Collection Auto Generate Art
-     */
-    collection_auto_generate_art: boolean;
-    /**
-     * Collection Auto Match Art
-     */
-    collection_auto_match_art: boolean;
+    collection_auto_art: AutoArt;
     /**
      * Collection Auto Match Theme
      */
     collection_auto_match_theme: boolean;
+    /**
+     * Collection Backgrounds
+     */
+    collection_backgrounds: boolean;
     /**
      * Collection Delete Below Minimum
      */
@@ -106,6 +103,7 @@ export type AppSettingsRead = {
      * Collection Delete When Inactive
      */
     collection_delete_when_inactive: boolean;
+    collection_drawn_style: ArtStyle;
     collection_filtering_default: CollectionFiltering;
     /**
      * Collection Import Unmanaged
@@ -129,15 +127,7 @@ export type AppSettingsRead = {
      * Collection Summary Format
      */
     collection_summary_format: string;
-    /**
-     * Collection Sync Enabled
-     */
-    collection_sync_enabled: boolean;
     collection_sync_mode: SyncMode;
-    /**
-     * Collection Sync Schedule
-     */
-    collection_sync_schedule: string;
     /**
      * Collection Themes Unavailable
      */
@@ -270,18 +260,15 @@ export type AppSettingsUpdate = {
      */
     auto_match_art?: boolean | null;
     auto_unmonitor?: AutoUnmonitor | null;
-    /**
-     * Collection Auto Generate Art
-     */
-    collection_auto_generate_art?: boolean | null;
-    /**
-     * Collection Auto Match Art
-     */
-    collection_auto_match_art?: boolean | null;
+    collection_auto_art?: AutoArt | null;
     /**
      * Collection Auto Match Theme
      */
     collection_auto_match_theme?: boolean | null;
+    /**
+     * Collection Backgrounds
+     */
+    collection_backgrounds?: boolean | null;
     /**
      * Collection Delete Below Minimum
      */
@@ -290,6 +277,7 @@ export type AppSettingsUpdate = {
      * Collection Delete When Inactive
      */
     collection_delete_when_inactive?: boolean | null;
+    collection_drawn_style?: ArtStyle | null;
     collection_filtering_default?: CollectionFiltering | null;
     /**
      * Collection Import Unmanaged
@@ -313,15 +301,7 @@ export type AppSettingsUpdate = {
      * Collection Summary Format
      */
     collection_summary_format?: string | null;
-    /**
-     * Collection Sync Enabled
-     */
-    collection_sync_enabled?: boolean | null;
     collection_sync_mode?: SyncMode | null;
-    /**
-     * Collection Sync Schedule
-     */
-    collection_sync_schedule?: string | null;
     /**
      * Collection Visible Home
      */
@@ -457,6 +437,10 @@ export type ArtCandidate = {
      */
     source: string | null;
     /**
+     * Textless
+     */
+    textless: boolean;
+    /**
      * Title
      */
     title: string | null;
@@ -589,6 +573,29 @@ export type ArtUploadResponse = {
 export type AspectRatioTolerance = 'strict' | 'lenient' | 'off';
 
 /**
+ * AssetRemoval
+ *
+ * What removing an asset does, in any combination.
+ *
+ * Overture only ever deletes images and MP3 themes: the art and theme files
+ * it manages in media folders, and the server's copies of them.
+ */
+export type AssetRemoval = {
+    /**
+     * Delete File
+     */
+    delete_file?: boolean;
+    /**
+     * Delete From Server
+     */
+    delete_from_server?: boolean;
+    /**
+     * Forget
+     */
+    forget?: boolean;
+};
+
+/**
  * AssetRenameResponse
  *
  * Asset rename response.
@@ -659,6 +666,13 @@ export type AuthConfig = {
  * What the editor moves on to once a selection is saved.
  */
 export type AutoAdvance = 'off' | 'slots' | 'slots_and_items';
+
+/**
+ * AutoArt
+ *
+ * What a sync does for a collection's art slot that has none chosen.
+ */
+export type AutoArt = 'off' | 'match' | 'match_or_draw' | 'draw';
 
 /**
  * AutoUnmonitor
@@ -1097,8 +1111,9 @@ export type BulkCollectionOperation = {
     /**
      * Operation
      */
-    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'adopt' | 'orphan' | 'clear_artwork' | 'clear_themes' | 'delete';
+    operation: 'set_visibility' | 'set_order' | 'set_monitored' | 'set_group' | 'apply_sort_title_format' | 'adopt' | 'orphan' | 'remove_artwork' | 'remove_themes' | 'delete';
     order_type?: CollectionOrder | null;
+    removal?: AssetRemoval;
     sort_title_format?: SortTitleFormat | null;
     /**
      * Visible Home
@@ -1149,6 +1164,7 @@ export type BulkItemOperation = {
      */
     item_ids: Array<number>;
     operation: BulkItemOperationKind;
+    removal?: AssetRemoval;
 };
 
 export type BulkItemOperationKind = 'artwork' | 'themes' | 'delete' | 'monitor' | 'unmonitor';
@@ -1159,6 +1175,12 @@ export type BulkItemOperationKind = 'artwork' | 'themes' | 'delete' | 'monitor' 
  * The items a bulk operation actually changed.
  */
 export type BulkItemOperationResult = {
+    /**
+     * Errors
+     */
+    errors: {
+        [key: string]: PublicText;
+    };
     /**
      * Item Ids
      */
@@ -1485,59 +1507,6 @@ export type CollectionArrOptions = {
 };
 
 /**
- * CollectionArtwork
- *
- * Selected collection artwork and its completion state.
- */
-export type CollectionArtwork = {
-    art_status: AssetStatus;
-    /**
-     * Background Hash
-     */
-    background_hash: string | null;
-    /**
-     * Background Height
-     */
-    background_height: number | null;
-    /**
-     * Background Phash
-     */
-    background_phash: string | null;
-    background_source: ArtSource | null;
-    background_status: AssetStatus;
-    /**
-     * Background Url
-     */
-    background_url: string | null;
-    /**
-     * Background Width
-     */
-    background_width: number | null;
-    /**
-     * Poster Hash
-     */
-    poster_hash: string | null;
-    /**
-     * Poster Height
-     */
-    poster_height: number | null;
-    /**
-     * Poster Phash
-     */
-    poster_phash: string | null;
-    poster_source: ArtSource | null;
-    poster_status: AssetStatus;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Poster Width
-     */
-    poster_width: number | null;
-};
-
-/**
  * CollectionCapabilities
  *
  * What the active media server lets collections do, for one media type.
@@ -1648,18 +1617,15 @@ export type CollectionDefaults = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Generate Art
-     */
-    auto_generate_art: boolean | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art: boolean | null;
+    auto_art: AutoArt | null;
     /**
      * Auto Match Theme
      */
     auto_match_theme: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean | null;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
     /**
@@ -1670,6 +1636,7 @@ export type CollectionDefaults = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    drawn_style: ArtStyle | null;
     /**
      * Home Order
      */
@@ -1686,12 +1653,7 @@ export type CollectionDefaults = {
     request_missing: boolean | null;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled: boolean;
     sync_mode: SyncMode | null;
-    sync_schedule: CronExpression;
     /**
      * Visible Home
      */
@@ -1745,6 +1707,10 @@ export type CollectionDetail = {
      * Background Width
      */
     background_width: number | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean;
     /**
      * Below Minimum
      */
@@ -2155,25 +2121,20 @@ export type CollectionGroupDelete = {
  * CollectionGroupPolicy
  *
  * Nullable group defaults; null inherits the application setting.
- *
- * Only groups and the application schedule syncs; a collection follows its group.
  */
 export type CollectionGroupPolicyInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
-    /**
-     * Auto Generate Art
-     */
-    auto_generate_art?: boolean | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art?: boolean | null;
+    auto_art?: AutoArt | null;
     /**
      * Auto Match Theme
      */
     auto_match_theme?: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds?: boolean | null;
     collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
     /**
@@ -2184,6 +2145,7 @@ export type CollectionGroupPolicyInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
+    drawn_style?: ArtStyle | null;
     generator?: CollectionGeneratorInput | null;
     /**
      * Home Order
@@ -2205,12 +2167,7 @@ export type CollectionGroupPolicyInput = {
     separator?: boolean;
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled?: boolean | null;
     sync_mode?: SyncMode | null;
-    sync_schedule?: CronExpression | null;
     /**
      * Visible Home
      */
@@ -2229,25 +2186,20 @@ export type CollectionGroupPolicyInput = {
  * CollectionGroupPolicy
  *
  * Nullable group defaults; null inherits the application setting.
- *
- * Only groups and the application schedule syncs; a collection follows its group.
  */
 export type CollectionGroupPolicyOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Generate Art
-     */
-    auto_generate_art: boolean | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art: boolean | null;
+    auto_art: AutoArt | null;
     /**
      * Auto Match Theme
      */
     auto_match_theme: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean | null;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
     /**
@@ -2258,6 +2210,7 @@ export type CollectionGroupPolicyOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    drawn_style: ArtStyle | null;
     generator: CollectionGeneratorOutput | null;
     /**
      * Home Order
@@ -2279,12 +2232,7 @@ export type CollectionGroupPolicyOutput = {
     separator: boolean;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
-    /**
-     * Sync Enabled
-     */
-    sync_enabled: boolean | null;
     sync_mode: SyncMode | null;
-    sync_schedule: CronExpression | null;
     /**
      * Visible Home
      */
@@ -2589,6 +2537,10 @@ export type CollectionRead = {
      */
     background_width: number | null;
     /**
+     * Backgrounds
+     */
+    backgrounds: boolean;
+    /**
      * Below Minimum
      */
     below_minimum: boolean;
@@ -2820,18 +2772,15 @@ export type CollectionRuleRead = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Generate Art
-     */
-    auto_generate_art: boolean | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art: boolean | null;
+    auto_art: AutoArt | null;
     /**
      * Auto Match Theme
      */
     auto_match_theme: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean | null;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
     /**
@@ -2842,6 +2791,7 @@ export type CollectionRuleRead = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    drawn_style: ArtStyle | null;
     /**
      * Home Order
      */
@@ -2903,18 +2853,15 @@ export type CollectionRuleWriteInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
-    /**
-     * Auto Generate Art
-     */
-    auto_generate_art?: boolean | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art?: boolean | null;
+    auto_art?: AutoArt | null;
     /**
      * Auto Match Theme
      */
     auto_match_theme?: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds?: boolean | null;
     collection_filtering?: CollectionFiltering | null;
     collection_mode?: CollectionMode | null;
     /**
@@ -2925,6 +2872,7 @@ export type CollectionRuleWriteInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
+    drawn_style?: ArtStyle | null;
     /**
      * Home Order
      */
@@ -2977,18 +2925,15 @@ export type CollectionRuleWriteOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Generate Art
-     */
-    auto_generate_art: boolean | null;
-    /**
-     * Auto Match Art
-     */
-    auto_match_art: boolean | null;
+    auto_art: AutoArt | null;
     /**
      * Auto Match Theme
      */
     auto_match_theme: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean | null;
     collection_filtering: CollectionFiltering | null;
     collection_mode: CollectionMode | null;
     /**
@@ -2999,6 +2944,7 @@ export type CollectionRuleWriteOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    drawn_style: ArtStyle | null;
     /**
      * Home Order
      */
@@ -3533,22 +3479,6 @@ export type DownloadJobMetadata = {
 export type DownloadStatus = 'pending' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * EnqueuedJobResponse
- *
- * A download job that was queued.
- */
-export type EnqueuedJobResponse = {
-    /**
-     * Job Id
-     */
-    job_id: string;
-    /**
-     * Status
-     */
-    status: 'enqueued';
-};
-
-/**
  * FieldCondition
  *
  * Test one metadata field of an item.
@@ -3773,6 +3703,8 @@ export type IncrementalSyncState = {
  * Theme sources, in priority order, queued for media found by incremental sync.
  */
 export type IncrementalThemeOrder = 'off' | 'overturedb_themerrdb' | 'themerrdb_overturedb';
+
+export type ItemArtAsset = ArtType | 'art';
 
 /**
  * ItemDownloadTarget
@@ -4808,6 +4740,50 @@ export type RealtimeSnapshot = {
  */
 export type RecentUnit = 'hours' | 'days';
 
+export type RemovableAsset = ItemArtAsset | 'theme';
+
+/**
+ * RemovalOption
+ *
+ * How many of the targets one removal choice would change.
+ */
+export type RemovalOption = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Unavailable
+     */
+    unavailable: string | null;
+};
+
+/**
+ * RemovalOptions
+ *
+ * What each removal choice would change for a target, as things stand.
+ */
+export type RemovalOptions = {
+    delete_file: RemovalOption;
+    delete_from_server: RemovalOption;
+    forget: RemovalOption;
+};
+
+/**
+ * RemovalTarget
+ *
+ * The items or collections, and which of their assets, a removal acts on.
+ */
+export type RemovalTarget = {
+    asset: RemovableAsset;
+    collection_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0;
+    item_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0;
+    /**
+     * Season Id
+     */
+    season_id?: number | null;
+};
+
 /**
  * RenameItem
  *
@@ -4861,6 +4837,10 @@ export type SaveArtRequest = {
      * Height
      */
     height?: number | null;
+    /**
+     * Textless
+     */
+    textless?: boolean;
     upload_hash?: ImageHash | null;
     /**
      * Url
@@ -5150,6 +5130,19 @@ export type SetCollectionThemeRequest = {
 };
 
 /**
+ * SetCollectionThemeResponse
+ *
+ * A collection's chosen theme: its queued download, or a choice kept for later.
+ */
+export type SetCollectionThemeResponse = {
+    /**
+     * Job Id
+     */
+    job_id: string | null;
+    theme_status: AssetStatus;
+};
+
+/**
  * SetDimension
  *
  * The metadata a collection set creates one collection per value of.
@@ -5277,7 +5270,7 @@ export type StatsResponse = {
  *
  * What a command did.
  */
-export type Status = 'ok' | 'started' | 'already_running' | 'stopping' | 'not_running' | 'idle' | 'queued' | 'enqueued' | 'cleared' | 'deleted' | 'disabled' | 'no_jobs_selected';
+export type Status = 'ok' | 'started' | 'already_running' | 'stopping' | 'not_running' | 'idle' | 'queued' | 'cleared' | 'deleted' | 'disabled' | 'no_jobs_selected';
 
 /**
  * StatusResponse
@@ -6133,11 +6126,15 @@ export type CoverageWritable = {
 
 export type GroupNamesWritable = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength200MinLenMinLength1;
 
+export type ItemArtAssetWritable = ArtType | 'art';
+
 export type JsonValueWritable = string | number | number | boolean | Array<JsonValueWritable> | {
     [key: string]: JsonValueWritable;
 } | null;
 
 export type LibraryIdsWritable = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
+
+export type RemovableAssetWritable = ItemArtAssetWritable | 'theme';
 
 export type SourceOrderArtBulkSourceWritable = UniqueListArtBulkSourceMinLenMinLength1Writable;
 
@@ -6187,6 +6184,39 @@ export type UniqueListThemeBulkSourceMinLenMinLength1Writable = Array<ThemeBulkS
 
 export type UniqueListYouTubeIdMaxLenMaxLength20Writable = Array<YouTubeId>;
 
+export type GetRemovalOptionsData = {
+    body: RemovalTarget;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/art/removal-options';
+};
+
+export type GetRemovalOptionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetRemovalOptionsError = GetRemovalOptionsErrors[keyof GetRemovalOptionsErrors];
+
+export type GetRemovalOptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RemovalOptions;
+};
+
+export type GetRemovalOptionsResponse = GetRemovalOptionsResponses[keyof GetRemovalOptionsResponses];
+
 export type UploadArtData = {
     body: Blob | File;
     headers?: {
@@ -6220,7 +6250,7 @@ export type UploadArtResponses = {
 
 export type UploadArtResponse = UploadArtResponses[keyof UploadArtResponses];
 
-export type ClearAllArtData = {
+export type RemoveAllArtData = {
     body?: never;
     headers?: {
         /**
@@ -6238,29 +6268,42 @@ export type ClearAllArtData = {
          */
         item_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
     url: '/api/art/{item_id}';
 };
 
-export type ClearAllArtErrors = {
+export type RemoveAllArtErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ClearAllArtError = ClearAllArtErrors[keyof ClearAllArtErrors];
+export type RemoveAllArtError = RemoveAllArtErrors[keyof RemoveAllArtErrors];
 
-export type ClearAllArtResponses = {
+export type RemoveAllArtResponses = {
     /**
      * Successful Response
      */
     200: StatusResponse;
 };
 
-export type ClearAllArtResponse = ClearAllArtResponses[keyof ClearAllArtResponses];
+export type RemoveAllArtResponse = RemoveAllArtResponses[keyof RemoveAllArtResponses];
 
-export type ClearArtData = {
+export type RemoveArtData = {
     body?: never;
     headers?: {
         /**
@@ -6284,32 +6327,44 @@ export type ClearArtData = {
     };
     query?: {
         /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+        /**
          * Season Id
          *
-         * The season to clear; omit to clear every season's poster
+         * The season; omit to remove every season's poster
          */
         season_id?: number | null;
     };
     url: '/api/art/{item_id}/{art_type}';
 };
 
-export type ClearArtErrors = {
+export type RemoveArtErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ClearArtError = ClearArtErrors[keyof ClearArtErrors];
+export type RemoveArtError = RemoveArtErrors[keyof RemoveArtErrors];
 
-export type ClearArtResponses = {
+export type RemoveArtResponses = {
     /**
      * Successful Response
      */
     200: StatusResponse;
 };
 
-export type ClearArtResponse = ClearArtResponses[keyof ClearArtResponses];
+export type RemoveArtResponse = RemoveArtResponses[keyof RemoveArtResponses];
 
 export type SaveArtData = {
     body: SaveArtRequest;
@@ -8235,7 +8290,7 @@ export type AdoptCollectionResponses = {
 
 export type AdoptCollectionResponse = AdoptCollectionResponses[keyof AdoptCollectionResponses];
 
-export type ClearAllCollectionArtData = {
+export type RemoveAllCollectionArtData = {
     body?: never;
     headers?: {
         /**
@@ -8253,29 +8308,42 @@ export type ClearAllCollectionArtData = {
          */
         collection_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
     url: '/api/collections/{collection_id}/art';
 };
 
-export type ClearAllCollectionArtErrors = {
+export type RemoveAllCollectionArtErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ClearAllCollectionArtError = ClearAllCollectionArtErrors[keyof ClearAllCollectionArtErrors];
+export type RemoveAllCollectionArtError = RemoveAllCollectionArtErrors[keyof RemoveAllCollectionArtErrors];
 
-export type ClearAllCollectionArtResponses = {
+export type RemoveAllCollectionArtResponses = {
     /**
      * Successful Response
      */
-    200: CollectionArtwork;
+    200: StatusResponse;
 };
 
-export type ClearAllCollectionArtResponse = ClearAllCollectionArtResponses[keyof ClearAllCollectionArtResponses];
+export type RemoveAllCollectionArtResponse = RemoveAllCollectionArtResponses[keyof RemoveAllCollectionArtResponses];
 
-export type ClearCollectionArtData = {
+export type RemoveCollectionArtData = {
     body?: never;
     headers?: {
         /**
@@ -8297,27 +8365,40 @@ export type ClearCollectionArtData = {
          */
         art_type: ArtType;
     };
-    query?: never;
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
     url: '/api/collections/{collection_id}/art/{art_type}';
 };
 
-export type ClearCollectionArtErrors = {
+export type RemoveCollectionArtErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ClearCollectionArtError = ClearCollectionArtErrors[keyof ClearCollectionArtErrors];
+export type RemoveCollectionArtError = RemoveCollectionArtErrors[keyof RemoveCollectionArtErrors];
 
-export type ClearCollectionArtResponses = {
+export type RemoveCollectionArtResponses = {
     /**
      * Successful Response
      */
-    200: CollectionArtwork;
+    200: StatusResponse;
 };
 
-export type ClearCollectionArtResponse = ClearCollectionArtResponses[keyof ClearCollectionArtResponses];
+export type RemoveCollectionArtResponse = RemoveCollectionArtResponses[keyof RemoveCollectionArtResponses];
 
 export type SaveCollectionArtData = {
     body: SaveArtRequest;
@@ -8386,7 +8467,12 @@ export type GetGeneratedCollectionArtData = {
         art_type: ArtType;
         style: ArtStyle;
     };
-    query?: never;
+    query?: {
+        /**
+         * Textless
+         */
+        textless?: boolean;
+    };
     url: '/api/collections/{collection_id}/art/{art_type}/generated/{style}';
 };
 
@@ -8976,7 +9062,7 @@ export type SyncCollectionResponses = {
 
 export type SyncCollectionResponse = SyncCollectionResponses[keyof SyncCollectionResponses];
 
-export type DeleteCollectionThemeData = {
+export type RemoveCollectionThemeData = {
     body?: never;
     headers?: {
         /**
@@ -8994,27 +9080,40 @@ export type DeleteCollectionThemeData = {
          */
         collection_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
     url: '/api/collections/{collection_id}/theme';
 };
 
-export type DeleteCollectionThemeErrors = {
+export type RemoveCollectionThemeErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DeleteCollectionThemeError = DeleteCollectionThemeErrors[keyof DeleteCollectionThemeErrors];
+export type RemoveCollectionThemeError = RemoveCollectionThemeErrors[keyof RemoveCollectionThemeErrors];
 
-export type DeleteCollectionThemeResponses = {
+export type RemoveCollectionThemeResponses = {
     /**
      * Successful Response
      */
     200: DeleteCollectionThemeResponse;
 };
 
-export type DeleteCollectionThemeResponse2 = DeleteCollectionThemeResponses[keyof DeleteCollectionThemeResponses];
+export type RemoveCollectionThemeResponse = RemoveCollectionThemeResponses[keyof RemoveCollectionThemeResponses];
 
 export type GetCollectionThemeData = {
     body?: never;
@@ -9091,10 +9190,10 @@ export type SetCollectionThemeResponses = {
     /**
      * Successful Response
      */
-    200: EnqueuedJobResponse;
+    200: SetCollectionThemeResponse;
 };
 
-export type SetCollectionThemeResponse = SetCollectionThemeResponses[keyof SetCollectionThemeResponses];
+export type SetCollectionThemeResponse2 = SetCollectionThemeResponses[keyof SetCollectionThemeResponses];
 
 export type HealthData = {
     body?: never;
@@ -11163,7 +11262,7 @@ export type SearchYoutubeResponses = {
 
 export type SearchYoutubeResponse = SearchYoutubeResponses[keyof SearchYoutubeResponses];
 
-export type ClearThemeData = {
+export type RemoveThemeData = {
     body?: never;
     headers?: {
         /**
@@ -11181,27 +11280,40 @@ export type ClearThemeData = {
          */
         item_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
     url: '/api/themes/{item_id}';
 };
 
-export type ClearThemeErrors = {
+export type RemoveThemeErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ClearThemeError = ClearThemeErrors[keyof ClearThemeErrors];
+export type RemoveThemeError = RemoveThemeErrors[keyof RemoveThemeErrors];
 
-export type ClearThemeResponses = {
+export type RemoveThemeResponses = {
     /**
      * Successful Response
      */
     200: StatusResponse;
 };
 
-export type ClearThemeResponse = ClearThemeResponses[keyof ClearThemeResponses];
+export type RemoveThemeResponse = RemoveThemeResponses[keyof RemoveThemeResponses];
 
 export type SelectThemeData = {
     body: SelectThemeRequest;

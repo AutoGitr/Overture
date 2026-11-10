@@ -77,7 +77,7 @@
   let drillSeason = $derived(
     view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
   );
-  /** Which art tabs hold a saved selection to forget. */
+  /** Which art tabs hold something to remove: a selection, or a library title's local file. */
   // A library selection is a link or an upload; a catalog entry's is always a link.
   let savedArt = $derived(
     catalogEntry
@@ -87,9 +87,9 @@
           seasons: (catalogEntry.seasons ?? []).some((season) => !!season.poster_url),
         }
       : {
-          poster: !!item?.poster_source,
-          background: !!item?.background_source,
-          seasons: seasons.some((season) => !!season.poster_source),
+          poster: !!(item?.poster_source || item?.poster_hash),
+          background: !!(item?.background_source || item?.background_hash),
+          seasons: seasons.some((season) => !!(season.poster_source || season.poster_hash)),
         },
   );
 
@@ -271,7 +271,7 @@
         ? () => {
             void catalog?.draft.save({ youtube_id_overturedb: null });
           }
-        : hasThemeAttributes(item)
+        : hasThemeAttributes(item) || item?.theme_file_hash
           ? () => void actions.clearTheme()
           : null}
       artBusy={!!catalog?.draft.busy || actions.clearingArt}

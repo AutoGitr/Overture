@@ -19,12 +19,14 @@ lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.repositories.seasons import SeasonRepository
 lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse, SaveArtRequest
+lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art import choice
 lazy from overture.services.art import service as module
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher, ArtMatchOutcome
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
@@ -138,6 +140,11 @@ def _art_service(
         ),
         image_clients=image_clients or unused(ProxyClientManager),
         image_cache=unused(ImageCache),
+        remover=AssetRemover(
+            asset_storage=AssetStorage(app_config=app_config),
+            provider_registry=registry,
+            database=database,
+        ),
     )
 
 
@@ -232,11 +239,7 @@ async def test_clear_art_raises_404_for_missing_item(
         app_config=app_config, database=database, publisher=FakePublisher()
     )
     with pytest.raises(PublicServiceError) as exc_info:
-        await service.clear(
-            item_id=99999,
-            art_type=ArtType.POSTER,
-            season_id=None,
-        )
+        await service.remove(99999, ArtType.POSTER, AssetRemoval())
     assert exc_info.value.status_code == 404
 
 
@@ -267,11 +270,7 @@ async def test_clear_art_forgets_the_selection_keeps_file_facts_and_broadcasts(
     service = _art_service(
         app_config=app_config, database=database, publisher=publisher
     )
-    result = await service.clear(
-        item_id=row_id(item),
-        art_type=ArtType.POSTER,
-        season_id=None,
-    )
+    result = await service.remove(row_id(item), ArtType.POSTER, AssetRemoval())
 
     assert result.status == "cleared"
     await db_session.refresh(item)
@@ -290,7 +289,7 @@ async def test_clear_all_art_raises_404_for_missing_item(
         app_config=app_config, database=database, publisher=FakePublisher()
     )
     with pytest.raises(PublicServiceError):
-        await service.clear_all(99999)
+        await service.remove(99999, "art", AssetRemoval())
 
 
 async def test_clear_all_art_forgets_item_and_season_selections(
@@ -331,7 +330,7 @@ async def test_clear_all_art_forgets_item_and_season_selections(
     service = _art_service(
         app_config=app_config, database=database, publisher=publisher
     )
-    result = await service.clear_all(row_id(item))
+    result = await service.remove(row_id(item), "art", AssetRemoval())
 
     assert result.status == "cleared"
     await db_session.refresh(item)
@@ -781,7 +780,7 @@ async def test_clear_season_posters_without_a_season_forgets_every_season(
         database=database_for(one_session(db_session)),
         publisher=FakePublisher(),
     )
-    result = await service.clear(row_id(item), ArtType.SEASON_POSTER)
+    result = await service.remove(row_id(item), ArtType.SEASON_POSTER, AssetRemoval())
 
     assert result.status == "cleared"
     for season in seasons:

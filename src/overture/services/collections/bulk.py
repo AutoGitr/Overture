@@ -12,9 +12,11 @@ lazy from ...schemas.collections import (
     CollectionAdoption,
     CollectionOptions,
 )
+lazy from ..art.collection_art import CollectionArtService
 lazy from .access import CollectionAccess
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
+lazy from .themes import CollectionThemes
 
 type BulkHandler = Callable[[int, BulkCollectionOperation], Awaitable[object]]
 type OptionEdit = Callable[[CollectionOptions, BulkCollectionOperation], None]
@@ -69,13 +71,20 @@ def bulk_options(
 class CollectionBulk:
     """Apply one operation to many collections, one collection at a time."""
 
-    def __init__(self, *, access: CollectionAccess, editor: CollectionEditor) -> None:
+    def __init__(
+        self,
+        *,
+        access: CollectionAccess,
+        editor: CollectionEditor,
+        art: CollectionArtService,
+        themes: CollectionThemes,
+    ) -> None:
         self._access = access
         self._editor = editor
         self._handlers: Mapping[str, BulkHandler] = {
             "delete": lambda i, body: editor.delete(i, target=body.delete_target),
-            "clear_artwork": lambda i, _: editor.forget_selections(i, artwork=True),
-            "clear_themes": lambda i, _: editor.forget_selections(i, artwork=False),
+            "remove_artwork": lambda i, body: art.remove(i, None, body.removal),
+            "remove_themes": lambda i, body: themes.remove(i, body.removal),
             "adopt": lambda i, body: editor.adopt(
                 i, CollectionAdoption(group=body.collection_group)
             ),

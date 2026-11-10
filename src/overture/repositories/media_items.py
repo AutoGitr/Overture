@@ -567,7 +567,12 @@ class MediaItemRepository:
                 await self.session.exec(
                     update(ArtSlot)
                     .where(owned)
-                    .values(url=None, upload_hash=None, generated_style=None)
+                    .values(
+                        url=None,
+                        upload_hash=None,
+                        generated_style=None,
+                        generated_textless=False,
+                    )
                     .execution_options(synchronize_session=False)
                 )
                 await self.session.exec(

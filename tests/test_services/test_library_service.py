@@ -37,11 +37,14 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
 lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.schemas.library import BulkItemOperation
+lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.library import service as library_module
 lazy from overture.services.library.service import LibraryService
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage, PathTraversalError
 lazy from overture.services.storage.image_cache import ImageCache
+lazy from overture.services.themes.service import ThemesService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.errors import PublicServiceError
@@ -1055,6 +1058,9 @@ def _service(database: Database, server: ArtServer) -> LibraryService:
         image_cache=unused(ImageCache),
         provider_registry=NoopProviderRegistry(server),
         proxy_clients=cast("ProxyClientManager", None),
+        art=unused(ArtService),
+        themes=unused(ThemesService),
+        remover=unused(AssetRemover),
     )
 
 

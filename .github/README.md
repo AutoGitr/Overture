@@ -450,6 +450,20 @@ count as saved choices, show as the **Upload** art source in the filters, and
 cannot be contributed to OvertureDB, which takes public links only. The item
 filters can also show only the titles of one **Collection**.
 
+The clear button on an art or theme tab, and **Remove art** and **Remove
+themes** for the filtered titles or collections in **Filters & operations**,
+ask what to remove, in any combination: **Forget the selection**, **Delete the
+local file** (the art or `theme.mp3` in the media folder) and **Delete from the
+media server**. Each choice says how many it applies to, or why it cannot: no
+selection, no file, no server copy, or a server whose API cannot delete it.
+Plex's API cannot delete artwork, so on Plex delete the local file: Plex shows
+its agent's art after the refresh that follows. Overture only ever deletes
+JPEG and PNG images and MP3 themes, checked by name and contents, inside the
+title's folder; any other file stays.
+
+YouTube theme searches show up to 20 results within the theme duration
+limits, drawn from the first 50 videos YouTube finds.
+
 For titles outside your library, switch the search field to **TMDB** (requires
 `TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
 finds their media folder.
@@ -492,17 +506,21 @@ Both kinds share the same sections, in the same order:
    its lists hold that the library lacks, which **Request** sends to Radarr or
    Sonarr.
 4. **Settings**: sort and limit, Sync mode (Sync removes members that stop
-   matching, Append keeps them), minimum, automatic art and theme, Request
+   matching, Append keeps them), minimum, Automatic art, Drawn colours,
+   Background (Not needed makes a poster complete the collection's art),
+   automatic theme, Request
    missing, Member label, Radarr or Sonarr tag, Plex's collection mode,
    filtering (smart collections only: Plex evaluates a smart filter, such as
    Unplayed, for each user; a regular collection shows everyone the same
    members, and Jellyfin and Emby have no such choice), Home and recommended
    promotion and Home order, sort title and summary templates, and the TMDB
    collection ID.
-5. **Schedule**: the active dates, which repeat yearly and can cross New Year,
-   and whether an inactive collection leaves the server. When a collection
-   syncs is its group's choice: Scheduled sync and the sync schedule (a cron
-   expression with presets) are set per group and in the global defaults.
+5. **Active dates**: the dates a collection is on the server, which repeat
+   yearly and can cross New Year, and whether an inactive collection leaves the
+   server. An inactive collection's art and theme can still be chosen: Overture
+   keeps them, and the sync that puts the collection back sends them. Scheduled
+   collection syncs are **Sync** schedules under Operations, which can sync
+   chosen groups or every collection.
 
 A collection's page opens with Setup and Content expanded and the rest
 closed, and a group in **Collection groups** with every section closed, each
@@ -651,26 +669,34 @@ saved collection leaves it out too.
 candidates end with a **Generated** row, one image per style (dark, light and
 accent) showing its title under its group's name. Choosing one keeps it in the
 image cache and uploads it like any other art, and its source shows as
-**Generated**. **Generated poster** in Settings draws a dark poster after a
-sync for a collection still without one once automatic art found nothing, and
-art drawn either way is drawn again when the collection's title or group
-changes.
+**Generated**. Each style is offered with the title and textless, as the
+style's colours alone. **Automatic art** in Settings decides what a sync does
+for a slot no one chose: **Off**; **Match**, the best art a source offers;
+**Match, else draw**; or **Draw**. Drawing makes a poster with the title and a
+textless background, in the **Drawn colours** (dark, light or accent), and a
+collection whose **Background** is **Not needed** gets no background: its
+poster completes its art, as OvertureDB's No theme completes a theme. Art drawn
+either way is drawn again when the collection's title or group changes.
 
 **Separator**, a Plex group setting in **Collection groups**, heads the group
-with an empty collection titled after it, with a drawn poster, in each library
+with an empty collection titled after it, with a poster drawn in the group's
+Drawn colours, in each library
 its collections use. Its sort title is the group's sort title template with an
 empty title, so a template that puts the group first, such as
 `{group} {title}`, sorts the separator right before the group's collections.
 The group keeps it: renaming the group renames it, turning the setting off or
-deleting the group removes it. Jellyfin and Emby keep no empty collections, so
-they have no separators.
+deleting the group removes it. It is not listed among the collections in the
+sidebar or Collection operations; its group's settings are where it is kept.
+Separators are offered on Plex only, the one server whose empty collections
+Overture has checked; `media_server_probe.py` with writes allowed reports
+whether Jellyfin and Emby keep and list one.
 
 **Collection groups**, opened from **Manage groups** in the collection sidebar or
 **Create new group** in Setup's Group list, creates groups and edits a group's
-collection set, Settings and Schedule; Setup only assigns a group. **Save**
-takes effect on the next sync, **Save and Apply** sends display settings to the
-server at once while keeping members and explicit overrides, and **Save and
-Sync** runs the set and syncs the group's collections; both need the group to
+collection set, Settings and Active dates; Setup only assigns a group.
+**Save** saves the group and sends its display settings to its collections on
+the server at once, keeping members and explicit overrides; **Save and Sync**
+also runs the set and syncs the group's collections, which needs the group to
 hold a collection or a set first. Rename or delete a custom group in
 **Collection groups**. Every managed collection
 belongs to a group. Deleting a group moves its collections to the reserved

@@ -412,9 +412,15 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
         tmdb_collection_id=10,
     )
     flagged = collection_read(
-        row, PublicDatasetCollection(tmdb_id=10, title="Saga", no_theme=True)
+        row,
+        PublicDatasetCollection(tmdb_id=10, title="Saga", no_theme=True),
+        None,
+        trust_no_theme=True,
+        backgrounds=True,
     )
     assert flagged.theme_status is AssetStatus.COMPLETE
     assert flagged.catalog_no_theme
     assert flagged.public_dataset_complete
-    assert collection_read(row, None).theme_status is AssetStatus.MISSING
+    assert (
+        collection_read(row, None, None, trust_no_theme=True, backgrounds=True)
+    ).theme_status is AssetStatus.MISSING

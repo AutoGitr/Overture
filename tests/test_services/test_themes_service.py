@@ -13,7 +13,12 @@ lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaType, ServerAsset
 lazy from overture.integrations.proxy import ProxyClientManager
-lazy from overture.schemas.themes import SearchRequest, ThemeSearchResult
+lazy from overture.schemas.removal import AssetRemoval
+lazy from overture.schemas.themes import (
+    MAX_SEARCH_RESULTS,
+    SearchRequest,
+    ThemeSearchResult,
+)
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
@@ -73,6 +78,49 @@ async def test_theme_search_filters_by_settings_duration(
     assert result.results[0].duration == 60
     # Someone is waiting on the answer, so a rate-limit pause fails it at once.
     assert waits == [False]
+
+
+async def test_theme_search_fills_its_limit_with_videos_within_the_limits(
+    tmp_path: Path,
+    db_session: AsyncSession,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    db_session.add(AppSettings(id=1, min_duration_seconds=30, max_duration_seconds=90))
+    await db_session.commit()
+    asked: list[int] = []
+
+    class FakeYoutube(NoopYoutube):
+        @override
+        async def search(
+            self,
+            query: str = "",
+            limit: int = 10,
+            video_ids: Sequence[str] | None = None,
+            *,
+            wait: bool = True,
+        ) -> list[ThemeSearchResult]:
+            asked.append(limit)
+            # Most of the first videos are too long; the rest fit.
+            return [
+                ThemeSearchResult(id=f"v{index:09d}", title="V", duration=duration)
+                for index, duration in enumerate([300] * 8 + [60] * 10)
+            ]
+
+    runtime = make_runtime(
+        config_dir=tmp_path,
+        youtube=FakeYoutube(),
+        app_config=app_config,
+        database=database,
+    )
+
+    result = await runtime.themes.search(SearchRequest(query="theme", limit=4))
+
+    assert asked == [MAX_SEARCH_RESULTS]
+    assert [item.id for item in result.results] == [
+        f"v{index:09d}" for index in range(8, 12)
+    ]
 
 
 async def test_theme_search_explicit_video_ids_bypass_duration_limits(
@@ -216,7 +264,7 @@ async def test_theme_clear_forgets_the_selection_keeps_the_file_and_broadcasts(
         database=database,
     )
 
-    assert (await runtime.themes.clear(1)).status == "cleared"
+    assert (await runtime.themes.remove(1, AssetRemoval())).status == "cleared"
 
     item = await db_session.get(MediaItem, 1)
     assert item is not None
@@ -238,7 +286,7 @@ async def test_theme_clear_forgets_the_selection_keeps_the_file_and_broadcasts(
     assert isinstance(raw_item, dict)
     item_payload = cast("dict[str, Any]", raw_item)
     assert item_payload["id"] == 1
-    assert payload["source"] == "themes.clear"
+    assert payload["source"] == "themes.remove"
 
 
 async def test_theme_download_missing_item_returns_404(

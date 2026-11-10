@@ -20,8 +20,9 @@
     sync_mode: "collection_sync_mode",
     minimum_items: "collection_minimum_items",
     delete_below_minimum: "collection_delete_below_minimum",
-    auto_match_art: "collection_auto_match_art",
-    auto_generate_art: "collection_auto_generate_art",
+    auto_art: "collection_auto_art",
+    drawn_style: "collection_drawn_style",
+    backgrounds: "collection_backgrounds",
     auto_match_theme: "collection_auto_match_theme",
     request_missing: "collection_request_missing",
     collection_mode: "collection_mode_default",
@@ -32,11 +33,9 @@
     visible_library: "collection_visible_library",
     sort_title_format: "collection_sort_title_format",
     summary_format: "collection_summary_format",
-    sync_schedule: "collection_sync_schedule",
-    sync_enabled: "collection_sync_enabled",
     delete_when_inactive: "collection_delete_when_inactive",
   } as const satisfies Partial<Record<keyof (PolicyData & ScheduleData), keyof AppSettingsUpdate>>;
-  const TEXT = new Set(["sort_title_format", "summary_format", "sync_schedule"]);
+  const TEXT = new Set(["sort_title_format", "summary_format"]);
 
   // Global defaults always hold a value: cleared text is empty, other blanks are ignored.
   const policy: PolicyData & ScheduleData = {};
@@ -110,7 +109,8 @@
     arr={anyArr ? "Radarr or Sonarr" : null}
   />
 </div>
-<h4 class="caps-label">Schedule</h4>
+<h4 class="caps-label">Active dates</h4>
+<p class="hint">Collections sync on the Sync schedules under Operations, or with Sync.</p>
 <div class="options-col">
   <CollectionScheduleFields {policy} level="global" />
 </div>

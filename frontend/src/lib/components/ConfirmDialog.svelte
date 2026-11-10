@@ -10,8 +10,14 @@
   let cancelButton: HTMLButtonElement;
   let confirmButton: HTMLButtonElement;
   const name = $props.id();
-  // Nothing is picked for the user: a destructive choice must be made on purpose.
-  let chosen = $state<string | null>(null);
+  // Nothing is picked for the user unless the request ticks it: a destructive
+  // choice must be made on purpose.
+  let chosen = $derived<string[]>(request.initial ?? []);
+  let picked = $derived(chosen[0] ?? null);
+
+  function toggle(value: string, on: boolean) {
+    chosen = on ? [...chosen, value] : chosen.filter((entry) => entry !== value);
+  }
 
   onMount(() => {
     // Destructive actions, and those waiting for a choice, start on Cancel so Enter cannot slip through.
@@ -36,19 +42,36 @@
 
   <p class="confirm-message">{request.message}</p>
   {#if request.choices}
-    <div class="choices" role="radiogroup" aria-label={request.title}>
+    <div
+      class="choices"
+      role={request.multiple ? "group" : "radiogroup"}
+      aria-label={request.title}
+    >
       {#each request.choices as choice, index (choice.value)}
         {@const detail = choice.unavailable ?? choice.description}
         <label class={["choice", { unavailable: !!choice.unavailable }]}>
-          <input
-            type="radio"
-            {name}
-            value={choice.value}
-            bind:group={chosen}
-            disabled={!!choice.unavailable}
-            aria-label={choice.label}
-            aria-describedby={detail ? `${name}-${index}` : undefined}
-          />
+          {#if request.multiple}
+            <input
+              type="checkbox"
+              value={choice.value}
+              checked={chosen.includes(choice.value)}
+              onchange={(event) => toggle(choice.value, event.currentTarget.checked)}
+              disabled={!!choice.unavailable}
+              aria-label={choice.label}
+              aria-describedby={detail ? `${name}-${index}` : undefined}
+            />
+          {:else}
+            <input
+              type="radio"
+              {name}
+              value={choice.value}
+              checked={picked === choice.value}
+              onchange={() => (chosen = [choice.value])}
+              disabled={!!choice.unavailable}
+              aria-label={choice.label}
+              aria-describedby={detail ? `${name}-${index}` : undefined}
+            />
+          {/if}
           <span class="choice-text">
             <span class="choice-label">{choice.label}</span>
             {#if detail}<span class="hint" id={`${name}-${index}`}>{detail}</span>{/if}
@@ -71,9 +94,13 @@
       type="button"
       class={["btn", request.destructive ? "btn-danger" : "btn-primary"]}
       bind:this={confirmButton}
-      disabled={!!request.choices && chosen === null}
-      title={request.choices && chosen === null ? "Choose one of the options first" : undefined}
-      onclick={() => notificationState.settleConfirm(request.choices ? chosen : "confirm")}
+      disabled={!!request.choices && chosen.length === 0}
+      title={request.choices && chosen.length === 0
+        ? request.multiple
+          ? "Tick at least one option first"
+          : "Choose one of the options first"
+        : undefined}
+      onclick={() => notificationState.settleConfirm(request.choices ? chosen : ["confirm"])}
     >
       {request.confirmLabel ?? "Confirm"}
     </button>

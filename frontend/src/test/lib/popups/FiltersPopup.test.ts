@@ -262,50 +262,71 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     expect(view.getByRole("region", { name: "Bulk operations" })).toBeInTheDocument();
     expect(view.getByRole("button", { name: "Monitor 1" })).toBeEnabled();
     expect(view.getByRole("button", { name: "Unmonitor 1" })).toBeEnabled();
-    expect(view.getByRole("button", { name: "Clear theme selections 1" })).toBeEnabled();
-    expect(view.getByRole("button", { name: "Clear artwork selections 2" })).toBeEnabled();
+    expect(view.getByRole("button", { name: "Remove themes 2" })).toBeEnabled();
+    expect(view.getByRole("button", { name: "Remove art 2" })).toBeEnabled();
     expect(view.getByRole("button", { name: "Delete from Overture 2" })).toBeEnabled();
 
     await fireEvent.click(view.getByRole("radio", { name: "Unmonitored" }));
-    expect(view.getByRole("button", { name: "Clear theme selections 0" })).toBeDisabled();
+    expect(view.getByRole("button", { name: "Remove themes 1" })).toBeEnabled();
     expect(view.getByRole("button", { name: "Delete from Overture 1" })).toBeEnabled();
     expect(uiState.movieFilters.monitored).toBe("all");
   });
 
   it.each([
-    ["artwork", "Clear artwork selections 2"],
-    ["themes", "Clear theme selections 2"],
-  ])("clears %s in one request for a fixed filtered target set", async (operation, label) => {
-    const items = [1, 2].map((id) =>
-      mediaItem({ id, title: `Item ${id}`, youtube_id: "theme", theme_status: "complete" }),
-    );
-    queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
-      items: [...items, mediaItem({ id: 3 })],
-      total: 3,
-    });
-    uiState.setFilters({ ...defaultFilters(), theme: "complete" });
-    const { calls } = mockFetchSequence([
-      { body: [] }, // Libraries query on mount.
-      { body: { item_ids: [1, 2], operation } },
-    ]);
-    const view = renderWithQueryClient(FiltersPopup);
-    await waitFor(() => expect(calls).toHaveLength(1));
-    await fireEvent.click(view.getByRole("button", { name: label }));
-    expect((await answerConfirmation(true)).message).toContain("Local");
-
-    await waitFor(() =>
-      expect(view.getByRole("status")).toHaveTextContent("selections for 2 movies"),
-    );
-    expect(calls[1]?.url).toBe("/api/library/items/bulk-operation");
-    expect(calls[1]?.init.method).toBe("POST");
-    expect(JSON.parse(calls[1]?.init.body as string)).toEqual({ item_ids: [1, 2], operation });
-    // Clearing changes completeness, so the list is fetched again from the server.
-    await waitFor(() =>
+    ["artwork", "art", "Remove art 2"],
+    ["themes", "theme", "Remove themes 2"],
+  ])(
+    "removes %s as chosen in one request for a fixed filtered target set",
+    async (operation, asset, label) => {
+      const items = [1, 2].map((id) =>
+        mediaItem({ id, title: `Item ${id}`, youtube_id: "theme", theme_status: "complete" }),
+      );
+      queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
+        items: [...items, mediaItem({ id: 3 })],
+        total: 3,
+      });
+      uiState.setFilters({ ...defaultFilters(), theme: "complete" });
+      const { calls } = mockFetchSequence([
+        { body: [] }, // Libraries query on mount.
+        {
+          body: {
+            forget: { count: 2 },
+            delete_file: { count: 1 },
+            delete_from_server: { count: 0, unavailable: "Plex's API cannot delete artwork" },
+          },
+        },
+        { body: { item_ids: [1, 2], operation, errors: {} } },
+      ]);
+      const view = renderWithQueryClient(FiltersPopup);
+      await waitFor(() => expect(calls).toHaveLength(1));
+      await fireEvent.click(view.getByRole("button", { name: label }));
+      const dialog = await view.findByRole("dialog", { name: /^Remove the/ });
+      // What cannot apply is shown, with why, and cannot be ticked.
       expect(
-        calls.slice(2).some((call) => call.url === "/api/library/items?media_type=movie"),
-      ).toBe(true),
-    );
-  });
+        within(dialog).getByRole("checkbox", { name: "Delete from the media server" }),
+      ).toBeDisabled();
+      expect(within(dialog).getByText("Plex's API cannot delete artwork")).toBeInTheDocument();
+      expect(within(dialog).getByRole("checkbox", { name: "Forget the selection" })).toBeChecked();
+      await answerConfirmation(true, undefined, ["Delete the local file"]);
+
+      await waitFor(() => expect(view.getByRole("status")).toHaveTextContent("of 2 movies"));
+      expect(calls[1]?.url).toBe("/api/art/removal-options");
+      expect(JSON.parse(calls[1]?.init.body as string)).toEqual({ asset, item_ids: [1, 2] });
+      expect(calls[2]?.url).toBe("/api/library/items/bulk-operation");
+      expect(calls[2]?.init.method).toBe("POST");
+      expect(JSON.parse(calls[2]?.init.body as string)).toEqual({
+        item_ids: [1, 2],
+        operation,
+        removal: { forget: true, delete_file: true, delete_from_server: false },
+      });
+      // Clearing changes completeness, so the list is fetched again from the server.
+      await waitFor(() =>
+        expect(
+          calls.slice(2).some((call) => call.url === "/api/library/items?media_type=movie"),
+        ).toBe(true),
+      );
+    },
+  );
 
   it("deletes only draft-filtered items and removes them from the cache", async () => {
     queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
@@ -314,7 +335,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     });
     const { calls } = mockFetchSequence([
       { body: [] },
-      { body: { item_ids: [2], operation: "delete" } },
+      { body: { item_ids: [2], operation: "delete", errors: {} } },
     ]);
     const view = renderWithQueryClient(FiltersPopup);
     await waitFor(() => expect(calls).toHaveLength(1));
@@ -338,18 +359,25 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     ).toEqual([1]);
   });
 
-  it.each(["Clear artwork selections 1", "Clear theme selections 1", "Delete from Overture 1"])(
+  it.each(["Remove art 1", "Remove themes 1", "Delete from Overture 1"])(
     "does not run %s when confirmation is cancelled",
     async (label) => {
       queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
         items: [mediaItem({ youtube_id: "theme" })],
         total: 1,
       });
-      const { calls } = mockFetch([]);
+      const { calls } = mockFetchRoutes({
+        "/api/library/libraries": [],
+        "/api/art/removal-options": {
+          forget: { count: 1 },
+          delete_file: { count: 0 },
+          delete_from_server: { count: 1 },
+        },
+      });
       const view = renderWithQueryClient(FiltersPopup);
       await fireEvent.click(view.getByRole("button", { name: label }));
       await answerConfirmation(false);
-      expect(calls.some((call) => call.init.method === "POST")).toBe(false);
+      expect(calls.some((call) => call.url.endsWith("/bulk-operation"))).toBe(false);
     },
   );
 
@@ -570,7 +598,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     );
   });
 
-  it("clears the artwork and theme choices of the matching collections", async () => {
+  it("removes the themes of the matching collections as chosen", async () => {
     await navigate("/collections");
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     queryClient.setQueryData(listCollectionsOptions().queryKey, [
@@ -581,16 +609,26 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
       "/api/collections/bulk-operation": { collection_ids: [1], errors: {}, skipped: {} },
+      "/api/art/removal-options": {
+        forget: { count: 1 },
+        delete_file: { count: 0, unavailable: "Plex keeps collection themes itself" },
+        delete_from_server: { count: 1 },
+      },
     });
     const view = renderWithQueryClient(FiltersPopup);
-
-    await fireEvent.click(await view.findByRole("button", { name: /Clear theme selections 1/ }));
-    await answerConfirmation(true);
+    await fireEvent.click(await view.findByRole("button", { name: /Remove themes 2/ }));
+    await answerConfirmation(true, undefined, ["Delete from the media server"]);
     await waitFor(() =>
       expect(
-        JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),
-      ).toEqual({ collection_ids: [1], operation: "clear_themes" }),
+        JSON.parse(String(calls.find((call) => call.url.endsWith("/bulk-operation"))?.init.body)),
+      ).toEqual({
+        collection_ids: [1, 2],
+        operation: "remove_themes",
+        removal: { forget: true, delete_file: false, delete_from_server: true },
+      }),
     );
-    expect(view.getByRole("button", { name: /Clear artwork selections 2/ })).toBeEnabled();
+    expect(
+      JSON.parse(String(calls.find((call) => call.url.endsWith("/removal-options"))?.init.body)),
+    ).toEqual({ asset: "theme", collection_ids: [1, 2] });
   });
 });

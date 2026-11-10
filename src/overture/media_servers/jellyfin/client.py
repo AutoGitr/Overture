@@ -367,6 +367,14 @@ class JellyfinClient(MediaServerHttpClient):
     async def delete_item(self, item_id: str) -> None:
         await self._request("DELETE", f"/Items/{item_id}")
 
+    async def delete_image(self, item_id: str, art_type: ArtType) -> None:
+        """Delete an item's first image of the art type; a saved file goes with it."""
+        await self._request(
+            "DELETE",
+            f"/Items/{item_id}/Images/{IMAGE_TYPES[art_type]}",
+            allow_not_found=True,
+        )
+
     @override
     async def test_connection(self) -> bool:
         try:

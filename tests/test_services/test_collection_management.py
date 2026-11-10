@@ -2,7 +2,6 @@
 
 lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass, field
-lazy from datetime import timedelta
 lazy from typing import ClassVar, override
 lazy from unittest.mock import AsyncMock
 
@@ -24,7 +23,10 @@ lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     SMART_CUSTOM_ORDER,
+    ArtStyle,
     ArtType,
+    AssetStatus,
+    AutoArt,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
@@ -98,20 +100,20 @@ lazy from overture.schemas.collections import (
     TmdbPersonSource,
 )
 lazy from overture.schemas.common import Status, StatusResponse
+lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.collections.criteria import CriteriaContext, evaluate
 lazy from overture.services.collections.recommend import recommend_kind
 lazy from overture.services.collections.rules import member_criteria
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
-lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
 lazy from tests.collection_helpers import library_rule
-lazy from tests.runtime_helpers import NoopProviderRegistry, unused
+lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
 lazy from tests.term_helpers import assign, holding
 lazy from tests.test_services.test_collections_service import (
     FakeDownloads,
@@ -391,7 +393,16 @@ class Art(CollectionArtService):
     def __init__(self) -> None:
         self.selections: list[ArtType] = []
         self.generated: list[ArtType] = []
+        self.textless: list[ArtType] = []
+        self.removed: list[tuple[int, ArtType | None, AssetRemoval]] = []
         self.fail = False
+
+    @override
+    async def remove(
+        self, collection_id: int, art_type: ArtType | None, removal: AssetRemoval
+    ) -> StatusResponse:
+        self.removed.append((collection_id, art_type, removal))
+        return StatusResponse(status=Status.OK)
 
     @override
     async def found(self, collection_id: int, art_type: ArtType) -> ArtSourcesResponse:
@@ -411,6 +422,8 @@ class Art(CollectionArtService):
         self.selections.append(art_type)
         if body.generated is not None:
             self.generated.append(art_type)
+        if body.textless:
+            self.textless.append(art_type)
         return StatusResponse(status=Status.OK)
 
 
@@ -592,7 +605,7 @@ async def manager(database: Database, app_config: Settings) -> Manager:
         app_config=app_config,
         tmdb=tmdb,
         mdblist=lists,
-        scheduler=SchedulerService(app_config=app_config),
+        remover=make_remover(provider, app_config=app_config, database=database),
         art=art,
         radarr=radarr,
         sonarr=FakeArrClient(2, "anime"),
@@ -974,12 +987,13 @@ async def test_inherited_placeholders_resolve_group_before_global(
     defaults = await manager.service.reader.inherited_policy("Weekend")
     assert defaults.sort_title_format == ""
     assert defaults.minimum_items == 4
-    # A group's schedule inherits the global one, which its form names.
+    # A group's automatic art inherits the global choice, which its form names.
     global_defaults = await manager.service.reader.inherited_policy()
-    assert (global_defaults.sync_schedule, global_defaults.sync_enabled) == (
-        "0 3 * * *",
-        True,
-    )
+    assert (
+        global_defaults.auto_art,
+        global_defaults.drawn_style,
+        global_defaults.backgrounds,
+    ) == (AutoArt.OFF, ArtStyle.DARK, True)
 
 
 def make_jellyfin_service(
@@ -998,7 +1012,7 @@ def make_jellyfin_service(
         app_config=app_config,
         tmdb=manager.tmdb,
         mdblist=manager.lists,
-        scheduler=SchedulerService(app_config=app_config),
+        remover=make_remover(provider, app_config=app_config, database=database),
         art=manager.art,
         radarr=FakeArrClient(1, "4k"),
         sonarr=FakeArrClient(2, "anime"),
@@ -1222,20 +1236,10 @@ async def test_tmdb_and_intersected_filters_resolve_only_library_members(
     assert manager.provider.members["1"] == ["m1", "m2"]
 
 
-async def test_scheduler_honors_due_times_and_stops_its_client(
+async def test_closing_the_service_closes_its_source_clients(
     manager: Manager,
 ) -> None:
-    identity = await create(manager)
-    await manager.service.editor.save_rule(
-        identity,
-        library_rule(criteria=sources(MdblistSource(identifiers=["42"]))),
-    )
-    await manager.service.start()
-    await manager.service.schedule.sync_due()
-    count = len(manager.publisher.broadcasts)
-    await manager.service.schedule.sync_due()
-    assert len(manager.publisher.broadcasts) == count
-    await manager.service.stop()
+    await manager.service.close()
     assert manager.lists.closed
 
 
@@ -1246,7 +1250,7 @@ async def test_rule_sync_uses_shared_automatic_art_and_theme_pipelines(
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_match_art=True, collection_auto_match_theme=True
+                collection_auto_art=AutoArt.MATCH, collection_auto_match_theme=True
             )
         )
         session.add(
@@ -1270,7 +1274,7 @@ async def test_auto_asset_failure_keeps_synced_members_and_records_the_failure(
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
-        await session.merge(settings_row(collection_auto_match_art=True))
+        await session.merge(settings_row(collection_auto_art=AutoArt.MATCH))
     await manager.service.editor.save_rule(
         identity,
         library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
@@ -1405,14 +1409,14 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
             settings_row(
                 collection_minimum_items=3,
                 collection_delete_below_minimum=True,
-                collection_auto_match_art=True,
+                collection_auto_art=AutoArt.MATCH,
             )
         )
     policy = CollectionGroupPolicy(
         sync_mode=SyncMode.SYNC,
         minimum_items=2,
         delete_below_minimum=False,
-        auto_match_art=False,
+        auto_art=AutoArt.OFF,
         collection_mode=CollectionMode.HIDE,
         sort_title_format="+{group} - {title}",
     )
@@ -2021,60 +2025,6 @@ async def test_formatted_options(manager: Manager) -> None:
         )
 
 
-async def test_sync_due_runs_due_sets_and_rules(
-    manager: Manager, database: Database
-) -> None:
-    await manager.service.groups.save_policy(
-        "Franchises",
-        CollectionGroupPolicy(
-            minimum_items=2,
-            sync_schedule="0 0 1 1 *",
-            generator=CollectionGenerator(
-                dimension=SetDimension.FRANCHISE, library_ids=["movies"]
-            ),
-        ),
-    )
-    # A collection syncs on its group's schedule: yearly, so never due twice.
-    await manager.service.groups.save_policy(
-        "Yearly", CollectionGroupPolicy(sync_schedule="0 0 1 1 *")
-    )
-    created = await manager.service.editor.create(
-        CollectionCreate(
-            title="Due Collection",
-            collection_group="Yearly",
-            rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11, 12]))),
-        )
-    )
-    await manager.service.schedule.sync_due()
-    detail = await manager.service.reader.get(created.id)
-    assert detail.rule is not None
-    assert detail.rule.last_synced_at is not None
-    # A set first runs by hand; the scheduler then keeps it current.
-    assert {row.title for row in await manager.service.reader.listed()} == {
-        "Due Collection"
-    }
-    async with database.write_session() as session:
-        group = await CollectionRepository(session).group(ServerType.PLEX, "Franchises")
-        assert group is not None
-        # A New Year has passed since, so the yearly schedule is due.
-        group.generated_at = utc_now() - timedelta(days=400)
-        session.add(group)
-    await manager.service.schedule.sync_due()
-    assert {row.title for row in await manager.service.reader.listed()} == {
-        "Saga",
-        "Due Collection",
-    }
-
-    # Neither the set nor the rule is due again yet.
-    count = len(manager.provider.created)
-    synced = detail.rule.last_synced_at
-    await manager.service.schedule.sync_due()
-    assert len(manager.provider.created) == count
-    again = await manager.service.reader.get(created.id)
-    assert again.rule is not None
-    assert again.rule.last_synced_at == synced
-
-
 async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
     # RadarrTagSource sync
     radarr_col = await manager.service.editor.create(
@@ -2249,20 +2199,6 @@ async def test_group_policy_validation_errors(
         )
 
 
-async def test_sync_due_survives_a_failing_set(manager: Manager) -> None:
-    await manager.service.groups.save_policy(
-        "FaultyFranchises",
-        CollectionGroupPolicy(
-            generator=CollectionGenerator(
-                dimension=SetDimension.FRANCHISE, library_ids=["movies"]
-            ),
-        ),
-    )
-    manager.tmdb.error = RuntimeError("TMDB upstream connection reset")
-    await manager.service.schedule.sync_due()
-    assert manager.provider.created == []
-
-
 async def test_franchise_sets_skip_franchises_other_collections_hold(
     manager: Manager,
 ) -> None:
@@ -2335,24 +2271,6 @@ async def test_a_collection_below_its_minimum_waits_in_overture_for_the_server(
     assert not result.skipped
     assert not result.withheld
     assert not (await manager.service.reader.get(detail.id)).withheld
-
-
-async def test_scheduled_sync_rule_skips_when_not_due(manager: Manager) -> None:
-    col = await manager.service.editor.create(
-        CollectionCreate(
-            title="Scheduled Skip",
-            rule=library_rule(
-                criteria=sources(TmdbItemSource(tmdb_ids=[11])),
-            ),
-        )
-    )
-    # First sync runs
-    first = await manager.service.rules.sync(col.id, scheduled=False)
-    assert first.skipped is False
-
-    # Second scheduled sync skips because not enough time elapsed
-    second = await manager.service.rules.sync(col.id, scheduled=True)
-    assert second.skipped is True
 
 
 async def test_inactive_rule_without_delete_skips_sync(manager: Manager) -> None:
@@ -2602,7 +2520,6 @@ async def test_saved_only_collection_stays_off_the_server_until_synced(
         sync=False,
     )
     assert (saved.withheld, saved.unsynced) == (True, True)
-    await manager.service.schedule.sync_due()
     assert manager.provider.created == []
 
     await manager.service.rules.sync(saved.id)
@@ -3323,7 +3240,7 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
         row.youtube_id = "abcdefghijk"
         session.add(row)
 
-    for operation in ("clear_artwork", "clear_themes"):
+    for operation in ("remove_artwork", "remove_themes"):
         result = await manager.service.bulk.run(
             BulkCollectionOperation(
                 collection_ids=[identity],
@@ -3332,8 +3249,9 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
         )
         assert result.collection_ids == [identity]
 
+    assert manager.art.removed == [(identity, None, AssetRemoval())]
     detail = await manager.service.reader.get(identity)
-    assert (detail.poster_url, detail.youtube_id) == (None, None)
+    assert detail.youtube_id is None
 
 
 async def test_unmanaged_collections_accept_only_adoption(
@@ -3734,10 +3652,20 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
         CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
     )
 
-    listed = await manager.service.reader.listed()
-    [separator] = [row for row in listed if row.kind is CollectionKind.SEPARATOR]
-    assert (separator.title, separator.collection_group) == ("Sagas", "Sagas")
+    # The group keeps it, so it is never listed on its own.
+    assert all(
+        row.kind is not CollectionKind.SEPARATOR
+        for row in await manager.service.reader.listed()
+    )
+    async with database.read_session() as session:
+        [separator] = [
+            row
+            for row in await CollectionRepository(session).list_listed()
+            if row.kind is CollectionKind.SEPARATOR
+        ]
+    assert (separator.title, separator.group_name) == ("Sagas", "Sagas")
     assert separator.child_count == 0
+    assert separator.id is not None
     assert separator.server_item_id is not None
     # Its sort title is the group's with no title, so it sorts first.
     assert manager.provider.sort_titles[separator.server_item_id] == "Sagas"
@@ -3750,11 +3678,12 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     await manager.service.groups.save_policy(
         "Sagas", CollectionGroupPolicy(sort_title_format="{group} {title}")
     )
-    assert not [
-        row
-        for row in await manager.service.reader.listed()
-        if row.kind is CollectionKind.SEPARATOR
-    ]
+    async with database.read_session() as session:
+        assert not [
+            row
+            for row in await CollectionRepository(session).list_listed()
+            if row.kind is CollectionKind.SEPARATOR
+        ]
 
 
 async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
@@ -3762,11 +3691,7 @@ async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
-        await session.merge(
-            settings_row(
-                collection_auto_match_art=True, collection_auto_generate_art=True
-            )
-        )
+        await session.merge(settings_row(collection_auto_art=AutoArt.MATCH_OR_DRAW))
         row = await CollectionRepository(session).get(identity)
         assert row is not None
         select_upload(row, ArtType.BACKGROUND, "b" * 64)
@@ -3780,7 +3705,7 @@ async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
     manager.art.fail = True
     manager.art.selections.clear()
     await manager.service.groups.save_policy(
-        "Ungrouped", CollectionGroupPolicy(auto_match_art=False)
+        "Ungrouped", CollectionGroupPolicy(auto_art=AutoArt.DRAW)
     )
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -3804,15 +3729,16 @@ async def test_deleting_group_with_separator_discards_separator(
         "Sagas",
         CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
     )
-    listed = await manager.service.reader.listed()
+    async with manager.database.read_session() as session:
+        listed = await CollectionRepository(session).list_listed()
     assert any(row.kind is CollectionKind.SEPARATOR for row in listed)
 
     result = await manager.service.groups.delete(
         "Sagas", CollectionGroupDelete(collections="both")
     )
     assert not result.errors
-    listed_after = await manager.service.reader.listed()
-    assert not listed_after
+    async with manager.database.read_session() as session:
+        assert not await CollectionRepository(session).list_listed()
 
 
 async def test_separator_apply_raises_title_taken_on_collision(
@@ -3858,32 +3784,6 @@ async def test_renaming_a_separated_group_to_a_taken_title_changes_nothing(
         assert await repo.group(ServerType.PLEX, "Sagas") is None
 
 
-async def test_sync_due_skips_a_collection_deleted_during_the_run(
-    manager: Manager, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    await manager.service.groups.save_policy(
-        "Yearly", CollectionGroupPolicy(sync_schedule="0 0 1 1 *")
-    )
-    first, second = [
-        await manager.service.editor.create(
-            CollectionCreate(
-                title=title, collection_group="Yearly", rule=chosen(manager)
-            )
-        )
-        for title in ("First", "Second")
-    ]
-    synced: list[int] = []
-
-    async def sync_deleting_second(collection_id: int, *, scheduled: bool) -> None:
-        assert scheduled
-        synced.append(collection_id)
-        await manager.service.editor.delete(second.id)
-
-    monkeypatch.setattr(manager.service.rules, "sync", sync_deleting_second)
-    await manager.service.schedule.sync_due()
-    assert synced == [first.id]
-
-
 async def test_preview_smart_collection_with_labelled_fields_evaluates_locally(
     manager: Manager,
 ) -> None:
@@ -3921,3 +3821,28 @@ async def test_generator_validation_rejects_sources_when_plex_counts(
         await manager.service.groups.save_policy(
             "Languages", CollectionGroupPolicy(generator=generator)
         )
+
+
+@pytest.mark.parametrize("backgrounds", [True, False])
+async def test_automatic_drawing_titles_posters_and_draws_backgrounds_it_needs(
+    manager: Manager, database: Database, backgrounds: bool
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_auto_art=AutoArt.DRAW, collection_backgrounds=backgrounds
+            )
+        )
+    manager.art.selections.clear()
+
+    await manager.service.rules.sync(identity)
+
+    wanted = [ArtType.POSTER, ArtType.BACKGROUND] if backgrounds else [ArtType.POSTER]
+    assert manager.art.generated == wanted
+    # The server shows the title over a background, so it is drawn without one.
+    assert manager.art.textless == wanted[1:]
+    detail = await manager.service.reader.get(identity)
+    assert detail.backgrounds is backgrounds
+    if not backgrounds:
+        assert detail.background_status is AssetStatus.COMPLETE

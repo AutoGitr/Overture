@@ -9,7 +9,7 @@ lazy from ...db.art_slots import find_art_slot
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.settings import get_app_settings
-lazy from ...domain import ITEM_ART_TYPES, ArtType, ImageSize
+lazy from ...domain import ITEM_ART_TYPES, ArtType, CollectionKind, ImageSize
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
@@ -54,12 +54,18 @@ class CollectionReader:
         self._proxy_clients = proxy_clients
 
     async def listed(self) -> list[CollectionRead]:
-        """Return the collections the last sync listed."""
+        """Return the collections the last sync listed.
+
+        Separators are left out: each is part of its group, which keeps it.
+        """
         server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rows = [
-                row for row in await repo.list_listed() if row.server_type is server
+                row
+                for row in await repo.list_listed()
+                if row.server_type is server
+                and row.kind is not CollectionKind.SEPARATOR
             ]
             defaults = await get_app_settings(session)
             catalog = await catalog_collections(
@@ -73,6 +79,7 @@ class CollectionReader:
                 catalog.get(row.tmdb_collection_id or 0),
                 row.rule,
                 trust_no_theme=defaults.overturedb_no_theme,
+                backgrounds=policy.backgrounds,
             ).model_copy(
                 update={
                     "below_minimum": row.child_count < policy.minimum_items,
@@ -122,7 +129,13 @@ class CollectionReader:
             row, provider=self._access.provider(), app_config=self._access.app_config
         )
         return CollectionDetail(
-            **collection_read(row, entry, saved, trust_no_theme=trust_no_theme)
+            **collection_read(
+                row,
+                entry,
+                saved,
+                trust_no_theme=trust_no_theme,
+                backgrounds=policy.backgrounds,
+            )
             .model_copy(
                 update={"below_minimum": row.child_count < policy.minimum_items}
             )

@@ -1,4 +1,4 @@
-"""Themes router - YouTube search, selection and clearing."""
+"""Themes router - YouTube search, selection and removal."""
 
 lazy from typing import Annotated
 
@@ -7,6 +7,7 @@ lazy from fastapi import APIRouter, Depends, Query
 lazy from ..dependencies import ThemesDep
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.library import ItemSelectionResponse
+lazy from ..schemas.removal import AssetRemoval
 lazy from ..schemas.themes import SearchRequest, SelectThemeRequest, ThemeSearchResponse
 lazy from .auth import require_auth
 lazy from .parameters import ItemIdPath
@@ -36,6 +37,10 @@ async def select_theme(
 
 
 @router.delete("/{item_id}")
-async def clear_theme(item_id: ItemIdPath, themes: ThemesDep) -> StatusResponse:
-    """Clear saved YouTube metadata without changing the local theme file."""
-    return await themes.clear(item_id)
+async def remove_theme(
+    item_id: ItemIdPath,
+    removal: Annotated[AssetRemoval, Query()],
+    themes: ThemesDep,
+) -> StatusResponse:
+    """Forget an item's theme, delete its local file or the server's copy."""
+    return await themes.remove(item_id, removal)

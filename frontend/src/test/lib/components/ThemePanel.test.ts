@@ -63,6 +63,10 @@ vi.mock("../../../lib/router/routes", () => ({
   goToSeason: vi.fn(),
   route: { pathname: "/movies/1-alien/themes" },
   routedItemId: () => routed.itemId,
+  routedItem: () => ({ kind: "item", id: routed.itemId }),
+  routeScope: () => ({ source: "library", tab: "movie", mode: "items" }),
+  routedCatalogEntry: () => null,
+  routedCollectionId: () => null,
 }));
 vi.mock("../../../lib/stores/downloadState.svelte", () => ({
   downloadState: {
@@ -413,7 +417,7 @@ describe("ThemePanel search", () => {
 
     await waitFor(() =>
       expect(searchYoutube).toHaveBeenCalledWith(
-        expect.objectContaining({ query: { limit: 10, video_ids: ["overture_yt"] } }),
+        expect.objectContaining({ query: { limit: 20, video_ids: ["overture_yt"] } }),
       ),
     );
     const textSearches = searchYoutube.mock.calls.filter(
@@ -461,7 +465,7 @@ describe("ThemePanel for TMDB titles", () => {
 
     await waitFor(() =>
       expect(searchYoutube).toHaveBeenCalledWith(
-        expect.objectContaining({ query: { query: "The Matrix 1999 theme", limit: 10 } }),
+        expect.objectContaining({ query: { query: "The Matrix 1999 theme", limit: 20 } }),
       ),
     );
     expect(getTmdbPublicDatasetSources).toHaveBeenCalledWith(
@@ -498,7 +502,7 @@ describe("ThemePanel for TMDB titles", () => {
 
     await waitFor(() =>
       expect(searchYoutube).toHaveBeenCalledWith(
-        expect.objectContaining({ query: { query: "Different show 1999 theme", limit: 10 } }),
+        expect.objectContaining({ query: { query: "Different show 1999 theme", limit: 20 } }),
       ),
     );
     expect(screen.getByLabelText("Search themes")).toHaveValue("Different show 1999 theme");

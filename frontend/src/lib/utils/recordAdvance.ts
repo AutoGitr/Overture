@@ -1,10 +1,11 @@
 import type { CatalogEntryRow, CollectionRead } from "../../generated/rest/types.gen";
 import { goToCatalogEntry, goToCollectionView, type ItemView } from "../router/routes";
 import { settingsState } from "../stores/settingsState.svelte";
-import { sidebarState } from "../stores/sidebarState.svelte";
 import {
   AUTO_ADVANCE_DELAY_MS,
-  beginAutoAdvance,
+  catalogKey,
+  collectionKey,
+  continueWalk,
   isCurrent,
   scheduleAutoAdvance,
   type AutoAdvanceContext,
@@ -29,8 +30,6 @@ export interface AdvanceRecord {
   slots: readonly { slot: RecordSlot; complete: boolean }[];
   open(slot: RecordSlot): void;
 }
-
-export type RecordAdvanceContext = AutoAdvanceContext & { records: AdvanceRecord[] };
 
 function inWorkflow(slot: RecordSlot, workflow: AutoAdvanceSettings["workflow"]): boolean {
   return slot === "theme" ? workflow !== "art" : workflow !== "themes";
@@ -70,22 +69,18 @@ export function openNextRecord(
     const slots = shownSlots(record, settings);
     const first = slots.find(({ complete }) => !skip || !complete);
     if (!first) continue;
+    continueWalk(record.key);
     record.open(first.slot);
     return true;
   }
   return false;
 }
 
-/** Capture before the save, with the rows the sidebar shows then. */
-export function beginRecordAdvance(): RecordAdvanceContext {
-  return { ...beginAutoAdvance(), records: [...(sidebarState.records ?? [])] };
-}
-
 /** After *current* of *key* was saved, move on as the settings say. */
 export function handleRecordSelectionAdvance(
   key: string,
   current: RecordSlot,
-  context: RecordAdvanceContext,
+  context: AutoAdvanceContext,
   /** The record as its page knows it, which is exact where its row is not. */
   page?: AdvanceRecord,
 ): void {
@@ -110,10 +105,6 @@ export function handleRecordSelectionAdvance(
   );
 }
 
-export function collectionKey(id: number): string {
-  return `collection:${id}`;
-}
-
 /** A library collection; Emby keeps no collection themes. */
 export function collectionRecord(row: CollectionRead): AdvanceRecord {
   const themes = settingsState.current.media_server !== "emby";
@@ -131,10 +122,6 @@ export function collectionRecord(row: CollectionRead): AdvanceRecord {
         slot === "background" ? "background" : "poster",
       ),
   };
-}
-
-export function catalogKey(target: { media_type: string; entry_key: string }): string {
-  return `catalog:${target.media_type}:${target.entry_key}`;
 }
 
 function catalogView(slot: RecordSlot): ItemView {

@@ -102,8 +102,11 @@
     hasMembers || draft?.generator ? null : "The group has no collections yet",
   );
 
-  /** Save in Overture; `then` applies the defaults or syncs the group on the server. */
-  async function save(then?: "apply" | "sync") {
+  /**
+   * Save the group and send its defaults to its collections on the server;
+   * with `sync`, sync the group as well.
+   */
+  async function save(sync = false) {
     if (!draft || busy) return;
     const variables = {
       query: { name: group },
@@ -116,9 +119,9 @@
         saved,
       );
       onsave?.();
-      if (then === "sync") return await sync();
-      if (!then) {
-        feedback.success("Saved. Collections use it from their next sync.");
+      if (sync) return await syncGroup();
+      if (!hasMembers) {
+        feedback.success("Saved. Its collections use it once they are made.");
         return;
       }
       const result = await applyRequest.mutateAsync({ query: variables.query });
@@ -137,7 +140,7 @@
     }
   }
 
-  async function sync() {
+  async function syncGroup() {
     try {
       const result = await syncRequest.mutateAsync({
         query: { name: group },
@@ -247,8 +250,8 @@
   </DetailForm>
   <DetailForm
     collapsible
-    title="Schedule"
-    description="When the group's collections sync, and when they are active each year."
+    title="Active dates"
+    description="When the group's collections are on the server each year."
     {busy}
   >
     <CollectionScheduleFields bind:policy={draft} level="group" defaults={defaults.data} />
@@ -260,24 +263,19 @@
     <button
       type="button"
       class="btn btn-secondary"
-      title={hasMembers
-        ? "Send the defaults to the server without changing members"
-        : "The group has no collections yet"}
-      disabled={busy || !hasMembers}
-      onclick={() => void save("apply")}>Save and Apply</button
-    >
-    <button
-      type="button"
-      class="btn btn-secondary"
-      title={serverBlocker ?? undefined}
+      title={serverBlocker ?? "Save, then sync the group's members"}
       disabled={busy || !!serverBlocker}
-      onclick={() => void save("sync")}
+      onclick={() => void save(true)}
     >
       <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />
       Save and Sync
     </button>
-    <button type="button" class="btn btn-primary" disabled={busy} onclick={() => void save()}
-      >Save</button
+    <button
+      type="button"
+      class="btn btn-primary"
+      title="Save, and send the settings to the group's collections on the server"
+      disabled={busy}
+      onclick={() => void save()}>Save</button
     >
   {/if}
 {/snippet}

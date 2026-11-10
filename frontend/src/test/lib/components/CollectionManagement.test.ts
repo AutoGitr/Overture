@@ -16,6 +16,7 @@ import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   appSettings,
+  collection,
   collectionCapabilities,
   collectionDetail,
   collectionRule,
@@ -350,19 +351,12 @@ describe("collection management", () => {
         },
         current_url: null,
       },
-      "/api/collections/12/art/poster": ({ init }: { init: RequestInit }) =>
-        Response.json(
-          init.method === "PUT"
-            ? { status: "ok" }
-            : {
-                poster_url: null,
-                poster_source: null,
-                background_url: null,
-                poster_status: "partial",
-                background_status: "missing",
-                art_status: "partial",
-              },
-        ),
+      "/api/collections/12/art/poster": { status: "ok" },
+      "/api/art/removal-options": {
+        forget: { count: 1 },
+        delete_file: { count: 0, unavailable: "Overture keeps no file of collection art" },
+        delete_from_server: { count: 1 },
+      },
     });
     goToCollectionView(detail, "art");
     renderWithQueryClient(CollectionPage);
@@ -370,7 +364,11 @@ describe("collection management", () => {
     expect(clear.querySelector("[data-status]")).toHaveAttribute("data-status", "success");
     await fireEvent.click(clear);
     await answerConfirmation(true);
-    await waitFor(() => expect(calls.some((call) => call.init.method === "DELETE")).toBe(true));
+    await waitFor(() =>
+      expect(calls.find((call) => call.init.method === "DELETE")?.url).toBe(
+        "/api/collections/12/art/poster?forget=true&delete_file=false&delete_from_server=false",
+      ),
+    );
     expect(await screen.findByText(/Set a TMDB collection ID to browse/)).toBeVisible();
     // Choosing drawn art sends its style, which the server draws from the title.
     await fireEvent.click(await screen.findByRole("button", { name: /generated/i }));
@@ -380,7 +378,7 @@ describe("collection management", () => {
           (call) =>
             call.init.method === "PUT" && call.url.endsWith("/api/collections/12/art/poster"),
         )?.init.body,
-      ).toBe(JSON.stringify({ generated: "dark" })),
+      ).toBe(JSON.stringify({ generated: "dark", textless: false })),
     );
   });
 
@@ -952,8 +950,9 @@ describe("collection management", () => {
     expect(screen.getByRole("textbox", { name: "Sort title" })).toHaveValue("+{title}");
   });
 
-  it("saves group defaults before explicitly applying them to the group", async () => {
+  it("saves group defaults and sends them to the group's collections", async () => {
     const { calls } = mockFetchRoutes({
+      "/api/collections": [collection({ id: 12, collection_group: "Weekend" })],
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
@@ -966,7 +965,9 @@ describe("collection management", () => {
       "/api/collections/group-policy/apply": { collection_ids: [12, 13], errors: {} },
     });
     renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Save and Apply" }));
+    await screen.findByRole("button", { name: "Save and Sync" });
+    await waitFor(() => expect(calls.some((call) => call.url === "/api/collections")).toBe(true));
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.some((call) => call.url.includes("/apply"))).toBe(true));
     expect(
       calls.filter((call) => call.init.method !== "GET").map((call) => call.init.method),

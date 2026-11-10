@@ -10,7 +10,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **Collections:** an **In a collection** condition; **In a collection is false** makes a catch-all of every title no other collection holds, and a collection never counts itself.
-- **Artwork:** collection art drawn from the title, in a dark, light or accent style, offered as **Generated** candidates for posters and backgrounds and filterable as the **Generated** art source; **Generated poster** draws one after a sync for a collection still without a poster, and drawn art is drawn again when the title or group changes.
+- **Artwork:** collection art drawn from the title, in a dark, light or accent style, with the title or textless, offered as **Generated** candidates for posters and backgrounds and filterable as the **Generated** art source; drawn art is drawn again when the title or group changes.
+- **Collections:** **Automatic art** (global, group and collection) is one choice: Off, Match, Match, else draw, or Draw, which draws a titled poster and a textless background in the **Drawn colours**; **Background: Not needed** makes a poster complete a collection's art. The upgrade turns the two earlier switches into the matching choice.
+- **Artwork and themes:** removing art or a theme, from its tab or for filtered titles and collections, can forget the selection, delete the local file and delete the media server's copy, in any combination; the dialog offers only what applies and says why the rest cannot. Only JPEG and PNG images and MP3 themes are ever deleted.
+- **Collections:** an inactive collection's art and theme can be chosen; the sync that puts it back on the server sends them.
 - **Collections:** a Plex group can have a **Separator**, an empty collection titled after the group with a drawn poster, sorted before the group's collections by the group's sort title template.
 - **Notifications:** `NOTIFY_URL` receives each failed library sync, asset run, server audit, OvertureDB sync and backup, as JSON Apprise's API and other webhooks accept.
 - **API:** `GET /api/media-server/links` returns where the server's web app opens items and collections; `GET /api/collections/{id}/art/{art_type}/generated/{style}` returns art drawn from the collection's title; the database record lists a title's values, such as genres and people.
@@ -42,6 +45,13 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Collections:** collection syncs run on **Sync** schedules under Operations, which can sync chosen groups; the per-group and global collection sync schedules are gone, and the upgrade turns each enabled one into a Sync schedule of its groups.
+- **Collections:** a group's **Save** also sends its display settings to its collections on the server; **Save and Apply** is gone.
+- **Collections:** separators are no longer listed among the collections; their group keeps them.
+- **Collections:** a collection's members are grouped by library, movie libraries first, each kind by title.
+- **Interface:** Settings sections collapse, and stay as you left them.
+- **Themes:** YouTube searches show up to 20 results within the duration limits, rather than at most 10 before the limits filtered them.
+- **API:** the art and theme removal routes take `forget`, `delete_file` and `delete_from_server`; `POST /api/art/removal-options` says what each would change; bulk `clear_artwork` and `clear_themes` are `remove_artwork` and `remove_themes` with a `removal`.
 - **Database:** the library sync records the server's libraries, so their names show while the server cannot be reached; titles hold their genres, people, labels and TMDB facts as shared values; movies and shows keep only their own fields and only shows have seasons; collections reference their group and every group is kept until deleted; JSON settings are checked to be valid JSON. The upgrade converts existing data.
 - **Collections:** a group stays listed after its last collection leaves it, until it is deleted in **Collection groups**.
 - **Interface:** links that open a title or collection in the media server follow the server's current address.
@@ -94,6 +104,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Artwork:** Assets runs that adopt perfect matches only find a byte-identical candidate whose preview differs slightly from the original, for items and collections.
+- **Interface:** auto-advance goes through the sidebar in the order it showed when you reached a title, even when a selection moves the title, such as when sorting by poster shape.
+- **Interface:** the Status filters are no longer parted by rules.
 - **Performance:** collection syncs, previews and library loading read only the values they need, so a collection syncs in moments instead of minutes and large libraries no longer run the app out of memory. Upgrading rebuilds the stored genre and people links once.
 - **Artwork:** automatic art no longer replaces an uploaded collection image after a sync, and a new server copy of a collection receives its uploaded image.
 - **Artwork:** collections without a TMDB collection ID offer the art of the person their criteria list.

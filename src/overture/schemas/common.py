@@ -43,7 +43,6 @@ class Status(StrEnum):
     NOT_RUNNING = "not_running"
     IDLE = "idle"
     QUEUED = "queued"
-    ENQUEUED = "enqueued"
     CLEARED = "cleared"
     DELETED = "deleted"
     DISABLED = "disabled"
@@ -64,13 +63,6 @@ class StatusResponse(StrictBaseModel):
     def stop(cls, stopping: bool) -> Self:
         """Say whether a running job was asked to stop, or none was running."""
         return cls(status=Status.STOPPING if stopping else Status.NOT_RUNNING)
-
-
-class EnqueuedJobResponse(StrictBaseModel):
-    """A download job that was queued."""
-
-    job_id: str
-    status: Literal[Status.ENQUEUED] = Status.ENQUEUED
 
 
 class MonitorUpdate(StrictBaseModel):

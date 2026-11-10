@@ -130,6 +130,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
   return {
     active_end_mmdd: null,
     active_start_mmdd: null,
+    backgrounds: true,
     generated_value: null,
     // Overture manages what it creates; only server imports start unmanaged.
     managed: true,
@@ -197,9 +198,10 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
   return {
     active_end_mmdd: null,
     active_start_mmdd: null,
-    auto_generate_art: null,
-    auto_match_art: null,
+    auto_art: null,
     auto_match_theme: null,
+    backgrounds: null,
+    drawn_style: null,
     libraries: [
       {
         library_id: "1",
@@ -586,6 +588,7 @@ export function artCandidate(overrides: Partial<ArtCandidate> = {}): ArtCandidat
     perfect_match: null,
     preview_url: null,
     source: "tmdb",
+    textless: false,
     title: null,
     url: "https://images.test/poster.jpg",
     width: 1000,

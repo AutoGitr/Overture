@@ -151,6 +151,9 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     """Adapt Plex responses to the shared media-server contract."""
 
     server_type: ClassVar[ServerType] = ServerType.PLEX
+    # Plex's API selects, uploads and locks artwork but has no delete; an
+    # item shows its agent's art again once its local file is deleted.
+    art_deletion_unavailable: ClassVar[str | None] = "Plex's API cannot delete artwork"
     collections = UploadThemes()
 
     def __init__(

@@ -9,11 +9,17 @@ lazy from ...db.completion import holds_files
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...db.theme_file import clear_theme_selection, select_theme
-lazy from ...domain import AssetScope, JobType, ThemeIdSource
+lazy from ...db.theme_file import (
+    clear_theme_selection,
+    record_theme_file,
+    select_theme,
+)
+lazy from ...domain import AssetScope, JobType, ServerAsset, ThemeIdSource
 lazy from ...schemas.common import SaveSelectionResponse, Status, StatusResponse
 lazy from ...schemas.library import ItemSelectionResponse
+lazy from ...schemas.removal import AssetRemoval
 lazy from ...schemas.themes import (
+    MAX_SEARCH_RESULTS,
     SearchRequest,
     ThemeSearchResponse,
     ThemeSearchResult,
@@ -27,6 +33,7 @@ lazy from ..library.items import (
     library_item_read,
     require_item,
 )
+lazy from ..removal import AssetRemover
 lazy from ..storage.assets import AssetStorage
 lazy from .youtube_resolver import YouTubeResolver
 
@@ -44,7 +51,9 @@ class ThemesService:
         downloads: DownloadService,
         publisher: protocols.EventPublisher,
         youtube_resolver: YouTubeResolver,
+        remover: AssetRemover,
     ) -> None:
+        self._remover = remover
         self._database = database
         self._asset_storage = asset_storage
         self._downloads = downloads
@@ -55,7 +64,11 @@ class ThemesService:
         self,
         body: SearchRequest,
     ) -> ThemeSearchResponse:
-        """Search YouTube for theme music, filtered by duration limits."""
+        """Search YouTube for theme music within the duration limits.
+
+        A search reads as many videos as one search may, so the limits leave
+        up to ``limit`` results however many of the first they reject.
+        """
         async with self._database.read_session() as db:
             app_settings = await get_app_settings(db)
         min_duration = app_settings.min_duration_seconds
@@ -63,7 +76,7 @@ class ThemesService:
 
         try:
             results = await self._youtube.search(
-                body.query, body.limit, body.video_ids, wait=False
+                body.query, MAX_SEARCH_RESULTS, body.video_ids, wait=False
             )
         except (OSError, ValueError) as exc:
             raise PublicServiceError(502, str(exc)) from exc
@@ -74,7 +87,12 @@ class ThemesService:
             if result.id in explicit_ids
             or min_duration <= (result.duration or 0) <= max_duration
         ]
-        return ThemeSearchResponse(results=filtered)
+        # Videos asked for by ID are always kept; the limit counts found ones.
+        found = [result for result in filtered if result.id not in explicit_ids]
+        kept = {result.id for result in found[: body.limit]} | explicit_ids
+        return ThemeSearchResponse(
+            results=[result for result in filtered if result.id in kept]
+        )
 
     async def video_metadata(self, youtube_id: str) -> ThemeSearchResult | None:
         """Return the video's title and duration, or ``None`` when unavailable.
@@ -148,23 +166,31 @@ class ThemesService:
             selection=SaveSelectionResponse.of(job_id, created=created), item=read
         )
 
-    async def clear(
-        self,
-        item_id: int,
-    ) -> StatusResponse:
-        """Clear saved YouTube provenance without changing the local file."""
-        async with (
-            self._asset_storage.asset_locks.acquire(item_id),
-            self._database.write_session() as db,
-        ):
-            clear_theme_selection(await require_item(db, item_id))
-            await self._downloads.cancel_assets(
-                db, AssetScope(item_id, job_type=JobType.THEME)
+    async def remove(self, item_id: int, removal: AssetRemoval) -> StatusResponse:
+        """Forget an item's theme, delete its local file or the server's copy."""
+        async with self._asset_storage.asset_locks.acquire(item_id):
+            async with self._database.read_session() as db:
+                item = await require_item(db, item_id)
+            if removal.delete_from_server:
+                await self._remover.delete_item_theme_on_server(item)
+            deleted = (
+                removal.delete_file and await self._remover.delete_item_theme_file(item)
             )
-
-        await self._downloads.committed(db)
+            async with self._database.write_session() as db:
+                item = await require_item(db, item_id)
+                if removal.forget:
+                    clear_theme_selection(item)
+                    await self._downloads.cancel_assets(
+                        db, AssetScope(item_id, job_type=JobType.THEME)
+                    )
+                if deleted:
+                    record_theme_file(item, None)
+                db.add(item)
+            await self._downloads.committed(db)
+            await self._remover.refresh_item(
+                item, {ServerAsset.THEME} if deleted else set()
+            )
         await emit_library_item_upserted(
-            item_id, "themes.clear", self._publisher, database=self._database
+            item_id, "themes.remove", self._publisher, database=self._database
         )
-
         return StatusResponse(status=Status.CLEARED)

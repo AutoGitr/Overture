@@ -419,6 +419,34 @@ class ArtStyle(StrEnum):
     ACCENT = "accent"
 
 
+@dataclass(frozen=True, slots=True)
+class ArtDrawing:
+    """How Overture draws a piece of art: its colours, with or without the title."""
+
+    style: ArtStyle
+    textless: bool = False
+
+
+class AutoArt(StrEnum):
+    """What a sync does for a collection's art slot that has none chosen."""
+
+    OFF = "off"
+    #: The best art a source offers.
+    MATCH = "match"
+    #: The best art a source offers, else art drawn from the title.
+    MATCH_OR_DRAW = "match_or_draw"
+    #: Art drawn from the title.
+    DRAW = "draw"
+
+    @property
+    def matches(self) -> bool:
+        return self in {AutoArt.MATCH, AutoArt.MATCH_OR_DRAW}
+
+    @property
+    def draws(self) -> bool:
+        return self in {AutoArt.MATCH_OR_DRAW, AutoArt.DRAW}
+
+
 class ArtSource(StrEnum):
     """Where selected artwork comes from.
 
@@ -673,7 +701,7 @@ PERFECT_MATCH_ONLY = -1
 ASSETS_MATCH_THRESHOLD_DEFAULT = PERFECT_MATCH_ONLY
 
 
-#: What a bulk operation changes on item records.
+#: What a bulk operation changes on item records; artwork and themes are removed.
 type BulkItemOperationKind = Literal[
     "artwork", "themes", "delete", "monitor", "unmonitor"
 ]

@@ -21,8 +21,9 @@ lazy from ..domain import (
     ThemeIdSource,
 )
 lazy from ..utils.art_urls import art_preview_url
-lazy from .base import StrictBaseModel
+lazy from .base import PublicText, StrictBaseModel
 lazy from .common import SaveSelectionResponse
+lazy from .removal import AssetRemoval
 
 
 class MediaItemRead(StrictBaseModel):
@@ -229,6 +230,8 @@ class BulkItemOperation(StrictBaseModel):
 
     item_ids: list[int]
     operation: BulkItemOperationKind
+    #: What ``artwork`` and ``themes`` remove.
+    removal: AssetRemoval = Field(default_factory=AssetRemoval)
 
 
 class BulkItemOperationResult(StrictBaseModel):
@@ -236,6 +239,8 @@ class BulkItemOperationResult(StrictBaseModel):
 
     item_ids: list[int]
     operation: BulkItemOperationKind
+    #: Items left as they were, and why.
+    errors: dict[int, PublicText] = Field(default_factory=dict[int, PublicText])
 
 
 class LibraryItemUpsertedEvent(StrictBaseModel):

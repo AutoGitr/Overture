@@ -114,13 +114,14 @@ describe("realtime REST cache policy", () => {
 
   it("applies bulk changes and removals to the library", () => {
     applyRestCachePolicy(
-      message("library.items.changed", { item_ids: [1, 2], operation: "monitor" }),
+      message("library.items.changed", { item_ids: [1, 2], operation: "monitor", errors: {} }),
     );
     applyRestCachePolicy(message("library.item.removed", { media_item_id: 3 }));
 
     expect(rest.applyBulkItemOperation).toHaveBeenCalledWith({
       item_ids: [1, 2],
       operation: "monitor",
+      errors: {},
     });
     expect(rest.removeLibraryItem).toHaveBeenCalledWith(3);
   });

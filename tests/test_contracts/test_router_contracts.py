@@ -336,14 +336,22 @@ class TestCollectionResponseMappers:
         catalog = PublicDatasetCollection(
             tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="a" * 11
         )
-        read = collection_read(self._row(), catalog)
+        read = collection_read(
+            self._row(), catalog, None, trust_no_theme=True, backgrounds=True
+        )
 
         assert read.server_poster_version is not None
         assert read.server_background_version is not None
         versions = read.server_poster_version + read.server_background_version
         assert "provider" not in versions
         # A replaced server image gets a new version; the same one keeps its version.
-        renamed = collection_read(self._row(thumb_url="provider-thumb-2"), None)
+        renamed = collection_read(
+            self._row(thumb_url="provider-thumb-2"),
+            None,
+            None,
+            trust_no_theme=True,
+            backgrounds=True,
+        )
         assert renamed.server_poster_version != read.server_poster_version
         assert renamed.server_background_version == read.server_background_version
         assert read.has_theme is True
@@ -357,16 +365,13 @@ class TestCollectionResponseMappers:
         assert renamed.public_dataset_themerrdb is False
 
     def test_collection_theme_status_mapper_uses_reconciled_collection(self) -> None:
-        read = collection_read(
-            self._row(
-                server_theme_id=None,
-                youtube_id=None,
-                youtube_title=None,
-                youtube_duration=None,
-            ),
-            None,
+        row = self._row(
+            server_theme_id=None,
+            youtube_id=None,
+            youtube_title=None,
+            youtube_duration=None,
         )
-        assert collection_theme_status_response(read) == (
+        assert collection_theme_status_response(row) == (
             CollectionThemeStatusResponse(has_theme=False, youtube_id=None)
         )
 
@@ -446,6 +451,7 @@ class TestArtRequestContract:
             "url",
             "upload_hash",
             "generated",
+            "textless",
             "width",
             "height",
         }

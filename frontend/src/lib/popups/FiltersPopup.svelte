@@ -18,7 +18,7 @@
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
   import CheckboxList from "../components/CheckboxList.svelte";
   import FieldRow from "../components/FieldRow.svelte";
-  import FilterSection from "../components/FilterSection.svelte";
+  import PopupSection from "../components/PopupSection.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import RangeFields from "../components/RangeFields.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
@@ -346,7 +346,7 @@
     --segmented-wrap="nowrap"
   >
     {#if uiState.sidebarSource === "overturedb"}
-      <FilterSection label={sidebarDomain.FILTER_GROUPS.status}>
+      <PopupSection label={sidebarDomain.FILTER_GROUPS.status}>
         {#each sidebarDomain.CATALOG_FILTER_KEYS as key (key)}
           {#if key !== "seasonPosters" || uiState.sidebarTab === "show"}
             <FieldRow label={sidebarDomain.CATALOG_FILTER_LABELS[key]}>
@@ -358,33 +358,35 @@
             </FieldRow>
           {/if}
         {/each}
-      </FilterSection>
+      </PopupSection>
       <CatalogDraftsCard entries={catalogEntries} />
     {:else}
       {#each groupedSections as [group, keys] (group)}
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
         {#if title}
-          <FilterSection label={title}>
+          <PopupSection label={title}>
             {#each choiceRuns(keys) as run (run[0])}
-              <div class="choice-run">
+              <!-- Status holds one-line choices only, which its spacing groups;
+                   art and theme filters span rows, so a rule ends each run. -->
+              <div class="choice-run" class:ruled={group !== "status"}>
                 {#each run as key (key)}
                   {@render filter(key)}
                 {/each}
               </div>
             {/each}
-          </FilterSection>
+          </PopupSection>
         {:else}
           {#each keys as key (key)}
             {#if key !== "libraries"}
-              <FilterSection label={sidebarDomain.FILTERS[key].label}>
+              <PopupSection label={sidebarDomain.FILTERS[key].label}>
                 {@render filter(key)}
-              </FilterSection>
+              </PopupSection>
             {:else if librariesQuery.isError}
-              <FilterSection label={sidebarDomain.FILTERS.libraries.label}>
+              <PopupSection label={sidebarDomain.FILTERS.libraries.label}>
                 <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
-              </FilterSection>
+              </PopupSection>
             {:else if libraries.length > 1}
-              <FilterSection
+              <PopupSection
                 label={sidebarDomain.FILTERS.libraries.label}
                 description={filters.libraryIds.length === 0
                   ? "All libraries"
@@ -400,7 +402,7 @@
                   ontoggle={(id) =>
                     (draft.libraryIds = toggleSelectedValue(filters.libraryIds, id))}
                 />
-              </FilterSection>
+              </PopupSection>
             {/if}
           {/each}
         {/if}
@@ -439,6 +441,9 @@
   /* Filters offering the same choices read as one block. */
   .choice-run + .choice-run {
     padding-top: var(--space-2);
+  }
+
+  .choice-run + .choice-run.ruled {
     border-top: var(--border-subtle);
   }
 </style>

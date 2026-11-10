@@ -7,11 +7,10 @@ lazy from ...integrations.arr import ArrClient
 lazy from ...integrations.mdblist import MDBListClient
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...integrations.tmdb import TMDBClient
-lazy from ...jobs.gate import LibraryGate
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..downloads.service import DownloadService
-lazy from ..scheduler import SchedulerService
+lazy from ..removal import AssetRemover
 lazy from .access import CollectionAccess
 lazy from .arr_requests import CollectionArr
 lazy from .bulk import CollectionBulk
@@ -31,7 +30,6 @@ lazy from .post_sync import (
 )
 lazy from .reader import CollectionReader
 lazy from .rule_sync import RuleSync
-lazy from .schedule import CollectionSchedule
 lazy from .separators import CollectionSeparators
 lazy from .set_runner import CollectionSets
 lazy from .sources import SourceResolver
@@ -43,7 +41,7 @@ class CollectionsService:
     """Own the collection workflows and their lifetime.
 
     Each attribute is one responsibility that callers use directly; this class
-    only wires them together and starts and stops what needs it.
+    only wires them together and closes what needs it.
     """
 
     def __init__(
@@ -57,11 +55,10 @@ class CollectionsService:
         app_config: Settings,
         tmdb: TMDBClient,
         mdblist: MDBListClient,
-        scheduler: SchedulerService,
         art: CollectionArtService,
+        remover: AssetRemover,
         radarr: ArrClient | None = None,
         sonarr: ArrClient | None = None,
-        library_gate: LibraryGate | None = None,
     ) -> None:
         self._sources = SourceResolver(
             app_config=app_config,
@@ -98,7 +95,7 @@ class CollectionsService:
             downloads=downloads,
         )
         self.themes = CollectionThemes(
-            access=access, downloads=downloads, app_config=app_config
+            access=access, downloads=downloads, app_config=app_config, remover=remover
         )
         self.arr = CollectionArr(access=access, sources=self._sources, effects=effects)
         post_sync = PostSync(
@@ -136,20 +133,10 @@ class CollectionsService:
                 access=access, editor=self.editor, rules=self.rules
             ),
         )
-        self.bulk = CollectionBulk(access=access, editor=self.editor)
-        self.schedule = CollectionSchedule(
-            access=access,
-            sets=self.sets,
-            rules=self.rules,
-            scheduler=scheduler,
-            library_gate=library_gate,
+        self.bulk = CollectionBulk(
+            access=access, editor=self.editor, art=art, themes=self.themes
         )
 
-    async def start(self) -> None:
-        """Start polling for due sets and rules."""
-        self.schedule.start()
-
-    async def stop(self) -> None:
-        """Remove polling before the runtime closes its HTTP clients."""
-        self.schedule.stop()
+    async def close(self) -> None:
+        """Close the source clients."""
         await self._sources.close()

@@ -32,8 +32,9 @@ lazy from overture.schemas.collections import (
     SourceCondition,
     TmdbItemSource,
 )
+lazy from overture.schemas.removal import AssetRemoval, RemovalTarget
 lazy from overture.services.collections.service import CollectionsService
-lazy from overture.services.scheduler import SchedulerService
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import library_rule
@@ -42,6 +43,7 @@ lazy from tests.runtime_helpers import (
     NoopDownloads,
     NoopProviderRegistry,
     make_local_assets,
+    make_remover,
     unused,
 )
 lazy from tests.sync_helpers import sync_full
@@ -76,6 +78,7 @@ _LEAD = FilterGroup(
 @dataclass(slots=True)
 class Bed:
     service: CollectionsService
+    remover: AssetRemover
     database: Database
     engine: AsyncEngine
     regular: int
@@ -144,6 +147,7 @@ async def bed(
             await provider.get_sections(), utc_now()
         )
         await session.merge(settings_row())
+    remover = make_remover(provider, app_config=app_config, database=database)
     service = CollectionsService(
         database=database,
         provider_registry=NoopProviderRegistry(provider),
@@ -153,13 +157,13 @@ async def bed(
         app_config=app_config,
         tmdb=Tmdb(),
         mdblist=Lists(),
-        scheduler=SchedulerService(app_config=app_config),
+        remover=remover,
         art=Art(),
         radarr=FakeArrClient(1, "4k"),
         sonarr=FakeArrClient(2, "anime"),
     )
     _forbid_inside_writes(provider)
-    bench = Bed(service, database, isolated_engine, 0, 0)
+    bench = Bed(service, remover, database, isolated_engine, 0, 0)
     await bench.stock(_TITLES)
     bench.regular = (
         await service.editor.create(
@@ -205,6 +209,10 @@ async def _recommend(bed: Bed) -> object:
     )
 
 
+async def _removal_options(bed: Bed) -> object:
+    return await bed.remover.options(RemovalTarget(asset="art", item_ids=[1, 2, 3]))
+
+
 #: Each operation, and how many statements it may take at any library size.
 OPERATIONS: dict[str, tuple[Operation, int]] = {
     "regular rule sync": (lambda bed: bed.service.rules.sync(bed.regular), 40),
@@ -214,6 +222,11 @@ OPERATIONS: dict[str, tuple[Operation, int]] = {
     "recommendation": (_recommend, 5),
     "collection detail": (lambda bed: bed.service.reader.get(bed.regular), 15),
     "collection list": (lambda bed: bed.service.reader.listed(), 15),
+    "removal options": (_removal_options, 6),
+    "collection theme removal": (
+        lambda bed: bed.service.themes.remove(bed.regular, AssetRemoval()),
+        12,
+    ),
 }
 
 

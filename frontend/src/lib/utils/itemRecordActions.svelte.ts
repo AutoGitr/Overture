@@ -1,9 +1,9 @@
 import { createMutation } from "@tanstack/svelte-query";
 import {
-  clearAllArtMutation,
-  clearArtMutation,
-  clearThemeMutation,
   deleteItemMutation,
+  removeAllArtMutation,
+  removeArtMutation,
+  removeThemeMutation,
   setMonitoredMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { MediaItemRead } from "../../generated/rest/types.gen";
@@ -11,21 +11,20 @@ import { upsertLibraryItem } from "../rest/cache";
 import { goToLibrary, type ArtSubTab } from "../router/routes";
 import { downloadState } from "../stores/downloadState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+import { askRemoval } from "./assetRemoval";
 import { errorMessage } from "./errors";
 
-const ARTWORK_KEPT = "Local artwork files are kept.";
-
 /**
- * What the detail view can do to a stored item's record: forget selections,
- * monitor it or remove it. Changed items arrive over the live connection, so
+ * What the detail view can do to a stored item's record: remove its art or
+ * theme, monitor it or remove it. Changed items arrive over the live connection, so
  * only the server's own answers are written to the cache here. Create it
  * during component initialisation.
  */
 export class ItemRecordActions {
   readonly #feedback = createNotifier();
-  readonly #clearAllArt = createMutation(() => clearAllArtMutation());
-  readonly #clearArt = createMutation(() => clearArtMutation());
-  readonly #clearTheme = createMutation(() => clearThemeMutation());
+  readonly #clearAllArt = createMutation(() => removeAllArtMutation());
+  readonly #clearArt = createMutation(() => removeArtMutation());
+  readonly #clearTheme = createMutation(() => removeThemeMutation());
   readonly #setMonitored = createMutation(() => setMonitoredMutation());
   readonly #delete = createMutation(() => deleteItemMutation());
 
@@ -54,45 +53,42 @@ export class ItemRecordActions {
     return this.#delete.isPending;
   }
 
-  /** Forget a tab's selections, or only the season being viewed. */
+  /** Remove a tab's art, or only the season being viewed. */
   async clearArt(tab: ArtSubTab, seasonId: number | null = null): Promise<void> {
     const item = this.item();
     if (!item || this.clearingArt) return;
-    if (!(await this.#confirm(`Forget the saved ${tab} selection?`, ARTWORK_KEPT))) {
-      return;
-    }
-    await this.#run("Clear art failed", () =>
-      this.#clearArt.mutateAsync({
-        path: { item_id: item.id, art_type: tab === "seasons" ? "season_poster" : tab },
-        ...(seasonId === null ? {} : { query: { season_id: seasonId } }),
-      }),
-    );
+    const artType = tab === "seasons" ? "season_poster" : tab;
+    await this.#run("Remove art failed", async () => {
+      const removal = await askRemoval(
+        { asset: artType, item_ids: [item.id], season_id: seasonId },
+        seasonId === null && tab === "seasons" ? "every season poster" : `the ${tab}`,
+      );
+      if (!removal) return;
+      await this.#clearArt.mutateAsync({
+        path: { item_id: item.id, art_type: artType },
+        query: { ...removal, ...(seasonId === null ? {} : { season_id: seasonId }) },
+      });
+    });
   }
 
   async clearAllArt(): Promise<void> {
     const item = this.item();
     if (!item || this.clearingArt) return;
-    if (
-      !(await this.#confirm("Forget every saved artwork selection?", ARTWORK_KEPT, "Forget all"))
-    ) {
-      return;
-    }
-    await this.#run("Clear all art failed", () =>
-      this.#clearAllArt.mutateAsync({ path: { item_id: item.id } }),
-    );
+    await this.#run("Remove all art failed", async () => {
+      const removal = await askRemoval({ asset: "art", item_ids: [item.id] }, "all of its art");
+      if (!removal) return;
+      await this.#clearAllArt.mutateAsync({ path: { item_id: item.id }, query: removal });
+    });
   }
 
   async clearTheme(): Promise<void> {
     const item = this.item();
     if (!item || this.themeBusy) return;
-    if (
-      !(await this.#confirm("Forget the saved theme selection?", "The local theme file is kept."))
-    ) {
-      return;
-    }
-    await this.#run("Clear theme failed", () =>
-      this.#clearTheme.mutateAsync({ path: { item_id: item.id } }),
-    );
+    await this.#run("Remove theme failed", async () => {
+      const removal = await askRemoval({ asset: "theme", item_ids: [item.id] }, "the theme");
+      if (!removal) return;
+      await this.#clearTheme.mutateAsync({ path: { item_id: item.id }, query: removal });
+    });
   }
 
   async toggleMonitored(): Promise<void> {
@@ -122,10 +118,6 @@ export class ItemRecordActions {
       await this.#delete.mutateAsync({ path: { item_id: item.id } });
       goToLibrary(item.media_type);
     });
-  }
-
-  #confirm(title: string, message: string, confirmLabel = "Forget"): Promise<boolean> {
-    return confirmAction({ title, message, confirmLabel, destructive: true });
   }
 
   async #run(failure: string, action: () => Promise<unknown>): Promise<void> {

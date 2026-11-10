@@ -143,8 +143,8 @@
       {#if set}
         <DetailForm
           collapsible
-          title="Schedule"
-          description="When the set syncs, and when its collections are active each year."
+          title="Active dates"
+          description="When the set's collections are on the server each year."
           busy={set.busy}
           disabled={!set.libraryIds.length}
         >

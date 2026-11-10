@@ -7,8 +7,10 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.settings import AppSettings, get_app_settings
 lazy from overture.domain import (
+    ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
+    AutoArt,
     AutoUnmonitor,
     ServerType,
     TmdbLanguageFilter,
@@ -97,9 +99,11 @@ async def test_get_settings_creates_default_row(
     assert (
         result.collection_minimum_items,
         result.collection_delete_below_minimum,
-        result.collection_sync_enabled,
+        result.collection_auto_art,
+        result.collection_drawn_style,
+        result.collection_backgrounds,
         result.collection_delete_when_inactive,
-    ) == (2, True, False, True)
+    ) == (2, True, AutoArt.OFF, ArtStyle.DARK, True, True)
     assert (result.radarr_search, result.sonarr_search) == (False, False)
 
 

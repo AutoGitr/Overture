@@ -13,8 +13,8 @@
 
 <DetailForm
   collapsible
-  title="Schedule"
-  description="When the collection is active each year. Its group decides when it syncs."
+  title="Active dates"
+  description="When the collection is on the server each year."
   busy={editor.busy}
   disabled={!editor.libraryIds.length}
 >

@@ -1,24 +1,26 @@
 import { createMutation } from "@tanstack/svelte-query";
 import {
-  deleteCollectionThemeMutation,
-  clearCollectionArtMutation,
-  clearAllCollectionArtMutation,
+  removeAllCollectionArtMutation,
+  removeCollectionArtMutation,
+  removeCollectionThemeMutation,
   setCollectionThemeMutation,
   setCollectionMonitoredMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionDetail } from "../../generated/rest/types.gen";
 import { patchCollection } from "../rest/cache";
 import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
-import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
+import { createNotifier } from "../stores/notificationState.svelte";
+import { askRemoval } from "./assetRemoval";
 import { errorMessage } from "./errors";
-import { beginRecordAdvance, collectionKey, handleRecordSelectionAdvance } from "./recordAdvance";
+import { beginAutoAdvance, collectionKey } from "./autoAdvance";
+import { handleRecordSelectionAdvance } from "./recordAdvance";
 
 /** Collection asset actions shared by the header and the active section. */
 export class CollectionActions {
   private readonly feedback = createNotifier();
-  private readonly clearArtRequest = createMutation(() => clearCollectionArtMutation());
-  private readonly clearAllArtRequest = createMutation(() => clearAllCollectionArtMutation());
-  private readonly deleteThemeRequest = createMutation(() => deleteCollectionThemeMutation());
+  private readonly clearArtRequest = createMutation(() => removeCollectionArtMutation());
+  private readonly clearAllArtRequest = createMutation(() => removeAllCollectionArtMutation());
+  private readonly deleteThemeRequest = createMutation(() => removeCollectionThemeMutation());
   private readonly setThemeRequest = createMutation(() => setCollectionThemeMutation());
   private readonly setMonitoredRequest = createMutation(() => setCollectionMonitoredMutation());
   private chosen = $state<{ collectionId: number; videoId: string } | null>(null);
@@ -72,17 +74,20 @@ export class CollectionActions {
     const target = this.current();
     this.chosen = { collectionId: target.id, videoId };
     this.feedback.clear();
-    const advanceContext = beginRecordAdvance();
+    const advanceContext = beginAutoAdvance();
     try {
       const result = await this.setThemeRequest.mutateAsync({
         body: { youtube_id: videoId },
         path: { collection_id: target.id },
       });
-      downloadState.trackQueuedCollectionJob({
-        jobId: result.job_id,
-        collectionId: target.id,
-        title: target.title,
-      });
+      if (result.job_id)
+        downloadState.trackQueuedCollectionJob({
+          jobId: result.job_id,
+          collectionId: target.id,
+          title: target.title,
+        });
+      // An inactive collection keeps the choice; the sync that restores it downloads it.
+      else patchCollection(target.id, { youtube_id: videoId, theme_status: result.theme_status });
       handleRecordSelectionAdvance(collectionKey(target.id), "theme", advanceContext);
       return true;
     } catch (error) {
@@ -97,56 +102,52 @@ export class CollectionActions {
 
   async clearArt(artType: "poster" | "background" | "all") {
     if (this.clearingArt) return;
-    if (
-      !(await confirmAction({
-        title: "Forget selected collection artwork?",
-        message: "Artwork on the media server is kept.",
-        confirmLabel: "Forget",
-      }))
-    )
-      return;
     const collection = this.current();
+    this.feedback.clear();
     try {
-      const result =
-        artType === "all"
-          ? await this.clearAllArtRequest.mutateAsync({
-              path: { collection_id: collection.id },
-            })
-          : await this.clearArtRequest.mutateAsync({
-              path: { collection_id: collection.id, art_type: artType },
-            });
-      patchCollection(collection.id, result);
+      const removal = await askRemoval(
+        { asset: artType === "all" ? "art" : artType, collection_ids: [collection.id] },
+        artType === "all" ? "its art" : `the ${artType}`,
+      );
+      if (!removal) return;
+      if (artType === "all")
+        await this.clearAllArtRequest.mutateAsync({
+          path: { collection_id: collection.id },
+          query: removal,
+        });
+      else
+        await this.clearArtRequest.mutateAsync({
+          path: { collection_id: collection.id, art_type: artType },
+          query: removal,
+        });
     } catch (error) {
-      this.feedback.error(errorMessage(error, "Clear artwork failed"));
+      this.feedback.error(errorMessage(error, "Remove artwork failed"));
     }
   }
 
   async clearTheme() {
     if (this.uploading) return;
     const target = this.current();
-    if (
-      !(await confirmAction({
-        title: "Remove the collection theme?",
-        message: `The theme is removed from ${target.title} on the media server.`,
-        confirmLabel: "Remove",
-        destructive: true,
-      }))
-    )
-      return;
     this.feedback.clear();
     try {
+      const removal = await askRemoval(
+        { asset: "theme", collection_ids: [target.id] },
+        "the collection theme",
+      );
+      if (!removal) return;
       const cleared = await this.deleteThemeRequest.mutateAsync({
         path: { collection_id: target.id },
+        query: removal,
       });
       patchCollection(target.id, {
         has_theme: cleared.has_theme,
-        youtube_id: null,
-        youtube_title: null,
-        youtube_duration: null,
+        ...(removal.forget
+          ? { youtube_id: null, youtube_title: null, youtube_duration: null }
+          : {}),
         theme_status: cleared.theme_status,
       });
     } catch (error) {
-      this.feedback.error(errorMessage(error, "Clear failed"));
+      this.feedback.error(errorMessage(error, "Remove theme failed"));
     }
   }
 }

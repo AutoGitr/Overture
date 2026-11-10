@@ -19,12 +19,14 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.schemas.art import SaveArtRequest
 lazy from overture.schemas.library import media_item_read_from_model
+lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services import retention
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.retention import prune_image_cache
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
@@ -87,6 +89,11 @@ def _service(
         ),
         image_clients=unused(ProxyClientManager),
         image_cache=cache,
+        remover=AssetRemover(
+            asset_storage=AssetStorage(app_config=app_config),
+            provider_registry=registry,
+            database=database,
+        ),
     )
 
 
@@ -189,7 +196,7 @@ async def test_an_item_without_a_folder_keeps_its_upload_as_its_file(
     assert response.selection.job_id is None
     assert response.item.poster_hash == upload.upload_hash
     assert response.item.poster_status is AssetStatus.COMPLETE
-    await service.clear(item_id, ArtType.POSTER)
+    await service.remove(item_id, ArtType.POSTER, AssetRemoval())
     assert await _slot(database, item_id) is None
 
 

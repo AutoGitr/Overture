@@ -80,8 +80,8 @@ test("dialogs isolate keyboard focus and restore the opener", async ({ page }) =
   const close = dialog.getByRole("button", { name: "Close popup" });
   await expect(close).toBeFocused();
   await page.keyboard.press("Tab");
-  // Workflow comes first, as the setting the rest depend on.
-  await expect(dialog.getByRole("combobox").first()).toBeFocused();
+  // Workflow comes first, as the setting the rest depend on; its section folds.
+  await expect(dialog.getByRole("button", { name: /^Workflow/ })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(close).toBeFocused();
   // Native dialogs allow access to browser controls, but not background content.
@@ -227,11 +227,11 @@ test("settings cannot be saved until their server values have loaded", async ({ 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-  await expect(dialog.getByLabel("Workflow")).toBeDisabled();
+  await expect(dialog.getByRole("combobox", { name: "Workflow" })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Retry settings", exact: true })).toBeEnabled();
   available = true;
   await dialog.getByRole("button", { name: "Retry settings", exact: true }).click();
-  await expect(dialog.getByLabel("Workflow")).toHaveValue("themes");
+  await expect(dialog.getByRole("combobox", { name: "Workflow" })).toHaveValue("themes");
   await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
 });
 

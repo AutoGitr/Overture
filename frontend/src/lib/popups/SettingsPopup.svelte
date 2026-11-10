@@ -7,6 +7,7 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { ASPECT_TOLERANCES, DEFAULT_APP_SETTINGS } from "../../generated/settings";
   import { createNotifier } from "../stores/notificationState.svelte";
+  import { setSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import {
@@ -24,6 +25,7 @@
   import DataStatus from "../components/DataStatus.svelte";
   import ColorInput from "../components/ColorInput.svelte";
   import GlobalCollectionDefaults from "../components/GlobalCollectionDefaults.svelte";
+  import PopupSection from "../components/PopupSection.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
 
   const THEMES: readonly (readonly [ThemeMode, string])[] = [
@@ -32,6 +34,7 @@
     ["dark", "Dark"],
   ];
 
+  setSectionView("settings");
   const queryClient = useQueryClient();
 
   let draft = $state(settingsState.toUpdatePayload());
@@ -110,8 +113,7 @@
     aria-label="Application settings"
   >
     <CardColumn>
-      <div class="option-card">
-        <span class="form-label">Workflow</span>
+      <PopupSection label="Workflow">
         <div class="options-col">
           <label class="form-row justify-between">
             <span>Workflow</span>
@@ -158,10 +160,9 @@
             </select>
           </label>
         </div>
-      </div>
+      </PopupSection>
 
-      <div class="option-card">
-        <span class="form-label">Artwork</span>
+      <PopupSection label="Artwork">
         <div class="options-col">
           <label class="form-row justify-between">
             <span>Aspect ratio control</span>
@@ -197,10 +198,9 @@
             </label>
           {/if}
         </div>
-      </div>
+      </PopupSection>
 
-      <div class="option-card">
-        <span class="form-label">Themes</span>
+      <PopupSection label="Themes">
         <div class="options-col">
           <div class="form-row">
             <label for="theme-search-format">Theme search query</label>
@@ -243,15 +243,13 @@
             <input type="checkbox" bind:checked={draft.normalize_theme_loudness} />
           </label>
         </div>
-      </div>
+      </PopupSection>
 
-      <div class="option-card">
-        <span class="form-label">Collections</span>
+      <PopupSection label="Collections">
         <GlobalCollectionDefaults bind:draft />
-      </div>
+      </PopupSection>
 
-      <div class="option-card">
-        <span class="form-label">Appearance</span>
+      <PopupSection label="Appearance">
         <div class="options-col">
           <div class="form-row justify-between">
             <span>Theme</span>
@@ -286,7 +284,7 @@
             <input type="checkbox" bind:checked={appearance.showBackgroundImage} />
           </label>
         </div>
-      </div>
+      </PopupSection>
 
     </CardColumn>
   </fieldset>

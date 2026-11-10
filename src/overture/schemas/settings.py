@@ -8,8 +8,10 @@ lazy from sqlmodel._compat import SQLModelConfig
 
 lazy from ..db.models.settings import AppSettingsBase
 lazy from ..domain import (
+    ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
+    AutoArt,
     AutoUnmonitor,
     CollectionFiltering,
     CollectionMode,
@@ -75,14 +77,13 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_visible_library: bool | None = None
     collection_minimum_items: int | None = None
     collection_delete_below_minimum: bool | None = None
-    collection_auto_match_art: bool | None = None
-    collection_auto_generate_art: bool | None = None
+    collection_auto_art: AutoArt | None = None
+    collection_drawn_style: ArtStyle | None = None
+    collection_backgrounds: bool | None = None
     collection_auto_match_theme: bool | None = None
     collection_sort_title_format: str | None = None
     collection_summary_format: str | None = None
     collection_delete_when_inactive: bool | None = None
-    collection_sync_schedule: str | None = None
-    collection_sync_enabled: bool | None = None
     collection_request_missing: bool | None = None
     collection_import_unmanaged: bool | None = None
     overturedb_no_theme: bool | None = None

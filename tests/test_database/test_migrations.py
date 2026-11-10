@@ -1,5 +1,6 @@
 """Startup creates or upgrades the schema and safely accepts repeated runs."""
 
+lazy import json
 lazy import logging
 lazy from pathlib import Path
 
@@ -17,6 +18,7 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database, alembic_config, run_migrations
 lazy from overture.domain import MediaType
 lazy from overture.migrations import versions_at_head
+lazy from overture.schemas.sync import SyncScheduleConfig
 
 
 def test_baseline_downgrade_removes_all_tables_and_can_be_reapplied() -> None:
@@ -875,5 +877,124 @@ def test_drawn_art_and_separators_are_added_and_separators_go_on_downgrade() -> 
             assert conn.exec_driver_sql(
                 "SELECT COUNT(*) FROM media_collections"
             ).all() == [(0,)]
+    finally:
+        engine.dispose()
+
+
+#: An application settings row as the revision before automatic art stores it.
+_SETTINGS_BEFORE_AUTO_ART = {
+    "id": 1,
+    "collection_sync_mode": "'sync'",
+    "collection_mode_default": "'default'",
+    "collection_order_default": "'release.asc'",
+    "collection_filtering_default": "'user'",
+    "collection_visible_home": 0,
+    "collection_visible_shared": 0,
+    "collection_visible_library": 0,
+    "collection_minimum_items": 2,
+    "collection_delete_below_minimum": 1,
+    "collection_auto_match_art": 1,
+    "collection_auto_generate_art": 0,
+    "collection_auto_match_theme": 0,
+    "collection_sort_title_format": "''",
+    "collection_summary_format": "''",
+    "collection_delete_when_inactive": 1,
+    "collection_sync_schedule": "'0 3 * * *'",
+    "collection_sync_enabled": 1,
+    "collection_request_missing": 0,
+    "collection_import_unmanaged": 1,
+    "overturedb_no_theme": 1,
+    "overturedb_browse": 1,
+    "tmdb_region": "'US'",
+    "radarr_root_folder": "''",
+    "radarr_search": 0,
+    "sonarr_root_folder": "''",
+    "sonarr_search": 0,
+    "auto_match_art": 0,
+    "workflow": "'art_and_themes'",
+    "theme_search_format": "'{title}'",
+    "min_duration_seconds": 20,
+    "max_duration_seconds": 600,
+    "normalize_theme_loudness": 1,
+    "skip_media_server_tmdb_urls": 0,
+    "disable_media_server_art": 0,
+    "aspect_ratio_tolerance": "'strict'",
+    "tmdb_language_filter": "'en_null'",
+    "auto_advance": "'slots_and_items'",
+    "auto_advance_skip_completed": 1,
+    "auto_unmonitor": "'art_and_theme'",
+}
+
+
+def test_automatic_art_combines_each_tiers_switches_and_schedules_move_to_sync() -> (
+    None
+):
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c9e4f1b7a2d3")
+            conn.exec_driver_sql(
+                f"INSERT INTO app_settings ({', '.join(_SETTINGS_BEFORE_AUTO_ART)}) "  # noqa: S608 -- literal test values
+                f"VALUES ({', '.join(map(str, _SETTINGS_BEFORE_AUTO_ART.values()))})"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, separator, "
+                "auto_generate_art, sync_schedule) VALUES "
+                "(1, 'plex', 'Sagas', 0, 1, '0 4 * * *'), "
+                "(2, 'plex', 'Studios', 0, NULL, NULL), "
+                "(3, 'plex', 'Off', 0, NULL, NULL)"
+            )
+            conn.exec_driver_sql(
+                "UPDATE collection_groups SET sync_enabled = 0 WHERE id = 3"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, server_type, kind, title, "
+                "order_type, visible_home, visible_shared, visible_library, "
+                "child_count, monitored, unsynced, deselected, group_id) VALUES "
+                "(1, 'plex', 'regular', 'Saga', 'release.asc', 0, 0, 0, 0, 1, 0, "
+                "0, 1)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_rules (collection_id, smart, auto_match_art) "
+                "VALUES (1, 0, 0)"
+            )
+
+            command.upgrade(config, "b4d7e2a9c815")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_art, collection_drawn_style, "
+                "collection_backgrounds FROM app_settings"
+            ).all() == [("match", "dark", 1)]
+            assert conn.exec_driver_sql(
+                "SELECT name, auto_art FROM collection_groups ORDER BY id"
+            ).all() == [("Sagas", "match_or_draw"), ("Studios", None), ("Off", None)]
+            # The collection turned matching off and inherited its group's drawing.
+            assert conn.exec_driver_sql(
+                "SELECT auto_art FROM collection_rules"
+            ).all() == [("draw",)]
+            schedules = conn.exec_driver_sql(
+                "SELECT name, cron_expression, payload FROM saved_schedules "
+                "WHERE kind = 'sync' ORDER BY cron_expression"
+            ).all()
+            assert [(name, cron) for name, cron, _ in schedules] == [
+                ("Collections (0 3 * * *)", "0 3 * * *"),
+                ("Collections (0 4 * * *)", "0 4 * * *"),
+            ]
+            assert [
+                json.loads(payload)["collection_groups"] for *_, payload in (schedules)
+            ] == [["Studios", "Ungrouped"], ["Sagas"]]
+            SyncScheduleConfig.model_validate(json.loads(schedules[0][2]))
+
+            command.downgrade(config, "c9e4f1b7a2d3")
+            assert conn.exec_driver_sql(
+                "SELECT auto_match_art, auto_generate_art FROM collection_groups "
+                "WHERE id = 1"
+            ).all() == [(1, 1)]
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_match_art, collection_auto_generate_art "
+                "FROM app_settings"
+            ).all() == [(1, 0)]
     finally:
         engine.dispose()

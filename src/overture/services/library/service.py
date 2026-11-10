@@ -21,6 +21,7 @@ lazy from ...domain import (
     media_sort_key,
 )
 lazy from ...integrations.proxy import ProxyClientManager
+lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
@@ -41,9 +42,12 @@ lazy from ...schemas.library import (
 lazy from ...schemas.records import DatabaseRecord
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import UnsupportedImageFormatError
+lazy from ...utils.security import sanitise_error
 lazy from ...utils.threads import owned_thread
+lazy from ..art.service import ArtService
 lazy from ..downloads.service import DownloadService
 lazy from ..provider_images import proxy_provider_image
+lazy from ..removal import AssetRemover
 lazy from ..server_identity import resolve_server_item_id
 lazy from ..storage.assets import (
     AssetStorage,
@@ -53,6 +57,7 @@ lazy from ..storage.assets import (
 )
 lazy from ..storage.image_cache import CachedOriginal, ImageCache
 lazy from ..storage.responses import cached_image_response
+lazy from ..themes.service import ThemesService
 lazy from .items import (
     emit_library_item_removed,
     emit_library_item_upserted,
@@ -87,7 +92,13 @@ class LibraryService:
         image_cache: ImageCache,
         provider_registry: ProviderRegistry,
         proxy_clients: ProxyClientManager,
+        art: ArtService,
+        themes: ThemesService,
+        remover: AssetRemover,
     ) -> None:
+        self._art = art
+        self._themes = themes
+        self._remover = remover
         self._downloads = downloads
         self._database = database
         self._publisher = publisher
@@ -207,8 +218,14 @@ class LibraryService:
     ) -> BulkItemOperationResult:
         """Commit the complete target set before publishing one cache update.
 
-        Clearing or deleting cancels the affected downloads.
+        Clearing or deleting cancels the affected downloads. Deleting files or
+        the server's copies goes item by item, each committed on its own.
         """
+        removal = body.removal
+        if body.operation in {"artwork", "themes"} and (
+            removal.delete_file or removal.delete_from_server
+        ):
+            return await self._remove_each(body)
         cancelled = _CANCELLED_JOBS.get(body.operation, ())
         async with self._database.write_session() as db:
             if cancelled:
@@ -222,6 +239,25 @@ class LibraryService:
             await self._publisher.broadcast(
                 "library.items.changed", result.model_dump(mode="json")
             )
+        return result
+
+    async def _remove_each(self, body: BulkItemOperation) -> BulkItemOperationResult:
+        """Remove each item's artwork or theme, counting the ones that fail."""
+        if body.operation == "artwork" and body.removal.delete_from_server:
+            self._remover.require_art_deletion()
+        result = BulkItemOperationResult(item_ids=[], operation=body.operation)
+        for item_id in dict.fromkeys(body.item_ids):
+            try:
+                if body.operation == "artwork":
+                    await self._art.remove(item_id, "art", body.removal)
+                else:
+                    await self._themes.remove(item_id, body.removal)
+            except (MediaServerError, OSError, PathTraversalError) as exc:
+                result.errors[item_id] = sanitise_error(str(exc))
+            except PublicServiceError as exc:
+                result.errors[item_id] = exc.message
+            else:
+                result.item_ids.append(item_id)
         return result
 
     async def delete_item(self, item_id: int) -> None:

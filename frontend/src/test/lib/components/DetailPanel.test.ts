@@ -12,6 +12,7 @@ import { mediaItem, publicDatasetStatus, season } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 const {
+  askRemoval,
   clearAllArt,
   clearArt,
   clearTheme,
@@ -23,6 +24,7 @@ const {
   setMonitored,
   upsertLibraryItem,
 } = vi.hoisted(() => ({
+  askRemoval: vi.fn(),
   clearAllArt: vi.fn(),
   clearArt: vi.fn(),
   clearTheme: vi.fn(),
@@ -37,13 +39,14 @@ const {
 
 vi.mock("../../../generated/rest/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../generated/rest/sdk.gen")>()),
-  clearAllArt,
-  clearArt,
-  clearTheme,
+  removeAllArt: clearAllArt,
+  removeArt: clearArt,
+  removeTheme: clearTheme,
   deleteItem,
   getSeasons,
   setMonitored,
 }));
+vi.mock("../../../lib/utils/assetRemoval", () => ({ askRemoval }));
 vi.mock("../../../lib/rest/cache", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/rest/cache")>()),
   invalidateSeasons,
@@ -329,6 +332,8 @@ describe("DetailPanel image changes", () => {
   });
 });
 
+const FORGET = { forget: true, delete_file: false, delete_from_server: false };
+
 describe("DetailPanel record actions", () => {
   const firefly = mediaItem({ id: 7, media_type: "show", title: "Firefly" });
   const alien = mediaItem({
@@ -343,6 +348,7 @@ describe("DetailPanel record actions", () => {
     queryClient.clear();
     vi.resetAllMocks();
     confirmAction.mockResolvedValue(true);
+    askRemoval.mockResolvedValue(FORGET);
     refreshItem.mockResolvedValue(undefined);
     invalidateSeasons.mockResolvedValue(undefined);
     getSeasons.mockResolvedValue({
@@ -361,10 +367,16 @@ describe("DetailPanel record actions", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "Clear seasons" }));
 
     await waitFor(() => expect(clearArt).toHaveBeenCalledTimes(1));
-    expect(clearArt).toHaveBeenCalledWith(
-      expect.objectContaining({ path: { item_id: 7, art_type: "season_poster" } }),
+    expect(askRemoval).toHaveBeenCalledWith(
+      { asset: "season_poster", item_ids: [7], season_id: null },
+      "every season poster",
     );
-    expect(clearArt.mock.calls[0]?.[0]).not.toHaveProperty("query");
+    expect(clearArt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { item_id: 7, art_type: "season_poster" },
+        query: FORGET,
+      }),
+    );
   });
 
   it("forgets only the season being viewed", async () => {
@@ -380,7 +392,7 @@ describe("DetailPanel record actions", () => {
     expect(clearArt).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { item_id: 7, art_type: "season_poster" },
-        query: { season_id: 2 },
+        query: { ...FORGET, season_id: 2 },
       }),
     );
   });
@@ -393,18 +405,28 @@ describe("DetailPanel record actions", () => {
     expect(screen.getByRole("button", { name: "Clear poster" })).toBeEnabled();
   });
 
-  it("forgets one artwork type and leaves the update to the live connection", async () => {
+  it("offers to remove a local poster nothing selects", async () => {
+    renderWithQueryClient(DetailPanel, {
+      item: { ...alien, poster_url: null, poster_source: null, poster_hash: "local" },
+    });
+    expect(screen.getByRole("button", { name: "Clear poster" })).toBeEnabled();
+  });
+
+  it("removes what was chosen and leaves the update to the live connection", async () => {
+    const removal = { forget: false, delete_file: true, delete_from_server: true };
+    askRemoval.mockResolvedValue(removal);
     clearArt.mockResolvedValue({ data: { status: "cleared" } });
     renderWithQueryClient(DetailPanel, { item: alien });
 
     await fireEvent.click(screen.getByRole("button", { name: "Clear poster" }));
 
     await waitFor(() => expect(clearArt).toHaveBeenCalledOnce());
-    expect(confirmAction).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Forget the saved poster selection?", destructive: true }),
+    expect(askRemoval).toHaveBeenCalledWith(
+      { asset: "poster", item_ids: [8], season_id: null },
+      "the poster",
     );
     expect(clearArt).toHaveBeenCalledWith(
-      expect.objectContaining({ path: { item_id: 8, art_type: "poster" } }),
+      expect.objectContaining({ path: { item_id: 8, art_type: "poster" }, query: removal }),
     );
     expect(refreshItem).not.toHaveBeenCalled();
     expect(invalidateSeasons).not.toHaveBeenCalled();
@@ -417,15 +439,16 @@ describe("DetailPanel record actions", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Clear all art" }));
 
     await waitFor(() =>
-      expect(clearAllArt).toHaveBeenCalledWith(expect.objectContaining({ path: { item_id: 8 } })),
+      expect(clearAllArt).toHaveBeenCalledWith(
+        expect.objectContaining({ path: { item_id: 8 }, query: FORGET }),
+      ),
     );
-    expect(confirmAction).toHaveBeenCalledWith(
-      expect.objectContaining({ confirmLabel: "Forget all" }),
-    );
+    expect(askRemoval).toHaveBeenCalledWith({ asset: "art", item_ids: [8] }, "all of its art");
   });
 
   it("changes nothing when a confirmation is declined", async () => {
     confirmAction.mockResolvedValue(false);
+    askRemoval.mockResolvedValue(null);
     const { rerender } = renderWithQueryClient(DetailPanel, {
       item: alien,
       view: { mode: "art", artSubTab: "poster", drillSeasonNum: null },
@@ -440,13 +463,14 @@ describe("DetailPanel record actions", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
     await fireEvent.click(screen.getByTitle("Delete item from database"));
 
-    await waitFor(() => expect(confirmAction).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(confirmAction).toHaveBeenCalledOnce());
+    expect(askRemoval).toHaveBeenCalledTimes(2);
     expect(clearAllArt).not.toHaveBeenCalled();
     expect(clearTheme).not.toHaveBeenCalled();
     expect(deleteItem).not.toHaveBeenCalled();
   });
 
-  it("forgets the theme selection", async () => {
+  it("removes the theme as chosen", async () => {
     clearTheme.mockResolvedValue({ data: { status: "cleared" } });
     renderWithQueryClient(DetailPanel, {
       item: alien,
@@ -457,7 +481,9 @@ describe("DetailPanel record actions", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Clear theme" }));
 
     await waitFor(() =>
-      expect(clearTheme).toHaveBeenCalledWith(expect.objectContaining({ path: { item_id: 8 } })),
+      expect(clearTheme).toHaveBeenCalledWith(
+        expect.objectContaining({ path: { item_id: 8 }, query: FORGET }),
+      ),
     );
   });
 

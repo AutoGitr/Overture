@@ -18,6 +18,7 @@ import { renderWithQueryClient } from "../../helpers/render";
 const {
   deleteCollectionTheme,
   getCollectionJob,
+  getRemovalOptions,
   searchYoutube,
   setCollectionMonitored,
   setCollectionTheme,
@@ -25,6 +26,7 @@ const {
 } = vi.hoisted(() => ({
   deleteCollectionTheme: vi.fn(),
   getCollectionJob: vi.fn(),
+  getRemovalOptions: vi.fn(),
   searchYoutube: vi.fn(),
   setCollectionMonitored: vi.fn(),
   setCollectionTheme: vi.fn(),
@@ -32,7 +34,8 @@ const {
 }));
 
 vi.mock("../../../generated/rest/sdk.gen", () => ({
-  deleteCollectionTheme,
+  getRemovalOptions,
+  removeCollectionTheme: deleteCollectionTheme,
   searchYoutube,
   setCollectionMonitored,
   setCollectionTheme,
@@ -162,6 +165,13 @@ describe("CollectionThemePanel theme state", () => {
   });
 
   it("removes the theme from the media server once confirmed", async () => {
+    getRemovalOptions.mockResolvedValue({
+      data: {
+        forget: { count: 1 },
+        delete_file: { count: 0, unavailable: "Plex keeps collection themes itself" },
+        delete_from_server: { count: 1 },
+      },
+    });
     deleteCollectionTheme.mockResolvedValue({
       data: { has_theme: false, theme_status: "missing" },
     });
@@ -174,7 +184,9 @@ describe("CollectionThemePanel theme state", () => {
     await renderPage();
 
     await fireEvent.click(await screen.findByRole("button", { name: "Clear theme" }));
-    expect((await answerConfirmation(true)).title).toBe("Remove the collection theme?");
+    expect(
+      (await answerConfirmation(true, undefined, ["Delete from the media server"])).title,
+    ).toBe("Remove the collection theme?");
 
     await waitFor(() =>
       expect(cachedCollection()).toMatchObject({
@@ -186,6 +198,7 @@ describe("CollectionThemePanel theme state", () => {
     expect(deleteCollectionTheme).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { collection_id: 1 },
+        query: { forget: true, delete_file: false, delete_from_server: true },
       }),
     );
   });

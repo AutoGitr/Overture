@@ -1,5 +1,7 @@
 <script module lang="ts">
   import type {
+    ArtStyle,
+    AutoArt,
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
@@ -31,6 +33,21 @@
   const ON_OFF = [
     [true, "On"],
     [false, "Off"],
+  ] as const;
+  const AUTO_ART: readonly (readonly [AutoArt, string])[] = [
+    ["off", "Off"],
+    ["match", "Match"],
+    ["match_or_draw", "Match, else draw"],
+    ["draw", "Draw"],
+  ];
+  const STYLES: readonly (readonly [ArtStyle, string])[] = [
+    ["dark", "Dark"],
+    ["light", "Light"],
+    ["accent", "Accent"],
+  ];
+  const WANTED_NOT = [
+    [true, "Wanted"],
+    [false, "Not needed"],
   ] as const;
   const SHOW_HIDE = [
     [true, "Show"],
@@ -88,7 +105,7 @@
 </script>
 
 {#if sync}
-  <h4 class="caps-label">Sync</h4>
+  <h4 class="caps-label">Membership</h4>
   <InheritedSelect
     label="Sync mode"
     {inherits}
@@ -126,18 +143,26 @@
   <InheritedSelect
     label="Automatic art"
     {inherits}
-    bind:value={policy.auto_match_art}
-    inherited={defaults?.auto_match_art}
-    options={ON_OFF}
-    hint="Picks art after a sync when none is chosen."
+    bind:value={policy.auto_art}
+    inherited={defaults?.auto_art}
+    options={AUTO_ART}
+    hint="After a sync, fills art no one chose: Match takes the best a source has; Draw draws a poster with the title and a background without."
   />
   <InheritedSelect
-    label="Generated poster"
+    label="Drawn colours"
     {inherits}
-    bind:value={policy.auto_generate_art}
-    inherited={defaults?.auto_generate_art}
-    options={ON_OFF}
-    hint="Draws a poster from the title after a sync when none is chosen or found."
+    bind:value={policy.drawn_style}
+    inherited={defaults?.drawn_style}
+    options={STYLES}
+    hint="The colours of art Automatic art draws, and of a group's separator."
+  />
+  <InheritedSelect
+    label="Background"
+    {inherits}
+    bind:value={policy.backgrounds}
+    inherited={defaults?.backgrounds}
+    options={WANTED_NOT}
+    hint="Not needed: a poster completes a collection's art, and none is filled in automatically."
   />
   <InheritedSelect
     label="Automatic theme"

@@ -19,6 +19,8 @@ import {
   updateCollectionMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
+  ArtStyle,
+  AutoArt,
   CollectionDetail,
   CollectionDimensionRead,
   CollectionLibraryCriteriaInput,
@@ -56,8 +58,9 @@ export type PolicyData = {
   sync_mode?: SyncMode | null;
   minimum_items?: number | null;
   delete_below_minimum?: boolean | null;
-  auto_match_art?: boolean | null;
-  auto_generate_art?: boolean | null;
+  auto_art?: AutoArt | null;
+  drawn_style?: ArtStyle | null;
+  backgrounds?: boolean | null;
   auto_match_theme?: boolean | null;
   request_missing?: boolean | null;
   member_label?: string | null;
@@ -73,10 +76,8 @@ export type PolicyData = {
   summary_format?: string | null;
 };
 
-/** When collections sync and are active, at any level. */
+/** When collections are active each year, at any level; syncs follow Sync schedules. */
 export type ScheduleData = {
-  sync_enabled?: boolean | null;
-  sync_schedule?: string | null;
   active_start_mmdd?: string | null;
   active_end_mmdd?: string | null;
   delete_when_inactive?: boolean | null;
@@ -99,8 +100,9 @@ export function defaultRule(): CollectionRuleWriteInput {
     sync_mode: null,
     minimum_items: null,
     delete_below_minimum: null,
-    auto_match_art: null,
-    auto_generate_art: null,
+    auto_art: null,
+    drawn_style: null,
+    backgrounds: null,
     auto_match_theme: null,
     collection_mode: null,
     collection_filtering: null,
@@ -923,8 +925,9 @@ const RULE_POLICY = [
   "sync_mode",
   "minimum_items",
   "delete_below_minimum",
-  "auto_match_art",
-  "auto_generate_art",
+  "auto_art",
+  "drawn_style",
+  "backgrounds",
   "auto_match_theme",
   "request_missing",
   "member_label",

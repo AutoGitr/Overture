@@ -75,6 +75,7 @@ lazy from overture.services.named_schedules import NamedSchedules
 lazy from overture.services.notifications import FailureNotifier
 lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.public_dataset.service import PublicDatasetService
+lazy from overture.services.removal import AssetRemover
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_audit.service import ServerAuditService
 lazy from overture.services.stats.service import StatsService
@@ -546,6 +547,23 @@ def make_runtime(
         app_config=app_config,
     )
 
+    remover = AssetRemover(
+        asset_storage=asset_storage,
+        provider_registry=provider_registry,
+        database=database,
+    )
+    themes = (
+        ThemesService(
+            database=database,
+            asset_storage=asset_storage,
+            downloads=downloads,
+            publisher=events,
+            youtube_resolver=youtube,
+            remover=remover,
+        )
+        if themes is None
+        else themes
+    )
     art = (
         ArtService(
             app_config=app_config,
@@ -559,6 +577,7 @@ def make_runtime(
             candidates=candidates,
             image_clients=proxy_clients,
             image_cache=image_cache,
+            remover=remover,
         )
         if art is None
         else art
@@ -572,6 +591,9 @@ def make_runtime(
             image_cache=image_cache,
             provider_registry=provider_registry,
             proxy_clients=proxy_clients,
+            art=art,
+            themes=themes,
+            remover=remover,
         )
         if library is None
         else library
@@ -597,7 +619,7 @@ def make_runtime(
             tmdb=tmdb,
             mdblist=MDBListClient(app_config=app_config),
             art=art.collections,
-            scheduler=scheduler,
+            remover=remover,
             database=database,
             provider_registry=provider_registry,
             publisher=events,
@@ -607,17 +629,6 @@ def make_runtime(
         )
         if collections is None
         else collections
-    )
-    themes = (
-        ThemesService(
-            database=database,
-            asset_storage=asset_storage,
-            downloads=downloads,
-            publisher=events,
-            youtube_resolver=youtube,
-        )
-        if themes is None
-        else themes
     )
     asset_manager = (
         AssetManagerService(
@@ -666,6 +677,7 @@ def make_runtime(
         tmdb=tmdb,
         youtube=youtube,
         art=art,
+        remover=remover,
         library=library,
         server_audit=server_audit,
         collections=collections,
@@ -918,3 +930,14 @@ def server_sections(items: Iterable[ServerItem]) -> list[ServerSection]:
             (item.library_id, item.media_type) for item in items if item.library_id
         )
     ]
+
+
+def make_remover(
+    provider: Any, *, app_config: Settings, database: Database
+) -> AssetRemover:
+    """An asset remover for *provider*, deleting files beneath real folders."""
+    return AssetRemover(
+        asset_storage=AssetStorage(app_config=app_config),
+        provider_registry=NoopProviderRegistry(provider),
+        database=database,
+    )

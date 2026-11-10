@@ -107,19 +107,18 @@
             "$ref": "#/components/schemas/AutoUnmonitor",
             "default": "art_and_theme"
           },
-          "collection_auto_generate_art": {
-            "default": false,
-            "title": "Collection Auto Generate Art",
-            "type": "boolean"
-          },
-          "collection_auto_match_art": {
-            "default": false,
-            "title": "Collection Auto Match Art",
-            "type": "boolean"
+          "collection_auto_art": {
+            "$ref": "#/components/schemas/AutoArt",
+            "default": "off"
           },
           "collection_auto_match_theme": {
             "default": false,
             "title": "Collection Auto Match Theme",
+            "type": "boolean"
+          },
+          "collection_backgrounds": {
+            "default": true,
+            "title": "Collection Backgrounds",
             "type": "boolean"
           },
           "collection_delete_below_minimum": {
@@ -131,6 +130,10 @@
             "default": true,
             "title": "Collection Delete When Inactive",
             "type": "boolean"
+          },
+          "collection_drawn_style": {
+            "$ref": "#/components/schemas/ArtStyle",
+            "default": "dark"
           },
           "collection_filtering_default": {
             "$ref": "#/components/schemas/CollectionFiltering",
@@ -173,20 +176,9 @@
             "title": "Collection Summary Format",
             "type": "string"
           },
-          "collection_sync_enabled": {
-            "default": false,
-            "title": "Collection Sync Enabled",
-            "type": "boolean"
-          },
           "collection_sync_mode": {
             "$ref": "#/components/schemas/SyncMode",
             "default": "sync"
-          },
-          "collection_sync_schedule": {
-            "default": "0 3 * * *",
-            "maxLength": 100,
-            "title": "Collection Sync Schedule",
-            "type": "string"
           },
           "collection_themes_unavailable": {
             "anyOf": [
@@ -384,14 +376,13 @@
           "collection_visible_library",
           "collection_minimum_items",
           "collection_delete_below_minimum",
-          "collection_auto_match_art",
-          "collection_auto_generate_art",
+          "collection_auto_art",
+          "collection_drawn_style",
+          "collection_backgrounds",
           "collection_auto_match_theme",
           "collection_sort_title_format",
           "collection_summary_format",
           "collection_delete_when_inactive",
-          "collection_sync_schedule",
-          "collection_sync_enabled",
           "collection_request_missing",
           "collection_import_unmanaged",
           "overturedb_no_theme",
@@ -486,27 +477,15 @@
               }
             ]
           },
-          "collection_auto_generate_art": {
+          "collection_auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Collection Auto Generate Art"
-          },
-          "collection_auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Auto Match Art"
+            ]
           },
           "collection_auto_match_theme": {
             "anyOf": [
@@ -518,6 +497,17 @@
               }
             ],
             "title": "Collection Auto Match Theme"
+          },
+          "collection_backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Backgrounds"
           },
           "collection_delete_below_minimum": {
             "anyOf": [
@@ -540,6 +530,16 @@
               }
             ],
             "title": "Collection Delete When Inactive"
+          },
+          "collection_drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "collection_filtering_default": {
             "anyOf": [
@@ -626,17 +626,6 @@
             ],
             "title": "Collection Summary Format"
           },
-          "collection_sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Sync Enabled"
-          },
           "collection_sync_mode": {
             "anyOf": [
               {
@@ -646,17 +635,6 @@
                 "type": "null"
               }
             ]
-          },
-          "collection_sync_schedule": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Sync Schedule"
           },
           "collection_visible_home": {
             "anyOf": [
@@ -999,6 +977,11 @@
             ],
             "title": "Source"
           },
+          "textless": {
+            "default": false,
+            "title": "Textless",
+            "type": "boolean"
+          },
           "title": {
             "anyOf": [
               {
@@ -1037,7 +1020,8 @@
           "art_type",
           "hamming",
           "perfect_match",
-          "generated"
+          "generated",
+          "textless"
         ],
         "title": "ArtCandidate",
         "type": "object"
@@ -1263,6 +1247,29 @@
         "title": "AspectRatioTolerance",
         "type": "string"
       },
+      "AssetRemoval": {
+        "additionalProperties": false,
+        "description": "What removing an asset does, in any combination.\n\nOverture only ever deletes images and MP3 themes: the art and theme files\nit manages in media folders, and the server's copies of them.",
+        "properties": {
+          "delete_file": {
+            "default": false,
+            "title": "Delete File",
+            "type": "boolean"
+          },
+          "delete_from_server": {
+            "default": false,
+            "title": "Delete From Server",
+            "type": "boolean"
+          },
+          "forget": {
+            "default": true,
+            "title": "Forget",
+            "type": "boolean"
+          }
+        },
+        "title": "AssetRemoval",
+        "type": "object"
+      },
       "AssetRenameResponse": {
         "additionalProperties": false,
         "description": "Asset rename response.",
@@ -1377,6 +1384,17 @@
           "slots_and_items"
         ],
         "title": "AutoAdvance",
+        "type": "string"
+      },
+      "AutoArt": {
+        "description": "What a sync does for a collection's art slot that has none chosen.",
+        "enum": [
+          "off",
+          "match",
+          "match_or_draw",
+          "draw"
+        ],
+        "title": "AutoArt",
         "type": "string"
       },
       "AutoUnmonitor": {
@@ -2200,8 +2218,8 @@
               "apply_sort_title_format",
               "adopt",
               "orphan",
-              "clear_artwork",
-              "clear_themes",
+              "remove_artwork",
+              "remove_themes",
               "delete"
             ],
             "title": "Operation",
@@ -2216,6 +2234,9 @@
                 "type": "null"
               }
             ]
+          },
+          "removal": {
+            "$ref": "#/components/schemas/AssetRemoval"
           },
           "sort_title_format": {
             "anyOf": [
@@ -2315,6 +2336,9 @@
           },
           "operation": {
             "$ref": "#/components/schemas/BulkItemOperationKind"
+          },
+          "removal": {
+            "$ref": "#/components/schemas/AssetRemoval"
           }
         },
         "required": [
@@ -2338,6 +2362,13 @@
         "additionalProperties": false,
         "description": "The items a bulk operation actually changed.",
         "properties": {
+          "errors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PublicText"
+            },
+            "title": "Errors",
+            "type": "object"
+          },
           "item_ids": {
             "items": {
               "type": "integer"
@@ -2351,7 +2382,8 @@
         },
         "required": [
           "item_ids",
-          "operation"
+          "operation",
+          "errors"
         ],
         "title": "BulkItemOperationResult",
         "type": "object"
@@ -3035,173 +3067,6 @@
         "title": "CollectionArrOptions",
         "type": "object"
       },
-      "CollectionArtwork": {
-        "additionalProperties": false,
-        "description": "Selected collection artwork and its completion state.",
-        "properties": {
-          "art_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "background_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Hash"
-          },
-          "background_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Height"
-          },
-          "background_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Phash"
-          },
-          "background_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "background_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "background_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Url"
-          },
-          "background_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Width"
-          },
-          "poster_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Hash"
-          },
-          "poster_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Height"
-          },
-          "poster_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Phash"
-          },
-          "poster_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "poster_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Width"
-          }
-        },
-        "required": [
-          "poster_url",
-          "background_url",
-          "poster_source",
-          "background_source",
-          "poster_hash",
-          "background_hash",
-          "poster_phash",
-          "background_phash",
-          "poster_width",
-          "poster_height",
-          "background_width",
-          "background_height",
-          "poster_status",
-          "background_status",
-          "art_status"
-        ],
-        "title": "CollectionArtwork",
-        "type": "object"
-      },
       "CollectionCapabilities": {
         "additionalProperties": false,
         "description": "What the active media server lets collections do, for one media type.",
@@ -3480,27 +3345,15 @@
               }
             ]
           },
-          "auto_generate_art": {
+          "auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Generate Art"
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
+            ]
           },
           "auto_match_theme": {
             "anyOf": [
@@ -3512,6 +3365,17 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
           },
           "collection_filtering": {
             "anyOf": [
@@ -3554,6 +3418,16 @@
               }
             ],
             "title": "Delete When Inactive"
+          },
+          "drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "home_order": {
             "anyOf": [
@@ -3632,10 +3506,6 @@
               }
             ]
           },
-          "sync_enabled": {
-            "title": "Sync Enabled",
-            "type": "boolean"
-          },
           "sync_mode": {
             "anyOf": [
               {
@@ -3645,9 +3515,6 @@
                 "type": "null"
               }
             ]
-          },
-          "sync_schedule": {
-            "$ref": "#/components/schemas/CronExpression"
           },
           "visible_home": {
             "anyOf": [
@@ -3687,8 +3554,9 @@
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
-          "auto_match_art",
-          "auto_generate_art",
+          "auto_art",
+          "drawn_style",
+          "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -3704,9 +3572,7 @@
           "request_missing",
           "member_label",
           "arr_tag",
-          "home_order",
-          "sync_schedule",
-          "sync_enabled"
+          "home_order"
         ],
         "title": "CollectionDefaults",
         "type": "object"
@@ -3816,6 +3682,11 @@
               }
             ],
             "title": "Background Width"
+          },
+          "backgrounds": {
+            "default": true,
+            "title": "Backgrounds",
+            "type": "boolean"
           },
           "below_minimum": {
             "default": false,
@@ -4315,6 +4186,7 @@
           "poster_status",
           "background_status",
           "art_status",
+          "backgrounds",
           "id",
           "kind",
           "title",
@@ -4749,7 +4621,7 @@
       },
       "CollectionGroupPolicy-Input": {
         "additionalProperties": false,
-        "description": "Nullable group defaults; null inherits the application setting.\n\nOnly groups and the application schedule syncs; a collection follows its group.",
+        "description": "Nullable group defaults; null inherits the application setting.",
         "properties": {
           "active_end_mmdd": {
             "anyOf": [
@@ -4781,27 +4653,15 @@
               }
             ]
           },
-          "auto_generate_art": {
+          "auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Generate Art"
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
+            ]
           },
           "auto_match_theme": {
             "anyOf": [
@@ -4813,6 +4673,17 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
           },
           "collection_filtering": {
             "anyOf": [
@@ -4855,6 +4726,16 @@
               }
             ],
             "title": "Delete When Inactive"
+          },
+          "drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "generator": {
             "anyOf": [
@@ -4948,31 +4829,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5018,7 +4878,7 @@
       },
       "CollectionGroupPolicy-Output": {
         "additionalProperties": false,
-        "description": "Nullable group defaults; null inherits the application setting.\n\nOnly groups and the application schedule syncs; a collection follows its group.",
+        "description": "Nullable group defaults; null inherits the application setting.",
         "properties": {
           "active_end_mmdd": {
             "anyOf": [
@@ -5050,27 +4910,15 @@
               }
             ]
           },
-          "auto_generate_art": {
+          "auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Generate Art"
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
+            ]
           },
           "auto_match_theme": {
             "anyOf": [
@@ -5082,6 +4930,17 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
           },
           "collection_filtering": {
             "anyOf": [
@@ -5124,6 +4983,16 @@
               }
             ],
             "title": "Delete When Inactive"
+          },
+          "drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "generator": {
             "anyOf": [
@@ -5217,31 +5086,10 @@
               }
             ]
           },
-          "sync_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Enabled"
-          },
           "sync_mode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SyncMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sync_schedule": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CronExpression"
               },
               {
                 "type": "null"
@@ -5286,8 +5134,9 @@
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
-          "auto_match_art",
-          "auto_generate_art",
+          "auto_art",
+          "drawn_style",
+          "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -5304,8 +5153,6 @@
           "member_label",
           "arr_tag",
           "home_order",
-          "sync_schedule",
-          "sync_enabled",
           "generator",
           "separator"
         ],
@@ -5908,6 +5755,11 @@
             ],
             "title": "Background Width"
           },
+          "backgrounds": {
+            "default": true,
+            "title": "Backgrounds",
+            "type": "boolean"
+          },
           "below_minimum": {
             "default": false,
             "title": "Below Minimum",
@@ -6325,6 +6177,7 @@
           "poster_status",
           "background_status",
           "art_status",
+          "backgrounds",
           "id",
           "kind",
           "title",
@@ -6481,27 +6334,15 @@
               }
             ]
           },
-          "auto_generate_art": {
+          "auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Generate Art"
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
+            ]
           },
           "auto_match_theme": {
             "anyOf": [
@@ -6513,6 +6354,17 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
           },
           "collection_filtering": {
             "anyOf": [
@@ -6555,6 +6407,16 @@
               }
             ],
             "title": "Delete When Inactive"
+          },
+          "drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "home_order": {
             "anyOf": [
@@ -6741,8 +6603,9 @@
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
-          "auto_match_art",
-          "auto_generate_art",
+          "auto_art",
+          "drawn_style",
+          "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -6803,27 +6666,15 @@
               }
             ]
           },
-          "auto_generate_art": {
+          "auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Generate Art"
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
+            ]
           },
           "auto_match_theme": {
             "anyOf": [
@@ -6835,6 +6686,17 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
           },
           "collection_filtering": {
             "anyOf": [
@@ -6877,6 +6739,16 @@
               }
             ],
             "title": "Delete When Inactive"
+          },
+          "drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "home_order": {
             "anyOf": [
@@ -7066,27 +6938,15 @@
               }
             ]
           },
-          "auto_generate_art": {
+          "auto_art": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/AutoArt"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Auto Generate Art"
-          },
-          "auto_match_art": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Match Art"
+            ]
           },
           "auto_match_theme": {
             "anyOf": [
@@ -7098,6 +6958,17 @@
               }
             ],
             "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
           },
           "collection_filtering": {
             "anyOf": [
@@ -7140,6 +7011,16 @@
               }
             ],
             "title": "Delete When Inactive"
+          },
+          "drawn_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "home_order": {
             "anyOf": [
@@ -7293,8 +7174,9 @@
           "sync_mode",
           "minimum_items",
           "delete_below_minimum",
-          "auto_match_art",
-          "auto_generate_art",
+          "auto_art",
+          "drawn_style",
+          "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
           "collection_mode",
@@ -8198,28 +8080,6 @@
         "title": "DownloadStatus",
         "type": "string"
       },
-      "EnqueuedJobResponse": {
-        "additionalProperties": false,
-        "description": "A download job that was queued.",
-        "properties": {
-          "job_id": {
-            "title": "Job Id",
-            "type": "string"
-          },
-          "status": {
-            "const": "enqueued",
-            "default": "enqueued",
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_id",
-          "status"
-        ],
-        "title": "EnqueuedJobResponse",
-        "type": "object"
-      },
       "FieldCondition-Input": {
         "additionalProperties": false,
         "description": "Test one metadata field of an item.",
@@ -8654,6 +8514,17 @@
         ],
         "title": "IncrementalThemeOrder",
         "type": "string"
+      },
+      "ItemArtAsset": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ArtType"
+          },
+          {
+            "const": "art",
+            "type": "string"
+          }
+        ]
       },
       "ItemDownloadTarget": {
         "additionalProperties": false,
@@ -10759,6 +10630,98 @@
         "title": "RecentUnit",
         "type": "string"
       },
+      "RemovableAsset": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ItemArtAsset"
+          },
+          {
+            "const": "theme",
+            "type": "string"
+          }
+        ]
+      },
+      "RemovalOption": {
+        "additionalProperties": false,
+        "description": "How many of the targets one removal choice would change.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "unavailable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable"
+          }
+        },
+        "required": [
+          "count",
+          "unavailable"
+        ],
+        "title": "RemovalOption",
+        "type": "object"
+      },
+      "RemovalOptions": {
+        "additionalProperties": false,
+        "description": "What each removal choice would change for a target, as things stand.",
+        "properties": {
+          "delete_file": {
+            "$ref": "#/components/schemas/RemovalOption"
+          },
+          "delete_from_server": {
+            "$ref": "#/components/schemas/RemovalOption"
+          },
+          "forget": {
+            "$ref": "#/components/schemas/RemovalOption"
+          }
+        },
+        "required": [
+          "forget",
+          "delete_file",
+          "delete_from_server"
+        ],
+        "title": "RemovalOptions",
+        "type": "object"
+      },
+      "RemovalTarget": {
+        "additionalProperties": false,
+        "description": "The items or collections, and which of their assets, a removal acts on.",
+        "properties": {
+          "asset": {
+            "$ref": "#/components/schemas/RemovableAsset"
+          },
+          "collection_ids": {
+            "$ref": "#/components/schemas/UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0_____"
+          },
+          "item_ids": {
+            "$ref": "#/components/schemas/UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0_____"
+          },
+          "season_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Id"
+          }
+        },
+        "required": [
+          "asset"
+        ],
+        "title": "RemovalTarget",
+        "type": "object"
+      },
       "RenameItem": {
         "additionalProperties": false,
         "description": "One asset rename request.",
@@ -10834,6 +10797,11 @@
               }
             ],
             "title": "Height"
+          },
+          "textless": {
+            "default": false,
+            "title": "Textless",
+            "type": "boolean"
           },
           "upload_hash": {
             "anyOf": [
@@ -11375,6 +11343,32 @@
         "title": "SetCollectionThemeRequest",
         "type": "object"
       },
+      "SetCollectionThemeResponse": {
+        "additionalProperties": false,
+        "description": "A collection's chosen theme: its queued download, or a choice kept for later.",
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "theme_status": {
+            "$ref": "#/components/schemas/AssetStatus"
+          }
+        },
+        "required": [
+          "job_id",
+          "theme_status"
+        ],
+        "title": "SetCollectionThemeResponse",
+        "type": "object"
+      },
       "SetDimension": {
         "description": "The metadata a collection set creates one collection per value of.",
         "enum": [
@@ -11639,7 +11633,6 @@
           "not_running",
           "idle",
           "queued",
-          "enqueued",
           "cleared",
           "deleted",
           "disabled",
@@ -13097,6 +13090,90 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/art/removal-options": {
+      "post": {
+        "description": "Say what each removal choice would change for items or collections.",
+        "operationId": "get_removal_options",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemovalTarget"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemovalOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Removal Options",
+        "tags": [
+          "art"
+        ]
+      }
+    },
     "/api/art/uploads": {
       "post": {
         "description": "Keep an uploaded JPEG or PNG until an art slot selects it.\n\nSave it into a slot by sending the returned ``upload_hash`` in place of a\nlink.",
@@ -13184,8 +13261,8 @@
     },
     "/api/art/{item_id}": {
       "delete": {
-        "description": "Clear every artwork slot across an item tree.",
-        "operationId": "clear_all_art",
+        "description": "Remove every art slot of an item and its seasons.",
+        "operationId": "remove_all_art",
         "parameters": [
           {
             "description": "Media item ID",
@@ -13196,6 +13273,36 @@
               "description": "Media item ID",
               "title": "Item Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
             }
           },
           {
@@ -13261,7 +13368,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Clear All Art",
+        "summary": "Remove All Art",
         "tags": [
           "art"
         ]
@@ -13269,8 +13376,8 @@
     },
     "/api/art/{item_id}/{art_type}": {
       "delete": {
-        "description": "Forget a slot's selected artwork.\n\nA season poster without ``season_id`` forgets every season's.",
-        "operationId": "clear_art",
+        "description": "Forget a slot's art, delete its local file or the server's copy.",
+        "operationId": "remove_art",
         "parameters": [
           {
             "description": "Media item ID",
@@ -13294,7 +13401,37 @@
             }
           },
           {
-            "description": "The season to clear; omit to clear every season's poster",
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The season; omit to remove every season's poster",
             "in": "query",
             "name": "season_id",
             "required": false,
@@ -13307,7 +13444,7 @@
                   "type": "null"
                 }
               ],
-              "description": "The season to clear; omit to clear every season's poster",
+              "description": "The season; omit to remove every season's poster",
               "title": "Season Id"
             }
           },
@@ -13374,7 +13511,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Clear Art",
+        "summary": "Remove Art",
         "tags": [
           "art"
         ]
@@ -17775,8 +17912,8 @@
     },
     "/api/collections/{collection_id}/art": {
       "delete": {
-        "description": "Forget all selected collection artwork, preserving the server copies.",
-        "operationId": "clear_all_collection_art",
+        "description": "Forget both of a collection's art slots, or delete the server's images.",
+        "operationId": "remove_all_collection_art",
         "parameters": [
           {
             "description": "Collection ID",
@@ -17788,6 +17925,36 @@
               "exclusiveMinimum": 0,
               "title": "Collection Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
             }
           },
           {
@@ -17836,7 +18003,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionArtwork"
+                  "$ref": "#/components/schemas/StatusResponse"
                 }
               }
             },
@@ -17853,7 +18020,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Clear All Collection Art",
+        "summary": "Remove All Collection Art",
         "tags": [
           "collections"
         ]
@@ -17861,8 +18028,8 @@
     },
     "/api/collections/{collection_id}/art/{art_type}": {
       "delete": {
-        "description": "Forget one selected collection artwork slot.",
-        "operationId": "clear_collection_art",
+        "description": "Forget a collection's art slot, or delete the server's image.",
+        "operationId": "remove_collection_art",
         "parameters": [
           {
             "description": "Collection ID",
@@ -17887,6 +18054,36 @@
             }
           },
           {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Read-only API key",
             "in": "header",
             "name": "X-Api-Key",
@@ -17932,7 +18129,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionArtwork"
+                  "$ref": "#/components/schemas/StatusResponse"
                 }
               }
             },
@@ -17949,7 +18146,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Clear Collection Art",
+        "summary": "Remove Collection Art",
         "tags": [
           "collections"
         ]
@@ -18092,6 +18289,16 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/ArtStyle"
+            }
+          },
+          {
+            "in": "query",
+            "name": "textless",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Textless",
+              "type": "boolean"
             }
           },
           {
@@ -19441,8 +19648,8 @@
     },
     "/api/collections/{collection_id}/theme": {
       "delete": {
-        "description": "Remove the theme from a collection and clear its stored record.",
-        "operationId": "delete_collection_theme",
+        "description": "Forget a collection's theme, delete the server's copy or its file.",
+        "operationId": "remove_collection_theme",
         "parameters": [
           {
             "description": "Collection ID",
@@ -19454,6 +19661,36 @@
               "exclusiveMinimum": 0,
               "title": "Collection Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
             }
           },
           {
@@ -19519,7 +19756,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Delete Collection Theme",
+        "summary": "Remove Collection Theme",
         "tags": [
           "collections"
         ]
@@ -19680,7 +19917,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EnqueuedJobResponse"
+                  "$ref": "#/components/schemas/SetCollectionThemeResponse"
                 }
               }
             },
@@ -24347,8 +24584,8 @@
     },
     "/api/themes/{item_id}": {
       "delete": {
-        "description": "Clear saved YouTube metadata without changing the local theme file.",
-        "operationId": "clear_theme",
+        "description": "Forget an item's theme, delete its local file or the server's copy.",
+        "operationId": "remove_theme",
         "parameters": [
           {
             "description": "Media item ID",
@@ -24359,6 +24596,36 @@
               "description": "Media item ID",
               "title": "Item Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
             }
           },
           {
@@ -24424,7 +24691,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Clear Theme",
+        "summary": "Remove Theme",
         "tags": [
           "themes"
         ]

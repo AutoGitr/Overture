@@ -24,7 +24,6 @@ lazy from overture.schemas.collections import (
     BulkCollectionMonitorUpdate,
     BulkCollectionOperation,
     BulkCollectionOperationResult,
-    CollectionArtwork,
     CollectionCapabilities,
     CollectionCreate,
     CollectionDefaults,
@@ -45,17 +44,18 @@ lazy from overture.schemas.collections import (
     DeleteCollectionThemeResponse,
     FilterGroup,
     SetCollectionThemeRequest,
+    SetCollectionThemeResponse,
     SourceCondition,
     TmdbCollectionSource,
 )
 lazy from overture.schemas.common import (
     BulkMonitorResponse,
-    EnqueuedJobResponse,
     MonitoredResponse,
     MonitorUpdate,
     Status,
     StatusResponse,
 )
+lazy from overture.schemas.removal import AssetRemoval
 lazy from tests.collection_helpers import library_rule
 
 
@@ -77,12 +77,6 @@ async def test_collection_routes_delegate_to_service() -> None:
         youtube_id_overturedb="yt1",
         youtube_id_themerrdb="yt2",
     )
-    artwork = CollectionArtwork(
-        poster_status=AssetStatus.COMPLETE,
-        background_status=AssetStatus.COMPLETE,
-        art_status=AssetStatus.COMPLETE,
-    )
-
     service = MagicMock()
     service.reader.listed = AsyncMock(return_value=[read_item])
     service.groups.names = AsyncMock(return_value=["Franchises"])
@@ -114,8 +108,12 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.themes.status = AsyncMock(
         return_value=CollectionThemeStatusResponse(has_theme=True)
     )
-    service.themes.queue = AsyncMock(return_value=EnqueuedJobResponse(job_id="job1"))
-    service.themes.delete = AsyncMock(
+    service.themes.queue = AsyncMock(
+        return_value=SetCollectionThemeResponse(
+            job_id="job1", theme_status=AssetStatus.PARTIAL
+        )
+    )
+    service.themes.remove = AsyncMock(
         return_value=DeleteCollectionThemeResponse(
             status=Status.OK,
             has_theme=False,
@@ -152,7 +150,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.rules.sync = AsyncMock(return_value=CollectionSyncResponse(added=2))
 
     art_service = MagicMock()
-    art_service.clear = AsyncMock(return_value=artwork)
+    art_service.remove = AsyncMock(return_value=StatusResponse(status=Status.OK))
     art_service.sources = AsyncMock(return_value=ArtSourcesResponse(sources={}))
     art_service.save = AsyncMock(return_value=StatusResponse(status=Status.OK))
     art_service.match = AsyncMock(return_value=ArtMatchResponse(matches=[]))
@@ -163,7 +161,7 @@ async def test_collection_routes_delegate_to_service() -> None:
         "Franchises"
     ]
 
-    defaults = CollectionDefaults(sync_schedule="0 3 * * *", sync_enabled=True)
+    defaults = CollectionDefaults(minimum_items=2)
     service.reader.inherited_policy = AsyncMock(return_value=defaults)
     assert (
         await collections_router.get_collection_defaults(service.reader, "Franchises")
@@ -231,7 +229,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     # Bulk operation
     bulk = BulkCollectionOperation(
         collection_ids=[1],
-        operation="clear_artwork",
+        operation="remove_artwork",
     )
     result = await collections_router.bulk_operate_collections(service.bulk, bulk)
     assert result.collection_ids == [1]
@@ -251,7 +249,9 @@ async def test_collection_routes_delegate_to_service() -> None:
         await collections_router.set_collection_theme(1, set_theme, service.themes)
     ).job_id == "job1"
     assert (
-        await collections_router.delete_collection_theme(1, service.themes)
+        await collections_router.remove_collection_theme(
+            1, AssetRemoval(), service.themes
+        )
     ).status == Status.OK
 
     # Monitored ops
@@ -312,12 +312,15 @@ async def test_collection_routes_delegate_to_service() -> None:
     assert sync_res.added == 2
 
     # Art endpoints
-    all_art = await collections_router.clear_all_collection_art(1, art_service)
-    assert all_art.poster_status is AssetStatus.COMPLETE
-    slot_art = await collections_router.clear_collection_art(
-        1, ArtType.POSTER, art_service
+    removal = AssetRemoval(delete_from_server=True)
+    all_art = await collections_router.remove_all_collection_art(
+        1, removal, art_service
     )
-    assert slot_art.poster_status is AssetStatus.COMPLETE
+    assert all_art.status is Status.OK
+    await collections_router.remove_collection_art(
+        1, ArtType.POSTER, removal, art_service
+    )
+    assert art_service.remove.await_args_list[-1].args == (1, ArtType.POSTER, removal)
     art_sources = await collections_router.get_collection_art_sources(
         1, ArtType.POSTER, art_service
     )

@@ -401,7 +401,8 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
       expect(body).toMatchObject({
-        sync_schedule: "0 3 * * 0",
+        active_start_mmdd: "12-01",
+        active_end_mmdd: "01-05",
         visible_home: true,
         generator: {
           dimension: "franchise",
@@ -433,12 +434,13 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await setup.getByLabel(/^Group/).fill("Franchises");
   await page.getByLabel("Trailing text to remove", { exact: true }).fill(" Collection");
   await page.getByLabel(/^Skip these values/).fill("10, 20");
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
-  await page.getByLabel("Sync schedule", { exact: true }).fill("0 3 * * 0");
+  await page.getByRole("button", { name: "Active dates", exact: true }).click();
+  await page.getByLabel(/^Active from/).fill("12-01");
+  await page.getByLabel(/^Active until/).fill("01-05");
   await setup.getByText("One collection", { exact: true }).click();
   await expect(setup.getByLabel("Title", { exact: true })).toHaveValue("Unsaved single collection");
   await setup.getByText("One per value", { exact: true }).click();
-  await expect(page.getByLabel("Sync schedule", { exact: true })).toHaveValue("0 3 * * 0");
+  await expect(page.getByLabel(/^Active from/)).toHaveValue("12-01");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
@@ -516,7 +518,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
   await page
     .getByRole("combobox", { name: "Collection filtering", exact: true })
     .selectOption("user");
-  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Active dates", exact: true }).click();
   await page.getByLabel(/^Active from/).fill("12-01");
   await page.getByLabel(/^Active until/).fill("01-05");
   await expect(page.getByLabel("Search members", { exact: true })).toHaveCount(0);
@@ -533,7 +535,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
   expect(created).toBe(true);
 });
 
-test("group management saves and applies defaults separately from an unsaved collection", async ({
+test("group management saves and sends defaults apart from an unsaved collection", async ({
   page,
 }) => {
   await page.route("**/api/settings", (route) =>
@@ -555,7 +557,7 @@ test("group management saves and applies defaults separately from an unsaved col
     applied = true;
     return route.fulfill({ json: { collection_ids: [12], errors: {} } });
   });
-  // Save and Apply needs the group to hold a collection.
+  // Save sends the defaults to the collections the group holds.
   await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({ json: [collectionDetail({ id: 12, collection_group: "Weekend" })] }),
   );
@@ -574,7 +576,7 @@ test("group management saves and applies defaults separately from an unsaved col
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
-  await dialog.getByRole("button", { name: "Save and Apply", exact: true }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Saved and applied to 1 collection.")).toBeVisible();
   expect(applied).toBe(true);
   await dialog.getByRole("button", { name: "Close popup", exact: true }).click();

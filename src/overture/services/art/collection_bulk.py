@@ -11,7 +11,7 @@ lazy from ...config import Settings
 lazy from ...db.art_slots import read_art_slot, saved_art
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.session import Database
-lazy from ...domain import ITEM_ART_TYPES, PERFECT_MATCH_ONLY, ArtBulkSource, ArtType
+lazy from ...domain import ITEM_ART_TYPES, ArtBulkSource, ArtType
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import BulkAssetTally
@@ -29,7 +29,8 @@ lazy from ..bulk_common import (
     planned_outcome,
 )
 lazy from ..public_dataset.index import CatalogPick, PublicDatasetIndex
-lazy from .collection_art import CollectionArtService
+lazy from .collection_art import CollectionArtService, uploaded_image
+lazy from .perfect_match import accepted_matches, comparison_threshold
 
 _ERRORS = (PublicServiceError, httpx2.HTTPError, OSError, ValueError)
 
@@ -37,12 +38,15 @@ _ERRORS = (PublicServiceError, httpx2.HTTPError, OSError, ValueError)
 def _unmatchable(row: MediaCollection, art_type: ArtType) -> str | None:
     """Why local art matching cannot compare a slot, or ``None`` when it can.
 
-    It compares the server's image with the TMDB collection's.
+    It compares the TMDB collection's art with the image Overture uploaded,
+    else the one the server shows.
     """
     if row.tmdb_collection_id is None:
         return "Local art matching: the collection has no TMDB collection ID"
-    if row.server_item_id is None or row.server_image_url(art_type) is None:
-        return "Local art matching: the server has no image to compare"
+    if uploaded_image(row, art_type) is None and (
+        row.server_item_id is None or row.server_image_url(art_type) is None
+    ):
+        return "Local art matching: the collection has no image to compare"
     return None
 
 
@@ -160,12 +164,8 @@ async def _choose(
             notes.append(reason)
             continue
         threshold = params.threshold
-        result = await art.match(row.id or 0, art_type, max(threshold, 0))
-        matches = [
-            match
-            for match in result.matches
-            if threshold != PERFECT_MATCH_ONLY or match.perfect_match
-        ]
+        result = await art.match(row.id or 0, art_type, comparison_threshold(threshold))
+        matches = accepted_matches(result.matches, threshold)
         if matches:
             if not await art.adopt(row.id or 0, art_type, matches[0].url):
                 return JobOutcome.SKIPPED, NOT_PUBLIC_ART_URL, None

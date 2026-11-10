@@ -3,7 +3,7 @@
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { discardDrafts } from "../utils/catalogDrafts";
   import { errorMessage } from "../utils/errors";
-  import FilterSection from "./FilterSection.svelte";
+  import PopupSection from "./PopupSection.svelte";
 
   /** Operations on the catalog entries the filters and search match. */
   let { entries }: { entries: CatalogEntryRow[] } = $props();
@@ -33,7 +33,7 @@
   }
 </script>
 
-<FilterSection
+<PopupSection
   label="Bulk operations"
   description={`For the ${entries.length} entries the filters and search match.`}
 >
@@ -43,4 +43,4 @@
     disabled={busy || !drafted.length}
     onclick={() => void discard()}>Discard drafts ({drafted.length})</button
   >
-</FilterSection>
+</PopupSection>

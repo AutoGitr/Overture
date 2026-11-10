@@ -18,7 +18,7 @@
   let open = $derived(sectionState.isOpen(view, label, true));
 </script>
 
-<section class="filter-section" aria-label={label}>
+<section class="popup-section" aria-label={label}>
   <Disclosure
     heading
     title={label}
@@ -36,7 +36,7 @@
 
 <style>
   /* The toggle spans the column edge to edge, so the section gives up its padding. */
-  .filter-section {
+  .popup-section {
     --card-padding: 0;
     --segmented-margin: 0;
   }
