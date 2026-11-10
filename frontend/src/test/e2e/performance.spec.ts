@@ -6,6 +6,8 @@ const TITLES = 10_000;
 /** The longest the page may stop responding; a frame every 50 ms feels instant. */
 const LOAD_BUDGET_MS = 500;
 const INTERACTION_BUDGET_MS = 300;
+/** How long the page may take to apply a burst of live updates in total. */
+const BURST_BUDGET_MS = 3_000;
 
 declare global {
   interface Window {
@@ -65,6 +67,7 @@ test("searching a large library stays responsive", async ({ page }) => {
 
 test("a burst of live updates keeps a large library responsive", async ({ page, realtime }) => {
   await resetLongestTask(page);
+  const started = Date.now();
   for (let sequence = 1; sequence <= 300; sequence += 1) {
     realtime.emit({
       epoch,
@@ -74,6 +77,8 @@ test("a burst of live updates keeps a large library responsive", async ({ page, 
     });
   }
   await settle(page);
+  // The timer queues behind every update, so it resolves once all are applied.
+  expect(Date.now() - started).toBeLessThan(BURST_BUDGET_MS);
   await settle(page);
   expect(await longestTask(page)).toBeLessThan(INTERACTION_BUDGET_MS);
 });

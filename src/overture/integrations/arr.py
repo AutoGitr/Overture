@@ -60,6 +60,8 @@ class ArrRequest:
     root_folder: str
     quality_profile_id: int
     search: bool
+    #: Tags every added title gets, by ID.
+    tag_ids: tuple[int, ...] = ()
 
 
 class _TagRecord(BaseModel):
@@ -298,6 +300,7 @@ class ArrClient:
             "qualityProfileId": request.quality_profile_id,
             "rootFolderPath": request.root_folder,
             "monitored": True,
+            "tags": sorted({*found.get("tags", ()), *request.tag_ids}),
             "addOptions": options,
         }
         if self._kind == "sonarr":

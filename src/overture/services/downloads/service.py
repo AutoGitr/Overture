@@ -4,7 +4,6 @@ lazy import asyncio
 lazy import logging
 lazy from collections.abc import (
     Awaitable,
-    Callable,
     Collection,
     Coroutine,
     Generator,
@@ -31,7 +30,6 @@ lazy from ...domain import (
     JobType,
     ServerAsset,
 )
-lazy from ...jobs.gate import LibraryGate
 lazy from ...jobs.kinds import INTERRUPTED_MESSAGE, DownloadStatus
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
@@ -61,7 +59,12 @@ lazy from .art import DownloadArtHandler
 lazy from .collection_theme import store_collection_theme
 lazy from .events import DownloadEventPublisher
 lazy from .queue import JobTarget, add_job
-lazy from .results import DownloadedCollectionTheme, DownloadResult, PreparedDownload
+lazy from .results import (
+    DownloadedCollectionTheme,
+    DownloadResult,
+    DownloadTarget,
+    PreparedDownload,
+)
 lazy from .theme import DownloadThemeHandler
 lazy from .watch import DownloadWatch
 
@@ -143,11 +146,8 @@ class DownloadService:
         asset_storage: AssetStorage,
         app_config: Settings,
         database: Database,
-        library_gate: LibraryGate | None = None,
     ) -> None:
         self._database = database
-        self._library_gate = library_gate
-        self._gate_release: Callable[[], None] | None = None
         self.art_handler = art_handler
         self.theme_handler = theme_handler
         self.provider_registry = provider_registry
@@ -171,29 +171,6 @@ class DownloadService:
     def asset_locks(self) -> KeyedLock[int | str]:
         """Locks coordinating access to item and collection assets."""
         return self._asset_storage.asset_locks
-
-    def _hold_gate(self) -> None:
-        if self._library_gate is not None and self._gate_release is None:
-            self._gate_release = self._library_gate.hold("downloads", "downloads")
-
-    def _release_gate(self) -> None:
-        if self._gate_release is not None:
-            self._gate_release()
-            self._gate_release = None
-
-    async def _reconcile_gate(self) -> None:
-        if self._library_gate is None:
-            return
-        if self._running_jobs:
-            self._hold_gate()
-            return
-        # Serialize the idle decision with enqueue commits, so a new job cannot
-        # lose its lease to an older empty-queue observation.
-        async with self._database.write_session() as session:
-            if await DownloadJobRepository(session).has_active():
-                self._hold_gate()
-            else:
-                self._release_gate()
 
     def _staged(self, session: AsyncSession) -> _Staged:
         return session.info.setdefault(self, _Staged())
@@ -263,7 +240,6 @@ class DownloadService:
             return
         await self._finish_cancelling(staged.cancelled)
         if staged.lanes:
-            self._hold_gate()
             for lane in staged.lanes:
                 self._wake[lane].set()
 
@@ -288,7 +264,6 @@ class DownloadService:
         for job, title in cancelled:
             self._settle(job.id, "the download was cancelled", cancelled=True)
             await self._events.publish(job, DownloadStatus.CANCELLED, title=title)
-        await self._reconcile_gate()
 
     async def start(self) -> None:
         """Cancel interrupted downloads and start an empty execution queue."""
@@ -299,7 +274,6 @@ class DownloadService:
         await self._cancel_active_jobs()
         if self._stopping:
             return
-        await self._reconcile_gate()
         for lane, size in self._lane_sizes.items():
             for _ in range(size):
                 task = asyncio.create_task(self._worker_loop(lane))
@@ -326,7 +300,6 @@ class DownloadService:
             await asyncio.gather(*self._worker_tasks, return_exceptions=True)
             self._worker_tasks.clear()
         await self._cancel_active_jobs()
-        self._release_gate()
         logger.debug("Download workers stopped")
 
     @property
@@ -434,34 +407,23 @@ class DownloadService:
         await wake.wait()
         while not self._stopping:
             wake.clear()
-            release = None
-            if self._library_gate is not None:
-                await self._library_gate.wait_for("downloads")
-                # Admission and reservation have no intervening await. Keep
-                # sync out while claiming, even before a task is registered.
-                release = self._library_gate.hold("downloads", "downloads")
-            try:
-                async with self._database.write_session() as session:
-                    job_id = await DownloadJobRepository(session).claim_pending(
-                        _LANES[lane]
-                    )
-                if self._stopping:
-                    return
-                if job_id is not None:
-                    task = asyncio.create_task(self.process_job(job_id))
-                    self._running_jobs[job_id] = task
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        current = asyncio.current_task()
-                        if current is not None and current.cancelling():
-                            raise
-                    finally:
-                        self._running_jobs.pop(job_id, None)
-                await self._reconcile_gate()
-            finally:
-                if release is not None:
-                    release()
+            async with self._database.write_session() as session:
+                job_id = await DownloadJobRepository(session).claim_pending(
+                    _LANES[lane]
+                )
+            if self._stopping:
+                return
+            if job_id is not None:
+                task = asyncio.create_task(self.process_job(job_id))
+                self._running_jobs[job_id] = task
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    current = asyncio.current_task()
+                    if current is not None and current.cancelling():
+                        raise
+                finally:
+                    self._running_jobs.pop(job_id, None)
             if job_id is None:
                 await wake.wait()
 
@@ -534,10 +496,21 @@ class DownloadService:
             else:
                 downloaded = await self.theme_handler.download(job, item, progress)
             # Downloads of one item run side by side; only writing its files
-            # takes the item's lock, which sync and refreshes share.
+            # takes the item's lock, which sync and refreshes share. The item
+            # is read again under it, as a sync may have moved its folder.
             async with self.asset_locks.acquire(_lock_key(job)):
+                async with self._database.read_session() as session:
+                    current = await session.get(MediaItem, item.id)
+                if current is None:
+                    raise DownloadError("Media item not found")
+                item = current
+                target = (
+                    await self.art_handler.target(job, item, downloaded)
+                    if job.job_type is JobType.ART
+                    else self.theme_handler.target(item)
+                )
                 written = await self._finish_commit(
-                    job.id, self._commit_download(job, item, downloaded)
+                    job.id, self._commit_download(job, item, downloaded, target)
                 )
         except _JOB_ERRORS as exc:
             await self.fail_job(job, exc, title=title)
@@ -613,7 +586,11 @@ class DownloadService:
         return job is not None and job.status is JobStatus.RUNNING
 
     async def _commit_download(
-        self, job: DownloadJob, item: MediaItem, downloaded: PreparedDownload
+        self,
+        job: DownloadJob,
+        item: MediaItem,
+        downloaded: PreparedDownload,
+        target: DownloadTarget,
     ) -> bool:
         """Replace the file unless it already holds these bytes, then record it.
 
@@ -624,21 +601,17 @@ class DownloadService:
         try:
             data_hash = downloaded.file_hash or compute_bytes_hash(downloaded.data)
             await owned_thread(
-                storage.validate_target,
-                downloaded.target_path,
-                downloaded.trusted_root,
+                storage.validate_target, target.path, target.trusted_root
             )
             if not await self._is_running(job.id):
                 return False
-            stored = await owned_thread(
-                storage.identical_file, downloaded.target_path, data_hash
-            )
+            stored = await owned_thread(storage.identical_file, target.path, data_hash)
             if stored is None:
                 written = True
                 stored = await storage.write_file_async(
-                    downloaded.target_path,
+                    target.path,
                     downloaded.data,
-                    downloaded.trusted_root,
+                    target.trusted_root,
                     file_hash=data_hash,
                 )
             else:
@@ -646,7 +619,7 @@ class DownloadService:
                 logger.debug(
                     "Download %s is identical to %s; nothing written",
                     job.id,
-                    downloaded.target_path,
+                    target.path,
                 )
             await self.record_job(job, downloaded.result, stored)
         except (

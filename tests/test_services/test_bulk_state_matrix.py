@@ -32,6 +32,7 @@ lazy from overture.domain import (
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.collection_art import CollectionArtService
+lazy from overture.services.art.matcher import LocalComparison
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes import bulk as theme_bulk
@@ -61,7 +62,7 @@ ACTION_LINES: frozendict[str, tuple[str, str]] = frozendict(
         "restored": ("Queued ", "restores the saved selection"),
         "kept_saved": ("Skipped ", "saved selection already set"),
         "kept_theme": ("Skipped ", "kept the local theme file"),
-        "kept_art": ("Skipped ", "OvertureDB artwork differs from the local file"),
+        "kept_art": ("Skipped ", "OvertureDB artwork is a different picture, d=30"),
         "adopted": ("Adopted ", "identical to the local file"),
     }
 )
@@ -135,9 +136,10 @@ async def test_dataset_only_state_matrix(
         queued[target.media_item_id] = target.target_url
         return True
 
-    async def identical_to_local(url: str, facts: ArtFileFacts) -> bool:
+    async def compare_with_local(url: str, facts: ArtFileFacts) -> LocalComparison:
         assert url == "https://public.test/image.jpg"
-        return facts.file_hash == compute_bytes_hash(CATALOG_BYTES)
+        same = facts.file_hash == compute_bytes_hash(CATALOG_BYTES)
+        return LocalComparison(distance=0 if same else 30, identical=same)
 
     monkeypatch.setattr(art_bulk, "queue_download", queue)
     monkeypatch.setattr(theme_bulk, "queue_download", queue)
@@ -168,7 +170,7 @@ async def test_dataset_only_state_matrix(
         )
     else:
         matcher = art_matcher(app_config=app_config, database=database)
-        monkeypatch.setattr(matcher, "identical_to_local", identical_to_local)
+        monkeypatch.setattr(matcher, "compare_with_local", compare_with_local)
         await art_bulk.run_bulk_art_match(
             as_job_context(context),
             BulkMatchArtRequest(

@@ -16,6 +16,7 @@ lazy from .media_collection import (
     MediaCollectionMember,
 )
 lazy from .media_item import MediaItem
+lazy from .notification import NotificationRule
 lazy from .public_dataset import (
     PublicDatasetCollection,
     PublicDatasetDraft,
@@ -54,6 +55,7 @@ __all__ = [
     "MediaCollectionMember",
     "MediaItem",
     "MediaItemTerm",
+    "NotificationRule",
     "PublicDatasetCollection",
     "PublicDatasetDraft",
     "PublicDatasetItem",

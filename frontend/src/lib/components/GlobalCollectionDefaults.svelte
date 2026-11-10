@@ -66,6 +66,13 @@
   }));
   let plex = $derived(settingsState.current.media_server === "plex");
 
+  let arrName = $derived(
+    settingsState.current.radarr_configured && settingsState.current.sonarr_configured
+      ? "Radarr and Sonarr"
+      : settingsState.current.radarr_configured
+        ? "Radarr"
+        : "Sonarr",
+  );
   let anyArr = $derived(
     settingsState.current.radarr_configured || settingsState.current.sonarr_configured,
   );
@@ -106,53 +113,52 @@
     level="global"
     {plex}
     orders={capabilities.data?.orders ?? []}
-    arr={anyArr ? "Radarr or Sonarr" : null}
-  />
+    arr={anyArr ? arrName : null}
+  >
+    {#snippet requests()}
+      <p class="hint">Where Request missing adds titles, and whether it searches for them.</p>
+      {#each ARR as [mediaType, name, key] (key)}
+        {@const options = mediaType === "movie" ? radarr : sonarr}
+        {#if settingsState.current[`${key}_configured`]}
+          <DataStatus
+            label={`${name} options`}
+            error={options.error}
+            loading={options.isFetching}
+            hasData={options.data !== undefined}
+            onretry={() => options.refetch()}
+          />
+          <div class="options-col">
+            <FieldRow label={`${name} root folder`} for={`${id}-${key}-folder`}>
+              <select id={`${id}-${key}-folder`} bind:value={draft[`${key}_root_folder`]}>
+                <option value="">Choose a folder</option>
+                {#each options.data?.root_folders ?? [] as folder (folder)}
+                  <option value={folder}>{folder}</option>
+                {/each}
+              </select>
+            </FieldRow>
+            <FieldRow label={`${name} quality profile`} for={`${id}-${key}-profile`}>
+              <select id={`${id}-${key}-profile`} bind:value={draft[`${key}_quality_profile_id`]}>
+                <option value={null}>Choose a profile</option>
+                {#each options.data?.quality_profiles ?? [] as profile (profile.id)}
+                  <option value={profile.id}>{profile.label}</option>
+                {/each}
+              </select>
+            </FieldRow>
+            <label class="form-row justify-between">
+              <span>Search when added</span>
+              <input type="checkbox" bind:checked={draft[`${key}_search`]} />
+            </label>
+          </div>
+        {/if}
+      {/each}
+    {/snippet}
+  </CollectionPolicyFields>
 </div>
 <h4 class="caps-label">Active dates</h4>
 <p class="hint">Collections sync on the Sync schedules under Operations, or with Sync.</p>
 <div class="options-col">
   <CollectionScheduleFields {policy} level="global" />
 </div>
-
-{#if anyArr}
-  <h4 class="caps-label">Requests</h4>
-  <p class="hint">Where Request missing adds titles, and whether it searches for them.</p>
-  {#each ARR as [mediaType, name, key] (key)}
-    {@const options = mediaType === "movie" ? radarr : sonarr}
-    {#if settingsState.current[`${key}_configured`]}
-      <DataStatus
-        label={`${name} options`}
-        error={options.error}
-        loading={options.isFetching}
-        hasData={options.data !== undefined}
-        onretry={() => options.refetch()}
-      />
-      <div class="options-col">
-        <FieldRow label={`${name} root folder`} for={`${id}-${key}-folder`}>
-          <select id={`${id}-${key}-folder`} bind:value={draft[`${key}_root_folder`]}>
-            <option value="">Choose a folder</option>
-            {#each options.data?.root_folders ?? [] as folder (folder)}
-              <option value={folder}>{folder}</option>
-            {/each}
-          </select>
-        </FieldRow>
-        <FieldRow label={`${name} quality profile`} for={`${id}-${key}-profile`}>
-          <select id={`${id}-${key}-profile`} bind:value={draft[`${key}_quality_profile_id`]}>
-            <option value={null}>Choose a profile</option>
-            {#each options.data?.quality_profiles ?? [] as profile (profile.id)}
-              <option value={profile.id}>{profile.label}</option>
-            {/each}
-          </select>
-        </FieldRow>
-        <label class="form-row justify-between">
-          <span>Search when added</span>
-          <input type="checkbox" bind:checked={draft[`${key}_search`]} />
-        </label>
-      </div>
-    {/if}
-  {/each}
-{/if}
 
 <style>
   h4 {

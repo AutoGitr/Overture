@@ -588,7 +588,7 @@ export function artCandidate(overrides: Partial<ArtCandidate> = {}): ArtCandidat
     perfect_match: null,
     preview_url: null,
     source: "tmdb",
-    textless: false,
+    title_only: false,
     title: null,
     url: "https://images.test/poster.jpg",
     width: 1000,

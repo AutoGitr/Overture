@@ -83,6 +83,8 @@ class DownloadState {
   private readonly jobIdsByOwner = new SvelteMap<string, ReadonlySet<string>>();
   /** Each listed failure's removal, so a repeat failure restarts its own timer. */
   private readonly failureTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Downloads this client asked for, whose completion it announces. */
+  private readonly requested = new Set<string>();
 
   private put(job: DownloadJob) {
     this.cancelFailureTimer(job.job_id);
@@ -143,15 +145,25 @@ class DownloadState {
 
   handleFinished(data: DownloadJobEvent) {
     this.remove(data.job.id);
-    // Report a completed collection theme alongside other download notifications.
+    const requested = this.requested.delete(data.job.id);
+    if (data.job.status !== "completed") return;
     const target = data.job.target;
-    if (data.job.status === "completed" && target.target_type === "collection_theme") {
+    if (target.target_type === "collection_theme") {
       notify.success(`Theme applied to ${target.title}.`);
+    } else if (requested) {
+      const asset = ASSET_LABELS[target.art_type ?? "theme"].toLowerCase();
+      const title = target.title ? ` for ${target.title}` : "";
+      notify.success(
+        data.unchanged
+          ? `The ${asset}${title} is already on disk.`
+          : `Downloaded the ${asset}${title}.`,
+      );
     }
   }
 
   handleFailed(data: DownloadJobEvent) {
     const jobId = data.job.id;
+    this.requested.delete(jobId);
     const failed = buildJob(data, "failed");
     failed.stage = jobEventErrorMessage(data, "failed");
     this.put(failed);
@@ -174,6 +186,7 @@ class DownloadState {
     artType?: ServerAsset | null;
     seasonId?: number | null;
   }) {
+    this.requested.add(options.jobId);
     this.put({
       job_id: options.jobId,
       media_item_id: options.mediaItemId,
@@ -218,6 +231,8 @@ class DownloadState {
     this.jobs.clear();
     this.jobIdsByOwner.clear();
     for (const event of events) this.put(buildJob(event));
+    // A download that ended while this client was away is not announced.
+    for (const jobId of this.requested) if (!this.jobs.has(jobId)) this.requested.delete(jobId);
   }
 
   getJobsForItem(mediaItemId: number): DownloadJob[] {

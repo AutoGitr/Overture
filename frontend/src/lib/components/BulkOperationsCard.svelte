@@ -23,7 +23,7 @@
   import { sidebarGroup } from "../router/routes";
   import { runBulkCollections } from "../utils/bulkCollections";
   import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
-  import { askRemoval } from "../utils/assetRemoval";
+  import { askRemoval, removedMessage } from "../utils/assetRemoval";
   import { errorMessage } from "../utils/errors";
   import { UNGROUPED_GROUP } from "../../generated/settings";
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
@@ -183,9 +183,13 @@
       applyBulkItemOperation(result);
       const count = result.item_ids.length;
       feedback.success(
-        operation === "delete"
-          ? `Deleted ${count} ${noun} from Overture.`
-          : `Removed the ${operation === "artwork" ? "art" : "themes"} of ${count} ${noun}.`,
+        removal
+          ? removedMessage(
+              `the ${operation === "artwork" ? "art" : "themes"} of ${count} ${noun}`,
+              removal,
+              true,
+            )
+          : `Deleted ${count} ${noun} from Overture.`,
       );
       for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
     } catch (err: unknown) {
@@ -253,7 +257,13 @@
         { collection_ids: ids, operation, removal },
         (body) => collectionsRequest.mutateAsync({ body }),
       );
-      feedback.success(`Removed the ${what} of ${result.collection_ids.length} collections.`);
+      feedback.success(
+        removedMessage(
+          `the ${what} of ${result.collection_ids.length} collections`,
+          removal,
+          true,
+        ),
+      );
       for (const [id, error] of Object.entries(result.errors)) feedback.error(`${id}: ${error}`);
     } catch (error) {
       feedback.error(errorMessage(error, "Bulk operation failed"));

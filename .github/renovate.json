@@ -52,6 +52,11 @@
       "allowedVersions": "<4.2 || >4.3.1"
     },
     {
+      "description": "Finished rather than abandoned: deepmerge comes only through Vite's plugins, argon2-cffi is the reference Argon2 binding, and PyYAML only reads workflow files in tests",
+      "matchPackageNames": ["deepmerge", "argon2-cffi", "pyyaml"],
+      "abandonmentThreshold": null
+    },
+    {
       "matchManagers": ["github-actions", "custom.regex"],
       "addLabels": ["ci"]
     },

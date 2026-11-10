@@ -45,7 +45,11 @@ lazy from .services.downloads.theme import DownloadThemeHandler
 lazy from .services.health import get_service_status
 lazy from .services.library.service import LibraryService
 lazy from .services.local_assets.service import LocalAssets
-lazy from .services.notifications import FailureNotifier, NotifyingPublisher
+lazy from .services.notifications import (
+    NotificationSettings,
+    NotifyingPublisher,
+    RunNotifier,
+)
 lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
@@ -119,7 +123,8 @@ class RuntimeServices:
     tmdb_items: TmdbItemsService
     asset_manager: AssetManagerService
     stats: StatsService
-    notifier: FailureNotifier
+    notifier: RunNotifier
+    notifications: NotificationSettings
     config_dir: Path
     connectivity_probe: Callable[
         [ProviderRegistry, TMDBClient], Awaitable[ConnectivityStatusResponse]
@@ -408,7 +413,7 @@ def build_runtime(
     database = database if database is not None else Database(database_url(config_dir))
     redactor = Redactor(app_config.secret_values())
     websockets = ConnectionManager()
-    notifier = FailureNotifier(app_config=app_config)
+    notifier = RunNotifier(app_config=app_config, database=database)
     events: protocols.EventPublisher = NotifyingPublisher(
         WebSocketEventEmitter(websockets), notifier
     )
@@ -468,7 +473,6 @@ def build_runtime(
         asset_storage=asset_storage,
         app_config=app_config,
         database=database,
-        library_gate=background_jobs.library_gate,
     )
     scheduler = SchedulerService(app_config=app_config)
     backup_events = BackupEvents(events)
@@ -586,6 +590,7 @@ def build_runtime(
 
     return RuntimeServices(
         notifier=notifier,
+        notifications=NotificationSettings(database=database, notifier=notifier),
         app_settings=app_config,
         database=database,
         auth=AuthService(app_config, database),

@@ -235,10 +235,16 @@ def _job_tables(renderer: TypeScriptRenderer) -> str:
     prefixes = "".join(
         f"  {kind.value}: {_ts_literal(kind.event_prefix)},\n" for kind in JobKind
     )
+    labels = "".join(
+        f"  {kind.value}: {_ts_literal(kind.label)},\n" for kind in JobKind
+    )
     clearable = ", ".join(_ts_literal(kind.value) for kind in JobKind if kind.clearable)
     return (
         "/** The prefix of each job kind's lifecycle events. */\n"
         f"export const JOB_EVENT_PREFIXES = {{\n{prefixes}}}"
+        " as const satisfies Record<JobKind, string>;\n\n"
+        "/** How a run of each job kind is named to users. */\n"
+        f"export const JOB_KIND_LABELS = {{\n{labels}}}"
         " as const satisfies Record<JobKind, string>;\n\n"
         "/** Job kinds whose last result a client may clear from its view. */\n"
         f"export const CLEARABLE_JOB_KINDS = [{clearable}]"

@@ -18,7 +18,7 @@ describe("item collection badge", () => {
       libraryCollectionId: 12,
       datasetEnabled: true,
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Collection" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Open its collection" }));
     await waitFor(() => expect(route.pathname).toBe("/collections/12-collection"));
   });
   it("opens a catalog collection when there is no library match", async () => {
@@ -30,7 +30,9 @@ describe("item collection badge", () => {
       }),
     );
     renderWithQueryClient(CollectionBadge, { tmdbId: 10, datasetEnabled: true });
-    await fireEvent.click(screen.getByRole("button", { name: "Collection: Star Wars" }));
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Open its collection, Star Wars, in OvertureDB" }),
+    );
     await waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections/tmdb-10"));
   });
   it("links nowhere outside Overture when the catalog is disabled", () => {

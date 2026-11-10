@@ -96,6 +96,7 @@ class AppSettingsUpdate(StrictBaseModel):
     sonarr_quality_profile_id: int | None = None
     sonarr_search: bool | None = None
     auto_match_art: bool | None = None
+    auto_search_themes: bool | None = None
     workflow: Workflow | None = None
     theme_search_format: str | None = None
     min_duration_seconds: int | None = None

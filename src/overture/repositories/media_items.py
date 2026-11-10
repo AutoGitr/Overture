@@ -571,7 +571,7 @@ class MediaItemRepository:
                         url=None,
                         upload_hash=None,
                         generated_style=None,
-                        generated_textless=False,
+                        generated_title_only=False,
                     )
                     .execution_options(synchronize_session=False)
                 )

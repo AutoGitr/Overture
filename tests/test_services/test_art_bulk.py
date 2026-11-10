@@ -12,6 +12,7 @@ lazy from overture.db.art_slots import ArtFileFacts
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    PERFECT_MATCH_ONLY,
     ArtBulkSource,
     ArtType,
     MediaType,
@@ -23,7 +24,7 @@ lazy from overture.schemas.bulk import BulkMatchArtRequest
 lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.bulk_work import BulkArtWork
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import ArtMatchOutcome
+lazy from overture.services.art.matcher import ArtMatchOutcome, LocalComparison
 lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.utils.time import utc_now
@@ -620,7 +621,7 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
     matcher = art_matcher(app_config=app_config, database=database)
     monkeypatch.setattr(
         matcher,
-        "identical_to_local",
+        "compare_with_local",
         AsyncMock(side_effect=ValueError("invalid image")),
     )
     use_art_work(
@@ -649,6 +650,64 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
     ]
     assert stamper.checked == []
     assert context.events[-1][1]["errors"] == 1
+
+
+@pytest.mark.parametrize(
+    ("threshold", "log"),
+    [
+        (
+            PERFECT_MATCH_ONLY,
+            (
+                "Skipped Movie (poster) - kept the local file: OvertureDB artwork "
+                "is d=0 from the local file but not the same file; a match "
+                "threshold of 0 or more takes it (Replace existing would replace it)"
+            ),
+        ),
+        (3, "Queued Movie (poster) - d=0 from OvertureDB; replaces the local file"),
+    ],
+)
+async def test_overturedb_art_is_compared_with_the_local_file_as_local_matching_is(
+    threshold: int,
+    log: str,
+    monkeypatch: pytest.MonkeyPatch,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    """The same picture in another file is taken within the run's threshold."""
+    item = movie_item(
+        art={"poster": {"file_hash": "hash", "file_mtime_ns": 100, "file_size": 50}}
+    )
+    matcher = art_matcher(app_config=app_config, database=database)
+    monkeypatch.setattr(
+        matcher,
+        "compare_with_local",
+        AsyncMock(return_value=LocalComparison(distance=0, identical=False)),
+    )
+    monkeypatch.setattr(art_bulk, "queue_download", AsyncMock(return_value=True))
+    use_art_work(
+        monkeypatch,
+        BulkArtWork(
+            [(item, ArtType.POSTER, None)],
+            public_index(1, poster_url="https://images.test/poster.jpg"),
+        ),
+    )
+    bind_stamper(monkeypatch, art_bulk)
+    context = Context()
+
+    await art_bulk.run_bulk_art_match(
+        as_job_context(context),
+        BulkMatchArtRequest(
+            source_order=[ArtBulkSource.OVERTUREDB], threshold=threshold
+        ),
+        make_bulk_downloads(app_config=app_config, database=database),
+        matcher,
+        art=unused(CollectionArtService),
+        local_assets=make_local_assets(app_config=app_config, database=database),
+        app_config=app_config,
+        database=database,
+    )
+
+    assert progress_logs(context)[0].startswith(log)
 
 
 @pytest.mark.parametrize("failure_point", ["decision", "stamp"])

@@ -64,15 +64,20 @@ def uploaded_image(row: MediaCollection, art_type: ArtType) -> ArtFileFacts | No
     return facts if facts is not None and facts.phash is not None else None
 
 
-def _render(row: MediaCollection, art_type: ArtType, drawing: ArtDrawing) -> bytes:
-    """Draw a collection's art: its title under its group, unless textless.
+def _headed(row: MediaCollection) -> bool:
+    """Whether a poster can show the collection's group above its title.
 
-    A separator's title is its group, so it is drawn alone.
+    A separator's title is its group, so it has no heading.
     """
-    if drawing.textless:
+    return row.kind is not CollectionKind.SEPARATOR and bool(row.group_name)
+
+
+def _render(row: MediaCollection, art_type: ArtType, drawing: ArtDrawing) -> bytes:
+    """Draw a collection's art as :class:`ArtDrawing` describes it."""
+    if art_type is ArtType.BACKGROUND:
         return render_art(art_type, drawing.style)
-    subtitle = None if row.kind is CollectionKind.SEPARATOR else row.group_name
-    return render_art(art_type, drawing.style, row.title, subtitle)
+    heading = row.group_name if _headed(row) and not drawing.title_only else None
+    return render_art(art_type, drawing.style, row.title, heading)
 
 
 class CollectionArtService:
@@ -135,6 +140,11 @@ class CollectionArtService:
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
             policy = CandidatePolicy.of(await get_app_settings(db))
+        return await self._found(row, art_type, policy)
+
+    async def _found(
+        self, row: MediaCollection, art_type: ArtType, policy: CandidatePolicy
+    ) -> ArtSourcesResponse:
         sources = await self._candidates.gather_collection(row, art_type, policy)
         return ArtSourcesResponse(
             sources=sources.by_source, current_url=read_art_slot(row, art_type).url
@@ -143,18 +153,30 @@ class CollectionArtService:
     async def sources(
         self, collection_id: int, art_type: ArtType
     ) -> ArtSourcesResponse:
-        """Offer what sources have, and art drawn in each style, titled or not."""
-        found = await self.found(collection_id, art_type)
+        """Offer what sources have, and art drawn in each style.
+
+        Posters are drawn with the title, under the group when there is one
+        and alone; backgrounds without text.
+        """
+        async with self._database.read_session() as db:
+            row = await self._require(db, collection_id, art_type)
+            policy = CandidatePolicy.of(await get_app_settings(db))
+        found = await self._found(row, art_type, policy)
+        variants = (
+            (False, True)
+            if art_type is ArtType.POSTER and _headed(row)
+            else (art_type is ArtType.POSTER,)
+        )
         drawn = [
             ArtCandidate(
                 url=f"/api/collections/{collection_id}/art/{art_type}/generated/{style}"
-                + ("?textless=true" if textless else ""),
+                + ("?title_only=true" if title_only else ""),
                 source=ArtSource.GENERATED,
                 art_type=art_type,
                 generated=style,
-                textless=textless,
+                title_only=title_only,
             )
-            for textless in (False, True)
+            for title_only in variants
             for style in ArtStyle
         ]
         return found.model_copy(
@@ -180,9 +202,16 @@ class CollectionArtService:
         Art to draw is drawn from the collection's title and group, kept like
         an upload, and recorded as generated so a new title draws it again.
         """
+        drawing = body.drawing
+        if (
+            drawing is not None
+            and drawing.title_only
+            and art_type is not ArtType.POSTER
+        ):
+            raise PublicServiceError(422, "Only posters are drawn with a title")
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
-        if (drawing := body.drawing) is not None:
+        if drawing is not None:
             drawn = await self._draw(row, art_type, drawing)
             await self._choose(
                 collection_id,

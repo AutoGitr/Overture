@@ -255,7 +255,7 @@ export interface SchedulesChangedEvent {
 }
 
 /** A tag the REST query keys carry. */
-export type ApiTag = "art" | "asset-manager" | "auth" | "backups" | "bulk" | "collections" | "health" | "job-snapshots" | "library" | "media-server" | "public-dataset" | "realtime" | "server-audit" | "settings" | "stats" | "sync" | "themes" | "tmdb";
+export type ApiTag = "art" | "asset-manager" | "auth" | "backups" | "bulk" | "collections" | "health" | "job-snapshots" | "library" | "media-server" | "notifications" | "public-dataset" | "realtime" | "server-audit" | "settings" | "stats" | "sync" | "themes" | "tmdb";
 
 /** The prefix of each job kind's lifecycle events. */
 export const JOB_EVENT_PREFIXES = {
@@ -266,6 +266,19 @@ export const JOB_EVENT_PREFIXES = {
   server_audit: "server.audit",
   server_audit_fix: "server.audit.fix",
   public_dataset_sync: "public-dataset.sync",
+  backup: "backup",
+  download: "download",
+} as const satisfies Record<JobKind, string>;
+
+/** How a run of each job kind is named to users. */
+export const JOB_KIND_LABELS = {
+  sync: "library sync",
+  bulk_art: "Assets art run",
+  bulk_theme: "Assets theme run",
+  asset_scan: "Renamer scan",
+  server_audit: "server audit",
+  server_audit_fix: "server audit fix",
+  public_dataset_sync: "OvertureDB sync",
   backup: "backup",
   download: "download",
 } as const satisfies Record<JobKind, string>;

@@ -35,7 +35,7 @@ lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import ArtMatchOutcome
+lazy from overture.services.art.matcher import ArtMatchOutcome, LocalComparison
 lazy from overture.services.bulk_common import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
@@ -247,7 +247,7 @@ def visited_art(
                 "selection saved, nothing downloaded",
             )
         else:
-            declined.append("OvertureDB artwork differs from the local file")
+            declined.append("OvertureDB artwork is a different picture, d=30")
     notes = "; ".join([*declined, *empty])
     if declined:
         return Expected(
@@ -315,10 +315,11 @@ async def test_art_source_matrix(
         queued[f"Case {target.media_item_id:03d}"] = target.target_url
         return True
 
-    async def identical_to_local(url: str, facts: ArtFileFacts) -> bool:
-        return url == CATALOG_URL and facts.file_hash == compute_bytes_hash(
+    async def compare_with_local(url: str, facts: ArtFileFacts) -> LocalComparison:
+        same = url == CATALOG_URL and facts.file_hash == compute_bytes_hash(
             CATALOG_BYTES
         )
+        return LocalComparison(distance=0 if same else 30, identical=same)
 
     async def match_item_art(
         item_id: int, art_type: ArtType, *_args: Any, **_kwargs: Any
@@ -337,7 +338,7 @@ async def test_art_source_matrix(
 
     monkeypatch.setattr(art_bulk, "queue_download", queue)
     matcher = art_matcher(app_config=app_config, database=database)
-    monkeypatch.setattr(matcher, "identical_to_local", identical_to_local)
+    monkeypatch.setattr(matcher, "compare_with_local", compare_with_local)
     monkeypatch.setattr(matcher, "match_item_art", match_item_art)
     context = Context()
     await art_bulk.run_bulk_art_match(

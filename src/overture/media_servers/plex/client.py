@@ -992,7 +992,9 @@ class PlexClient(MediaServerHttpClient):
         if visible_library or (hub and hub.get("promotedToRecommended")):
             params["promotedToRecommended"] = int(visible_library)
         if hub:
-            await self._request("PUT", f"{path}/{hub['identifier']}", params=params)
+            # The hub was just read, so a write only follows a change.
+            if any(bool(hub.get(key)) != bool(value) for key, value in params.items()):
+                await self._request("PUT", f"{path}/{hub['identifier']}", params=params)
         elif visible_home or visible_shared or visible_library:
             await self._request(
                 "POST", path, params={**params, "metadataItemId": collection_id}

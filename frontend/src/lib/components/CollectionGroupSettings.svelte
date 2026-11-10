@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { countOf } from "../utils/plural";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import { onMount, type Snippet } from "svelte";
   import { createQuery, createMutation, useQueryClient } from "@tanstack/svelte-query";
   import {
-    applyCollectionGroupPolicyMutation,
     getCollectionDefaultsOptions,
     getCollectionGroupPolicyOptions,
     listCollectionsOptions,
@@ -62,7 +60,6 @@
   const options = new CollectionOptions();
   const request = createMutation(() => saveCollectionGroupPolicyMutation());
   const syncRequest = createMutation(() => syncCollectionGroupMutation());
-  const applyRequest = createMutation(() => applyCollectionGroupPolicyMutation());
   const feedback = createNotifier();
 
   type GroupDraft = Omit<CollectionGroupPolicyInput, "generator"> & {
@@ -93,7 +90,7 @@
       ? mediaTypes.map((type) => (type === "movie" ? "Radarr" : "Sonarr")).join(" and ")
       : null,
   );
-  let busy = $derived(request.isPending || syncRequest.isPending || applyRequest.isPending);
+  let busy = $derived(request.isPending || syncRequest.isPending);
   let hasMembers = $derived(
     (collections.data ?? []).some((row) => row.managed && row.collection_group === group),
   );
@@ -103,8 +100,8 @@
   );
 
   /**
-   * Save the group and send its defaults to its collections on the server;
-   * with `sync`, sync the group as well.
+   * Save the group in Overture; with `sync`, also sync the group, which sends
+   * its defaults to its collections on the server.
    */
   async function save(sync = false) {
     if (!draft || busy) return;
@@ -120,20 +117,10 @@
       );
       onsave?.();
       if (sync) return await syncGroup();
-      if (!hasMembers) {
-        feedback.success("Saved. Its collections use it once they are made.");
-        return;
-      }
-      const result = await applyRequest.mutateAsync({ query: variables.query });
-      const errors = Object.values(result.errors);
-      if (errors.length) {
-        feedback.error(
-          `Applied to ${result.collection_ids.length} collections. ${errors.length} failed: ${errors.join("; ")}`,
-        );
-        return;
-      }
       feedback.success(
-        `Saved and applied to ${countOf(result.collection_ids.length, "collection")}.`,
+        hasMembers
+          ? "Saved. Its collections get it on the server with their next sync."
+          : "Saved. Its collections use it once they are made.",
       );
     } catch (error) {
       feedback.error(errorMessage(error, "Could not save the group"));
@@ -242,7 +229,7 @@
     {#if group !== UNGROUPED_GROUP && settingsState.current.media_server === "plex"}
       <FieldRow
         label="Separator"
-        hint="An empty collection titled after the group, with drawn art. A sort title that puts the group first, such as {'{group} {title}'}, sorts it right before the group's collections."
+        hint="An empty collection titled after the group, with drawn art, sorted right before the group's collections. Without a sort title set anywhere, they sort as {'{group} {title}'}; one that puts the group first keeps it there."
       >
         <input type="checkbox" aria-label="Separator" bind:checked={form.separator} />
       </FieldRow>
@@ -273,7 +260,7 @@
     <button
       type="button"
       class="btn btn-primary"
-      title="Save, and send the settings to the group's collections on the server"
+      title="Save in Overture; the group's next sync sends the settings to its collections"
       disabled={busy}
       onclick={() => void save()}>Save</button
     >

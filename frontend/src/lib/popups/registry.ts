@@ -5,6 +5,7 @@ import CollectionGroupsPopup from "./CollectionGroupsPopup.svelte";
 import BackupPopup from "./BackupPopup.svelte";
 import DbRecordPopup from "./DbRecordPopup.svelte";
 import FiltersPopup from "./FiltersPopup.svelte";
+import NotificationsPopup from "./NotificationsPopup.svelte";
 import OperationsPopup from "./OperationsPopup.svelte";
 import OvertureDbPopup from "./OvertureDbPopup.svelte";
 import SettingsPopup from "./SettingsPopup.svelte";
@@ -16,6 +17,7 @@ export const POPUP_COMPONENTS = {
   "api-keys": ApiKeysPopup,
   "collection-groups": CollectionGroupsPopup,
   filters: FiltersPopup,
+  notifications: NotificationsPopup,
   operations: OperationsPopup,
   settings: SettingsPopup,
   overturedb: OvertureDbPopup,

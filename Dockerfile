@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
-# apt packages track the pinned base image rather than pinned versions.
+# apt packages track the pinned base image and Debian's security updates rather
+# than pinned versions.
 # hadolint global ignore=DL3008
 
 # Vite emits architecture-independent assets; avoid emulation for arm64 releases.
@@ -85,10 +86,13 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
 
 # Keep apt downloads across builds, without putting them in image layers.
+# Debian publishes security fixes before the official image is rebuilt with
+# them, so each build applies them.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates tzdata && \
     groupadd --gid 1000 overture && \

@@ -150,8 +150,13 @@ class CollectionEditor:
         self._validator.rule(types, rule, policy)
         if "order_type" not in body.model_fields_set:
             body = body.model_copy(update={"order_type": policy.order_type})
-        wanted = await self._initial_members(body, scopes)
-        source_summary = await self._sources.summary(rule.libraries)
+        # Without sync the next one reads the lists, so saving stays instant.
+        wanted: dict[str, list[CollectionItem]] = (
+            await self._initial_members(body, scopes)
+            if sync
+            else {scope.library_id: [] for scope in scopes}
+        )
+        source_summary = await self._sources.summary(rule.libraries) if sync else None
         # The minimum and the season decide only whether the server has it
         # yet; Overture keeps it either way, and a later sync creates it.
         total = sum(len(items) for items in wanted.values())
@@ -629,13 +634,6 @@ class CollectionEditor:
         )
         if keep_source_order:
             body = body.model_copy(update={"order_type": CollectionOrder.CUSTOM})
-            await self._display.push(
-                row,
-                saved_options(row, None).model_copy(
-                    update={"order_type": CollectionOrder.CUSTOM}
-                ),
-                body,
-            )
         franchise = min(franchise_ids(body.libraries), default=None)
         async with self._access.database.write_session() as session:
             saved_row = await self._access.require(session, collection_id)

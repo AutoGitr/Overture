@@ -177,6 +177,10 @@
             <input type="checkbox" bind:checked={draft.auto_match_art} />
           </label>
           <label class="form-row justify-between">
+            <span>Auto-search themes on load</span>
+            <input type="checkbox" bind:checked={draft.auto_search_themes} />
+          </label>
+          <label class="form-row justify-between">
             <span>
               Skip TMDB images from {settingsState.media_server_name}
             </span>

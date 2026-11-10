@@ -60,3 +60,12 @@ async def test_add_refuses_when_no_result_has_the_id() -> None:
     finally:
         await client.close()
     assert added == []
+
+
+async def test_add_keeps_the_lookup_tags_and_adds_the_requested_ones() -> None:
+    client, added = _client("radarr", [{"tmdbId": 603, "title": "Wanted", "tags": [2]}])
+    try:
+        await client.add(603, ArrRequest("/media", 4, search=False, tag_ids=(7,)))
+    finally:
+        await client.close()
+    assert added[0]["tags"] == [2, 7]

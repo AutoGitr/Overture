@@ -378,7 +378,7 @@ describe("collection management", () => {
           (call) =>
             call.init.method === "PUT" && call.url.endsWith("/api/collections/12/art/poster"),
         )?.init.body,
-      ).toBe(JSON.stringify({ generated: "dark", textless: false })),
+      ).toBe(JSON.stringify({ generated: "dark", title_only: false })),
     );
   });
 
@@ -950,7 +950,7 @@ describe("collection management", () => {
     expect(screen.getByRole("textbox", { name: "Sort title" })).toHaveValue("+{title}");
   });
 
-  it("saves group defaults and sends them to the group's collections", async () => {
+  it("saves group defaults in Overture alone, leaving the server to the next sync", async () => {
     const { calls } = mockFetchRoutes({
       "/api/collections": [collection({ id: 12, collection_group: "Weekend" })],
       "/api/collections/defaults": {},
@@ -962,17 +962,18 @@ describe("collection management", () => {
             ? JSON.parse(String(init.body))
             : { sort_title_format: "01_{title}", summary_format: null },
         ),
-      "/api/collections/group-policy/apply": { collection_ids: [12, 13], errors: {} },
     });
     renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
     await screen.findByRole("button", { name: "Save and Sync" });
     await waitFor(() => expect(calls.some((call) => call.url === "/api/collections")).toBe(true));
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.url.includes("/apply"))).toBe(true));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    expect(
+      await screen.findByText("Saved. Its collections get it on the server with their next sync."),
+    ).toBeInTheDocument();
     expect(
       calls.filter((call) => call.init.method !== "GET").map((call) => call.init.method),
-    ).toEqual(["PUT", "POST"]);
-    expect(calls.some((call) => call.url.includes("/sync"))).toBe(false);
+    ).toEqual(["PUT"]);
   });
 
   it("lists the titles the lists hold beyond the library and requests them", async () => {

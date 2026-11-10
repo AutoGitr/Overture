@@ -96,15 +96,6 @@ class DownloadJobRepository:
         result = await self.session.exec(stmt)
         return [(job, title) for job, title in result.all()]
 
-    async def has_active(self) -> bool:
-        """Return whether any queued or running job remains."""
-        stmt = (
-            select(DownloadJob.id)
-            .where(col(DownloadJob.status).in_(ACTIVE_JOB_STATUSES))
-            .limit(1)
-        )
-        return (await self.session.exec(stmt)).first() is not None
-
     async def claim_pending(self, types: tuple[JobType, ...]) -> str | None:
         """Claim one durable job while the caller holds the writer lock."""
         job = (

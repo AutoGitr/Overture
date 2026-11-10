@@ -22,7 +22,6 @@ lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
-    SMART_CUSTOM_ORDER,
     ArtStyle,
     ArtType,
     AssetStatus,
@@ -391,9 +390,13 @@ class Tmdb(TMDBClient):
 
 class Art(CollectionArtService):
     def __init__(self) -> None:
+        self.offered: dict[str, list[ArtCandidate]] = {
+            "plex": [ArtCandidate(url="https://plex.test/art.jpg")],
+            "tmdb": [ArtCandidate(url="https://example.test/poster.jpg")],
+        }
+        self.urls: list[str | None] = []
         self.selections: list[ArtType] = []
         self.generated: list[ArtType] = []
-        self.textless: list[ArtType] = []
         self.removed: list[tuple[int, ArtType | None, AssetRemoval]] = []
         self.fail = False
 
@@ -408,9 +411,7 @@ class Art(CollectionArtService):
     async def found(self, collection_id: int, art_type: ArtType) -> ArtSourcesResponse:
         if self.fail:
             raise PublicServiceError(502, "Artwork source unavailable")
-        return ArtSourcesResponse(
-            sources={"tmdb": [ArtCandidate(url="https://example.test/poster.jpg")]}
-        )
+        return ArtSourcesResponse(sources=self.offered)
 
     @override
     async def save(
@@ -420,10 +421,9 @@ class Art(CollectionArtService):
         body: SaveArtRequest,
     ) -> StatusResponse:
         self.selections.append(art_type)
+        self.urls.append(body.url)
         if body.generated is not None:
             self.generated.append(art_type)
-        if body.textless:
-            self.textless.append(art_type)
         return StatusResponse(status=Status.OK)
 
 
@@ -1250,7 +1250,8 @@ async def test_rule_sync_uses_shared_automatic_art_and_theme_pipelines(
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_art=AutoArt.MATCH, collection_auto_match_theme=True
+                collection_auto_art=AutoArt.OVERTUREDB_TMDB,
+                collection_auto_match_theme=True,
             )
         )
         session.add(
@@ -1274,7 +1275,7 @@ async def test_auto_asset_failure_keeps_synced_members_and_records_the_failure(
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
-        await session.merge(settings_row(collection_auto_art=AutoArt.MATCH))
+        await session.merge(settings_row(collection_auto_art=AutoArt.OVERTUREDB_TMDB))
     await manager.service.editor.save_rule(
         identity,
         library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
@@ -1409,7 +1410,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
             settings_row(
                 collection_minimum_items=3,
                 collection_delete_below_minimum=True,
-                collection_auto_art=AutoArt.MATCH,
+                collection_auto_art=AutoArt.OVERTUREDB_TMDB,
             )
         )
     policy = CollectionGroupPolicy(
@@ -2381,10 +2382,12 @@ async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
             visible_home=True,
         ),
     )
+    # Saving writes only; the group's sync sends what its collections inherit.
+    assert (await manager.service.reader.get(inherited.id)).sort_title != "02_Inherited"
     for _ in range(2):
-        result = await manager.service.groups.apply_policy("Charts")
+        result = await manager.service.groups.sync("Charts")
         assert not result.errors
-        assert set(result.collection_ids) == {inherited.id, explicit.id}
+        assert result.synced == 2
         refreshed = await manager.service.reader.get(inherited.id)
         assert refreshed.sort_title == "02_Inherited"
         assert refreshed.summary == "Updated Inherited"
@@ -2444,7 +2447,7 @@ async def test_rule_sync_resolves_changed_group_defaults_without_freezing_them(
     assert refreshed.visible_home is False
 
 
-async def test_group_apply_commits_successful_collections_and_reports_failures(
+async def test_group_sync_commits_successful_collections_and_reports_failures(
     manager: Manager,
 ) -> None:
     created = [
@@ -2461,9 +2464,9 @@ async def test_group_apply_commits_successful_collections_and_reports_failures(
     await manager.service.groups.save_policy(
         "Shared", CollectionGroupPolicy(sort_title_format="01_{title}")
     )
-    result = await manager.service.groups.apply_policy("Shared")
-    assert result.collection_ids == [created[1].id]
-    assert result.errors == {created[0].id: "Server refused this update"}
+    result = await manager.service.groups.sync("Shared")
+    assert result.synced == 1
+    assert result.errors == {"First": "Server refused this update"}
     first = await manager.service.reader.get(created[0].id)
     second = await manager.service.reader.get(created[1].id)
     assert first.sort_title is None
@@ -2622,9 +2625,11 @@ async def test_missing_titles_list_and_request_what_the_library_lacks(
     result = await manager.service.arr.request_missing(created.id, CollectionRequest())
     assert (result.requested, result.present) == (1, 0)
     radarr = manager.radarr
-    assert [(tmdb_id, request.root_folder) for tmdb_id, request in radarr.added] == [
-        (99, "/movies")
-    ]
+    assert [
+        (tmdb_id, request.root_folder, request.tag_ids)
+        for tmdb_id, request in radarr.added
+    ] == [(99, "/movies", (77,))]
+    assert radarr.tag_labels == ["overture"]
     already = await manager.service.arr.request_missing(
         created.id,
         CollectionRequest(
@@ -3048,7 +3053,7 @@ async def test_the_unmanaged_name_is_reserved(manager: Manager) -> None:
             invalid()
 
 
-async def test_group_apply_skips_smart_members_under_a_custom_order(
+async def test_group_sync_keeps_plexs_order_for_smart_members_under_a_custom_one(
     manager: Manager,
 ) -> None:
     regular, smart = [
@@ -3069,10 +3074,15 @@ async def test_group_apply_skips_smart_members_under_a_custom_order(
         CollectionGroupPolicy(order_type=CollectionOrder.CUSTOM),
     )
 
-    result = await manager.service.groups.apply_policy("Mixed")
+    result = await manager.service.groups.sync("Mixed")
 
-    assert result.collection_ids == [regular.id]
-    assert result.skipped == {smart.id: SMART_CUSTOM_ORDER}
+    assert result.synced == 2, result.errors
+    assert (await manager.service.reader.get(regular.id)).order_type is (
+        CollectionOrder.CUSTOM
+    )
+    assert (await manager.service.reader.get(smart.id)).order_type is not (
+        CollectionOrder.CUSTOM
+    )
 
 
 async def test_missing_group_membership_uses_reserved_fallback(
@@ -3651,6 +3661,13 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
         "Sagas",
         CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
     )
+    # Saving only writes; the group's next sync adds the separator.
+    async with database.read_session() as session:
+        assert all(
+            row.kind is not CollectionKind.SEPARATOR
+            for row in await CollectionRepository(session).list_listed()
+        )
+    await manager.service.groups.sync("Sagas")
 
     # The group keeps it, so it is never listed on its own.
     assert all(
@@ -3678,6 +3695,7 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     await manager.service.groups.save_policy(
         "Sagas", CollectionGroupPolicy(sort_title_format="{group} {title}")
     )
+    await manager.service.groups.sync("Sagas")
     async with database.read_session() as session:
         assert not [
             row
@@ -3691,7 +3709,9 @@ async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
-        await session.merge(settings_row(collection_auto_art=AutoArt.MATCH_OR_DRAW))
+        await session.merge(
+            settings_row(collection_auto_art=AutoArt.OVERTUREDB_TMDB_DRAW)
+        )
         row = await CollectionRepository(session).get(identity)
         assert row is not None
         select_upload(row, ArtType.BACKGROUND, "b" * 64)
@@ -3718,6 +3738,81 @@ async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
     assert manager.art.generated == [ArtType.POSTER]
 
 
+@pytest.mark.parametrize(
+    ("auto_art", "urls"),
+    [
+        (AutoArt.OVERTUREDB_TMDB, ["https://overturedb.test/a.jpg"]),
+        (AutoArt.TMDB, ["https://example.test/poster.jpg"]),
+        (AutoArt.OVERTUREDB, ["https://overturedb.test/a.jpg"]),
+    ],
+)
+async def test_automatic_art_takes_the_first_source_in_its_order(
+    manager: Manager, database: Database, auto_art: AutoArt, urls: list[str]
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(collection_auto_art=auto_art, collection_backgrounds=False)
+        )
+    manager.art.offered = {
+        "overturedb": [ArtCandidate(url="https://overturedb.test/a.jpg")],
+        **manager.art.offered,
+    }
+    manager.art.urls.clear()
+
+    await manager.service.rules.sync(identity)
+
+    assert manager.art.urls == urls
+
+
+async def test_automatic_art_never_takes_the_servers_own_art_and_draws_without_any(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    async with database.write_session() as session:
+        await session.merge(
+            settings_row(
+                collection_auto_art=AutoArt.OVERTUREDB_DRAW,
+                collection_backgrounds=False,
+            )
+        )
+    manager.art.selections.clear()
+    manager.art.urls.clear()
+
+    await manager.service.rules.sync(identity)
+
+    assert manager.art.urls == [None]
+    assert manager.art.generated == [ArtType.POSTER]
+
+
+async def test_a_separated_group_without_a_sort_title_still_sorts_behind_its_separator(
+    manager: Manager, database: Database
+) -> None:
+    identity = await create(manager)
+    await manager.service.editor.update(
+        identity, CollectionOptions(title="The Saga", collection_group="The Sagas")
+    )
+
+    await manager.service.groups.save_policy(
+        "The Sagas", CollectionGroupPolicy(separator=True)
+    )
+    await manager.service.groups.sync("The Sagas")
+
+    async with database.read_session() as session:
+        rows = await CollectionRepository(session).list_listed()
+    [separator] = [row for row in rows if row.kind is CollectionKind.SEPARATOR]
+    [member] = [row for row in rows if row.kind is not CollectionKind.SEPARATOR]
+    sort_titles = manager.provider.sort_titles
+    assert sort_titles[separator.server_item_id or ""] == "Sagas"
+    assert sort_titles[member.server_item_id or ""] == "Sagas Saga"
+    assert min(title or "" for title in sort_titles.values()) == "Sagas"
+    # A separator belongs to its group, which alone shows it.
+    assert separator.group_name == "The Sagas"
+    assert separator.id not in {row.id for row in await manager.service.reader.listed()}
+    with pytest.raises(PublicServiceError, match="Collection not found"):
+        await manager.service.reader.get(separator.id or 0)
+
+
 async def test_deleting_group_with_separator_discards_separator(
     manager: Manager,
 ) -> None:
@@ -3729,6 +3824,7 @@ async def test_deleting_group_with_separator_discards_separator(
         "Sagas",
         CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
     )
+    await manager.service.groups.sync("Sagas")
     async with manager.database.read_session() as session:
         listed = await CollectionRepository(session).list_listed()
     assert any(row.kind is CollectionKind.SEPARATOR for row in listed)
@@ -3840,8 +3936,6 @@ async def test_automatic_drawing_titles_posters_and_draws_backgrounds_it_needs(
 
     wanted = [ArtType.POSTER, ArtType.BACKGROUND] if backgrounds else [ArtType.POSTER]
     assert manager.art.generated == wanted
-    # The server shows the title over a background, so it is drawn without one.
-    assert manager.art.textless == wanted[1:]
     detail = await manager.service.reader.get(identity)
     assert detail.backgrounds is backgrounds
     if not backgrounds:

@@ -37,10 +37,21 @@ directly, so Overture's answers are compared with the server's own:
 Where Plex itself answers a condition differently from what it means
 elsewhere, the difference is noted with the reason rather than reported.
 
-It cannot change anything. Overture is signed in to with API keys, which read
-and preview but never change; media servers and every other service are only
-sent GET requests, and any other Overture request is refused before it is
-sent. Create an Overture key per instance under API keys in the menu and pass
+It changes nothing unless asked. Overture is signed in to with API keys, which
+read and preview but never change; media servers and every other service are
+only sent GET requests, and any other Overture request is refused before it is
+sent.
+
+- **Writes**, only with ``--write``: what reading cannot show, how each media
+  server takes Overture's own collection writes. Overture's media server
+  clients, the code a sync runs, create a regular collection and on Plex a
+  smart one, change and order their members, edit their title, sort title,
+  summary and Home visibility, upload a poster and delete them, reading the
+  server back after each step. Everything they make is titled "zz Overture
+  verify" and deleted at the end, whatever fails; one left by a run that was
+  killed is deleted first. No item, library or other collection is changed.
+
+Create an Overture key per instance under API keys in the menu and pass
 them in the order of the addresses; give each media server's address and its
 token or API key:
 
@@ -74,14 +85,27 @@ lazy from urllib.parse import parse_qs, urlsplit
 
 lazy import httpx2
 
+lazy from overture.config import Settings
 lazy from overture.dataset_contract.contract import ISSUE_FORMS
-lazy from overture.domain import CollectionOrder, MediaType
-lazy from overture.schemas.collections import CollectionRuleWrite
+lazy from overture.domain import (
+    ArtStyle,
+    ArtType,
+    CollectionMode,
+    CollectionOrder,
+    MediaType,
+)
+lazy from overture.media_servers.adapters import ServerCollection
+lazy from overture.media_servers.base import BaseMediaServerProvider
+lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.registry import ProviderRegistry
+lazy from overture.schemas.collections import CollectionRuleWrite, FilterGroup
 lazy from overture.services.collections.plex_query import (
+    compile_plex_query,
     plex_field_keys,
     plex_operators,
     plex_sort,
 )
+lazy from overture.utils.generated_art import render_art
 lazy from overture.utils.http_security import API_KEY_HEADER
 
 #: Operands for operators that compare numbers, days or dates.
@@ -98,6 +122,8 @@ SET_TOP = 3
 ISSUE_SAMPLE = 10
 #: Missing or extra IDs a mismatch names.
 NAMED = 5
+#: The title every collection the write check makes starts with.
+WRITE_PREFIX = "zz Overture verify"
 #: Plex's page size when listing a section's items.
 PLEX_PAGE = 500
 #: Conditions Plex answers by rules of its own, which no evaluator can share.
@@ -1314,6 +1340,223 @@ async def check_arr(
     return cases
 
 
+def write_provider(
+    server: str, url: str, secret: str, *, verify: bool
+) -> tuple[ProviderRegistry, BaseMediaServerProvider[Any]]:
+    """Overture's own client of one media server, as a sync builds it."""
+    values: dict[str, Any] = {
+        name: spec.default for name, spec in Settings.model_fields.items()
+    }
+    values |= {
+        "AUTH_MODE": "none",
+        "MEDIA_SERVER": server,
+        "MEDIA_SERVER_URL": url,
+        "MEDIA_SERVER_API_KEY": secret,
+        "MEDIA_SERVER_VERIFY_TLS": verify,
+    }
+    registry = ProviderRegistry(app_config=Settings(**values))
+    return registry, registry.provider
+
+
+class WriteCheck:
+    """Make, change and delete temporary collections with Overture's own client.
+
+    Each step reads the server back. Only collections titled ``WRITE_PREFIX``
+    are touched, and every one made is deleted at the end, whatever failed.
+    """
+
+    def __init__(
+        self,
+        direct: PlexServer | MediaBrowserServer,
+        url: str,
+        secret: str,
+        *,
+        verify: bool,
+    ) -> None:
+        self.direct = direct
+        self.registry, self.provider = write_provider(
+            direct.server, url, secret, verify=verify
+        )
+        self.cases: list[Case] = []
+        self.made: list[str] = []
+
+    def case(self, label: str) -> Case:
+        found = Case(self.direct.server, "", "writes", label)
+        self.cases.append(found)
+        return found
+
+    async def listed(self, collection_id: str) -> ServerCollection | None:
+        return next(
+            (
+                row
+                for row in await self.provider.list_collections()
+                if row.id == collection_id
+            ),
+            None,
+        )
+
+    async def run(self) -> list[Case]:
+        try:
+            for stale in await self.provider.list_collections():
+                if stale.title.startswith(WRITE_PREFIX):
+                    await self.provider.delete_collection(stale.id)
+            if (found := await self.movies()) is not None:
+                library, items = found
+                collection_id = await self.members(library, items)
+                await self.details(library, collection_id)
+                await self.poster(collection_id)
+                if isinstance(self.direct, PlexServer):
+                    await self.smart(library)
+                await self.delete()
+        except (MediaServerError, httpx2.HTTPError) as exc:
+            self.case("write to the media server").error = str(exc)
+        finally:
+            for collection_id in self.made:
+                try:
+                    await self.provider.delete_collection(collection_id)
+                except (MediaServerError, httpx2.HTTPError) as exc:
+                    self.case(
+                        f"delete {collection_id}"
+                    ).error = f"left on the server, delete it by hand: {exc}"
+            await self.registry.close()
+        return self.cases
+
+    async def movies(self) -> tuple[str, list[str]] | None:
+        """A movie library and three of its movies, or ``None`` with why not."""
+        library = next(
+            (
+                row.key
+                for row in await self.provider.get_sections()
+                if row.media_type is MediaType.MOVIE
+            ),
+            None,
+        )
+        if library is None:
+            self.case("find a movie library").error = "the server has no movie library"
+            return None
+        if isinstance(self.direct, PlexServer):
+            items = sorted(await self.direct.item_ids(library, "movie"))[:3]
+        else:
+            found = await self.direct.items(library, "movie", Limit=3)
+            items = [str(row["Id"]) for row in found["Items"]]
+        if len(items) < 3:
+            self.case("find three movies").error = "the library holds fewer than three"
+            return None
+        return library, items
+
+    async def members(self, library: str, items: list[str]) -> str:
+        """Create a collection, then replace and order its members."""
+        first, second, third = items
+        check = self.case("create a collection with two members")
+        created = await self.provider.create_collection(
+            library, f"{WRITE_PREFIX} regular", MediaType.MOVIE, [first, second]
+        )
+        self.made.append(created.id)
+        held = await self.provider.get_collection_member_ids(created.id)
+        check.count, check.held = 2, len(set(held) & {first, second})
+
+        check = self.case("replace a member and keep a custom order")
+        await self.provider.set_collection_members(
+            created.id, [third, first], order=CollectionOrder.CUSTOM
+        )
+        order = await self.provider.get_collection_member_ids(created.id)
+        if order != [third, first]:
+            check.error = f"the server holds {order}, not [{third}, {first}]"
+        return created.id
+
+    async def details(self, library: str, collection_id: str) -> None:
+        """Edit what a sync sends, and read it back."""
+        check = self.case("edit the title, sort title, summary and Home visibility")
+        wanted = {
+            "title": f"{WRITE_PREFIX} edited",
+            "sort title": f"{WRITE_PREFIX} sort",
+            "summary": "Made by Overture's verify script",
+        }
+        await self.provider.update_collection_details(
+            collection_id,
+            library_id=library,
+            title=wanted["title"],
+            summary=wanted["summary"],
+            sort_title=wanted["sort title"],
+            mode=CollectionMode.DEFAULT,
+            order=CollectionOrder.CUSTOM,
+            smart=False,
+            visible_home=True,
+        )
+        row = await self.listed(collection_id)
+        if row is None:
+            check.error = "the edited collection is no longer listed"
+            return
+        kept = {
+            "title": row.title,
+            "sort title": row.sort_title,
+            "summary": row.summary,
+        }
+        wrong = [
+            name
+            for name, value in kept.items()
+            if value is not None and value != wanted[name]
+        ]
+        if isinstance(self.direct, PlexServer) and not row.visible_home:
+            wrong.append("Home visibility")
+        if wrong:
+            check.error = f"the server kept another {', '.join(wrong)}"
+
+    async def poster(self, collection_id: str) -> None:
+        check = self.case("upload a poster")
+        before = await self.listed(collection_id)
+        await self.provider.upload_collection_art(
+            collection_id,
+            ArtType.POSTER,
+            render_art(ArtType.POSTER, ArtStyle.DARK, WRITE_PREFIX),
+            "image/png",
+        )
+        after = await self.listed(collection_id)
+        if (
+            after is None
+            or not after.thumb_url
+            or (before is not None and after.thumb_url == before.thumb_url)
+        ):
+            check.note = "the server lists the same poster address after the upload"
+
+    async def smart(self, library: str) -> None:
+        """Create a smart collection from Overture's query; Plex fills it."""
+        check = self.case("create a smart collection Plex fills itself")
+        query = compile_plex_query(
+            FilterGroup.model_validate({"conditions": [EVERYTHING]}),
+            media_type=MediaType.MOVIE,
+            order=CollectionOrder.TITLE_ASC,
+            limit=None,
+            choices={},
+            labels={},
+        )
+        created = await self.provider.create_smart_collection(
+            library, f"{WRITE_PREFIX} smart", MediaType.MOVIE, query
+        )
+        self.made.append(created.id)
+        matching, _ = await self.provider.find_matching(
+            library, MediaType.MOVIE, query, 0
+        )
+        held = await self.provider.get_collection_member_ids(created.id)
+        check.count, check.held = matching, len(held)
+        kept = await self.provider.smart_collection_filter(created.id)
+        if "year" not in kept:
+            check.note = f"Plex keeps the filter as {kept}"
+
+    async def delete(self) -> None:
+        check = self.case("delete the collections it made")
+        for collection_id in list(self.made):
+            await self.provider.delete_collection(collection_id)
+            self.made.remove(collection_id)
+        left = [
+            row.title
+            for row in await self.provider.list_collections()
+            if row.title.startswith(WRITE_PREFIX)
+        ]
+        if left:
+            check.error = f"the server still lists {named(left)}"
+
+
 def cell(value: object) -> str:
     return "" if value is None else str(value).replace("|", "\\|")
 
@@ -1377,9 +1620,9 @@ def api_keys(count: int) -> list[str]:
 
 def servers(
     args: argparse.Namespace, verify: bool
-) -> list[PlexServer | MediaBrowserServer]:
-    """The media servers given, each with its credential from the environment."""
-    found: list[PlexServer | MediaBrowserServer] = []
+) -> list[tuple[PlexServer | MediaBrowserServer, str, str]]:
+    """The media servers given, with the address and credential of each."""
+    found: list[tuple[PlexServer | MediaBrowserServer, str, str]] = []
     for name, variable in (
         ("plex", "PLEX_TOKEN"),
         ("jellyfin", "JELLYFIN_API_KEY"),
@@ -1392,9 +1635,13 @@ def servers(
         if not secret:
             raise SystemExit(f"Set {variable} to read {name} with --{name}")
         found.append(
-            PlexServer(url, secret, verify=verify)
-            if name == "plex"
-            else MediaBrowserServer(name, url, secret, verify=verify)
+            (
+                PlexServer(url, secret, verify=verify)
+                if name == "plex"
+                else MediaBrowserServer(name, url, secret, verify=verify),
+                url,
+                secret,
+            )
         )
     return found
 
@@ -1443,7 +1690,8 @@ async def run(args: argparse.Namespace) -> int:
     extra = json.loads(args.sources.read_text()) if args.sources else []
     cases: list[Case] = []
     verify = not getattr(args, "insecure", False)
-    direct = {server.server: server for server in servers(args, verify)}
+    given = servers(args, verify)
+    direct = {server.server: server for server, _, _ in given}
     try:
         for url, key in zip(args.urls, api_keys(len(args.urls)), strict=True):
             server = await server_of(url, key, verify)
@@ -1453,6 +1701,10 @@ async def run(args: argparse.Namespace) -> int:
                 )
             )
         cases.extend(await check_services(args, verify))
+        if args.write:
+            for server, url, secret in given:
+                print(f"Writing to {server.server}...", flush=True)
+                cases.extend(await WriteCheck(server, url, secret, verify=verify).run())
     finally:
         for server in direct.values():
             await server.client.aclose()
@@ -1490,6 +1742,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--insecure", action="store_true", help="Skip TLS certificate verification"
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            'Also make, change and delete temporary "zz Overture verify" '
+            "collections on each media server given"
+        ),
     )
     sys.exit(asyncio.run(run(parser.parse_args())))
 

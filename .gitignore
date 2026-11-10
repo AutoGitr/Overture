@@ -57,6 +57,16 @@ frontend/tsconfig.tsbuildinfo
 .DS_Store
 Thumbs.db
 
+# ── Agent skills copied from installed packages by scripts/sync_skills.py
+/.agents/skills/fastapi
+/.agents/skills/sqlmodel
+/.agents/skills/playwright-cli
+/.agents/skills/playwright-trace
+/.claude/skills/fastapi
+/.claude/skills/sqlmodel
+/.claude/skills/playwright-cli
+/.claude/skills/playwright-trace
+
 # ── Runtime / Misc
 *.db
 *.log

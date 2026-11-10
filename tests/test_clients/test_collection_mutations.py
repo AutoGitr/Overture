@@ -350,3 +350,46 @@ def test_only_items_out_of_order_move(
     current: list[str], wanted: list[str], settled: set[str]
 ) -> None:
     assert longest_ordered_run(current, wanted) == settled
+
+
+async def test_plex_leaves_a_collections_hub_alone_when_its_visibility_holds(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    hub = {
+        "identifier": "custom.collection.1.box",
+        "promotedToOwnHome": True,
+        "promotedToSharedHome": False,
+        "promotedToRecommended": False,
+    }
+    requests: list[httpx2.Request] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        if request.url.path == "/hubs/sections/1/manage" and request.method == "GET":
+            return httpx2.Response(200, json={"MediaContainer": {"Hub": [hub]}})
+        return httpx2.Response(200, json={"MediaContainer": {}})
+
+    factory, _transport = mock_client_factory(handle)
+    client = PlexClient(app_config=app_config, client_factory=factory)
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    try:
+        for visible_home in (True, False):
+            await client.update_collection_details(
+                "box",
+                library_id="1",
+                title="Saga",
+                summary=None,
+                sort_title=None,
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=visible_home,
+            )
+    finally:
+        await client.close()
+    hub_writes = [
+        dict(request.url.params)
+        for request in requests
+        if request.url.path == "/hubs/sections/1/manage/custom.collection.1.box"
+    ]
+    assert hub_writes == [{"promotedToOwnHome": "0"}]

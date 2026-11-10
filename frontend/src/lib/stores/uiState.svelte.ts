@@ -26,6 +26,7 @@ export type PopupType =
   | "api-keys"
   | "collection-groups"
   | "filters"
+  | "notifications"
   | "operations"
   | "settings"
   | "database"

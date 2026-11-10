@@ -395,9 +395,12 @@ class CollectionSync:
                 record_art_file(row, art_type, None)
         row.sqlmodel_update(
             {
-                "kind": (
-                    CollectionKind.SMART if collection.smart else CollectionKind.REGULAR
-                ),
+                # A separator is Overture's, an empty collection to the server.
+                "kind": row.kind
+                if row.kind is CollectionKind.SEPARATOR
+                else CollectionKind.SMART
+                if collection.smart
+                else CollectionKind.REGULAR,
                 "thumb_url": collection.thumb_url,
                 "art_url": collection.art_url,
                 "server_path": collection.path,

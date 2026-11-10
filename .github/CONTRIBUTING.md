@@ -25,7 +25,8 @@ when Renovate normally groups them.
 ```sh
 uv sync --locked --group dev
 uv run python -m scripts.provider_specs   # pinned media server API specs for tests
-cd frontend && bun install --frozen-lockfile
+(cd frontend && bun install --frozen-lockfile)
+uv run python -m scripts.sync_skills      # agent skills the installed packages ship
 git config core.hooksPath .githooks       # quick checks on every commit
 ```
 

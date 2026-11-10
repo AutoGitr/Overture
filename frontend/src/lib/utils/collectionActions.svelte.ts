@@ -10,7 +10,7 @@ import type { CollectionDetail } from "../../generated/rest/types.gen";
 import { patchCollection } from "../rest/cache";
 import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
 import { createNotifier } from "../stores/notificationState.svelte";
-import { askRemoval } from "./assetRemoval";
+import { askRemoval, removedMessage } from "./assetRemoval";
 import { errorMessage } from "./errors";
 import { beginAutoAdvance, collectionKey } from "./autoAdvance";
 import { handleRecordSelectionAdvance } from "./recordAdvance";
@@ -104,10 +104,11 @@ export class CollectionActions {
     if (this.clearingArt) return;
     const collection = this.current();
     this.feedback.clear();
+    const what = artType === "all" ? "its art" : `the ${artType}`;
     try {
       const removal = await askRemoval(
         { asset: artType === "all" ? "art" : artType, collection_ids: [collection.id] },
-        artType === "all" ? "its art" : `the ${artType}`,
+        what,
       );
       if (!removal) return;
       if (artType === "all")
@@ -120,6 +121,7 @@ export class CollectionActions {
           path: { collection_id: collection.id, art_type: artType },
           query: removal,
         });
+      this.feedback.success(removedMessage(what, removal, artType === "all"));
     } catch (error) {
       this.feedback.error(errorMessage(error, "Remove artwork failed"));
     }
@@ -146,6 +148,7 @@ export class CollectionActions {
           : {}),
         theme_status: cleared.theme_status,
       });
+      this.feedback.success(removedMessage("the collection theme", removal));
     } catch (error) {
       this.feedback.error(errorMessage(error, "Remove theme failed"));
     }

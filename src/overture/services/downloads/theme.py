@@ -7,7 +7,12 @@ lazy from ...db.session import Database
 lazy from ...utils.progress import ProgressCallback
 lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from ..themes.youtube_resolver import DownloadError, YouTubeResolver
-lazy from .results import DownloadedCollectionTheme, DownloadedTheme, PreparedDownload
+lazy from .results import (
+    DownloadedCollectionTheme,
+    DownloadedTheme,
+    DownloadTarget,
+    PreparedDownload,
+)
 
 
 class DownloadThemeHandler:
@@ -24,6 +29,18 @@ class DownloadThemeHandler:
         self.asset_storage = asset_storage
         self.youtube_resolver = youtube_resolver
 
+    def target(self, item: MediaItem) -> DownloadTarget:
+        """Return where the item's theme goes, in its folder as it is now.
+
+        Raises:
+            DownloadError: When the item has no folder.
+        """
+        folder_path = require_folder_path(item)
+        return DownloadTarget(
+            path=self.asset_storage.resolve_theme_path(folder_path),
+            trusted_root=folder_path,
+        )
+
     async def download(
         self,
         job: DownloadJob,
@@ -39,7 +56,7 @@ class DownloadThemeHandler:
         Raises:
             DownloadError: When the job names no YouTube ID.
         """
-        folder_path = require_folder_path(item)
+        require_folder_path(item)
         youtube_id = job.target_url
         if not youtube_id:
             raise DownloadError("No YouTube ID specified")
@@ -57,10 +74,7 @@ class DownloadThemeHandler:
             normalize_loudness=app_settings.normalize_theme_loudness,
         )
 
-        target_path = self.asset_storage.resolve_theme_path(folder_path)
         return PreparedDownload(
-            target_path=target_path,
-            trusted_root=folder_path,
             data=result.audio_bytes,
             result=DownloadedTheme(
                 youtube_id=youtube_id,

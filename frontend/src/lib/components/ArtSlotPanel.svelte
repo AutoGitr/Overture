@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ASSET_LABELS } from "../utils/artTypes";
   import { createMutation, createQuery } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
   import {
@@ -138,7 +139,7 @@
               preview_url: null,
               title: null,
               generated: null,
-              textless: false,
+              title_only: false,
             },
           ]
         : [];
@@ -197,6 +198,7 @@
           body,
           path: { collection_id: slot.collectionId, art_type: artType },
         });
+        feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()}.`);
         if (artType === "poster" || artType === "background")
           handleRecordSelectionAdvance(collectionKey(slot.collectionId), artType, advanceContext);
         return true;
@@ -258,6 +260,7 @@
           { artType, seasonNum: slot.seasonNum },
           advanceContext,
         );
+        feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()} and stored the title.`);
         return true;
       } catch (err) {
         feedback.error(errorMessage(err, "Save failed"));
@@ -291,8 +294,11 @@
       }
       upsertLibraryItem(result.item);
       // Nothing to download: the item already shows its choice.
-      if (!result.selection.job_id && detailArtType) {
-        artPreviewState.clear(target.mediaItemId, detailArtType);
+      if (!result.selection.job_id) {
+        if (detailArtType) artPreviewState.clear(target.mediaItemId, detailArtType);
+        feedback.success(
+          `Saved the ${ASSET_LABELS[artType].toLowerCase()}; the title has no folder to download it into.`,
+        );
       }
       if (target.artType === "season_poster") await invalidateSeasons(target.mediaItemId);
       await handleArtworkSelectionAdvance({
@@ -449,7 +455,7 @@
           saveArt(
             // A drawn candidate is drawn again on saving, from the current title.
             art.generated
-              ? { generated: art.generated, textless: art.textless }
+              ? { generated: art.generated, title_only: art.title_only }
               : { url: art.url, width: art.width, height: art.height },
             candidateImageUrl(art),
           )}

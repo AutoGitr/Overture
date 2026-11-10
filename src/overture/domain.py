@@ -110,9 +110,16 @@ class AutoAdvance(StrEnum):
     SLOTS_AND_ITEMS = "slots_and_items"
 
 
+#: The order a collection takes when nothing else names one.
+DEFAULT_COLLECTION_ORDER = CollectionOrder.RELEASE_ASC
 #: Why a smart collection cannot take a custom order.
 SMART_CUSTOM_ORDER = "Smart collections are ordered by Plex; choose a sort"
 
+#: The Radarr and Sonarr tag on every title Overture adds; no member tag may use it.
+ARR_ADDED_TAG = "overture"
+#: The sort title of a separated group's collections when none is set, which
+#: keeps them together behind their separator.
+SEPARATED_SORT_TITLE = "{group} {title}"
 #: The virtual group of collections without rules; no stored group may use it.
 UNMANAGED_GROUP = "Unmanaged"
 UNGROUPED_GROUP = "Ungrouped"
@@ -421,30 +428,58 @@ class ArtStyle(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ArtDrawing:
-    """How Overture draws a piece of art: its colours, with or without the title."""
+    """How Overture draws a piece of art.
+
+    A poster shows the title, under its group unless *title_only*; a
+    background shows the style's colours alone, as the server draws the title
+    over it.
+    """
 
     style: ArtStyle
-    textless: bool = False
+    title_only: bool = False
 
 
 class AutoArt(StrEnum):
-    """What a sync does for a collection's art slot that has none chosen."""
+    """What a sync does for a collection's art slot that has none chosen.
+
+    The value names what it tries, first to last: the catalog sources whose
+    best art it takes, then, with ``draw``, art drawn from the title. OvertureDB's
+    curated art always comes before TMDB's.
+    """
 
     OFF = "off"
-    #: The best art a source offers.
-    MATCH = "match"
-    #: The best art a source offers, else art drawn from the title.
-    MATCH_OR_DRAW = "match_or_draw"
-    #: Art drawn from the title.
+    OVERTUREDB = "overturedb"
+    TMDB = "tmdb"
+    OVERTUREDB_TMDB = "overturedb_tmdb"
+    OVERTUREDB_DRAW = "overturedb_draw"
+    TMDB_DRAW = "tmdb_draw"
+    OVERTUREDB_TMDB_DRAW = "overturedb_tmdb_draw"
     DRAW = "draw"
 
     @property
-    def matches(self) -> bool:
-        return self in {AutoArt.MATCH, AutoArt.MATCH_OR_DRAW}
+    def sources(self) -> tuple[ArtSource, ...]:
+        """Return the sources whose best art it takes, first to last."""
+        return tuple(
+            ArtSource(name)
+            for name in self.value.split("_")
+            if name not in {"off", "draw"}
+        )
 
     @property
     def draws(self) -> bool:
-        return self in {AutoArt.MATCH_OR_DRAW, AutoArt.DRAW}
+        """Whether it draws art when no source has any."""
+        return self.value.endswith("draw")
+
+
+class NotifyCompleted(StrEnum):
+    """Which completed runs are announced."""
+
+    NEVER = "never"
+    ALWAYS = "always"
+    #: Runs that added, changed, removed or downloaded something, or found a mismatch.
+    CHANGES = "changes"
+    #: Runs that finished with one or more targets failing.
+    ERRORS = "errors"
 
 
 class ArtSource(StrEnum):

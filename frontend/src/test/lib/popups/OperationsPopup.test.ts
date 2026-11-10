@@ -62,7 +62,7 @@ describe("OperationsPopup tab navigation", () => {
     settingsState.reset();
   });
 
-  it("blocks full sync during independent downloads without a bulk spinner", async () => {
+  it("leaves full sync free during independent downloads, without a bulk spinner", async () => {
     downloadState.trackQueuedItemJob({
       jobId: "independent",
       mediaItemId: 1,
@@ -77,8 +77,7 @@ describe("OperationsPopup tab navigation", () => {
     expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole("tab", { name: /Sync/i }));
 
-    expect(screen.getByText("Wait for downloads to finish.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
+    expect(screen.queryByText(/Wait for/)).not.toBeInTheDocument();
   });
 
   it("renders with the initial tab and allows switching between all tabs", async () => {

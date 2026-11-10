@@ -3,6 +3,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { getCatalogEntryOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { goToCatalogEntry, goToCollection } from "../router/routes";
+  import IdBadge from "./IdBadge.svelte";
 
   // One link at most, and its icon names where it goes: the sidebar's
   // collection icon for the library's collection, OvertureDB's for its entry.
@@ -25,18 +26,18 @@
 </script>
 
 {#if libraryCollectionId !== null}
-  <button
-    class="btn btn-ghost btn-sm"
-    onclick={() => {
-      if (libraryCollectionId !== null)
-        goToCollection({ id: libraryCollectionId, title: "Collection" });
-    }}><MEDIA_ICONS.collection size={16} />Collection</button
+  <IdBadge
+    title="Open its collection"
+    onselect={() => goToCollection({ id: libraryCollectionId, title: "Collection" })}
   >
+    <MEDIA_ICONS.collection size={30} aria-hidden="true" />
+  </IdBadge>
 {:else if entry}
-  <button
-    class="btn btn-ghost btn-sm"
-    onclick={() => {
-      if (entry) goToCatalogEntry({ media_type: "collection", entry_key: entry.entry_key });
-    }}><img src="/brand/overturedb-tab.svg" width="16" height="16" alt="" />Collection: {entry.entry.title}</button
-  >
+  {@const entryKey = entry.entry_key}
+  <IdBadge
+    title={`Open its collection, ${entry.entry.title}, in OvertureDB`}
+    icon="/brand/overturedb-tab.svg"
+    alt="OvertureDB collection"
+    onselect={() => goToCatalogEntry({ media_type: "collection", entry_key: entryKey })}
+  />
 {/if}

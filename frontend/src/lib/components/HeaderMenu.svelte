@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Bell from "@lucide/svelte/icons/bell";
   import ChartColumn from "@lucide/svelte/icons/chart-column";
   import DatabaseBackup from "@lucide/svelte/icons/database-backup";
   import KeyRound from "@lucide/svelte/icons/key-round";
@@ -169,6 +170,10 @@
       >
         <KeyRound size={16} />
         <span class="menu-label">API keys</span>
+      </button>
+      <button type="button" class="menu-item" onclick={() => openPopup("notifications")}>
+        <Bell size={16} />
+        <span class="menu-label">Notifications</span>
       </button>
       <button type="button" class="menu-item" onclick={() => openPopup("settings")}>
         <Settings size={16} />

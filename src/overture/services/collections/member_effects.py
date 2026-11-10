@@ -1,9 +1,10 @@
 """What a sync does beyond membership: requests, Radarr and Sonarr tags, Home order."""
 
 lazy from collections.abc import Sequence
+lazy from dataclasses import replace
 
 lazy from ...db.models.settings import AppSettings
-lazy from ...domain import FilterOperator, MediaType
+lazy from ...domain import ARR_ADDED_TAG, FilterOperator, MediaType
 lazy from ...integrations.arr import ArrRequest, ArrTitle
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...repositories.collections import CollectionItem
@@ -99,7 +100,11 @@ class MemberEffects:
     async def request(
         self, media_type: MediaType, tmdb_ids: Sequence[int], settings: AppSettings
     ) -> CollectionRequestResult:
-        """Add titles to Radarr or Sonarr with the configured folder and profile."""
+        """Add titles to Radarr or Sonarr with the configured folder and profile.
+
+        Every added title carries :data:`ARR_ADDED_TAG`, so Radarr and Sonarr
+        show which titles Overture requested.
+        """
         arr = self._sources.arr(media_type)
         request = _arr_request(media_type, settings)
         held = _external_ids(await arr.titles(), media_type)
@@ -112,6 +117,9 @@ class MemberEffects:
                 elif external in held:
                     result.present += 1
                 else:
+                    if not request.tag_ids:
+                        tag_ids = (await arr.tag_id(ARR_ADDED_TAG),)
+                        request = replace(request, tag_ids=tag_ids)
                     await arr.add(external, request)
                     held.add(external)
                     result.requested += 1

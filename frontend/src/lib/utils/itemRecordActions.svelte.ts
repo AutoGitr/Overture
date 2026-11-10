@@ -11,7 +11,7 @@ import { upsertLibraryItem } from "../rest/cache";
 import { goToLibrary, type ArtSubTab } from "../router/routes";
 import { downloadState } from "../stores/downloadState.svelte";
 import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
-import { askRemoval } from "./assetRemoval";
+import { askRemoval, removedMessage } from "./assetRemoval";
 import { errorMessage } from "./errors";
 
 /**
@@ -58,16 +58,23 @@ export class ItemRecordActions {
     const item = this.item();
     if (!item || this.clearingArt) return;
     const artType = tab === "seasons" ? "season_poster" : tab;
+    const what =
+      seasonId === null && tab === "seasons"
+        ? "every season poster"
+        : tab === "seasons"
+          ? "the season poster"
+          : `the ${tab}`;
     await this.#run("Remove art failed", async () => {
       const removal = await askRemoval(
         { asset: artType, item_ids: [item.id], season_id: seasonId },
-        seasonId === null && tab === "seasons" ? "every season poster" : `the ${tab}`,
+        what,
       );
       if (!removal) return;
       await this.#clearArt.mutateAsync({
         path: { item_id: item.id, art_type: artType },
         query: { ...removal, ...(seasonId === null ? {} : { season_id: seasonId }) },
       });
+      this.#feedback.success(removedMessage(what, removal));
     });
   }
 
@@ -78,6 +85,7 @@ export class ItemRecordActions {
       const removal = await askRemoval({ asset: "art", item_ids: [item.id] }, "all of its art");
       if (!removal) return;
       await this.#clearAllArt.mutateAsync({ path: { item_id: item.id }, query: removal });
+      this.#feedback.success(removedMessage("all of its art", removal, true));
     });
   }
 
@@ -88,6 +96,7 @@ export class ItemRecordActions {
       const removal = await askRemoval({ asset: "theme", item_ids: [item.id] }, "the theme");
       if (!removal) return;
       await this.#clearTheme.mutateAsync({ path: { item_id: item.id }, query: removal });
+      this.#feedback.success(removedMessage("the theme", removal));
     });
   }
 

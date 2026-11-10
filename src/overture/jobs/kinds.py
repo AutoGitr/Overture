@@ -34,13 +34,24 @@ class JobKind(StrEnum):
 
     @property
     def label(self) -> str:
-        """Return how a run of this kind is named in logs."""
+        """Return how a run of this kind is named to users and in logs.
+
+        It names the Operations tab that starts it, as the interface does.
+        """
         return _LABELS[self]
 
     @property
     def clearable(self) -> bool:
         """Whether a client may clear this kind's last result from its view."""
         return self in _CLEARABLE
+
+    @property
+    def notifiable(self) -> bool:
+        """Whether a run of this kind can be announced at ``NOTIFY_URL``.
+
+        A single download is reported in the queue, not sent out.
+        """
+        return self is not JobKind.DOWNLOAD
 
 
 _EVENT_PREFIXES = frozendict(
@@ -59,9 +70,9 @@ _EVENT_PREFIXES = frozendict(
 _LABELS = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         JobKind.SYNC: "library sync",
-        JobKind.BULK_ART: "bulk art match",
-        JobKind.BULK_THEME: "bulk theme match",
-        JobKind.ASSET_SCAN: "asset scan",
+        JobKind.BULK_ART: "Assets art run",
+        JobKind.BULK_THEME: "Assets theme run",
+        JobKind.ASSET_SCAN: "Renamer scan",
         JobKind.SERVER_AUDIT: "server audit",
         JobKind.SERVER_AUDIT_FIX: "server audit fix",
         JobKind.PUBLIC_DATASET_SYNC: "OvertureDB sync",
@@ -78,6 +89,9 @@ _CLEARABLE = frozenset(
         JobKind.SERVER_AUDIT,
     }
 )
+
+#: The kinds of run a notification rule can announce, in the order rules list them.
+NOTIFIABLE_KINDS = tuple(kind for kind in JobKind if kind.notifiable)
 
 
 class LifecycleStatus(StrEnum):

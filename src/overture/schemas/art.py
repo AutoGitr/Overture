@@ -21,8 +21,8 @@ class SaveArtRequest(StrictBaseModel):
     upload_hash: ImageHash | None = None
     #: Art Overture draws in this style from a collection's title.
     generated: ArtStyle | None = None
-    #: Draw the style's colours only, without the title.
-    textless: bool = False
+    #: Draw a poster with the title alone, without its group.
+    title_only: bool = False
     width: int | None = None
     height: int | None = None
 
@@ -31,7 +31,7 @@ class SaveArtRequest(StrictBaseModel):
         """How to draw the art, when it is art to draw."""
         if self.generated is None:
             return None
-        return ArtDrawing(self.generated, textless=self.textless)
+        return ArtDrawing(self.generated, title_only=self.title_only)
 
     @model_validator(mode="after")
     def validate_source(self) -> Self:
@@ -39,8 +39,8 @@ class SaveArtRequest(StrictBaseModel):
         chosen = (self.url, self.upload_hash, self.generated)
         if sum(value is not None for value in chosen) != 1:
             raise ValueError("Choose a link, an uploaded image or a generated style")
-        if self.textless and self.generated is None:
-            raise ValueError("Only drawn art can be textless")
+        if self.title_only and self.generated is None:
+            raise ValueError("Only drawn art can show the title alone")
         return self
 
 
@@ -71,8 +71,8 @@ class ArtCandidate(StrictBaseModel):
     perfect_match: bool | None = None
     #: Choosing it draws the art in this style; *url* shows what it looks like.
     generated: ArtStyle | None = None
-    #: Choosing it draws the style's colours without the title.
-    textless: bool = False
+    #: Choosing it draws a poster with the title alone, without its group.
+    title_only: bool = False
 
     @property
     def area(self) -> int:

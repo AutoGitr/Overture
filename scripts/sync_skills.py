@@ -6,6 +6,10 @@
   ``uv.lock``.
 - ``npm``: shipped inside an installed frontend package, so it follows
   ``frontend/bun.lock``.
+
+  Package skills are copied from the installed package and git-ignored, so a
+  dependency update, which no bot can follow with a copy, never leaves a
+  committed copy behind.
 - ``github``: a path in a GitHub repository, pinned to a commit and a content
   hash that ``--update`` moves to the default branch's latest commit.
 - ``local``: written for Overture and edited in place in ``.agents/skills``.
@@ -22,6 +26,7 @@ lazy import importlib.util
 lazy import io
 lazy import json
 lazy import shutil
+lazy import subprocess
 lazy import sys
 lazy import tarfile
 lazy import tempfile
@@ -165,15 +170,34 @@ def _install(name: str, entry: Entry, target: Path) -> None:
         raise SystemExit(f"{name}: the local skill {target} is missing")
 
 
+def _from_package(entry: Entry) -> bool:
+    return "python" in entry or "npm" in entry
+
+
+GIT = shutil.which("git") or "git"
+
+
+def _ignored(path: Path) -> bool:
+    command = [GIT, "check-ignore", "--quiet", "--no-index", path]
+    return subprocess.run(command, cwd=ROOT, check=False).returncode == 0
+
+
 def _problem(name: str, entry: Entry, target: Path) -> str | None:
-    """Describe how an installed entry differs from its source, if it does."""
+    """Describe how an entry differs from its source, if it does."""
+    if _from_package(entry):
+        source = _package_source(name, entry)
+        if not _ignored(target):
+            listed = target.relative_to(ROOT).as_posix()
+            return f"{name} comes from a package, so .gitignore must list {listed}"
+        if target.exists() and not _same(source, target):
+            return f"{name} differs from the copy its installed package ships"
+        return None
+    if _ignored(target):
+        return f"{name} is committed, so .gitignore must not list it"
     if not target.exists():
         return f"{name} is not installed"
-    if "github" in entry:
-        if _digest(target) != entry["sha256"]:
-            return f"{name} differs from {entry['github']}@{entry['commit'][:12]}"
-    elif "local" not in entry and not _same(_package_source(name, entry), target):
-        return f"{name} differs from the copy its installed package ships"
+    if "github" in entry and _digest(target) != entry["sha256"]:
+        return f"{name} differs from {entry['github']}@{entry['commit'][:12]}"
     return None
 
 
@@ -197,6 +221,11 @@ def _check(entries: list[tuple[str, Entry, Path]], names: set[str]) -> int:
         f"{name} differs between .agents/skills and .claude/skills"
         for name in sorted(names)
         if (SKILLS / name).exists() and not _same(SKILLS / name, CLAUDE_SKILLS / name)
+    ]
+    problems += [
+        f"{name} comes from a package, so .gitignore must list .claude/skills/{name}"
+        for name, entry, _ in entries
+        if name in names and _from_package(entry) and not _ignored(CLAUDE_SKILLS / name)
     ]
     problems += [
         f"{path.relative_to(ROOT).as_posix()} is not listed in skills.json"

@@ -552,12 +552,6 @@ test("group management saves and sends defaults apart from an unsaved collection
           : { sort_title_format: "01_{title}", summary_format: null },
     }),
   );
-  let applied = false;
-  await page.route("**/api/collections/group-policy/apply{,?*}", (route) => {
-    applied = true;
-    return route.fulfill({ json: { collection_ids: [12], errors: {} } });
-  });
-  // Save sends the defaults to the collections the group holds.
   await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({ json: [collectionDetail({ id: 12, collection_group: "Weekend" })] }),
   );
@@ -577,8 +571,10 @@ test("group management saves and sends defaults apart from an unsaved collection
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Saved and applied to 1 collection.")).toBeVisible();
-  expect(applied).toBe(true);
+  // Saving writes in Overture alone; the group's next sync sends it.
+  await expect(
+    page.getByText("Saved. Its collections get it on the server with their next sync."),
+  ).toBeVisible();
   await dialog.getByRole("button", { name: "Close popup", exact: true }).click();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved collection");
 });

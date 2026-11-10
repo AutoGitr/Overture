@@ -47,6 +47,8 @@ Run `npx` commands from skills as `bunx`.
 
 `uv run python -m scripts.sync_skills` installs the skills listed in
 `.agents/skills.json`; only `.agents/skills/svelte-query` is edited by hand.
+Skills an installed package ships are copied from it and git-ignored, so run it
+again after a dependency update.
 
 ## Engineering standards
 

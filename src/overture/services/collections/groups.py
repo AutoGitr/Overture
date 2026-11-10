@@ -23,7 +23,6 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
-lazy from .display import saved_options
 lazy from .editor import CollectionEditor
 lazy from .rule_sync import RuleSync
 lazy from .rules import generator, group_name
@@ -86,7 +85,6 @@ class CollectionGroups:
             for row in await repo.group_members(group):
                 row.updated_at = utc_now()
                 session.add(row)
-        await self._separators.apply(replacement)
         await self._access.changed()
         return StatusResponse(status=Status.OK)
 
@@ -241,48 +239,8 @@ class CollectionGroups:
             session.add(row)
             await session.flush()
             await self._separators.refuse_taken(session, row)
-        await self._separators.apply(name)
         await self._access.changed()
         return body
-
-    async def apply_policy(self, name: str) -> BulkCollectionOperationResult:
-        """Apply display defaults while preserving sources and rule overrides.
-
-        A group may mix regular and smart collections; Plex orders smart ones
-        itself, so a custom order skips them.
-        """
-        server = self._access.server_type
-        async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
-            policy = await repo.group(server, name)
-            rows = [
-                row
-                for row in await repo.list_listed()
-                if row.group_name == name
-                and row.server_type is server
-                and row.id is not None
-            ]
-        result = BulkCollectionOperationResult()
-        custom = policy is not None and policy.order_type is CollectionOrder.CUSTOM
-        ids: list[int] = []
-        for row in rows:
-            if custom and row.kind is CollectionKind.SMART:
-                result.skipped[row.id or 0] = SMART_CUSTOM_ORDER
-            else:
-                ids.append(row.id or 0)
-        for collection_id in ids:
-            try:
-                async with self._access.locked(collection_id):
-                    async with self._access.database.read_session() as session:
-                        row = await self._access.require(session, collection_id)
-                    if row.group_name != name:
-                        continue
-                    await self._editor.update_locked(row, saved_options(row, row.rule))
-                result.collection_ids.append(collection_id)
-                await self._access.updated(collection_id)
-            except Exception as exc:
-                result.errors[collection_id] = str(exc)
-        return result
 
     async def sync(
         self, name: str, *, library_ids: list[str] | None = None

@@ -206,7 +206,7 @@ def select_art(
     slot.url = url
     slot.upload_hash = None
     slot.generated_style = None
-    slot.generated_textless = False
+    slot.generated_title_only = False
     return slot
 
 
@@ -225,7 +225,7 @@ def select_upload(
     slot.url = None
     slot.upload_hash = upload_hash
     slot.generated_style = generated.style if generated else None
-    slot.generated_textless = generated.textless if generated else False
+    slot.generated_title_only = generated.title_only if generated else False
     return slot
 
 
@@ -233,7 +233,7 @@ def art_drawing(slot: ArtSlot) -> ArtDrawing | None:
     """Return how Overture drew the slot's art, if it drew it."""
     if slot.generated_style is None:
         return None
-    return ArtDrawing(slot.generated_style, textless=slot.generated_textless)
+    return ArtDrawing(slot.generated_style, title_only=slot.generated_title_only)
 
 
 def clear_art_selection(
@@ -246,7 +246,7 @@ def clear_art_selection(
     slot.url = None
     slot.upload_hash = None
     slot.generated_style = None
-    slot.generated_textless = False
+    slot.generated_title_only = False
     _drop_if_empty(owner, slot)
 
 

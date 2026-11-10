@@ -36,8 +36,12 @@
   ] as const;
   const AUTO_ART: readonly (readonly [AutoArt, string])[] = [
     ["off", "Off"],
-    ["match", "Match"],
-    ["match_or_draw", "Match, else draw"],
+    ["overturedb", "OvertureDB"],
+    ["tmdb", "TMDB"],
+    ["overturedb_tmdb", "OvertureDB, then TMDB"],
+    ["overturedb_draw", "OvertureDB, else draw"],
+    ["tmdb_draw", "TMDB, else draw"],
+    ["overturedb_tmdb_draw", "OvertureDB, then TMDB, else draw"],
     ["draw", "Draw"],
   ];
   const STYLES: readonly (readonly [ArtStyle, string])[] = [
@@ -77,6 +81,7 @@
     memberLabels = false,
     filtering = true,
     children,
+    requests,
   }: {
     policy: PolicyData;
     level: PolicyLevel;
@@ -97,6 +102,8 @@
     filtering?: boolean;
     /** Fields placed right after Sort, under Display. */
     children?: Snippet;
+    /** Fields placed last in the Radarr and Sonarr section. */
+    requests?: Snippet;
   } = $props();
 
   const id = $props.id();
@@ -146,7 +153,7 @@
     bind:value={policy.auto_art}
     inherited={defaults?.auto_art}
     options={AUTO_ART}
-    hint="After a sync, fills art no one chose: Match takes the best a source has; Draw draws a poster with the title and a background without."
+    hint="After a sync, fills art no one chose with the best art of the first source that has any: OvertureDB's catalog art, or TMDB's art of the franchise or a listed person. Draw draws a poster with the title and a background without."
   />
   <InheritedSelect
     label="Drawn colours"
@@ -172,16 +179,6 @@
     options={ON_OFF}
     hint="Picks the OvertureDB theme after a sync when none is chosen."
   />
-  {#if arr}
-    <InheritedSelect
-      label="Request missing"
-      {inherits}
-      bind:value={policy.request_missing}
-      inherited={defaults?.request_missing}
-      options={ON_OFF}
-      hint={`After a sync, asks ${arr} for list titles the library lacks.`}
-    />
-  {/if}
   {#if inherits && memberLabels}
     <FieldRow
       label="Member label"
@@ -197,20 +194,32 @@
       />
     </FieldRow>
   {/if}
-  {#if inherits && arr}
-    <FieldRow
-      label={`${arr} tag`}
-      for={`${id}-arr-tag`}
-      hint={`Members get this ${arr} tag; other titles lose it unless a collection with the same tag holds them. Text or {title} and {group}, written as a-z, 0-9 and -.`}
-    >
-      <input
-        id={`${id}-arr-tag`}
-        maxlength="200"
-        value={policy.arr_tag ?? ""}
-        placeholder={defaults?.arr_tag || "None"}
-        oninput={(event) => (policy.arr_tag = event.currentTarget.value || null)}
-      />
-    </FieldRow>
+  {#if arr}
+    <h4 class="caps-label">{arr}</h4>
+    <InheritedSelect
+      label="Request missing"
+      {inherits}
+      bind:value={policy.request_missing}
+      inherited={defaults?.request_missing}
+      options={ON_OFF}
+      hint={`After a sync, asks ${arr} for list titles the library lacks, and tags each title it adds overture.`}
+    />
+    {#if inherits}
+      <FieldRow
+        label={`${arr} tag`}
+        for={`${id}-arr-tag`}
+        hint={`Members get this ${arr} tag; other titles lose it unless a collection with the same tag holds them. Text or {title} and {group}, written as a-z, 0-9 and -; overture is Overture's own.`}
+      >
+        <input
+          id={`${id}-arr-tag`}
+          maxlength="200"
+          value={policy.arr_tag ?? ""}
+          placeholder={defaults?.arr_tag || "None"}
+          oninput={(event) => (policy.arr_tag = event.currentTarget.value || null)}
+        />
+      </FieldRow>
+    {/if}
+    {@render requests?.()}
   {/if}
 {/if}
 

@@ -12,7 +12,7 @@ export function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
-interface JobEventErrorLike {
+export interface JobEventErrorLike {
   job?: {
     error?: {
       message?: string | null;

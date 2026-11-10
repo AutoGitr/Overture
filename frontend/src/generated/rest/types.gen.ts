@@ -85,6 +85,10 @@ export type AppSettingsRead = {
      * Auto Match Art
      */
     auto_match_art: boolean;
+    /**
+     * Auto Search Themes
+     */
+    auto_search_themes: boolean;
     auto_unmonitor: AutoUnmonitor;
     collection_auto_art: AutoArt;
     /**
@@ -259,6 +263,10 @@ export type AppSettingsUpdate = {
      * Auto Match Art
      */
     auto_match_art?: boolean | null;
+    /**
+     * Auto Search Themes
+     */
+    auto_search_themes?: boolean | null;
     auto_unmonitor?: AutoUnmonitor | null;
     collection_auto_art?: AutoArt | null;
     /**
@@ -437,13 +445,13 @@ export type ArtCandidate = {
      */
     source: string | null;
     /**
-     * Textless
-     */
-    textless: boolean;
-    /**
      * Title
      */
     title: string | null;
+    /**
+     * Title Only
+     */
+    title_only: boolean;
     /**
      * Url
      */
@@ -671,8 +679,12 @@ export type AutoAdvance = 'off' | 'slots' | 'slots_and_items';
  * AutoArt
  *
  * What a sync does for a collection's art slot that has none chosen.
+ *
+ * The value names what it tries, first to last: the catalog sources whose
+ * best art it takes, then, with ``draw``, art drawn from the title. OvertureDB's
+ * curated art always comes before TMDB's.
  */
-export type AutoArt = 'off' | 'match' | 'match_or_draw' | 'draw';
+export type AutoArt = 'off' | 'overturedb' | 'tmdb' | 'overturedb_tmdb' | 'overturedb_draw' | 'tmdb_draw' | 'overturedb_tmdb_draw' | 'draw';
 
 /**
  * AutoUnmonitor
@@ -4316,6 +4328,97 @@ export type MonitoredResponse = {
 };
 
 /**
+ * NotificationRuleRead
+ *
+ * When runs of one kind are announced, and how the kind is named.
+ */
+export type NotificationRuleRead = {
+    completed: NotifyCompleted;
+    /**
+     * Failed
+     */
+    failed: boolean;
+    kind: JobKind;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Scheduled Only
+     */
+    scheduled_only: boolean;
+    /**
+     * Stopped
+     */
+    stopped: boolean;
+};
+
+/**
+ * NotificationRuleWrite
+ *
+ * When runs of one kind are announced.
+ */
+export type NotificationRuleWrite = {
+    completed?: NotifyCompleted;
+    /**
+     * Failed
+     */
+    failed?: boolean;
+    kind: JobKind;
+    /**
+     * Scheduled Only
+     */
+    scheduled_only?: boolean;
+    /**
+     * Stopped
+     */
+    stopped?: boolean;
+};
+
+/**
+ * NotificationSettingsRead
+ *
+ * Where notifications go, and when each kind of run sends one.
+ */
+export type NotificationSettingsRead = {
+    /**
+     * Rules
+     */
+    rules: Array<NotificationRuleRead>;
+    service: NotifyService | null;
+    /**
+     * Service Label
+     */
+    service_label: string | null;
+};
+
+/**
+ * NotificationSettingsUpdate
+ *
+ * The rules to save; a kind left out keeps its saved rule.
+ */
+export type NotificationSettingsUpdate = {
+    /**
+     * Rules
+     */
+    rules: Array<NotificationRuleWrite>;
+};
+
+/**
+ * NotifyCompleted
+ *
+ * Which completed runs are announced.
+ */
+export type NotifyCompleted = 'never' | 'always' | 'changes' | 'errors';
+
+/**
+ * NotifyService
+ *
+ * A service ``NOTIFY_URL`` can name; ``apprise`` covers every other URL.
+ */
+export type NotifyService = 'apprise' | 'discord' | 'slack' | 'telegram' | 'gotify' | 'ntfy';
+
+/**
  * PublicDatasetEnabledRequest
  *
  * Validate the public dataset enabled request payload.
@@ -4838,9 +4941,9 @@ export type SaveArtRequest = {
      */
     height?: number | null;
     /**
-     * Textless
+     * Title Only
      */
-    textless?: boolean;
+    title_only?: boolean;
     upload_hash?: ImageHash | null;
     /**
      * Url
@@ -7643,44 +7746,6 @@ export type SaveCollectionGroupPolicyResponses = {
 
 export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
 
-export type ApplyCollectionGroupPolicyData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    url: '/api/collections/group-policy/apply';
-};
-
-export type ApplyCollectionGroupPolicyErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ApplyCollectionGroupPolicyError = ApplyCollectionGroupPolicyErrors[keyof ApplyCollectionGroupPolicyErrors];
-
-export type ApplyCollectionGroupPolicyResponses = {
-    /**
-     * Successful Response
-     */
-    200: BulkCollectionOperationResult;
-};
-
-export type ApplyCollectionGroupPolicyResponse = ApplyCollectionGroupPolicyResponses[keyof ApplyCollectionGroupPolicyResponses];
-
 export type SyncCollectionGroupData = {
     body?: never;
     headers?: {
@@ -8469,9 +8534,9 @@ export type GetGeneratedCollectionArtData = {
     };
     query?: {
         /**
-         * Textless
+         * Title Only
          */
-        textless?: boolean;
+        title_only?: boolean;
     };
     url: '/api/collections/{collection_id}/art/{art_type}/generated/{style}';
 };
@@ -9990,6 +10055,105 @@ export type GetServerWebLinksResponses = {
 };
 
 export type GetServerWebLinksResponse = GetServerWebLinksResponses[keyof GetServerWebLinksResponses];
+
+export type GetNotificationsData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/notifications';
+};
+
+export type GetNotificationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetNotificationsError = GetNotificationsErrors[keyof GetNotificationsErrors];
+
+export type GetNotificationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotificationSettingsRead;
+};
+
+export type GetNotificationsResponse = GetNotificationsResponses[keyof GetNotificationsResponses];
+
+export type UpdateNotificationsData = {
+    body: NotificationSettingsUpdate;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/notifications';
+};
+
+export type UpdateNotificationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateNotificationsError = UpdateNotificationsErrors[keyof UpdateNotificationsErrors];
+
+export type UpdateNotificationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotificationSettingsRead;
+};
+
+export type UpdateNotificationsResponse = UpdateNotificationsResponses[keyof UpdateNotificationsResponses];
+
+export type SendTestNotificationData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/notifications/test';
+};
+
+export type SendTestNotificationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SendTestNotificationError = SendTestNotificationErrors[keyof SendTestNotificationErrors];
+
+export type SendTestNotificationResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type SendTestNotificationResponse = SendTestNotificationResponses[keyof SendTestNotificationResponses];
 
 export type ListCatalogEntriesData = {
     body?: never;

@@ -273,11 +273,11 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   });
 
   it.each([
-    ["artwork", "art", "Remove art 2"],
-    ["themes", "theme", "Remove themes 2"],
+    ["artwork", "art", "Remove art 2", "Delete the local image files"],
+    ["themes", "theme", "Remove themes 2", "Delete the local MP3 files"],
   ])(
     "removes %s as chosen in one request for a fixed filtered target set",
-    async (operation, asset, label) => {
+    async (operation, asset, label, deleteFiles) => {
       const items = [1, 2].map((id) =>
         mediaItem({ id, title: `Item ${id}`, youtube_id: "theme", theme_status: "complete" }),
       );
@@ -307,9 +307,13 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       ).toBeDisabled();
       expect(within(dialog).getByText("Plex's API cannot delete artwork")).toBeInTheDocument();
       expect(within(dialog).getByRole("checkbox", { name: "Forget the selection" })).toBeChecked();
-      await answerConfirmation(true, undefined, ["Delete the local file"]);
+      await answerConfirmation(true, undefined, [deleteFiles]);
 
-      await waitFor(() => expect(view.getByRole("status")).toHaveTextContent("of 2 movies"));
+      await waitFor(() =>
+        expect(view.getByRole("status")).toHaveTextContent(
+          "of 2 movies: forgot the selection and deleted the local files.",
+        ),
+      );
       expect(calls[1]?.url).toBe("/api/art/removal-options");
       expect(JSON.parse(calls[1]?.init.body as string)).toEqual({ asset, item_ids: [1, 2] });
       expect(calls[2]?.url).toBe("/api/library/items/bulk-operation");

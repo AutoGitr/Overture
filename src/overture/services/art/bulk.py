@@ -28,7 +28,7 @@ lazy from ...db.art_slots import ArtFileFacts, SavedArt, art_file_facts, saved_a
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
-lazy from ...domain import ArtBulkSource, ArtType
+lazy from ...domain import MATCH_THRESHOLD_MAX, ArtBulkSource, ArtType
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import BulkAssetTally
@@ -59,7 +59,7 @@ lazy from .bulk_work import load_art_batch, plan_bulk_art
 lazy from .collection_art import CollectionArtService
 lazy from .collection_bulk import plan_collection_art, run_collection_art
 lazy from .matcher import ArtMatcher
-lazy from .perfect_match import accepted_matches, comparison_threshold
+lazy from .perfect_match import accepted_matches, accepts, comparison_threshold
 lazy from .selection import adopt_art
 lazy from .targets import target_label
 
@@ -138,15 +138,26 @@ async def _from_overturedb(
         reason = pick.label + ("; replaces the local file" if local else "")
         return _Decision(url, reason)
     try:
-        identical = await run.art_matcher.identical_to_local(url, local)
+        compared = await run.art_matcher.compare_with_local(url, local)
     except ValueError as exc:
         notes.errors.append(f"OvertureDB: {exc}")
         return None
-    if identical:
+    if compared.identical:
         return _Decision(
             url, "OvertureDB artwork is identical to the local file", verified=local
         )
-    notes.declined.append("OvertureDB artwork differs from the local file")
+    threshold = run.params.threshold
+    if accepts(threshold, distance=compared.distance, identical=False):
+        return _Decision(
+            url,
+            f"d={compared.distance} from OvertureDB; replaces the local file",
+        )
+    notes.declined.append(
+        f"OvertureDB artwork is d={compared.distance} from the local file but not "
+        f"the same file; a match threshold of {compared.distance} or more takes it"
+        if compared.distance <= MATCH_THRESHOLD_MAX
+        else f"OvertureDB artwork is a different picture, d={compared.distance}"
+    )
     return None
 
 

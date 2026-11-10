@@ -27,6 +27,7 @@ lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
+    CollectionKind,
     IncrementalThemeOrder,
     MediaType,
     ServerType,
@@ -720,3 +721,20 @@ async def test_managed_collections_keep_overtures_choices_and_outlive_their_serv
         assert (kept.server_item_id, kept.child_count) == (None, 0)
         assert await repo.members(saga.id or 0) == []
         assert [row.title for row in await repo.list_all()] == ["Saga"]
+
+
+async def test_a_library_sync_keeps_a_separator_a_separator(
+    *, app_config: Settings, database: Database
+) -> None:
+    """Plex lists a separator as an empty collection; only Overture knows its role."""
+    server = Server(_collection("sep"))
+    await _run(server, database, app_config)
+    async with database.write_session() as session:
+        row = (await _rows(database))["sep"]
+        row.kind = CollectionKind.SEPARATOR
+        session.add(row)
+        session.add(managing_rule(row.id or 0))
+
+    await _run(server, database, app_config)
+
+    assert (await _rows(database))["sep"].kind is CollectionKind.SEPARATOR

@@ -451,7 +451,7 @@ class TestArtRequestContract:
             "url",
             "upload_hash",
             "generated",
-            "textless",
+            "title_only",
             "width",
             "height",
         }

@@ -341,8 +341,7 @@ async def test_two_selections_completing_in_reverse_order_keeps_newest_choice(
             a_downloading.set()
             await a_can_finish.wait()
         return PreparedDownload(
-            target_path=str(folder / "poster.jpg"),
-            trusted_root=str(tmp_path),
+            extension=".jpg",
             data=_image_bytes("JPEG", color),
             result=DownloadedArt(
                 ArtType.POSTER, None, PublicArtUrl(urls[color]), None, 2, 2
@@ -436,8 +435,7 @@ async def test_clear_during_preparation_cancels_download_without_overwriting(
             1500,
         )
         return PreparedDownload(
-            target_path=str(folder / "poster.jpg"),
-            trusted_root=str(tmp_path),
+            extension=".jpg",
             data=_image_bytes("JPEG"),
             result=result,
         )
@@ -620,6 +618,57 @@ async def test_cancellation_never_subsequently_becomes_failure_or_completion(
     assert watch.active_job_ids == ["cancelled-job"]
 
 
+async def test_a_download_is_written_into_the_folder_its_item_has_when_saved(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    """A sync may move a title's folder while its artwork downloads."""
+    publisher = RecordingPublisher()
+    service = _download_service(publisher, app_config=app_config, database=database)
+    before, after = tmp_path / "Movie (2001)", tmp_path / "Movie (2002)"
+    before.mkdir()
+    after.mkdir()
+    async with database.write_session() as session:
+        session.add(
+            MediaItem(
+                id=1, media_type=MediaType.MOVIE, title="Movie", folder_path=str(before)
+            )
+        )
+        await session.flush()
+        job_id, _ = await service.queue_job(
+            session, JobTarget.art(1, ArtType.POSTER, "https://images.test/poster.jpg")
+        )
+
+    async def fake_download(
+        job: DownloadJob, item: MediaItem, progress: Any
+    ) -> PreparedDownload:
+        async with database.write_session() as session:
+            moved = await session.get(MediaItem, 1)
+            assert moved is not None
+            moved.folder_path = str(after)
+        return PreparedDownload(
+            data=_image_bytes("JPEG"),
+            extension=".jpg",
+            result=DownloadedArt(
+                ArtType.POSTER,
+                None,
+                PublicArtUrl("https://images.test/poster.jpg"),
+                None,
+                2,
+                2,
+            ),
+        )
+
+    monkeypatch.setattr(service.art_handler, "download", fake_download)
+    await service.process_job(job_id)
+
+    assert (after / "poster.jpg").is_file()
+    assert not (before / "poster.jpg").exists()
+
+
 @pytest.mark.parametrize("cancelled", [False, True])
 async def test_identical_file_completes_unchanged_unless_cancelled(
     monkeypatch: pytest.MonkeyPatch,
@@ -653,8 +702,7 @@ async def test_identical_file_completes_unchanged_unless_cancelled(
             async with database.write_session() as session:
                 await service.cancel_assets(session, AssetScope(1))
         return PreparedDownload(
-            target_path=str(poster_path),
-            trusted_root=str(tmp_path),
+            extension=".jpg",
             data=image_data,
             result=DownloadedArt(
                 ArtType.POSTER,
@@ -733,8 +781,7 @@ async def test_shutdown_during_local_commit_preserves_completion(
         job: DownloadJob, item: MediaItem, progress: Any
     ) -> PreparedDownload:
         return PreparedDownload(
-            target_path=str(folder / "poster.jpg"),
-            trusted_root=str(tmp_path),
+            extension=".jpg",
             data=_image_bytes("JPEG"),
             result=DownloadedArt(
                 ArtType.POSTER,

@@ -228,15 +228,6 @@ async def save_collection_group_policy(
     return await groups.save_policy(name, body, new_set=new_set)
 
 
-@router.post("/group-policy/apply")
-async def apply_collection_group_policy(
-    groups: CollectionGroupsDep,
-    name: Annotated[str, Query(min_length=1, max_length=200)],
-) -> BulkCollectionOperationResult:
-    """Apply group defaults while preserving each collection's explicit overrides."""
-    return await groups.apply_policy(name)
-
-
 @router.post("/group-policy/sync")
 async def sync_collection_group(
     groups: CollectionGroupsDep,
@@ -516,11 +507,13 @@ async def get_generated_collection_art(
     art_type: ArtTypePath,
     style: ArtStyle,
     art: CollectionArtDep,
-    textless: bool = False,
+    title_only: bool = False,
 ) -> Response:
     """Return the art Overture would draw for the collection in *style*."""
     return Response(
-        await art.drawn(collection_id, art_type, ArtDrawing(style, textless=textless)),
+        await art.drawn(
+            collection_id, art_type, ArtDrawing(style, title_only=title_only)
+        ),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},
     )

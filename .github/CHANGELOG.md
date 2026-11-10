@@ -10,12 +10,12 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **Collections:** an **In a collection** condition; **In a collection is false** makes a catch-all of every title no other collection holds, and a collection never counts itself.
-- **Artwork:** collection art drawn from the title, in a dark, light or accent style, with the title or textless, offered as **Generated** candidates for posters and backgrounds and filterable as the **Generated** art source; drawn art is drawn again when the title or group changes.
-- **Collections:** **Automatic art** (global, group and collection) is one choice: Off, Match, Match, else draw, or Draw, which draws a titled poster and a textless background in the **Drawn colours**; **Background: Not needed** makes a poster complete a collection's art. The upgrade turns the two earlier switches into the matching choice.
+- **Artwork:** collection art drawn from the title, in a dark, light or accent style, offered as **Generated** candidates and filterable as the **Generated** art source: posters show the title, under the group or alone, and backgrounds never show text; drawn art is drawn again when the title or group changes.
+- **Collections:** **Automatic art** (global, group and collection) is one choice: Off; OvertureDB, TMDB, or OvertureDB then TMDB, each optionally else draw; or Draw, which draws a titled poster and a background without text in the **Drawn colours**; **Background: Not needed** makes a poster complete a collection's art. The media server's own art is never taken. The upgrade turns the earlier switches into OvertureDB, then TMDB.
 - **Artwork and themes:** removing art or a theme, from its tab or for filtered titles and collections, can forget the selection, delete the local file and delete the media server's copy, in any combination; the dialog offers only what applies and says why the rest cannot. Only JPEG and PNG images and MP3 themes are ever deleted.
 - **Collections:** an inactive collection's art and theme can be chosen; the sync that puts it back on the server sends them.
-- **Collections:** a Plex group can have a **Separator**, an empty collection titled after the group with a drawn poster, sorted before the group's collections by the group's sort title template.
-- **Notifications:** `NOTIFY_URL` receives each failed library sync, asset run, server audit, OvertureDB sync and backup, as JSON Apprise's API and other webhooks accept.
+- **Collections:** a Plex group can have a **Separator**, an empty collection titled after the group with a drawn poster showing its name alone, sorted before the group's collections by the group's sort title template, or by `{group} {title}` when none is set.
+- **Notifications:** `NOTIFY_URL` hears when runs end, in the format of a Discord, Slack, Telegram, Gotify or ntfy webhook it names, or as the JSON Apprise's API takes for any other service. **Notifications** in the menu chooses, per kind of run, whether failed and stopped runs are announced, which completed ones are (never, always, with changes or with errors) and whether only scheduled runs count, and sends a test notification.
 - **API:** `GET /api/media-server/links` returns where the server's web app opens items and collections; `GET /api/collections/{id}/art/{art_type}/generated/{style}` returns art drawn from the collection's title; the database record lists a title's values, such as genres and people.
 - **Collections:** a collection can span several libraries, of movies, shows or both, with its own criteria for each. Jellyfin and Emby hold one collection for them all; Plex holds one in each library, which Overture keeps alike. The libraries of a saved collection can change, and a set makes one collection per value across its libraries.
 - **Collections:** the icon beside Movies and Shows in the library sidebar lists movie and show collections together, with a **Holds** filter: its first click opens the last view used, Groups or Collections, and later clicks switch between them.
@@ -23,7 +23,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Collections:** a set's per-library collections of one value merge into one on upgrade; the next sync folds extra Jellyfin and Emby collections into one, and a Plex copy added later receives the collection's art and theme.
 - **Collections:** the sort menu of **Groups** sorts the groups themselves, by name, collections, items, date added or last synced.
 - **Collections:** MDBList conditions refuse franchise and official-list URLs (`mdblist.com/franchises/...`, `mdblist.com/lists/official/...`) and say what to use instead, since MDBList's API serves neither.
-- **Collections:** `scripts/verify.py` replaces `verify_collections.py`: besides Overture's own checks it reads each media server directly, read only, and compares libraries, items, collections, values and counts with the server's own, loads every collection image, and reports every Plex filter, field, sort and operator and every Jellyfin and Emby filter Overture cannot use.
+- **Collections:** `scripts/verify.py` replaces `verify_collections.py`: besides Overture's own checks it reads each media server directly, read only, and compares libraries, items, collections, values and counts with the server's own, loads every collection image, and reports every Plex filter, field, sort and operator and every Jellyfin and Emby filter Overture cannot use. With `--write` it also makes, changes and deletes temporary "zz Overture verify" collections with Overture's own media server clients, to show how each server takes them.
 - **OvertureDB:** a library title, collection or catalog draft can be contributed on its own through **Contribute issue**, which opens its OvertureDB form on GitHub filled in.
 - **Collections:** sets can be split by production company, TMDB keyword and show status, and on Plex by video codec, audio codec and audio channels.
 - **Collections:** Plex smart collections and smart sets can test any field Overture can evaluate, such as original language or TMDB facts, through labels Overture keeps on the matching items and refreshes on each sync.
@@ -44,6 +44,18 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **API:** `GET /api/library/items/{id}/record` and `GET /api/collections/{id}/record` return a record's stored rows and derived values, and the `collection.monitored` event reports a monitoring change on its own.
 
 ### Changed
+
+- **Collections:** saving a collection or group only writes in Overture and returns at once; **Save and Sync** sends it to the media server. A new collection saved without syncing reads its lists on its first sync.
+- **Downloads:** art and themes download while a full sync runs, so a choice made then shows at once; each download writes into the folder its title has when it is saved.
+- **Collections:** sort titles leave out a leading "The", "A" or "An" of the title and group, as Plex does when it sorts titles itself.
+- **Collections:** a smart collection never takes a group's or the default **Custom** order, which Plex cannot apply to it, but the next order the settings give.
+- **Artwork:** an Assets run compares OvertureDB's artwork with the local file as local image matching does, so with a looser matching threshold the same picture saved differently is taken instead of skipped.
+- **Radarr and Sonarr:** every title Request missing adds is tagged `overture`; a member tag cannot be `overture`.
+- **Settings:** **Request missing** sits with the Radarr and Sonarr root folder, quality profile and search, in its own section.
+- **Settings:** **Auto-search themes on load**, on by default, searches YouTube as soon as a title's themes open.
+- **Interface:** a title's collection link is an icon badge like its other links; removals say exactly what they forget or delete, and every removal, art choice, OvertureDB draft change and run ending shows a notice.
+- **Interface:** status filters are evenly spaced.
+- **Interface:** runs are named as their Operations tabs are, such as "Assets art run" and "Renamer scan", in notices, notifications and messages.
 
 - **Collections:** collection syncs run on **Sync** schedules under Operations, which can sync chosen groups; the per-group and global collection sync schedules are gone, and the upgrade turns each enabled one into a Sync schedule of its groups.
 - **Collections:** a group's **Save** also sends its display settings to its collections on the server; **Save and Apply** is gone.
@@ -104,6 +116,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Collections:** a library sync kept turning separators into regular collections, which then showed in the sidebar, failed to open and kept their group's next separator from being made ("A collection with this title already exists in this library"); the upgrade makes such collections separators again.
+- **Interface:** a burst of live updates no longer slows a large library.
+
 - **Artwork:** Assets runs that adopt perfect matches only find a byte-identical candidate whose preview differs slightly from the original, for items and collections.
 - **Interface:** auto-advance goes through the sidebar in the order it showed when you reached a title, even when a selection moves the title, such as when sorting by poster shape.
 - **Interface:** the Status filters are no longer parted by rules.
@@ -134,6 +149,10 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Interface:** a long summary no longer stretches the poster in the detail header.
 - **Interface:** posters link to the media server only while the server holds the item or collection.
 - **Media server:** an error answer to one request no longer marks the server unreachable.
+
+### Security
+
+- **Container:** the image applies Debian's security updates when it is built, so fixes such as zlib's and apt's reach it before the official Python image is rebuilt with them.
 
 ## [0.1.0] - 2026-11-03
 

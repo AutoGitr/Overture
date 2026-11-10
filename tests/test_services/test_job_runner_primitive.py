@@ -103,7 +103,7 @@ async def test_a_named_run_logs_its_start_its_entries_and_one_summary(
         return await publish_job_lifecycle(
             JobKind.BULK_ART,
             status,
-            name="bulk art match",
+            name="Assets art run",
             publisher=NullEventPublisher(),
             **payload,
         )
@@ -139,13 +139,13 @@ async def test_a_named_run_logs_its_start_its_entries_and_one_summary(
     )
 
     assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
-        (logging.INFO, "Bulk art match started"),
-        (logging.DEBUG, "Bulk art match: Started Matching - planning 3 slots"),
-        (logging.DEBUG, "Bulk art match: Queued Movie (poster) - OvertureDB artwork"),
-        (logging.WARNING, "Bulk art match: Error Show (poster) - lookup failed"),
+        (logging.INFO, "Assets art run started"),
+        (logging.DEBUG, "Assets art run: Started Matching - planning 3 slots"),
+        (logging.DEBUG, "Assets art run: Queued Movie (poster) - OvertureDB artwork"),
+        (logging.WARNING, "Assets art run: Error Show (poster) - lookup failed"),
         (
             logging.INFO,
-            "Bulk art match completed in 1m 12s - 3/3 done, queued 1, errors 1",
+            "Assets art run completed in 1m 12s - 3/3 done, queued 1, errors 1",
         ),
     ]
 
@@ -352,8 +352,8 @@ async def test_report_counts_exactly_the_lines_it_logs(
     assert tally.done == 5
     # The container log carries the same lines, word for word.
     logged = [record.getMessage() for record in caplog.records]
-    assert [line for line in logged if line.startswith("Bulk art match: ")] == [
-        f"Bulk art match: {line}" for line in lines
+    assert [line for line in logged if line.startswith("Assets art run: ")] == [
+        f"Assets art run: {line}" for line in lines
     ]
     assert [
         record.levelno for record in caplog.records if "Error B" in record.getMessage()
@@ -387,7 +387,7 @@ async def test_failure_publishes_failed_counts_the_error_and_is_swallowed() -> N
     assert payload["job"]["error"]["message"] == "work blew up"
     assert (
         JobLogEntry.model_validate(payload["log"]).format()
-        == "Error Bulk art match - work blew up"
+        == "Error Assets art run - work blew up"
     )
 
 

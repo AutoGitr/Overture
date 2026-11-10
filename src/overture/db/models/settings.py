@@ -14,6 +14,7 @@ lazy from sqlmodel import CheckConstraint, Field, SQLModel
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...domain import (
+    DEFAULT_COLLECTION_ORDER,
     ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
@@ -54,7 +55,7 @@ class AppSettingsBase(SQLModel):
         default=CollectionMode.DEFAULT, sa_type=enum_type(CollectionMode)
     )
     collection_order_default: CollectionOrder = Field(
-        default=CollectionOrder.RELEASE_ASC, sa_type=enum_type(CollectionOrder)
+        default=DEFAULT_COLLECTION_ORDER, sa_type=enum_type(CollectionOrder)
     )
     collection_filtering_default: CollectionFiltering = Field(
         default=CollectionFiltering.USER, sa_type=enum_type(CollectionFiltering)
@@ -87,6 +88,8 @@ class AppSettingsBase(SQLModel):
     sonarr_quality_profile_id: int | None = Field(default=None, ge=1)
     sonarr_search: bool = False
     auto_match_art: bool = False
+    #: Search YouTube for themes as soon as a title's theme panel opens.
+    auto_search_themes: bool = True
     workflow: Workflow = Field(
         default=Workflow.ART_AND_THEMES, sa_type=enum_type(Workflow)
     )

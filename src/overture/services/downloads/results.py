@@ -118,10 +118,22 @@ type DownloadResult = DownloadedArt | DownloadedTheme
 
 @dataclass(slots=True, frozen=True)
 class PreparedDownload:
-    """Complete bytes and metadata, ready for the uncancellable save phase."""
+    """Complete bytes and metadata, ready for the uncancellable save phase.
 
-    target_path: str
-    trusted_root: str
+    Where they go is decided only when they are saved, under the item's lock,
+    as a sync can move the item's folder while they download.
+    """
+
     data: bytes
     result: DownloadResult
     file_hash: str | None = None
+    #: The image's file extension; themes are always MP3.
+    extension: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class DownloadTarget:
+    """Where a download is written, inside the folder it may write in."""
+
+    path: str
+    trusted_root: str

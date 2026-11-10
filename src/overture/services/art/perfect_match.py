@@ -27,19 +27,25 @@ def comparison_threshold(threshold: int) -> int:
     return max(threshold, PERFECT_MATCH_MAX_DISTANCE)
 
 
-def accepted_matches(matches: list[ArtCandidate], threshold: int) -> list[ArtCandidate]:
-    """Return the matches an Assets run with *threshold* accepts, in order.
+def accepts(threshold: int, *, distance: int | None, identical: bool) -> bool:
+    """Whether an Assets run with *threshold* takes an image this close to the file.
 
     A perfect match is always accepted; any other only within *threshold*.
     """
+    return identical or (
+        threshold != PERFECT_MATCH_ONLY
+        and distance is not None
+        and distance <= threshold
+    )
+
+
+def accepted_matches(matches: list[ArtCandidate], threshold: int) -> list[ArtCandidate]:
+    """Return the matches an Assets run with *threshold* accepts, in order."""
     return [
         match
         for match in matches
-        if match.perfect_match
-        or (
-            threshold != PERFECT_MATCH_ONLY
-            and match.hamming is not None
-            and match.hamming <= threshold
+        if accepts(
+            threshold, distance=match.hamming, identical=bool(match.perfect_match)
         )
     ]
 

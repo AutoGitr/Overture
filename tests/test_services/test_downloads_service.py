@@ -34,7 +34,6 @@ lazy from overture.domain import (
     ServerAsset,
     ServerType,
 )
-lazy from overture.jobs.gate import LibraryGate
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.repositories.downloads import DownloadJobRepository
@@ -282,7 +281,6 @@ def _download_manager(
     image_clients: StaticImageClients | None = None,
     app_config: Settings,
     database: Database,
-    library_gate: LibraryGate | None = None,
 ) -> DownloadService:
     asset_storage = AssetStorage(app_config=app_config)
     return DownloadService(
@@ -306,7 +304,6 @@ def _download_manager(
         asset_storage=asset_storage,
         app_config=app_config,
         database=database,
-        library_gate=library_gate,
     )
 
 
@@ -1565,173 +1562,6 @@ async def test_the_snapshot_lists_active_jobs_in_queue_order(
         (event.job.id, event.job.target.title)
         for event in await manager.snapshot_events()
     ] == [("c", "Movie 3"), ("b", "Movie 2"), ("a", "Movie 1")]
-
-
-async def test_download_service_holds_and_releases_library_gate(
-    *, app_config: Settings, database: Database
-) -> None:
-    gate = LibraryGate()
-    manager = _download_manager(
-        RecordingPublisher(),
-        provider=RefreshingProvider(),
-        phash=PhashService(app_config=app_config),
-        youtube_resolver=unused(YouTubeResolver),
-        app_config=app_config,
-        database=database,
-        library_gate=gate,
-    )
-    assert gate.blocker("sync") is None
-
-    async with database.write_session() as session:
-        session.add(
-            MediaItem(
-                id=1,
-                media_type=MediaType.MOVIE,
-                title="Movie 1",
-                server_item_id="item-1",
-            )
-        )
-        await session.commit()
-        job_id, _ = await manager.queue_job(
-            session,
-            JobTarget.art(1, ArtType.POSTER, "http://example.com/poster.jpg"),
-        )
-        await session.commit()
-    await manager.committed(session)
-
-    assert gate.blocker("sync") == "downloads"
-
-    await manager.cancel_jobs([job_id])
-    assert gate.blocker("sync") is None
-
-
-async def test_download_service_reconciles_gate_on_startup(
-    monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
-) -> None:
-    gate = LibraryGate()
-    async with database.write_session() as session:
-        session.add(
-            MediaItem(
-                id=1,
-                media_type=MediaType.MOVIE,
-                title="Movie 1",
-                server_item_id="item-1",
-            )
-        )
-        session.add(
-            DownloadJob(
-                id="reconcile-job",
-                media_item_id=1,
-                job_type=JobType.ART,
-                art_type=ArtType.POSTER,
-                target_url="http://example.com/poster.jpg",
-                status=JobStatus.RUNNING,
-                created_at=datetime.now(UTC),
-            )
-        )
-        await session.commit()
-
-    manager = _download_manager(
-        RecordingPublisher(),
-        provider=RefreshingProvider(),
-        phash=PhashService(app_config=app_config),
-        youtube_resolver=unused(YouTubeResolver),
-        app_config=app_config,
-        database=database,
-        library_gate=gate,
-    )
-    monkeypatch.setattr(manager, "process_job", AsyncMock())
-
-    await manager.start()
-    try:
-        assert gate.blocker("sync") is None
-        async with database.read_session() as session:
-            stored = await session.get(DownloadJob, "reconcile-job")
-            assert stored is not None
-            assert stored.status is JobStatus.CANCELLED
-    finally:
-        await manager.stop()
-    assert gate.blocker("sync") is None
-
-
-async def test_rolled_back_download_does_not_block_sync(
-    *, app_config: Settings, database: Database
-) -> None:
-    gate = LibraryGate()
-    manager = _download_manager(
-        RecordingPublisher(),
-        provider=RefreshingProvider(),
-        phash=PhashService(app_config=app_config),
-        youtube_resolver=unused(YouTubeResolver),
-        app_config=app_config,
-        database=database,
-        library_gate=gate,
-    )
-    async with database.write_session() as session:
-        session.add(MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie"))
-    async with database.write_session() as session:
-        await manager.queue_job(
-            session, JobTarget.art(1, ArtType.POSTER, "https://images.test/poster.jpg")
-        )
-        await session.rollback()
-    assert gate.blocker("sync") is None
-
-
-async def test_download_workers_can_stop_while_waiting_for_sync(
-    *, app_config: Settings, database: Database
-) -> None:
-    gate = LibraryGate()
-    release = gate.hold("sync", "full sync")
-    manager = _download_manager(
-        RecordingPublisher(),
-        provider=RefreshingProvider(),
-        phash=PhashService(app_config=app_config),
-        youtube_resolver=unused(YouTubeResolver),
-        app_config=app_config,
-        database=database,
-        library_gate=gate,
-    )
-    try:
-        await manager.start()
-        await asyncio.sleep(0)
-        await asyncio.wait_for(manager.stop(), timeout=2)
-        assert gate.blocker("sync") is None
-        assert gate.blocker("downloads") == "full sync"
-    finally:
-        release()
-        await manager.stop()
-
-
-async def test_download_workers_reserve_gate_before_awaiting_a_claim(
-    monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
-) -> None:
-    gate = LibraryGate()
-    manager = _download_manager(
-        RecordingPublisher(),
-        provider=RefreshingProvider(),
-        phash=PhashService(app_config=app_config),
-        youtube_resolver=unused(YouTubeResolver),
-        app_config=app_config,
-        database=database,
-        library_gate=gate,
-    )
-    monkeypatch.setattr(manager, "process_job", AsyncMock())
-    await manager.start()
-    try:
-        async with database.write_session() as session:
-            session.add(MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie"))
-            await session.flush()
-            await manager.queue_job(
-                session,
-                JobTarget.art(1, ArtType.POSTER, "https://images.test/poster.jpg"),
-            )
-        await manager.committed(session)
-        async with database.write_lock:
-            await asyncio.sleep(0)
-            assert gate.blocker("sync") == "downloads"
-    finally:
-        await manager.stop()
-    assert gate.blocker("sync") is None
 
 
 async def test_art_download_from_a_down_media_server_gives_its_reason(

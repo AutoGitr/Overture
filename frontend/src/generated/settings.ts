@@ -7,6 +7,7 @@ export const DEFAULT_APP_SETTINGS = {
   auto_advance: "slots_and_items",
   auto_advance_skip_completed: true,
   auto_match_art: false,
+  auto_search_themes: true,
   auto_unmonitor: "art_and_theme",
   collection_auto_art: "off",
   collection_auto_match_theme: false,

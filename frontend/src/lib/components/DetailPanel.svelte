@@ -238,17 +238,19 @@
         onselect={openLibrary}
       />
     {/if}
+    {#if item?.tmdb_collection_id}
+      <CollectionBadge
+        tmdbId={item.tmdb_collection_id}
+        libraryCollectionId={item.library_collection_id}
+        datasetEnabled={catalogBrowsing.enabled}
+      />
+    {/if}
     <ContributeIssueLink issue={detail ? detail.draft_issue : item ? itemIssue.data : null} />
     {#if detail?.draft}<button
         class="btn btn-ghost btn-sm"
         disabled={catalog?.draft.busy}
         onclick={() => catalog?.draft.discard()}>Discard draft</button
       >{/if}
-    {#if item?.tmdb_collection_id}<CollectionBadge
-        tmdbId={item.tmdb_collection_id}
-        libraryCollectionId={item.library_collection_id}
-        datasetEnabled={catalogBrowsing.enabled}
-      />{/if}
   {/snippet}
 
   {#snippet tabs()}

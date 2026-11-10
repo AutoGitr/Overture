@@ -6,6 +6,8 @@ lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.settings import AppSettings
 lazy from ...domain import (
+    DEFAULT_COLLECTION_ORDER,
+    SEPARATED_SORT_TITLE,
     ArtStyle,
     AutoArt,
     CollectionFiltering,
@@ -111,8 +113,19 @@ def resolve_policy(
         ),
         order_type=inherit(
             rule.order_type if rule else None,
-            group.order_type if group else None,
-            defaults.collection_order_default,
+            *(
+                order
+                for order in (
+                    group.order_type if group else None,
+                    defaults.collection_order_default,
+                    DEFAULT_COLLECTION_ORDER,
+                )
+                # Plex orders a smart collection by its query, never by hand,
+                # so an inherited Custom passes to the next tier.
+                if not (
+                    rule is not None and rule.smart and order is CollectionOrder.CUSTOM
+                )
+            ),
         ),
         collection_filtering=inherit(
             rule.collection_filtering if rule else None,
@@ -137,7 +150,8 @@ def resolve_policy(
         sort_title_format=inherit(
             rule.sort_title_format if rule else None,
             group.sort_title_format if group else None,
-            defaults.collection_sort_title_format,
+            defaults.collection_sort_title_format
+            or (SEPARATED_SORT_TITLE if group is not None and group.separator else ""),
         ),
         summary_format=inherit(
             rule.summary_format if rule else None,

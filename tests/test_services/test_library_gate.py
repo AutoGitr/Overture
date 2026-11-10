@@ -73,7 +73,7 @@ async def test_one_operation_runs_at_a_time_and_shares_the_gate_with_its_jobs() 
             gate.start(side, job, _held(release))
         assert blocked.value.status_code == 409
         assert blocked.value.message == (
-            "Wait for bulk art match, bulk theme match to finish"
+            "Wait for Assets art run, Assets theme run to finish"
         )
         assert job.running is False
 
@@ -113,14 +113,14 @@ async def test_a_scheduled_run_waits_for_the_other_side_and_reports_it() -> None
         gate.run("sync", sync, full_sync, report=reports.append)
     )
     await asyncio.sleep(0)
-    assert reports == ["asset scan"]
+    assert reports == ["Renamer scan"]
     assert ran == []
 
     release_scan.set()
     await asyncio.wait_for(waiting, timeout=1)
 
     assert ran == ["sync"]
-    assert reports == ["asset scan", None]
+    assert reports == ["Renamer scan", None]
     await _finish(sync)
     assert gate.blocker("renamer") is None
 
@@ -141,8 +141,8 @@ async def test_a_waiting_run_holds_the_gate_while_its_slot_is_busy() -> None:
     )
     await asyncio.sleep(0)
 
-    assert reports == ["bulk art match"]
-    with pytest.raises(PublicServiceError, match="bulk art match"):
+    assert reports == ["Assets art run"]
+    with pytest.raises(PublicServiceError, match="Assets art run"):
         gate.start("sync", sync, _held(asyncio.Event()))
 
     release_manual.set()
@@ -159,7 +159,7 @@ async def test_a_cancelled_wait_releases_the_gate() -> None:
         gate.run("assets", art, _held(asyncio.Event()), report=lambda _reason: None)
     )
     await asyncio.sleep(0)
-    assert gate.blocker("sync") == "bulk art match"
+    assert gate.blocker("sync") == "Assets art run"
 
     waiting.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -207,7 +207,7 @@ async def test_manual_full_sync_is_refused_while_an_item_job_runs(
     release = asyncio.Event()
     assert gate.start("renamer", scan, _held(release))
 
-    with pytest.raises(PublicServiceError, match="Wait for asset scan to finish"):
+    with pytest.raises(PublicServiceError, match="Wait for Renamer scan to finish"):
         engine.run_sync(SyncRunRequest())
 
     assert engine.job.running is False
@@ -264,7 +264,7 @@ async def test_queued_and_waiting_schedules_report_why_and_announce_changes(
             for schedule in await engine.schedules.all()
         }
         return statuses == {
-            "First": ("waiting", "asset scan"),
+            "First": ("waiting", "Renamer scan"),
             "Second": ("queued", "First"),
         }
 
@@ -280,48 +280,3 @@ async def test_queued_and_waiting_schedules_report_why_and_announce_changes(
         "idle"
     }
     assert ("schedules.changed", {"kind": "sync"}) in publisher.events
-
-
-async def test_library_gate_hold_and_release() -> None:
-    gate = LibraryGate()
-    assert gate.blocker("sync") is None
-    assert gate.blocker("renamer") is None
-
-    release = gate.hold("downloads", "downloads")
-    assert gate.blocker("sync") == "downloads"
-    assert gate.blocker("renamer") is None
-    assert gate.blocker("assets") is None
-
-    sync = _job(JobKind.SYNC)
-    with pytest.raises(PublicServiceError, match="Wait for downloads to finish"):
-        gate.start("sync", sync, _held(asyncio.Event()))
-
-    release()
-    assert gate.blocker("sync") is None
-    release()
-    assert gate.blocker("sync") is None
-
-
-async def test_library_gate_wait_for() -> None:
-    gate = LibraryGate()
-    sync = _job(JobKind.SYNC)
-    release_sync = asyncio.Event()
-
-    assert gate.start("sync", sync, _held(release_sync))
-    assert gate.blocker("downloads") == "full sync"
-
-    waited = False
-
-    async def waiter() -> None:
-        nonlocal waited
-        await gate.wait_for("downloads")
-        waited = True
-
-    task = asyncio.create_task(waiter())
-    await asyncio.sleep(0)
-    assert waited is False
-
-    release_sync.set()
-    await sync.wait_idle()
-    await task
-    assert waited is True

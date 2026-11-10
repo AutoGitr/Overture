@@ -29,7 +29,6 @@ lazy from overture.domain import (
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
-lazy from overture.jobs.gate import LibraryGate
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.registry import BackgroundJobRegistry
@@ -72,7 +71,7 @@ lazy from overture.services.health import get_service_status
 lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.named_schedules import NamedSchedules
-lazy from overture.services.notifications import FailureNotifier
+lazy from overture.services.notifications import NotificationSettings, RunNotifier
 lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.public_dataset.service import PublicDatasetService
 lazy from overture.services.removal import AssetRemover
@@ -654,8 +653,10 @@ def make_runtime(
         else stats
     )
 
+    notifier = RunNotifier(app_config=app_config, database=database)
     return RuntimeServices(
-        notifier=FailureNotifier(app_config=app_config),
+        notifier=notifier,
+        notifications=NotificationSettings(database=database, notifier=notifier),
         app_settings=app_config,
         database=database,
         auth=AuthService(app_config, database),
@@ -829,7 +830,6 @@ def make_download_service(
     app_config: Settings,
     database: Database,
     image_cache: ImageCache | None = None,
-    library_gate: LibraryGate | None = None,
 ) -> DownloadService:
     """Wire a real download queue with the test's external collaborators."""
     return DownloadService(
@@ -853,7 +853,6 @@ def make_download_service(
         asset_storage=asset_storage,
         app_config=app_config,
         database=database,
-        library_gate=library_gate,
     )
 
 

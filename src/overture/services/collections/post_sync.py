@@ -14,6 +14,7 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import AppSettings, get_app_settings
 lazy from ...domain import (
     ITEM_ART_TYPES,
+    ArtSource,
     ArtType,
     CollectionKind,
     MediaType,
@@ -80,8 +81,10 @@ class AutoAssets:
     """Match or draw art, and match the catalog's theme.
 
     A slot with no art chosen gets what the policy's Automatic art says: the
-    art of the franchise or a listed person, or art drawn in the policy's
-    style, a poster with the title and a background without. A collection
+    best art of the first source in its order that has any (OvertureDB's
+    catalog art, or TMDB's art of the franchise or a listed person), else art
+    drawn in the policy's style, a poster with the title and a background
+    without. A collection
     that needs no background gets none, and a separator's poster is always
     drawn. Art drawn earlier is drawn again when the title or group it shows
     changed.
@@ -124,8 +127,10 @@ class AutoAssets:
                 continue
             elif art_type is ArtType.POSTER and row.kind is CollectionKind.SEPARATOR:
                 await self._draw(synced, art_type)
-            elif policy.auto_art.matches and (
-                url := await self._matched(collection_id, art_type)
+            elif policy.auto_art.sources and (
+                url := await self._matched(
+                    collection_id, art_type, policy.auto_art.sources
+                )
             ):
                 await self._art.save(collection_id, art_type, SaveArtRequest(url=url))
             elif policy.auto_art.draws:
@@ -133,25 +138,20 @@ class AutoAssets:
         await self._theme(synced)
 
     async def _draw(self, synced: SyncedCollection, art_type: ArtType) -> None:
-        """Draw the slot's art in the policy's style; a background has no title."""
+        """Draw the slot's art in the policy's style."""
         await self._art.save(
             synced.collection_id,
             art_type,
-            SaveArtRequest(
-                generated=synced.policy.drawn_style,
-                textless=art_type is ArtType.BACKGROUND,
-            ),
+            SaveArtRequest(generated=synced.policy.drawn_style),
         )
 
-    async def _matched(self, collection_id: int, art_type: ArtType) -> str | None:
-        """The best art a source offers for the slot."""
-        sources = await self._art.found(collection_id, art_type)
+    async def _matched(
+        self, collection_id: int, art_type: ArtType, order: tuple[ArtSource, ...]
+    ) -> str | None:
+        """The best art the first source in *order* that has any offers."""
+        found = (await self._art.found(collection_id, art_type)).sources
         return next(
-            (
-                candidate.url
-                for group in sources.sources.values()
-                for candidate in group
-            ),
+            (found[source][0].url for source in order if found.get(source)),
             None,
         )
 

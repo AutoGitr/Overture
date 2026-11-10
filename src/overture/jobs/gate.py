@@ -1,4 +1,4 @@
-"""Runs one library operation at a time, and keeps downloads apart from a full sync."""
+"""Runs one library operation at a time."""
 
 lazy import asyncio
 lazy from collections.abc import Callable, Coroutine
@@ -10,7 +10,7 @@ lazy from .runner import JobContext
 lazy from .slot import ManagedBackgroundJob
 
 #: The operation a run belongs to; ``sync`` is a full sync.
-type GateSide = Literal["sync", "assets", "renamer", "audit", "downloads"]
+type GateSide = Literal["sync", "assets", "renamer", "audit"]
 
 #: Receives what a waiting run waits for, then ``None`` once it runs.
 type WaitReporter = Callable[[str | None], None]
@@ -25,16 +25,11 @@ class _Lease:
 def _conflicts(side: GateSide, other: GateSide) -> bool:
     """Return whether runs of *side* and *other* must not overlap.
 
-    Runs of one operation share it, such as Assets' art and theme jobs. A
-    full sync rewrites which items exist and where their folders are, so
-    downloads, which write into those folders, stay apart from it; they run
-    beside the other operations, whose files are guarded by asset locks.
+    Runs of one operation share it, such as Assets' art and theme jobs.
+    Downloads stay outside: each writes under its item's asset lock, which a
+    sync takes too, into the folder the item has once the lock is held.
     """
-    if side == other:
-        return False
-    if "downloads" in (side, other):
-        return "sync" in (side, other)
-    return True
+    return side != other
 
 
 class LibraryGate:
@@ -53,17 +48,6 @@ class LibraryGate:
             lease.label for lease in self._leases if _conflicts(side, lease.side)
         )
         return ", ".join(labels) or None
-
-    def hold(self, side: GateSide, label: str) -> Callable[[], None]:
-        """Reserve *side* under *label* until the returned callback releases it."""
-        lease = _Lease(side, label)
-        self._leases.append(lease)
-        return lambda: self._leave(lease)
-
-    async def wait_for(self, side: GateSide) -> None:
-        """Wait until *side* is not blocked."""
-        while self.blocker(side) is not None:
-            await self._released.wait()
 
     def start(
         self,

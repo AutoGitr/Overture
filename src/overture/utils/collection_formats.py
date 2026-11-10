@@ -8,6 +8,8 @@ lazy from typing import Annotated
 
 lazy from pydantic import AfterValidator, Field
 
+lazy from ..domain import ARR_ADDED_TAG
+
 MAX_COLLECTION_SUMMARY_LENGTH = 10_000
 
 _SUMMARY_FIELDS = frozenset(
@@ -35,9 +37,24 @@ type SortTitleFormat = Annotated[
 ]
 
 
+#: A leading article, which Plex leaves out when it sorts by title itself.
+_ARTICLE = re.compile(r"^(?:the|an|a)\s+(?=\S)", re.IGNORECASE)
+
+
+def sortable(text: str) -> str:
+    """Return *text* as Plex sorts it: without a leading article."""
+    return _ARTICLE.sub("", text.strip())
+
+
 def format_sort_title(template: str, *, title: str, group: str | None) -> str:
-    """Render a validated template without silently truncating server metadata."""
-    result = validate_sort_title_format(template).format(title=title, group=group or "")
+    """Render a validated template without silently truncating server metadata.
+
+    Plex sorts a set sort title as it is, so the title and group lose their
+    leading articles here, as Plex drops them from titles it sorts itself.
+    """
+    result = validate_sort_title_format(template).format(
+        title=sortable(title), group=sortable(group or "")
+    )
     if len(result) > 200:
         raise ValueError("The formatted sort title must be at most 200 characters")
     return result
@@ -66,10 +83,15 @@ def format_arr_tag(template: str, *, title: str, group: str | None) -> str:
         .encode("ascii", "ignore")
         .decode()
     )
-    result = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+    result = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")[:200]
     if not result:
         raise ValueError("The Radarr or Sonarr tag has no letters or digits")
-    return result[:200]
+    if result == ARR_ADDED_TAG:
+        raise ValueError(
+            f"Overture tags the titles it adds with {ARR_ADDED_TAG!r}; "
+            "choose another tag"
+        )
+    return result
 
 
 def validate_set_title_format(value: str) -> str:

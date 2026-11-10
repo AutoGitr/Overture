@@ -493,11 +493,22 @@ async def test_drawn_collection_art_is_offered_chosen_and_drawn_again_for_a_new_
     )
 
     offered = (await service.collections.sources(1, ArtType.POSTER)).sources
-    # Each style is offered with the title, then without it.
+    # A grouped collection's poster is offered under its group, then alone.
     assert [
-        (candidate.generated, candidate.textless)
+        (candidate.generated, candidate.title_only)
         for candidate in offered[ArtSource.GENERATED]
     ] == [(style, False) for style in ArtStyle] + [(style, True) for style in ArtStyle]
+    backgrounds = (await service.collections.sources(1, ArtType.BACKGROUND)).sources
+    assert [
+        (candidate.generated, candidate.title_only)
+        for candidate in backgrounds[ArtSource.GENERATED]
+    ] == [(style, False) for style in ArtStyle]
+    with pytest.raises(PublicServiceError, match="Only posters"):
+        await service.collections.save(
+            1,
+            ArtType.BACKGROUND,
+            SaveArtRequest(generated=ArtStyle.DARK, title_only=True),
+        )
     # What matching compares never includes art to draw.
     assert (
         ArtSource.GENERATED
@@ -539,12 +550,15 @@ def test_drawn_art_is_the_same_for_the_same_title() -> None:
         ArtType.BACKGROUND, ArtStyle.LIGHT, "Studio Ghibli", "Studios"
     )
     assert Image.open(BytesIO(first)).size == (3840, 2160)
-    # Textless art is the style's colours alone, whatever the title.
-    textless = render_art(ArtType.BACKGROUND, ArtStyle.LIGHT)
-    assert textless not in {first, render_art(ArtType.BACKGROUND, ArtStyle.DARK)}
+    # Art without a title is the style's colours alone.
+    untitled = render_art(ArtType.BACKGROUND, ArtStyle.LIGHT)
+    assert untitled not in {first, render_art(ArtType.BACKGROUND, ArtStyle.DARK)}
+    # A title without a heading is drawn alone, with no rule above it.
+    alone = render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas")
+    assert alone != render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas", "Sagas")
 
 
-async def test_textless_drawn_art_stays_textless_when_drawn_again(
+async def test_drawn_backgrounds_never_show_text_and_title_only_posters_stay_so(
     database: Database, app_config: Settings, tmp_path: Path
 ) -> None:
     provider = ArtProvider(app_config)
@@ -583,19 +597,33 @@ async def test_textless_drawn_art_stays_textless_when_drawn_again(
     await service.collections.save(
         1,
         ArtType.BACKGROUND,
-        SaveArtRequest(generated=ArtStyle.ACCENT, textless=True),
+        SaveArtRequest(generated=ArtStyle.ACCENT),
+    )
+    await service.collections.save(
+        1,
+        ArtType.POSTER,
+        SaveArtRequest(generated=ArtStyle.DARK, title_only=True),
     )
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        slot = read_art_slot(row, ArtType.BACKGROUND)
-        assert (slot.generated_style, slot.generated_textless) == (
-            ArtStyle.ACCENT,
+        slot = read_art_slot(row, ArtType.POSTER)
+        assert (slot.generated_style, slot.generated_title_only) == (
+            ArtStyle.DARK,
             True,
         )
         row.title = "Renamed"
         session.add(row)
     await service.collections.redraw(1, ArtType.BACKGROUND, resend=False)
+    await service.collections.redraw(1, ArtType.POSTER, resend=False)
 
-    assert len(provider.uploads) == 1
+    # The background shows no title, so a new one leaves it as it is.
+    assert [art_type for art_type, *_ in provider.uploads] == [
+        ArtType.BACKGROUND,
+        ArtType.POSTER,
+        ArtType.POSTER,
+    ]
     assert provider.uploads[0][1] == render_art(ArtType.BACKGROUND, ArtStyle.ACCENT)
+    assert provider.uploads[-1][1] == render_art(
+        ArtType.POSTER, ArtStyle.DARK, "Renamed"
+    )

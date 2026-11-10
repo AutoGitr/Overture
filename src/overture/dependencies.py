@@ -30,6 +30,7 @@ lazy from .services.collections.rule_sync import RuleSync
 lazy from .services.collections.set_runner import CollectionSets
 lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
+lazy from .services.notifications import NotificationSettings
 lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
@@ -188,6 +189,11 @@ def get_asset_manager(runtime: RuntimeDep) -> AssetManagerService:
     return runtime.asset_manager
 
 
+def get_notifications(runtime: RuntimeDep) -> NotificationSettings:
+    """Resolve the notification rules and test sending."""
+    return runtime.notifications
+
+
 def get_stats(runtime: RuntimeDep) -> StatsService:
     """Resolve the application statistics service."""
     return runtime.stats
@@ -248,6 +254,7 @@ PublicDatasetDep = Annotated[PublicDatasetService, Depends(get_public_dataset)]
 AssetsDep = Annotated[AssetsService, Depends(get_assets)]
 AssetManagerDep = Annotated[AssetManagerService, Depends(get_asset_manager)]
 StatsDep = Annotated[StatsService, Depends(get_stats)]
+NotificationsDep = Annotated[NotificationSettings, Depends(get_notifications)]
 ProviderRegistryDep = Annotated[ProviderRegistry, Depends(get_provider_registry)]
 TmdbDep = Annotated[TMDBClient, Depends(get_tmdb)]
 EventsDep = Annotated[protocols.EventPublisher, Depends(get_events)]

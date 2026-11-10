@@ -1,12 +1,16 @@
 """The verify script checks Overture and its media servers without changing either."""
 
 lazy import json
+lazy from dataclasses import replace
 lazy from pathlib import Path
-lazy from typing import Any
+lazy from typing import Any, override
 
 lazy import httpx2
 lazy import pytest
 
+lazy from overture.domain import MediaType
+lazy from overture.media_servers.adapters import ServerCollection, ServerSection
+lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.utils.http_security import API_KEY_HEADER
 lazy from scripts import verify as module
 
@@ -310,7 +314,12 @@ def requests(monkeypatch: pytest.MonkeyPatch) -> Requests:
 
 def _args(report: Path | None, *urls: str, **servers: str) -> Any:
     return module.argparse.Namespace(
-        urls=list(urls), report=report, sources=None, insecure=False, **servers
+        urls=list(urls),
+        report=report,
+        sources=None,
+        insecure=False,
+        write=False,
+        **servers,
     )
 
 
@@ -443,3 +452,96 @@ async def test_an_arr_needs_its_key(
     monkeypatch.setenv("OVERTURE_API_KEY", "plex-key")
     with pytest.raises(SystemExit, match="SONARR_API_KEY"):
         await module.run(_args(None, "http://plex.test", sonarr="http://sonarr.test"))
+
+
+class _Collections:
+    """A media server's collections, written as Overture's client writes them."""
+
+    def __init__(self, *, fail_at: str | None = None) -> None:
+        self.held: dict[str, ServerCollection] = {
+            "old": ServerCollection(
+                id="old", title=f"{module.WRITE_PREFIX} regular", member_ids=()
+            ),
+            "kept": ServerCollection(id="kept", title="Mine", member_ids=()),
+        }
+        self.fail_at = fail_at
+        self.closed = False
+
+    async def list_collections(self) -> list[ServerCollection]:
+        return list(self.held.values())
+
+    async def get_sections(self) -> list[Any]:
+        return [ServerSection("1", "Movies", MediaType.MOVIE)]
+
+    async def create_collection(
+        self, _library: str, title: str, _media: Any, members: list[str]
+    ) -> ServerCollection:
+        made = ServerCollection(id=title, title=title, member_ids=tuple(members))
+        self.held[made.id] = made
+        return made
+
+    async def get_collection_member_ids(self, collection_id: str) -> list[str]:
+        return list(self.held[collection_id].member_ids)
+
+    async def set_collection_members(
+        self, collection_id: str, members: list[str], **_kwargs: Any
+    ) -> list[str]:
+        if self.fail_at == "members":
+            raise MediaServerError("Plex refused the order")
+        self.held[collection_id] = replace(
+            self.held[collection_id], member_ids=tuple(members)
+        )
+        return members
+
+    async def update_collection_details(
+        self, collection_id: str, **kwargs: Any
+    ) -> None:
+        self.held[collection_id] = replace(
+            self.held[collection_id],
+            title=kwargs["title"],
+            sort_title=kwargs["sort_title"],
+            summary=kwargs["summary"],
+            visible_home=kwargs["visible_home"],
+        )
+
+    async def upload_collection_art(self, collection_id: str, *_args: Any) -> None:
+        self.held[collection_id] = replace(
+            self.held[collection_id], thumb_url="/thumb/new"
+        )
+
+    async def delete_collection(self, collection_id: str) -> None:
+        del self.held[collection_id]
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class _Jellyfin(module.MediaBrowserServer):
+    @override
+    async def items(self, library_id: str, media_type: str, **params: Any) -> Any:
+        return {"Items": [{"Id": "a"}, {"Id": "b"}, {"Id": "c"}]}
+
+
+@pytest.mark.parametrize("fail_at", [None, "members"])
+async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_fails(
+    monkeypatch: pytest.MonkeyPatch, fail_at: str | None
+) -> None:
+    server = _Collections(fail_at=fail_at)
+
+    def provider(*_args: object, **_kwargs: object) -> tuple[Any, Any]:
+        return server, server
+
+    monkeypatch.setattr(module, "write_provider", provider)
+    direct = _Jellyfin("jellyfin", "http://jellyfin.test", "key")
+    try:
+        cases = await module.WriteCheck(
+            direct, "http://jellyfin.test", "key", verify=True
+        ).run()
+    finally:
+        await direct.client.aclose()
+
+    # A collection left by a killed run is deleted, and only Overture's go.
+    assert list(server.held) == ["kept"]
+    assert server.closed
+    problems = [case.problem for case in cases if case.problem]
+    assert problems == (["Plex refused the order"] if fail_at else [])

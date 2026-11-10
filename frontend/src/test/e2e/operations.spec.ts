@@ -122,7 +122,7 @@ test("the operations popup stays centred, as tall as each tab needs", async ({
   expect((await dialog.getByRole("log").boundingBox())!.height).toBeLessThan(3 * 24);
 });
 
-test("restart restores stopped results and active download blocks sync", async ({
+test("restart restores stopped results and an active download leaves sync free", async ({
   page,
   realtime,
 }) => {
@@ -175,9 +175,9 @@ test("restart restores stopped results and active download blocks sync", async (
       },
     },
   });
+  // Downloads run beside every operation, so none waits for them.
   await dialog.getByRole("tab", { name: /Sync/ }).click();
-  await expect(dialog.getByText("Wait for downloads to finish.")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Run now", exact: true })).toBeDisabled();
+  await expect(dialog.getByText(/Wait for/)).toHaveCount(0);
 });
 
 test("assets runs only the current sidebar search results", async ({ page }) => {

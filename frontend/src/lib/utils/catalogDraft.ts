@@ -41,6 +41,7 @@ export class CatalogDraft {
     try {
       const detail = await this.saveRequest.mutateAsync({ path: target, body });
       storeCatalogDetail(target, detail);
+      this.feedback.success("Saved to the OvertureDB draft.");
       return true;
     } catch (error) {
       this.feedback.error(errorMessage(error, "Draft could not be saved"));
@@ -55,6 +56,7 @@ export class CatalogDraft {
     try {
       const detail = await this.discardRequest.mutateAsync({ path: target });
       storeCatalogDetail(target, detail);
+      this.feedback.success("Discarded the OvertureDB draft.");
     } catch (error) {
       this.feedback.error(errorMessage(error, "Draft could not be discarded"));
     }

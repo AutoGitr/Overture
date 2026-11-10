@@ -61,6 +61,20 @@ class JobOutcome(StrEnum):
         return _LOG_LEVELS[self]
 
 
+#: Outcomes that changed something or found something to fix; a completed run
+#: with any of them has changes to announce.
+CHANGE_OUTCOMES = frozenset(
+    {
+        JobOutcome.ADDED,
+        JobOutcome.UPDATED,
+        JobOutcome.REMOVED,
+        JobOutcome.QUEUED,
+        JobOutcome.DOWNLOADED,
+        JobOutcome.ADOPTED,
+        JobOutcome.MISMATCH,
+    }
+)
+
 #: Changes to the library and findings are info; routine confirmations and
 #: steps on the way to an outcome are debug; a failed target is a warning, as
 #: the run carries on. The download service logs each file it writes, so a

@@ -365,9 +365,9 @@
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
         {#if title}
           <PopupSection label={title}>
-            {#each choiceRuns(keys) as run (run[0])}
-              <!-- Status holds one-line choices only, which its spacing groups;
-                   art and theme filters span rows, so a rule ends each run. -->
+            <!-- Status holds one-line choices only, evenly spaced as one run;
+                 art and theme filters span rows, so a rule ends each run. -->
+            {#each group === "status" ? [keys] : choiceRuns(keys) as run (run[0])}
               <div class="choice-run" class:ruled={group !== "status"}>
                 {#each run as key (key)}
                   {@render filter(key)}
@@ -439,11 +439,8 @@
   }
 
   /* Filters offering the same choices read as one block. */
-  .choice-run + .choice-run {
-    padding-top: var(--space-2);
-  }
-
   .choice-run + .choice-run.ruled {
+    padding-top: var(--space-2);
     border-top: var(--border-subtle);
   }
 </style>

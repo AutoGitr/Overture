@@ -53,7 +53,11 @@ fi
 uv run python -m scripts.release_metadata
 
 echo "=== Checking Agent Skills ==="
-uv run python -m scripts.sync_skills --check
+if [ "$FIX" = true ]; then
+    uv run python -m scripts.sync_skills
+else
+    uv run python -m scripts.sync_skills --check
+fi
 
 OVERTUREDB_DIR="$ROOT_DIR/../OvertureDB"
 if [ -d "$OVERTUREDB_DIR/schema" ]; then
@@ -66,8 +70,9 @@ fi
 if [ "$BACKEND_CHANGED" = true ]; then
     echo "=== Running Backend Checks & Tests ==="
     if [ "$FIX" = true ]; then
-        uv run ruff check --fix
+        # Formatting first, so the check sees the lines the formatter wraps.
         uv run ruff format
+        uv run ruff check --fix
     else
         uv run ruff check
         uv run ruff format --check

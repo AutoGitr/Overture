@@ -5,9 +5,11 @@ lazy from datetime import date
 lazy import pytest
 
 lazy from overture.utils.collection_formats import (
+    format_arr_tag,
     format_sort_title,
     format_summary,
     is_within_active_window,
+    sortable,
     strip_affixes,
     validate_seasonal_mmdd,
     validate_sort_title_format,
@@ -119,3 +121,48 @@ def test_strip_affixes() -> None:
     )
     # Empty title or stripped to empty falls back to original trimmed title
     assert strip_affixes("   The   ", prefix="The", suffix="") == "The"
+
+
+def test_arr_tags_are_rendered_as_radarr_accepts_and_never_overtures_own() -> None:
+    assert format_arr_tag("{group} {title}", title="Amélie", group="Saga") == (
+        "saga-amelie"
+    )
+    with pytest.raises(ValueError, match="no letters or digits"):
+        format_arr_tag("{title}", title="!!!", group=None)
+    with pytest.raises(ValueError, match="titles it adds"):
+        format_arr_tag("{title}", title="Overture", group=None)
+
+
+@pytest.mark.parametrize(
+    ("title", "sorted_as"),
+    [
+        ("The Matrix Collection", "Matrix Collection"),
+        ("A Quiet Place Collection", "Quiet Place Collection"),
+        ("An American Tail", "American Tail"),
+        ("the lord of the rings", "lord of the rings"),
+        ("Anaconda", "Anaconda"),
+        ("Theodore Rex", "Theodore Rex"),
+        ("The", "The"),
+        ("The The", "The"),
+        ("  The  Godfather ", "Godfather"),
+    ],
+)
+def test_sort_titles_drop_a_leading_article_as_plex_does(
+    title: str, sorted_as: str
+) -> None:
+    assert sortable(title) == sorted_as
+
+
+def test_sort_title_templates_sort_title_and_group_without_articles() -> None:
+    assert (
+        format_sort_title("{group} {title}", title="The Matrix", group="The Sagas")
+        == "Sagas Matrix"
+    )
+    # A separator's sort title is its group's, which sorts before every member.
+    separator = format_sort_title("{group} {title}", title="", group="The Sagas")
+    assert separator.strip() == "Sagas"
+    members = [
+        format_sort_title("{group} {title}", title=title, group="The Sagas")
+        for title in ("Alien", "The Abyss", "A Bug's Life")
+    ]
+    assert min([*members, separator.strip()]) == "Sagas"

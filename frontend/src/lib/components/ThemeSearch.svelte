@@ -3,6 +3,7 @@
   import { untrack } from "svelte";
   import { searchYoutubeOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { ThemeSearchResult } from "../../generated/rest/types.gen";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { extractYouTubeId, isYouTubeUrl, type ThemeSearchResultItem } from "../utils/themeSearch";
   import DataStatus from "./DataStatus.svelte";
   import PendingButton from "./PendingButton.svelte";
@@ -11,8 +12,9 @@
   const RESULT_LIMIT = 20;
 
   /**
-   * A YouTube theme search for one subject. It searches for *initialQuery*
-   * straight away, so key it on the subject to start afresh for another one.
+   * A YouTube theme search for one subject. With Auto-search themes on load it
+   * searches for *initialQuery* straight away, so key it on the subject to
+   * start afresh for another one.
    * A pasted YouTube link selects that video instead of searching.
    */
   let {
@@ -42,7 +44,9 @@
   } = $props();
 
   let text = $state(untrack(() => initialQuery));
-  let submitted = $state(untrack(() => initialQuery.trim()));
+  let submitted = $state(
+    untrack(() => (settingsState.current.auto_search_themes ? initialQuery.trim() : "")),
+  );
   let linkedId = $derived(isYouTubeUrl(text) ? extractYouTubeId(text) : null);
 
   const search = createQuery(() => ({

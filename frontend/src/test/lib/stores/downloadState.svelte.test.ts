@@ -152,7 +152,8 @@ describe("downloadState", () => {
     expect(downloadState.lane("theme")).toEqual({ running: [], waiting: 1 });
     expect(OPERATIONS.assets.running).toBe(false);
     expect(OPERATIONS.assets.hasRun).toBe(false);
-    expect(libraryGate.blocked("sync")).toContain("downloads");
+    // Downloads run beside every operation.
+    expect(libraryGate.blocked("sync")).toBeNull();
 
     downloadState.handleFinished(itemEvent("art", 10, "cancelled"));
     downloadState.handleFinished({

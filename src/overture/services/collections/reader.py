@@ -110,9 +110,15 @@ class CollectionReader:
         return DatabaseRecord.of(stored, read)
 
     async def get(self, collection_id: int) -> CollectionDetail:
-        """Return one collection with its members and catalog entry."""
+        """Return one collection with its members and catalog entry.
+
+        Raises:
+            PublicServiceError: 404 for a separator, which only its group shows.
+        """
         async with self._access.database.read_session() as session:
             row = await self._access.require(session, collection_id)
+            if row.kind is CollectionKind.SEPARATOR:
+                raise PublicServiceError(404, "Collection not found")
             saved = row.rule
             members = display_order(
                 await CollectionRepository(session).members(row.id or 0), row.order_type

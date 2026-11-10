@@ -26,7 +26,7 @@ lazy from ..art.phash import PhashService
 lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from ..storage.image_cache import ImageCache
 lazy from ..themes.youtube_resolver import DownloadError
-lazy from .results import DownloadedArt, PreparedDownload
+lazy from .results import DownloadedArt, DownloadTarget, PreparedDownload
 
 
 class DownloadArtHandler:
@@ -120,6 +120,28 @@ class DownloadArtHandler:
             raise DownloadError("Season not found")
         return owner
 
+    async def target(
+        self, job: DownloadJob, item: MediaItem, prepared: PreparedDownload
+    ) -> DownloadTarget:
+        """Return where *prepared* goes for the item and season as they are now.
+
+        Raises:
+            DownloadError: When the item has no folder or the season is gone.
+        """
+        if not job.art_type or not prepared.extension:
+            raise DownloadError("No art type specified")
+        folder_path = require_folder_path(item)
+        season = await self._season(job, item)
+        path = await owned_thread(
+            self.asset_storage.resolve_art_path,
+            folder_path=folder_path,
+            art_type=job.art_type,
+            ext=prepared.extension,
+            season_folder_path=season.folder_path if season else None,
+            season_num=season.season_num if season else None,
+        )
+        return DownloadTarget(path=path, trusted_root=folder_path)
+
     async def download(
         self,
         job: DownloadJob,
@@ -137,7 +159,7 @@ class DownloadArtHandler:
         """
         if not job.art_type:
             raise DownloadError("No art type specified")
-        folder_path = require_folder_path(item)
+        require_folder_path(item)
         art_type = job.art_type
         season = await self._season(job, item)
         progress = StepProgress(progress_cb, ("downloading", "hashing", "writing"))
@@ -172,19 +194,10 @@ class DownloadArtHandler:
             await self._image_cache.thumb(original)
         except UnsupportedImageFormatError as exc:
             raise DownloadError(str(exc)) from exc
-        target_path = await owned_thread(
-            self.asset_storage.resolve_art_path,
-            folder_path=folder_path,
-            art_type=art_type,
-            ext=original.extension,
-            season_folder_path=season.folder_path if season else None,
-            season_num=season.season_num if season else None,
-        )
         return PreparedDownload(
-            target_path=target_path,
-            trusted_root=folder_path,
             data=image_data,
             file_hash=original.file_hash,
+            extension=original.extension,
             result=DownloadedArt(
                 art_type=art_type,
                 season_id=season.id if season else None,

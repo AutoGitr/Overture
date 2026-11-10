@@ -66,6 +66,10 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Realtime events patch the library lists in place and keep every unchanged
+// item, so comparing ten thousand items on each patch only costs time.
+queryClient.setQueryDefaults([{ _id: "listItems" }], { structuralSharing: false });
+
 /**
  * Follow what the cache holds for *queryKey*: *onData* receives the current
  * value and every later one, from a fetch or a realtime write alike, and

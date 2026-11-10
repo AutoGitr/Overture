@@ -261,7 +261,7 @@ its [settings file](#native-service-settings). Empty values count as unset.
 | `SONARR_URL`                | No                 |                           | Sonarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:8989`); enables Sonarr tag collection builders |
 | `SONARR_API_KEY`            | If using Sonarr    |                           | Sonarr API key; kept on the backend                                                                                         |
 | `SONARR_VERIFY_TLS`         | No                 | `true`                    | Set to `false` only for self-signed certificates                                                                            |
-| `NOTIFY_URL`                | No                 |                           | Webhook or Apprise API URL that receives each failed run; see [Notifications](#notifications)                               |
+| `NOTIFY_URL`                | No                 |                           | Discord, Slack, Telegram, Gotify, ntfy or Apprise address that hears when runs end; see [Notifications](#notifications)     |
 | `AUTH_MODE`                 | No                 | `password`                | Authentication mode: `password`, `oidc`, `both`, or `none`                                                                  |
 | `APP_PASSWORD_HASH`         | `password`, `both` |                           | [Password](#password) hash; required for `password` and `both` modes                                                        |
 | `OIDC_ISSUER_URL`           | `oidc`, `both`     |                           | Exact [OIDC](#sso-with-openid-connect) issuer, with any path and trailing slash (Authentik: `.../application/o/overture/`)  |
@@ -462,7 +462,9 @@ JPEG and PNG images and MP3 themes, checked by name and contents, inside the
 title's folder; any other file stays.
 
 YouTube theme searches show up to 20 results within the theme duration
-limits, drawn from the first 50 videos YouTube finds.
+limits, drawn from the first 50 videos YouTube finds. With **Auto-search
+themes on load** (Settings, on by default) a title's themes are searched for as
+soon as you open them; turn it off to search only when you choose **Search**.
 
 For titles outside your library, switch the search field to **TMDB** (requires
 `TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
@@ -633,7 +635,8 @@ selects its value again. A set's
 collections take their criteria and titles from the set; edit it in
 **Collection groups**. A set runs on its schedule once it has been synced.
 
-**Save** (or Enter) saves in Overture only and never changes the media server.
+**Save** (or Enter) saves in Overture only and never changes the media server,
+so it is instant; a new collection's lists are read on its first sync.
 **Save and Create** saves and creates the collection or set on the server;
 **Save and Sync** saves an existing collection and makes the server match it,
 then picks art and themes, labels and tags members, requests missing titles and
@@ -654,8 +657,10 @@ their tags, requests and member tags. A member tag is written as Radarr and
 Sonarr accept tags, in lowercase letters, digits and dashes (`{title}` gives
 `star-wars-collection`); members get it and other titles lose it, unless a
 collection whose tag comes out the same holds them, so collections can share a
-tag. Choose where requested titles go under
-**Settings > Collections**. Imported Plex smart collections keep their
+tag. `overture` is not one: Overture tags every title Request missing adds with
+`overture`, so Radarr and Sonarr show which titles it requested. Request
+missing and where requested titles go are under **Settings > Collections**, in
+the **Radarr and Sonarr** section. Imported Plex smart collections keep their
 Plex filter until you choose **Replace the Plex filter with these criteria**.
 Failed list lookups keep existing members.
 
@@ -669,35 +674,45 @@ saved collection leaves it out too.
 candidates end with a **Generated** row, one image per style (dark, light and
 accent) showing its title under its group's name. Choosing one keeps it in the
 image cache and uploads it like any other art, and its source shows as
-**Generated**. Each style is offered with the title and textless, as the
-style's colours alone. **Automatic art** in Settings decides what a sync does
-for a slot no one chose: **Off**; **Match**, the best art a source offers;
-**Match, else draw**; or **Draw**. Drawing makes a poster with the title and a
-textless background, in the **Drawn colours** (dark, light or accent), and a
+**Generated**. A poster always shows the title; a grouped collection's is
+offered under its group and with the title alone, centred. A background never
+shows text, as the media server draws the title over it. **Automatic art** in
+Settings decides what a sync does for a slot no one chose: **Off**; the best
+art of **OvertureDB**, **TMDB** (the franchise's art, or a listed person's
+photo), or **OvertureDB, then TMDB**, each optionally **else draw**; or
+**Draw**. The media server's own art is never taken. Drawing makes a poster
+with the title and a background without text, in the **Drawn colours** (dark,
+light or accent), and a
 collection whose **Background** is **Not needed** gets no background: its
 poster completes its art, as OvertureDB's No theme completes a theme. Art drawn
 either way is drawn again when the collection's title or group changes.
 
 **Separator**, a Plex group setting in **Collection groups**, heads the group
 with an empty collection titled after it, with a poster drawn in the group's
-Drawn colours, in each library
-its collections use. Its sort title is the group's sort title template with an
-empty title, so a template that puts the group first, such as
-`{group} {title}`, sorts the separator right before the group's collections.
-The group keeps it: renaming the group renames it, turning the setting off or
-deleting the group removes it. It is not listed among the collections in the
-sidebar or Collection operations; its group's settings are where it is kept.
-Separators are offered on Plex only, the one server whose empty collections
-Overture has checked; `media_server_probe.py` with writes allowed reports
-whether Jellyfin and Emby keep and list one.
+Drawn colours and showing the group's name alone, in each library its
+collections use. Its sort title is the group's sort title template with an
+empty title, so it sorts right before the group's collections. A separated
+group whose sort title is not set anywhere sorts its collections as
+`{group} {title}`, which keeps them together behind it. Sort titles leave out a
+leading "The", "A" or "An" of the title and group, as Plex does when it sorts
+titles itself, so *The Matrix* in *The Sagas* sorts as `Sagas Matrix`.
+The group keeps it, and the group's next sync makes it as the group says:
+renaming the group renames it, turning the setting off or deleting the group
+removes it. It is not listed among the collections in the sidebar or
+Collection operations; its group's settings are where it is kept. Separators
+are offered on Plex only, the one server whose empty collections Overture has
+checked; `scripts/verify.py --write` reports how each server takes Overture's
+collection writes.
 
 **Collection groups**, opened from **Manage groups** in the collection sidebar or
 **Create new group** in Setup's Group list, creates groups and edits a group's
 collection set, Settings and Active dates; Setup only assigns a group.
-**Save** saves the group and sends its display settings to its collections on
-the server at once, keeping members and explicit overrides; **Save and Sync**
-also runs the set and syncs the group's collections, which needs the group to
-hold a collection or a set first. Rename or delete a custom group in
+**Save** saves the group in Overture at once; its collections get its display
+settings on the server with their next sync, keeping members and explicit
+overrides. **Save and Sync** also runs the set and syncs the group's
+collections, which needs the group to hold a collection or a set first. A smart
+collection never takes a group's **Custom** order, which Plex cannot apply to
+it; it takes the next order the settings give. Rename or delete a custom group in
 **Collection groups**. Every managed collection
 belongs to a group. Deleting a group moves its collections to the reserved
 **Ungrouped** group by default; you can instead move them to another group,
@@ -720,13 +735,26 @@ full-width controls and stack their labels above the controls on small screens.
 
 #### Notifications
 
-Set `NOTIFY_URL` and Overture posts each failed run there: a library sync,
-asset run, server audit or its fix, OvertureDB sync or backup. Each post is
-JSON with `title`, `body` (the error, without any configured secret) and
-`type` (`failure`), which [Apprise's API](https://github.com/caronc/apprise-api)
-takes as is, so one Apprise URL reaches Discord, ntfy, email and the rest;
-other webhooks read the same fields. A post that fails is logged, without the
-URL, and never holds up the run.
+Set `NOTIFY_URL` and Overture tells that address when runs end. It recognises
+these by their address and sends each the message its API takes:
+
+| Service | `NOTIFY_URL` |
+| --- | --- |
+| Discord | the channel's webhook, `https://discord.com/api/webhooks/…` |
+| Slack | the incoming webhook, `https://hooks.slack.com/services/…` |
+| Telegram | `https://api.telegram.org/bot<token>/sendMessage?chat_id=<chat>` |
+| Gotify | `https://<gotify>/message?token=<app token>` |
+| ntfy | `https://ntfy.sh/<topic>` |
+| Anything else | gets JSON with `title`, `body` and `type` (`success`, `warning` or `failure`), which [Apprise's API](https://github.com/caronc/apprise-api) takes as is, so one Apprise URL reaches email, Matrix, Pushover and every other service Apprise supports |
+
+**Notifications** in the menu chooses, for each kind of run (library sync,
+Assets art and theme runs, Renamer scan, server audit and its fix, OvertureDB
+sync, backup), whether a failed or stopped run is announced, which completed
+runs are (never, always, only with changes, only with errors), and whether only
+runs a schedule started count. Out of the box only failures are announced.
+**Send test notification** checks the address. A message never carries a
+configured secret; one that cannot be sent is logged, without the URL, and
+never holds up the run.
 
 ### Operations
 
@@ -786,8 +814,10 @@ deleted outside Overture is noticed after a Renamer scan or an Audit.
 
 **Replace existing** also replaces existing theme files; a downloaded file
 identical to yours is left untouched. A source image identical to your file is
-adopted in place. Local-image matching defaults to identical files; a looser
-matching threshold can replace unsaved local artwork with a similar image.
+adopted in place. OvertureDB's artwork is compared with your file as local
+image matching compares its candidates: by default only an identical file is
+taken, and a looser matching threshold also takes the same picture saved
+differently, replacing your unsaved file with OvertureDB's.
 
 **Skip recently checked** skips searches within the chosen time window, also
 with Replace existing. Restoring a missing saved choice always runs.
@@ -796,8 +826,8 @@ with Replace existing. Restoring a missing saved choice always runs.
 
 **Schedules** use five-field cron in your time zone. One operation runs at a
 time: Sync, Assets, Renamer and Audit each wait for whichever is running, and a
-scheduled run waits its turn. A full sync also waits for queued downloads, and
-downloads wait while a full sync runs.
+scheduled run waits its turn. Downloads, such as the art and themes you choose
+by hand, run beside any of them.
 
 ### Files
 

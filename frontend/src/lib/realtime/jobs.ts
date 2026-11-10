@@ -1,5 +1,6 @@
 import {
   JOB_EVENT_PREFIXES,
+  JOB_KIND_LABELS,
   type JobKind,
   type LifecycleStatus,
   type WebSocketHandlerMap,
@@ -8,7 +9,9 @@ import { assetManagerState } from "../stores/assetManagerState.svelte";
 import { matchState, themeJobState } from "../stores/bulkJobState.svelte";
 import { backupState, publicDatasetSyncState, syncState } from "../stores/jobStates.svelte";
 import { serverAuditFixState } from "../stores/serverAuditFixState.svelte";
+import { notify } from "../stores/notificationState.svelte";
 import { serverAuditState } from "../stores/serverAuditState.svelte";
+import { jobEventErrorMessage, type JobEventErrorLike } from "../utils/errors";
 
 /** Every job a popup follows, by its kind. Downloads are tracked per item. */
 export const JOB_STATES = {
@@ -35,7 +38,19 @@ const STATUS_HANDLERS = {
   failed: "handleFailed",
 } as const satisfies Record<LifecycleStatus, string>;
 
-/** Route each job's lifecycle events to the state that follows it. */
+/** Say how a run ended; a run that is still going says nothing. */
+function announceEnding(kind: FollowedKind, status: string, data: JobEventErrorLike): void {
+  const name = JOB_KIND_LABELS[kind];
+  const run = `${name.slice(0, 1).toUpperCase()}${name.slice(1)}`;
+  if (status === "completed") notify.success(`${run} finished.`);
+  else if (status === "stopped") notify.info(`${run} stopped.`);
+  else if (status === "failed")
+    notify.error(jobEventErrorMessage(data, "See its log in Operations."), {
+      title: `${run} failed`,
+    });
+}
+
+/** Route each job's lifecycle events to the state that follows it, and announce endings. */
 // Object.fromEntries types its keys as string, so the cast restores the event
 // names; the entries come from the same JOB_STATES and STATUS_HANDLERS as
 // JobEventName.
@@ -43,7 +58,10 @@ export const JOB_PROJECTION_HANDLERS = Object.fromEntries(
   Object.entries(JOB_STATES).flatMap(([kind, state]) =>
     Object.entries(STATUS_HANDLERS).map(([status, handler]) => [
       `${JOB_EVENT_PREFIXES[kind as FollowedKind]}.${status}`,
-      (data: never) => state[handler](data),
+      (data: never) => {
+        state[handler](data);
+        announceEnding(kind as FollowedKind, status, data);
+      },
     ]),
   ),
 ) as unknown as Pick<WebSocketHandlerMap, JobEventName>;

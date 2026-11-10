@@ -103,6 +103,11 @@
             "title": "Auto Match Art",
             "type": "boolean"
           },
+          "auto_search_themes": {
+            "default": true,
+            "title": "Auto Search Themes",
+            "type": "boolean"
+          },
           "auto_unmonitor": {
             "$ref": "#/components/schemas/AutoUnmonitor",
             "default": "art_and_theme"
@@ -395,6 +400,7 @@
           "sonarr_quality_profile_id",
           "sonarr_search",
           "auto_match_art",
+          "auto_search_themes",
           "workflow",
           "theme_search_format",
           "min_duration_seconds",
@@ -466,6 +472,17 @@
               }
             ],
             "title": "Auto Match Art"
+          },
+          "auto_search_themes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Search Themes"
           },
           "auto_unmonitor": {
             "anyOf": [
@@ -977,11 +994,6 @@
             ],
             "title": "Source"
           },
-          "textless": {
-            "default": false,
-            "title": "Textless",
-            "type": "boolean"
-          },
           "title": {
             "anyOf": [
               {
@@ -992,6 +1004,11 @@
               }
             ],
             "title": "Title"
+          },
+          "title_only": {
+            "default": false,
+            "title": "Title Only",
+            "type": "boolean"
           },
           "url": {
             "title": "Url",
@@ -1021,7 +1038,7 @@
           "hamming",
           "perfect_match",
           "generated",
-          "textless"
+          "title_only"
         ],
         "title": "ArtCandidate",
         "type": "object"
@@ -1387,11 +1404,15 @@
         "type": "string"
       },
       "AutoArt": {
-        "description": "What a sync does for a collection's art slot that has none chosen.",
+        "description": "What a sync does for a collection's art slot that has none chosen.\n\nThe value names what it tries, first to last: the catalog sources whose\nbest art it takes, then, with ``draw``, art drawn from the title. OvertureDB's\ncurated art always comes before TMDB's.",
         "enum": [
           "off",
-          "match",
-          "match_or_draw",
+          "overturedb",
+          "tmdb",
+          "overturedb_tmdb",
+          "overturedb_draw",
+          "tmdb_draw",
+          "overturedb_tmdb_draw",
           "draw"
         ],
         "title": "AutoArt",
@@ -9793,6 +9814,165 @@
         "title": "MonitoredResponse",
         "type": "object"
       },
+      "NotificationRuleRead": {
+        "additionalProperties": false,
+        "description": "When runs of one kind are announced, and how the kind is named.",
+        "properties": {
+          "completed": {
+            "$ref": "#/components/schemas/NotifyCompleted",
+            "default": "never"
+          },
+          "failed": {
+            "default": true,
+            "title": "Failed",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "scheduled_only": {
+            "default": false,
+            "title": "Scheduled Only",
+            "type": "boolean"
+          },
+          "stopped": {
+            "default": false,
+            "title": "Stopped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "failed",
+          "stopped",
+          "completed",
+          "scheduled_only",
+          "label"
+        ],
+        "title": "NotificationRuleRead",
+        "type": "object"
+      },
+      "NotificationRuleWrite": {
+        "additionalProperties": false,
+        "description": "When runs of one kind are announced.",
+        "properties": {
+          "completed": {
+            "$ref": "#/components/schemas/NotifyCompleted",
+            "default": "never"
+          },
+          "failed": {
+            "default": true,
+            "title": "Failed",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "scheduled_only": {
+            "default": false,
+            "title": "Scheduled Only",
+            "type": "boolean"
+          },
+          "stopped": {
+            "default": false,
+            "title": "Stopped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "NotificationRuleWrite",
+        "type": "object"
+      },
+      "NotificationSettingsRead": {
+        "additionalProperties": false,
+        "description": "Where notifications go, and when each kind of run sends one.",
+        "properties": {
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationRuleRead"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "service": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotifyService"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "service_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Label"
+          }
+        },
+        "required": [
+          "service",
+          "service_label",
+          "rules"
+        ],
+        "title": "NotificationSettingsRead",
+        "type": "object"
+      },
+      "NotificationSettingsUpdate": {
+        "additionalProperties": false,
+        "description": "The rules to save; a kind left out keeps its saved rule.",
+        "properties": {
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationRuleWrite"
+            },
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rules"
+        ],
+        "title": "NotificationSettingsUpdate",
+        "type": "object"
+      },
+      "NotifyCompleted": {
+        "description": "Which completed runs are announced.",
+        "enum": [
+          "never",
+          "always",
+          "changes",
+          "errors"
+        ],
+        "title": "NotifyCompleted",
+        "type": "string"
+      },
+      "NotifyService": {
+        "description": "A service ``NOTIFY_URL`` can name; ``apprise`` covers every other URL.",
+        "enum": [
+          "apprise",
+          "discord",
+          "slack",
+          "telegram",
+          "gotify",
+          "ntfy"
+        ],
+        "title": "NotifyService",
+        "type": "string"
+      },
       "PublicDatasetEnabledRequest": {
         "additionalProperties": false,
         "description": "Validate the public dataset enabled request payload.",
@@ -10798,9 +10978,9 @@
             ],
             "title": "Height"
           },
-          "textless": {
+          "title_only": {
             "default": false,
-            "title": "Textless",
+            "title": "Title Only",
             "type": "boolean"
           },
           "upload_hash": {
@@ -16416,91 +16596,6 @@
         ]
       }
     },
-    "/api/collections/group-policy/apply": {
-      "post": {
-        "description": "Apply group defaults while preserving each collection's explicit overrides.",
-        "operationId": "apply_collection_group_policy",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "maxLength": 200,
-              "minLength": 1,
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkCollectionOperationResult"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Apply Collection Group Policy",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
     "/api/collections/group-policy/sync": {
       "post": {
         "description": "Run the group's collection set, then sync its collections' criteria.",
@@ -18293,11 +18388,11 @@
           },
           {
             "in": "query",
-            "name": "textless",
+            "name": "title_only",
             "required": false,
             "schema": {
               "default": false,
-              "title": "Textless",
+              "title": "Title Only",
               "type": "boolean"
             }
           },
@@ -21715,6 +21810,236 @@
         "summary": "Get Server Web Links",
         "tags": [
           "media-server"
+        ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "description": "Return where notifications go and when each kind of run sends one.",
+        "operationId": "get_notifications",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Notifications",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "put": {
+        "description": "Save when each kind of run sends a notification.",
+        "operationId": "update_notifications",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/test": {
+      "post": {
+        "description": "Send a test notification to ``NOTIFY_URL``.",
+        "operationId": "send_test_notification",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Test Notification",
+        "tags": [
+          "notifications"
         ]
       }
     },

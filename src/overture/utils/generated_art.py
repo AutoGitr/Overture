@@ -116,7 +116,7 @@ def render_art(
 ) -> bytes:
     """Draw *title*, under *subtitle* if given, as a PNG of *art_type*.
 
-    Without a title the art is textless: the style's colours alone.
+    Without a title the art is the style's colours alone.
     """
     palette = _PALETTES[style]
     image = _gradient(_SIZES[art_type], palette)
@@ -130,7 +130,7 @@ def render_art(
 def _draw_title(
     image: Image.Image, palette: _Palette, title: str, subtitle: str | None
 ) -> None:
-    """Draw *title* under *subtitle* and a rule, centred on *image*."""
+    """Draw *title* centred on *image*, under *subtitle* and a rule if given."""
     width, height = image.size
     draw = ImageDraw.Draw(image)
     text_width = width * 0.8
@@ -141,23 +141,23 @@ def _draw_title(
     heading = subtitle.strip().upper() if subtitle and subtitle.strip() else None
     rule_gap = round(height * 0.03)
     block = len(lines) * line_height + (
-        small.getmetrics()[0] + 2 * rule_gap if heading else rule_gap
+        small.getmetrics()[0] + 2 * rule_gap if heading else 0
     )
     y = (height - block) // 2
     if heading:
         draw.text((width / 2, y), heading, font=small, fill=palette.muted, anchor="mt")
         y += small.getmetrics()[0] + rule_gap
-    rule_width = round(width * 0.12)
-    draw.rectangle(
-        (
-            (width - rule_width) // 2,
-            y,
-            (width + rule_width) // 2,
-            y + max(round(height * 0.004), 2),
-        ),
-        fill=palette.rule,
-    )
-    y += rule_gap
+        rule_width = round(width * 0.12)
+        draw.rectangle(
+            (
+                (width - rule_width) // 2,
+                y,
+                (width + rule_width) // 2,
+                y + max(round(height * 0.004), 2),
+            ),
+            fill=palette.rule,
+        )
+        y += rule_gap
     for line in lines:
         draw.text((width / 2, y), line, font=font, fill=palette.text, anchor="mt")
         y += line_height

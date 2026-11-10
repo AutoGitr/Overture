@@ -998,3 +998,62 @@ def test_automatic_art_combines_each_tiers_switches_and_schedules_move_to_sync()
             ).all() == [(1, 0)]
     finally:
         engine.dispose()
+
+
+def test_matching_becomes_overturedb_then_tmdb_and_rules_and_theme_search_appear() -> (
+    None
+):
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c9e4f1b7a2d3")
+            conn.exec_driver_sql(
+                f"INSERT INTO app_settings ({', '.join(_SETTINGS_BEFORE_AUTO_ART)}) "  # noqa: S608 -- literal test values
+                f"VALUES ({', '.join(map(str, _SETTINGS_BEFORE_AUTO_ART.values()))})"
+            )
+            command.upgrade(config, "b4d7e2a9c815")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, separator, "
+                "auto_art) VALUES (1, 'plex', 'Sagas', 0, 'match_or_draw'), "
+                "(2, 'plex', 'Studios', 0, 'draw')"
+            )
+            conn.exec_driver_sql(
+                "UPDATE app_settings SET collection_auto_art = 'match'"
+            )
+
+            command.upgrade(config, "e8a3c5d1f702")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_art, auto_search_themes FROM app_settings"
+            ).all() == [("overturedb_tmdb", 1)]
+            assert conn.exec_driver_sql(
+                "SELECT auto_art FROM collection_groups ORDER BY id"
+            ).all() == [("overturedb_tmdb_draw",), ("draw",)]
+            slot_columns = {
+                column["name"] for column in inspect(conn).get_columns("art_slots")
+            }
+            assert "generated_title_only" in slot_columns
+            assert "generated_textless" not in slot_columns
+            conn.exec_driver_sql(
+                "INSERT INTO notification_rules VALUES ('sync', 1, 0, 'changes', 0)"
+            )
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "INSERT INTO notification_rules VALUES ('backup', 1, 0, 'often', 0)"
+                )
+            conn.exec_driver_sql(
+                "UPDATE collection_groups SET auto_art = 'tmdb_draw' WHERE id = 2"
+            )
+
+            command.downgrade(config, "b4d7e2a9c815")
+            assert conn.exec_driver_sql(
+                "SELECT auto_art FROM collection_groups ORDER BY id"
+            ).all() == [("match_or_draw",), ("match_or_draw",)]
+            assert "notification_rules" not in inspect(conn).get_table_names()
+            assert "generated_textless" in {
+                column["name"] for column in inspect(conn).get_columns("art_slots")
+            }
+    finally:
+        engine.dispose()
