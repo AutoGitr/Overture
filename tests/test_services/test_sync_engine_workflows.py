@@ -368,6 +368,11 @@ class NoGroups:
     ) -> CollectionGroupSyncResult:
         raise AssertionError("There are no groups to sync")
 
+    async def sync_collections(
+        self, collection_ids: list[int]
+    ) -> CollectionGroupSyncResult:
+        raise AssertionError("There are no collections to sync")
+
 
 class NoTmdbShows(TmdbSeasonSync):
     def __init__(self) -> None:
@@ -1308,12 +1313,13 @@ async def test_a_clean_scheduled_full_sync_clears_its_own_result(
     await engine.schedules.stop()
 
 
-async def test_full_sync_can_sync_chosen_collection_groups_instead(
+async def test_full_sync_can_sync_chosen_groups_and_collections_instead(
     tmp_path: Path,
 ) -> None:
     class Groups:
         def __init__(self) -> None:
             self.synced: list[tuple[str, list[str] | None]] = []
+            self.collections: list[list[int]] = []
 
         async def names(self) -> list[str]:
             return ["Sagas", "Ungrouped"]
@@ -1327,6 +1333,12 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
             self.synced.append((name, library_ids))
             return CollectionGroupSyncResult(synced=2, errors={"Broken": "refused"})
 
+        async def sync_collections(
+            self, collection_ids: list[int]
+        ) -> CollectionGroupSyncResult:
+            self.collections.append(collection_ids)
+            return CollectionGroupSyncResult(synced=1, errors={"Alien": "refused"})
+
     class EveryCollection(NoCollections):
         @override
         async def run(self, *_args: object, **_kwargs: object) -> None:
@@ -1339,6 +1351,7 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
         library_ids=["1"],
         include_collections=False,
         collection_groups=["Sagas", "Gone"],
+        collection_ids=[7, 9],
         provider_registry=NoopProviderRegistry(FakeProvider()),
         reconciler=FakeReconciler(),
         config_dir=tmp_path,
@@ -1348,10 +1361,11 @@ async def test_full_sync_can_sync_chosen_collection_groups_instead(
         groups=groups,
     )
 
-    assert groups.synced == [("Sagas", ["1"])]
+    # Chosen collections sync whole, whatever libraries the run covers.
+    assert (groups.synced, groups.collections) == ([("Sagas", ["1"])], [[7, 9]])
     assert probe.names()[-1] == "sync.completed"
     _, payload = probe.terminal()
-    assert payload["errors"] == 1
+    assert payload["errors"] == 2
 
 
 async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(
@@ -1372,6 +1386,11 @@ async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(
         ) -> CollectionGroupSyncResult:
             order.append(f"{name}:{library_ids}")
             return CollectionGroupSyncResult(synced=1)
+
+        async def sync_collections(
+            self, collection_ids: list[int]
+        ) -> CollectionGroupSyncResult:
+            raise AssertionError("Every collection covers each one")
 
     class ReadServer(NoCollections):
         @override

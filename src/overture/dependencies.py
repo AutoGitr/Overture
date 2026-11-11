@@ -26,7 +26,6 @@ lazy from .services.collections.discovery import CollectionDiscovery
 lazy from .services.collections.editor import CollectionEditor
 lazy from .services.collections.groups import CollectionGroups
 lazy from .services.collections.reader import CollectionReader
-lazy from .services.collections.rule_sync import RuleSync
 lazy from .services.collections.set_runner import CollectionSets
 lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
@@ -122,11 +121,6 @@ def get_collection_discovery(runtime: RuntimeDep) -> CollectionDiscovery:
 def get_collection_editor(runtime: RuntimeDep) -> CollectionEditor:
     """Resolve the collections' editor component."""
     return runtime.collections.editor
-
-
-def get_collection_rules(runtime: RuntimeDep) -> RuleSync:
-    """Resolve the collections' rules component."""
-    return runtime.collections.rules
 
 
 def get_collection_groups(runtime: RuntimeDep) -> CollectionGroups:
@@ -241,7 +235,6 @@ CollectionDiscoveryDep = Annotated[
     CollectionDiscovery, Depends(get_collection_discovery)
 ]
 CollectionEditorDep = Annotated[CollectionEditor, Depends(get_collection_editor)]
-CollectionRulesDep = Annotated[RuleSync, Depends(get_collection_rules)]
 CollectionGroupsDep = Annotated[CollectionGroups, Depends(get_collection_groups)]
 CollectionSetsDep = Annotated[CollectionSets, Depends(get_collection_sets)]
 CollectionBulkDep = Annotated[CollectionBulk, Depends(get_collection_bulk)]

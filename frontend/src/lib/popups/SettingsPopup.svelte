@@ -2,12 +2,15 @@
   import { createMutation, createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { invalidateTags } from "../rest/cache";
   import {
+    getPublicDatasetStatusOptions,
     getSettingsOptions,
+    setPublicDatasetEnabledMutation,
     updateSettingsMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { ASPECT_TOLERANCES, DEFAULT_APP_SETTINGS } from "../../generated/settings";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
+  import { publicDatasetSyncState } from "../stores/jobStates.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import {
@@ -25,6 +28,7 @@
   import DataStatus from "../components/DataStatus.svelte";
   import ColorInput from "../components/ColorInput.svelte";
   import GlobalCollectionDefaults from "../components/GlobalCollectionDefaults.svelte";
+  import OvertureDbSettings from "../components/OvertureDbSettings.svelte";
   import PopupSection from "../components/PopupSection.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
 
@@ -51,6 +55,11 @@
   const showSaving = delayedFlag(() => saving);
   const feedback = createNotifier();
   const updateSettingsRequest = createMutation(() => updateSettingsMutation());
+  const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
+  const saveDatasetEnabledRequest = createMutation(() => setPublicDatasetEnabledMutation());
+  /** The OvertureDB switch, which its schedule holds rather than the app settings. */
+  let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
+  let datasetEnabledDirty = $derived(datasetEnabled !== (datasetQuery.data?.enabled ?? false));
 
   let appearance = $state<AppearancePreferences>({
     ...loadAppearancePreferences(),
@@ -62,14 +71,22 @@
     saving = true;
     feedback.clear();
     try {
-      const previousTolerance = settingsState.current.aspect_ratio_tolerance;
+      const previous = settingsState.current;
       const fresh = await updateSettingsRequest.mutateAsync({ body: draft });
       queryClient.setQueryData(getSettingsOptions().queryKey, fresh);
+      if (datasetEnabledDirty) {
+        const status = await saveDatasetEnabledRequest.mutateAsync({
+          body: { enabled: datasetEnabled },
+        });
+        queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, status);
+      }
       // Refetch in the background: art candidates come from remote sources, and
       // waiting for them made saving slow. Library items carry
-      // has_incorrect_aspect_ratio, computed for the tolerance.
+      // has_incorrect_aspect_ratio, computed for the tolerance, and their theme
+      // completeness, which follows OvertureDB's No theme flag.
       void invalidateTags(
-        settingsState.current.aspect_ratio_tolerance === previousTolerance
+        previous.aspect_ratio_tolerance === draft.aspect_ratio_tolerance &&
+          previous.overturedb_no_theme === draft.overturedb_no_theme
           ? ["art", "collections"]
           : ["art", "library", "collections"],
       );
@@ -251,6 +268,23 @@
 
       <PopupSection label="Collections">
         <GlobalCollectionDefaults bind:draft />
+      </PopupSection>
+
+      <PopupSection label="OvertureDB">
+        <DataStatus
+          label="OvertureDB status"
+          error={datasetQuery.error}
+          loading={datasetQuery.isFetching}
+          hasData={datasetQuery.data !== undefined}
+          onretry={() => datasetQuery.refetch()}
+        />
+        {#if datasetQuery.data}
+          <OvertureDbSettings
+            bind:draft
+            bind:enabled={datasetEnabled}
+            disabled={publicDatasetSyncState.running}
+          />
+        {/if}
       </PopupSection>
 
       <PopupSection label="Appearance">

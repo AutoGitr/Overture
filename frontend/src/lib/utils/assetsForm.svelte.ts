@@ -28,7 +28,7 @@ import {
 } from "./assetsPopup";
 import { DEFAULT_CRON_EXPRESSION } from "./cronPresets";
 import { persistedState } from "./persistedState.svelte";
-import { toggleCollectionChoice, toggleSelectedValue } from "./popupSelection";
+import { toggleSelectedValue, type CollectionChoice } from "./popupSelection";
 
 /** What the form reads from the server: the libraries and whether OvertureDB is on. */
 export interface AssetsFormSource {
@@ -224,22 +224,11 @@ export class AssetsForm {
     this.config.useSidebarItems = false;
   }
 
-  /** Every collection, or chosen groups: choosing one clears the other. */
-  toggleCollections(group: string | null): void {
-    const choice = toggleCollectionChoice(
-      { all: this.config.allCollections, groups: this.selectedCollectionGroups },
-      group,
-    );
+  /** Run every collection or the chosen groups, in place of the sidebar's selection. */
+  chooseCollections(choice: CollectionChoice): void {
     this.config.useSidebarItems = false;
     this.config.allCollections = choice.all;
     this.config.collectionGroups = choice.groups;
-  }
-
-  /** "Select all" covers every collection; clearing it clears the groups too. */
-  selectAllCollections(checked: boolean): void {
-    this.config.useSidebarItems = false;
-    this.config.allCollections = checked;
-    this.config.collectionGroups = [];
   }
 
   toggleArtType(type: ArtType): void {

@@ -15,6 +15,7 @@
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
   import ArtTypeFiltersCard from "../ArtTypeFiltersCard.svelte";
   import CardColumn from "../CardColumn.svelte";
+  import Checklist from "../Checklist.svelte";
   import FolderScopeCard from "../FolderScopeCard.svelte";
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
@@ -207,7 +208,7 @@
 
 {#if !hasResults}
   <CardColumn>
-    <FolderScopeCard {scope} />
+    <FolderScopeCard {scope} collections={settingsState.current.collections_supported ? collectionScope : undefined} />
     <ArtTypeFiltersCard
       {artTypes}
       hasSelectedFolders={scope.hasSelection}
@@ -216,22 +217,6 @@
       ontoggletype={toggleArtType}
       ontoggletheme={(value) => (config.checkThemes = value)}
     />
-    {#if settingsState.current.collections_supported}
-      <div class="option-card">
-        <label class="checkbox-group">
-          <input
-            type="checkbox"
-            checked={config.checkCollections}
-            onchange={(event) => (config.checkCollections = event.currentTarget.checked)}
-          />
-          <span>Collections</span>
-        </label>
-        <span class="hint"
-          >Compares the posters and backgrounds Overture uploaded to collections with what the
-          server shows; refreshing uploads them again.</span
-        >
-      </div>
-    {/if}
   </CardColumn>
 {:else}
   <ServerAuditResultsPanel
@@ -239,6 +224,24 @@
     selectedThemeCount={selectedThemeResults.length}
   />
 {/if}
+
+{#snippet collectionScope()}
+  <Checklist
+    label="Collections"
+    groups={[]}
+    allSelected={config.checkCollections}
+    ontoggle={() => {}}
+    ontoggleall={(checked) => (config.checkCollections = checked)}
+    notice={collectionHint}
+  />
+{/snippet}
+
+{#snippet collectionHint()}
+  <span class="hint"
+    >Compares the posters and backgrounds Overture uploaded to collections with what the server
+    shows; refreshing uploads them again.</span
+  >
+{/snippet}
 
 {#snippet auditFooter()}
   <JobFooter

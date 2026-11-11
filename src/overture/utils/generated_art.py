@@ -1,12 +1,16 @@
 """Artwork Overture draws from a title, for collections that have none.
 
-Pillow's built-in scalable font draws the text, so nothing is downloaded or
-bundled, and the same title and style always give the same bytes.
+The bundled Noto fonts draw the text, so any script a title uses renders and
+the same title and style always give the same bytes.
 """
 
 lazy import io
+lazy import unicodedata
 lazy from dataclasses import dataclass
+lazy from functools import cache, lru_cache
+lazy from pathlib import Path
 
+lazy from fontTools.ttLib import TTFont
 lazy from PIL import Image, ImageDraw, ImageFont
 
 lazy from ..domain import ArtStyle, ArtType
@@ -15,6 +19,21 @@ lazy from ..domain import ArtStyle, ArtType
 _SIZES = {ArtType.POSTER: (1000, 1500), ArtType.BACKGROUND: (3840, 2160)}
 #: The most lines a title wraps to before its size shrinks instead.
 _MAX_LINES = 4
+_FONT_DIR = Path(__file__).resolve().parent / "fonts"
+#: The bundled fonts in the order a character looks for one that draws it.
+FONT_FILES = (
+    "NotoSans-Regular.ttf",
+    "NotoSansArabic-Regular.ttf",
+    "NotoSansHebrew-Regular.ttf",
+    "NotoSansDevanagari-Regular.ttf",
+    "NotoSansThai-Regular.ttf",
+    "NotoSansCJKjp-Regular.otf",
+    "NotoSansSymbols-Regular.ttf",
+    "NotoSansSymbols2-Regular.ttf",
+    "NotoEmoji-Regular.ttf",
+)
+#: Bidirectional classes that make a title read right to left.
+_RTL_CLASSES = frozenset({"R", "AL"})
 
 type _Rgb = tuple[int, int, int]
 
@@ -70,41 +89,96 @@ def _gradient(size: tuple[int, int], palette: _Palette) -> Image.Image:
     return image
 
 
-def _font(size: int) -> ImageFont.FreeTypeFont:
-    """Pillow's built-in scalable font at *size* pixels.
+@cache
+def font_coverage(font_file: str) -> frozenset[int]:
+    """The code points *font_file* has a glyph for."""
+    with TTFont(_FONT_DIR / font_file, lazy=True) as font:
+        return frozenset(font.getBestCmap() or ())
 
-    Raises:
-        RuntimeError: When Pillow was built without FreeType, whose fixed-size
-            fallback cannot be scaled.
+
+@lru_cache(maxsize=128)
+def _font(font_file: str, size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(_FONT_DIR / font_file, size)
+
+
+def _font_for(char: str, current: str | None) -> str:
+    """The font that draws *char*, keeping *current* while it can.
+
+    A character no bundled font has falls back to the first, which draws its
+    missing-glyph box.
     """
-    font = ImageFont.load_default(size=size)
-    if not isinstance(font, ImageFont.FreeTypeFont):
-        raise RuntimeError("Drawing artwork needs Pillow built with FreeType")
-    return font
+    point = ord(char)
+    if current is not None and (
+        point in font_coverage(current) or unicodedata.combining(char)
+    ):
+        return current
+    return next(
+        (name for name in FONT_FILES if point in font_coverage(name)), FONT_FILES[0]
+    )
 
 
-def _wrap(text: str, font: ImageFont.FreeTypeFont, width: float) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class _Text:
+    """A line of text split into runs, each drawn by one bundled font."""
+
+    runs: tuple[tuple[ImageFont.FreeTypeFont, str], ...]
+    rtl: bool
+
+    @classmethod
+    def of(cls, text: str, size: int) -> _Text:
+        runs: list[tuple[str, str]] = []
+        for char in text:
+            name = _font_for(char, runs[-1][0] if runs else None)
+            if runs and runs[-1][0] == name:
+                runs[-1] = (name, runs[-1][1] + char)
+            else:
+                runs.append((name, char))
+        direction = next(
+            (
+                unicodedata.bidirectional(char)
+                for char in text
+                if unicodedata.bidirectional(char) in {"L", "R", "AL"}
+            ),
+            "L",
+        )
+        return cls(
+            tuple((_font(name, size), run) for name, run in runs),
+            direction in _RTL_CLASSES,
+        )
+
+    @property
+    def width(self) -> float:
+        return sum(font.getlength(run) for font, run in self.runs)
+
+    def draw(
+        self, draw: ImageDraw.ImageDraw, centre: float, baseline: float, fill: _Rgb
+    ) -> None:
+        """Draw the runs centred on *centre*, in reading order, on *baseline*."""
+        x = centre - self.width / 2
+        for font, run in reversed(self.runs) if self.rtl else self.runs:
+            draw.text((x, baseline), run, font=font, fill=fill, anchor="ls")
+            x += font.getlength(run)
+
+
+def _wrap(text: str, size: int, width: float) -> list[_Text]:
     """Split *text* into lines no wider than *width*, word by word."""
-    lines: list[str] = []
+    words: list[str] = []
     for word in text.split():
-        candidate = f"{lines[-1]} {word}" if lines else word
-        if lines and font.getlength(candidate) <= width:
-            lines[-1] = candidate
+        candidate = f"{words[-1]} {word}" if words else word
+        if words and _Text.of(candidate, size).width <= width:
+            words[-1] = candidate
         else:
-            lines.append(word)
-    return lines or [""]
+            words.append(word)
+    return [_Text.of(line, size) for line in words or [""]]
 
 
-def _fitted(
-    text: str, width: float, size: int
-) -> tuple[ImageFont.FreeTypeFont, list[str]]:
-    """The largest font up to *size* that wraps *text* into few enough lines."""
+def _fitted(text: str, width: float, size: int) -> tuple[int, list[_Text]]:
+    """The largest size up to *size* that wraps *text* into few enough lines."""
     while True:
-        font = _font(size)
-        lines = _wrap(text, font, width)
-        widest = max(font.getlength(line) for line in lines)
+        lines = _wrap(text, size, width)
+        widest = max(line.width for line in lines)
         if (len(lines) <= _MAX_LINES and widest <= width) or size <= 12:
-            return font, lines
+            return size, lines
         size = round(size * 0.9)
 
 
@@ -133,20 +207,20 @@ def _draw_title(
     """Draw *title* centred on *image*, under *subtitle* and a rule if given."""
     width, height = image.size
     draw = ImageDraw.Draw(image)
-    text_width = width * 0.8
-    font, lines = _fitted(title.strip() or " ", text_width, round(height * 0.085))
-    ascent, descent = font.getmetrics()
+    size, lines = _fitted(title.strip() or " ", width * 0.8, round(height * 0.085))
+    ascent, descent = _font(FONT_FILES[0], size).getmetrics()
     line_height = round((ascent + descent) * 1.1)
-    small = _font(round(height * 0.028))
+    small_size = round(height * 0.028)
+    small_ascent = _font(FONT_FILES[0], small_size).getmetrics()[0]
     heading = subtitle.strip().upper() if subtitle and subtitle.strip() else None
     rule_gap = round(height * 0.03)
-    block = len(lines) * line_height + (
-        small.getmetrics()[0] + 2 * rule_gap if heading else 0
-    )
+    block = len(lines) * line_height + (small_ascent + 2 * rule_gap if heading else 0)
     y = (height - block) // 2
     if heading:
-        draw.text((width / 2, y), heading, font=small, fill=palette.muted, anchor="mt")
-        y += small.getmetrics()[0] + rule_gap
+        _Text.of(heading, small_size).draw(
+            draw, width / 2, y + small_ascent, palette.muted
+        )
+        y += small_ascent + rule_gap
         rule_width = round(width * 0.12)
         draw.rectangle(
             (
@@ -159,5 +233,5 @@ def _draw_title(
         )
         y += rule_gap
     for line in lines:
-        draw.text((width / 2, y), line, font=font, fill=palette.text, anchor="mt")
+        line.draw(draw, width / 2, y + ascent, palette.text)
         y += line_height

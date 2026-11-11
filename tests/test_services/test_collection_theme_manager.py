@@ -10,7 +10,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.session import Database
-lazy from overture.domain import JobStatus, MediaType, ServerAsset, ServerType
+lazy from overture.domain import JobStatus, MediaType, ServerAsset
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.plex import PlexProvider
@@ -78,7 +78,7 @@ def _download_service(
 async def test_enqueue_supersedes_a_previous_upload_to_the_same_collection(
     *, app_config: Settings, database: Database
 ) -> None:
-    await _listed_collection(database, ServerType.PLEX)
+    await _listed_collection(database)
     service = _download_service(app_config=app_config, database=database)
 
     async with database.write_session() as session:
@@ -111,7 +111,7 @@ async def test_process_job_broadcasts_failed_payload_on_download_error(
         async def download_audio(self, *_args: object, **_kwargs: object) -> ThemeAudio:
             raise DownloadError("api_key=secret")
 
-    await _listed_collection(database, ServerType.PLEX)
+    await _listed_collection(database)
     publisher = RecordingPublisher()
     service = _download_service(
         publisher,
@@ -148,14 +148,13 @@ class Resolver:
 
 
 async def _listed_collection(
-    database: Database, server_type: ServerType, server_path: str | None = None
+    database: Database, server_path: str | None = None
 ) -> None:
     async with database.write_session() as session:
         session.add(
             stored_collection(
                 server_item_id="collection-1",
                 media_type=MediaType.MOVIE,
-                server_type=server_type,
                 title="Collection",
                 server_path=server_path,
                 last_synced_at=utc_now(),
@@ -180,7 +179,7 @@ async def test_process_job_persists_complete_collection_theme_provenance(
                 raise MediaServerError("Plex rejected the collection theme upload")
             return "/themes/uploaded"
 
-    await _listed_collection(database, ServerType.PLEX)
+    await _listed_collection(database)
     publisher = RecordingPublisher()
     service = _download_service(
         publisher,
@@ -242,9 +241,7 @@ async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
     folder.mkdir()
     app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
     # Jellyfin names its own path for the folder; only the name carries over.
-    await _listed_collection(
-        database, ServerType.JELLYFIN, "/config/data/collections/Star Wars [boxset]"
-    )
+    await _listed_collection(database, "/config/data/collections/Star Wars [boxset]")
     service = _download_service(
         youtube_resolver=cast("Any", Resolver()),
         provider=Provider(app_config=app_config),
@@ -273,7 +270,7 @@ async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
 async def test_jellyfin_collection_theme_needs_the_collections_path(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    await _listed_collection(database, ServerType.JELLYFIN, "/data/Star Wars [boxset]")
+    await _listed_collection(database, "/data/Star Wars [boxset]")
     service = _download_service(
         youtube_resolver=cast("Any", Resolver()),
         provider=JellyfinProvider(app_config=app_config),

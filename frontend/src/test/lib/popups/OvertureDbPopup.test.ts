@@ -7,7 +7,7 @@ import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
 import { publicDatasetSyncState } from "../../../lib/stores/jobStates.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { appSettings, catalogRow, publicDatasetStatus } from "../../helpers/fixtures";
+import { catalogRow, publicDatasetStatus } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -100,58 +100,9 @@ describe("OvertureDbPopup", () => {
   });
 });
 
-describe("OvertureDbPopup settings", () => {
+describe("OvertureDbPopup sync", () => {
   beforeEach(() => {
     publicDatasetSyncState.reset();
-  });
-
-  it("saves the switch and confirms the server's answer", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: false }));
-    const { calls } = mockFetchRoutes({
-      "/api/public-dataset/enabled": publicDatasetStatus({ enabled: true }),
-    });
-    renderWithQueryClient(OvertureDbPopup);
-    const save = screen.getByRole("button", { name: "Save" });
-    expect(save).toBeDisabled();
-
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Enable OvertureDB" }));
-    await fireEvent.click(save);
-
-    expect(await screen.findByText("OvertureDB settings saved.")).toBeInTheDocument();
-    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ enabled: true });
-    expect(screen.getByRole("button", { name: "Sync OvertureDB Now" })).toBeEnabled();
-    expect(save).toBeDisabled();
-  });
-
-  it("saves the No theme and sidebar settings with the app settings", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
-    const { calls } = mockFetchRoutes({ "/api/settings": appSettings() });
-    renderWithQueryClient(OvertureDbPopup);
-
-    await fireEvent.click(
-      screen.getByRole("checkbox", { name: "Trust OvertureDB's No theme flag" }),
-    );
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(await screen.findByText("OvertureDB settings saved.")).toBeInTheDocument();
-    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
-      overturedb_no_theme: false,
-      overturedb_browse: true,
-    });
-  });
-
-  it("restores the switch when saving fails", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
-    mockFetchRoutes({ "/api/public-dataset/enabled": failure("Settings are read-only") });
-    renderWithQueryClient(OvertureDbPopup);
-    const toggle = screen.getByRole("checkbox", { name: "Enable OvertureDB" });
-
-    await fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Sync OvertureDB Now" })).toBeDisabled();
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(await screen.findByText("Settings are read-only")).toBeInTheDocument();
-    expect(toggle).toBeChecked();
   });
 
   it("starts a sync and shows it running from the click", async () => {
@@ -173,7 +124,7 @@ describe("OvertureDbPopup settings", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Sync OvertureDB Now" }));
 
     expect(
-      await screen.findByText("Enable and save OvertureDB before syncing."),
+      await screen.findByText("Enable OvertureDB in Settings before syncing."),
     ).toBeInTheDocument();
     expect(publicDatasetSyncState.running).toBe(false);
   });

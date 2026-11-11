@@ -2,7 +2,6 @@
 
 lazy import urllib.parse
 lazy from collections.abc import Collection, Iterable, Mapping, Sequence
-lazy from contextlib import suppress
 
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import (
@@ -38,9 +37,9 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..downloads.service import DownloadService
 lazy from . import COLLECTIONS_LOCK
-lazy from .access import CollectionAccess, LibraryScope
+lazy from .access import CollectionAccess
 lazy from .criteria import order_items
-lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay, saved_options
+lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay
 lazy from .membership import Membership, resolve_members
 lazy from .plex_query import (
     UnmappableFilterError,
@@ -62,7 +61,6 @@ lazy from .rules import (
     rule_row,
     shared_franchise,
 )
-lazy from .sources import SourceResolver
 lazy from .validation import CollectionValidator
 
 
@@ -94,7 +92,7 @@ def save_placement(saved: MediaCollection, row: MediaCollection) -> None:
 
 
 class CollectionEditor:
-    """Create, edit and remove collections, on the server and in Overture.
+    """Create, edit and remove collections; only syncs and removals reach the server.
 
     The ``*_locked`` methods expect the caller to hold
     :meth:`CollectionAccess.locked` for the collection.
@@ -108,7 +106,6 @@ class CollectionEditor:
         membership: Membership,
         display: CollectionDisplay,
         reader: CollectionReader,
-        sources: SourceResolver,
         downloads: DownloadService,
     ) -> None:
         self._access = access
@@ -116,22 +113,16 @@ class CollectionEditor:
         self._membership = membership
         self._display = display
         self._reader = reader
-        self._sources = sources
         self._downloads = downloads
 
     # Creating
 
     async def create(
-        self,
-        body: CollectionCreate,
-        *,
-        generated_value: str | None = None,
-        sync: bool = True,
+        self, body: CollectionCreate, *, generated_value: str | None = None
     ) -> CollectionDetail:
-        """Create on the server, then record its complete local membership.
+        """Save a new collection in Overture; the next sync puts it on the server.
 
-        *generated_value* marks a collection its group's set creates. Without
-        *sync* the collection is saved in Overture only, until it is synced.
+        *generated_value* marks a collection its group's set creates.
         """
         overrides = body.model_dump(include=body.model_fields_set & DISPLAY_OVERRIDES)
         body = body.model_copy(update={"rule": body.rule.model_copy(update=overrides)})
@@ -150,176 +141,49 @@ class CollectionEditor:
         self._validator.rule(types, rule, policy)
         if "order_type" not in body.model_fields_set:
             body = body.model_copy(update={"order_type": policy.order_type})
-        # Without sync the next one reads the lists, so saving stays instant.
-        wanted: dict[str, list[CollectionItem]] = (
-            await self._initial_members(body, scopes)
-            if sync
-            else {scope.library_id: [] for scope in scopes}
-        )
-        source_summary = await self._sources.summary(rule.libraries) if sync else None
-        # The minimum and the season decide only whether the server has it
-        # yet; Overture keeps it either way, and a later sync creates it.
-        total = sum(len(items) for items in wanted.values())
-        withhold = (not smart and total < policy.minimum_items) or (
-            policy.delete_when_inactive
-            and not self._access.active(
-                body.active_start_mmdd or policy.active_start_mmdd,
-                body.active_end_mmdd or policy.active_end_mmdd,
-            )
-        )
-        server = self._access.server_type
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
             async with self._access.database.read_session() as session:
                 existing = await CollectionRepository(session).list_listed()
             if any(
-                row.server_type is server
-                and row.title.casefold() == body.title.casefold()
+                row.title.casefold() == body.title.casefold()
                 and not types.keys().isdisjoint(row.library_ids)
                 for row in existing
             ):
                 raise PublicServiceError(409, TITLE_TAKEN)
             now = utc_now()
             row = MediaCollection(
-                server_type=server,
                 kind=CollectionKind.SMART if smart else CollectionKind.REGULAR,
                 generated_value=generated_value,
-                unsynced=not sync,
+                unsynced=True,
                 last_synced_at=now,
                 created_at=now,
                 updated_at=now,
+                summary_source=body.summary,
                 **body.model_dump(exclude={"rule", "collection_group"}),
             )
             apply_libraries(row, rule.libraries, types)
-            if sync and not withhold:
-                wanted = await self._create_on_server(row, body, wanted, scopes)
-            await self._configure_new(
-                row, body, rule, wanted, smart=smart, source_summary=source_summary
+            effective = await self._display.effective(row, body, rule)
+            row.sqlmodel_update(
+                effective.model_dump(exclude={"rule", "collection_group"})
             )
             async with self._access.database.write_session() as session:
                 if row.tmdb_collection_id is None:
                     row.tmdb_collection_id = min(
                         franchise_ids(rule.libraries), default=None
                     )
-                row.group = await CollectionRepository(session).ensure_group(
-                    server, group
-                )
+                row.group = await CollectionRepository(session).ensure_group(group)
                 session.add(row)
                 await session.flush()
-                await CollectionRepository(session).replace_members(
-                    row.id or 0,
-                    [item.id for items in wanted.values() for item in items],
-                )
-                saved_rule = rule_row(row.id or 0, rule)
-                saved_rule.source_summary = source_summary
-                row.rule = saved_rule
+                row.rule = rule_row(row.id or 0, rule)
         await self._access.changed()
         return await self._reader.get(row.id or 0)
-
-    async def _configure_new(
-        self,
-        row: MediaCollection,
-        body: CollectionCreate,
-        rule: CollectionRuleWrite,
-        wanted: Mapping[str, list[CollectionItem]],
-        *,
-        smart: bool,
-        source_summary: str | None,
-    ) -> None:
-        """Apply display options and order to a new collection, or remove it."""
-        provider = self._access.provider()
-        try:
-            row.child_count = sum(len(items) for items in wanted.values())
-            row.summary_source = body.summary
-            effective = await self._display.push(
-                row, body, rule, source_summary=source_summary
-            )
-            row.sqlmodel_update(
-                effective.model_dump(exclude={"rule", "collection_group"})
-            )
-            if smart:
-                return
-            for copy in self._access.copies(row):
-                ids = _server_ids(wanted, copy.library_ids)
-                if copy.server_item_id is not None and ids:
-                    await provider.set_collection_members(
-                        copy.server_item_id, ids, order=body.order_type
-                    )
-        except Exception:
-            # Overture records nothing, so the server keeps no half-made copy.
-            for server_id in row.server_ids:
-                with suppress(MediaServerError):
-                    await provider.delete_collection(server_id)
-            raise
-
-    async def _initial_members(
-        self, body: CollectionCreate, scopes: Sequence[LibraryScope]
-    ) -> dict[str, list[CollectionItem]]:
-        """What the criteria select; Plex fills a smart collection itself."""
-        if body.rule.smart:
-            return {scope.library_id: [] for scope in scopes}
-        return await self._membership.wanted_in(
-            scopes, order=body.order_type, limit=body.rule.limit
-        )
-
-    async def _create_on_server(
-        self,
-        row: MediaCollection,
-        body: CollectionCreate,
-        wanted: Mapping[str, list[CollectionItem]],
-        scopes: Sequence[LibraryScope],
-    ) -> dict[str, list[CollectionItem]]:
-        """Create the server's collections; Plex decides a smart one's members.
-
-        A library with nothing to hold gets no server collection until it has.
-        """
-        provider = self._access.provider()
-        by_library = {scope.library_id: scope for scope in scopes}
-        members = dict(wanted)
-        try:
-            for copy in self._access.copies(row):
-                lead = copy.lead
-                if body.rule.smart:
-                    scope = by_library[lead.library_id]
-                    server = await provider.create_smart_collection(
-                        lead.library_id,
-                        body.title,
-                        lead.media_type,
-                        await self._membership.smart_query(
-                            scope, body.order_type, body.rule.limit
-                        ),
-                    )
-                    by_server_id = {
-                        item.server_item_id: item
-                        for item in scope.items
-                        if item.server_item_id
-                    }
-                    members[lead.library_id] = [
-                        by_server_id[identity]
-                        for identity in server.member_ids
-                        if identity in by_server_id
-                    ]
-                else:
-                    ids = _server_ids(wanted, copy.library_ids)
-                    if not ids:
-                        continue
-                    server = await provider.create_collection(
-                        lead.library_id, body.title, lead.media_type, ids
-                    )
-                copy.place(server.id)
-                row.server_path = row.server_path or server.path
-        except Exception:
-            for server_id in row.server_ids:
-                with suppress(MediaServerError):
-                    await provider.delete_collection(server_id)
-            raise
-        return members
 
     # Display options
 
     async def update(
-        self, collection_id: int, body: CollectionOptions, *, sync: bool = True
+        self, collection_id: int, body: CollectionOptions
     ) -> CollectionDetail:
-        """Edit collection metadata without touching movie or show metadata."""
+        """Save display options in Overture; the next sync sends them."""
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 row = await self._access.require_managed(session, collection_id)
@@ -332,14 +196,18 @@ class CollectionEditor:
                 raise PublicServiceError(
                     422, "Its group keeps the separator; change the group instead"
                 )
-            await self.update_locked(row, body, push=sync)
+            await self.update_locked(row, body, push=False)
         await self._access.updated(collection_id)
         return await self._reader.get(collection_id)
 
     async def update_locked(
-        self, row: MediaCollection, body: CollectionOptions, *, push: bool = True
+        self, row: MediaCollection, body: CollectionOptions, *, push: bool
     ) -> None:
-        """Persist display choices after the caller acquires the collection locks."""
+        """Save display choices, and with *push* send them to the server copies.
+
+        Without *push* the collection is marked as holding changes the server
+        lacks, which the next sync sends.
+        """
         overrides: dict[str, object] = {}
         if body.sort_title is not None and body.sort_title_format is None:
             overrides["sort_title_format"] = literal_template(body.sort_title)
@@ -357,7 +225,11 @@ class CollectionEditor:
         if rule is not None:
             body = body.model_copy(update={"collection_group": group})
             rule.sqlmodel_update(display)
-        effective = await self._display.push(row, body, rule, push=push)
+        effective = (
+            await self._display.push(row, body, rule)
+            if push
+            else await self._display.effective(row, body, rule)
+        )
         summary_source = row.summary_source
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
@@ -365,9 +237,7 @@ class CollectionEditor:
             fields["summary_source"] = summary_source
             # Only a managed collection belongs to a group.
             if group is not None:
-                saved.group = await CollectionRepository(session).ensure_group(
-                    saved.server_type, group
-                )
+                saved.group = await CollectionRepository(session).ensure_group(group)
             if "tmdb_collection_id" not in body.model_fields_set:
                 fields.pop("tmdb_collection_id")
             saved.sqlmodel_update(fields)
@@ -547,9 +417,9 @@ class CollectionEditor:
         return wanted
 
     async def set_members(
-        self, collection_id: int, body: CollectionMembersUpdate, *, sync: bool = True
+        self, collection_id: int, body: CollectionMembersUpdate
     ) -> CollectionDetail:
-        """Replace members, in an order the server supports."""
+        """Save members chosen by hand, in Overture; the next sync sends them."""
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 row = await self._access.require_managed(session, collection_id)
@@ -558,17 +428,9 @@ class CollectionEditor:
                 raise PublicServiceError(
                     422, "Smart collection members are controlled by their criteria"
                 )
-            wanted = await self._chosen_members(row, body)
-            if sync:
-                await self._display.push(
-                    row,
-                    saved_options(row, None).model_copy(
-                        update={"order_type": body.order_type}
-                    ),
-                )
-                await self.set_members_locked(row, wanted, body.order_type)
-            else:
-                await self._store_members(row, wanted, body.order_type)
+            await self._store_members(
+                row, await self._chosen_members(row, body), body.order_type
+            )
         return await self._reader.get(collection_id)
 
     async def _store_members(
@@ -577,7 +439,6 @@ class CollectionEditor:
         wanted: Mapping[str, list[CollectionItem]],
         order: CollectionOrder,
     ) -> None:
-        """Save members in Overture only; the next sync sends them."""
         ids = [item.id for items in wanted.values() for item in items]
         async with self._access.database.write_session() as session:
             current = await self._access.require(session, row.id or 0)
@@ -716,9 +577,7 @@ class CollectionEditor:
         async with self._access.locked(collection_id):
             async with self._access.database.write_session() as session:
                 stored = await self._access.require(session, collection_id)
-                stored.group = await CollectionRepository(session).ensure_group(
-                    stored.server_type, group
-                )
+                stored.group = await CollectionRepository(session).ensure_group(group)
                 stored.tmdb_collection_id = plan.tmdb_collection_id
                 session.add(stored)
             await self.save_rule_locked(stored, plan.rule)

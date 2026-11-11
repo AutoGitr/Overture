@@ -84,7 +84,10 @@ BACKUP_SCHEDULE = ScheduleSpec(
     BACKUP_TASK_NAME, BackupPayload, DEFAULT_BACKUP_CRON, default_enabled=True
 )
 PUBLIC_DATASET_SCHEDULE = ScheduleSpec(
-    PUBLIC_DATASET_TASK_NAME, PublicDatasetPayload, DEFAULT_PUBLIC_DATASET_CRON
+    PUBLIC_DATASET_TASK_NAME,
+    PublicDatasetPayload,
+    DEFAULT_PUBLIC_DATASET_CRON,
+    default_enabled=True,
 )
 
 

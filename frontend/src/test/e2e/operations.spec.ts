@@ -299,10 +299,7 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
   );
   await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({
-      json: [
-        collection({ id: 12, title: "Star Wars", server_type: "jellyfin" }),
-        collection({ id: 34, title: "Matrix", server_type: "jellyfin" }),
-      ],
+      json: [collection({ id: 12, title: "Star Wars" }), collection({ id: 34, title: "Matrix" })],
     }),
   );
   let requestBody: unknown;

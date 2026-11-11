@@ -4,6 +4,7 @@
   import { sidebarState } from "../stores/sidebarState.svelte";
   import type { AssetsForm } from "../utils/assetsForm.svelte";
   import ArtWorkflowCard from "./ArtWorkflowCard.svelte";
+  import CollectionChecklist from "./CollectionChecklist.svelte";
   import LibraryChecklist from "./LibraryChecklist.svelte";
   import SidebarItemsOption from "./SidebarItemsOption.svelte";
   import SourceOrderList from "./SourceOrderList.svelte";
@@ -39,15 +40,16 @@
       emptyMessage="No synced libraries found. Run Sync first."
       ontoggle={(id) => form.toggleLibrary(id)}
       ontoggleall={(checked) => form.toggleAll(checked)}
-      collectionGroups={settingsState.current.collections_supported
-        ? form.collectionGroupOptions
-        : undefined}
-      collections={config.useSidebarItems
-        ? undefined
-        : { all: config.allCollections, groups: form.selectedCollectionGroups }}
-      oncollectiontoggle={(group) => form.toggleCollections(group)}
-      oncollectionsall={(checked) => form.selectAllCollections(checked)}
     />
+    {#if settingsState.current.collections_supported}
+      <CollectionChecklist
+        groups={form.collectionGroupOptions}
+        choice={config.useSidebarItems
+          ? undefined
+          : { all: config.allCollections, groups: form.selectedCollectionGroups }}
+        onchange={(choice) => form.chooseCollections(choice)}
+      />
+    {/if}
   </div>
   <SidebarItemsOption
     checked={config.useSidebarItems}

@@ -283,7 +283,6 @@ describe("REST cache helpers", () => {
       title: "Action",
       monitored: false,
       has_theme: false,
-      server_type: "plex",
     });
     const key = listCollectionsOptions().queryKey;
     queryClient.setQueryData(key, [collection]);

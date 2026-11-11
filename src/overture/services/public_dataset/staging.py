@@ -144,7 +144,7 @@ async def replace(
             }
             if entry["media_type"] == CatalogMediaType.COLLECTION:
                 del row["media_type"]
-                collections.append(row)
+                collections.append({"consistent_poster_url": None, **row})
                 stats.collections += 1
                 continue
             items.append(row)

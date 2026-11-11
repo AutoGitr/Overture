@@ -87,12 +87,18 @@ class PublicDatasetService:
         )
 
     async def start(self) -> None:
-        """Start the public dataset scheduler."""
+        """Start the public dataset scheduler, and a first sync when none has run.
+
+        OvertureDB starts enabled, so a new install has the catalog without
+        waiting for the schedule.
+        """
         async with self._database.read_session() as session:
             schedule = await load_schedule(
                 session, PUBLIC_DATASET_SCHEDULE, timezone=self._app_config.TZ
             )
         self._schedule_job(schedule)
+        if schedule.enabled and schedule.payload.last_synced_at is None:
+            self.start_background_sync()
         logger.debug("OvertureDB scheduler started")
 
     async def stop(self) -> None:

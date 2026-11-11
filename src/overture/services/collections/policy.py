@@ -13,6 +13,7 @@ lazy from ...domain import (
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     SyncMode,
 )
 lazy from ...schemas.collections import CollectionGroupPolicy, CollectionRuleWrite
@@ -45,6 +46,7 @@ class CollectionPolicy:
     delete_below_minimum: bool
     auto_art: AutoArt
     drawn_style: ArtStyle
+    overturedb_posters: CollectionPosterStyle
     backgrounds: bool
     auto_match_theme: bool
     collection_mode: CollectionMode
@@ -95,6 +97,11 @@ def resolve_policy(
             rule.drawn_style if rule else None,
             group.drawn_style if group else None,
             defaults.collection_drawn_style,
+        ),
+        overturedb_posters=inherit(
+            rule.overturedb_posters if rule else None,
+            group.overturedb_posters if group else None,
+            defaults.collection_overturedb_posters,
         ),
         backgrounds=inherit(
             rule.backgrounds if rule else None,

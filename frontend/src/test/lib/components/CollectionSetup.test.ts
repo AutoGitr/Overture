@@ -13,6 +13,8 @@ import {
   mediaItem,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
+import { uiState } from "../../../lib/stores/uiState.svelte";
+import { syncSelection } from "../../../lib/stores/syncSelection.svelte";
 
 const member = mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" });
 const detail = collectionDetail({
@@ -119,7 +121,7 @@ describe("collection setup flow", () => {
     expect(screen.getByRole("region", { name: "Collection settings" })).toHaveFocus();
   });
 
-  it("saves a new collection without the server on Enter", async () => {
+  it("saves a new collection on Enter, without opening Sync", async () => {
     const { calls } = mockPage();
     await createPage();
     await onlyLibrary(screen, "Movies");
@@ -133,13 +135,7 @@ describe("collection setup flow", () => {
         ),
       ).toBe(true),
     );
-    expect(
-      calls
-        .find(
-          (call) => call.init.method === "POST" && call.url.split("?")[0] === "/api/collections",
-        )
-        ?.url.startsWith("/api/collections?to_server=false"),
-    ).toBe(true);
+    expect(uiState.openPopup).toBeNull();
   });
 
   it("creates a smart collection combining a Radarr tag with an unplayed condition", async () => {
@@ -162,7 +158,7 @@ describe("collection setup flow", () => {
     await fireEvent.change(screen.getByLabelText("Criteria condition 2 value"), {
       target: { value: "false" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() =>
       expect(
         calls.some(
@@ -192,12 +188,6 @@ describe("collection setup flow", () => {
         Response.json(
           init.method === "PUT" ? JSON.parse(String(init.body)) : { visible_home: true },
         ),
-      "/api/collections/group-policy/sync": {
-        created: [12, 13],
-        removed: [],
-        synced: 0,
-        errors: {},
-      },
       "/api/collections/sets/preview": [
         {
           value: "1990",
@@ -222,7 +212,7 @@ describe("collection setup flow", () => {
     expect(set.queryByLabelText("Split by")).toBeNull();
     await fireEvent.click(set.getByRole("button", { name: "Preview collections" }));
     expect(await set.findByText("1990s")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
 
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
     expect(postedBody(calls, "/api/collections/group-policy?")).toMatchObject({
@@ -234,12 +224,12 @@ describe("collection setup flow", () => {
         strip_prefix: "",
       },
     });
-    expect(calls.some((call) => call.url.startsWith("/api/collections/group-policy/sync"))).toBe(
-      true,
-    );
     expect(
       calls.some((call) => call.init.method === "PUT" && call.url.includes("new_set=true")),
     ).toBe(true);
+    await waitFor(() => expect(uiState.openPopup).toBe("operations"));
+    expect(syncSelection.groups).toEqual(["Decades"]);
+    uiState.closePopup();
   });
 
   it("refuses a group that already is a set, and warns of another set splitting alike", async () => {
@@ -256,14 +246,14 @@ describe("collection setup flow", () => {
     await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "decade" } });
 
     expect(await setup.findByText('"Decades" already is a set')).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save and Create" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save and Sync" })).toBeDisabled();
 
     await fireEvent.input(setup.getByRole("combobox", { name: /^Group/ }), {
       target: { value: "Film decades" },
     });
     expect(await setup.findByText('"Decades" already splits by decades')).toBeInTheDocument();
     expect(setup.queryByText(/"Genres" already splits/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Save and Create" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save and Sync" })).toBeEnabled();
   });
 
   it("offers an unmanaged collection only adoption, with the group it joins", async () => {

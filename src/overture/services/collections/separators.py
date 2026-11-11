@@ -7,7 +7,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...domain import CollectionKind, MediaType, ServerType
+lazy from ...domain import CollectionKind, MediaType
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import CollectionLibraryCriteria, FilterGroup
 lazy from ...utils.collection_formats import format_sort_title, literal_template
@@ -57,11 +57,10 @@ class CollectionSeparators:
             PublicServiceError: 409 when another collection in one of its
                 libraries already has the group's name.
         """
-        server = self._access.server_type
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
             async with self._access.database.read_session() as session:
                 repo = CollectionRepository(session)
-                group = await repo.group(server, name)
+                group = await repo.group(name)
                 rows = await repo.group_members(group) if group else []
                 policy = await self._access.policy(session, group)
                 if group is not None:
@@ -73,7 +72,7 @@ class CollectionSeparators:
             if (
                 group is None
                 or not group.separator
-                or server is not ServerType.PLEX
+                or not self._access.plex
                 or not libraries
             ):
                 if separator is not None:
@@ -110,13 +109,12 @@ class CollectionSeparators:
         Raises:
             PublicServiceError: 409 when the group's name is taken.
         """
-        if not group.separator or group.server_type is not ServerType.PLEX:
+        if not group.separator or not self._access.plex:
             return
         repo = CollectionRepository(session)
         libraries = _held_libraries(await repo.group_members(group))
         if any(
-            row.server_type is group.server_type
-            and row.kind is not CollectionKind.SEPARATOR
+            row.kind is not CollectionKind.SEPARATOR
             and row.title.casefold() == group.name.casefold()
             and not libraries.keys().isdisjoint(row.library_ids)
             for row in await repo.list_listed()
@@ -156,7 +154,6 @@ class CollectionSeparators:
             if row is None:
                 now = utc_now()
                 row = MediaCollection(
-                    server_type=group.server_type,
                     kind=CollectionKind.SEPARATOR,
                     last_synced_at=now,
                     created_at=now,

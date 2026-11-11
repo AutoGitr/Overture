@@ -15,7 +15,6 @@ lazy from ...domain import (
     MediaSortKey,
     MediaType,
     ServerAsset,
-    ServerType,
     media_sort_key,
 )
 lazy from ...repositories.collections import CollectionRepository
@@ -203,15 +202,15 @@ async def plan_audit(
 
 
 async def plan_collection_audit(
-    params: ServerAuditRequest, server: ServerType, *, database: Database
+    params: ServerAuditRequest, *, database: Database
 ) -> list[CollectionAuditTarget]:
-    """Return each collection image Overture uploaded to *server*, by title."""
+    """Return each collection image Overture uploaded to the server, by title."""
     async with database.read_session() as session:
         rows = await CollectionRepository(session).list_listed()
     return [
         CollectionAuditTarget(row.id, art_type)
         for row in sorted(rows, key=lambda row: (row.title.casefold(), row.id))
-        if row.id is not None and row.server_type is server
+        if row.id is not None
         for art_type in ITEM_ART_TYPES
         if art_type in params.art_types
         and (slot := find_art_slot(row, art_type)) is not None

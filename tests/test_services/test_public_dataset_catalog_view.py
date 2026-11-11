@@ -11,13 +11,17 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
+lazy from overture.db.models.public_dataset import (
+    PublicDatasetCollection,
+    PublicDatasetDraft,
+)
+lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     AssetStatus,
     CatalogMediaType,
+    CollectionPosterStyle,
     MediaType,
-    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.jobs.progress_log import JobOutcome
@@ -33,6 +37,10 @@ lazy from overture.services.public_dataset import staging
 lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.public_dataset.export import export_selections
 lazy from overture.services.public_dataset.index import NO_THEME
+lazy from overture.services.schedule_store import (
+    PUBLIC_DATASET_SCHEDULE,
+    save_schedule,
+)
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
@@ -102,6 +110,8 @@ async def test_the_catalog_view_needs_overturedb_enabled(
     database: Database,
 ) -> None:
     await _import_catalog(db_session, tmp_path, app_config)
+    await save_schedule(db_session, PUBLIC_DATASET_SCHEDULE, enabled=False)
+    await db_session.commit()
     browser = CatalogBrowser(database=database, app_config=app_config)
 
     with pytest.raises(PublicServiceError) as exc_info:
@@ -118,7 +128,6 @@ async def test_rows_link_to_what_the_library_holds(
         stored_collection(
             server_item_id="saga",
             media_type=MediaType.MOVIE,
-            server_type=ServerType.PLEX,
             tmdb_collection_id=10,
             last_synced_at=utc_now(),
         )
@@ -215,6 +224,33 @@ async def test_collection_drafts_take_only_collection_fields(
     assert discarded.draft is None
 
 
+async def test_a_consistent_collection_poster_is_the_poster_the_view_edits(
+    browser: CatalogBrowser, db_session: AsyncSession
+) -> None:
+    await db_session.merge(
+        AppSettings(
+            id=SETTINGS_ROW_ID,
+            collection_overturedb_posters=CollectionPosterStyle.CONSISTENT,
+        )
+    )
+    await db_session.commit()
+    poster = "https://image.tmdb.org/t/p/original/consistent.jpg"
+
+    saved = await browser.save_draft(
+        CatalogMediaType.COLLECTION, "tmdb-10", CatalogDraftUpdate(poster_url=poster)
+    )
+
+    assert saved.draft is not None
+    assert saved.draft.poster_url == poster
+    (draft,) = (await db_session.exec(select(PublicDatasetDraft))).all()
+    assert (draft.entry["poster_url"], draft.entry["consistent_poster_url"]) == (
+        None,
+        poster,
+    )
+    [row] = await browser.list_entries(CatalogMediaType.COLLECTION)
+    assert row.poster_url == poster
+
+
 async def test_export_puts_drafts_first_then_selections_and_collection_themes(
     db_session: AsyncSession,
     tmp_path: Path,
@@ -237,7 +273,6 @@ async def test_export_puts_drafts_first_then_selections_and_collection_themes(
             stored_collection(
                 server_item_id="saga",
                 media_type=MediaType.MOVIE,
-                server_type=ServerType.PLEX,
                 title="Star Wars",
                 tmdb_collection_id=10,
                 youtube_id="collection1",
@@ -286,7 +321,6 @@ async def test_correcting_a_drafts_only_identity_keeps_it_editable_and_exportabl
     db_session.add(
         stored_collection(
             server_item_id="saga",
-            server_type=ServerType.PLEX,
             media_type=MediaType.MOVIE,
             title="Old title",
             tmdb_collection_id=10,
@@ -316,7 +350,6 @@ async def test_export_preserves_themerrdb_attribution_after_the_catalog_is_clear
     db_session.add(
         stored_collection(
             server_item_id="saga",
-            server_type=ServerType.PLEX,
             media_type=MediaType.MOVIE,
             title="Saga",
             tmdb_collection_id=10,
@@ -372,7 +405,6 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
             id=1,
             server_item_id="saga",
             media_type=MediaType.MOVIE,
-            server_type=ServerType.PLEX,
             title="Star Wars",
             tmdb_collection_id=10,
             last_synced_at=utc_now(),
@@ -407,7 +439,6 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
         id=1,
         server_item_id="saga",
         media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
         title="Saga",
         tmdb_collection_id=10,
     )

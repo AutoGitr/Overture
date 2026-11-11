@@ -104,11 +104,6 @@ def outdates_server(row: MediaCollection) -> bool:
     return row.unsynced or row.server_item_id is not None
 
 
-def never_created(row: MediaCollection) -> bool:
-    """Saved in Overture only, so the scheduler leaves it until it is synced."""
-    return row.unsynced and row.server_item_id is None
-
-
 def member_criteria(
     row: MediaCollection, members: list[CollectionItem], *, franchise: int | None
 ) -> FilterGroup:

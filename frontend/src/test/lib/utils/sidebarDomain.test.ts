@@ -555,10 +555,16 @@ describe("sidebar collections", () => {
     expect(filterCollections(collections)).toEqual(["Saga 2", "Saga 10"]);
   });
 
-  it("filters by members, kind, sync status and catalog themes", () => {
+  it("filters by members, kind, origin, sync status and catalog themes", () => {
     const collections = [
       collection({ id: 1, title: "Manual", managed: false }),
-      collection({ id: 2, title: "Smart", kind: "smart", managed: true }),
+      collection({
+        id: 2,
+        title: "Smart",
+        kind: "smart",
+        managed: true,
+        generated_value: "1990s",
+      }),
       collection({
         id: 3,
         title: "Failing",
@@ -573,6 +579,8 @@ describe("sidebar collections", () => {
     expect(titles({ collectionMembers: "unmanaged" })).toEqual(["Manual"]);
     expect(titles({ collectionMembers: "managed" })).toEqual(["Failing", "Smart"]);
     expect(titles({ collectionKind: "smart" })).toEqual(["Smart"]);
+    expect(titles({ collectionOrigin: "set" })).toEqual(["Smart"]);
+    expect(titles({ collectionOrigin: "single" })).toEqual(["Failing", "Manual"]);
     expect(titles({ collectionSync: "failed" })).toEqual(["Failing"]);
     expect(titles({ collectionSync: "synced" })).toEqual(["Smart"]);
     expect(titles({ overtureDb: "complete" }, true)).toEqual(["Failing"]);

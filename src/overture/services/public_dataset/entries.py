@@ -4,9 +4,29 @@ lazy from typing import Any
 
 lazy from ...dataset_contract.contract import entry_fields
 lazy from ...db.models.public_dataset import PublicDatasetCollection, PublicDatasetItem
-lazy from ...domain import CatalogMediaType, MediaType
+lazy from ...domain import CatalogMediaType, CollectionPosterStyle, MediaType
 
 type Entry = dict[str, Any]
+
+
+def collection_poster_field(posters: CollectionPosterStyle) -> str:
+    """The entry field that is a collection's poster, as *posters* chooses."""
+    return (
+        "consistent_poster_url"
+        if posters is CollectionPosterStyle.CONSISTENT
+        else "poster_url"
+    )
+
+
+def shown_entry(entry: Entry, posters: CollectionPosterStyle) -> Entry:
+    """Return *entry* with a collection's chosen poster as its only poster."""
+    if entry["media_type"] != CatalogMediaType.COLLECTION:
+        return entry
+    shown = {
+        name: value for name, value in entry.items() if name != "consistent_poster_url"
+    }
+    shown["poster_url"] = entry.get(collection_poster_field(posters))
+    return shown
 
 
 def catalog_item_entry(
@@ -38,4 +58,6 @@ def catalog_collection_entry(collection: PublicDatasetCollection) -> Entry:
     }
     if collection.no_theme:
         entry["no_theme"] = True
+    if collection.consistent_poster_url is not None:
+        entry["consistent_poster_url"] = collection.consistent_poster_url
     return entry

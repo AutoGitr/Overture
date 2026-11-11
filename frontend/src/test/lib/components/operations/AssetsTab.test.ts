@@ -268,7 +268,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByRole("checkbox", { name: /Movies/ });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all libraries" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
 
     const skipInput = screen.getByRole("spinbutton");
@@ -348,7 +348,7 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByRole("checkbox", { name: /Movies/ });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all libraries" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
     await fireEvent.input(screen.getByPlaceholderText("Nightly assets"), {
       target: { value: "Nightly" },
@@ -384,7 +384,7 @@ describe("AssetsPopup", () => {
     const save = screen.getByText("Save schedule");
     expect(save).toBeDisabled();
 
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all libraries" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
     expect(save).toBeDisabled();
 

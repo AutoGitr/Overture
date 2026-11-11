@@ -192,7 +192,6 @@ async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
                 stored_collection(
                     server_item_id="saga",
                     media_type=MediaType.MOVIE,
-                    server_type=ServerType.PLEX,
                     youtube_id="abcDEF12345",
                     server_theme_id="/theme/old",
                     monitored=False,
@@ -201,14 +200,12 @@ async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
                 stored_collection(
                     server_item_id="kept",
                     media_type=MediaType.MOVIE,
-                    server_type=ServerType.PLEX,
                     youtube_id="abcDEF12345",
                     server_theme_id="/theme/kept",
                 ),
                 stored_collection(
                     server_item_id="gone",
                     media_type=MediaType.MOVIE,
-                    server_type=ServerType.PLEX,
                     last_synced_at=utc_now(),
                 ),
             ]
@@ -242,7 +239,6 @@ async def test_a_library_scoped_sync_leaves_other_libraries_collections(
             stored_collection(
                 server_item_id="elsewhere",
                 media_type=MediaType.MOVIE,
-                server_type=ServerType.PLEX,
                 library_id="2",
                 last_synced_at=utc_now(),
             )
@@ -498,7 +494,6 @@ async def test_an_unavailable_jellyfin_mount_preserves_theme_facts_and_provenanc
         session.add(
             stored_collection(
                 server_item_id="box",
-                server_type=ServerType.JELLYFIN,
                 media_type=MediaType.MOVIE,
                 youtube_id="JG5OsfOuEy0",
                 theme_file_hash="known",
@@ -532,7 +527,6 @@ async def test_a_listed_boxset_without_local_members_preserves_manual_matching(
         session.add(
             stored_collection(
                 server_item_id="box",
-                server_type=ServerType.JELLYFIN,
                 media_type=MediaType.MOVIE,
                 library_id="1",
                 tmdb_collection_id=99,

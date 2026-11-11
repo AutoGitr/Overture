@@ -23,7 +23,6 @@ lazy from overture.domain import (
     CatalogMediaType,
     ImageSize,
     MediaType,
-    ServerType,
     TmdbLanguageFilter,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
@@ -46,7 +45,7 @@ lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.errors import PublicServiceError
-lazy from overture.utils.generated_art import render_art
+lazy from overture.utils.generated_art import FONT_FILES, font_coverage, render_art
 lazy from overture.utils.image import THUMB_EXTENSION
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
@@ -177,7 +176,6 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             stored_collection(
                 id=1,
                 server_item_id="box",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
                 tmdb_collection_id=10,
@@ -277,7 +275,6 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
             stored_collection(
                 id=1,
                 server_item_id="box",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
                 last_synced_at=utc_now(),
@@ -339,7 +336,6 @@ async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores
             stored_collection(
                 id=2,
                 server_item_id=None,
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Inactive",
                 last_synced_at=utc_now(),
@@ -427,7 +423,6 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
         id=1,
         server_item_id="box",
         media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
         tmdb_collection_id=10,
     )
     policy = CandidatePolicy.of(AppSettings())
@@ -464,7 +459,6 @@ async def test_drawn_collection_art_is_offered_chosen_and_drawn_again_for_a_new_
             stored_collection(
                 id=1,
                 server_item_id="box",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
                 group="Franchises",
@@ -558,6 +552,25 @@ def test_drawn_art_is_the_same_for_the_same_title() -> None:
     assert alone != render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas", "Sagas")
 
 
+@pytest.mark.parametrize(
+    "title",
+    [
+        "100 Years of Olympic Films: 1912\u20132012",
+        "Amélie “Ghibli” — Ωμέγα Ёлки… № ½ € ★ ♫ 🎬",
+        "千と千尋の神隠し スタジオジブリ 스튜디오 지브리 宫崎骏",
+        "سلسلة أفلام الرعب עברית हिन्दी ภาษาไทย",
+    ],
+)
+def test_bundled_fonts_draw_every_character_of_a_title(title: str) -> None:
+    missing = {
+        char
+        for char in title
+        if not any(ord(char) in font_coverage(name) for name in FONT_FILES)
+    }
+    assert not missing
+    assert Image.open(BytesIO(render_art(ArtType.POSTER, ArtStyle.DARK, title)))
+
+
 async def test_drawn_backgrounds_never_show_text_and_title_only_posters_stay_so(
     database: Database, app_config: Settings, tmp_path: Path
 ) -> None:
@@ -567,7 +580,6 @@ async def test_drawn_backgrounds_never_show_text_and_title_only_posters_stay_so(
             stored_collection(
                 id=1,
                 server_item_id="box",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
                 last_synced_at=utc_now(),

@@ -16,6 +16,7 @@ lazy from ..domain import (
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     ServerType,
     SyncMode,
     TmdbLanguageFilter,
@@ -79,6 +80,7 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_delete_below_minimum: bool | None = None
     collection_auto_art: AutoArt | None = None
     collection_drawn_style: ArtStyle | None = None
+    collection_overturedb_posters: CollectionPosterStyle | None = None
     collection_backgrounds: bool | None = None
     collection_auto_match_theme: bool | None = None
     collection_sort_title_format: str | None = None

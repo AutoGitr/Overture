@@ -1057,3 +1057,90 @@ def test_matching_becomes_overturedb_then_tmdb_and_rules_and_theme_search_appear
             }
     finally:
         engine.dispose()
+
+
+def test_collections_start_with_their_own_posters_and_keep_consistent_ones() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c9e4f1b7a2d3")
+            conn.exec_driver_sql(
+                f"INSERT INTO app_settings ({', '.join(_SETTINGS_BEFORE_AUTO_ART)}) "  # noqa: S608 -- literal test values
+                f"VALUES ({', '.join(map(str, _SETTINGS_BEFORE_AUTO_ART.values()))})"
+            )
+            command.upgrade(config, "e8a3c5d1f702")
+            conn.exec_driver_sql(
+                "INSERT INTO public_dataset_collections (tmdb_id, title, no_theme) "
+                "VALUES (10, 'Star Wars Collection', 0)"
+            )
+
+            command.upgrade(config, "8e103f5cf701")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_overturedb_posters FROM app_settings"
+            ).all() == [("individual",)]
+            for table in ("collection_groups", "collection_rules"):
+                assert "overturedb_posters" in {
+                    column["name"] for column in inspect(conn).get_columns(table)
+                }
+            assert conn.exec_driver_sql(
+                "SELECT consistent_poster_url FROM public_dataset_collections"
+            ).all() == [(None,)]
+
+            command.downgrade(config, "e8a3c5d1f702")
+            assert "consistent_poster_url" not in {
+                column["name"]
+                for column in inspect(conn).get_columns("public_dataset_collections")
+            }
+    finally:
+        engine.dispose()
+
+
+def test_the_collections_of_the_server_synced_last_are_kept() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "8e103f5cf701")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, server_type, name, separator) "
+                "VALUES (1, 'plex', 'Sagas', 0), (2, 'jellyfin', 'Sagas', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, server_type, kind, title, "
+                "order_type, visible_home, visible_shared, visible_library, "
+                "child_count, monitored, unsynced, deselected, group_id, "
+                "last_synced_at) VALUES "
+                "(1, 'plex', 'regular', 'Old', 'release.asc', 0, 0, 0, 0, 1, 0, 0, 1, "
+                "'2026-01-01 00:00:00'), "
+                "(2, 'jellyfin', 'regular', 'New', 'release.asc', 0, 0, 0, 0, 1, 0, "
+                "0, 2, '2026-02-01 00:00:00')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_rules (collection_id, smart) VALUES (1, 0)"
+            )
+
+            command.upgrade(config, "b7e2c4f9a1d6")
+
+            assert conn.exec_driver_sql(
+                "SELECT id, title FROM media_collections"
+            ).all() == [(2, "New")]
+            assert conn.exec_driver_sql("SELECT id FROM collection_groups").all() == [
+                (2,)
+            ]
+            assert conn.exec_driver_sql("SELECT * FROM collection_rules").all() == []
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "INSERT INTO collection_groups (name, separator) "
+                    "VALUES ('Sagas', 0)"
+                )
+
+            command.downgrade(config, "8e103f5cf701")
+            assert conn.exec_driver_sql(
+                "SELECT server_type FROM media_collections"
+            ).all() == [("plex",)]
+    finally:
+        engine.dispose()

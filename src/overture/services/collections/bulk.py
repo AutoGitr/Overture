@@ -126,5 +126,7 @@ class CollectionBulk:
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 row = await self._access.require(session, collection_id)
-            await self._editor.update_locked(row, bulk_options(row, body, row.rule))
+            await self._editor.update_locked(
+                row, bulk_options(row, body, row.rule), push=False
+            )
         await self._access.updated(collection_id)

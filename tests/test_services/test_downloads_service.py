@@ -346,7 +346,6 @@ async def test_start_cancels_jobs_left_by_a_previous_run(
         session.add(
             stored_collection(
                 id=1,
-                server_type=ServerType.PLEX,
                 server_item_id="collection-1",
                 media_type=MediaType.MOVIE,
             )
@@ -377,7 +376,6 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
         session.add(
             stored_collection(
                 id=1,
-                server_type=ServerType.PLEX,
                 server_item_id="collection-1",
                 media_type=MediaType.MOVIE,
             )

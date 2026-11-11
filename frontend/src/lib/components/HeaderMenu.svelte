@@ -16,9 +16,12 @@
   import { queryClient } from "../rest/queryClient";
   import { session } from "../auth/session.svelte";
   import { OPERATIONS } from "../stores/operations";
+  import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { uiState, type OperationsTab } from "../stores/uiState.svelte";
 
   let { onLogout }: { onLogout: () => void } = $props();
+  /** OvertureDB's popup is offered only while it is enabled in Settings. */
+  const catalog = new CatalogBrowsing();
   let menuOpen = $state(false);
   let menuWrapper: HTMLDivElement | null = null;
   let menuButton: HTMLButtonElement;
@@ -147,10 +150,12 @@
         <DatabaseBackup size={16} />
         <span class="menu-label">Backup</span>
       </button>
-      <button type="button" class="menu-item" onclick={() => openPopup("overturedb")}>
-        <img src="/brand/overturedb-tab.svg" width="16" height="16" alt="" />
-        <span class="menu-label">OvertureDB</span>
-      </button>
+      {#if catalog.enabled}
+        <button type="button" class="menu-item" onclick={() => openPopup("overturedb")}>
+          <img src="/brand/overturedb-tab.svg" width="16" height="16" alt="" />
+          <span class="menu-label">OvertureDB</span>
+        </button>
+      {/if}
       <button
         type="button"
         class="menu-item"

@@ -47,7 +47,7 @@ async def test_loading_an_unsaved_schedule_returns_defaults_and_writes_no_row(
     assert backup.payload.retention == BackupRetention()
     assert backup.enabled is True
     assert public.payload.last_status == "never_synced"
-    assert public.enabled is False
+    assert public.enabled is True
 
     rows = (await db_session.exec(select(TaskSchedule))).all()
     assert rows == []

@@ -4,7 +4,14 @@
     selected,
     ontoggle,
   }: {
-    options: readonly { value: T; label: string; count?: number }[];
+    /** A `disabled` option shows its state but cannot be toggled; `title` says why. */
+    options: readonly {
+      value: T;
+      label: string;
+      count?: number;
+      disabled?: boolean;
+      title?: string;
+    }[];
     selected: readonly T[];
     ontoggle: (value: T) => void;
   } = $props();
@@ -13,10 +20,11 @@
 
 <div class="list">
   {#each options as option (option.value)}
-    <label class="checkbox-group">
+    <label class="checkbox-group" title={option.title}>
       <input
         type="checkbox"
         checked={selectedSet.has(option.value)}
+        disabled={option.disabled}
         onchange={() => ontoggle(option.value)}
       />
       <span class="label">

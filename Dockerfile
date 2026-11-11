@@ -94,7 +94,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        ca-certificates tzdata && \
+        ca-certificates libfribidi0 tzdata && \
     groupadd --gid 1000 overture && \
     useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin overture && \
     install -d -o overture -g overture -m 0750 /config && \

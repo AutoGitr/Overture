@@ -22,7 +22,7 @@ lazy from ..db.models.media_collection import (
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.term import MediaItemTerm, Term
 lazy from ..db.session import CHUNK_SIZE
-lazy from ..domain import MediaType, ServerType, TermKind
+lazy from ..domain import MediaType, TermKind
 
 
 class CollectionItem(NamedTuple):
@@ -123,38 +123,25 @@ class CollectionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def groups(self, server_type: ServerType) -> list[CollectionGroup]:
-        """Return the server's groups."""
-        return list(
-            (
-                await self.session.exec(
-                    select(CollectionGroup).where(
-                        col(CollectionGroup.server_type) == server_type
-                    )
-                )
-            ).all()
-        )
+    async def groups(self) -> list[CollectionGroup]:
+        """Return every group."""
+        return list((await self.session.exec(select(CollectionGroup))).all())
 
-    async def group(
-        self, server_type: ServerType, name: str | None
-    ) -> CollectionGroup | None:
-        """Return the server's group named *name*; none for no name."""
+    async def group(self, name: str | None) -> CollectionGroup | None:
+        """Return the group named *name*; none for no name."""
         if not name:
             return None
         return (
             await self.session.exec(
-                select(CollectionGroup).where(
-                    col(CollectionGroup.server_type) == server_type,
-                    col(CollectionGroup.name) == name,
-                )
+                select(CollectionGroup).where(col(CollectionGroup.name) == name)
             )
         ).first()
 
-    async def ensure_group(self, server_type: ServerType, name: str) -> CollectionGroup:
-        """Return the server's group named *name*, added without defaults if new."""
-        group = await self.group(server_type, name)
+    async def ensure_group(self, name: str) -> CollectionGroup:
+        """Return the group named *name*, added without defaults if new."""
+        group = await self.group(name)
         if group is None:
-            group = CollectionGroup(server_type=server_type, name=name)
+            group = CollectionGroup(name=name)
             self.session.add(group)
             await self.session.flush()
         return group
@@ -179,9 +166,7 @@ class CollectionRepository:
             ).all()
         )
 
-    async def find_server(
-        self, server_type: ServerType, server_item_id: str
-    ) -> MediaCollection | None:
+    async def find_server(self, server_item_id: str) -> MediaCollection | None:
         """Return the collection one of whose server copies this is."""
         return (
             await self.session.exec(
@@ -190,10 +175,7 @@ class CollectionRepository:
                     CollectionLibrary,
                     col(CollectionLibrary.collection_id) == col(MediaCollection.id),
                 )
-                .where(
-                    col(MediaCollection.server_type) == server_type,
-                    col(CollectionLibrary.server_item_id) == server_item_id,
-                )
+                .where(col(CollectionLibrary.server_item_id) == server_item_id)
             )
         ).first()
 
@@ -396,6 +378,47 @@ class CollectionRepository:
         row.updated_at = timestamp
         self.session.add(row)
         await self.replace_members(collection_id, [i for i in kept if i is not None])
+
+    async def move_library(
+        self, library_id: str, media_type: MediaType, replacement: str
+    ) -> None:
+        """Make collections and sets that hold a library hold its replacement.
+
+        A collection already holding the replacement keeps that part alone.
+        """
+        parts = (
+            await self.session.exec(
+                select(CollectionLibrary).where(
+                    col(CollectionLibrary.library_id) == library_id,
+                    col(CollectionLibrary.media_type) == media_type,
+                )
+            )
+        ).all()
+        holding = set(
+            (
+                await self.session.exec(
+                    select(CollectionLibrary.collection_id).where(
+                        col(CollectionLibrary.library_id) == replacement,
+                        col(CollectionLibrary.media_type) == media_type,
+                    )
+                )
+            ).all()
+        )
+        for part in parts:
+            if part.collection_id in holding:
+                await self.session.delete(part)
+            else:
+                part.library_id = replacement
+                self.session.add(part)
+        for group in await self.groups():
+            ids: list[str] = (group.generator or {}).get("library_ids") or []
+            if library_id in ids:
+                moved = [replacement if each == library_id else each for each in ids]
+                group.generator = {
+                    **(group.generator or {}),
+                    "library_ids": list(dict.fromkeys(moved)),
+                }
+                self.session.add(group)
 
     async def delete_ids(self, collection_ids: Sequence[int]) -> None:
         """Delete collections; their members go with them."""

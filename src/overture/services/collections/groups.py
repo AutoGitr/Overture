@@ -1,6 +1,7 @@
 """Collection groups: their names, shared policy, set and members."""
 
 lazy from ...db.models.collection_group import CollectionGroup
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import (
     SMART_CUSTOM_ORDER,
     UNGROUPED_GROUP,
@@ -52,11 +53,9 @@ class CollectionGroups:
         self._separators = separators
 
     async def names(self) -> list[str]:
-        """Return the active server's groups, Ungrouped always among them."""
+        """Return the groups, Ungrouped always among them."""
         async with self._access.database.read_session() as session:
-            groups = await CollectionRepository(session).groups(
-                self._access.server_type
-            )
+            groups = await CollectionRepository(session).groups()
         return sorted({UNGROUPED_GROUP} | {group.name for group in groups})
 
     async def rename(self, name: str, replacement: str) -> StatusResponse:
@@ -66,16 +65,15 @@ class CollectionGroups:
             raise PublicServiceError(
                 422, "The Ungrouped group cannot be renamed or replaced"
             )
-        server = self._access.server_type
         async with (
             self._access.asset_locks.acquire(COLLECTIONS_LOCK),
             self._access.database.write_session() as session,
         ):
             repo = CollectionRepository(session)
-            group = await repo.group(server, name)
+            group = await repo.group(name)
             if group is None:
                 raise PublicServiceError(404, "Collection group not found")
-            if replacement != name and await repo.group(server, replacement):
+            if replacement != name and await repo.group(replacement):
                 raise PublicServiceError(
                     409, "A collection group with this name already exists"
                 )
@@ -102,12 +100,11 @@ class CollectionGroups:
         target = collection_group(body.group)
         if target.casefold() == name.casefold():
             raise PublicServiceError(422, "Move the collections to another group")
-        server = self._access.server_type
         result = BulkCollectionOperationResult()
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
             async with self._access.database.read_session() as session:
                 repo = CollectionRepository(session)
-                group = await repo.group(server, name)
+                group = await repo.group(name)
                 rows = await repo.group_members(group) if group else []
             if group is None:
                 raise PublicServiceError(404, "Collection group not found")
@@ -133,9 +130,9 @@ class CollectionGroups:
             if not result.errors:
                 async with self._access.database.write_session() as session:
                     repo = CollectionRepository(session)
-                    group = await repo.group(server, name)
+                    group = await repo.group(name)
                     if group is not None:
-                        moved_to = await repo.ensure_group(server, target)
+                        moved_to = await repo.ensure_group(target)
                         for row in await repo.group_members(group):
                             row.group = moved_to
                             row.generated_value = None
@@ -149,9 +146,7 @@ class CollectionGroups:
     async def sets(self) -> list[CollectionSetSummary]:
         """Return the groups that are sets, by name."""
         async with self._access.database.read_session() as session:
-            policies = await CollectionRepository(session).groups(
-                self._access.server_type
-            )
+            policies = await CollectionRepository(session).groups()
         return [
             CollectionSetSummary(
                 group=group.name,
@@ -165,9 +160,7 @@ class CollectionGroups:
     async def policy(self, name: str) -> CollectionGroupPolicy:
         """Return nullable group overrides, including for a new group."""
         async with self._access.database.read_session() as session:
-            row = await CollectionRepository(session).group(
-                self._access.server_type, name.strip()
-            )
+            row = await CollectionRepository(session).group(name.strip())
         if row is None:
             return CollectionGroupPolicy()
         return CollectionGroupPolicy(
@@ -189,10 +182,9 @@ class CollectionGroups:
                 is a set.
         """
         name = group_name(name)
-        server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
-            group = await repo.group(server, name)
+            group = await repo.group(name)
             held = {
                 media_type
                 for row in (await repo.group_members(group) if group else [])
@@ -220,7 +212,7 @@ class CollectionGroups:
             self._access.asset_locks.acquire(COLLECTIONS_LOCK),
             self._access.database.write_session() as session,
         ):
-            row = await CollectionRepository(session).group(server, name)
+            row = await CollectionRepository(session).group(name)
             if new_set and (current := generator(row)) is not None:
                 raise PublicServiceError(
                     409,
@@ -229,7 +221,7 @@ class CollectionGroups:
                     "edit that set in the group's settings, or name another group",
                 )
             if row is None:
-                row = CollectionGroup(server_type=server, name=name)
+                row = CollectionGroup(name=name)
             row.sqlmodel_update(body.model_dump(exclude={"generator"}))
             row.generator = (
                 body.generator.model_dump(mode="json")
@@ -251,9 +243,8 @@ class CollectionGroups:
         whole, because a value's collection spans its libraries.
         """
         name = name.strip()
-        server = self._access.server_type
         async with self._access.database.read_session() as session:
-            group = await CollectionRepository(session).group(server, name)
+            group = await CollectionRepository(session).group(name)
         result = CollectionGroupSyncResult()
         set_generator = generator(group)
         if (
@@ -268,23 +259,43 @@ class CollectionGroups:
             rows = [
                 row
                 for row in await CollectionRepository(session).list_listed()
-                if row.server_type is server
-                and row.group_name == name
+                if row.group_name == name
                 and (library_ids is None or set(library_ids) & set(row.library_ids))
             ]
-        for row in rows:
-            if (
-                row.rule is not None
-                and row.id not in result.created
-                and row.kind is not CollectionKind.SEPARATOR
-            ):
-                try:
-                    await self._rules.sync(row.id or 0)
-                    result.synced += 1
-                except Exception as exc:
-                    result.errors[row.title] = str(exc)
+        await self._sync_rows(rows, result)
         try:
             await self._separators.apply(name)
         except Exception as exc:
             result.errors[name] = str(exc)
         return result
+
+    async def sync_collections(
+        self, collection_ids: list[int]
+    ) -> CollectionGroupSyncResult:
+        """Sync these collections whole, whatever libraries a run covers."""
+        async with self._access.database.read_session() as session:
+            repo = CollectionRepository(session)
+            rows = [
+                row
+                for collection_id in collection_ids
+                if (row := await repo.get_listed(collection_id)) is not None
+            ]
+        result = CollectionGroupSyncResult()
+        await self._sync_rows(rows, result)
+        return result
+
+    async def _sync_rows(
+        self, rows: list[MediaCollection], result: CollectionGroupSyncResult
+    ) -> None:
+        """Make the server match each managed collection, counting what fails.
+
+        A separator follows its group, which keeps it apart.
+        """
+        for row in rows:
+            if row.rule is None or row.kind is CollectionKind.SEPARATOR:
+                continue
+            try:
+                await self._rules.sync(row.id or 0)
+                result.synced += 1
+            except Exception as exc:
+                result.errors[row.title] = str(exc)

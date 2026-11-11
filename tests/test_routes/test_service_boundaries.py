@@ -111,7 +111,6 @@ async def test_http_services_use_bound_database_events_and_queue(
             stored_collection(
                 server_item_id="collection-1",
                 media_type=MediaType.MOVIE,
-                server_type=ServerType.PLEX,
                 title="Collection",
                 last_synced_at=utc_now(),
             )

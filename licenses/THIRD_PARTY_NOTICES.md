@@ -22,6 +22,7 @@ CPython's license.
 | blake3 | Apache-2.0 or CC0-1.0 |
 | Authlib, httpx2, joserfc | BSD-3-Clause |
 | Pillow | MIT-CMU |
+| fontTools | MIT |
 | Uvicorn | BSD-3-Clause |
 | yt-dlp | Unlicense |
 | yt-dlp-ejs | Unlicense, MIT, and ISC components |
@@ -39,6 +40,11 @@ The web interface serves Inter v20 (Latin and Latin Extended, weights 400-700)
 from the [Fontsource](https://fontsource.org/fonts/inter) v5.3.0 distribution of
 [Inter](https://github.com/rsms/inter), under the SIL Open Font License 1.1 in
 `frontend/public/fonts/OFL.txt`.
+
+Art Overture draws from collection titles uses the
+[Noto](https://notofonts.github.io/) fonts Noto Sans, Noto Sans Arabic, Hebrew,
+Devanagari, Thai, Symbols and Symbols 2, Noto Sans CJK JP and Noto Emoji, under
+the SIL Open Font License 1.1 in `src/overture/utils/fonts/OFL.txt`.
 
 ## Service marks and logos
 

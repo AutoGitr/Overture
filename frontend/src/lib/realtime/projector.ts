@@ -11,7 +11,13 @@ import { downloadState } from "../stores/downloadState.svelte";
 import { mediaServerState } from "../stores/mediaServerState.svelte";
 import { invalidateSchedules } from "../rest/cache";
 import { storePublicDatasetStatus } from "./cache";
-import { clearJobSnapshot, JOB_PROJECTION_HANDLERS, jobKindOf, resetJobStates } from "./jobs";
+import {
+  announceJobEvent,
+  clearJobSnapshot,
+  JOB_PROJECTION_HANDLERS,
+  jobLifecycleOf,
+  resetJobStates,
+} from "./jobs";
 
 const PROJECTION_HANDLERS: WebSocketHandlerMap = {
   "realtime.snapshot": () => {},
@@ -47,8 +53,10 @@ const PROJECTION_HANDLERS: WebSocketHandlerMap = {
   "media-server.status": (data) => mediaServerState.store(data),
 };
 
+/** Apply a live message, and announce a run's ending once it is applied. */
 export function projectRealtimeMessage(message: ServerWebSocketDataMessage): void {
   routeServerWebSocketMessage(message, PROJECTION_HANDLERS);
+  announceJobEvent(message.event, message.data);
 }
 
 export function resetRealtimeProjection(): void {
@@ -66,7 +74,9 @@ export function resetRealtimeProjection(): void {
  */
 export function projectRealtimeSnapshot(snapshot: RealtimeSnapshot, continuing: boolean): void {
   if (continuing) {
-    resetJobStates(new Set((snapshot.jobs ?? []).map((job) => jobKindOf(job.event))));
+    resetJobStates(
+      new Set((snapshot.jobs ?? []).map((job) => jobLifecycleOf(job.event)?.kind ?? null)),
+    );
   } else {
     resetRealtimeProjection();
   }

@@ -13,7 +13,6 @@ lazy from ..dependencies import (
     CollectionEditorDep,
     CollectionGroupsDep,
     CollectionReaderDep,
-    CollectionRulesDep,
     CollectionSetsDep,
     CollectionThemesDep,
     require_media_server,
@@ -43,7 +42,6 @@ lazy from ..schemas.collections import (
     CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionGroupRename,
-    CollectionGroupSyncResult,
     CollectionKindRequest,
     CollectionMembersUpdate,
     CollectionMissing,
@@ -58,7 +56,6 @@ lazy from ..schemas.collections import (
     CollectionSetEntry,
     CollectionSetPreview,
     CollectionSetSummary,
-    CollectionSyncResponse,
     CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
@@ -84,10 +81,6 @@ lazy from .parameters import (
     ImageVersionQuery,
     MediaTypeQuery,
 )
-
-ToServerQuery = Annotated[
-    bool, Query(description="Also send the change to the media server")
-]
 
 router = APIRouter(
     prefix="/collections",
@@ -226,15 +219,6 @@ async def save_collection_group_policy(
 ) -> CollectionGroupPolicy:
     """Save defaults inherited by collections assigned to this group."""
     return await groups.save_policy(name, body, new_set=new_set)
-
-
-@router.post("/group-policy/sync")
-async def sync_collection_group(
-    groups: CollectionGroupsDep,
-    name: Annotated[str, Query(min_length=1, max_length=200)],
-) -> CollectionGroupSyncResult:
-    """Run the group's collection set, then sync its collections' criteria."""
-    return await groups.sync(name)
 
 
 @router.get("/tags/radarr")
@@ -381,10 +365,10 @@ async def proxy_collection_image(
 
 @router.post("")
 async def create_collection(
-    body: CollectionCreate, editor: CollectionEditorDep, to_server: ToServerQuery = True
+    body: CollectionCreate, editor: CollectionEditorDep
 ) -> CollectionDetail:
-    """Create a collection in a server library, or only in Overture."""
-    return await editor.create(body, sync=to_server)
+    """Save a new collection; a sync puts it on the media server."""
+    return await editor.create(body)
 
 
 @router.put("/{collection_id}")
@@ -392,10 +376,9 @@ async def update_collection(
     collection_id: CollectionIdPath,
     body: CollectionOptions,
     editor: CollectionEditorDep,
-    to_server: ToServerQuery = True,
 ) -> CollectionDetail:
-    """Update collection metadata and display options."""
-    return await editor.update(collection_id, body, sync=to_server)
+    """Save collection metadata and display options; a sync sends them."""
+    return await editor.update(collection_id, body)
 
 
 @router.delete("/{collection_id}")
@@ -413,10 +396,9 @@ async def set_collection_members(
     collection_id: CollectionIdPath,
     body: CollectionMembersUpdate,
     editor: CollectionEditorDep,
-    to_server: ToServerQuery = True,
 ) -> CollectionDetail:
-    """Replace collection membership and order."""
-    return await editor.set_members(collection_id, body, sync=to_server)
+    """Save collection membership and order; a sync sends them."""
+    return await editor.set_members(collection_id, body)
 
 
 @router.put("/{collection_id}/rule")
@@ -455,15 +437,6 @@ async def orphan_collection(
 ) -> CollectionDetail:
     """Stop managing a collection; the server keeps it, listed as unmanaged."""
     return await editor.orphan(collection_id)
-
-
-@router.post("/{collection_id}/sync")
-async def sync_collection(
-    collection_id: CollectionIdPath,
-    rules: CollectionRulesDep,
-) -> CollectionSyncResponse:
-    """Make the media server match the collection saved in Overture."""
-    return await rules.sync(collection_id)
 
 
 @router.delete("/{collection_id}/art")

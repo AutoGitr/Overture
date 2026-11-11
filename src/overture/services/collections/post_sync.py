@@ -256,7 +256,6 @@ class MemberTag:
         self, collection_id: int, tag: str
     ) -> list[CollectionItem]:
         """The stored members of the other managed collections with *tag*."""
-        server = self._access.server_type
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             defaults = await get_app_settings(session)
@@ -265,7 +264,6 @@ class MemberTag:
                 for row in await repo.list_listed()
                 if row.id != collection_id
                 and row.rule is not None
-                and row.server_type is server
                 and (template := resolve_policy(defaults, row.group, row.rule).arr_tag)
                 and _arr_tag(row, template) == tag
             ]

@@ -19,6 +19,7 @@ lazy from overture.jobs.gate import LibraryGate
 lazy from overture.media_servers.adapters import ServerItem, ServerSection
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.protocols import CollectionGroups
+lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.repositories.media_items import MediaItemRepository
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.schemas.sync import SyncScheduleConfig, SyncScheduleWrite
@@ -30,10 +31,11 @@ lazy from overture.services.schedule_store import (
     save_schedule,
 )
 lazy from overture.services.scheduler import SchedulerService
+lazy from overture.services.server_switch import MediaServerSwitch
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.services.sync.item_sync import ItemReconciler
 lazy from overture.services.sync.reconciler import LibraryReconciler
-lazy from overture.utils.time import parse_utc_datetime
+lazy from overture.utils.time import parse_utc_datetime, utc_now
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopDownloads,
@@ -226,10 +228,13 @@ async def test_unmatched_media_migrates_via_folder_path(
     database: Database,
 ) -> None:
     """Home videos or uncurated media without external GUIDs correlate by
-    folder_path across servers.
+    folder_path across servers, which tells where their library went.
     """
     folder = "/media/home_videos/trip_2023"
     async with isolated_session_factory() as session:
+        await LibraryRepository(session).record(
+            [ServerSection("plex-movies", "Movies", MediaType.MOVIE)], utc_now()
+        )
         session.add(
             MediaItem(
                 id=50,
@@ -237,6 +242,7 @@ async def test_unmatched_media_migrates_via_folder_path(
                 title="Summer Vacation",
                 folder_path=folder,
                 server_item_id="plex-video-42",
+                library_id="plex-movies",
             )
         )
         await session.commit()
@@ -261,6 +267,8 @@ async def test_unmatched_media_migrates_via_folder_path(
     stats = await sync_full(reconciler, new_server_items)
     assert stats.tally.errors == 0
     assert stats.created_item_ids == []
+    # Where its titles went is where the old server's library went.
+    assert stats.library_moves == {("plex-movies", MediaType.MOVIE, "lib-1"): 1}
 
     async with isolated_session_factory() as session:
         item = await session.get(MediaItem, 50)
@@ -340,7 +348,7 @@ async def test_media_server_switch_resets_schedule_filters(
     app_config: Settings,
     database: Database,
 ) -> None:
-    """When MEDIA_SERVER or URL changes, SyncEngine resets library_ids and
+    """When MEDIA_SERVER or URL changes, the switch resets library_ids and
     incremental checkpoints on every saved sync schedule.
     """
 
@@ -394,6 +402,7 @@ async def test_media_server_switch_resets_schedule_filters(
     app_config.MEDIA_SERVER = ServerType.JELLYFIN
     app_config.MEDIA_SERVER_URL = "http://jellyfin.local:8096"
 
+    await MediaServerSwitch(database=database, app_config=app_config).reconcile()
     engine = make_engine()
     await engine.start()
 
@@ -418,6 +427,7 @@ async def test_media_server_switch_resets_schedule_filters(
             session.add(record)
         await session.commit()
     app_config.MEDIA_SERVER_URL += "/"
+    await MediaServerSwitch(database=database, app_config=app_config).reconcile()
     restarted = make_engine()
     await restarted.start()
     try:

@@ -47,6 +47,18 @@ class SavedScheduleRepository:
             existing.casefold() == folded for existing in await self.session.exec(stmt)
         )
 
+    async def move_library(self, library_id: str, replacement: str) -> None:
+        """Make every schedule that names a library name its replacement instead."""
+        for record in (await self.session.exec(select(SavedSchedule))).all():
+            ids: list[str] = record.payload.get("library_ids") or []
+            if library_id in ids:
+                moved = [replacement if each == library_id else each for each in ids]
+                record.payload = {
+                    **record.payload,
+                    "library_ids": list(dict.fromkeys(moved)),
+                }
+                self.session.add(record)
+
     def add(self, record: SavedSchedule) -> None:
         """Stage a schedule for persistence."""
         self.session.add(record)

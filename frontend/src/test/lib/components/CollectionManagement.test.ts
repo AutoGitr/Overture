@@ -12,6 +12,7 @@ import {
   routedCollectionView,
 } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
+import { syncSelection } from "../../../lib/stores/syncSelection.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
@@ -110,8 +111,7 @@ describe("collection management", () => {
       ).not.toBeInTheDocument(),
     );
     const put = calls.find((call) => call.init.method === "PUT");
-    // Member edits stay in Overture until the collection is synced.
-    expect(put?.url).toContain("to_server=false");
+    expect(put?.url).toBe("/api/collections/12/members");
     expect(put?.init.body).toBe(JSON.stringify({ member_ids: [2], order_type: "release.asc" }));
   });
 
@@ -138,14 +138,13 @@ describe("collection management", () => {
     expect(await screen.findByRole("heading", { name: "New saga" })).toBeInTheDocument();
   });
 
-  it("saves rule overrides and runs a saved rule", async () => {
+  it("saves rule overrides, then syncs only from Operations", async () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, rule },
       "/api/collections/12/rule": rule,
-      "/api/collections/12/sync": { added: 1, removed: 0, skipped: false, deleted: false },
     });
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
@@ -170,15 +169,13 @@ describe("collection management", () => {
     );
     expect(body.sync_mode).toBe("append");
     expect(body.minimum_items).toBeNull();
-    expect(calls.some((call) => call.url.includes("/sync") && call.init.method === "POST")).toBe(
-      false,
-    );
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
-    await waitFor(() =>
-      expect(calls.some((call) => call.url.includes("/sync") && call.init.method === "POST")).toBe(
-        true,
-      ),
-    );
+    await waitFor(() => expect(uiState.openPopup).toBe("operations"));
+    expect(uiState.operationsTab).toBe("sync");
+    expect(syncSelection.collectionIds).toEqual([12]);
+    expect(syncSelection.libraries).toEqual([]);
+    expect(calls.some((call) => call.url.includes("sync"))).toBe(false);
+    uiState.closePopup();
   });
 
   it("saves an existing or custom group with the complete Configure draft", async () => {
@@ -398,7 +395,7 @@ describe("collection management", () => {
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() => expect(route.pathname).toBe("/collections/12-saga"));
     expect(
       JSON.parse(
@@ -563,14 +560,14 @@ describe("collection management", () => {
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
-    const submit = screen.getByRole("button", { name: "Save and Create" });
+    const submit = screen.getByRole("button", { name: "Save and Sync" });
     expect(submit).toBeDisabled();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "  Saga  " } });
     expect(submit).toBeEnabled();
     await onlyLibrary(screen, "Other");
-    expect(screen.getByRole("button", { name: "Save and Create" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save and Sync" })).toBeEnabled();
     expect(screen.getByLabelText("Criteria condition 1 TMDB IDs")).toHaveValue("11");
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() =>
       expect(
         calls.some(
@@ -624,7 +621,7 @@ describe("collection management", () => {
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Create" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Create refused");
     await fireEvent.click(await screen.findByRole("button", { name: "Retry collection creation" }));
     await waitFor(() => expect(attempts).toBe(2));

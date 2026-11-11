@@ -26,12 +26,17 @@ export interface CollectionChoice {
   groups: string[];
 }
 
-/** Toggle every collection (`null`) or one group; choosing one clears the other. */
-export function toggleCollectionChoice(
+/**
+ * Toggle one of the *available* groups. Every collection includes every group,
+ * so unticking one of them chooses the rest instead.
+ */
+export function toggleCollectionGroup(
   choice: CollectionChoice,
-  group: string | null,
+  group: string,
+  available: readonly string[],
 ): CollectionChoice {
-  return group === null
-    ? { all: !choice.all, groups: [] }
-    : { all: false, groups: toggleSelectedValue(choice.groups, group) };
+  return {
+    all: false,
+    groups: toggleSelectedValue(choice.all ? [...available] : choice.groups, group),
+  };
 }

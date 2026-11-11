@@ -439,6 +439,17 @@ class ArtDrawing:
     title_only: bool = False
 
 
+class CollectionPosterStyle(StrEnum):
+    """Which poster OvertureDB gives a TMDB collection.
+
+    ``consistent`` takes the poster in the layout every consistent collection
+    poster shares; a collection without one has no OvertureDB poster.
+    """
+
+    INDIVIDUAL = "individual"
+    CONSISTENT = "consistent"
+
+
 class AutoArt(StrEnum):
     """What a sync does for a collection's art slot that has none chosen.
 

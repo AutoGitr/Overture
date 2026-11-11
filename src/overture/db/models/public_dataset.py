@@ -92,6 +92,8 @@ class PublicDatasetCollection(SQLModel, table=True):
     title: str
     poster_url: str | None = None
     background_url: str | None = None
+    #: The poster in the layout every consistent collection poster shares.
+    consistent_poster_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
     #: OvertureDB says the collection has no theme music.

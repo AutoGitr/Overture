@@ -12,9 +12,11 @@ lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.public_dataset import PublicDatasetCollection, PublicDatasetItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
-lazy from ...domain import ArtType, ThemeBulkSource
+lazy from ...domain import ArtType, CollectionPosterStyle, ThemeBulkSource
 lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ..collections.policy import resolve_policy
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from .entries import catalog_collection_entry, shown_entry
 
 
 def catalog_art_url(
@@ -30,6 +32,17 @@ def catalog_art_url(
         return public_item.background_url
     if art_type is ArtType.SEASON_POSTER and season_num is not None:
         return season_posters.get(season_num)
+    return None
+
+
+def catalog_collection_art_url(
+    entry: PublicDatasetCollection, art_type: ArtType, posters: CollectionPosterStyle
+) -> str | None:
+    """Return a collection entry's URL for an art slot, its poster as *posters* says."""
+    if art_type is ArtType.POSTER:
+        return shown_entry(catalog_collection_entry(entry), posters)["poster_url"]
+    if art_type is ArtType.BACKGROUND:
+        return entry.background_url
     return None
 
 
@@ -85,6 +98,10 @@ class PublicDatasetIndex:
     )
     #: Whether the user lets OvertureDB's No theme flag count as a theme.
     trust_no_theme: bool = True
+    #: Which of its OvertureDB posters each collection takes, by collection ID.
+    collection_posters: dict[int, CollectionPosterStyle] = field(
+        default_factory=dict[int, CollectionPosterStyle]
+    )
 
     @classmethod
     async def build_collections(
@@ -107,11 +124,17 @@ class PublicDatasetIndex:
                 if row.tmdb_collection_id is not None
             }
         )
+        settings = await get_app_settings(session)
         return cls(
             {},
             {},
             collections=entries,
-            trust_no_theme=(await get_app_settings(session)).overturedb_no_theme,
+            trust_no_theme=settings.overturedb_no_theme,
+            collection_posters={
+                row.id: resolve_policy(settings, row.group, row.rule).overturedb_posters
+                for row in collections
+                if row.id is not None
+            },
         )
 
     @classmethod
@@ -181,11 +204,9 @@ class PublicDatasetIndex:
         url = (
             None
             if entry is None
-            else entry.poster_url
-            if art_type is ArtType.POSTER
-            else entry.background_url
-            if art_type is ArtType.BACKGROUND
-            else None
+            else catalog_collection_art_url(
+                entry, art_type, self.collection_posters[row.id or 0]
+            )
         )
         if url:
             return CatalogPick(url, "OvertureDB artwork")

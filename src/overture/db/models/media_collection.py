@@ -20,7 +20,6 @@ lazy from ...domain import (
     CollectionMode,
     CollectionOrder,
     MediaType,
-    ServerType,
     ThemeBulkSource,
 )
 lazy from ..columns import enum_type, typed_columns
@@ -39,8 +38,6 @@ class MediaCollection(ThemeColumns, table=True):
     __tablename__: ClassVar[Any] = "media_collections"
 
     id: int | None = Field(default=None, primary_key=True)
-    # Which media server supplied this collection
-    server_type: ServerType = Field(sa_type=enum_type(ServerType))
 
     kind: CollectionKind = Field(
         default=CollectionKind.REGULAR, sa_type=enum_type(CollectionKind)

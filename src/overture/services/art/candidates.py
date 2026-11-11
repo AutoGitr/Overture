@@ -17,7 +17,7 @@ lazy from ...config import Settings
 lazy from ...dataset_contract.contract import art_source
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.settings import AppSettings
+lazy from ...db.models.settings import AppSettings, get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import (
     ArtSource,
@@ -32,6 +32,8 @@ lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
 lazy from ...utils.image import is_valid_aspect_ratio, is_valid_image_format
+lazy from ..collections.policy import resolve_policy
+lazy from ..public_dataset.index import catalog_collection_art_url
 lazy from ..public_dataset.lookup import build_candidate, get_art_candidates
 lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
 lazy from ..server_identity import resolve_server_item_id
@@ -298,14 +300,9 @@ class ArtCandidates:
                 {collection.tmdb_collection_id}
             )
             entry = entries.get(collection.tmdb_collection_id)
-        url = (
-            (
-                entry.background_url
-                if art_type is ArtType.BACKGROUND
-                else entry.poster_url
-            )
-            if entry
-            else None
-        )
+            posters = resolve_policy(
+                await get_app_settings(session), collection.group, collection.rule
+            ).overturedb_posters
+        url = catalog_collection_art_url(entry, art_type, posters) if entry else None
         candidate = build_candidate(url, art_type)
         return [candidate] if candidate else []

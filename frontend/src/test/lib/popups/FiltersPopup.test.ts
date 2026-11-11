@@ -548,6 +548,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "Size",
       "Management",
       "Kind",
+      "Made as",
       "Holds",
     ]);
     expect(

@@ -12,7 +12,7 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerType, ThemeBulkSource
+lazy from overture.domain import ArtType, MediaType, ThemeBulkSource
 lazy from overture.services.public_dataset.export import (
     REPORT_NAME,
     export_archive,
@@ -184,7 +184,6 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
     collection = stored_collection(
         server_item_id="saga",
         media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
         title="Saga",
         tmdb_collection_id=10,
         youtube_id="themerrdb01",
@@ -216,3 +215,35 @@ def test_export_names_art_from_a_host_overturedb_refuses() -> None:
         "https://m.media-amazon.com/images/M/a.jpg",
         "https://image.tmdb.org/t/p/original/b.jpg",
     ) == [warning]
+
+
+@pytest.mark.parametrize(("seconds", "kept"), [(19, False), (20, True), (601, False)])
+async def test_export_leaves_out_a_theme_overturedb_refuses_for_its_length(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    database: Database,
+    seconds: int,
+    kept: bool,
+) -> None:
+    item = MediaItem(
+        media_type=MediaType.MOVIE,
+        title="Theme",
+        tmdb_id=10,
+        youtube_id="dQw4w9WgXcQ",
+        youtube_duration=seconds,
+    )
+    select_art(
+        item, ArtType.POSTER, PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg")
+    )
+    db_session.add(item)
+    await db_session.commit()
+
+    with ZipFile(await export_selections(database, tmp_path)) as archive:
+        entry = json.loads(archive.read("data/movies/tmdb-10.json"))
+        report = (
+            archive.read(REPORT_NAME).decode()
+            if REPORT_NAME in archive.namelist()
+            else ""
+        )
+    assert (entry["youtube_id_overturedb"] == "dQw4w9WgXcQ") is kept
+    assert (f"Theme: Theme: {seconds} seconds long" in report) is not kept

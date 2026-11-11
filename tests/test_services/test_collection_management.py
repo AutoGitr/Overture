@@ -1,5 +1,6 @@
 """Collection lifecycle and rule runs against the real database."""
 
+lazy from collections import Counter
 lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass, field
 lazy from typing import ClassVar, override
@@ -7,6 +8,7 @@ lazy from unittest.mock import AsyncMock
 
 lazy import pytest
 lazy from pydantic import SecretStr, ValidationError
+lazy from sqlmodel import select
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import (
@@ -19,6 +21,7 @@ lazy from overture.db.art_slots import (
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.public_dataset import PublicDatasetCollection
+lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -33,6 +36,7 @@ lazy from overture.domain import (
     FilterField,
     FilterOperator,
     MediaType,
+    ScheduleKind,
     ServerType,
     SetDimension,
     SourceType,
@@ -106,13 +110,21 @@ lazy from overture.services.collections.recommend import recommend_kind
 lazy from overture.services.collections.rules import member_criteria
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
+lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.server_switch import MediaServerSwitch
+lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_public_dataset
-lazy from tests.collection_helpers import library_rule
-lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
+lazy from tests.collection_helpers import library_rule, stored_collection
+lazy from tests.runtime_helpers import (
+    NoopProviderRegistry,
+    make_local_assets,
+    make_remover,
+    unused,
+)
 lazy from tests.term_helpers import assign, holding
 lazy from tests.test_services.test_collections_service import (
     FakeDownloads,
@@ -625,6 +637,20 @@ async def members(manager: Manager, detail: CollectionDetail) -> list[MediaItem]
         ]
 
 
+async def created(
+    service: CollectionsService, body: CollectionCreate
+) -> CollectionDetail:
+    """Save a collection, then sync it, as a sync from Operations sends it."""
+    detail = await service.editor.create(body)
+    return await synced(service, detail.id)
+
+
+async def synced(service: CollectionsService, collection_id: int) -> CollectionDetail:
+    """Sync a saved collection and read it back."""
+    await service.rules.sync(collection_id)
+    return await service.reader.get(collection_id)
+
+
 async def create_unmanaged(manager: Manager, database: Database) -> int:
     """A collection as a server sync imports one: listed, with no rule."""
     identity = await create(manager)
@@ -635,11 +661,12 @@ async def create_unmanaged(manager: Manager, database: Database) -> int:
 
 
 async def create(manager: Manager, ids: list[int] | None = None) -> int:
-    result = await manager.service.editor.create(
+    result = await created(
+        manager.service,
         CollectionCreate(
             title="Saga",
             rule=chosen(manager, ids),
-        )
+        ),
     )
     return result.id
 
@@ -809,8 +836,8 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
     decades = CollectionGenerator(
         dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
     )
-    taken = await manager.service.editor.create(
-        CollectionCreate(title="1990s", rule=chosen(manager, None))
+    taken = await created(
+        manager.service, CollectionCreate(title="1990s", rule=chosen(manager, None))
     )
 
     preview = await manager.service.sets.preview(
@@ -956,11 +983,12 @@ async def test_sets_create_update_and_withhold_their_collections(
 
 
 async def test_sets_skip_titles_other_collections_hold(manager: Manager) -> None:
-    await manager.service.editor.create(
+    await created(
+        manager.service,
         CollectionCreate(
             title="Action",
             rule=chosen(manager),
-        )
+        ),
     )
     await manager.service.groups.save_policy(
         "Genres",
@@ -1045,7 +1073,10 @@ async def test_create_edit_order_and_delete_preserve_media(
         ),
     )
     assert detail.member_ids == list(reversed(manager.ids))
-    assert manager.provider.members["1"] == ["m2", "m1", "m0"]
+    assert (detail.unsynced, manager.provider.members["1"]) == (
+        True,
+        ["m0", "m1", "m2"],
+    )
     await manager.service.editor.save_rule(
         identity,
         library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
@@ -1087,13 +1118,14 @@ async def test_invalid_members_never_reach_the_server(
 
 async def test_create_validates_library_and_duplicate_titles(manager: Manager) -> None:
     with pytest.raises(PublicServiceError, match="server's libraries"):
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title="Saga",
                 rule=library_rule(
                     criteria=sources(TmdbItemSource(tmdb_ids=[11])), library_id="other"
                 ),
-            )
+            ),
         )
     await create(manager)
     with pytest.raises(PublicServiceError, match="already exists"):
@@ -1101,20 +1133,19 @@ async def test_create_validates_library_and_duplicate_titles(manager: Manager) -
     assert manager.provider.created == ["Saga"]
 
 
-async def test_failed_server_membership_keeps_committed_members(
-    manager: Manager,
-) -> None:
+async def test_a_failed_sync_keeps_the_saved_members(manager: Manager) -> None:
     identity = await create(manager)
+    await manager.service.editor.set_members(
+        identity,
+        CollectionMembersUpdate(
+            member_ids=[manager.ids[0]], order_type=CollectionOrder.RELEASE_ASC
+        ),
+    )
     manager.provider.fail = True
     with pytest.raises(MediaServerError):
-        await manager.service.editor.set_members(
-            identity,
-            CollectionMembersUpdate(
-                member_ids=[manager.ids[0]], order_type=CollectionOrder.RELEASE_ASC
-            ),
-        )
+        await manager.service.rules.sync(identity)
     detail = await manager.service.reader.get(identity)
-    assert len(detail.member_ids) == 3
+    assert (detail.member_ids, detail.unsynced) == ([manager.ids[0]], True)
 
 
 @pytest.mark.parametrize(
@@ -1387,11 +1418,12 @@ async def test_explicit_identity_survives_membership_changes(manager: Manager) -
 async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Dynamic",
             rule=library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
-        )
+        ),
     )
     assert detail.tmdb_collection_id == 10
     assert [member.tmdb_id for member in await members(manager, detail)] == [11, 12]
@@ -1427,6 +1459,7 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
         identity,
         CollectionOptions(title="Saga", collection_group="Weekend"),
     )
+    await synced(manager.service, identity)
     assert manager.provider.options["1"][1] is CollectionMode.HIDE
     assert manager.provider.sort_titles["1"] == "+Weekend - Saga"
     await manager.service.editor.save_rule(
@@ -1487,6 +1520,8 @@ async def test_bulk_operations_commit_successes_and_report_invalid_targets(
         )
     )
     assert result.collection_ids == [identity]
+    assert (await manager.service.reader.get(identity)).unsynced
+    await synced(manager.service, identity)
     assert manager.provider.sort_titles["1"] == "+Weekend: Saga"
     result = await manager.service.bulk.run(
         BulkCollectionOperation(
@@ -1524,7 +1559,8 @@ async def test_composable_builders_and_person_biography_summary(
         "Directors",
         CollectionGroupPolicy(summary_format="Famous director. {source_summary}"),
     )
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Director Spotlight",
             collection_group="Directors",
@@ -1538,7 +1574,7 @@ async def test_composable_builders_and_person_biography_summary(
                     TmdbItemSource(tmdb_ids=[12]),
                 )
             ),
-        )
+        ),
     )
     assert [m.tmdb_id for m in await members(manager, detail)] == [11, 13, 12]
     assert detail.summary == "Famous director. Person biography"
@@ -1551,7 +1587,8 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
     requested = SourceCondition(source=MdblistSource(identifiers=["user/requests"]))
     label = source_label(requested)
     manager.provider.choices = {"label": [("5", label)]}
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Requests",
             collection_filtering=CollectionFiltering.USER,
@@ -1574,7 +1611,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
                     ],
                 ),
             ),
-        )
+        ),
     )
     assert detail.kind is CollectionKind.SMART
     assert manager.provider.synced_labels == [(label, ["m0", "m1"], [])]
@@ -1634,7 +1671,8 @@ async def test_smart_collections_test_fields_plex_lacks_through_labels(
     label = condition_label(japanese)
     manager.provider.choices = {"label": [("7", label)]}
 
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Japanese",
             rule=library_rule(
@@ -1642,7 +1680,7 @@ async def test_smart_collections_test_fields_plex_lacks_through_labels(
                 order_type=CollectionOrder.TITLE_ASC,
                 criteria=FilterGroup(conditions=[japanese]),
             ),
-        )
+        ),
     )
 
     assert detail.kind is CollectionKind.SMART
@@ -1691,7 +1729,8 @@ async def test_regular_and_smart_kinds_replace_the_server_collection(
 async def test_seasonal_inactive_withholds_and_deletes_server_collection(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Holiday",
             active_start_mmdd="01-01",
@@ -1700,13 +1739,14 @@ async def test_seasonal_inactive_withholds_and_deletes_server_collection(
                 criteria=sources(TmdbItemSource(tmdb_ids=[11, 12])),
                 delete_when_inactive=True,
             ),
-        )
+        ),
     )
     assert detail.withheld
     assert manager.provider.created == []
 
     # Active collection transitions to inactive and deletes server copy
-    active = await manager.service.editor.create(
+    active = await created(
+        manager.service,
         CollectionCreate(
             title="Active Seasonal",
             active_start_mmdd="01-01",
@@ -1715,7 +1755,7 @@ async def test_seasonal_inactive_withholds_and_deletes_server_collection(
                 criteria=sources(TmdbItemSource(tmdb_ids=[11, 12])),
                 delete_when_inactive=True,
             ),
-        )
+        ),
     )
     assert not active.withheld
     assert active.title in manager.provider.created
@@ -1761,11 +1801,12 @@ async def test_non_plex_option_validation(
 ) -> None:
     jellyfin_service = make_jellyfin_service(manager, app_config, database)
     identity = (
-        await jellyfin_service.editor.create(
+        await created(
+            jellyfin_service,
             CollectionCreate(
                 title="Box set",
                 rule=chosen(manager),
-            )
+            ),
         )
     ).id
 
@@ -1819,13 +1860,14 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
 ) -> None:
     movies = await create(manager)
     shows = (
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title="Anime",
                 rule=library_rule(
                     criteria=sources(TmdbItemSource(tmdb_ids=[11])), library_id="shows"
                 ),
-            )
+            ),
         )
     ).id
     for collection, library_id, source, message in (
@@ -1854,11 +1896,12 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
 
     jellyfin = make_jellyfin_service(manager, app_config, database)
     box_set = (
-        await jellyfin.editor.create(
+        await created(
+            jellyfin,
             CollectionCreate(
                 title="Box set",
                 rule=chosen(manager),
-            )
+            ),
         )
     ).id
     genre = where(FilterField.GENRE, FilterOperator.IS, "Action")
@@ -2028,20 +2071,22 @@ async def test_formatted_options(manager: Manager) -> None:
 
 async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
     # RadarrTagSource sync
-    radarr_col = await manager.service.editor.create(
+    radarr_col = await created(
+        manager.service,
         CollectionCreate(
             title="4K Movies",
             rule=library_rule(
                 criteria=sources(RadarrTagSource(tags=["4k"])),
             ),
-        )
+        ),
     )
     assert radarr_col.child_count == 2
     res = await manager.service.rules.sync(radarr_col.id)
     assert res.added == 0
 
     # SonarrTagSource sync
-    sonarr_col = await manager.service.editor.create(
+    sonarr_col = await created(
+        manager.service,
         CollectionCreate(
             title="Anime Shows",
             rule=library_rule(
@@ -2049,7 +2094,7 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
                 library_id="shows",
                 minimum_items=1,
             ),
-        )
+        ),
     )
     assert sonarr_col.child_count == 1
     show_res = await manager.service.rules.sync(sonarr_col.id)
@@ -2057,29 +2102,30 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
 
 
 async def test_create_collection_custom_order(manager: Manager) -> None:
-    col = await manager.service.editor.create(
+    col = await created(
+        manager.service,
         CollectionCreate(
             title="Custom Order",
             order_type=CollectionOrder.CUSTOM,
             rule=chosen(manager),
-        )
+        ),
     )
     assert col.order_type is CollectionOrder.CUSTOM
 
 
-async def test_create_removes_the_server_copy_when_setup_fails(
+async def test_a_sync_that_fails_midway_keeps_its_copy_for_the_next(
     manager: Manager,
 ) -> None:
+    saved = await manager.service.editor.create(
+        CollectionCreate(title="Half made", rule=chosen(manager))
+    )
     manager.provider.rejected_updates.add("1")
     with pytest.raises(ValueError, match="refused"):
-        await manager.service.editor.create(
-            CollectionCreate(
-                title="Half made",
-                rule=chosen(manager),
-            )
-        )
-    assert manager.provider.deleted == ["1"]
-    assert await manager.service.reader.listed() == []
+        await manager.service.rules.sync(saved.id)
+    manager.provider.rejected_updates.clear()
+    detail = await synced(manager.service, saved.id)
+    assert (manager.provider.created, manager.provider.deleted) == (["Half made"], [])
+    assert (detail.server_item_id, detail.unsynced) == ("1", False)
 
 
 def test_source_labels_name_stable_identifiers() -> None:
@@ -2102,7 +2148,8 @@ async def test_seasonal_smart_collection_sync_creates_server_copy(
     manager: Manager,
 ) -> None:
     # Inactive smart collection starts withheld with no server_item_id
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Seasonal Smart",
             active_start_mmdd="01-01",
@@ -2113,7 +2160,7 @@ async def test_seasonal_smart_collection_sync_creates_server_copy(
                 smart=True,
                 order_type=CollectionOrder.RELEASE_DESC,
             ),
-        )
+        ),
     )
     assert detail.withheld
 
@@ -2141,21 +2188,23 @@ async def test_inherited_format_overflow_raises_422(manager: Manager) -> None:
         ),
     )
     with pytest.raises(PublicServiceError, match="at most 200 characters"):
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title="T" * 150,
                 collection_group="LongGroup",
                 rule=chosen(manager),
-            )
+            ),
         )
     with pytest.raises(PublicServiceError, match="at most 10000 characters"):
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title="Normal",
                 summary="S" * 9960,
                 collection_group="LongGroup",
                 rule=chosen(manager),
-            )
+            ),
         )
 
 
@@ -2203,14 +2252,15 @@ async def test_group_policy_validation_errors(
 async def test_franchise_sets_skip_franchises_other_collections_hold(
     manager: Manager,
 ) -> None:
-    await manager.service.editor.create(
+    await created(
+        manager.service,
         CollectionCreate(
             title="External Franchise",
             collection_group="OtherGroup",
             rule=library_rule(
                 criteria=sources(TmdbCollectionSource(collection_id=10)),
             ),
-        )
+        ),
     )
     generator = CollectionGenerator(
         dimension=SetDimension.FRANCHISE, library_ids=["movies"]
@@ -2229,23 +2279,25 @@ async def test_franchise_sets_skip_franchises_other_collections_hold(
 
 
 async def test_get_collection_theme_status(manager: Manager) -> None:
-    col = await manager.service.editor.create(
+    col = await created(
+        manager.service,
         CollectionCreate(
             title="Theme Target",
             rule=chosen(manager),
-        )
+        ),
     )
     theme = await manager.service.themes.status(col.id)
     assert theme.has_theme is False
 
 
 async def test_sync_group_records_rule_errors(manager: Manager) -> None:
-    await manager.service.editor.create(
+    await created(
+        manager.service,
         CollectionCreate(
             title="Will Fail",
             collection_group="ErrorGroup",
             rule=library_rule(criteria=sources(MdblistSource(identifiers=["1234"]))),
-        )
+        ),
     )
     manager.lists.failure = True
     res = await manager.service.groups.sync("ErrorGroup")
@@ -2255,11 +2307,12 @@ async def test_sync_group_records_rule_errors(manager: Manager) -> None:
 async def test_a_collection_below_its_minimum_waits_in_overture_for_the_server(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Empty",
             rule=NOTHING_MATCHES,
-        )
+        ),
     )
     assert detail.withheld
     assert manager.provider.created == []
@@ -2275,7 +2328,8 @@ async def test_a_collection_below_its_minimum_waits_in_overture_for_the_server(
 
 
 async def test_inactive_rule_without_delete_skips_sync(manager: Manager) -> None:
-    col = await manager.service.editor.create(
+    col = await created(
+        manager.service,
         CollectionCreate(
             title="Inactive Seasonal",
             active_start_mmdd="01-01",
@@ -2284,18 +2338,19 @@ async def test_inactive_rule_without_delete_skips_sync(manager: Manager) -> None
                 criteria=sources(TmdbItemSource(tmdb_ids=[11])),
                 delete_when_inactive=False,
             ),
-        )
+        ),
     )
     res = await manager.service.rules.sync(col.id)
     assert res.skipped is True
 
 
 async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
-    col = await manager.service.editor.create(
+    col = await created(
+        manager.service,
         CollectionCreate(
             title="Bulk Config",
             rule=chosen(manager),
-        )
+        ),
     )
     # set_order
     res_order = await manager.service.bulk.run(
@@ -2330,12 +2385,13 @@ async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
 async def test_tmdb_lists_merge_in_order_and_failures_keep_members(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Lists",
             order_type=CollectionOrder.CUSTOM,
             rule=library_rule(criteria=sources(TmdbListSource(list_ids=[1, 2]))),
-        )
+        ),
     )
     assert [item.tmdb_id for item in await members(manager, detail)] == [13, 11, 12]
     manager.tmdb.error = ValueError("List temporarily unavailable")
@@ -2356,14 +2412,16 @@ async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
             visible_home=True,
         ),
     )
-    inherited = await manager.service.editor.create(
+    inherited = await created(
+        manager.service,
         CollectionCreate(
             title="Inherited",
             collection_group="Charts",
             rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
-        )
+        ),
     )
-    explicit = await manager.service.editor.create(
+    explicit = await created(
+        manager.service,
         CollectionCreate(
             title="Override",
             collection_group="Charts",
@@ -2372,7 +2430,7 @@ async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[12])), visible_home=False
             ),
-        )
+        ),
     )
     await manager.service.groups.save_policy(
         "Charts",
@@ -2421,12 +2479,13 @@ async def test_summary_source_is_not_replaced_by_its_rendered_template(
 async def test_rule_sync_resolves_changed_group_defaults_without_freezing_them(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Inherited",
             collection_group="Shared",
             rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
-        )
+        ),
     )
     assert detail.visible_home is False
     await manager.service.groups.save_policy(
@@ -2450,13 +2509,14 @@ async def test_rule_sync_resolves_changed_group_defaults_without_freezing_them(
 async def test_group_sync_commits_successful_collections_and_reports_failures(
     manager: Manager,
 ) -> None:
-    created = [
-        await manager.service.editor.create(
+    collections = [
+        await created(
+            manager.service,
             CollectionCreate(
                 title=title,
                 collection_group="Shared",
                 rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
-            )
+            ),
         )
         for title in ("First", "Second")
     ]
@@ -2467,8 +2527,8 @@ async def test_group_sync_commits_successful_collections_and_reports_failures(
     result = await manager.service.groups.sync("Shared")
     assert result.synced == 1
     assert result.errors == {"First": "Server refused this update"}
-    first = await manager.service.reader.get(created[0].id)
-    second = await manager.service.reader.get(created[1].id)
+    first = await manager.service.reader.get(collections[0].id)
+    second = await manager.service.reader.get(collections[1].id)
     assert first.sort_title is None
     assert second.sort_title == "01_Second"
 
@@ -2476,7 +2536,8 @@ async def test_group_sync_commits_successful_collections_and_reports_failures(
 async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="First",
             summary="Original",
@@ -2484,7 +2545,7 @@ async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
             active_start_mmdd="01-01",
             active_end_mmdd="12-31",
             rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
-        )
+        ),
     )
     for operation in (
         BulkCollectionOperation(
@@ -2512,69 +2573,62 @@ async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
     assert refreshed.rule.order_type is None
 
 
-async def test_saved_only_collection_stays_off_the_server_until_synced(
+async def test_a_saved_collection_stays_off_the_server_until_synced(
     manager: Manager,
 ) -> None:
     saved = await manager.service.editor.create(
         CollectionCreate(
             title="Draft",
             rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
-        ),
-        sync=False,
+        )
     )
     assert (saved.withheld, saved.unsynced) == (True, True)
     assert manager.provider.created == []
 
-    await manager.service.rules.sync(saved.id)
-    synced = await manager.service.reader.get(saved.id)
+    detail = await synced(manager.service, saved.id)
     assert manager.provider.created == ["Draft"]
-    assert (synced.withheld, synced.unsynced) == (False, False)
+    assert (detail.withheld, detail.unsynced) == (False, False)
 
 
-async def test_saved_only_edits_wait_for_sync(manager: Manager) -> None:
+async def test_saved_edits_wait_for_sync(manager: Manager) -> None:
     identity = await create(manager)
-    await manager.service.editor.update(
-        identity, CollectionOptions(title="Renamed"), sync=False
-    )
+    await manager.service.editor.update(identity, CollectionOptions(title="Renamed"))
     detail = await manager.service.editor.set_members(
         identity,
         CollectionMembersUpdate(
             member_ids=list(reversed(manager.ids)), order_type=CollectionOrder.CUSTOM
         ),
-        sync=False,
     )
     assert (detail.title, detail.unsynced) == ("Renamed", True)
     assert detail.member_ids == list(reversed(manager.ids))
     assert manager.provider.members["1"] == ["m0", "m1", "m2"]
     assert manager.provider.options["1"][0] == "Saga"
 
-    await manager.service.rules.sync(identity)
-    synced = await manager.service.reader.get(identity)
+    detail = await synced(manager.service, identity)
     assert sorted(manager.provider.members["1"]) == ["m0", "m1", "m2"]
     assert manager.provider.options["1"][0] == "Renamed"
-    assert synced.unsynced is False
+    assert detail.unsynced is False
 
 
 async def test_append_sync_sends_members_chosen_since_the_last_sync(
     manager: Manager,
 ) -> None:
-    created = await manager.service.editor.create(
+    saved = await created(
+        manager.service,
         CollectionCreate(
             title="Append",
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[11])),
                 sync_mode=SyncMode.APPEND,
             ),
-        )
+        ),
     )
-    picked = [*created.member_ids, manager.ids[2]]
+    picked = [*saved.member_ids, manager.ids[2]]
     await manager.service.editor.set_members(
-        created.id,
+        saved.id,
         CollectionMembersUpdate(member_ids=picked, order_type=CollectionOrder.CUSTOM),
-        sync=False,
     )
-    await manager.service.rules.sync(created.id)
-    detail = await manager.service.reader.get(created.id)
+    detail = await synced(manager.service, saved.id)
     assert {member.id for member in await members(manager, detail)} == set(picked)
     assert detail.unsynced is False
 
@@ -2591,12 +2645,13 @@ async def _set_requests(database: Database, *, folder: str = "/movies") -> None:
 
 
 async def test_a_chart_keeps_its_order_for_its_region(manager: Manager) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Popular",
             order_type=CollectionOrder.CUSTOM,
             rule=library_rule(criteria=_chart()),
-        )
+        ),
     )
     assert [member.title for member in await members(manager, detail)] == [
         "Manual",
@@ -2608,21 +2663,24 @@ async def test_a_chart_keeps_its_order_for_its_region(manager: Manager) -> None:
 async def test_missing_titles_list_and_request_what_the_library_lacks(
     manager: Manager, database: Database
 ) -> None:
-    created = await manager.service.editor.create(
+    collection = await created(
+        manager.service,
         CollectionCreate(
             title="Popular",
             rule=library_rule(criteria=_chart()),
-        )
+        ),
     )
-    missing = await manager.service.arr.missing(created.id)
+    missing = await manager.service.arr.missing(collection.id)
     assert [
         (title.tmdb_id, title.title, title.requested) for title in missing.titles
     ] == [(99, "Missing 99", False)]
     assert missing.requestable
     with pytest.raises(PublicServiceError, match="root folder"):
-        await manager.service.arr.request_missing(created.id, CollectionRequest())
+        await manager.service.arr.request_missing(collection.id, CollectionRequest())
     await _set_requests(database)
-    result = await manager.service.arr.request_missing(created.id, CollectionRequest())
+    result = await manager.service.arr.request_missing(
+        collection.id, CollectionRequest()
+    )
     assert (result.requested, result.present) == (1, 0)
     radarr = manager.radarr
     assert [
@@ -2631,7 +2689,7 @@ async def test_missing_titles_list_and_request_what_the_library_lacks(
     ] == [(99, "/movies", (77,))]
     assert radarr.tag_labels == ["overture"]
     already = await manager.service.arr.request_missing(
-        created.id,
+        collection.id,
         CollectionRequest(
             titles=[CollectionRequestTitle(tmdb_id=11, media_type=MediaType.MOVIE)]
         ),
@@ -2643,7 +2701,7 @@ async def test_a_sync_labels_tags_requests_and_orders_home(
     manager: Manager, database: Database
 ) -> None:
     await _set_requests(database)
-    created = await manager.service.editor.create(
+    collection = await manager.service.editor.create(
         CollectionCreate(
             title="Popular",
             collection_group="Charts",
@@ -2655,9 +2713,9 @@ async def test_a_sync_labels_tags_requests_and_orders_home(
                 request_missing=True,
                 home_order=1,
             ),
-        )
+        ),
     )
-    await manager.service.rules.sync(created.id)
+    await manager.service.rules.sync(collection.id)
     assert any(
         label == "Popular members" for label, _, _ in manager.provider.synced_labels
     )
@@ -2678,7 +2736,7 @@ async def test_collections_sharing_an_arr_tag_keep_each_others_members(
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[11])), arr_tag="Shared Tag"
             ),
-        )
+        ),
     )
     other = await manager.service.editor.create(
         CollectionCreate(
@@ -2686,7 +2744,7 @@ async def test_collections_sharing_an_arr_tag_keep_each_others_members(
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[12])), arr_tag="shared-tag"
             ),
-        )
+        ),
     )
     await manager.service.rules.sync(holder.id)
     await manager.service.rules.sync(other.id)
@@ -2700,15 +2758,15 @@ async def test_collections_sharing_an_arr_tag_keep_each_others_members(
 async def test_a_failed_effect_is_recorded_after_members_sync(
     manager: Manager,
 ) -> None:
-    created = await manager.service.editor.create(
+    collection = await manager.service.editor.create(
         CollectionCreate(
             title="Popular",
             rule=library_rule(criteria=_chart(), request_missing=True),
-        )
+        ),
     )
     with pytest.raises(PublicServiceError, match="Request missing failed"):
-        await manager.service.rules.sync(created.id)
-    detail = await manager.service.reader.get(created.id)
+        await manager.service.rules.sync(collection.id)
+    detail = await manager.service.reader.get(collection.id)
     assert [member.title for member in await members(manager, detail)] == [
         "Second",
         "Manual",
@@ -2839,12 +2897,13 @@ async def test_previews_count_members_before_saving(manager: Manager) -> None:
 
 
 async def test_source_summary_follows_the_first_list(manager: Manager) -> None:
-    detail = await manager.service.editor.create(
+    detail = await created(
+        manager.service,
         CollectionCreate(
             title="Listed",
             summary_format="From TMDB: {source_summary}",
             rule=library_rule(criteria=sources(TmdbListSource(list_ids=[1]))),
-        )
+        ),
     )
     assert detail.summary == "From TMDB: List 1"
 
@@ -2937,7 +2996,7 @@ def test_adoption_names_members_by_tmdb_then_tvdb_then_imdb_then_title() -> None
         holding(MediaItem(id=3, media_type=MediaType.SHOW, title="C", imdb_id="tt9")),
         holding(MediaItem(id=4, media_type=MediaType.SHOW, title="D")),
     ]
-    row = MediaCollection(server_type=ServerType.PLEX, title="Saga")
+    row = MediaCollection(title="Saga")
 
     criteria = member_criteria(row, members, franchise=None)
 
@@ -3057,7 +3116,8 @@ async def test_group_sync_keeps_plexs_order_for_smart_members_under_a_custom_one
     manager: Manager,
 ) -> None:
     regular, smart = [
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title=title,
                 collection_group="Mixed",
@@ -3065,7 +3125,7 @@ async def test_group_sync_keeps_plexs_order_for_smart_members_under_a_custom_one
                     criteria=where(FilterField.STUDIO, FilterOperator.IS, "Studio"),
                     smart=title == "Smart",
                 ),
-            )
+            ),
         )
         for title in ("Regular", "Smart")
     ]
@@ -3354,8 +3414,8 @@ def spanning(
 async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_each(
     manager: Manager,
 ) -> None:
-    detail = await manager.service.editor.create(
-        CollectionCreate(title="Everything", rule=spanning(manager))
+    detail = await created(
+        manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
     )
 
     # Plex keeps a collection in one library, so each holds its own copy.
@@ -3372,9 +3432,8 @@ async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_
     await manager.service.editor.update(
         detail.id, CollectionOptions(title="Everything", summary="Both")
     )
+    await synced(manager.service, detail.id)
     assert manager.provider.summaries == {"1": "Both", "2": "Both"}
-
-    await manager.service.rules.sync(detail.id)
     assert manager.provider.created == ["Everything", "Everything"]
 
     await manager.service.editor.delete(detail.id)
@@ -3386,8 +3445,8 @@ async def test_one_boxset_holds_every_library_on_jellyfin(
 ) -> None:
     provider = JellyfinProvider(app_config)
     service = make_jellyfin_service(manager, app_config, database, provider)
-    detail = await service.editor.create(
-        CollectionCreate(title="Everything", rule=spanning(manager))
+    detail = await created(
+        service, CollectionCreate(title="Everything", rule=spanning(manager))
     )
 
     assert provider.created == ["Everything"]
@@ -3408,8 +3467,8 @@ async def test_libraries_saved_apart_fold_into_one_boxset(
     """A set's per-library collections merge into one on upgrade, BoxSets and all."""
     provider = JellyfinProvider(app_config)
     service = make_jellyfin_service(manager, app_config, database, provider)
-    detail = await service.editor.create(
-        CollectionCreate(title="Everything", rule=spanning(manager))
+    detail = await created(
+        service, CollectionCreate(title="Everything", rule=spanning(manager))
     )
     provider.members["2"] = ["s1"]
     async with database.write_session() as session:
@@ -3448,8 +3507,8 @@ async def test_adding_a_library_reaches_the_server_only_when_synced(
 async def test_removing_a_library_takes_its_copy_off_at_the_next_sync(
     manager: Manager, database: Database
 ) -> None:
-    detail = await manager.service.editor.create(
-        CollectionCreate(title="Everything", rule=spanning(manager))
+    detail = await created(
+        manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
     )
     await manager.service.editor.save_rule(
         detail.id,
@@ -3484,8 +3543,8 @@ async def test_a_library_with_nothing_to_hold_gets_no_copy_until_it_has(
             ),
         ]
     )
-    detail = await manager.service.editor.create(
-        CollectionCreate(title="Everything", rule=rule)
+    detail = await created(
+        manager.service, CollectionCreate(title="Everything", rule=rule)
     )
     assert manager.provider.created == ["Everything"]
     async with database.read_session() as session:
@@ -3498,7 +3557,8 @@ async def test_each_library_is_validated_against_what_it_holds(
     manager: Manager,
 ) -> None:
     with pytest.raises(PublicServiceError, match="movies only"):
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title="Everything",
                 rule=CollectionRuleWrite(
@@ -3513,7 +3573,7 @@ async def test_each_library_is_validated_against_what_it_holds(
                         ),
                     ]
                 ),
-            )
+            ),
         )
     with pytest.raises(ValidationError, match="one set of criteria"):
         CollectionRuleWrite(
@@ -3540,12 +3600,13 @@ async def test_movie_and_show_collections_share_one_group(manager: Manager) -> N
             where(FilterField.TITLE, FilterOperator.IS, "Anime Series"),
         ),
     ):
-        await manager.service.editor.create(
+        await created(
+            manager.service,
             CollectionCreate(
                 title=title,
                 collection_group="Shared",
                 rule=library_rule(criteria=criteria, library_id=library_id),
-            )
+            ),
         )
 
     assert "Shared" in await manager.service.groups.names()
@@ -3562,8 +3623,8 @@ async def test_movie_and_show_collections_share_one_group(manager: Manager) -> N
 async def test_orphaning_leaves_plex_copies_for_the_next_sync_to_list(
     manager: Manager, database: Database
 ) -> None:
-    detail = await manager.service.editor.create(
-        CollectionCreate(title="Everything", rule=spanning(manager))
+    detail = await created(
+        manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
     )
 
     orphaned = await manager.service.editor.orphan(detail.id)
@@ -3593,12 +3654,13 @@ async def test_a_group_takes_a_sort_every_collection_it_holds_can_use(
     manager: Manager,
 ) -> None:
     only_movies = CollectionOrder.DURATION_DESC
-    await manager.service.editor.create(
+    await created(
+        manager.service,
         CollectionCreate(
             title="Long films",
             collection_group="Films",
             rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
-        )
+        ),
     )
 
     # Shows have no Plex duration sort, but this group holds only movies.
@@ -3635,10 +3697,11 @@ async def test_a_catch_all_collection_holds_what_no_other_collection_does(
             )
         ]
     )
-    catch_all = await manager.service.editor.create(
+    catch_all = await created(
+        manager.service,
         CollectionCreate(
             title="Everything else", rule=library_rule(criteria=collectionless)
-        )
+        ),
     )
     assert catch_all.member_ids == manager.ids[1:]
 
@@ -3840,11 +3903,15 @@ async def test_deleting_group_with_separator_discards_separator(
 async def test_separator_apply_raises_title_taken_on_collision(
     manager: Manager,
 ) -> None:
-    await manager.service.editor.create(
-        CollectionCreate(title="Sagas", collection_group="Other", rule=chosen(manager))
+    await created(
+        manager.service,
+        CollectionCreate(title="Sagas", collection_group="Other", rule=chosen(manager)),
     )
-    await manager.service.editor.create(
-        CollectionCreate(title="Part 2", collection_group="Sagas", rule=chosen(manager))
+    await created(
+        manager.service,
+        CollectionCreate(
+            title="Part 2", collection_group="Sagas", rule=chosen(manager)
+        ),
     )
     with pytest.raises(
         PublicServiceError, match="A collection with this title already exists"
@@ -3853,7 +3920,7 @@ async def test_separator_apply_raises_title_taken_on_collision(
             "Sagas", CollectionGroupPolicy(separator=True)
         )
     async with manager.database.read_session() as session:
-        group = await CollectionRepository(session).group(ServerType.PLEX, "Sagas")
+        group = await CollectionRepository(session).group("Sagas")
     assert group is not None
     assert not group.separator
 
@@ -3861,11 +3928,15 @@ async def test_separator_apply_raises_title_taken_on_collision(
 async def test_renaming_a_separated_group_to_a_taken_title_changes_nothing(
     manager: Manager,
 ) -> None:
-    await manager.service.editor.create(
-        CollectionCreate(title="Sagas", collection_group="Other", rule=chosen(manager))
+    await created(
+        manager.service,
+        CollectionCreate(title="Sagas", collection_group="Other", rule=chosen(manager)),
     )
-    await manager.service.editor.create(
-        CollectionCreate(title="Part 2", collection_group="Parts", rule=chosen(manager))
+    await created(
+        manager.service,
+        CollectionCreate(
+            title="Part 2", collection_group="Parts", rule=chosen(manager)
+        ),
     )
     await manager.service.groups.save_policy(
         "Parts", CollectionGroupPolicy(separator=True)
@@ -3876,8 +3947,8 @@ async def test_renaming_a_separated_group_to_a_taken_title_changes_nothing(
         await manager.service.groups.rename("Parts", "Sagas")
     async with manager.database.read_session() as session:
         repo = CollectionRepository(session)
-        assert await repo.group(ServerType.PLEX, "Parts") is not None
-        assert await repo.group(ServerType.PLEX, "Sagas") is None
+        assert await repo.group("Parts") is not None
+        assert await repo.group("Sagas") is None
 
 
 async def test_preview_smart_collection_with_labelled_fields_evaluates_locally(
@@ -3940,3 +4011,146 @@ async def test_automatic_drawing_titles_posters_and_draws_backgrounds_it_needs(
     assert detail.backgrounds is backgrounds
     if not backgrounds:
         assert detail.background_status is AssetStatus.COMPLETE
+
+
+async def test_chosen_collections_sync_alone(manager: Manager) -> None:
+    rule = library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11])))
+    chosen_one = await manager.service.editor.create(
+        CollectionCreate(title="Chosen", rule=rule)
+    )
+    await manager.service.editor.create(CollectionCreate(title="Left", rule=rule))
+
+    result = await manager.service.groups.sync_collections([chosen_one.id, 999])
+
+    assert (result.synced, result.errors) == (1, {})
+    assert manager.provider.created == ["Chosen"]
+
+
+async def test_collections_follow_a_change_of_media_server(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    switch = MediaServerSwitch(database=database, app_config=app_config)
+    # The first start only records the server; nothing moves.
+    await switch.reconcile()
+    saga = await created(
+        manager.service,
+        CollectionCreate(
+            title="Saga",
+            collection_mode=CollectionMode.HIDE_ITEMS,
+            visible_home=True,
+            order_type=CollectionOrder.CUSTOM,
+            rule=chosen(manager),
+        ),
+    )
+    unmanaged = await created(
+        manager.service, CollectionCreate(title="Theirs", rule=chosen(manager))
+    )
+    async with database.write_session() as session:
+        rule = await CollectionRepository(session).rule(unmanaged.id)
+        await session.delete(rule)
+    assert manager.provider.created == ["Saga", "Theirs"]
+
+    app_config.MEDIA_SERVER = ServerType.JELLYFIN
+    app_config.MEDIA_SERVER_URL = "http://jellyfin.test:8096"
+    await switch.reconcile()
+
+    async with database.read_session() as session:
+        repo = CollectionRepository(session)
+        assert await repo.get(unmanaged.id) is None
+        row = await repo.get(saga.id)
+    assert row is not None
+    assert (row.server_ids, row.unsynced) == ([], True)
+    # Jellyfin has neither Plex's visibility nor its custom order.
+    assert (row.collection_mode, row.visible_home) == (None, False)
+    assert row.order_type is CollectionOrder.RELEASE_ASC
+    assert row.rule is not None
+    assert row.rule.order_type is None
+
+    provider = JellyfinProvider(app_config)
+    jellyfin = make_jellyfin_service(manager, app_config, database, provider)
+    detail = await synced(jellyfin, saga.id)
+    assert provider.created == ["Saga"]
+    assert (detail.server_item_id, detail.unsynced) == ("1", False)
+
+
+async def test_a_collection_takes_over_the_server_one_of_its_title(
+    manager: Manager, database: Database
+) -> None:
+    saved = await manager.service.editor.create(
+        CollectionCreate(title="Saga", rule=chosen(manager))
+    )
+    async with database.write_session() as session:
+        session.add(
+            stored_collection(
+                server_item_id="9",
+                library_id="movies",
+                title="Saga",
+                last_synced_at=utc_now(),
+            )
+        )
+
+    detail = await synced(manager.service, saved.id)
+
+    assert manager.provider.created == []
+    assert detail.server_item_id == "9"
+    assert [row.title for row in await manager.service.reader.listed()] == ["Saga"]
+
+
+async def test_collections_sets_and_schedules_follow_a_moved_library(
+    manager: Manager, app_config: Settings, database: Database
+) -> None:
+    saga = await created(
+        manager.service, CollectionCreate(title="Saga", rule=chosen(manager))
+    )
+    await manager.service.groups.save_policy(
+        "Decades",
+        CollectionGroupPolicy(
+            generator=CollectionGenerator(
+                dimension=SetDimension.DECADE, library_ids=["movies"]
+            )
+        ),
+    )
+    async with database.write_session() as session:
+        session.add(
+            SavedSchedule(
+                kind=ScheduleKind.ASSETS,
+                name="Nightly",
+                cron_expression="0 3 * * *",
+                payload={"library_ids": ["movies", "shows"]},
+                created_at=utc_now(),
+                updated_at=utc_now(),
+            )
+        )
+        # The server now lists the movies under another library.
+        await LibraryRepository(session).record(
+            [
+                ServerSection("new-movies", "Films", MediaType.MOVIE),
+                ServerSection("shows", "Shows", MediaType.SHOW),
+            ],
+            utc_now(),
+        )
+    reconciler = LibraryReconciler(
+        publisher=manager.publisher,
+        local_assets=make_local_assets(app_config=app_config, database=database),
+        downloads=unused(DownloadService),
+        app_config=app_config,
+        database=database,
+    )
+
+    followed = await reconciler.follow_moved_libraries(
+        Counter(
+            {
+                ("movies", MediaType.MOVIE, "new-movies"): 3,
+                ("movies", MediaType.MOVIE, "shows"): 1,
+            }
+        )
+    )
+
+    assert followed == [("movies", "new-movies")]
+    assert (await manager.service.reader.get(saga.id)).library_ids == ["new-movies"]
+    policy = await manager.service.groups.policy("Decades")
+    assert policy.generator is not None
+    assert policy.generator.library_ids == ["new-movies"]
+    async with database.read_session() as session:
+        (schedule,) = (await session.exec(select(SavedSchedule))).all()
+    assert schedule.payload["library_ids"] == ["new-movies", "shows"]

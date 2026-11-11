@@ -31,7 +31,6 @@ lazy from overture.domain import (
     AspectRatioTolerance,
     ImageSize,
     MediaType,
-    ServerType,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
@@ -1185,7 +1184,7 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
         await session.flush()
         select_art(season, ArtType.SEASON_POSTER, PublicArtUrl("https://x/s1.jpg"))
         select_art(show, ArtType.POSTER, PublicArtUrl("https://x/p.jpg"))
-        session.add(MediaCollection(id=5, server_type=ServerType.PLEX, title="Saga"))
+        session.add(MediaCollection(id=5, title="Saga"))
         await session.flush()
         session.add(MediaCollectionMember(collection_id=5, media_item_id=1))
 

@@ -126,10 +126,7 @@ class CollectionArtService:
                 422, "Collections have posters and backgrounds only"
             )
         row = await CollectionRepository(db).get_listed(collection_id)
-        if (
-            row is None
-            or row.server_type is not self._provider_registry.provider.server_type
-        ):
+        if row is None:
             raise PublicServiceError(404, "Collection not found")
         if managed and await CollectionRepository(db).rule(collection_id) is None:
             raise PublicServiceError(409, UNMANAGED_REFUSAL)

@@ -55,6 +55,7 @@ lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
 lazy from .services.scheduler import SchedulerService
 lazy from .services.server_audit.service import ServerAuditService
+lazy from .services.server_switch import MediaServerSwitch
 lazy from .services.stats.service import StatsService
 lazy from .services.storage.assets import AssetStorage
 lazy from .services.storage.image_cache import ImageCache
@@ -212,6 +213,7 @@ class RuntimeServices:
         await owned_thread(clean_abandoned_operations, self.config_dir)
         faulthandler.enable()
         await self.database.initialize(self.backups.backup_before_upgrade)
+        await MediaServerSwitch(database=self.database, app_config=config).reconcile()
         await interrupt_unfinished(self.database)
         runs = await latest_runs(self.database)
         for kind, job in self.job_slots.items():

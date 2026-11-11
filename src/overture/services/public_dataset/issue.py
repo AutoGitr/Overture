@@ -14,13 +14,15 @@ lazy from ...dataset_contract.contract import (
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
+lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...schemas.public_dataset import ContributionIssue
 lazy from ...utils.errors import PublicServiceError
+lazy from ..collections.policy import resolve_policy
 lazy from .catalog import PUBLIC_DATASET_REPO_URL
 lazy from .entries import catalog_collection_entry, catalog_item_entry
-lazy from .export import collection_entry, item_entry, refused_art
+lazy from .export import collection_entry, collection_refusals, item_entry, refusals
 lazy from .lookup import find_public_item
 
 #: The kind each issue form's title starts with, as its template writes it.
@@ -145,7 +147,7 @@ async def item_issue(item_id: int, *, database: Database) -> ContributionIssue:
                 },
             )
     return contribution_issue(
-        item_entry(item), refused_art(item.title, item), current=current
+        item_entry(item), refusals(item.title, item), current=current
     )
 
 
@@ -164,9 +166,12 @@ async def collection_issue(
         catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
             {row.tmdb_collection_id}
         )
+        posters = resolve_policy(
+            await get_app_settings(session), row.group, row.rule
+        ).overturedb_posters
     held = catalog.get(row.tmdb_collection_id)
     return contribution_issue(
-        collection_entry(row, held),
-        refused_art(row.title, row),
+        collection_entry(row, held, posters),
+        collection_refusals(row, posters),
         current=catalog_collection_entry(held) if held else None,
     )

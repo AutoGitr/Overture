@@ -11,7 +11,7 @@ lazy from overture.db.models.public_dataset import (
     PublicDatasetItem,
 )
 lazy from overture.db.session import Database
-lazy from overture.domain import MediaType, ServerType
+lazy from overture.domain import MediaType
 lazy from overture.routers import public_dataset
 lazy from overture.schemas.common import Status
 lazy from overture.schemas.public_dataset import PublicDatasetStatus
@@ -61,7 +61,6 @@ async def test_records_for_collections_and_catalog_entries(
             stored_collection(
                 id=4,
                 server_item_id="saga",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
                 tmdb_collection_id=10,

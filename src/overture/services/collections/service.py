@@ -91,7 +91,6 @@ class CollectionsService:
             membership=membership,
             display=CollectionDisplay(access=access),
             reader=self.reader,
-            sources=self._sources,
             downloads=downloads,
         )
         self.themes = CollectionThemes(
@@ -120,7 +119,6 @@ class CollectionsService:
             validator=validator,
             membership=membership,
             editor=self.editor,
-            post_sync=post_sync,
             sources=self._sources,
         )
         self.groups = CollectionGroups(

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsState } from "../stores/settingsState.svelte";
   import EyeOff from "@lucide/svelte/icons/eye-off";
   import Sparkles from "@lucide/svelte/icons/sparkles";
   import type {
@@ -183,7 +184,7 @@
       title={row.title}
       artStatus={catalogTones?.art ?? artStatus}
       themeStatus={catalogTones?.theme ?? themeStatus}
-      hideTheme={hideTheme || collection?.server_type === "emby"}
+      hideTheme={hideTheme || (!!collection && settingsState.current.media_server === "emby")}
       onart={onOpenArt}
       onthemes={onOpenThemes}
     />

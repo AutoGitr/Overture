@@ -181,7 +181,6 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     media_types: ["movie"],
     monitored: false,
     server_added_at: null,
-    server_type: "plex",
     server_item_id: null,
     summary: null,
     server_poster_version: null,
@@ -202,6 +201,7 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     auto_match_theme: null,
     backgrounds: null,
     drawn_style: null,
+    overturedb_posters: null,
     libraries: [
       {
         library_id: "1",

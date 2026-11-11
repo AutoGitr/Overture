@@ -26,7 +26,7 @@ lazy from overture.services.art import bulk_work
 lazy from overture.services.bulk_common import AssetPlan
 lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
 lazy from tests.factories import (
     MediaItemFactory,
     PublicDatasetItemFactory,
@@ -364,6 +364,7 @@ async def test_a_disabled_dataset_drops_every_target(
     database: Database,
 ) -> None:
     """With the dataset off there is nothing for its rows to be read from."""
+    await disable_public_dataset(db_session)
 
     db_session.add(_movie(media_item_factory, "Served", tmdb_id=8))
     db_session.add(
@@ -532,6 +533,7 @@ async def test_a_disabled_dataset_skips_all_but_saved_restores(
     mode: str,
 ) -> None:
     """Nothing is a no match while the catalog is off; restoring needs no catalog."""
+    await disable_public_dataset(db_session)
     recorded = {} if mode == "missing" else RECORDED
     saved = _movie(
         media_item_factory,
@@ -583,6 +585,7 @@ async def test_themerrdb_only_run_names_the_switch_it_needs(
     app_config: Settings,
     database: Database,
 ) -> None:
+    await disable_public_dataset(db_session)
     db_session.add(_movie(media_item_factory, "Movie", tmdb_id=18))
     await db_session.commit()
 

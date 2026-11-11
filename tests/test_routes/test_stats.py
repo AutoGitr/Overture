@@ -183,7 +183,6 @@ async def test_stats_with_seeded_data(
     coll1 = stored_collection(
         server_item_id="coll-1",
         media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
         server_theme_id="server_th_1",
         youtube_id="coll_yt_123",
         monitored=True,

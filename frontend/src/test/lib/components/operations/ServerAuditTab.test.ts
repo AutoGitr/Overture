@@ -4,15 +4,22 @@ import OperationsPopup from "../../../../lib/popups/OperationsPopup.svelte";
 import { queryClient } from "../../../../lib/rest/queryClient";
 import { serverAuditFixState } from "../../../../lib/stores/serverAuditFixState.svelte";
 import { serverAuditState } from "../../../../lib/stores/serverAuditState.svelte";
+import { settingsState } from "../../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
+import { appSettings } from "../../../helpers/fixtures";
 import { answerConfirmation } from "../../../helpers/notifications";
 import { renderWithQueryClient } from "../../../helpers/render";
 
-const { fixAuditFindings, getFolderRoots } = vi.hoisted(() => ({
+const { fixAuditFindings, getFolderRoots, startServerAudit } = vi.hoisted(() => ({
   fixAuditFindings: vi.fn(),
   getFolderRoots: vi.fn(),
+  startServerAudit: vi.fn(),
 }));
-vi.mock("../../../../generated/rest/sdk.gen", () => ({ fixAuditFindings, getFolderRoots }));
+vi.mock("../../../../generated/rest/sdk.gen", () => ({
+  fixAuditFindings,
+  getFolderRoots,
+  startServerAudit,
+}));
 
 describe("ServerAuditTab results", () => {
   beforeEach(() => {
@@ -21,6 +28,23 @@ describe("ServerAuditTab results", () => {
     serverAuditFixState.reset();
     uiState.openOperations("audit");
     getFolderRoots.mockResolvedValue({ data: { movies: ["/movies"], shows: [] } });
+  });
+
+  it("chooses collections in the scope, beside the folders", async () => {
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    startServerAudit.mockResolvedValue({ data: { status: "started" } });
+    renderWithQueryClient(OperationsPopup);
+    await screen.findByRole("checkbox", { name: "/movies" });
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all collections" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Audit server" }));
+
+    await waitFor(() =>
+      expect(startServerAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({ check_collections: true, check_themes: false }),
+        }),
+      ),
+    );
   });
 
   it("starts a background fix and waits for the server before marking rows fixed", async () => {

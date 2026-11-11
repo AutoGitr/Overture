@@ -14,8 +14,6 @@ import {
   saveCollectionGroupPolicyMutation,
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
-  syncCollectionGroupMutation,
-  syncCollectionMutation,
   updateCollectionMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
@@ -32,6 +30,7 @@ import type {
   CollectionOptions,
   CollectionGroupPolicyInput,
   CollectionOrder,
+  CollectionPosterStyle,
   CollectionRuleWriteInput,
   FilterGroupInput,
   LibrarySectionRead,
@@ -51,6 +50,7 @@ import {
   franchiseCriteria,
 } from "./collectionCriteria";
 import { errorMessage } from "./errors";
+import { openSync } from "./syncShortcut";
 import { CollectionOptions as Capabilities } from "./libraries.svelte";
 
 /** Collection policy as a collection, a group and the global defaults hold it. */
@@ -60,6 +60,7 @@ export type PolicyData = {
   delete_below_minimum?: boolean | null;
   auto_art?: AutoArt | null;
   drawn_style?: ArtStyle | null;
+  overturedb_posters?: CollectionPosterStyle | null;
   backgrounds?: boolean | null;
   auto_match_theme?: boolean | null;
   request_missing?: boolean | null;
@@ -102,6 +103,7 @@ export function defaultRule(): CollectionRuleWriteInput {
     delete_below_minimum: null,
     auto_art: null,
     drawn_style: null,
+    overturedb_posters: null,
     backgrounds: null,
     auto_match_theme: null,
     collection_mode: null,
@@ -308,7 +310,6 @@ export class CollectionEditor {
   private readonly updateRequest = createMutation(() => updateCollectionMutation());
   private readonly membersRequest = createMutation(() => setCollectionMembersMutation());
   private readonly ruleRequest = createMutation(() => saveCollectionRuleMutation());
-  private readonly syncRequest = createMutation(() => syncCollectionMutation());
   private readonly deleteRequest = createMutation(() => deleteCollectionMutation());
   private readonly orphanRequest = createMutation(() => orphanCollectionMutation());
   private readonly feedback = createNotifier();
@@ -341,7 +342,7 @@ export class CollectionEditor {
     return this.current();
   }
   get serverType() {
-    return this.collection.server_type;
+    return settingsState.current.media_server;
   }
   get libraryIds() {
     return this.rule.libraries.map((entry) => entry.library_id);
@@ -414,7 +415,6 @@ export class CollectionEditor {
       this.updateRequest.isPending ||
       this.membersRequest.isPending ||
       this.ruleRequest.isPending ||
-      this.syncRequest.isPending ||
       this.deleteRequest.isPending ||
       this.orphanRequest.isPending
     );
@@ -429,11 +429,6 @@ export class CollectionEditor {
     return { path: { collection_id: this.collectionId } };
   }
 
-  /** Writes that stay in Overture until the collection is synced. */
-  private get localTarget() {
-    return { ...this.target, query: { to_server: false } };
-  }
-
   private async perform(action: () => Promise<void>): Promise<boolean> {
     if (this.busy) return false;
     try {
@@ -445,28 +440,17 @@ export class CollectionEditor {
     }
   }
 
-  /** Save in Overture; with `sync`, then make the server match. */
+  /** Save in Overture; with `sync`, then open Sync with only this collection chosen. */
   save(sync = false) {
-    // Snapshot target and options before persistRule resets drafts or remounts the view.
-    const { target } = this;
-    const options = { ...this.localTarget, body: optionsBody(this) };
+    // Snapshot options before persistRule resets drafts or remounts the view.
+    const options = { ...this.target, body: optionsBody(this) };
     return this.perform(async () => {
       const rule = await this.persistRule();
       const saved = await this.updateRequest.mutateAsync(options);
       storeCollectionDetail(saved);
       if (rule !== undefined) patchCollectionRule(saved.id, rule);
-      if (!sync) {
-        this.feedback.success("Saved.");
-        return;
-      }
-      const result = await this.syncRequest.mutateAsync(target);
-      this.feedback.success(
-        result.withheld
-          ? "Saved. Below minimum, out of season or left out by its set, so it is off the server; Overture keeps it."
-          : result.skipped
-            ? "Saved. Below minimum or out of season, so the server is unchanged."
-            : `Saved and synced: ${result.added} added, ${result.removed} removed.`,
-      );
+      if (sync) await openSync({ collectionIds: [saved.id] });
+      else this.feedback.success("Saved. Its next sync sends the changes to the server.");
     });
   }
 
@@ -480,7 +464,7 @@ export class CollectionEditor {
     return this.perform(async () => {
       storeCollectionDetail(
         await this.membersRequest.mutateAsync({
-          ...this.localTarget,
+          ...this.target,
           body: { member_ids: memberIds, order_type: order },
         }),
       );
@@ -621,7 +605,6 @@ export class CollectionDraft {
   readonly preview: CriteriaPreview;
   readonly request = createMutation(() => createCollectionMutation());
   private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
-  private readonly syncGroupRequest = createMutation(() => syncCollectionGroupMutation());
   private readonly feedback = createNotifier();
   private readonly sets = createQuery(() => listCollectionSetsOptions());
   private readonly collections = createQuery(() => ({
@@ -700,7 +683,7 @@ export class CollectionDraft {
     );
   }
   get busy() {
-    return this.request.isPending || this.groupRequest.isPending || this.syncGroupRequest.isPending;
+    return this.request.isPending || this.groupRequest.isPending;
   }
   private dimensionLabel(dimension: string) {
     return (
@@ -801,7 +784,7 @@ export class CollectionDraft {
     this.setPolicy = { ...this.setPolicy, order_type: dimension.order_type };
   }
 
-  /** Save in Overture; with `sync`, then create it on the server. */
+  /** Save in Overture; with `sync`, then open Sync with only what was saved chosen. */
   async save(sync = false) {
     if (this.busy) return false;
     return this.kind === "set" ? this.saveSet(sync) : this.saveCollection(sync);
@@ -810,11 +793,11 @@ export class CollectionDraft {
   private async saveCollection(sync: boolean) {
     try {
       const collection = await this.request.mutateAsync({
-        query: { to_server: sync },
         body: { ...optionsBody(this), rule: ruleBody(this) },
       });
       storeCollectionDetail(collection);
       goToCollection(collection);
+      if (sync) await openSync({ collectionIds: [collection.id] });
       return true;
     } catch (error) {
       this.feedback.error(errorMessage(error, "Could not save the collection"));
@@ -822,7 +805,7 @@ export class CollectionDraft {
     }
   }
 
-  /** Save the set into its group, keeping the group's other defaults; `sync` runs it. */
+  /** Save the set into its group, keeping the group's other defaults. */
   private async saveSet(sync: boolean) {
     const name = this.setGroup;
     const query = { name };
@@ -841,23 +824,9 @@ export class CollectionDraft {
         },
       });
       queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
-      if (!sync) {
-        this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
-        goToCollectionsList(name);
-        return true;
-      }
-      const result = await this.syncGroupRequest.mutateAsync({ query });
-      const errors = Object.entries(result.errors);
-      if (errors.length) {
-        this.feedback.error(
-          `Created ${result.created.length} collections. ${errors.length} failed: ${errors
-            .map(([title, error]) => `${title}: ${error}`)
-            .join("; ")}`,
-        );
-      } else {
-        this.feedback.success(`Created ${result.created.length} collections in "${name}".`);
-      }
       goToCollectionsList(name);
+      if (sync) await openSync({ groups: [name] });
+      else this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
       return true;
     } catch (error) {
       this.feedback.error(errorMessage(error, "Could not save the set"));
@@ -927,6 +896,7 @@ const RULE_POLICY = [
   "delete_below_minimum",
   "auto_art",
   "drawn_style",
+  "overturedb_posters",
   "backgrounds",
   "auto_match_theme",
   "request_missing",

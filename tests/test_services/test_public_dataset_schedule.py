@@ -168,3 +168,56 @@ class TestScheduleHelper:
         """Ranges are declared once on the payload rather than clamped ad hoc."""
         with pytest.raises(ValueError, match="latest"):
             BackupPayload.model_validate({"retention": {"latest": 0}})
+
+
+@pytest.mark.parametrize(
+    ("payload", "enabled", "starts"),
+    [
+        (PublicDatasetPayload(), True, True),
+        (
+            PublicDatasetPayload(last_synced_at=datetime(2026, 1, 1, tzinfo=UTC)),
+            True,
+            False,
+        ),
+        (PublicDatasetPayload(), False, False),
+    ],
+)
+async def test_a_first_start_syncs_the_catalog_overturedb_starts_enabled_with(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: PublicDatasetPayload,
+    enabled: bool,
+    starts: bool,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    async def saved(
+        *_args: object, **_kwargs: object
+    ) -> Schedule[PublicDatasetPayload]:
+        return Schedule(
+            enabled=enabled,
+            cron_expression="0 3 * * *",
+            payload=payload,
+            updated_at=None,
+        )
+
+    service = PublicDatasetService(
+        scheduler=SchedulerService(app_config=app_config),
+        publisher=NullEventPublisher(),
+        app_config=app_config,
+        database=database,
+        config_dir=tmp_path,
+    )
+    started: list[bool] = []
+    monkeypatch.setattr(service_module, "load_schedule", saved)
+
+    def schedule_job(_schedule: object) -> None:
+        return None
+
+    monkeypatch.setattr(service, "_schedule_job", schedule_job)
+    monkeypatch.setattr(service, "start_background_sync", lambda: started.append(True))
+
+    await service.start()
+
+    assert bool(started) is starts

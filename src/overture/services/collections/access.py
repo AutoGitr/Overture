@@ -80,6 +80,14 @@ class CollectionAccess:
             )
         return provider
 
+    def require_collections(self) -> None:
+        """Refuse to serve collections where the media server has none.
+
+        Raises:
+            PublicServiceError: When the media server has no collections.
+        """
+        self.provider()
+
     @property
     def server_type(self) -> ServerType:
         return self.provider().server_type
@@ -113,9 +121,9 @@ class CollectionAccess:
         Raises:
             PublicServiceError: When the last sync listed no such collection.
         """
-        provider = self.provider()
+        self.require_collections()
         row = await CollectionRepository(session).get_listed(collection_id)
-        if row is None or row.server_type is not provider.server_type:
+        if row is None:
             raise PublicServiceError(404, "Collection not found")
         return row
 
@@ -135,8 +143,8 @@ class CollectionAccess:
     async def group(
         self, session: AsyncSession, name: str | None
     ) -> CollectionGroup | None:
-        """Return the active server's group named *name*, if it has one."""
-        return await CollectionRepository(session).group(self.server_type, name)
+        """Return the group named *name*, if there is one."""
+        return await CollectionRepository(session).group(name)
 
     async def policy(
         self,

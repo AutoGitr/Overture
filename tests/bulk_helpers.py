@@ -169,10 +169,23 @@ def use_theme_work(
 
 async def enable_public_dataset(session: AsyncSession) -> None:
     """Switch OvertureDB on, as the user does with Enable OvertureDB."""
-    session.add(
+    await session.merge(
         TaskSchedule(
             task_name="public_dataset",
             enabled=True,
+            cron_expression="0 0 * * *",
+            payload={},
+        )
+    )
+    await session.commit()
+
+
+async def disable_public_dataset(session: AsyncSession) -> None:
+    """Switch OvertureDB off, which it is not unless the user says so."""
+    await session.merge(
+        TaskSchedule(
+            task_name="public_dataset",
+            enabled=False,
             cron_expression="0 0 * * *",
             payload={},
         )

@@ -15,8 +15,10 @@ lazy from starlette.types import Receive, Scope, Send
 
 lazy from ...dataset_contract.contract import (
     catalog_art_url,
+    consistent_poster_problem,
     entry_identities,
     entry_repo_path,
+    theme_length_problem,
     validate_entry,
 )
 lazy from ...db.art_slots import read_art_slot
@@ -24,8 +26,15 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.season import Season
+lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import PAGE_SIZE, Database
-lazy from ...domain import ArtType, CatalogMediaType, MediaType, ThemeBulkSource
+lazy from ...domain import (
+    ArtType,
+    CatalogMediaType,
+    CollectionPosterStyle,
+    MediaType,
+    ThemeBulkSource,
+)
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...repositories.public_dataset_drafts import PublicDatasetDraftRepository
@@ -33,6 +42,8 @@ lazy from ...utils.art_urls import art_refusals
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.temporary import create_operation_directory
 lazy from ...utils.threads import owned_thread
+lazy from ..collections.policy import resolve_policy
+lazy from .entries import collection_poster_field
 
 
 def _initialize(directory: Path) -> None:
@@ -54,6 +65,18 @@ def _catalog_art_url(url: str | None) -> str | None:
         return None
 
 
+def _theme_problem(owner: MediaItem | MediaCollection) -> str | None:
+    """Why OvertureDB would refuse the chosen theme, as far as its length is known."""
+    if owner.youtube_id is None or owner.youtube_duration is None:
+        return None
+    return theme_length_problem(owner.youtube_duration)
+
+
+def _theme(owner: MediaItem | MediaCollection) -> str | None:
+    """The chosen theme, unless OvertureDB would refuse it."""
+    return None if _theme_problem(owner) else owner.youtube_id
+
+
 def item_entry(item: MediaItem) -> dict[str, Any] | None:
     """Return a library item's selections as a catalog entry, if it has any."""
     poster = _catalog_art_url(read_art_slot(item, ArtType.POSTER).url)
@@ -63,7 +86,8 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
         for season in sorted(item.seasons, key=lambda season: season.season_num)
         if (url := _catalog_art_url(read_art_slot(season, ArtType.SEASON_POSTER).url))
     ]
-    if not (poster or background or item.youtube_id or seasons):
+    theme = _theme(item)
+    if not (poster or background or theme or seasons):
         return None
     entry: dict[str, Any] = {
         "media_type": item.media_type.value,
@@ -74,7 +98,7 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
         "imdb_id": item.imdb_id,
         "poster_url": poster,
         "background_url": background,
-        "youtube_id_overturedb": item.youtube_id,
+        "youtube_id_overturedb": theme,
         "youtube_id_themerrdb": None,
     }
     if item.media_type == MediaType.SHOW:
@@ -83,17 +107,22 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
 
 
 def collection_entry(
-    collection: MediaCollection, catalog: PublicDatasetCollection | None
+    collection: MediaCollection,
+    catalog: PublicDatasetCollection | None,
+    posters: CollectionPosterStyle,
 ) -> dict[str, Any] | None:
     """Return a matched collection's art and theme as a catalog entry, if any.
 
-    A ThemerrDB theme is not OvertureDB's to take, so it is left out.
+    Its poster is the kind *posters* takes from OvertureDB. A ThemerrDB theme
+    is not OvertureDB's to take, so it is left out.
     """
     if collection.tmdb_collection_id is None:
         return None
     poster = _catalog_art_url(read_art_slot(collection, ArtType.POSTER).url)
+    if _consistent_problem(poster, posters):
+        poster = None
     background = _catalog_art_url(read_art_slot(collection, ArtType.BACKGROUND).url)
-    theme = collection.youtube_id
+    theme = _theme(collection)
     if collection.youtube_id_source is ThemeBulkSource.THEMERRDB or (
         catalog and theme == catalog.youtube_id_themerrdb
     ):
@@ -104,10 +133,11 @@ def collection_entry(
         "media_type": CatalogMediaType.COLLECTION.value,
         "title": catalog.title if catalog else collection.title,
         "tmdb_id": collection.tmdb_collection_id,
-        "poster_url": poster,
+        "poster_url": None,
         "background_url": background,
         "youtube_id_overturedb": theme,
         "youtube_id_themerrdb": None,
+        collection_poster_field(posters): poster,
     }
 
 
@@ -190,15 +220,35 @@ def _archive(directory: Path, left_out: list[str]) -> Path:
     return target
 
 
-def refused_art(title: str, owner: MediaItem | MediaCollection) -> list[str]:
-    """The selected art OvertureDB would refuse, as lines of the export summary."""
-    return [
-        f"{title}: {line}"
-        for line in art_refusals(
-            read_art_slot(owner, ArtType.POSTER).url,
-            read_art_slot(owner, ArtType.BACKGROUND).url,
-        )
-    ]
+def _consistent_problem(
+    poster: str | None, posters: CollectionPosterStyle
+) -> str | None:
+    """Why a collection's poster cannot be the consistent one *posters* contributes."""
+    if posters is not CollectionPosterStyle.CONSISTENT or poster is None:
+        return None
+    return consistent_poster_problem(poster)
+
+
+def collection_refusals(
+    collection: MediaCollection, posters: CollectionPosterStyle
+) -> list[str]:
+    """What OvertureDB would refuse of a collection's art and theme."""
+    lines = refusals(collection.title, collection)
+    poster = _catalog_art_url(read_art_slot(collection, ArtType.POSTER).url)
+    if problem := _consistent_problem(poster, posters):
+        lines.append(f"{collection.title}: Poster: {problem}")
+    return lines
+
+
+def refusals(title: str, owner: MediaItem | MediaCollection) -> list[str]:
+    """The selected art and theme OvertureDB would refuse, as summary lines."""
+    lines = art_refusals(
+        read_art_slot(owner, ArtType.POSTER).url,
+        read_art_slot(owner, ArtType.BACKGROUND).url,
+    )
+    if problem := _theme_problem(owner):
+        lines.append(f"Theme: {problem}")
+    return [f"{title}: {line}" for line in lines]
 
 
 async def export_selections(database: Database, directory: Path) -> Path:
@@ -250,9 +300,7 @@ async def export_selections(database: Database, directory: Path) -> Path:
         if not items:
             break
         entries = [entry for item in items if (entry := item_entry(item))]
-        left_out.extend(
-            line for item in items for line in refused_art(item.title, item)
-        )
+        left_out.extend(line for item in items for line in refusals(item.title, item))
         await owned_thread(_stage_batch, directory, entries)
         after = items[-1].id or after
     async with database.read_session() as session:
@@ -260,16 +308,25 @@ async def export_selections(database: Database, directory: Path) -> Path:
         catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
             {row.tmdb_collection_id for row in collections if row.tmdb_collection_id}
         )
+        settings = await get_app_settings(session)
+    posters = {
+        row.id: resolve_policy(settings, row.group, row.rule).overturedb_posters
+        for row in collections
+    }
     entries = [
         entry
         for row in collections
-        if (entry := collection_entry(row, catalog.get(row.tmdb_collection_id or 0)))
+        if (
+            entry := collection_entry(
+                row, catalog.get(row.tmdb_collection_id or 0), posters[row.id]
+            )
+        )
     ]
     left_out.extend(
         line
         for row in collections
         if row.tmdb_collection_id is not None
-        for line in refused_art(row.title, row)
+        for line in collection_refusals(row, posters[row.id])
     )
     await owned_thread(_stage_batch, directory, entries)
     return await owned_thread(_archive, directory, left_out)

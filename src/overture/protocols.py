@@ -48,10 +48,14 @@ class EventPublisher(Protocol):
 
 
 class CollectionGroups(Protocol):
-    """The collection groups a full sync can run."""
+    """The collection groups, and single collections, a full sync can run."""
 
     async def names(self) -> list[str]: ...
 
     async def sync(
         self, name: str, *, library_ids: list[str] | None = None
+    ) -> CollectionGroupSyncResult: ...
+
+    async def sync_collections(
+        self, collection_ids: list[int]
     ) -> CollectionGroupSyncResult: ...

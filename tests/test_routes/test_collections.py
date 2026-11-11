@@ -32,14 +32,12 @@ lazy from overture.schemas.collections import (
     CollectionGroupDelete,
     CollectionGroupPolicy,
     CollectionGroupRename,
-    CollectionGroupSyncResult,
     CollectionLibraryCriteria,
     CollectionMembersUpdate,
     CollectionOptions,
     CollectionRead,
     CollectionRuleRead,
     CollectionSetPreview,
-    CollectionSyncResponse,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     FilterGroup,
@@ -64,14 +62,12 @@ async def test_collection_routes_delegate_to_service() -> None:
         id=1,
         library_ids=["lib1"],
         media_types=[MediaType.MOVIE],
-        server_type=ServerType.PLEX,
         title="Star Wars",
     )
     detail_item = CollectionDetail(
         id=1,
         library_ids=["lib1"],
         media_types=[MediaType.MOVIE],
-        server_type=ServerType.PLEX,
         title="Star Wars",
         member_ids=[],
         youtube_id_overturedb="yt1",
@@ -82,9 +78,6 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.groups.names = AsyncMock(return_value=["Franchises"])
     service.groups.policy = AsyncMock(return_value=CollectionGroupPolicy())
     service.groups.save_policy = AsyncMock(return_value=CollectionGroupPolicy())
-    service.groups.sync = AsyncMock(
-        return_value=CollectionGroupSyncResult(created=[2], synced=1)
-    )
     capabilities = CollectionCapabilities(
         server_type=ServerType.PLEX,
         spans_libraries=False,
@@ -147,7 +140,6 @@ async def test_collection_routes_delegate_to_service() -> None:
             ]
         )
     )
-    service.rules.sync = AsyncMock(return_value=CollectionSyncResponse(added=2))
 
     art_service = MagicMock()
     art_service.remove = AsyncMock(return_value=StatusResponse(status=Status.OK))
@@ -218,9 +210,6 @@ async def test_collection_routes_delegate_to_service() -> None:
         )
         == CollectionGroupPolicy()
     )
-    assert (
-        await collections_router.sync_collection_group(service.groups, "Franchises")
-    ).created == [2]
 
     # Arr tags
     assert len(await collections_router.list_radarr_tags(service.arr)) == 1
@@ -308,8 +297,6 @@ async def test_collection_routes_delegate_to_service() -> None:
         saved_rule.libraries[0].criteria.source_conditions()[0].source.type
         == "tmdb_collection"
     )
-    sync_res = await collections_router.sync_collection(1, service.rules)
-    assert sync_res.added == 2
 
     # Art endpoints
     removal = AssetRemoval(delete_from_server=True)

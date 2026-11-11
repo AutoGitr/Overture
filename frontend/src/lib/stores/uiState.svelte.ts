@@ -47,6 +47,8 @@ export interface FilterState {
   collectionSize: "all" | "empty" | "below_minimum";
   collectionKind: "all" | "regular" | "smart";
   collectionHolds: "all" | "movie" | "show" | "both";
+  /** Whether a collection stands alone or is one a set made per value. */
+  collectionOrigin: "all" | "single" | "set";
   collectionMembers: "all" | "managed" | "unmanaged";
   collectionSync: "all" | "synced" | "failed";
   art: Completeness;
@@ -69,6 +71,7 @@ const DEFAULT_FILTERS: FilterState = {
   collectionSize: "all",
   collectionKind: "all",
   collectionHolds: "all",
+  collectionOrigin: "all",
   collectionMembers: "all",
   collectionSync: "all",
   art: "all",
@@ -150,6 +153,11 @@ function normalizeFilters(value: unknown): FilterState {
       source.collectionHolds,
       ["all", "movie", "show", "both"] as const,
       defaults.collectionHolds,
+    ),
+    collectionOrigin: stringOption(
+      source.collectionOrigin,
+      ["all", "single", "set"] as const,
+      defaults.collectionOrigin,
     ),
     collectionKind: stringOption(
       source.collectionKind,

@@ -22,7 +22,7 @@ describe("Checklist", () => {
     expect(screen.getByRole("checkbox", { name: "Films" })).toBeChecked();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Films" }));
     expect(ontoggle).toHaveBeenCalledWith("movie", "1");
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all libraries" }));
     expect(ontoggleall).toHaveBeenCalledWith(true);
   });
 });

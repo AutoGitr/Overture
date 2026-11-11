@@ -55,3 +55,8 @@ type GroupNames = Annotated[
     UniqueList[Annotated[str, Field(min_length=1, max_length=200)]],
     Field(min_length=1),
 ]
+
+#: Collections a run covers, without repeats; at least one when given.
+type CollectionIds = Annotated[
+    UniqueList[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
+]

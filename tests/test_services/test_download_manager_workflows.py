@@ -25,7 +25,6 @@ lazy from overture.domain import (
     JobStatus,
     JobType,
     MediaType,
-    ServerType,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.jobs.kinds import INTERRUPTED_MESSAGE, DownloadStatus
@@ -991,7 +990,6 @@ async def test_a_new_collection_theme_supersedes_the_pending_upload(
         session.add(
             stored_collection(
                 id=1,
-                server_type=ServerType.PLEX,
                 server_item_id="c1",
                 media_type=MediaType.MOVIE,
             )

@@ -7,7 +7,6 @@
     getCollectionGroupPolicyOptions,
     listCollectionsOptions,
     saveCollectionGroupPolicyMutation,
-    syncCollectionGroupMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { UNGROUPED_GROUP } from "../../generated/settings";
   import type {
@@ -20,6 +19,7 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import { defaultGenerator, type SetGenerator } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
+  import { openSync } from "../utils/syncShortcut";
   import { CollectionOptions } from "../utils/libraries.svelte";
   import { availableOrders } from "../utils/collectionCriteria";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
@@ -59,7 +59,6 @@
   const defaults = createQuery(() => getCollectionDefaultsOptions());
   const options = new CollectionOptions();
   const request = createMutation(() => saveCollectionGroupPolicyMutation());
-  const syncRequest = createMutation(() => syncCollectionGroupMutation());
   const feedback = createNotifier();
 
   type GroupDraft = Omit<CollectionGroupPolicyInput, "generator"> & {
@@ -90,7 +89,7 @@
       ? mediaTypes.map((type) => (type === "movie" ? "Radarr" : "Sonarr")).join(" and ")
       : null,
   );
-  let busy = $derived(request.isPending || syncRequest.isPending);
+  let busy = $derived(request.isPending);
   let hasMembers = $derived(
     (collections.data ?? []).some((row) => row.managed && row.collection_group === group),
   );
@@ -100,8 +99,8 @@
   );
 
   /**
-   * Save the group in Overture; with `sync`, also sync the group, which sends
-   * its defaults to its collections on the server.
+   * Save the group in Overture; with `sync`, then open Sync with only this
+   * group chosen, which sends its settings to its collections.
    */
   async function save(sync = false) {
     if (!draft || busy) return;
@@ -116,7 +115,7 @@
         saved,
       );
       onsave?.();
-      if (sync) return await syncGroup();
+      if (sync) return await openSync({ groups: [group] });
       feedback.success(
         hasMembers
           ? "Saved. Its collections get it on the server with their next sync."
@@ -124,25 +123,6 @@
       );
     } catch (error) {
       feedback.error(errorMessage(error, "Could not save the group"));
-    }
-  }
-
-  async function syncGroup() {
-    try {
-      const result = await syncRequest.mutateAsync({
-        query: { name: group },
-      });
-      const errors = Object.entries(result.errors);
-      const summary = `${result.created.length} created, ${result.withheld.length} taken off the server, ${result.synced} synced`;
-      if (errors.length) {
-        feedback.error(
-          `${summary}. ${errors.length} failed: ${errors.map(([title, error]) => `${title}: ${error}`).join("; ")}`,
-        );
-      } else {
-        feedback.success(`Saved and synced: ${summary}.`);
-      }
-    } catch (error) {
-      feedback.error(errorMessage(error, "Could not sync the group"));
     }
   }
 </script>
@@ -250,11 +230,11 @@
     <button
       type="button"
       class="btn btn-secondary"
-      title={serverBlocker ?? "Save, then sync the group's members"}
+      title={serverBlocker ?? "Save, then open Sync in Operations with only this group chosen"}
       disabled={busy || !!serverBlocker}
       onclick={() => void save(true)}
     >
-      <RefreshCw size={14} class={syncRequest.isPending ? "animate-spin" : ""} />
+      <RefreshCw size={14} />
       Save and Sync
     </button>
     <button

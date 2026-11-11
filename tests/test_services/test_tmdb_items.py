@@ -51,7 +51,7 @@ lazy from overture.services.tmdb_items import TmdbItemsService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
 lazy from tests.factories import (
     MediaItemFactory,
     PublicDatasetItemFactory,
@@ -380,8 +380,9 @@ async def test_catalog_members_use_only_catalog_or_draft_artwork(
 
 
 async def test_catalog_member_artwork_requires_an_enabled_catalog(
-    *, tmdb_config: Settings, database: Database
+    db_session: AsyncSession, *, tmdb_config: Settings, database: Database
 ) -> None:
+    await disable_public_dataset(db_session)
     with pytest.raises(PublicServiceError, match="disabled") as exc:
         await _service(app_config=tmdb_config, database=database).collection(
             2344, artwork_source="overturedb"

@@ -35,7 +35,7 @@ def stored_collection(
     """A collection held by one library, as a sync or a save stores it."""
     row = MediaCollection(**fields)
     if group is not None:
-        row.group = CollectionGroup(server_type=row.server_type, name=group)
+        row.group = CollectionGroup(name=group)
     row.libraries = [
         CollectionLibrary(
             collection_id=0,

@@ -19,6 +19,7 @@ const config: Config = {
   mode: "full",
   include_collections: true,
   collection_groups: null,
+  collection_ids: null,
   items: true,
   library_ids: ["1"],
   download_overturedb_art: false,

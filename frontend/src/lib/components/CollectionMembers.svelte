@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsState } from "../stores/settingsState.svelte";
   import ArrowUp from "@lucide/svelte/icons/arrow-up";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
   import GripVertical from "@lucide/svelte/icons/grip-vertical";
@@ -38,7 +39,7 @@
   let held = $derived(
     editor?.collection.member_ids.flatMap((id) => itemsById.get(id) ?? []) ?? [],
   );
-  let orderable = $derived(!smart && editor?.collection.server_type === "plex");
+  let orderable = $derived(!smart && settingsState.current.media_server === "plex");
   /** Members by library, in the libraries' order: movies first, then by title. */
   let memberGroups = $derived.by(() => {
     const known = new Set(libraries.map((library) => library.id));
@@ -87,7 +88,7 @@
       title="Members"
       description={smart
         ? "Plex decides the members and their order from the smart filter."
-        : editor.collection.server_type === "plex"
+        : settingsState.current.media_server === "plex"
           ? "Add, remove or drag members into place. The next sync sends them."
           : "Add or remove members. The next sync sends them."}
     >

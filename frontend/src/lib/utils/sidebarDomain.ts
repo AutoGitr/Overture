@@ -835,6 +835,13 @@ export const FILTERS = {
         holds === "both" ? row.media_types.length > 1 : row.media_types.join() === holds;
     },
   },
+  collectionOrigin: {
+    label: "Made as",
+    group: "status",
+    order: 125,
+    collections: (filters) =>
+      triState(filters.collectionOrigin, "set", (row) => row.generated_value !== null),
+  },
   monitored: {
     label: "Monitor status",
     group: "status",

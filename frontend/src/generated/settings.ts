@@ -20,6 +20,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_minimum_items: 2,
   collection_mode_default: "default",
   collection_order_default: "release.asc",
+  collection_overturedb_posters: "individual",
   collection_request_missing: false,
   collection_sort_title_format: "",
   collection_summary_format: "",

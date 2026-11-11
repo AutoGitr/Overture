@@ -26,7 +26,6 @@ lazy from overture.domain import (
     ArtType,
     MediaType,
     RecentUnit,
-    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.integrations.tmdb import TMDBClient
@@ -314,7 +313,6 @@ class TestCollectionResponseMappers:
             id=1,
             server_item_id="abc",
             media_type=MediaType.MOVIE,
-            server_type=ServerType.PLEX,
             title="Collection",
             summary="Summary",
             thumb_url="provider-thumb",

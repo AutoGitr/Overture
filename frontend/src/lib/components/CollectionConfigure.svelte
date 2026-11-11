@@ -42,10 +42,14 @@
   // Each visit opens with only Setup and Content expanded.
   sectionState.forget(getSectionView());
 
-  let onServer = $derived(!!collection && !collection.withheld);
   let set = $derived(editor instanceof CollectionDraft && editor.kind === "set" ? editor : null);
   /** Which save is running, for its pending label. */
   let syncing = $state(false);
+  let syncTitle = $derived(
+    set
+      ? "Save, then open Sync in Operations with only this set's group chosen"
+      : "Save, then open Sync in Operations with only this collection chosen",
+  );
 
   // A section link may open this view, so show the section it names once it renders.
   $effect(() => {
@@ -164,7 +168,7 @@
       <PendingButton
         type="submit"
         class="btn btn-primary default-submit"
-        title={editor.blocker ?? "Save in Overture without changing the server"}
+        title={editor.blocker ?? "Save in Overture; its next sync sends it to the server"}
         pending={editor.busy}
         pendingLabel={syncing ? undefined : "Saving..."}
         disabled={!!editor.blocker}
@@ -175,12 +179,12 @@
         type="submit"
         value="sync"
         class="btn btn-secondary"
-        title={editor.blocker ?? undefined}
+        title={editor.blocker ?? syncTitle}
         pending={editor.busy}
-        pendingLabel={syncing ? (onServer ? "Syncing..." : "Creating...") : undefined}
+        pendingLabel={syncing ? "Saving..." : undefined}
         disabled={!!editor.blocker}
       >
-        {onServer ? "Save and Sync" : "Save and Create"}
+        Save and Sync
       </PendingButton>
     </div>
   </form>

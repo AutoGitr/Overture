@@ -25,7 +25,6 @@ lazy from overture.domain import (
     ImageSize,
     MediaType,
     ServerAsset,
-    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.integrations.mdblist import MDBListClient
@@ -51,7 +50,7 @@ lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.factories import seed_art_slot
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
@@ -161,7 +160,6 @@ async def _collection(
     row = stored_collection(
         server_item_id=server_id,
         media_type=MediaType.MOVIE,
-        server_type=ServerType.PLEX,
         title=f"Collection {server_id}",
         last_synced_at=utc_now(),
         **fields,
@@ -201,7 +199,6 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
         stored_collection(
             server_item_id="old",
             media_type=MediaType.MOVIE,
-            server_type=ServerType.PLEX,
         )
     )
     db_session.add(
@@ -210,6 +207,7 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
         )
     )
     await db_session.commit()
+    await disable_public_dataset(db_session)
     service = _service(app_config=app_config, database=database)
 
     disabled = await service.reader.listed()
@@ -465,7 +463,6 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
             stored_collection(
                 id=1,
                 server_item_id="opaque-id",
-                server_type=ServerType.JELLYFIN,
                 media_type=MediaType.MOVIE,
                 server_path="/config/collections/Saga [boxset]",
                 youtube_id="a" * 11,

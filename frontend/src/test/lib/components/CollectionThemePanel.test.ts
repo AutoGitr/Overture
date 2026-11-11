@@ -45,7 +45,7 @@ vi.mock("../../../lib/stores/downloadState.svelte", async (importOriginal) => ({
   downloadState: { getCollectionJob, trackQueuedCollectionJob },
 }));
 
-const starWars = collection({ id: 1, title: "Star Wars", server_type: "plex" });
+const starWars = collection({ id: 1, title: "Star Wars" });
 let shown: CollectionDetail = starWars;
 
 function show(coll: CollectionDetail) {
@@ -263,7 +263,6 @@ describe("Jellyfin collection themes", () => {
   it("offers catalog themes when Jellyfin's collection folder is writable", async () => {
     show(
       collection({
-        server_type: "jellyfin",
         theme_unavailable: null,
         youtube_id_overturedb: "overture123",
         youtube_id_themerrdb: "themerr12345",
@@ -275,9 +274,7 @@ describe("Jellyfin collection themes", () => {
     expect(screen.getByText("ThemerrDB", { selector: ".badge" })).toBeInTheDocument();
   });
   it("shows the reason themes cannot be written", () => {
-    show(
-      collection({ server_type: "jellyfin", theme_unavailable: "Set JELLYFIN_COLLECTIONS_PATH" }),
-    );
+    show(collection({ theme_unavailable: "Set JELLYFIN_COLLECTIONS_PATH" }));
     renderPanel();
     expect(screen.getByText("Set JELLYFIN_COLLECTIONS_PATH")).toBeInTheDocument();
     expect(screen.queryByLabelText("Search collection themes")).toBeNull();

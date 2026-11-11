@@ -1,15 +1,12 @@
 import { expect, it } from "vitest";
 import { DEFAULT_APP_SETTINGS } from "../../../generated/settings";
 
-/**
- * Where settings are edited: the Settings popup with the components it renders
- * its fields with, and the OvertureDB popup for the catalog's own.
- */
+/** Where settings are edited: the Settings popup with the components it renders its fields with. */
 const SOURCES = import.meta.glob(
   [
     "../../../lib/popups/SettingsPopup.svelte",
     "../../../lib/components/GlobalCollectionDefaults.svelte",
-    "../../../lib/popups/OvertureDbPopup.svelte",
+    "../../../lib/components/OvertureDbSettings.svelte",
   ],
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;

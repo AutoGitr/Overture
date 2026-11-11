@@ -65,6 +65,7 @@ class RuleSync:
                 ]
             await self._refresh_source_summary(rule, row)
             had_copies = set(row.server_ids)
+            await self._take_over_copies(row)
             error = None
             try:
                 result = await self._apply(row, rule, policy, current, scopes)
@@ -130,7 +131,7 @@ class RuleSync:
                 )
                 copy.place(server.id)
         await self._save_placement(row)
-        await self._editor.update_locked(row, saved_options(row, rule))
+        await self._editor.update_locked(row, saved_options(row, rule), push=True)
         return CollectionSyncResponse()
 
     async def _sync_smart(
@@ -160,7 +161,7 @@ class RuleSync:
                 )
         row.kind = CollectionKind.SMART
         await self._save_placement(row)
-        await self._editor.update_locked(row, saved_options(row, rule))
+        await self._editor.update_locked(row, saved_options(row, rule), push=True)
         remote_ids = [
             identity
             for server_id in row.server_ids
@@ -215,7 +216,7 @@ class RuleSync:
         await self._editor.set_members_locked(
             row, wanted, policy.order_type, append=append
         )
-        await self._editor.update_locked(row, saved_options(row, rule))
+        await self._editor.update_locked(row, saved_options(row, rule), push=True)
         if was_smart:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
@@ -272,6 +273,47 @@ class RuleSync:
             if saved is not None:
                 saved.source_summary = summary
                 session.add(saved)
+
+    async def _take_over_copies(self, row: MediaCollection) -> None:
+        """Hold, where the collection has no copy, the server's one of its title.
+
+        A server keeps the collections Overture made on it, such as before a
+        change of media server, and a title names one collection in a library.
+        The unmanaged collection the last sync listed for it goes, so the
+        server has one collection, and the sync sends it this one's choices.
+        """
+        waiting = {part.library_id for part in row.libraries if not part.server_item_id}
+        if not waiting:
+            return
+        title = row.title.casefold()
+        async with self._access.database.read_session() as session:
+            others = [
+                other
+                for other in await CollectionRepository(session).list_listed()
+                if other.rule is None
+                and other.title.casefold() == title
+                and not waiting.isdisjoint(other.library_ids)
+            ]
+        for other in others:
+            async with (
+                self._access.asset_locks.acquire(f"collection:{other.id}"),
+                self._access.database.write_session() as session,
+            ):
+                saved = await self._access.require(session, row.id or 0)
+                held = {
+                    part.library_id: part.server_item_id
+                    for part in other.libraries
+                    if part.library_id in waiting and part.server_item_id
+                }
+                for part in saved.libraries:
+                    if part.library_id in held:
+                        part.server_item_id = held[part.library_id]
+                saved.server_path = saved.server_path or other.server_path
+                session.add(saved)
+                await CollectionRepository(session).delete_ids([other.id or 0])
+                save_placement(row, saved)
+                row.server_path = saved.server_path
+            waiting -= set(other.library_ids)
 
     async def _mark_synced(self, collection_id: int) -> None:
         async with self._access.database.write_session() as session:

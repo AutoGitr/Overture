@@ -299,7 +299,6 @@ async def _audit_collection(
         row = stored_collection(
             id=1,
             server_item_id="box",
-            server_type=ServerType.PLEX,
             media_type=MediaType.MOVIE,
             title="Saga",
             last_synced_at=utc_now(),
@@ -328,7 +327,7 @@ async def _audit_collection(
         collection_art=unused(CollectionArtService),
     )
     planned = await plan_collection_audit(
-        ServerAuditRequest(check_collections=True), ServerType.PLEX, database=database
+        ServerAuditRequest(check_collections=True), database=database
     )
     assert planned == (
         [CollectionAuditTarget(1, ArtType.POSTER)] if uploaded is not None else []

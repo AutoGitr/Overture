@@ -10,7 +10,7 @@ lazy import httpx2
 lazy from sqlalchemy.exc import SQLAlchemyError
 
 lazy from ... import protocols
-lazy from ...config import Settings, media_server_identity
+lazy from ...config import Settings
 lazy from ...db.session import Database
 lazy from ...domain import ScheduleKind
 lazy from ...integrations.tmdb import TMDBClient
@@ -42,7 +42,6 @@ lazy from ..public_dataset.downloads import (
     QueuedDownloads,
     queue_overturedb_downloads_for_items,
 )
-lazy from ..schedule_store import SYNC_SERVER_SCHEDULE, load_schedule, patch_payload
 lazy from ..scheduler import SchedulerService
 lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler
@@ -127,36 +126,8 @@ class SyncEngine:
             database=database,
         )
 
-    async def _reconcile_server_transition(self) -> None:
-        """Reset saved sync schedules when the media server has changed.
-
-        Library IDs and incremental checkpoints belong to the server that
-        issued them; on another server they would select nothing useful.
-        """
-        current_server = media_server_identity(
-            self._app_config.MEDIA_SERVER or "", self._app_config.MEDIA_SERVER_URL
-        )
-        async with self._database.read_session() as session:
-            saved = await load_schedule(session, SYNC_SERVER_SCHEDULE)
-        last_server = saved.payload.last_media_server
-        if last_server == current_server:
-            return
-        if last_server is not None:
-            logger.info(
-                "Media server changed; resetting sync schedule "
-                "libraries and incremental checkpoints",
-            )
-            await self.schedules.reset(
-                lambda config: config.model_copy(update={"library_ids": []})
-            )
-        async with self._database.write_session() as session:
-            await patch_payload(
-                session, SYNC_SERVER_SCHEDULE, last_media_server=current_server
-            )
-
     async def start(self) -> None:
-        """Reconcile saved schedules with the active server, then register them."""
-        await self._reconcile_server_transition()
+        """Register the saved schedules."""
         await self.schedules.start()
 
     async def stop(self) -> None:
@@ -313,6 +284,7 @@ class SyncEngine:
             items=body.items,
             include_collections=body.include_collections,
             collection_groups=body.collection_groups,
+            collection_ids=body.collection_ids,
             provider_registry=self.provider_registry,
             reconciler=self.reconciler,
             config_dir=self._config_dir,

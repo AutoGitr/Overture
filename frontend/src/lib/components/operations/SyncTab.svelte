@@ -13,6 +13,7 @@
   import JobPanel from "../JobPanel.svelte";
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
+  import CollectionChecklist, { type ChoosableCollection } from "../CollectionChecklist.svelte";
   import LibraryChecklist from "../LibraryChecklist.svelte";
   import FieldRow from "../FieldRow.svelte";
   import Schedules from "../Schedules.svelte";
@@ -20,6 +21,7 @@
     createSyncScheduleMutation,
     deleteSyncScheduleMutation,
     getPublicDatasetStatusOptions,
+    listCollectionsOptions,
     listServerLibrariesOptions,
     listSyncSchedulesOptions,
     runSyncMutation,
@@ -31,6 +33,8 @@
   import { createNotifier } from "../../stores/notificationState.svelte";
   import { settingsState } from "../../stores/settingsState.svelte";
   import { syncState } from "../../stores/jobStates.svelte";
+  import { syncSelection } from "../../stores/syncSelection.svelte";
+  import { UNGROUPED_GROUP } from "../../../generated/settings";
   import { collectionSummary, librarySummary } from "../../utils/assetsPopup";
   import { collectionGroupNames } from "../../utils/collectionGroups.svelte";
   import { errorMessage } from "../../utils/errors";
@@ -39,7 +43,6 @@
   import {
     filterAvailableValues,
     selectedValuesForAll,
-    toggleCollectionChoice,
     toggleSelectedValue,
   } from "../../utils/popupSelection";
   import {
@@ -48,7 +51,6 @@
     type CronPreset,
   } from "../../utils/cronPresets";
   import { ScheduleController } from "../../utils/schedules.svelte";
-  import { readJson, writeJson } from "../../utils/storage";
 
   let {
     isActive = false,
@@ -83,13 +85,13 @@
     ...getPublicDatasetStatusOptions(),
     enabled: isActive,
   }));
+  syncSelection.restore();
   let libraries: ServerLibraryRead[] = $derived(librariesQuery.data ?? []);
-  /** The chosen libraries; `null` until a choice is made means all of them. */
-  let librarySelection = $state<string[] | null>(
-    readJson<string[] | null>("syncPopup_selectedLibraries", null),
-  );
   let selectedLibraryIds = $derived(
-    filterAvailableValues(librarySelection ?? libraryKeys(libraries), libraryKeys(libraries)),
+    filterAvailableValues(
+      syncSelection.libraries ?? libraryKeys(libraries),
+      libraryKeys(libraries),
+    ),
   );
   /** Results show exactly while a run exists, never ahead of the server's answer. */
   let hasResults = $derived(syncState.hasRun);
@@ -108,13 +110,34 @@
   );
 
   let collectionsSupported = $derived(settingsState.current.collections_supported);
-  let includeCollections = $state(readJson<boolean>("syncPopup_includeCollections", true));
-  let collectionGroupSelection = $state(readJson<string[]>("syncPopup_collectionGroups", []));
+  let includeCollections = $derived(syncSelection.allCollections);
   const collectionGroups = collectionGroupNames(() => isActive && collectionsSupported);
   /** The saved group choice, less groups that no longer exist. */
   let selectedCollectionGroups = $derived(
-    filterAvailableValues(collectionGroupSelection, collectionGroups()),
+    filterAvailableValues(syncSelection.groups, collectionGroups()),
   );
+  const collectionsQuery = createQuery(() => ({
+    ...listCollectionsOptions(),
+    enabled: isActive && collectionsSupported,
+  }));
+  /** The collections a sync can send by themselves: those Overture manages. */
+  let choosableCollections = $derived<ChoosableCollection[]>(
+    (collectionsQuery.data ?? [])
+      .filter((row) => row.managed && row.kind !== "separator")
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        group: row.collection_group ?? UNGROUPED_GROUP,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title)),
+  );
+  /** The saved collection choice, less collections that no longer exist or a group covers. */
+  let selectedCollectionIds = $derived.by(() => {
+    const chosen = new Set(syncSelection.collectionIds);
+    return choosableCollections
+      .filter((row) => chosen.has(row.id) && !selectedCollectionGroups.includes(row.group))
+      .map((row) => row.id);
+  });
 
   let scheduleMode = $state<SyncScheduleMode>("full");
   let scheduleCronExpression = $state("0 * * * *");
@@ -159,7 +182,10 @@
   );
   /** Collections chosen for a full sync, which alone can make a run. */
   let collectionsChosen = $derived(
-    collectionsSupported && (includeCollections || selectedCollectionGroups.length > 0),
+    collectionsSupported &&
+      (includeCollections ||
+        selectedCollectionGroups.length > 0 ||
+        selectedCollectionIds.length > 0),
   );
   let canRunSync = $derived(
     !loading &&
@@ -185,40 +211,41 @@
   let canSaveSchedule = $derived(scheduleBlocker === null);
 
   function saveSelection() {
-    writeJson("syncPopup_selectedLibraries", selectedLibraryIds);
-    writeJson("syncPopup_includeCollections", includeCollections);
-    writeJson("syncPopup_collectionGroups", collectionGroupSelection);
-  }
-
-  function toggleCollections(group: string | null) {
-    const choice = toggleCollectionChoice(
-      { all: includeCollections, groups: selectedCollectionGroups },
-      group,
-    );
-    includeCollections = choice.all;
-    collectionGroupSelection = choice.groups;
+    syncSelection.save(selectedLibraryIds);
   }
 
   /**
-   * Every collection, or only the chosen groups; neither skips collections.
-   * Collections without a library sync alone, from what earlier syncs stored.
+   * Every collection, or only the chosen groups and collections; none skips
+   * collections. Collections without a library sync alone, from what earlier
+   * syncs stored.
    */
   function collectionScope(): Pick<
     SyncScheduleConfigInput,
-    "include_collections" | "collection_groups" | "items"
+    "include_collections" | "collection_groups" | "collection_ids" | "items"
   > {
     const items = hasSelectedLibraries || !collectionsChosen;
-    return collectionsSupported && !includeCollections && selectedCollectionGroups.length
-      ? { include_collections: false, collection_groups: selectedCollectionGroups, items }
-      : { include_collections: includeCollections, items };
+    if (!collectionsSupported || includeCollections || !collectionsChosen)
+      return { include_collections: includeCollections, items };
+    return {
+      include_collections: false,
+      ...(selectedCollectionGroups.length && { collection_groups: selectedCollectionGroups }),
+      ...(selectedCollectionIds.length && { collection_ids: selectedCollectionIds }),
+      items,
+    };
+  }
+
+  /** The titles of saved collection choices that still exist. */
+  function collectionTitles(ids: number[] | null | undefined): string[] {
+    const chosen = new Set(ids);
+    return choosableCollections.filter((row) => chosen.has(row.id)).map((row) => row.title);
   }
 
   function toggleAll(checked: boolean) {
-    librarySelection = selectedValuesForAll(checked, libraryKeys(libraries));
+    syncSelection.libraries = selectedValuesForAll(checked, libraryKeys(libraries));
   }
 
   function toggleLibrary(key: string) {
-    librarySelection = toggleSelectedValue(selectedLibraryIds, key);
+    syncSelection.libraries = toggleSelectedValue(selectedLibraryIds, key);
   }
 
   function scheduleConfig(): SyncScheduleConfigInput {
@@ -243,13 +270,18 @@
     scheduleController.beginEdit(schedule);
     const saved = schedule.config;
     scheduleMode = saved.mode;
-    includeCollections = saved.include_collections;
-    collectionGroupSelection = saved.collection_groups ?? [];
+    syncSelection.allCollections = saved.include_collections;
+    syncSelection.groups = saved.collection_groups ?? [];
+    syncSelection.collectionIds = saved.collection_ids ?? [];
     scheduleCronExpression = schedule.cron_expression;
     downloadOvertureDbArt = saved.download_overturedb_art;
     downloadThemes = saved.download_themes;
     // A schedule without libraries syncs all of them, unless it syncs only collections.
-    librarySelection = !saved.items ? [] : saved.library_ids.length ? saved.library_ids : null;
+    syncSelection.libraries = !saved.items
+      ? []
+      : saved.library_ids.length
+        ? saved.library_ids
+        : null;
   }
 
   async function runNow() {
@@ -294,16 +326,20 @@
         onretry={() => librariesQuery.refetch()}
         ontoggle={toggleLibrary}
         ontoggleall={toggleAll}
-        collectionGroups={collectionsSupported && scheduleMode === "full"
-          ? collectionGroups()
-          : undefined}
-        collections={{ all: includeCollections, groups: selectedCollectionGroups }}
-        oncollectiontoggle={toggleCollections}
-        oncollectionsall={(checked) => {
-          includeCollections = checked;
-          collectionGroupSelection = [];
-        }}
       />
+      {#if collectionsSupported && scheduleMode === "full"}
+        <CollectionChecklist
+          groups={collectionGroups()}
+          choice={{ all: includeCollections, groups: selectedCollectionGroups }}
+          onchange={(choice) => {
+            syncSelection.allCollections = choice.all;
+            syncSelection.groups = choice.groups;
+          }}
+          collections={choosableCollections}
+          collectionIds={selectedCollectionIds}
+          oncollectionschange={(ids) => (syncSelection.collectionIds = ids)}
+        />
+      {/if}
     </div>
 
     <Schedules
@@ -390,6 +426,7 @@
             Collections: {collectionSummary(
               schedule.config.include_collections,
               schedule.config.collection_groups,
+              collectionTitles(schedule.config.collection_ids),
             )}
           </div>
         {/if}

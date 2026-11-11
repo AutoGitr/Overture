@@ -11,7 +11,7 @@ lazy import pytest
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
+lazy from overture.domain import ArtType, MediaType, ServerAsset
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.media_servers.errors import MediaServerError
@@ -476,7 +476,6 @@ async def test_a_collection_image_is_uploaded_again_then_verified(
             stored_collection(
                 id=4,
                 server_item_id="box",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 title="Saga",
                 last_synced_at=utc_now(),

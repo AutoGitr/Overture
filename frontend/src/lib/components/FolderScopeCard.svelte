@@ -1,11 +1,19 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { sidebarState } from "../stores/sidebarState.svelte";
   import type { FolderScope } from "../utils/folderScope.svelte";
   import Checklist, { type ChecklistGroup } from "./Checklist.svelte";
   import DataStatus from "./DataStatus.svelte";
   import SidebarItemsOption from "./SidebarItemsOption.svelte";
 
-  let { scope }: { scope: FolderScope } = $props();
+  let {
+    scope,
+    collections,
+  }: {
+    scope: FolderScope;
+    /** What the run checks of collections, shown between the folders and the sidebar choice. */
+    collections?: Snippet;
+  } = $props();
 
   let movieFolders = $derived(scope.useSidebarItems ? [] : scope.movieFolders);
   let showFolders = $derived(scope.useSidebarItems ? [] : scope.showFolders);
@@ -62,6 +70,7 @@
       ontoggleall={(checked) => scope.toggleAll(checked)}
     />
   </div>
+  {@render collections?.()}
   <SidebarItemsOption
     checked={scope.useSidebarItems}
     sidebarItems={sidebarState.current}

@@ -225,13 +225,18 @@ export function librarySummary(
   return ids.map((id) => titles.get(id) || id).join(", ");
 }
 
-/** Render which collections a run covers: every one, the chosen groups, or none. */
+/** Render which collections a run covers: every one, the chosen groups and collections, or none. */
 export function collectionSummary(
   all: boolean,
   groups: readonly string[] | null | undefined,
+  titles: readonly string[] = [],
 ): string {
   if (all) return "All collections";
-  return groups?.length ? `Groups: ${groups.join(", ")}` : "None";
+  const parts = [
+    groups?.length ? `Groups: ${groups.join(", ")}` : "",
+    titles.length ? `Collections: ${titles.join(", ")}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join("; ") : "None";
 }
 
 /** Render a comma-separated summary of sources using the given labels. */

@@ -64,7 +64,7 @@ test("a collection set previews and creates its collections without horizontal o
   );
   await page
     .getByRole("group", { name: "Save", exact: true })
-    .getByRole("button", { name: "Save and Create", exact: true })
+    .getByRole("button", { name: "Save", exact: true })
     .click();
   await expect
     .poll(() => saved)
@@ -239,7 +239,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
     .getByLabel("Criteria condition 1 field", { exact: true })
     .selectOption("source:tmdb_list");
   await page.getByLabel("Criteria condition 1 TMDB list IDs", { exact: true }).fill("123");
-  await page.getByRole("button", { name: "Save and Create", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(/collections\/12-new-collection$/);
   await expect(page.getByRole("heading", { name: "New collection", exact: true })).toBeVisible();
 });
@@ -300,7 +300,6 @@ test("Emby collections clearly explain unsupported themes", async ({ page }) => 
       json: collectionDetail({
         id: 12,
         title: "Emby saga",
-        server_type: "emby",
         theme_unavailable: "Emby does not support collection themes",
       }),
     }),
@@ -396,7 +395,6 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
   let saves = 0;
-  let syncs = 0;
   await page.route("**/api/collections/group-policy{,?*}", (route) => {
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
@@ -417,17 +415,13 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     }
     return route.fulfill({ json: { visible_home: true } });
   });
-  await page.route("**/api/collections/group-policy/sync{,?*}", (route) => {
-    syncs++;
-    return route.fulfill({ json: { created: [12], removed: [], synced: 0, errors: {} } });
-  });
   await logIn(page, "/collections/new");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
   await setup.getByLabel("Title", { exact: true }).fill("Unsaved single collection");
   await setup.getByRole("checkbox", { name: "Other movies", exact: true }).check();
   await setup.getByText("One per value", { exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Configure sections" })).toHaveCount(0);
-  const submit = page.getByRole("button", { name: "Save and Create", exact: true });
+  const submit = page.getByRole("button", { name: "Save", exact: true });
   await page.getByLabel(/^Split by/).selectOption("franchise");
   // Split by names the group, and fills in what suits franchises.
   await expect(setup.getByLabel(/^Group/)).toHaveValue("TMDB franchises");
@@ -451,7 +445,6 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     .poll(() => new URL(page.url()).searchParams.get("collection_group"))
     .toBe("group:Franchises");
   expect(saves).toBe(1);
-  expect(syncs).toBe(1);
 });
 
 test("smart collections combine list sources and live criteria", async ({ page }) => {
@@ -468,7 +461,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
     kind: "smart",
   });
   let created = false;
-  // Creating posts to the list's own URL, with ?to_server.
+  // Creating posts to the list's own URL.
   await page.route("**/api/collections{,?*}", (route) => {
     if (route.request().method() !== "POST") return route.fulfill({ json: [] });
     expect(route.request().postDataJSON()).toMatchObject({
@@ -528,7 +521,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
   );
   const submit = page
     .getByRole("group", { name: "Save", exact: true })
-    .getByRole("button", { name: "Save and Create", exact: true });
+    .getByRole("button", { name: "Save", exact: true });
   await submit.scrollIntoViewIfNeeded();
   await submit.click();
   await expect(page).toHaveURL(/collections\/12-unwatched-favorites$/);

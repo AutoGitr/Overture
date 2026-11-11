@@ -9,6 +9,9 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Collections:** **OvertureDB posters**, a collection setting (global, per group or per collection), chooses between a TMDB collection's own OvertureDB poster and a consistent one in a layout every collection shares; automatic art, exports and **Contribute issue** follow each collection's choice, and the catalog view the global one.
+- **Collections:** a **Made as** filter shows collections made one at a time or by a set, one per value.
+- **Sync:** a full sync can sync chosen collections, picked under **Specific collections** below the groups, besides or instead of whole groups; schedules keep the choice.
 - **Collections:** an **In a collection** condition; **In a collection is false** makes a catch-all of every title no other collection holds, and a collection never counts itself.
 - **Artwork:** collection art drawn from the title, in a dark, light or accent style, offered as **Generated** candidates and filterable as the **Generated** art source: posters show the title, under the group or alone, and backgrounds never show text; drawn art is drawn again when the title or group changes.
 - **Collections:** **Automatic art** (global, group and collection) is one choice: Off; OvertureDB, TMDB, or OvertureDB then TMDB, each optionally else draw; or Draw, which draws a titled poster and a background without text in the **Drawn colours**; **Background: Not needed** makes a poster complete a collection's art. The media server's own art is never taken. The upgrade turns the earlier switches into OvertureDB, then TMDB.
@@ -45,6 +48,15 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Media servers:** changing the media server keeps your collections and groups, with their art, themes and settings. On the next start Overture forgets the collections the earlier server held that it does not manage, lets go of the managed ones' server copies and resets what the new server cannot keep, such as Plex's visibility, smart collections and custom orders on Jellyfin and Emby; the next sync makes them on the new server, or takes over its collection of the same title, and sends their art and themes. Sync schedules sync every library and polling starts over; server audit results are cleared. The upgrade keeps the collections of the server synced last and deletes those kept for earlier servers.
+- **API:** collections no longer carry `server_type`; they belong to whichever media server Overture is set up with.
+- **Libraries:** when the server stops listing a library and a sync finds its titles in another, collections, sets and schedules move to that library, as after a change of media server.
+- **Collections:** a collection without a copy on the server takes over the server's unmanaged collection of its title in that library instead of making a second one.
+- **OvertureDB:** OvertureDB is on by default and syncs its catalog on the first start. **Enable OvertureDB**, **Trust OvertureDB's No theme flag** and **Browse OvertureDB in the sidebar** moved to **Settings -> OvertureDB**; the OvertureDB menu entry shows only while it is on.
+- **OvertureDB:** Overture reads version 3 of the catalog, which adds consistent collection posters; earlier versions of Overture cannot sync it.
+- **OvertureDB:** exports and **Contribute issue** leave out a theme shorter than 20 seconds or longer than 10 minutes, which OvertureDB refuses, and say why.
+- **Collections:** only **Sync** under Operations changes collections on the media server. Saving a collection, group or set, editing its members and bulk display edits stay in Overture and never contact the server; **Save and Sync** saves, then opens Sync with only that collection, set or group chosen and every library unticked. `POST /api/collections/{id}/sync`, `POST /api/collections/group-policy/sync` and the `to_server` query of collection writes are removed; a full sync's `collection_ids` takes their place.
+- **Operations:** Collections is its own section beside Libraries or Folders in Assets, Sync and Server audit, with its own **Select all**; in Sync and Assets every collection includes every group, so unticking one group keeps the rest.
 - **Collections:** saving a collection or group only writes in Overture and returns at once; **Save and Sync** sends it to the media server. A new collection saved without syncing reads its lists on its first sync.
 - **Downloads:** art and themes download while a full sync runs, so a choice made then shows at once; each download writes into the folder its title has when it is saved.
 - **Collections:** sort titles leave out a leading "The", "A" or "An" of the title and group, as Plex does when it sorts titles itself.
@@ -116,6 +128,8 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Artwork:** drawn collection art renders every character of a title, such as dashes, curly quotes, accented letters, Greek, Cyrillic, Chinese, Japanese, Korean, Arabic, Hebrew, Devanagari, Thai, symbols and emoji, with bundled Noto fonts.
+- **Interface:** reloading the page no longer announces runs that had already finished.
 - **Collections:** a library sync kept turning separators into regular collections, which then showed in the sidebar, failed to open and kept their group's next separator from being made ("A collection with this title already exists in this library"); the upgrade makes such collections separators again.
 - **Interface:** a burst of live updates no longer slows a large library.
 

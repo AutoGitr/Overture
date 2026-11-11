@@ -147,7 +147,9 @@ For Linux `x86_64` with systemd.
 
 The archive bundles its own Python, web interface, FFmpeg and Deno, so
 installation runs offline. It needs glibc 2.28 or newer, as in Debian 12+,
-Ubuntu 22.04+, RHEL 8+, Fedora or Arch; the installer checks this.
+Ubuntu 22.04+, RHEL 8+, Fedora or Arch; the installer checks this. Drawn
+collection art lays out Arabic and Hebrew titles with the system's FriBiDi
+library (`libfribidi0` or `fribidi`), which most distributions install.
 
 1. Download the archive and its `.sha256` file from the
    [latest release](https://github.com/AutoGitr/Overture/releases/latest), then
@@ -233,6 +235,34 @@ the server as down.
 2. Set `MEDIA_SERVER=emby`, `MEDIA_SERVER_URL=http://<server>:8096` (include a
    base path such as `/emby` if you use one) and `MEDIA_SERVER_API_KEY=<key>`.
 3. In each library, keep local images ahead of online image fetchers.
+
+</details>
+
+<details>
+<summary><b>Change media server</b></summary>
+
+Point `MEDIA_SERVER`, `MEDIA_SERVER_URL` and `MEDIA_SERVER_API_KEY` at the
+other server and restart. Overture keeps your titles' choices and files, and
+your collections and groups, with their art, themes and settings; on the next
+start it lets go of what belonged to the earlier server:
+
+- Collections the earlier server held that Overture does not manage are
+  forgotten; the next sync lists the new server's own.
+- Every managed collection loses its server copies and shows **Unsynced**. Its
+  next sync makes it on the new server, or takes over the new server's
+  collection of the same title in that library, and sends it its art and
+  theme.
+- Choices the new server cannot keep go back to the defaults: Plex's
+  visibility, collection mode, filtering, Home order and member labels on
+  Jellyfin and Emby, which also make smart collections and sets regular ones
+  Overture evaluates; and orders the server cannot sort by.
+- Sync schedules sync every library, and polling starts over. Server audit
+  results are cleared.
+
+The first full sync matches each title to the new server by its IDs or folder,
+and moves collections, sets and schedules from a library the server no longer
+lists to the one its titles are now in. Sync once with every library before
+editing collections.
 
 </details>
 
@@ -484,7 +514,8 @@ inside their groups) or **Collections** (a layers icon: all in one list); each
 further click switches between them, and hovering it shows the icon of the view
 it switches to. Its count is what it lists: groups or collections. Movies and
 shows share groups, and **Holds**, a status filter, narrows the list to either
-or to collections of both.
+or to collections of both; **Made as** narrows it to collections made one at a
+time (**One collection**) or by a set (**One per value**).
 In the OvertureDB catalog, the same icon beside Movies opens its collections.
 **Groups** lists every group, empty ones too; **Ungrouped** and **Unmanaged**
 appear only while they hold a collection. A sparkle marks smart collections. **+ Create collection** opens a Configure page, the one place to create
@@ -520,9 +551,10 @@ Both kinds share the same sections, in the same order:
 5. **Active dates**: the dates a collection is on the server, which repeat
    yearly and can cross New Year, and whether an inactive collection leaves the
    server. An inactive collection's art and theme can still be chosen: Overture
-   keeps them, and the sync that puts the collection back sends them. Scheduled
-   collection syncs are **Sync** schedules under Operations, which can sync
-   chosen groups or every collection.
+   keeps them, and the sync that puts the collection back sends them. Every
+   collection sync, scheduled or run now, is a **Sync** under Operations, which
+   can sync every collection, chosen groups, or chosen collections under
+   **Specific collections**.
 
 A collection's page opens with Setup and Content expanded and the rest
 closed, and a group in **Collection groups** with every section closed, each
@@ -635,14 +667,16 @@ selects its value again. A set's
 collections take their criteria and titles from the set; edit it in
 **Collection groups**. A set runs on its schedule once it has been synced.
 
-**Save** (or Enter) saves in Overture only and never changes the media server,
-so it is instant; a new collection's lists are read on its first sync.
-**Save and Create** saves and creates the collection or set on the server;
-**Save and Sync** saves an existing collection and makes the server match it,
-then picks art and themes, labels and tags members, requests missing titles and
-orders Home rows as its settings say. Members you add, remove or reorder also
-wait for the next sync. A collection with changes the server does not have
-shows **Unsynced**, and a library sync keeps those changes.
+**Save** (or Enter) saves in Overture only and never contacts the media
+server, so it is instant; a new collection's lists are read on its first sync.
+Only **Sync** under Operations changes the server, so every sync runs, and is
+scheduled, in one place. **Save and Sync** saves, then opens **Sync** in
+Operations with only this collection chosen, or a new set's group, and every
+library unticked; **Run now** creates or updates it on the server, then picks
+art and themes, labels and tags members, requests missing titles and orders
+Home rows as its settings say. Members you add, remove or reorder also wait for
+the next sync. A collection with changes the server does not have shows
+**Unsynced**, and a library sync keeps those changes.
 
 Summary templates take `{title}`, `{group}`, `{start_date}`, `{end_date}`,
 `{summary}` (the server's) and `{source_summary}`, the description of the first
@@ -709,8 +743,9 @@ collection writes.
 collection set, Settings and Active dates; Setup only assigns a group.
 **Save** saves the group in Overture at once; its collections get its display
 settings on the server with their next sync, keeping members and explicit
-overrides. **Save and Sync** also runs the set and syncs the group's
-collections, which needs the group to hold a collection or a set first. A smart
+overrides. **Save and Sync** saves, then opens **Sync** in Operations with only
+this group chosen, which runs the set and syncs the group's collections; the
+group needs a collection or a set first. A smart
 collection never takes a group's **Custom** order, which Plex cannot apply to
 it; it takes the next order the settings give. Rename or delete a custom group in
 **Collection groups**. Every managed collection
@@ -845,8 +880,9 @@ Overture names files the way your `MEDIA_SERVER` expects. Images are `.jpg`,
 ### OvertureDB
 
 OvertureDB is a community catalog of hand-picked artwork sets and themes.
-Enable it in the **OvertureDB** menu to download the catalog and keep it up to
-date. It also carries imported ThemerrDB theme choices. Catalog-only runs still
+It is on by default: Overture downloads the catalog on its first start and
+keeps it up to date. Turn it off under **Settings -> OvertureDB**, which also
+hides its menu entry. It also carries imported ThemerrDB theme choices. Catalog-only runs still
 download images and audio from their linked sources; coverage and availability
 depend on those sources.
 
@@ -872,16 +908,31 @@ title has no theme music; once the catalog carries the flag, the next
 OvertureDB sync brings it to your library, where the title's theme counts as
 complete and theme runs skip it. **Export selections** includes all local
 drafts along with library selections and matched collection themes. The
-OvertureDB popup shows collection and draft counts, and holds two settings:
-**Trust OvertureDB's No theme flag** and **Browse OvertureDB in the sidebar**.
-Without browsing, the catalog switch and the links to OvertureDB entries are
-hidden, and an OvertureDB page that was open returns to the library.
+OvertureDB popup shows the catalog's status, collection and draft counts.
+**Settings -> OvertureDB** holds **Enable OvertureDB**, **Trust OvertureDB's No
+theme flag** and **Browse OvertureDB in the sidebar**. Without browsing, the
+catalog switch and the links to OvertureDB entries are hidden, and an
+OvertureDB page that was open returns to the library.
+
+**OvertureDB posters**, a collection setting (global, per group or per
+collection), chooses which poster OvertureDB gives a TMDB collection:
+**Individual**, its own, or **Consistent**, one in the layout every consistent
+poster shares, made with the
+[Coverlabs Silva designer](https://www.coverlabs.studio/designer/silva) and
+hosted on TMDB or ThePosterDB; a collection without a consistent poster then
+gets no OvertureDB poster. Automatic art, exports and **Contribute issue**
+follow each collection's choice, so posters you pick are contributed as the
+same kind; Consistent leaves out a poster from any other source and says so.
+The catalog view follows the global choice.
 
 To contribute, use **OvertureDB -> Export selections** and attach the ZIP to a
 [bulk contribution](https://github.com/AutoGitr/OvertureDB/issues/new?template=bulk.yml).
 To contribute one title, collection or draft, open it and use **Contribute
 issue**: it opens the movie, show or collection form on GitHub filled in with
 its selections, and warns about anything the form needs from you.
+
+OvertureDB takes themes 20 seconds to 10 minutes long, so contributions leave
+out a chosen theme outside that and say why.
 
 Review and submit the issue on GitHub; a maintainer approves it before it joins
 the catalog. Imported ThemerrDB choices are maintained upstream in ThemerrDB.

@@ -15,7 +15,6 @@ lazy from overture.db.session import Database
 lazy from overture.domain import (
     IncrementalThemeOrder,
     MediaType,
-    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.jobs.kinds import JobKind
@@ -50,7 +49,6 @@ async def _seed(database: Database, *, saved: str | None = None) -> None:
             stored_collection(
                 id=1,
                 server_item_id="opaque-server-id",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 library_id="movies",
                 title="Saga",
@@ -215,7 +213,6 @@ async def test_jellyfin_restores_a_missing_theme_and_keeps_a_recorded_one(
     async with database.write_session() as session:
         row = await session.get(MediaCollection, 1)
         assert row is not None
-        row.server_type = ServerType.JELLYFIN
         row.server_path = "/config/collections/Saga [boxset]"
         # Planning trusts the recorded file facts: none recorded means missing.
         row.theme_file_hash = "previous-file" if existing_file else None

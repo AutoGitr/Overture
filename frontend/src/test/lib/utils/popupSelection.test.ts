@@ -3,7 +3,7 @@ import {
   allValuesSelected,
   filterAvailableValues,
   selectedValuesForAll,
-  toggleCollectionChoice,
+  toggleCollectionGroup,
   toggleSelectedValue,
 } from "../../../lib/utils/popupSelection";
 
@@ -24,15 +24,18 @@ describe("popup selection helpers", () => {
     expect(allValuesSelected([], [])).toBe(false);
   });
 
-  it("chooses every collection or groups, never both", () => {
+  it("counts every collection as every group chosen", () => {
+    const available = ["Decades", "Sagas", "Studios"];
     const groups = { all: false, groups: ["Sagas"] };
 
-    expect(toggleCollectionChoice(groups, null)).toEqual({ all: true, groups: [] });
-    expect(toggleCollectionChoice({ all: true, groups: [] }, "Decades")).toEqual({
+    expect(toggleCollectionGroup({ all: true, groups: [] }, "Decades", available)).toEqual({
       all: false,
-      groups: ["Decades"],
+      groups: ["Sagas", "Studios"],
     });
-    expect(toggleCollectionChoice(groups, "Sagas")).toEqual({ all: false, groups: [] });
+    expect(toggleCollectionGroup(groups, "Sagas", available)).toEqual({ all: false, groups: [] });
+    expect(
+      toggleCollectionGroup({ all: false, groups: ["Sagas", "Studios"] }, "Decades", available),
+    ).toEqual({ all: false, groups: ["Sagas", "Studios", "Decades"] });
     expect(groups).toEqual({ all: false, groups: ["Sagas"] });
   });
 });

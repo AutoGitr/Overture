@@ -17,7 +17,7 @@ lazy from overture.db.models.media_collection import CollectionLibrary, MediaCol
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerType, TermKind
+lazy from overture.domain import ArtType, MediaType, TermKind
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.utils.time import utc_now
 lazy from tests.workload import Workload, recording
@@ -86,7 +86,6 @@ async def _stock(database: Database, first: int, count: int) -> None:
             if item_id % 10 == 0:
                 collection = MediaCollection(
                     id=item_id,
-                    server_type=ServerType.PLEX,
                     title=f"Collection {item_id}",
                     last_synced_at=now,
                     created_at=now,

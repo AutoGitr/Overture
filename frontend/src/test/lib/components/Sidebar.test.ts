@@ -42,7 +42,6 @@ describe("Sidebar", () => {
       collection({
         id: 1,
         title: "Action",
-        server_type: "plex",
       }),
     ]);
     uiState.closePopup();
@@ -97,18 +96,22 @@ describe("Sidebar", () => {
     expect(await screen.findByText("Smart collection")).toBeInTheDocument();
   });
 
-  it("shows collection art and theme badges except themes on Emby", async () => {
-    client.setQueryData(listCollectionsOptions().queryKey, [
-      collection({ id: 1, title: "Plex", server_type: "plex" }),
-      collection({ id: 2, title: "Emby", server_type: "emby" }),
-    ]);
-    await navigate("/collections");
-    render(SidebarHarness, { props: { client } });
-    expect(await screen.findByRole("button", { name: "Open art for Emby" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Open themes for Emby" })).toBeNull();
-    await fireEvent.click(screen.getByRole("button", { name: "Open themes for Plex" }));
-    await waitFor(() => expect(route.pathname).toBe("/collections/1-plex/themes"));
-  });
+  it.each([
+    ["plex", true],
+    ["emby", false],
+  ] as const)(
+    "shows collection art badges, and theme badges unless on Emby (%s)",
+    async (server, themes) => {
+      settingsState.load(appSettings({ media_server: server, collections_supported: true }));
+      client.setQueryData(listCollectionsOptions().queryKey, [
+        collection({ id: 1, title: "Saga" }),
+      ]);
+      await navigate("/collections");
+      render(SidebarHarness, { props: { client } });
+      expect(await screen.findByRole("button", { name: "Open art for Saga" })).toBeVisible();
+      expect(!!screen.queryByRole("button", { name: "Open themes for Saga" })).toBe(themes);
+    },
+  );
 
   it("remembers the scroll position of each tab separately", async () => {
     vi.useFakeTimers();

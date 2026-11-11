@@ -2,6 +2,8 @@
 
 lazy from typing import override
 
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import (
     ArtFileFacts,
@@ -16,7 +18,6 @@ lazy from overture.domain import (
     ArtBulkSource,
     ArtType,
     MediaType,
-    ServerType,
 )
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
@@ -35,7 +36,7 @@ lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import JobProbe
 
@@ -48,7 +49,6 @@ async def _seed(database: Database) -> None:
             row = stored_collection(
                 id=collection_id,
                 server_item_id=f"server-{collection_id}",
-                server_type=ServerType.PLEX,
                 media_type=MediaType.MOVIE,
                 library_id="movies",
                 title=f"Collection {collection_id}",
@@ -105,9 +105,10 @@ async def test_collection_art_plans_posters_and_backgrounds_with_item_rules(
 
 
 async def test_slots_no_source_can_serve_are_decided_together_while_planning(
-    *, app_config: Settings, database: Database
+    db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     await _seed(database)
+    await disable_public_dataset(db_session)
 
     plan = await plan_collection_art(
         BulkMatchArtRequest(collection_groups=["Sagas"]),

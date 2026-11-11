@@ -1,6 +1,7 @@
 """Application-owned media-server reconciliation."""
 
 lazy import logging
+lazy from collections import Counter
 lazy from collections.abc import (
     AsyncGenerator,
     Awaitable,
@@ -19,7 +20,7 @@ lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import PAGE_SIZE, Database
-lazy from ...domain import AutoUnmonitor, media_sort_key
+lazy from ...domain import AutoUnmonitor, MediaType, media_sort_key
 lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.adapters import (
@@ -30,8 +31,10 @@ lazy from ...media_servers.adapters import (
     SyncStopCheck,
 )
 lazy from ...media_servers.base import BaseMediaServerProvider
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
+lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...services.library.items import (
     emit_library_item_removed,
     emit_library_items_upserted,
@@ -75,6 +78,11 @@ class SyncResult:
 
     tally: SyncTally = field(default_factory=SyncTally)
     created_item_ids: list[int] = field(default_factory=list[int])
+    #: How many titles moved from one library to another, by
+    #: ``(library, media type, new library)``.
+    library_moves: Counter[tuple[str, MediaType, str]] = field(
+        default_factory=Counter[tuple[str, MediaType, str]]
+    )
 
 
 class LibraryReconciler:
@@ -105,6 +113,43 @@ class LibraryReconciler:
         """Store the libraries the server lists, which its items are filed under."""
         async with self._database.write_session() as session:
             await LibraryRepository(session).record(sections, utc_now())
+
+    async def follow_moved_libraries(
+        self, moves: Counter[tuple[str, MediaType, str]]
+    ) -> list[tuple[str, str]]:
+        """Point what named a library the server no longer lists at its successor.
+
+        A library's successor is the listed library most of its titles moved
+        to, as after a change of media server, whose libraries have other IDs.
+        Returns each ``(library, successor)`` followed.
+        """
+        if not moves:
+            return []
+        followed: list[tuple[str, str]] = []
+        async with self._database.write_session() as session:
+            listed = {
+                (library.id, library.media_type)
+                for library in await LibraryRepository(session).listed()
+            }
+            successors: dict[tuple[str, MediaType], Counter[str]] = {}
+            for (library_id, media_type, moved_to), count in moves.items():
+                successors.setdefault((library_id, media_type), Counter())[
+                    moved_to
+                ] += count
+            for (library_id, media_type), counts in successors.items():
+                if (library_id, media_type) in listed:
+                    continue
+                [(successor, _)] = counts.most_common(1)
+                if (successor, media_type) not in listed:
+                    continue
+                await CollectionRepository(session).move_library(
+                    library_id, media_type, successor
+                )
+                await SavedScheduleRepository(session).move_library(
+                    library_id, successor
+                )
+                followed.append((library_id, successor))
+        return followed
 
     async def fill_deferred_directors(
         self, provider: BaseMediaServerProvider[Any], server_items: list[ServerItem]
@@ -197,7 +242,7 @@ class LibraryReconciler:
                     stopped = True
                     break
                 outcome = await self._reconcile_one(
-                    server_item, claimed, auto_unmonitor=auto_unmonitor
+                    server_item, claimed, stats=stats, auto_unmonitor=auto_unmonitor
                 )
                 if isinstance(outcome, SyncItemResult) and outcome.item_id is not None:
                     synced.add(outcome.item_id)
@@ -362,6 +407,7 @@ class LibraryReconciler:
         server_item: ServerItem,
         claimed: Callable[[int], Awaitable[bool]],
         *,
+        stats: SyncResult,
         auto_unmonitor: AutoUnmonitor,
     ) -> SyncItemResult | str:
         """Find the row one provider item matches, then reconcile it."""
@@ -369,9 +415,20 @@ class LibraryReconciler:
             excluded, expected = await self._match(server_item, claimed)
         except Exception as exc:
             return _item_failure(server_item, exc)
-        return await self._reconcile_matched(
+        outcome = await self._reconcile_matched(
             server_item, excluded, expected, auto_unmonitor=auto_unmonitor
         )
+        if (
+            isinstance(outcome, SyncItemResult)
+            and expected is not None
+            and expected.library_id
+            and server_item.library_id
+            and expected.library_id != server_item.library_id
+        ):
+            stats.library_moves[
+                expected.library_id, server_item.media_type, server_item.library_id
+            ] += 1
+        return outcome
 
     async def _reconcile_matched(
         self,

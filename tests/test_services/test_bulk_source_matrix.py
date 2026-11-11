@@ -48,6 +48,7 @@ lazy from tests.bulk_helpers import (
     Context,
     art_matcher,
     as_job_context,
+    disable_public_dataset,
     enable_public_dataset,
     fast_fingerprints,
     make_bulk_downloads,
@@ -271,8 +272,7 @@ async def test_art_source_matrix(
     database: Database,
 ) -> None:
     storage = AssetStorage(app_config=app_config)
-    if enabled:
-        await enable_public_dataset(db_session)
+    await (enable_public_dataset if enabled else disable_public_dataset)(db_session)
     cases: dict[int, ArtCase] = {}
     expected: dict[str, Expected] = {}
     for number, case in enumerate(ART_CASES, 1):
@@ -519,8 +519,7 @@ async def test_theme_source_matrix(
     app_config: Settings,
     database: Database,
 ) -> None:
-    if enabled:
-        await enable_public_dataset(db_session)
+    await (enable_public_dataset if enabled else disable_public_dataset)(db_session)
     cases: dict[int, ThemeCase] = {}
     expected: dict[str, Expected] = {}
     for number, case in enumerate(THEME_CASES, 1):

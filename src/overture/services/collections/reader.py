@@ -58,14 +58,13 @@ class CollectionReader:
 
         Separators are left out: each is part of its group, which keeps it.
         """
-        server = self._access.server_type
+        self._access.require_collections()
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             rows = [
                 row
                 for row in await repo.list_listed()
-                if row.server_type is server
-                and row.kind is not CollectionKind.SEPARATOR
+                if row.kind is not CollectionKind.SEPARATOR
             ]
             defaults = await get_app_settings(session)
             catalog = await catalog_collections(

@@ -48,9 +48,10 @@
         type="checkbox"
         checked={allSelected}
         disabled={selectAllDisabled}
+        aria-label="{allSelected ? 'Deselect' : 'Select'} all {label.toLowerCase()}"
         onchange={(event) => ontoggleall(event.currentTarget.checked)}
       />
-      <span>{allSelected ? "Deselect all" : "Select all"}</span>
+      <span aria-hidden="true">{allSelected ? "Deselect all" : "Select all"}</span>
     </label>
   </div>
   {#if notice}

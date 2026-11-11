@@ -251,10 +251,11 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
     }
     return route.fulfill({ json: { backups: [] } });
   });
+  // The OvertureDB popup is offered only while OvertureDB is on.
   await page.route(/\/api\/public-dataset\/status/, (route) =>
     route.fulfill({
       json: {
-        enabled: false,
+        enabled: true,
         last_sync: null,
         last_stats: null,
         timezone: "UTC",

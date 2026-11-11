@@ -119,6 +119,7 @@ export type AppSettingsRead = {
     collection_minimum_items: number;
     collection_mode_default: CollectionMode;
     collection_order_default: CollectionOrder;
+    collection_overturedb_posters: CollectionPosterStyle;
     /**
      * Collection Request Missing
      */
@@ -297,6 +298,7 @@ export type AppSettingsUpdate = {
     collection_minimum_items?: number | null;
     collection_mode_default?: CollectionMode | null;
     collection_order_default?: CollectionOrder | null;
+    collection_overturedb_posters?: CollectionPosterStyle | null;
     /**
      * Collection Request Missing
      */
@@ -1659,6 +1661,7 @@ export type CollectionDefaults = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
+    overturedb_posters: CollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -1847,7 +1850,6 @@ export type CollectionDetail = {
      * Server Poster Version
      */
     server_poster_version: string | null;
-    server_type: ServerType;
     /**
      * Sort Title
      */
@@ -2169,6 +2171,7 @@ export type CollectionGroupPolicyInput = {
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
+    overturedb_posters?: CollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2234,6 +2237,7 @@ export type CollectionGroupPolicyOutput = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
+    overturedb_posters: CollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2268,31 +2272,7 @@ export type CollectionGroupRename = {
     name: GroupName;
 };
 
-/**
- * CollectionGroupSyncResult
- *
- * What syncing a group created, took off the server and failed to sync.
- */
-export type CollectionGroupSyncResult = {
-    /**
-     * Created
-     */
-    created: Array<number>;
-    /**
-     * Errors
-     */
-    errors: {
-        [key: string]: PublicText;
-    };
-    /**
-     * Synced
-     */
-    synced: number;
-    /**
-     * Withheld
-     */
-    withheld: Array<number>;
-};
+export type CollectionIds = UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1;
 
 /**
  * CollectionKind
@@ -2487,6 +2467,16 @@ export type CollectionOptions = {
 export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'critic_rating.desc' | 'critic_rating.asc' | 'audience_rating.desc' | 'audience_rating.asc' | 'user_rating.desc' | 'user_rating.asc' | 'duration.desc' | 'duration.asc' | 'plays.desc' | 'plays.asc' | 'last_played.desc' | 'last_played.asc' | 'random';
 
 /**
+ * CollectionPosterStyle
+ *
+ * Which poster OvertureDB gives a TMDB collection.
+ *
+ * ``consistent`` takes the poster in the layout every consistent collection
+ * poster shares; a collection without one has no OvertureDB poster.
+ */
+export type CollectionPosterStyle = 'individual' | 'consistent';
+
+/**
  * CollectionPreview
  *
  * What a collection's criteria select before it is saved.
@@ -2662,7 +2652,6 @@ export type CollectionRead = {
      * Server Poster Version
      */
     server_poster_version: string | null;
-    server_type: ServerType;
     /**
      * Sort Title
      */
@@ -2827,6 +2816,7 @@ export type CollectionRuleRead = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
+    overturedb_posters: CollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2903,6 +2893,7 @@ export type CollectionRuleWriteInput = {
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
+    overturedb_posters?: CollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2975,6 +2966,7 @@ export type CollectionRuleWriteOutput = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
+    overturedb_posters: CollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -3121,30 +3113,6 @@ export type CollectionSourceRead = {
      * Unavailable
      */
     unavailable: string | null;
-};
-
-/**
- * CollectionSyncResponse
- *
- * What one rule run changed.
- */
-export type CollectionSyncResponse = {
-    /**
-     * Added
-     */
-    added: number;
-    /**
-     * Removed
-     */
-    removed: number;
-    /**
-     * Skipped
-     */
-    skipped: boolean;
-    /**
-     * Withheld
-     */
-    withheld: boolean;
 };
 
 /**
@@ -5454,6 +5422,10 @@ export type SyncRunRequest = {
      */
     collection_groups?: GroupNames | null;
     /**
+     * Sync these collections instead, whole, besides any groups.
+     */
+    collection_ids?: CollectionIds | null;
+    /**
      * Include Collections
      *
      * Refresh every collection from the media server.
@@ -5478,6 +5450,10 @@ export type SyncScheduleConfigInput = {
      * Run these groups' sets and sync their collections instead.
      */
     collection_groups?: GroupNames | null;
+    /**
+     * Sync these collections instead, whole, besides any groups.
+     */
+    collection_ids?: CollectionIds | null;
     /**
      * Download Overturedb Art
      *
@@ -5517,6 +5493,10 @@ export type SyncScheduleConfigOutput = {
      * Run these groups' sets and sync their collections instead.
      */
     collection_groups: GroupNames | null;
+    /**
+     * Sync these collections instead, whole, besides any groups.
+     */
+    collection_ids: CollectionIds | null;
     /**
      * Download Overturedb Art
      *
@@ -6132,6 +6112,8 @@ export type TmdbSeasonPreview = {
 
 export type UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 = Array<number>;
 
+export type UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1 = Array<number>;
+
 export type UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200 = Array<string>;
 
 export type UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength200MinLenMinLength1 = Array<string>;
@@ -6202,6 +6184,8 @@ export type ArtTypeStatsWritable = {
     poster_shows: CoverageWritable;
     season_poster: CoverageWritable;
 };
+
+export type CollectionIdsWritable = UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1;
 
 /**
  * Coverage
@@ -7406,14 +7390,7 @@ export type CreateCollectionData = {
         'X-Api-Key'?: string | null;
     };
     path?: never;
-    query?: {
-        /**
-         * To Server
-         *
-         * Also send the change to the media server
-         */
-        to_server?: boolean;
-    };
+    query?: never;
     url: '/api/collections';
 };
 
@@ -7745,44 +7722,6 @@ export type SaveCollectionGroupPolicyResponses = {
 };
 
 export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
-
-export type SyncCollectionGroupData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    url: '/api/collections/group-policy/sync';
-};
-
-export type SyncCollectionGroupErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SyncCollectionGroupError = SyncCollectionGroupErrors[keyof SyncCollectionGroupErrors];
-
-export type SyncCollectionGroupResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionGroupSyncResult;
-};
-
-export type SyncCollectionGroupResponse = SyncCollectionGroupResponses[keyof SyncCollectionGroupResponses];
 
 export type DeleteCollectionGroupData = {
     body: CollectionGroupDelete;
@@ -8246,14 +8185,7 @@ export type UpdateCollectionData = {
          */
         collection_id: number;
     };
-    query?: {
-        /**
-         * To Server
-         *
-         * Also send the change to the media server
-         */
-        to_server?: boolean;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}';
 };
 
@@ -8778,14 +8710,7 @@ export type SetCollectionMembersData = {
          */
         collection_id: number;
     };
-    query?: {
-        /**
-         * To Server
-         *
-         * Also send the change to the media server
-         */
-        to_server?: boolean;
-    };
+    query?: never;
     url: '/api/collections/{collection_id}/members';
 };
 
@@ -9086,46 +9011,6 @@ export type GetCollectionSourcesResponses = {
 };
 
 export type GetCollectionSourcesResponse = GetCollectionSourcesResponses[keyof GetCollectionSourcesResponses];
-
-export type SyncCollectionData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Collection Id
-         *
-         * Collection ID
-         */
-        collection_id: number;
-    };
-    query?: never;
-    url: '/api/collections/{collection_id}/sync';
-};
-
-export type SyncCollectionErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SyncCollectionError = SyncCollectionErrors[keyof SyncCollectionErrors];
-
-export type SyncCollectionResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionSyncResponse;
-};
-
-export type SyncCollectionResponse = SyncCollectionResponses[keyof SyncCollectionResponses];
 
 export type RemoveCollectionThemeData = {
     body?: never;

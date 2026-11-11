@@ -47,6 +47,16 @@ describe("Header", () => {
     expect(uiState.operationsTab).toBe("sync");
   });
 
+  it.each([true, false])(
+    "offers OvertureDB in the menu only while it is enabled (%s)",
+    async (enabled) => {
+      browseCatalog(enabled);
+      renderWithQueryClient(Header, { onLogout: vi.fn() });
+      await fireEvent.click(screen.getByLabelText("Open menu"));
+      expect(!!screen.queryByRole("button", { name: "OvertureDB" })).toBe(enabled);
+    },
+  );
+
   it("links the brand to the landing page with a full reload", () => {
     renderWithQueryClient(Header, { onLogout: vi.fn() });
 

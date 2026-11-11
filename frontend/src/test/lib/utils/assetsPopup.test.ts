@@ -175,6 +175,9 @@ describe("summary formatters", () => {
     expect(collectionSummary(true, null)).toBe("All collections");
     expect(collectionSummary(false, ["Sagas", "Decades"])).toBe("Groups: Sagas, Decades");
     expect(collectionSummary(false, [])).toBe("None");
+    expect(collectionSummary(false, ["Sagas"], ["Alien"])).toBe(
+      "Groups: Sagas; Collections: Alien",
+    );
     expect(librarySummary(["m1", "missing"], [...movieLibraries, ...showLibraries])).toBe(
       "Movies, missing",
     );

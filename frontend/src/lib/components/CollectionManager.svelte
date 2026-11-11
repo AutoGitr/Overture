@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsState } from "../stores/settingsState.svelte";
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import Settings from "@lucide/svelte/icons/settings";
   import Unlink from "@lucide/svelte/icons/unlink";
@@ -97,8 +98,8 @@
   showPoster={!!collection}
   backgroundUrl={collectionArtDisplayUrl(collection, "background")}
   posterHref={serverLink}
-  posterLinkTitle={collection && serverLink
-    ? `Open in ${SERVER_DISPLAY_NAMES[collection.server_type]}`
+  posterLinkTitle={collection && serverLink && settingsState.current.media_server
+    ? `Open in ${SERVER_DISPLAY_NAMES[settingsState.current.media_server]}`
     : null}
   tabs={collection && actions ? tabs : undefined}
 >

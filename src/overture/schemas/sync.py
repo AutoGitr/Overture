@@ -9,14 +9,14 @@ lazy from ..domain import IncrementalThemeOrder
 lazy from .base import StrictBaseModel
 lazy from .common import JobEnvelope
 lazy from .schedules import ScheduleResponseBase, ScheduleWrite
-lazy from .validators import GroupNames, LibraryIds
+lazy from .validators import CollectionIds, GroupNames, LibraryIds
 
 #: ``full`` reconciles whole libraries; ``incremental`` polls for new media.
 type SyncScheduleMode = Literal["full", "incremental"]
 
 
 class _SyncCollections(StrictBaseModel):
-    """Which collections a full sync covers: every one, chosen groups, or none."""
+    """Which collections a full sync covers: every one, a choice of them, or none."""
 
     include_collections: bool = Field(
         default=True, description="Refresh every collection from the media server."
@@ -25,17 +25,26 @@ class _SyncCollections(StrictBaseModel):
         default=None,
         description="Run these groups' sets and sync their collections instead.",
     )
+    collection_ids: CollectionIds | None = Field(
+        default=None,
+        description="Sync these collections instead, whole, besides any groups.",
+    )
     items: bool = Field(
         default=True,
         description="Reconcile library items; off syncs only the collections.",
     )
 
+    @property
+    def chosen_collections(self) -> bool:
+        """Some groups or collections are chosen in place of every collection."""
+        return self.collection_groups is not None or self.collection_ids is not None
+
     @model_validator(mode="after")
     def validate_collections(self) -> Self:
-        """Every collection already covers each group; a sync syncs something."""
-        if self.include_collections and self.collection_groups is not None:
-            raise ValueError("Select collection groups or every collection")
-        if not self.items and not (self.include_collections or self.collection_groups):
+        """Every collection already covers each choice; a sync syncs something."""
+        if self.include_collections and self.chosen_collections:
+            raise ValueError("Select some collections or every collection")
+        if not self.items and not (self.include_collections or self.chosen_collections):
             raise ValueError("Select libraries or collections")
         return self
 
@@ -71,9 +80,7 @@ class SyncScheduleConfig(_SyncCollections):
             or self.download_themes is not IncrementalThemeOrder.OFF
         ):
             raise ValueError("Downloads apply only to incremental schedules")
-        if self.mode == "incremental" and (
-            self.collection_groups is not None or not self.items
-        ):
+        if self.mode == "incremental" and (self.chosen_collections or not self.items):
             raise ValueError("Polling looks for new items in libraries")
         return self
 

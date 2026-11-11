@@ -7,6 +7,7 @@ import {
   resetRealtimeProjection,
 } from "../../../lib/realtime/projector";
 import { downloadState } from "../../../lib/stores/downloadState.svelte";
+import { notify } from "../../../lib/stores/notificationState.svelte";
 import { publicDatasetSyncState, syncState } from "../../../lib/stores/jobStates.svelte";
 import {
   itemDownload,
@@ -51,6 +52,35 @@ describe("realtime projection", () => {
     projectRealtimeMessage(event("schedules.changed", { kind: "assets" }));
 
     expect(invalidateSchedules).toHaveBeenCalledWith("assets");
+  });
+
+  it("restores a finished run from a snapshot without announcing it", () => {
+    const success = vi.spyOn(notify, "success");
+
+    projectRealtimeSnapshot(
+      realtimeSnapshot({
+        jobs: [
+          {
+            event: "sync.completed",
+            data: { done: 1, total: 1, finished_at: "2026-01-01T00:00:00Z" },
+          },
+        ],
+      }),
+      false,
+    );
+
+    expect(syncState.status).toBe("completed");
+    expect(success).not.toHaveBeenCalled();
+  });
+
+  it("announces a run that ends live", () => {
+    const success = vi.spyOn(notify, "success");
+
+    projectRealtimeMessage(
+      event("sync.completed", { done: 1, total: 1, finished_at: "2026-01-01T00:00:00Z" }),
+    );
+
+    expect(success).toHaveBeenCalledWith("Library sync finished.");
   });
 
   it("resumes the jobs a continuing snapshot names and forgets the others", () => {

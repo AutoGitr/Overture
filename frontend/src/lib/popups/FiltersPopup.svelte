@@ -78,6 +78,11 @@
     ["show", "Shows"],
     ["both", "Both"],
   ] as const;
+  const ORIGIN_OPTIONS = [
+    ["all", "All"],
+    ["single", "One collection"],
+    ["set", "One per value"],
+  ] as const;
   const SYNC_OPTIONS = [
     ["all", "All"],
     ["synced", "Synced"],
@@ -104,6 +109,7 @@
     collectionMembers: { options: MEMBERS_OPTIONS },
     collectionHolds: { options: HOLDS_OPTIONS },
     collectionKind: { options: KIND_OPTIONS },
+    collectionOrigin: { options: ORIGIN_OPTIONS },
     collectionSync: { options: SYNC_OPTIONS },
     collectionSize: { options: SIZE_OPTIONS },
     mediaServer: { options: MEDIA_SERVER_OPTIONS },

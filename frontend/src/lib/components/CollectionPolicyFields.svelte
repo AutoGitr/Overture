@@ -5,6 +5,7 @@
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     SyncMode,
   } from "../../generated/rest/types.gen";
   import type { PolicyData } from "../utils/collectionForms.svelte";
@@ -48,6 +49,10 @@
     ["dark", "Dark"],
     ["light", "Light"],
     ["accent", "Accent"],
+  ];
+  const OVERTUREDB_POSTERS: readonly (readonly [CollectionPosterStyle, string])[] = [
+    ["individual", "Individual"],
+    ["consistent", "Consistent"],
   ];
   const WANTED_NOT = [
     [true, "Wanted"],
@@ -162,6 +167,14 @@
     inherited={defaults?.drawn_style}
     options={STYLES}
     hint="The colours of art Automatic art draws, and of a group's separator."
+  />
+  <InheritedSelect
+    label="OvertureDB posters"
+    {inherits}
+    bind:value={policy.overturedb_posters}
+    inherited={defaults?.overturedb_posters}
+    options={OVERTUREDB_POSTERS}
+    hint="Individual takes a TMDB collection's own OvertureDB poster. Consistent takes the one in the layout every consistent poster shares, so collections look alike; a collection without one gets no OvertureDB poster. Posters you choose are contributed as the same kind."
   />
   <InheritedSelect
     label="Background"

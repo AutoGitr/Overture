@@ -161,14 +161,22 @@ def test_full_sync_can_exclude_collections(
     assert engine.started_with == body
 
 
-def test_sync_collections_are_every_one_or_chosen_groups() -> None:
-    with pytest.raises(ValueError, match="groups or every collection"):
+def test_sync_collections_are_every_one_or_a_choice() -> None:
+    with pytest.raises(ValueError, match="some collections or every collection"):
         SyncRunRequest(collection_groups=["Sagas"])
+    with pytest.raises(ValueError, match="some collections or every collection"):
+        SyncRunRequest(collection_ids=[7])
     with pytest.raises(ValueError, match="at least 1"):
         SyncRunRequest(include_collections=False, collection_groups=[])
+    with pytest.raises(ValueError, match="at least 1"):
+        SyncRunRequest(include_collections=False, collection_ids=[])
     with pytest.raises(ValueError, match="new items in libraries"):
         SyncScheduleConfig(
             mode="incremental", include_collections=False, collection_groups=["Sagas"]
+        )
+    with pytest.raises(ValueError, match="new items in libraries"):
+        SyncScheduleConfig(
+            mode="incremental", include_collections=False, collection_ids=[7]
         )
     with pytest.raises(ValueError, match="new items in libraries"):
         SyncScheduleConfig(mode="incremental", items=False)
@@ -177,6 +185,9 @@ def test_sync_collections_are_every_one_or_chosen_groups() -> None:
     assert not SyncRunRequest(
         items=False, include_collections=False, collection_groups=["Sagas"]
     ).items
+    assert SyncRunRequest(
+        items=False, include_collections=False, collection_ids=[7, 7, 9]
+    ).collection_ids == [7, 9]
     assert SyncScheduleConfig(
         include_collections=False, collection_groups=["Sagas", "Sagas"]
     ).collection_groups == ["Sagas"]

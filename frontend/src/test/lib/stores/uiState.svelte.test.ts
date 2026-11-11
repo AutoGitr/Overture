@@ -58,6 +58,7 @@ describe("uiState persisted filters", () => {
       collectionSize: "all",
       collectionKind: "all",
       collectionHolds: "all",
+      collectionOrigin: "all",
       collectionMembers: "all",
       collectionSync: "all",
       art: "complete",

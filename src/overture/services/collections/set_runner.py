@@ -29,7 +29,6 @@ lazy from .criteria import TERM_FIELDS, criteria_terms
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
 lazy from .membership import Membership
-lazy from .post_sync import PostSync
 lazy from .rules import TITLE_TAKEN, franchise_ids, library_criteria, rule_read
 lazy from .sets import SetValue, count_values, set_values
 lazy from .sources import SourceResolver
@@ -55,14 +54,12 @@ class CollectionSets:
         validator: CollectionValidator,
         membership: Membership,
         editor: CollectionEditor,
-        post_sync: PostSync,
         sources: SourceResolver,
     ) -> None:
         self._access = access
         self._validator = validator
         self._membership = membership
         self._editor = editor
-        self._post_sync = post_sync
         self._sources = sources
 
     async def preview(self, body: CollectionSetPreview) -> list[CollectionSetEntry]:
@@ -76,11 +73,7 @@ class CollectionSets:
                     )
                 ).minimum_items
             )
-            listed = [
-                row
-                for row in await CollectionRepository(session).list_listed()
-                if row.server_type is self._access.server_type
-            ]
+            listed = await CollectionRepository(session).list_listed()
         existing = {
             row.generated_value: row.id
             for row in listed
@@ -133,14 +126,9 @@ class CollectionSets:
         when each collection syncs. Overture keeps every collection until it
         is deleted explicitly.
         """
-        server = self._access.server_type
         async with self._access.database.read_session() as session:
             policy = await self._access.policy(session, group)
-            listed = [
-                row
-                for row in await CollectionRepository(session).list_listed()
-                if row.server_type is server
-            ]
+            listed = await CollectionRepository(session).list_listed()
             rules = {
                 row.id: row.rule
                 for row in listed
@@ -324,13 +312,11 @@ class CollectionSets:
 
     async def _franchises_elsewhere(self, group: str | None) -> set[int]:
         """TMDB franchises collections outside the group already hold."""
-        server = self._access.server_type
         async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
             outside = [
                 row
-                for row in await repo.list_listed()
-                if row.group_name != group and row.server_type is server
+                for row in await CollectionRepository(session).list_listed()
+                if row.group_name != group
             ]
         return {
             row.tmdb_collection_id
@@ -374,7 +360,6 @@ class CollectionSets:
             )
             result.created.append(detail.id)
             titles.update((library_id, title) for library_id in library_ids)
-            await self._post_sync.run(detail.id)
         except Exception as exc:
             result.errors[collection.title] = str(exc)
 
@@ -393,6 +378,7 @@ class CollectionSets:
                     saved_options(row, saved).model_copy(
                         update={"title": collection.title}
                     ),
+                    push=False,
                 )
             current = rule_read(saved, row)
             if (

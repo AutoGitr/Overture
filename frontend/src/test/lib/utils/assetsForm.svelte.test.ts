@@ -140,7 +140,7 @@ describe("collection theme scope", () => {
   it("runs libraries and every collection, or the chosen groups, together", () => {
     const assets = form();
     assets.toggleLibrary("1");
-    assets.toggleCollections(null);
+    assets.chooseCollections({ all: true, groups: [] });
     assets.config.artTypes = ["poster", "season_poster"];
 
     expect(assets.canRun).toBe(true);
@@ -151,7 +151,7 @@ describe("collection theme scope", () => {
       art: { art_types: ["poster"] },
     });
 
-    assets.toggleCollections("Sagas");
+    assets.chooseCollections({ all: false, groups: ["Sagas"] });
     expect(assets.request()).toMatchObject({ collection_groups: ["Sagas"] });
     expect(assets.request()).not.toHaveProperty("all_collections");
     expect(assets.request().themes).not.toHaveProperty("include_collections");
@@ -159,7 +159,7 @@ describe("collection theme scope", () => {
 
   it("leaves season art out of a run over collections alone", () => {
     const assets = form();
-    assets.toggleCollections(null);
+    assets.chooseCollections({ all: true, groups: [] });
     assets.config.artTypes = ["poster", "season_poster"];
     expect(assets.request()).toMatchObject({
       library_ids: [],

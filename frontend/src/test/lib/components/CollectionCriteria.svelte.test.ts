@@ -29,6 +29,8 @@ import {
   dimension,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
+import { uiState } from "../../../lib/stores/uiState.svelte";
+import { syncSelection } from "../../../lib/stores/syncSelection.svelte";
 
 const capabilities = collectionCapabilities();
 const members = [mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" })];
@@ -590,9 +592,8 @@ describe("collection criteria", () => {
     });
   });
 
-  it("turns a group into a collection set, previews it, saves it and runs it", async () => {
+  it("turns a group into a collection set, previews it, saves it and opens its sync", async () => {
     let putBody: CollectionGroupPolicyOutput | null = null;
-    let synced = false;
     const groupPolicy: CollectionGroupPolicyOutput = {
       separator: false,
       sync_mode: null,
@@ -600,6 +601,7 @@ describe("collection criteria", () => {
       delete_below_minimum: null,
       auto_art: null,
       drawn_style: null,
+      overturedb_posters: null,
       backgrounds: null,
       auto_match_theme: null,
       delete_when_inactive: null,
@@ -645,10 +647,6 @@ describe("collection criteria", () => {
         }
         return Response.json(groupPolicy);
       },
-      "/api/collections/group-policy/sync": () => {
-        synced = true;
-        return Response.json({ created: [4], removed: [], synced: 0, errors: {} });
-      },
     });
     renderWithQueryClient(GroupSettingsHarness, {
       group: "Genres",
@@ -677,13 +675,15 @@ describe("collection criteria", () => {
 
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(putBody).not.toBeNull());
-    expect(synced).toBe(false);
+    expect(uiState.openPopup).toBeNull();
     expect(putBody).toMatchObject({
       minimum_items: 2,
       generator: { dimension: "genre", library_ids: ["movies"], title_format: "{value}", top: 10 },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
-    await waitFor(() => expect(synced).toBe(true));
+    await waitFor(() => expect(uiState.openPopup).toBe("operations"));
+    expect([uiState.operationsTab, syncSelection.groups]).toEqual(["sync", ["Genres"]]);
+    uiState.closePopup();
   });
 
   it("lists a custom set's collections and renames or merges other values", async () => {

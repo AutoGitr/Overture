@@ -1,4 +1,4 @@
-import { appSettings } from "../../../helpers/fixtures";
+import { appSettings, collection } from "../../../helpers/fixtures";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPopup from "../../../../lib/popups/OperationsPopup.svelte";
@@ -7,6 +7,7 @@ import { queryClient } from "../../../../lib/rest/queryClient";
 import { matchState } from "../../../../lib/stores/bulkJobState.svelte";
 import { settingsState } from "../../../../lib/stores/settingsState.svelte";
 import { syncState } from "../../../../lib/stores/jobStates.svelte";
+import { syncSelection } from "../../../../lib/stores/syncSelection.svelte";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
 import { renderWithQueryClient } from "../../../helpers/render";
 
@@ -17,6 +18,7 @@ const run = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
 const updateSchedule = vi.hoisted(() => vi.fn());
 const runSchedule = vi.hoisted(() => vi.fn());
+const collections = vi.hoisted(() => vi.fn());
 const defaultDatasetStatus = vi.hoisted(() => ({
   enabled: false,
   repo_url: "https://example.test/repo",
@@ -33,7 +35,8 @@ vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({
   listServerLibraries: async () => ({ data: await libraries() }),
   listSyncSchedules: async () => ({ data: await schedules() }),
   getPublicDatasetStatus: async () => ({ data: await datasetStatus() }),
-  listCollectionGroups: async () => ({ data: ["Sagas"] }),
+  listCollectionGroups: async () => ({ data: ["Sagas", "Ungrouped"] }),
+  listCollections: async () => ({ data: await collections() }),
 }));
 vi.mock("../../../../generated/rest/@tanstack/svelte-query.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -93,6 +96,7 @@ describe("Sync tab", () => {
     updateSchedule.mockReset().mockResolvedValue(SAVED_POLL);
     runSchedule.mockReset().mockResolvedValue({ status: "queued" });
     datasetStatus.mockReset().mockResolvedValue(defaultDatasetStatus);
+    collections.mockReset().mockResolvedValue([]);
   });
 
   it("preserves saved selections during failure and can retry successfully", async () => {
@@ -118,9 +122,11 @@ describe("Sync tab", () => {
   it("syncs chosen collection groups instead of every collection", async () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     await renderSync();
-    expect(screen.getByRole("checkbox", { name: "All collections" })).toBeChecked();
-    await fireEvent.click(await screen.findByRole("checkbox", { name: "Sagas" }));
-    expect(screen.getByRole("checkbox", { name: "All collections" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Deselect all collections" })).toBeChecked();
+    // Every collection includes every group, so unticking one keeps the rest.
+    await fireEvent.click(await screen.findByRole("checkbox", { name: "Ungrouped" }));
+    expect(screen.getByRole("checkbox", { name: "Select all collections" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Sagas" })).toBeChecked();
     await fireEvent.input(screen.getByPlaceholderText("Hourly sync"), {
       target: { value: "Sagas nightly" },
     });
@@ -156,10 +162,36 @@ describe("Sync tab", () => {
     );
   });
 
+  it("opens from a shortcut with only its collection chosen", async () => {
+    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    collections.mockResolvedValue([
+      collection({ id: 7, title: "Alien", collection_group: "Sagas", managed: true }),
+      collection({ id: 8, title: "Pixar", collection_group: null, managed: true }),
+    ]);
+    syncSelection.focus({ collectionIds: [8] });
+    await renderSync();
+    expect(screen.getByRole("checkbox", { name: "Movies" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select all collections" })).not.toBeChecked();
+    await fireEvent.click(screen.getByText(/Specific collections/));
+    expect(await screen.findByRole("checkbox", { name: "Pixar" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Alien" })).not.toBeChecked();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+
+    await waitFor(() =>
+      expect(run).toHaveBeenCalledWith(
+        {
+          body: { library_ids: [], include_collections: false, collection_ids: [8], items: false },
+        },
+        expect.anything(),
+      ),
+    );
+  });
+
   it("can exclude collections independently of the selected libraries", async () => {
     settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
     await renderSync();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "All collections" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all collections" }));
     await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
       expect(run).toHaveBeenCalledWith(
@@ -210,7 +242,7 @@ describe("Sync tab", () => {
   it("still requires a library selection when server libraries exist", async () => {
     settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
     await renderSync();
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all" }));
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all libraries" }));
 
     expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(run).not.toHaveBeenCalled();

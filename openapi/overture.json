@@ -164,6 +164,10 @@
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
           },
+          "collection_overturedb_posters": {
+            "$ref": "#/components/schemas/CollectionPosterStyle",
+            "default": "individual"
+          },
           "collection_request_missing": {
             "default": false,
             "title": "Collection Request Missing",
@@ -383,6 +387,7 @@
           "collection_delete_below_minimum",
           "collection_auto_art",
           "collection_drawn_style",
+          "collection_overturedb_posters",
           "collection_backgrounds",
           "collection_auto_match_theme",
           "collection_sort_title_format",
@@ -604,6 +609,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
               },
               {
                 "type": "null"
@@ -3496,6 +3511,16 @@
               }
             ]
           },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_missing": {
             "anyOf": [
               {
@@ -3577,6 +3602,7 @@
           "delete_below_minimum",
           "auto_art",
           "drawn_style",
+          "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
@@ -4012,9 +4038,6 @@
             ],
             "title": "Server Poster Version"
           },
-          "server_type": {
-            "$ref": "#/components/schemas/ServerType"
-          },
           "sort_title": {
             "anyOf": [
               {
@@ -4238,7 +4261,6 @@
           "media_types",
           "library_ids",
           "server_added_at",
-          "server_type",
           "server_item_id",
           "has_theme",
           "youtube_id",
@@ -4814,6 +4836,16 @@
               }
             ]
           },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_missing": {
             "anyOf": [
               {
@@ -5071,6 +5103,16 @@
               }
             ]
           },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_missing": {
             "anyOf": [
               {
@@ -5157,6 +5199,7 @@
           "delete_below_minimum",
           "auto_art",
           "drawn_style",
+          "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
@@ -5195,45 +5238,10 @@
         "title": "CollectionGroupRename",
         "type": "object"
       },
-      "CollectionGroupSyncResult": {
-        "additionalProperties": false,
-        "description": "What syncing a group created, took off the server and failed to sync.",
-        "properties": {
-          "created": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Created",
-            "type": "array"
-          },
-          "errors": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/PublicText"
-            },
-            "title": "Errors",
-            "type": "object"
-          },
-          "synced": {
-            "default": 0,
-            "title": "Synced",
-            "type": "integer"
-          },
-          "withheld": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Withheld",
-            "type": "array"
-          }
-        },
-        "required": [
-          "created",
-          "withheld",
-          "synced",
-          "errors"
-        ],
-        "title": "CollectionGroupSyncResult",
-        "type": "object"
+      "CollectionIds": {
+        "$ref": "#/components/schemas/UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0______MinLen_min_length_1_",
+        "maxItems": 1000,
+        "minItems": 1
       },
       "CollectionKind": {
         "description": "How a collection's membership is maintained on the media server.",
@@ -5632,6 +5640,15 @@
           "random"
         ],
         "title": "CollectionOrder",
+        "type": "string"
+      },
+      "CollectionPosterStyle": {
+        "description": "Which poster OvertureDB gives a TMDB collection.\n\n``consistent`` takes the poster in the layout every consistent collection\nposter shares; a collection without one has no OvertureDB poster.",
+        "enum": [
+          "individual",
+          "consistent"
+        ],
+        "title": "CollectionPosterStyle",
         "type": "string"
       },
       "CollectionPreview": {
@@ -6041,9 +6058,6 @@
             ],
             "title": "Server Poster Version"
           },
-          "server_type": {
-            "$ref": "#/components/schemas/ServerType"
-          },
           "sort_title": {
             "anyOf": [
               {
@@ -6229,7 +6243,6 @@
           "media_types",
           "library_ids",
           "server_added_at",
-          "server_type",
           "server_item_id",
           "has_theme",
           "youtube_id",
@@ -6529,6 +6542,16 @@
               }
             ]
           },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_missing": {
             "anyOf": [
               {
@@ -6626,6 +6649,7 @@
           "delete_below_minimum",
           "auto_art",
           "drawn_style",
+          "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
@@ -6833,6 +6857,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
               },
               {
                 "type": "null"
@@ -7111,6 +7145,16 @@
               }
             ]
           },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_missing": {
             "anyOf": [
               {
@@ -7197,6 +7241,7 @@
           "delete_below_minimum",
           "auto_art",
           "drawn_style",
+          "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
           "delete_when_inactive",
@@ -7457,40 +7502,6 @@
           "unavailable"
         ],
         "title": "CollectionSourceRead",
-        "type": "object"
-      },
-      "CollectionSyncResponse": {
-        "additionalProperties": false,
-        "description": "What one rule run changed.",
-        "properties": {
-          "added": {
-            "default": 0,
-            "title": "Added",
-            "type": "integer"
-          },
-          "removed": {
-            "default": 0,
-            "title": "Removed",
-            "type": "integer"
-          },
-          "skipped": {
-            "default": false,
-            "title": "Skipped",
-            "type": "boolean"
-          },
-          "withheld": {
-            "default": false,
-            "title": "Withheld",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "added",
-          "removed",
-          "skipped",
-          "withheld"
-        ],
-        "title": "CollectionSyncResponse",
         "type": "object"
       },
       "CollectionThemeDownloadTarget": {
@@ -11932,6 +11943,17 @@
             ],
             "description": "Run these groups' sets and sync their collections instead."
           },
+          "collection_ids": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionIds"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sync these collections instead, whole, besides any groups."
+          },
           "include_collections": {
             "default": true,
             "description": "Refresh every collection from the media server.",
@@ -11972,6 +11994,17 @@
               }
             ],
             "description": "Run these groups' sets and sync their collections instead."
+          },
+          "collection_ids": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionIds"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sync these collections instead, whole, besides any groups."
           },
           "download_overturedb_art": {
             "default": false,
@@ -12023,6 +12056,17 @@
             ],
             "description": "Run these groups' sets and sync their collections instead."
           },
+          "collection_ids": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionIds"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sync these collections instead, whole, besides any groups."
+          },
           "download_overturedb_art": {
             "default": false,
             "description": "Incremental only: queue OvertureDB art for new items.",
@@ -12058,6 +12102,7 @@
         "required": [
           "include_collections",
           "collection_groups",
+          "collection_ids",
           "items",
           "mode",
           "library_ids",
@@ -13156,6 +13201,13 @@
         "type": "object"
       },
       "UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0_____": {
+        "items": {
+          "exclusiveMinimum": 0.0,
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "UniqueList_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0______MinLen_min_length_1_": {
         "items": {
           "exclusiveMinimum": 0.0,
           "type": "integer"
@@ -15761,21 +15813,9 @@
         ]
       },
       "post": {
-        "description": "Create a collection in a server library, or only in Overture.",
+        "description": "Save a new collection; a sync puts it on the media server.",
         "operationId": "create_collection",
         "parameters": [
-          {
-            "description": "Also send the change to the media server",
-            "in": "query",
-            "name": "to_server",
-            "required": false,
-            "schema": {
-              "default": true,
-              "description": "Also send the change to the media server",
-              "title": "To Server",
-              "type": "boolean"
-            }
-          },
           {
             "description": "Read-only API key",
             "in": "header",
@@ -16591,91 +16631,6 @@
           }
         },
         "summary": "Save Collection Group Policy",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/group-policy/sync": {
-      "post": {
-        "description": "Run the group's collection set, then sync its collections' criteria.",
-        "operationId": "sync_collection_group",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "maxLength": 200,
-              "minLength": 1,
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionGroupSyncResult"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Sync Collection Group",
         "tags": [
           "collections"
         ]
@@ -17719,7 +17674,7 @@
         ]
       },
       "put": {
-        "description": "Update collection metadata and display options.",
+        "description": "Save collection metadata and display options; a sync sends them.",
         "operationId": "update_collection",
         "parameters": [
           {
@@ -17732,18 +17687,6 @@
               "exclusiveMinimum": 0,
               "title": "Collection Id",
               "type": "integer"
-            }
-          },
-          {
-            "description": "Also send the change to the media server",
-            "in": "query",
-            "name": "to_server",
-            "required": false,
-            "schema": {
-              "default": true,
-              "description": "Also send the change to the media server",
-              "title": "To Server",
-              "type": "boolean"
             }
           },
           {
@@ -18917,7 +18860,7 @@
     },
     "/api/collections/{collection_id}/members": {
       "put": {
-        "description": "Replace collection membership and order.",
+        "description": "Save collection membership and order; a sync sends them.",
         "operationId": "set_collection_members",
         "parameters": [
           {
@@ -18930,18 +18873,6 @@
               "exclusiveMinimum": 0,
               "title": "Collection Id",
               "type": "integer"
-            }
-          },
-          {
-            "description": "Also send the change to the media server",
-            "in": "query",
-            "name": "to_server",
-            "required": false,
-            "schema": {
-              "default": true,
-              "description": "Also send the change to the media server",
-              "title": "To Server",
-              "type": "boolean"
             }
           },
           {
@@ -19650,92 +19581,6 @@
           }
         },
         "summary": "Get Collection Sources",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/{collection_id}/sync": {
-      "post": {
-        "description": "Make the media server match the collection saved in Overture.",
-        "operationId": "sync_collection",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionSyncResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Sync Collection",
         "tags": [
           "collections"
         ]

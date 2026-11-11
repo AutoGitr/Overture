@@ -9,7 +9,7 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerType
+lazy from overture.domain import ArtType, MediaType
 lazy from overture.services.public_dataset.issue import (
     collection_issue,
     contribution_issue,
@@ -89,7 +89,6 @@ async def test_a_collection_issue_needs_its_tmdb_collection(
         stored_collection(
             server_item_id=key,
             media_type=MediaType.MOVIE,
-            server_type=ServerType.PLEX,
             title="Saga",
             tmdb_collection_id=tmdb_id,
             last_synced_at=utc_now(),

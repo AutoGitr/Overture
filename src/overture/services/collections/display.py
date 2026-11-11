@@ -114,16 +114,18 @@ class CollectionDisplay:
     def __init__(self, *, access: CollectionAccess) -> None:
         self._access = access
 
-    async def push(
+    async def effective(
         self,
         row: MediaCollection,
         options: CollectionOptions,
         rule: RuleOrPolicy = None,
-        *,
-        push: bool = True,
-        source_summary: str | None = None,
     ) -> CollectionOptions:
-        """Return the effective options, sent to the server copy when *push*."""
+        """Return the options the server shows, with the group's defaults filled in."""
+        return (await self._resolve(row, options, rule))[0]
+
+    async def _resolve(
+        self, row: MediaCollection, options: CollectionOptions, rule: RuleOrPolicy
+    ) -> tuple[CollectionOptions, CollectionPolicy]:
         if rule is None:
             rule = row.rule
         async with self._access.database.read_session() as session:
@@ -144,7 +146,7 @@ class CollectionDisplay:
         summary = inherited_summary(
             summary_options,
             policy,
-            rule.source_summary if isinstance(rule, CollectionRule) else source_summary,
+            rule.source_summary if isinstance(rule, CollectionRule) else None,
         )
         order = _explicit(options, "order_type", policy.order_type)
         visible_home = _explicit(options, "visible_home", policy.visible_home)
@@ -156,6 +158,7 @@ class CollectionDisplay:
             or policy.collection_filtering is not CollectionFiltering.ADMIN
             else None
         )
+        mode = options.collection_mode or policy.collection_mode
         effective = options.model_copy(
             update={
                 "sort_title": sort_title,
@@ -164,27 +167,32 @@ class CollectionDisplay:
                 "visible_home": visible_home,
                 "visible_shared": visible_shared,
                 "visible_library": visible_library,
-                "collection_mode": options.collection_mode or policy.collection_mode,
+                "collection_mode": mode,
                 "collection_filtering": filtering,
             }
         )
-        if not push:
-            return effective
+        return effective, policy
+
+    async def push(
+        self, row: MediaCollection, options: CollectionOptions, rule: RuleOrPolicy
+    ) -> CollectionOptions:
+        """Send the effective options to every server copy and return them."""
+        effective, policy = await self._resolve(row, options, rule)
         for copy in self._access.copies(row):
             if copy.server_item_id is None:
                 continue
             await self._access.provider().update_collection_details(
                 copy.server_item_id,
                 library_id=copy.lead.library_id,
-                title=options.title,
-                summary=summary,
-                sort_title=sort_title,
+                title=effective.title,
+                summary=effective.summary,
+                sort_title=effective.sort_title,
                 mode=options.collection_mode or policy.collection_mode,
-                order=order,
+                order=effective.order_type,
                 smart=row.kind is CollectionKind.SMART,
-                visible_home=visible_home,
-                visible_shared=visible_shared,
-                visible_library=visible_library,
-                filtering=filtering,
+                visible_home=effective.visible_home,
+                visible_shared=effective.visible_shared,
+                visible_library=effective.visible_library,
+                filtering=effective.collection_filtering,
             )
         return effective

@@ -8,6 +8,7 @@ lazy from ...domain import (
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     SyncMode,
 )
 lazy from ..columns import enum_type
@@ -38,6 +39,9 @@ class PolicyOverrides(SQLModel):
     delete_when_inactive: bool | None = None
     auto_art: AutoArt | None = Field(default=None, sa_type=enum_type(AutoArt))
     drawn_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
+    overturedb_posters: CollectionPosterStyle | None = Field(
+        default=None, sa_type=enum_type(CollectionPosterStyle)
+    )
     backgrounds: bool | None = None
     auto_match_theme: bool | None = None
     request_missing: bool | None = None

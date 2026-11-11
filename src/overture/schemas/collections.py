@@ -22,6 +22,7 @@ lazy from ..domain import (
     CollectionKind,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     FieldKind,
     FilterField,
     FilterOperator,
@@ -357,7 +358,6 @@ class CollectionRead(CollectionArtwork):
     media_types: list[MediaType]
     library_ids: list[str]
     server_added_at: str | None = None
-    server_type: ServerType
     #: The server copy that stands for the collection, which its link opens;
     #: none while the server holds no copy.
     server_item_id: str | None = None
@@ -495,7 +495,6 @@ def collection_read(
         server_added_at=row.server_added_at.isoformat()
         if row.server_added_at
         else None,
-        server_type=row.server_type,
         server_item_id=row.server_item_id,
         has_theme=has_theme,
         youtube_id=row.youtube_id,
@@ -571,6 +570,8 @@ class CollectionPolicyBase(StrictBaseModel):
     auto_art: AutoArt | None = None
     #: The colours of art Overture draws for it automatically.
     drawn_style: ArtStyle | None = None
+    #: Which of a TMDB collection's OvertureDB posters it takes and contributes.
+    overturedb_posters: CollectionPosterStyle | None = None
     #: Whether it needs a background; without one, a poster makes its art complete.
     backgrounds: bool | None = None
     auto_match_theme: bool | None = None

@@ -20,7 +20,6 @@ lazy from ...domain import (
     IncrementalThemeOrder,
     MediaType,
     ScheduleKind,
-    ServerType,
 )
 lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.runner import ManagedJob
@@ -164,23 +163,30 @@ class CollectionSync:
                     await get_app_settings(session)
                 ).collection_import_unmanaged
                 items = await MediaItemRepository(session).facts_by_server_id()
-                rows = [
-                    row
-                    for row in await CollectionRepository(session).list_all()
-                    if row.server_type is provider.server_type
-                ]
+                rows = await CollectionRepository(session).list_all()
                 managed_ids = {
                     row.id
                     for row in rows
                     if row.rule is not None and row.id is not None
                 }
+            # Titles of managed collections still without a server copy, which
+            # take over the server's collection of their title when they sync.
+            awaited = {
+                row.title.casefold()
+                for row in rows
+                if row.rule is not None and not row.server_ids
+            }
             seen = {collection.id for collection in listed}
             newly_identified: list[int] = []
             identified = 0
             for previous, copies in _by_row(listed, rows):
                 if job.stop_requested():
                     return
-                if previous is None and not import_unmanaged:
+                if (
+                    previous is None
+                    and not import_unmanaged
+                    and copies[0].title.casefold() not in awaited
+                ):
                     continue
                 collection = copies[0]
                 members = [
@@ -204,7 +210,7 @@ class CollectionSync:
                 ):
                     async with self._database.read_session() as session:
                         current = await CollectionRepository(session).find_server(
-                            provider.server_type, collection.id
+                            collection.id
                         )
                     facts, checked = await self._inspect_theme(
                         provider, collection, current, previous
@@ -213,7 +219,6 @@ class CollectionSync:
                         row = await self._store(
                             CollectionRepository(session),
                             copies,
-                            server_type=provider.server_type,
                             placement=placement,
                             members=members,
                             folder_themes=isinstance(
@@ -242,7 +247,6 @@ class CollectionSync:
                     row.id: missing
                     for row in await CollectionRepository(session).list_all()
                     if row.id is not None
-                    and row.server_type is provider.server_type
                     and (missing := set(row.server_ids) - seen)
                     and (
                         not library_ids
@@ -366,7 +370,6 @@ class CollectionSync:
         repository: CollectionRepository,
         copies: Sequence[ServerCollection],
         *,
-        server_type: ServerType,
         placement: Sequence[_Placed],
         members: list[ServerItemFacts],
         folder_themes: bool,
@@ -377,10 +380,7 @@ class CollectionSync:
     ) -> MediaCollection:
         """Store a collection from its server copies, the lead copy first."""
         collection = copies[0]
-        row = await repository.find_server(
-            server_type, collection.id
-        ) or MediaCollection(
-            server_type=server_type,
+        row = await repository.find_server(collection.id) or MediaCollection(
             created_at=now,
             tmdb_collection_id=collection.tmdb_id
             if any(placed.media_type is MediaType.MOVIE for placed in placement)

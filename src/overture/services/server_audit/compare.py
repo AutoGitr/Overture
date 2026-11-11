@@ -478,11 +478,7 @@ async def run_server_audit(
                 params, audit_context.local_assets, database=audit_context.database
             ),
             *(
-                await plan_collection_audit(
-                    params,
-                    audit_context.provider_registry.provider.server_type,
-                    database=audit_context.database,
-                )
+                await plan_collection_audit(params, database=audit_context.database)
                 if params.check_collections
                 else []
             ),

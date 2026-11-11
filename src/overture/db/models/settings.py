@@ -23,6 +23,7 @@ lazy from ...domain import (
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     SyncMode,
     TmdbLanguageFilter,
     Workflow,
@@ -70,6 +71,10 @@ class AppSettingsBase(SQLModel):
     )
     collection_drawn_style: ArtStyle = Field(
         default=ArtStyle.DARK, sa_type=enum_type(ArtStyle)
+    )
+    collection_overturedb_posters: CollectionPosterStyle = Field(
+        default=CollectionPosterStyle.INDIVIDUAL,
+        sa_type=enum_type(CollectionPosterStyle),
     )
     collection_backgrounds: bool = True
     collection_auto_match_theme: bool = False
