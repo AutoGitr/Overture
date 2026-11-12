@@ -15,7 +15,7 @@ _Artwork, collections & themes for Plex, Jellyfin and Emby_
 [![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-337ab7)](https://github.com/AutoGitr/Overture/blob/main/LICENSE)
 
-[Features](#features) &#9679; [Use cases](#use-cases) &#9679; [Installation](#installation) &#9679; [Using Overture](#using-overture) &#9679; [Maintenance](#maintenance) &#9679; [Contributing](#contributing)
+[Documentation](https://autogitr.github.io/Overture/) &#9679; [Features](#features) &#9679; [Use cases](#use-cases) &#9679; [Installation](#installation) &#9679; [Using Overture](#using-overture) &#9679; [Maintenance](#maintenance) &#9679; [Contributing](#contributing)
 
 </div>
 
@@ -1070,6 +1070,7 @@ and `sudo userdel overture`.
 Share artwork and theme selections with
 [OvertureDB](#overturedb), or help improve Overture itself. See the
 [contributor guide](https://github.com/AutoGitr/Overture/blob/main/.github/CONTRIBUTING.md) for development setup, checks and pull
-requests. Report security issues [privately](https://github.com/AutoGitr/Overture/blob/main/.github/SECURITY.md).
+requests, and the [documentation site](https://autogitr.github.io/Overture/)
+for everything on this page as separate pages, together with OvertureDB's. Report security issues [privately](https://github.com/AutoGitr/Overture/blob/main/.github/SECURITY.md).
 
 Overture is licensed under [AGPL-3.0](https://github.com/AutoGitr/Overture/blob/main/LICENSE).

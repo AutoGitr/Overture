@@ -24,6 +24,9 @@ def test_the_container_builds_with_the_pinned_uv_python_and_bun() -> None:
     package = json.loads((ROOT / "frontend/package.json").read_text())
     bun = package["packageManager"].removeprefix("bun@")
     assert package["engines"]["bun"] == bun
+    docs = json.loads((ROOT / "docs/package.json").read_text())
+    assert docs["packageManager"] == package["packageManager"]
+    assert docs["engines"]["bun"] == bun
     assert re.findall(r"(?m)^FROM astral/uv:([^@\s]+)@", dockerfile) == [uv]
     assert re.findall(r"(?m)^FROM python:([^-@\s]+)-slim@", dockerfile) == [python]
     assert re.findall(r"oven/bun:([^-@\s]+)-slim@", dockerfile) == [bun]
@@ -192,6 +195,8 @@ DEPENDENCIES = APP
         (".github/workflows/codeql.yml", {"backend"}),
         (".github/CHANGELOG.md", {"backend"}),
         ("AGENTS.md", {"backend"}),
+        ("docs/overture/index.md", set()),
+        ("docs/package.json", set()),
     ],
 )
 def test_ci_runs_exactly_the_jobs_a_change_affects(

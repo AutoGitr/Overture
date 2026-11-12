@@ -10,7 +10,8 @@ This file adds the rules for agents.
 
 - **Overture** (this repository): FastAPI backend in `src/overture/` with its
   tests in `tests/`, Svelte frontend in `frontend/`, native packaging in
-  `packaging/linux/`.
+  `packaging/linux/`, documentation site in `docs/` (Overture's pages in
+  `docs/overture/`; OvertureDB's are read from `../OvertureDB/docs/`).
 - **OvertureDB**: the curated catalog, checked out as `../OvertureDB`. Its
   `schema/` directory is the authoritative catalog contract and `data/` holds the
   entries.
@@ -92,8 +93,9 @@ got there. History belongs in commit messages and the changelog.
 - **Suppressions** (`noqa`, `pyright: ignore`, `eslint-disable`) name the exact
   rule and say why it does not apply, on the same line.
 - **Docs follow the code.** A change to behaviour, settings or the API updates
-  the README and docs in the same task, written for the person running
-  Overture: what it does and how to use it, never how it was built.
+  the README and the pages in `docs/overture/` in the same task, written for
+  the person running Overture: what it does and how to use it, never how it
+  was built. A change to the catalog updates `../OvertureDB/docs/` too.
 
 ## Backend
 
@@ -234,4 +236,5 @@ and becomes the release notes.
 - Run `scripts/pre-commit-check.sh --fix`. It formats, regenerates the
   contracts, then runs every check CI runs on what changed.
 - When OvertureDB changed, also run its `scripts/pre-commit-check.sh`.
-- Update the README for behaviour changes.
+- Update the README and `docs/overture/` for behaviour changes; `bun run ci`
+  in `docs/` checks the site.

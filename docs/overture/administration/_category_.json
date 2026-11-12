@@ -1,0 +1,8 @@
+{
+  "label": "Administration",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Keeping an installation healthy: upgrades, backups, logs and recovery."
+  }
+}

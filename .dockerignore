@@ -36,6 +36,7 @@ scripts/
 compose.*
 helm-charts
 openapi/
+docs/
 
 config/
 coverage*

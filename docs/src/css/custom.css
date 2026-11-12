@@ -1,0 +1,102 @@
+/*
+ * The web app's design tokens, applied to Infima: a cool slate in dark mode,
+ * a warm ivory in light mode, and the champagne accent in both. The fonts are
+ * the app's own, bundled from the same files.
+ */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../../../frontend/public/fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../../../frontend/public/fonts/inter-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --ifm-font-family-base: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ifm-font-family-monospace: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --ifm-code-font-size: 90%;
+  --ifm-heading-font-weight: 600;
+  --ifm-global-radius: 8px;
+  --ifm-navbar-shadow: none;
+
+  /* Light mode: the accent at a lightness that reads as text on ivory. */
+  --ifm-color-primary: oklch(50% 0.083 86);
+  --ifm-color-primary-dark: oklch(46% 0.083 86);
+  --ifm-color-primary-darker: oklch(43% 0.083 86);
+  --ifm-color-primary-darkest: oklch(37% 0.083 86);
+  --ifm-color-primary-light: oklch(54% 0.083 86);
+  --ifm-color-primary-lighter: oklch(57% 0.083 86);
+  --ifm-color-primary-lightest: oklch(63% 0.083 86);
+
+  --ifm-background-color: oklch(98.6% 0.004 84);
+  --ifm-background-surface-color: oklch(100% 0 0);
+  --ifm-navbar-background-color: oklch(98.6% 0.004 84);
+  --ifm-footer-background-color: oklch(96.8% 0.006 84);
+  --ifm-font-color-base: oklch(21% 0.006 285);
+  --ifm-color-emphasis-300: oklch(35% 0.03 84 / 0.2);
+  --ifm-toc-border-color: oklch(35% 0.03 84 / 0.11);
+  --ifm-menu-color-background-active: oklch(50% 0.083 86 / 0.12);
+  --ifm-menu-color-background-hover: oklch(93% 0.011 84);
+  --docusaurus-highlighted-code-line-bg: oklch(50% 0.083 86 / 0.12);
+}
+
+[data-theme="dark"] {
+  --ifm-color-primary: oklch(83.5% 0.052 86);
+  --ifm-color-primary-dark: oklch(79% 0.052 86);
+  --ifm-color-primary-darker: oklch(76% 0.052 86);
+  --ifm-color-primary-darkest: oklch(70% 0.052 86);
+  --ifm-color-primary-light: oklch(87% 0.052 86);
+  --ifm-color-primary-lighter: oklch(89% 0.052 86);
+  --ifm-color-primary-lightest: oklch(93% 0.052 86);
+
+  --ifm-background-color: oklch(20% 0.022 262);
+  --ifm-background-surface-color: oklch(22.5% 0.024 262);
+  --ifm-navbar-background-color: oklch(20% 0.022 262);
+  --ifm-footer-background-color: oklch(17.5% 0.02 262);
+  --ifm-font-color-base: oklch(94% 0.01 84);
+  --ifm-color-emphasis-300: oklch(85% 0.03 262 / 0.17);
+  --ifm-toc-border-color: oklch(85% 0.03 262 / 0.1);
+  --ifm-menu-color-background-active: oklch(83.5% 0.052 86 / 0.14);
+  --ifm-menu-color-background-hover: oklch(32% 0.03 262);
+  --docusaurus-highlighted-code-line-bg: oklch(83.5% 0.052 86 / 0.14);
+}
+
+.footer--dark {
+  --ifm-footer-background-color: oklch(96.8% 0.006 84);
+  --ifm-footer-color: oklch(40% 0.01 285);
+  --ifm-footer-link-color: oklch(40% 0.01 285);
+  --ifm-footer-title-color: oklch(21% 0.006 285);
+}
+
+[data-theme="dark"] .footer--dark {
+  --ifm-footer-background-color: oklch(17.5% 0.02 262);
+  --ifm-footer-color: oklch(80% 0.014 262);
+  --ifm-footer-link-color: oklch(80% 0.014 262);
+  --ifm-footer-title-color: oklch(94% 0.01 84);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+/* Tables scroll instead of widening the page on phones. */
+.markdown table {
+  display: block;
+  overflow-x: auto;
+}

@@ -1,0 +1,96 @@
+name: Docs
+
+# Builds the documentation site from this repository's docs/ and the sibling
+# OvertureDB checkout, and deploys it to GitHub Pages from main. OvertureDB's
+# Docs workflow dispatches a run after its own docs change; the weekly run
+# catches anything else.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - .github/CHANGELOG.md
+      - frontend/public/brand/**
+      - .github/workflows/docs.yml
+  pull_request:
+    paths:
+      - docs/**
+      - .github/CHANGELOG.md
+      - frontend/public/brand/**
+      - .github/workflows/docs.yml
+  repository_dispatch:
+    types: [overturedb-docs]
+  schedule:
+    - cron: "29 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout OvertureDB
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AutoGitr/OvertureDB
+          ref: main
+          path: OvertureDB
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: frontend/package.json
+
+      - name: Install docs dependencies
+        working-directory: docs
+        run: bun install --frozen-lockfile
+
+      - name: Audit locked docs dependencies
+        working-directory: docs
+        run: bun audit
+
+      - name: Typecheck, check formatting and build
+        working-directory: docs
+        env:
+          OVERTUREDB_DOCS: ../OvertureDB/docs
+        run: bun run ci
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      pages: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

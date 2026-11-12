@@ -1,0 +1,107 @@
+---
+sidebar_position: 4
+title: Media servers
+description: Connect Plex, Jellyfin or Emby, run without a server, or switch servers.
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+
+# Media servers
+
+Overture works with one media server at a time, chosen with `MEDIA_SERVER`.
+Give it the server's address and a token or API key, and make sure the server
+prefers local assets, so the files Overture writes beside your media are the
+ones it shows.
+
+<Tabs groupId="media-server" queryString>
+  <TabItem value="plex" label="Plex" default>
+
+1. Open any item in Plex Web, choose **Get Info -> View XML**, and copy the
+   `X-Plex-Token` value from the address bar.
+2. Set `MEDIA_SERVER=plex`, `MEDIA_SERVER_URL=https://<server-ip>:32400` and
+   `MEDIA_SERVER_API_KEY=<token>`. Keep `MEDIA_SERVER_VERIFY_TLS=true`:
+   Overture connects through Plex's verified `*.plex.direct` address, so every
+   **Secure connections** setting works, including **Required**.
+3. In each library's **Advanced** settings, turn on **Use local assets**.
+
+If your router's DNS rebinding protection blocks `plex.direct`, allow that
+domain.
+
+  </TabItem>
+  <TabItem value="jellyfin" label="Jellyfin">
+
+1. Create a key under **Dashboard -> API Keys**.
+2. Set `MEDIA_SERVER=jellyfin`, `MEDIA_SERVER_URL=http://<server>:8096` and
+   `MEDIA_SERVER_API_KEY=<key>`.
+3. In each library, keep local images ahead of online image fetchers.
+
+To write themes for Jellyfin collections (BoxSets), mount Jellyfin's
+collections directory into Overture and name it in
+`JELLYFIN_COLLECTIONS_PATH`.
+
+  </TabItem>
+  <TabItem value="emby" label="Emby">
+
+1. Create a key under **Dashboard -> Advanced -> API Keys**.
+2. Set `MEDIA_SERVER=emby`, `MEDIA_SERVER_URL=http://<server>:8096` (include a
+   base path such as `/emby` if you use one) and `MEDIA_SERVER_API_KEY=<key>`.
+3. In each library, keep local images ahead of online image fetchers.
+
+  </TabItem>
+</Tabs>
+
+## No media server
+
+Set `MEDIA_SERVER=none` to curate OvertureDB without a media server; leave
+`MEDIA_SERVER_URL` and `MEDIA_SERVER_API_KEY` unset. Sync, Audit and
+Collections are hidden, the sidebar opens on OvertureDB, and nothing reports
+the server as down.
+
+| Feature                                       | With `TMDB_API_KEY` | Without |
+| --------------------------------------------- | ------------------- | ------- |
+| Browse the catalog, drafts, export and issues | Yes                 | Yes     |
+| Pasted art URLs and YouTube theme search      | Yes                 | Yes     |
+| TMDB art candidates and TMDB-only titles      | Yes                 | No      |
+
+## Change media server
+
+Point `MEDIA_SERVER`, `MEDIA_SERVER_URL` and `MEDIA_SERVER_API_KEY` at the
+other server and restart. Overture keeps your titles' choices and files, and
+your collections and groups, with their art, themes and settings; on the next
+start it lets go of what belonged to the earlier server:
+
+- Collections the earlier server held that Overture does not manage are
+  forgotten; the next sync lists the new server's own.
+- Every managed collection loses its server copies and shows **Unsynced**. Its
+  next sync makes it on the new server, or takes over the new server's
+  collection of the same title in that library, and sends it its art and
+  theme.
+- Choices the new server cannot keep go back to the defaults: Plex's
+  visibility, collection mode, filtering, Home order and member labels on
+  Jellyfin and Emby, which also make smart collections and sets regular ones
+  Overture evaluates; and orders the server cannot sort by.
+- Sync schedules sync every library, and polling starts over. Server audit
+  results are cleared.
+
+The first full sync matches each title to the new server by its IDs or folder,
+and moves collections, sets and schedules from a library the server no longer
+lists to the one its titles are now in. Sync once with every library before
+editing collections.
+
+## How each server differs
+
+Overture evens out most differences, but some follow from the servers
+themselves:
+
+| Behaviour                                  | Plex                                                                                      | Jellyfin and Emby                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Season poster file name                    | `Season01.jpg` in the season folder                                                       | `poster.jpg` in the season folder                  |
+| Deleting artwork through the API           | Not possible; delete the local file and Plex shows its agent's art after the next refresh | Supported                                          |
+| Smart collections                          | Supported, evaluated by Plex, with labels for conditions Plex has no filter for           | Not available; Overture evaluates every collection |
+| A collection across several libraries      | One collection in each library, kept alike by Overture                                    | One collection holding every library's members     |
+| Separators (empty heading collections)     | Offered                                                                                   | Not offered                                        |
+| Visibility, collection mode and Home order | Supported                                                                                 | Not available                                      |
+
+See [Files](../features/files.md) for every file name and
+[Collections across libraries](../features/collections/across-libraries.md).

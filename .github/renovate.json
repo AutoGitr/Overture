@@ -88,6 +88,11 @@
       "groupName": "Frontend Core"
     },
     {
+      "matchFileNames": ["docs/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Docs"
+    },
+    {
       "matchPackageNames": [
         "/eslint/",
         "/prettier/",

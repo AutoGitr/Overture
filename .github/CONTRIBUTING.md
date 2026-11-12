@@ -160,6 +160,16 @@ border around the composite. Do not stretch Prism to fill a square.
 The app caches only the brand assets it uses. Full export sets remain available
 for repository headers and other uses without bloating the offline cache.
 
+## Documentation
+
+The [documentation site](https://autogitr.github.io/Overture/) is built with
+Docusaurus from `docs/`: Overture's pages in `docs/overture/` and OvertureDB's
+from the sibling checkout's `docs/`. Preview it with `bun run start` in
+`docs/`, and run `bun run ci` there before committing; the build fails on a
+broken link in either set of pages. The **Docs** workflow deploys `main` to
+GitHub Pages. See [Documentation](https://autogitr.github.io/Overture/overture/developer/documentation)
+for how pages are written and how OvertureDB's changes reach the site.
+
 ## Dependencies
 
 Add a dependency only when it is clearly needed. Pin the exact version, check
@@ -172,7 +182,8 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
 - Titles follow [Conventional Commits](https://www.conventionalcommits.org/),
   such as `fix(sync): keep seasons of unconnected shows`; the squash commit uses
   the title.
-- Update the [README](README.md) when behaviour changes.
+- Update the [README](README.md) and the pages in `docs/overture/` when
+  behaviour changes.
 - Describe changes users notice under `## [Unreleased]` in
   [CHANGELOG.md](CHANGELOG.md), in the same commit.
 - Leave out credentials and private media details. Report vulnerabilities as
