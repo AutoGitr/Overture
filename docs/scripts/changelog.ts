@@ -4,8 +4,9 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = resolve(import.meta.dirname, "..");
+const root = fileURLToPath(new URL("..", import.meta.url));
 const source = resolve(root, "../.github/CHANGELOG.md");
 const target = resolve(root, "overture/changelog.md");
 

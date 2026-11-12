@@ -195,8 +195,8 @@ DEPENDENCIES = APP
         (".github/workflows/codeql.yml", {"backend"}),
         (".github/CHANGELOG.md", {"backend"}),
         ("AGENTS.md", {"backend"}),
-        ("docs/overture/index.md", set()),
-        ("docs/package.json", set()),
+        ("docs/overture/index.md", set[str]()),
+        ("docs/package.json", set[str]()),
     ],
 )
 def test_ci_runs_exactly_the_jobs_a_change_affects(
