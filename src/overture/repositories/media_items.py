@@ -8,7 +8,7 @@ lazy from typing import Any, NamedTuple, cast
 
 lazy from sqlalchemy.orm import QueryableAttribute, raiseload
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import case, col, delete, or_, select, update
+lazy from sqlmodel import and_, case, col, delete, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select, SelectOfScalar
 
@@ -261,16 +261,13 @@ class MediaItemRepository:
 
         Items without a local folder are left out: a bulk run writes files.
         """
-        stmt = select(MediaItem).where(
-            col(MediaItem.server_removed_at).is_(None), HOLDS_FILES
+        stmt = _bulk_scope(
+            select(MediaItem),
+            library_ids,
+            item_ids=item_ids,
+            include_unmonitored=include_unmonitored,
+            after_id=after_id,
         )
-        if item_ids is not None:
-            stmt = stmt.where(col(MediaItem.id).in_(item_ids))
-        if not include_unmonitored:
-            stmt = stmt.where(col(MediaItem.monitored).is_(True))
-        if library_ids:
-            stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
-        stmt = stmt.where(col(MediaItem.id) > after_id).order_by(col(MediaItem.id))
         if limit is not None:
             stmt = stmt.limit(limit)
         result = await self.session.exec(stmt)
@@ -278,6 +275,54 @@ class MediaItemRepository:
             result.all(),
             key=lambda item: media_sort_key(item.media_type, item.title, item.id),
         )
+
+    async def bulk_target_ids_keeping_files(
+        self,
+        library_ids: list[str] | None,
+        *,
+        art: bool,
+        item_ids: list[int] | None,
+        include_unmonitored: bool,
+        after_id: int,
+        limit: int,
+    ) -> list[int]:
+        """Return the IDs of bulk targets whose saved selection has a recorded file.
+
+        *art* asks about artwork, of the item or its seasons; otherwise about
+        the theme.
+        """
+        if art:
+            kept_slot = (
+                col(ArtSlot.file_hash).is_not(None),
+                or_(
+                    col(ArtSlot.url).is_not(None),
+                    col(ArtSlot.upload_hash).is_not(None),
+                ),
+            )
+            keeps = or_(
+                select(ArtSlot.id)
+                .where(col(ArtSlot.media_item_id) == MediaItem.id, *kept_slot)
+                .exists(),
+                select(ArtSlot.id)
+                .join(Season, col(Season.id) == col(ArtSlot.season_id))
+                .where(col(Season.media_item_id) == MediaItem.id, *kept_slot)
+                .exists(),
+            )
+        else:
+            keeps = and_(
+                col(MediaItem.youtube_id).is_not(None),
+                col(MediaItem.theme_file_hash).is_not(None),
+            )
+        stmt = _bulk_scope(
+            select(MediaItem.id),
+            library_ids,
+            item_ids=item_ids,
+            include_unmonitored=include_unmonitored,
+            after_id=after_id,
+        ).where(keeps)
+        return [
+            item_id for item_id in await self.session.exec(stmt.limit(limit)) if item_id
+        ]
 
     async def list_monitored_with_folder_paths(
         self,
@@ -615,3 +660,22 @@ class MediaItemRepository:
         )
         result = await self.session.exec(stmt)
         return result.rowcount or 0
+
+
+def _bulk_scope[S: SelectOfScalar[Any]](
+    stmt: S,
+    library_ids: list[str] | None,
+    *,
+    item_ids: list[int] | None,
+    include_unmonitored: bool,
+    after_id: int,
+) -> S:
+    """Narrow *stmt* to the present items a bulk run targets, by ID from *after_id*."""
+    stmt = stmt.where(col(MediaItem.server_removed_at).is_(None), HOLDS_FILES)
+    if item_ids is not None:
+        stmt = stmt.where(col(MediaItem.id).in_(item_ids))
+    if not include_unmonitored:
+        stmt = stmt.where(col(MediaItem.monitored).is_(True))
+    if library_ids:
+        stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
+    return stmt.where(col(MediaItem.id) > after_id).order_by(col(MediaItem.id))

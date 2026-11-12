@@ -135,6 +135,27 @@ def art_file_columns(slot: ArtSlot | ArtFileFacts | None) -> ArtFileColumns:
     return _file_columns(slot)
 
 
+def record_selected_art_file(
+    owner: MediaItem | Season | MediaCollection,
+    art_type: ArtType,
+    facts: ArtFileFacts,
+) -> None:
+    """Record the slot's local file as the one holding its selection."""
+    _write_art_slot(owner, art_type, selection_hash=facts.file_hash, **asdict(facts))
+
+
+def file_holds_selection(slot: ArtSlot) -> bool:
+    """Return whether the slot's recorded file holds its selection.
+
+    A file recorded before Overture wrote or verified one for the selection
+    is taken to hold it.
+    """
+    return art_file_facts(slot) is not None and slot.selection_hash in {
+        None,
+        slot.file_hash,
+    }
+
+
 def record_art_file(
     owner: MediaItem | Season | MediaCollection,
     art_type: ArtType,
@@ -203,6 +224,8 @@ def select_art(
 ) -> ArtSlot:
     """Record *url* as the slot's selected artwork, leaving file facts alone."""
     slot = art_slot(owner, art_type)
+    if (slot.url, slot.upload_hash) != (url, None):
+        slot.selection_hash = None
     slot.url = url
     slot.upload_hash = None
     slot.generated_style = None
@@ -222,6 +245,8 @@ def select_upload(
     *generated* says how Overture drew it, for an image it made.
     """
     slot = art_slot(owner, art_type)
+    if (slot.url, slot.upload_hash) != (None, upload_hash):
+        slot.selection_hash = None
     slot.url = None
     slot.upload_hash = upload_hash
     slot.generated_style = generated.style if generated else None
@@ -245,6 +270,7 @@ def clear_art_selection(
         return
     slot.url = None
     slot.upload_hash = None
+    slot.selection_hash = None
     slot.generated_style = None
     slot.generated_title_only = False
     _drop_if_empty(owner, slot)

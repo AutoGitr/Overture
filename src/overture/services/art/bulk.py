@@ -24,7 +24,13 @@ lazy from functools import partial
 lazy from sqlalchemy.exc import SQLAlchemyError
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import ArtFileFacts, SavedArt, art_file_facts, saved_art
+lazy from ...db.art_slots import (
+    ArtFileFacts,
+    SavedArt,
+    art_file_facts,
+    file_holds_selection,
+    saved_art,
+)
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
@@ -45,6 +51,7 @@ lazy from ..bulk_common import (
     no_match_reason,
     queue_and_report,
     queue_download,
+    refresh_scope,
     report_downloads,
     report_unloaded,
 )
@@ -244,6 +251,8 @@ class _Slot:
     label: str
     local: ArtFileFacts | None
     saved: SavedArt | None
+    #: The local file is the saved selection's, as Overture wrote or verified it.
+    holds_selection: bool
 
     @property
     def target(self) -> str:
@@ -281,15 +290,16 @@ class _Slot:
 
 async def _settle_saved(run: _ArtRun, slot: _Slot, saved: SavedArt) -> None:
     """Keep a saved selection when Replace existing is off, restoring its file."""
-    if slot.local is not None:
+    if slot.holds_selection:
         await run.job.report(JobOutcome.SKIPPED, slot.target, SAVED_SELECTION)
-    else:
-        await queue_and_report(
-            run.job,
-            slot.target,
-            "restores the saved selection; local file missing",
-            slot.queue(run, saved.url, saved.upload_hash),
-        )
+        return
+    await queue_and_report(
+        run.job,
+        slot.target,
+        "restores the saved selection; local file "
+        + ("missing" if slot.local is None else "replaced outside Overture"),
+        slot.queue(run, saved.url, saved.upload_hash),
+    )
 
 
 async def _resolve(
@@ -402,6 +412,7 @@ def _slot(
         label=target_label(item, season=season),
         local=art_file_facts(stored) if stored else None,
         saved=saved_art(stored),
+        holds_selection=stored is not None and file_holds_selection(stored),
     )
 
 
@@ -473,6 +484,13 @@ async def run_bulk_art_match(
                 app_config=app_config,
             )
             await job.started()
+            await refresh_scope(
+                params,
+                local_assets=local_assets,
+                art=True,
+                source="assets.art",
+                database=database,
+            )
             plan = await plan_bulk_art(params, app_config=app_config, database=database)
             collection_plan = await plan_collection_art(
                 params, app_config=app_config, database=database

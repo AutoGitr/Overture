@@ -19,6 +19,7 @@ lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import CHUNK_SIZE, Database
+lazy from ...db.theme_file import theme_file_holds_selection
 lazy from ...domain import ThemeBulkSource
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
@@ -36,6 +37,7 @@ lazy from ..bulk_common import (
     planned_outcome,
     queue_and_report,
     queue_download,
+    refresh_scope,
     report_downloads,
     report_unloaded,
     scope_chunks,
@@ -134,6 +136,13 @@ async def run_bulk_themes(
                 database=database,
             )
             await job.started()
+            await refresh_scope(
+                params,
+                local_assets=local_assets,
+                art=False,
+                source="assets.themes",
+                database=database,
+            )
             plan = await plan_bulk_themes(
                 params, app_config=app_config, database=database
             )
@@ -206,13 +215,18 @@ async def _settle_existing(run: _ThemeRun, item: MediaItem) -> None:
     """Handle a saved selection or local file when not overwriting."""
     target = item.title
     if saved_id := item.youtube_id:
-        if item.theme_file_hash is not None:
+        if theme_file_holds_selection(item):
             await run.job.report(JobOutcome.SKIPPED, target, SAVED_SELECTION)
         else:
             await queue_and_report(
                 run.job,
                 target,
-                "restores the saved selection; local theme file missing",
+                "restores the saved selection; local theme file "
+                + (
+                    "missing"
+                    if item.theme_file_hash is None
+                    else "replaced outside Overture"
+                ),
                 run.queue(item, saved_id),
             )
         return
@@ -369,8 +383,8 @@ async def plan_bulk_themes(
                 decided = planned_outcome(
                     params,
                     saved=item.youtube_id,
-                    file_missing=item.theme_file_hash is None
-                    and item.folder_path is not None,
+                    selection_missing=item.folder_path is not None
+                    and not theme_file_holds_selection(item),
                     last_checked=item.last_matched_at,
                     catalog=None
                     if not dataset_only

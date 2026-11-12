@@ -124,7 +124,7 @@ async def plan_collection_art(
                 outcome = planned_outcome(
                     params,
                     saved=saved_art(slot),
-                    file_missing=not slot.file_hash,
+                    selection_missing=not slot.file_hash,
                     last_checked=row.last_matched_at,
                     catalog=_offer(row, art_type, params, index),
                 )

@@ -112,6 +112,9 @@ class MediaItem(ThemeColumns, table=True):
     # servers whose listings omit directors (Jellyfin and Emby).
     director_etag: str | None = None
     theme_provenance_cleared: bool = Field(default=False, nullable=False)
+    #: The hash of the theme file Overture wrote or verified for the
+    #: selection; a recorded file with another hash was replaced outside it.
+    theme_selection_hash: str | None = None
     #: The tmdb_id the TMDB fields describe; a different tmdb_id means they
     #: have to be looked up again, as does an old lookup.
     tmdb_checked_id: int | None = None

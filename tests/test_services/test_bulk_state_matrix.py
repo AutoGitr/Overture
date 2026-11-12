@@ -68,7 +68,7 @@ ACTION_LINES: frozendict[str, tuple[str, str]] = frozendict(
 )
 
 #: Actions planning decides from the database: no line names the target, and
-#: its files are never read.
+#: only the files of a saved selection are read, before planning.
 PLANNED_ACTIONS = frozenset({"set", "no_match", "recent"})
 
 
@@ -98,6 +98,7 @@ async def test_dataset_only_state_matrix(
     expected: dict[str, str] = {}
     on_disk: dict[int, bool] = {}
     cached_flags: dict[int, bool] = {}
+    files_read: dict[int, bool] = {}
     queue_targets: dict[int, str] = {}
     cases = product((False, True), repeat=5)
     for number, (flags, public, server_id) in enumerate(
@@ -121,6 +122,9 @@ async def test_dataset_only_state_matrix(
             saved, disk, same, cached, available, recent, asset, mode
         )
         expected[title] = action
+        files_read[number] = action not in PLANNED_ACTIONS or (
+            mode == "default" and saved and cached
+        )
         if action in {"restored", "queued"}:
             source = "saved" if action == "restored" else "public"
             queue_targets[number] = (
@@ -209,7 +213,9 @@ async def test_dataset_only_state_matrix(
     assert completed["no_match"] == no_match
     assert completed["downloaded"] == completed["errors"] == 0
 
-    await assert_rows_match_disk(db_session, asset, on_disk, cached_flags, expected)
+    await assert_rows_match_disk(
+        db_session, asset, on_disk, cached_flags, files_read, expected
+    )
 
 
 def seed_case(
@@ -308,8 +314,9 @@ def expected_action(
             return "no_match"
         return "recent" if recent else "queued"
     if saved:
-        # Planning trusts the stored file facts; a visit reads the disk.
-        if cached:
+        # A saved selection's recorded file is read again before planning
+        # trusts it; one without a record is visited, which reads the disk.
+        if cached and disk:
             return "set" if available else "no_match"
         return "kept_saved" if disk else "restored"
     if not available:
@@ -345,12 +352,13 @@ async def assert_rows_match_disk(
     asset: str,
     on_disk: dict[int, bool],
     cached_flags: dict[int, bool],
+    files_read: dict[int, bool],
     expected: dict[str, str],
 ) -> None:
-    """Visited targets' file records equal the disk; planned ones are unread.
+    """Targets whose files were read record the disk; the rest are unread.
 
-    A target planning decided keeps its seeded record - a presence flag that
-    may be stale and no hash - because its files were never read.
+    A target decided without reading its files keeps its seeded record - a
+    presence flag that may be stale and no hash.
     """
     session.expire_all()
     items = {item.id: item for item in (await session.exec(select(MediaItem))).all()}
@@ -360,8 +368,7 @@ async def assert_rows_match_disk(
     }
     for number, disk in on_disk.items():
         item = items[number]
-        visited = expected[item.title] not in PLANNED_ACTIONS
-        present = disk if visited else cached_flags[number]
+        present = disk if files_read[number] else cached_flags[number]
         if asset == "theme":
             assert (item.theme_file_hash is not None) is present, item.title
             continue

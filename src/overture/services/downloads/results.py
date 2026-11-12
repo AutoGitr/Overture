@@ -8,11 +8,16 @@ lazy from ...db.art_slots import (
     ArtFileFacts,
     clear_art_selection,
     record_art_file,
+    record_selected_art_file,
     select_art,
     select_upload,
 )
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, select_theme
+lazy from ...db.theme_file import (
+    ThemeFileFacts,
+    record_selected_theme_file,
+    select_theme,
+)
 lazy from ...domain import ArtType, ThemeIdSource
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.art_urls import PublicArtUrl
@@ -51,24 +56,23 @@ class DownloadedArt:
         if owner is None:
             raise DownloadError("Season not found")
 
+        facts = ArtFileFacts(
+            file_hash=stored.file_hash,
+            file_mtime_ns=stored.mtime_ns,
+            file_size=stored.size,
+            width=self.width,
+            height=self.height,
+            phash=self.phash,
+        )
         if self.upload_hash:
             select_upload(owner, self.art_type, self.upload_hash)
+            record_selected_art_file(owner, self.art_type, facts)
         elif self.url:
             select_art(owner, self.art_type, self.url)
+            record_selected_art_file(owner, self.art_type, facts)
         else:
             clear_art_selection(owner, self.art_type)
-        record_art_file(
-            owner,
-            self.art_type,
-            ArtFileFacts(
-                file_hash=stored.file_hash,
-                file_mtime_ns=stored.mtime_ns,
-                file_size=stored.size,
-                width=self.width,
-                height=self.height,
-                phash=self.phash,
-            ),
-        )
+            record_art_file(owner, self.art_type, facts)
         session.add(owner)
 
 
@@ -91,7 +95,7 @@ class DownloadedTheme:
             title=self.title,
             duration=self.duration,
         )
-        record_theme_file(
+        record_selected_theme_file(
             item,
             ThemeFileFacts(
                 file_hash=stored.file_hash,

@@ -99,8 +99,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     groupadd --gid 1000 overture && \
     useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin overture && \
     install -d -o overture -g overture -m 0750 /config && \
-    dpkg --remove --force-remove-protected apt $(dpkg-query -W -f='${Package} ' 'libapt-pkg*') && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /etc/apt /usr/bin/dpkg* /usr/local/lib/python*/site-packages/*
+    dpkg --remove --force-remove-protected apt "$(dpkg-query -W -f='${Package}' 'libapt-pkg*')" && \
+    rm -rf /etc/apt /usr/bin/dpkg* /usr/local/lib/python*/site-packages/*
 
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/

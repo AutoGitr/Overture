@@ -1144,3 +1144,45 @@ def test_the_collections_of_the_server_synced_last_are_kept() -> None:
             ).all() == [("plex",)]
     finally:
         engine.dispose()
+
+
+def test_selections_take_the_hash_of_the_file_recorded_for_them() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "b7e2c4f9a1d6")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "theme_provenance_cleared, youtube_id, theme_file_hash) VALUES "
+                "(1, 'movie', 'Chosen', 1, 0, 'abc', 't1'), "
+                "(2, 'movie', 'Unchosen', 1, 0, NULL, 't2')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (id, media_item_id, art_type, url, "
+                "upload_hash, file_hash, generated_title_only) VALUES "
+                "(1, 1, 'poster', 'https://images.test/p.jpg', NULL, 'p1', 0), "
+                "(2, 1, 'background', NULL, NULL, 'b1', 0), "
+                "(3, 2, 'poster', NULL, 'u', 'u', 0), "
+                "(4, 2, 'background', 'https://images.test/b.jpg', NULL, NULL, 0)"
+            )
+
+            command.upgrade(config, "d2a7f5c3e9b1")
+
+            assert conn.exec_driver_sql(
+                "SELECT id, selection_hash FROM art_slots ORDER BY id"
+            ).all() == [(1, "p1"), (2, None), (3, "u"), (4, None)]
+            assert conn.exec_driver_sql(
+                "SELECT id, theme_selection_hash FROM media_items ORDER BY id"
+            ).all() == [(1, "t1"), (2, None)]
+
+            command.downgrade(config, "b7e2c4f9a1d6")
+            assert "selection_hash" not in {
+                column["name"] for column in inspect(conn).get_columns("art_slots")
+            }
+            assert "theme_selection_hash" not in {
+                column["name"] for column in inspect(conn).get_columns("media_items")
+            }
+    finally:
+        engine.dispose()

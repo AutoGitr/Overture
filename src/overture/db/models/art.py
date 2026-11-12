@@ -85,6 +85,9 @@ class ArtSlot(SQLModel, table=True):
     generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
     #: The drawn poster shows the title alone, without its group.
     generated_title_only: bool = Field(default=False, nullable=False)
+    #: The hash of the file Overture wrote or verified for the selection; a
+    #: recorded file with another hash was replaced outside Overture.
+    selection_hash: str | None = None
     file_hash: str | None = None
     phash: str | None = None
     width: int | None = None

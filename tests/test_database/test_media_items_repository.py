@@ -2,17 +2,20 @@
 
 lazy from datetime import UTC, datetime
 lazy from pathlib import Path
+lazy from typing import Any
 
 lazy import pytest
 lazy from sqlalchemy.exc import InvalidRequestError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.art_slots import find_art_slot
+lazy from overture.db.art_slots import find_art_slot, select_art
 lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtStyle, ArtType, MediaType
 lazy from overture.repositories.media_items import MediaItemRepository
+lazy from overture.utils.art_urls import PublicArtUrl
 lazy from tests.factories import seed_art_slot
 lazy from tests.term_helpers import assign
 
@@ -314,3 +317,68 @@ async def test_bulk_operate_clears_artwork_selections(
         assert loaded.generated_style is None
         assert loaded.url is None
         assert loaded.file_hash == "filehash123"
+
+
+async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
+    db_session: AsyncSession, tmp_path: Path
+) -> None:
+    def movie(identity: int, **fields: Any) -> MediaItem:
+        return MediaItem.model_validate(
+            {
+                "id": identity,
+                "title": f"Title {identity}",
+                "media_type": MediaType.MOVIE,
+                "library_id": "movies",
+                "folder_path": str(tmp_path / str(identity)),
+            }
+            | fields
+        )
+
+    on_disk = movie(1)
+    not_on_disk = movie(2)
+    unmonitored = movie(3, monitored=False)
+    show = movie(4, media_type=MediaType.SHOW, library_id="shows")
+    season = Season(id=1, media_item_id=4, season_num=1)
+    themed = movie(5, youtube_id="video", theme_file_hash="theme")
+    file_without_selection = movie(6)
+    url = PublicArtUrl("https://cdn.test/p.jpg")
+    for owner in (on_disk, not_on_disk, unmonitored, season):
+        select_art(owner, ArtType.POSTER, url)
+    for owner in (on_disk, unmonitored, season, file_without_selection):
+        seed_art_slot(owner, ArtType.POSTER, file_hash="poster")
+    db_session.add_all(
+        [
+            on_disk,
+            not_on_disk,
+            unmonitored,
+            show,
+            season,
+            themed,
+            file_without_selection,
+        ]
+    )
+    await db_session.commit()
+    repo = MediaItemRepository(db_session)
+
+    async def keeping(
+        *,
+        art: bool = True,
+        library_ids: list[str] | None = None,
+        include_unmonitored: bool = False,
+        after_id: int = 0,
+        limit: int = 10,
+    ) -> list[int]:
+        return await repo.bulk_target_ids_keeping_files(
+            library_ids,
+            art=art,
+            item_ids=None,
+            include_unmonitored=include_unmonitored,
+            after_id=after_id,
+            limit=limit,
+        )
+
+    assert await keeping() == [1, 4]
+    assert await keeping(include_unmonitored=True) == [1, 3, 4]
+    assert await keeping(library_ids=["shows"]) == [4]
+    assert await keeping(after_id=1, limit=1) == [4]
+    assert await keeping(art=False) == [5]

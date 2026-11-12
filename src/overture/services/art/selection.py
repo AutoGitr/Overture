@@ -7,7 +7,13 @@ still the one that was verified.
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.art_slots import ArtFileFacts, art_file_facts, read_art_slot, select_art
+lazy from ...db.art_slots import (
+    ArtFileFacts,
+    art_file_facts,
+    read_art_slot,
+    record_selected_art_file,
+    select_art,
+)
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
@@ -84,6 +90,7 @@ async def adopt_art(
             if art_file_facts(read_art_slot(owner, art_type)) != verified:
                 return False
             select_art(owner, art_type, url)
+            record_selected_art_file(owner, art_type, verified)
             session.add(owner)
             await auto_unmonitor_completed(session, item)
     return True

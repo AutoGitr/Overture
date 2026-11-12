@@ -128,6 +128,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Assets:** a saved choice whose file was replaced after Overture wrote it, such as a `poster.jpg` from Radarr or Sonarr metadata, or deleted since the last sync, is downloaded again, as one whose file is missing already was. A run checks the files of saved choices before it plans, reading only files whose size or modification time changed.
 - **Artwork:** drawn collection art renders every character of a title, such as dashes, curly quotes, accented letters, Greek, Cyrillic, Chinese, Japanese, Korean, Arabic, Hebrew, Devanagari, Thai, symbols and emoji, with bundled Noto fonts.
 - **Interface:** reloading the page no longer announces runs that had already finished.
 - **Collections:** a library sync kept turning separators into regular collections, which then showed in the sidebar, failed to open and kept their group's next separator from being made ("A collection with this title already exists in this library"); the upgrade makes such collections separators again.

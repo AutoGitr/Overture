@@ -2,9 +2,11 @@
 
 Both plan their whole run before the first decision: every target in scope is
 either decided from the database alone, by :func:`planned_outcome`, or kept as
-a visit. Only visited targets have their files read and their sources asked,
-and the run's total is fixed before any of that starts. Both runners then
-stamp ``last_matched_at`` when they are done with a target.
+a visit. :func:`refresh_scope` first brings the recorded files of saved
+selections up to date, so planning keeps only those still on disk. Only
+visited targets have their files read and their sources asked, and the run's
+total is fixed before any of that starts. Both runners then stamp
+``last_matched_at`` when they are done with a target.
 """
 
 lazy import asyncio
@@ -31,10 +33,12 @@ lazy from ..jobs.tally import BulkAssetTally
 lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..repositories.seasons import SeasonRepository
 lazy from ..schemas.art import ArtMatchResponse
+lazy from ..schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from ..utils.time import utc_now
 lazy from .downloads.queue import JobTarget
 lazy from .downloads.service import DownloadService
 lazy from .downloads.watch import DownloadWatch
+lazy from .local_assets.service import LocalAssets
 lazy from .public_dataset.index import CatalogPick
 
 logger = logging.getLogger(__name__)
@@ -97,7 +101,7 @@ def planned_outcome(
     params: AssetRunParams,
     *,
     saved: str | SavedArt | None,
-    file_missing: bool,
+    selection_missing: bool,
     last_checked: datetime | None,
     catalog: CatalogPick | None,
 ) -> PlannedOutcome | None:
@@ -105,12 +109,13 @@ def planned_outcome(
 
     This is the planning half of an Assets decision; a visit makes the half
     that needs the files on disk or a source. *saved* is the slot's saved
-    selection, and *file_missing* says its file is not on disk where it
-    belongs. *catalog* is ``None`` unless the run's sole sources are catalogs,
-    and then is what they offer the target.
+    selection, and *selection_missing* says the file on disk is not it: the
+    file is missing, or was replaced outside Overture. *catalog* is ``None``
+    unless the run's sole sources are catalogs, and then is what they offer
+    the target.
     The rules apply in order:
 
-    1. A saved selection whose file is missing is visited, whenever last
+    1. A saved selection missing from disk is visited, whenever last
        checked, since the visit downloads the saved choice rather than asking
        a source.
     2. On a catalog-only run, a target no catalog serves is no match, or
@@ -120,7 +125,7 @@ def planned_outcome(
     5. Everything else is visited.
     """
     kept = bool(saved) and not params.overwrite_existing
-    if kept and file_missing:
+    if kept and selection_missing:
         return None
     if catalog is not None and catalog.value is None:
         outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
@@ -145,6 +150,46 @@ def _saved_reason(saved: str | SavedArt | None, catalog: CatalogPick | None) -> 
         f"saved selection differs from the {catalog.label}; "
         "Replace existing would replace it"
     )
+
+
+async def refresh_scope(
+    params: BulkMatchArtRequest | BulkThemeRequest,
+    *,
+    local_assets: LocalAssets,
+    art: bool,
+    source: str,
+    database: Database,
+) -> None:
+    """Record the files of saved selections as they are, before planning.
+
+    Planning keeps a saved selection on the strength of its recorded file, so
+    a file deleted or replaced since the last refresh has to be seen first.
+    Only titles keeping one are refreshed, and an unchanged file costs one stat
+    without being read. Every other target is visited, or decided without its
+    files, and a visit refreshes the files it decides on.
+    """
+    if params.overwrite_existing or (
+        params.collection_scope and not params.library_ids
+    ):
+        return
+    after_id = 0
+    while True:
+        async with database.read_session() as session:
+            item_ids = await MediaItemRepository(session).bulk_target_ids_keeping_files(
+                params.library_ids,
+                art=art,
+                item_ids=params.item_ids,
+                include_unmonitored=params.include_unmonitored,
+                after_id=after_id,
+                limit=CHUNK_SIZE,
+            )
+        if item_ids:
+            await local_assets.reconcile(
+                item_ids=item_ids, art=art, themes=not art, source=source
+            )
+        if len(item_ids) < CHUNK_SIZE:
+            return
+        after_id = item_ids[-1]
 
 
 @dataclass(slots=True, frozen=True)

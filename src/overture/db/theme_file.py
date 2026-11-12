@@ -68,6 +68,24 @@ def record_theme_file(item: ThemeColumns, facts: ThemeFileFacts | None) -> None:
     item.theme_file_duration = facts.duration if facts else None
 
 
+def record_selected_theme_file(item: MediaItem, facts: ThemeFileFacts) -> None:
+    """Record the item's local theme file as the one holding its selection."""
+    record_theme_file(item, facts)
+    item.theme_selection_hash = facts.file_hash
+
+
+def theme_file_holds_selection(item: MediaItem) -> bool:
+    """Return whether the item's recorded theme file holds its selection.
+
+    A file recorded before Overture wrote or verified one for the selection
+    is taken to hold it.
+    """
+    return item.theme_file_hash is not None and item.theme_selection_hash in {
+        None,
+        item.theme_file_hash,
+    }
+
+
 def select_theme(
     item: MediaItem,
     youtube_id: str,
@@ -77,6 +95,8 @@ def select_theme(
     duration: int | None,
 ) -> None:
     """Record *youtube_id* as the item's theme and how it was established."""
+    if item.youtube_id != youtube_id:
+        item.theme_selection_hash = None
     item.youtube_id = youtube_id
     item.youtube_id_source = source
     item.youtube_title = title
@@ -94,4 +114,5 @@ def clear_theme_selection(item: MediaItem) -> None:
     item.youtube_id_source = None
     item.youtube_title = None
     item.youtube_duration = None
+    item.theme_selection_hash = None
     item.theme_provenance_cleared = True

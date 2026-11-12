@@ -57,19 +57,25 @@ applies to movies and shows.
 
 ### How Assets treats existing choices and files
 
-By default, Assets keeps every existing file and skips slots that already have
-a saved choice, downloading the saved choice again when its file is missing:
+By default, Assets skips slots that already have a saved choice and keeps
+every file it did not write for one. It downloads the saved choice again when
+its file is missing, or was replaced by another program after Overture wrote
+it, as Radarr's or Sonarr's media upgrades can do.
+This happens whichever sources the run uses, since the saved choice is never
+looked for again:
 
-| Saved choice | Local file | Default                   | Replace existing |
-| ------------ | ---------- | ------------------------- | ---------------- |
-| Yes          | Yes        | Skip                      | Search again     |
-| Yes          | No         | Download the saved choice | Search again     |
-| No           | Either     | Search                    | Search again     |
+| Saved choice | Local file                    | Default                   | Replace existing |
+| ------------ | ----------------------------- | ------------------------- | ---------------- |
+| Yes          | The one Overture wrote for it | Skip                      | Search again     |
+| Yes          | Missing, or replaced since    | Download the saved choice | Search again     |
+| No           | Either                        | Search                    | Search again     |
 
 Saved choices include the artwork URLs Sync copies from your media server, so
-a run downloads those to the media folder when no local file exists yet.
-Assets knows a file is missing from what Overture last recorded on disk; a
-file deleted outside Overture is noticed after a Renamer scan or an Audit.
+a run downloads those to the media folder when no local file exists yet. Before
+it plans, a run checks the files of the titles with saved choices; an
+unchanged file costs one look at its size and modification time and is not
+read. To keep a file you put there yourself, clear the saved choice, or upload
+the image instead.
 
 **Replace existing** also replaces existing theme files; a downloaded file
 identical to yours is left untouched. A source image identical to your file is
@@ -79,7 +85,7 @@ taken, and a looser matching threshold also takes the same picture saved
 differently, replacing your unsaved file with OvertureDB's.
 
 **Skip recently checked** skips searches within the chosen time window, also
-with Replace existing. Restoring a missing saved choice always runs.
+with Replace existing. Restoring a saved choice always runs.
 
 ## Renamer
 

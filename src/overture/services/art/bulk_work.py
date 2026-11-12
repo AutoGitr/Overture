@@ -11,7 +11,7 @@ lazy from contextlib import aclosing
 lazy from dataclasses import dataclass, field
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import art_file_facts, saved_art
+lazy from ...db.art_slots import file_holds_selection, saved_art
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import CHUNK_SIZE, Database
@@ -109,9 +109,9 @@ async def plan_bulk_art(
                     decided = planned_outcome(
                         params,
                         saved=saved_art(stored),
-                        file_missing=stored is not None
-                        and art_file_facts(stored) is None
-                        and item.folder_path is not None,
+                        selection_missing=stored is not None
+                        and item.folder_path is not None
+                        and not file_holds_selection(stored),
                         last_checked=last_checked_at(item, art_type, season=season),
                         catalog=None
                         if index is None

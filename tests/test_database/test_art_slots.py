@@ -3,14 +3,18 @@
 Artwork lives in ``art_slots``, one row per owner and art type.
 """
 
+lazy from dataclasses import replace
+
 lazy from overture.db.art_slots import (
     ArtFileFacts,
     art_file_facts,
     art_slot,
     clear_art_selection,
+    file_holds_selection,
     find_art_slot,
     read_art_slot,
     record_art_file,
+    record_selected_art_file,
     select_art,
 )
 lazy from overture.db.models.art import ArtSlot
@@ -200,3 +204,37 @@ def test_slot_records_the_owner_identity_it_was_created_for(
 
     assert isinstance(slot, ArtSlot)
     assert (slot.media_item_id, slot.art_type) == (7, ArtType.BACKGROUND)
+
+
+def test_a_slot_holds_its_selection_while_the_file_is_the_one_recorded_for_it(
+    media_item_factory: MediaItemFactory,
+) -> None:
+    item = media_item_factory(id=1)
+    written = ArtFileFacts(
+        file_hash="written",
+        phash=None,
+        width=None,
+        height=None,
+        file_mtime_ns=1,
+        file_size=1,
+    )
+    select_art(item, ArtType.POSTER, PublicArtUrl("https://cdn.test/a.jpg"))
+    record_selected_art_file(item, ArtType.POSTER, written)
+    slot = read_art_slot(item, ArtType.POSTER)
+    assert file_holds_selection(slot)
+
+    # Selecting the same link again keeps what Overture knows about its file.
+    select_art(item, ArtType.POSTER, PublicArtUrl("https://cdn.test/a.jpg"))
+    record_art_file(
+        item, ArtType.POSTER, replace(written, file_hash="replaced", file_mtime_ns=2)
+    )
+    assert slot.selection_hash == "written"
+    assert not file_holds_selection(slot)
+
+    # A new selection's file is unknown until Overture writes or verifies one.
+    select_art(item, ArtType.POSTER, PublicArtUrl("https://cdn.test/b.jpg"))
+    assert slot.selection_hash is None
+    assert file_holds_selection(slot)
+
+    record_art_file(item, ArtType.POSTER, None)
+    assert not file_holds_selection(slot)
