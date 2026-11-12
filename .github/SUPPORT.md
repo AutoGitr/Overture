@@ -17,7 +17,7 @@ and patch releases.
 | Area | Tested | Not supported |
 | --- | --- | --- |
 | Docker | Linux `amd64` and `arm64` images, started and exercised before each release | Kubernetes, Helm and Podman are untested |
-| Native | x86_64 Linux with systemd ([requirements](README.md#installation)), tested on Ubuntu 22.04 and 26.04, and Debian 12 and 13 | Windows, macOS, ARM, musl or no systemd |
+| Native | x86_64 Linux with systemd ([requirements](https://autogitr.github.io/Overture/overture/install/linux-service)), tested on Ubuntu 22.04 and 26.04, and Debian 12 and 13 | Windows, macOS, ARM, musl or no systemd |
 | Media servers | Contract tests against pinned Plex, Jellyfin and Emby API specs, plus manual tests of current releases | One media server at a time |
 | Browsers | Chromium on desktop and mobile | Firefox and Safari are best effort |
 | Storage | Database on a local disk; media on disks or shares with locking and atomic renames | Two Overture instances on the same files |

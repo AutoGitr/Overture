@@ -1,7 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
+import type * as Docs from "@docusaurus/plugin-content-docs";
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config } from "@docusaurus/types";
+import fs from "node:fs";
+import path from "node:path";
 import { themes as prismThemes } from "prism-react-renderer";
 
 // This runs in Node.js at build time, never in the browser.
@@ -72,11 +73,12 @@ const config: Config = {
         path: overtureDbDocs,
         routeBasePath: "overturedb",
         sidebarPath: "./sidebars-overturedb.ts",
-        editUrl: "https://github.com/AutoGitr/OvertureDB/edit/main/",
+        editUrl: ({ docPath }) =>
+          `https://github.com/AutoGitr/OvertureDB/edit/main/docs/${docPath}`,
         // The sibling checkout is outside the site directory, so its Git
         // history is read from there.
         showLastUpdateTime: true,
-      },
+      } satisfies Docs.Options,
     ],
   ],
 

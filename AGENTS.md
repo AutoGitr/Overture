@@ -93,9 +93,10 @@ got there. History belongs in commit messages and the changelog.
 - **Suppressions** (`noqa`, `pyright: ignore`, `eslint-disable`) name the exact
   rule and say why it does not apply, on the same line.
 - **Docs follow the code.** A change to behaviour, settings or the API updates
-  the README and the pages in `docs/overture/` in the same task, written for
-  the person running Overture: what it does and how to use it, never how it
-  was built. A change to the catalog updates `../OvertureDB/docs/` too.
+  the pages in `docs/overture/` in the same task (the README only lists
+  features and links to them), written for the person running Overture: what
+  it does and how to use it, never how it was built. A change to the catalog
+  updates `../OvertureDB/docs/` too.
 
 ## Backend
 
@@ -236,5 +237,5 @@ and becomes the release notes.
 - Run `scripts/pre-commit-check.sh --fix`. It formats, regenerates the
   contracts, then runs every check CI runs on what changed.
 - When OvertureDB changed, also run its `scripts/pre-commit-check.sh`.
-- Update the README and `docs/overture/` for behaviour changes; `bun run ci`
-  in `docs/` checks the site.
+- Update `docs/overture/` for behaviour changes; `bun run ci` in `docs/`
+  checks the site.

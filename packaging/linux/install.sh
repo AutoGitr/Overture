@@ -64,7 +64,7 @@ failed() {
     systemctl stop overture.service 2>/dev/null || true
     echo "Installation did not start successfully. Overture is stopped." >&2
     echo "Previous release: ${previous:-none}. Pre-upgrade database backups are in the backups folder of the config directory." >&2
-    echo "Inspect journalctl -u overture and $target/README.md for recovery." >&2
+    echo "Inspect journalctl -u overture; https://autogitr.github.io/Overture/overture/administration/upgrade explains how to go back." >&2
 }
 trap failed ERR
 runuser -u overture -- "$target/bin/overture" check

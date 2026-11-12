@@ -87,7 +87,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Keep apt downloads across builds, without putting them in image layers.
 # Debian publishes security fixes before the official image is rebuilt with
-# them, so each build applies them.
+# them, so each build applies them. apt is then removed through dpkg, so image
+# scanners do not report it.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
@@ -98,7 +99,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     groupadd --gid 1000 overture && \
     useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin overture && \
     install -d -o overture -g overture -m 0750 /config && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /etc/apt /usr/bin/apt* /usr/bin/dpkg* /usr/local/lib/python*/site-packages/*
+    dpkg --remove --force-remove-protected apt $(dpkg-query -W -f='${Package} ' 'libapt-pkg*') && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /etc/apt /usr/bin/dpkg* /usr/local/lib/python*/site-packages/*
 
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
@@ -126,7 +128,7 @@ LABEL org.opencontainers.image.title="Overture" \
       org.opencontainers.image.description="Artwork, collections & themes for Plex, Jellyfin and Emby" \
       org.opencontainers.image.source="https://github.com/AutoGitr/Overture" \
       org.opencontainers.image.url="https://github.com/AutoGitr/Overture" \
-      org.opencontainers.image.documentation="https://github.com/AutoGitr/Overture#readme" \
+      org.opencontainers.image.documentation="https://autogitr.github.io/Overture/overture" \
       org.opencontainers.image.created="$BUILD_DATE" \
       org.opencontainers.image.revision="$VCS_REF" \
       org.opencontainers.image.version="$APP_VERSION" \

@@ -167,6 +167,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Security
 
 - **Container:** the image applies Debian's security updates when it is built, so fixes such as zlib's and apt's reach it before the official Python image is rebuilt with them.
+- **Container:** the image no longer contains `apt`, which it never uses at runtime, so its vulnerabilities do not apply to it.
 
 ## [0.1.0] - 2026-11-03
 

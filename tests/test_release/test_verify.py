@@ -11,6 +11,7 @@ lazy import pytest
 lazy from overture.domain import MediaType
 lazy from overture.media_servers.adapters import ServerCollection, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.schemas.collections import CollectionCapabilities
 lazy from overture.utils.http_security import API_KEY_HEADER
 lazy from scripts import verify as module
 
@@ -26,27 +27,32 @@ _GENRE = {
 
 
 def _capabilities(server: str) -> dict[str, Any]:
-    return {
+    capabilities = {
         "server_type": server,
+        "spans_libraries": server != "plex",
         "smart": server == "plex",
+        "visibility": server == "plex",
+        "member_labels": server == "plex",
         "arr": False,
         "orders": ["title.asc", "custom"],
         "smart_orders": ["title.asc"],
         "fields": [_GENRE],
+        "sources": [],
         "dimensions": [
             {
                 "dimension": "genre",
                 "label": "Genres",
                 "title_format": "{value}",
                 "smart_only": False,
-                "top": None,
                 "strip_prefix": "",
                 "strip_suffix": "",
             },
-            {"dimension": "custom", "label": "Custom", "smart_only": False},
+            {"dimension": "custom", "label": "Custom", "title_format": "{value}"},
         ],
         "charts": [],
     }
+    # The script reads what the API sends, so the fixture is that response.
+    return CollectionCapabilities.model_validate(capabilities).model_dump(mode="json")
 
 
 def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:

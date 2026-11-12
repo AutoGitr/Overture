@@ -55,12 +55,35 @@ Create an Overture key per instance under API keys in the menu and pass
 them in the order of the addresses; give each media server's address and its
 token or API key:
 
-    OVERTURE_API_KEY=plex-key,jellyfin-key,emby-key \\
-    PLEX_TOKEN=... JELLYFIN_API_KEY=... EMBY_API_KEY=... \\
-        uv run python -m scripts.verify \\
-        http://localhost:5885 http://localhost:5886 http://localhost:5887 \\
-        --plex https://plex.local:32400 --jellyfin http://jellyfin.local:8096 \\
-        --emby http://emby.local:8096 --report verify.md
+    Single Overture instance, one media server:
+    OVERTURE_API_KEY=plex-key \
+        PLEX_TOKEN=... \
+        RADARR_API_KEY=... \
+        SONARR_API_KEY=... \
+        uv run python -m scripts.verify \
+        https://plex.local:32400 \
+        --plex https://localhost:32400 --insecure \
+        --radarr http://localhost:7878 \
+        --sonarr http://localhost:8989 \
+        --report verify.md
+
+    Multiple Overture instances, one per media server:
+    OVERTURE_API_KEY=plex-key,jellyfin-key,emby-key \
+        PLEX_TOKEN=... \
+        JELLYFIN_API_KEY=... \
+        EMBY_API_KEY=... \
+        RADARR_API_KEY=... \
+        SONARR_API_KEY=... \
+        uv run python -m scripts.verify \
+        https://plex.local:32400 \
+        https://jellyfin.local:8096 \
+        https://emby.local:8095 \
+        --plex https://localhost:32400 --insecure \
+        --jellyfin http://localhost:8096 \
+        --emby http://localhost:8095 \
+        --radarr http://localhost:7878 \
+        --sonarr http://localhost:8989 \
+        --report verify.md
 
 Set TMDB_API_KEY and MDBLIST_API_KEY to probe those APIs too, and pass
 --radarr and --sonarr with RADARR_API_KEY and SONARR_API_KEY to compare them.
@@ -556,7 +579,7 @@ class Library:
                 self.case("set", dimension["label"]),
                 {
                     "dimension": dimension["dimension"],
-                    "top": dimension["top"] or SET_TOP,
+                    "top": SET_TOP,
                     "title_format": dimension["title_format"],
                     "strip_prefix": dimension["strip_prefix"],
                     "strip_suffix": dimension["strip_suffix"],

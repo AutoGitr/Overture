@@ -133,9 +133,9 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
 - Titles follow [Conventional Commits](https://www.conventionalcommits.org/),
   such as `fix(sync): keep seasons of unconnected shows`; the squash commit
   uses the title.
-- Update the README and these docs when behaviour changes, written for the
-  person running Overture: what it does and how to use it, never how it was
-  built.
+- Update these docs when behaviour changes, and the README's feature list
+  when a feature is added or removed, written for the person running Overture:
+  what it does and how to use it, never how it was built.
 - Describe changes users notice under `## [Unreleased]` in
   [CHANGELOG.md](https://github.com/AutoGitr/Overture/blob/main/.github/CHANGELOG.md),
   in the same commit. It follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)

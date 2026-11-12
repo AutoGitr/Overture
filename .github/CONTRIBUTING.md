@@ -182,8 +182,8 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
 - Titles follow [Conventional Commits](https://www.conventionalcommits.org/),
   such as `fix(sync): keep seasons of unconnected shows`; the squash commit uses
   the title.
-- Update the [README](README.md) and the pages in `docs/overture/` when
-  behaviour changes.
+- Update the pages in `docs/overture/` when behaviour changes, and the
+  [README](README.md)'s feature list when a feature is added or removed.
 - Describe changes users notice under `## [Unreleased]` in
   [CHANGELOG.md](CHANGELOG.md), in the same commit.
 - Leave out credentials and private media details. Report vulnerabilities as
