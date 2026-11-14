@@ -364,6 +364,8 @@ jobs:
           normalized="${rendered//\$\$/\$}"
           [[ "APP_PASSWORD_HASH='$normalized'" == "$line" ]]
 
+      # The container runs on an internal network, which has no route out, and
+      # a second container of the image reaches it there, as a host would.
       - name: Verify startup, authenticated boundaries, persistence, and restart
         env:
           APP_PASSWORD_HASH: $argon2id$v=19$m=19456,t=2,p=1$5PshSM2LkBARR0U/VapWcQ$Cyx+v2jMhbD55bxzEKRR07qFy3RE6MU1+PXxS/nJfK4
@@ -376,18 +378,29 @@ jobs:
           container="overture-smoke"
           volume="overture-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
+          network="$volume"
+
           cleanup() {
             docker rm --force "$container" >/dev/null 2>&1 || true
             docker volume rm "$volume" >/dev/null 2>&1 || true
+            docker network rm "$network" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
           docker volume create "$volume" >/dev/null
+          docker network create --internal "$network" >/dev/null
+
+          # Fetch a path from beside the container; fail unless it answers,
+          # and, given text, unless the page holds it.
+          probe() {
+            docker run --rm --network "$network" --entrypoint python overture:smoke \
+              -c "import sys, urllib.request; body = urllib.request.urlopen(sys.argv[1], timeout=2).read().decode(); sys.exit(len(sys.argv) > 2 and sys.argv[2] not in body)" "http://$container:5885$1" "${2:-}"
+          }
 
           start() {
             docker run --detach --name "$container" \
               --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
               --cap-drop ALL --security-opt no-new-privileges:true \
-              --publish 127.0.0.1:5885:5885 \
+              --network "$network" \
               --volume "$volume:/config" \
               --env APP_PASSWORD_HASH \
               --env MEDIA_SERVER \
@@ -396,7 +409,7 @@ jobs:
               overture:smoke >/dev/null
 
             for _ in $(seq 1 60); do
-              if curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null; then
+              if probe /api/ready >/dev/null 2>&1; then
                 return 0
               fi
               if [ "$(docker inspect --format '{{.State.Running}}' "$container")" != true ]; then
@@ -414,7 +427,7 @@ jobs:
           }
 
           start
-          curl --fail --silent http://127.0.0.1:5885/ | grep -q '<title>Overture</title>'
+          probe / '<title>Overture</title>'
           docker exec "$container" overture check
           verify --expected-tab art_and_themes --set-tab themes
           docker stop --time 30 "$container" >/dev/null

@@ -269,28 +269,39 @@ jobs:
           for architecture in amd64 arm64; do
             container="overture-release-$architecture"
             volume="overture-release-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            network="$volume"
             cleanup() {
               docker rm --force "$container" >/dev/null 2>&1 || true
               docker volume rm "$volume" >/dev/null 2>&1 || true
+              docker network rm "$network" >/dev/null 2>&1 || true
             }
             trap cleanup EXIT
             docker volume create "$volume" >/dev/null
+            # An internal network has no route out; a second container of the
+            # image reaches this one there, as a host would.
+            docker network create --internal "$network" >/dev/null
+            probe() {
+              docker run --rm --platform "linux/$architecture" --network "$network" \
+                --entrypoint python "$IMAGE@$DIGEST" \
+                -c "import sys, urllib.request; body = urllib.request.urlopen(sys.argv[1], timeout=2).read().decode(); sys.exit(len(sys.argv) > 2 and sys.argv[2] not in body)" "http://$container:5885$1" "${2:-}"
+            }
             docker run --detach --platform "linux/$architecture" --name "$container" \
               --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
               --cap-drop ALL --security-opt no-new-privileges:true \
-              --publish 127.0.0.1:5885:5885 \
+              --network "$network" \
               --volume "$volume:/config" \
               --env APP_PASSWORD_HASH --env MEDIA_SERVER \
               --env MEDIA_SERVER_URL --env MEDIA_SERVER_API_KEY \
               "$IMAGE@$DIGEST" >/dev/null
 
             for _ in $(seq 1 90); do
-              if curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null; then
+              if probe /api/ready >/dev/null 2>&1; then
                 break
               fi
               sleep 1
             done
-            curl --fail --silent http://127.0.0.1:5885/api/ready >/dev/null
+            probe /api/ready >/dev/null
+            probe / '<title>Overture</title>'
             docker exec --interactive "$container" python - \
               --expected-version "$VERSION" < scripts/container_smoke.py
             test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container")" = "$VERSION"

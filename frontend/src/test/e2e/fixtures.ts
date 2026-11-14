@@ -82,11 +82,12 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
     { auto: true },
   ],
   backend: [
-    async ({ page }, use) => {
+    async ({ page, context }, use) => {
       let authenticated = false;
-      // Registered first, so it answers only what no other route does, and the
-      // preview server never proxies a request to a backend that may be running.
-      await page.route("**/api/**", (route) =>
+      // Page routes take precedence, so this answers only what no other route
+      // does. On the context it also catches the service worker's requests, so
+      // the preview server never proxies one to a backend that may be running.
+      await context.route("**/api/**", (route) =>
         route.fulfill({ status: 404, json: { detail: "Not mocked" } }),
       );
       await page.route("**/api/auth/config", (route) =>

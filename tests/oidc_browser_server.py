@@ -1,10 +1,11 @@
 """Local-only Playwright fixture; never used by the production entry point."""
 
+lazy import socket
 lazy from collections.abc import AsyncGenerator
 lazy from contextlib import asynccontextmanager
 lazy from pathlib import Path
 lazy from tempfile import TemporaryDirectory
-lazy from typing import Annotated, Literal, override
+lazy from typing import Annotated, Any, Literal, override
 
 lazy import httpx2
 lazy from fastapi import FastAPI, Query, Request
@@ -14,7 +15,6 @@ lazy from starlette.responses import Response
 lazy from overture.config import Settings
 lazy from overture.db import metadata
 lazy from overture.db.session import Database
-lazy from overture.domain import ServerType
 lazy from overture.main import create_app
 lazy from overture.runtime import build_runtime
 lazy from overture.services.auth import AuthService
@@ -31,17 +31,30 @@ class BrowserAuth(AuthService):
         return 5 if self.short_session else super().session_seconds()
 
 
+def _resolve_loopback_only(host: str, *args: Any, **kwargs: Any) -> Any:
+    """Resolve only this machine, so a request off it fails instead of leaving."""
+    if host not in {"localhost", "127.0.0.1", "::1"}:
+        raise socket.gaierror(socket.EAI_NONAME, f"{host} is outside the test")
+    return _getaddrinfo(host, *args, **kwargs)
+
+
+_getaddrinfo = socket.getaddrinfo
+socket.getaddrinfo = _resolve_loopback_only
+
+
 def create_browser_app() -> FastAPI:
     """Build production auth routes and assets plus a cross-site test IdP."""
-    config = Settings(
-        AUTH_MODE="oidc",
-        APP_URL="http://127.0.0.1:8697",
-        OIDC_ISSUER_URL=AnyHttpUrl("http://localhost:8697/provider"),
-        OIDC_CLIENT_ID="overture",
-        OIDC_CLIENT_SECRET=SecretStr("test-client-secret"),
-        MEDIA_SERVER=ServerType.PLEX,
-        MEDIA_SERVER_URL="http://127.0.0.1:32400",
-        MEDIA_SERVER_API_KEY=SecretStr("test-media-key"),
+    config = Settings.model_validate(
+        {
+            "AUTH_MODE": "oidc",
+            "APP_URL": "http://127.0.0.1:8697",
+            "OIDC_ISSUER_URL": AnyHttpUrl("http://localhost:8697/provider"),
+            "OIDC_CLIENT_ID": "overture",
+            "OIDC_CLIENT_SECRET": SecretStr("test-client-secret"),
+            # Sign-in needs no media server, and a configured one is looked up
+            # on plex.tv; with none, nothing is reached beyond this process.
+            "MEDIA_SERVER": "none",
+        }
     )
     # Browser requests overlap. An in-memory StaticPool shares one transaction
     # across readers and writers, letting a read rollback undo session revocation.

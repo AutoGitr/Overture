@@ -71,6 +71,22 @@ beforeEach(async () => {
   render(NotificationHost);
 });
 
+// Tests never reach the network: a request a test does not stub fails it.
+// unstubGlobals restores these after each test, so a test's own stub wins.
+beforeEach(() => {
+  vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+    throw new Error(`Unstubbed fetch: ${String(input)}`);
+  });
+  vi.stubGlobal(
+    "WebSocket",
+    class {
+      constructor(url: string | URL) {
+        throw new Error(`Unstubbed WebSocket: ${String(url)}`);
+      }
+    },
+  );
+});
+
 afterEach(() => {
   cleanup();
   notificationState.settleConfirm(null);

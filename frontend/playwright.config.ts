@@ -22,10 +22,21 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: "performance.spec.ts",
     },
     {
       name: "mobile-chrome",
       use: { ...devices["Pixel 7"] },
+      testIgnore: "performance.spec.ts",
+    },
+    {
+      // Budgets measure the page, so they run alone once every other test has
+      // finished, not beside workers competing for the same CPU.
+      name: "performance",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: "performance.spec.ts",
+      fullyParallel: false,
+      dependencies: ["chromium", "mobile-chrome"],
     },
   ],
 });

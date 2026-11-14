@@ -36,8 +36,7 @@ const items = Array.from({ length: TITLES }, (_, index) =>
   mediaItem({ id: index + 1, title: `Movie ${String(index).padStart(5, "0")}` }),
 );
 
-test.beforeEach(async ({ page, isMobile }) => {
-  test.skip(isMobile, "One device is enough to compare runs.");
+test.beforeEach(async ({ page }) => {
   await watchLongTasks(page);
   await page.route("**/api/library/items?*", (route) =>
     route.fulfill({ json: { items, total: items.length } }),
