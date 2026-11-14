@@ -7,6 +7,7 @@
     getTmdbItemOptions,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
   import { CatalogDraft, type CatalogContext } from "../../utils/catalogDraft";
+  import { collectionPosterField } from "../../utils/collectionPosters";
   import DetailPanel from "../../components/DetailPanel.svelte";
   import CollectionMembers from "../../components/CollectionMembers.svelte";
   import DataStatus from "../../components/DataStatus.svelte";
@@ -56,7 +57,11 @@
           entry.seasons?.find((season) => season.season_num === season_num)?.poster_url ?? null,
         poster_preview_url: null,
       }));
-    return { detail, entry, target: entryTarget, draft, seasons };
+    const posterField =
+      entry.media_type === "collection"
+        ? collectionPosterField(uiState.catalogPosters)
+        : "poster_url";
+    return { detail, entry, posterField, target: entryTarget, draft, seasons };
   });
   const membersQuery = createQuery(() => ({
     ...getTmdbCollectionOptions({

@@ -17,7 +17,7 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...jobs.gate import LibraryGate, WaitReporter
 lazy from ...jobs.kinds import JobKind
 lazy from ...jobs.lifecycle import ManagedJobLifecycle
-lazy from ...jobs.runner import JobContext, scheduled
+lazy from ...jobs.runner import JobContext
 lazy from ...jobs.slot import ManagedBackgroundJob
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.registry import ProviderRegistry
@@ -37,6 +37,7 @@ lazy from ..catalog.downloads import (
 lazy from ..downloads.service import DownloadService
 lazy from ..local_assets.service import LocalAssets
 lazy from ..named_schedules import (
+    Attribution,
     NamedSchedule,
     NamedSchedules,
     ScheduleRunResult,
@@ -137,7 +138,10 @@ class SyncEngine:
         logger.debug("Sync stopped")
 
     async def _run_schedule(
-        self, schedule: NamedSchedule[SyncScheduleConfig], report: WaitReporter
+        self,
+        schedule: NamedSchedule[SyncScheduleConfig],
+        report: WaitReporter,
+        attribution: Attribution,
     ) -> ScheduleRunResult:
         """Run one saved schedule in the sync slot once the slot is free.
 
@@ -149,7 +153,7 @@ class SyncEngine:
             await self._library_gate.run(
                 "sync",
                 self.job,
-                scheduled(self._full_sync(config), schedule.name),
+                attribution(self._full_sync(config)),
                 report=report,
             )
             event, payload = self.job.final_snapshot()

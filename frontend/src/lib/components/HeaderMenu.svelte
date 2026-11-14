@@ -205,7 +205,7 @@
     right: 0;
     top: 100%;
     padding-top: var(--space-2);
-    z-index: 100;
+    z-index: var(--z-menu);
     visibility: hidden;
   }
 

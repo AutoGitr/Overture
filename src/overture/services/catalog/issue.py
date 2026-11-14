@@ -35,7 +35,11 @@ _REPLACED = {
     "tvdb_id": "TVDB ID",
     "imdb_id": "IMDb ID",
     "poster_url": "poster",
+    "poster_url_individual": "individual poster",
+    "poster_url_matte": "matte poster",
+    "poster_url_overlay": "overlay poster",
     "background_url": "background",
+    "seasons": "seasons",
     "youtube_id_overturedb": "theme",
 }
 
@@ -58,23 +62,29 @@ def _season_posters(entry: dict[str, Any]) -> dict[int, str]:
     return {int(season["season_num"]): str(season["poster_url"]) for season in seasons}
 
 
+def _replacement(
+    field: str, label: str, entry: dict[str, Any], current: dict[str, Any]
+) -> str | None:
+    """How the reason names *field* when *entry* replaces what *current* holds."""
+    if field == "seasons":
+        held = _season_posters(current)
+        numbers = [
+            str(number)
+            for number, url in _season_posters(entry).items()
+            if held.get(number) not in {None, url}
+        ]
+        return f"season {', '.join(numbers)} posters" if numbers else None
+    old, new = current.get(field), entry.get(field)
+    return label if None not in {old, new} and old != new else None
+
+
 def _replaced(entry: dict[str, Any], current: dict[str, Any]) -> list[str]:
     """What *entry* changes that OvertureDB already holds, in form order."""
-    changed = [
-        label
+    return [
+        text
         for field, label in _REPLACED.items()
-        if None not in {current.get(field), entry.get(field)}
-        and entry.get(field) != current.get(field)
+        if (text := _replacement(field, label, entry, current))
     ]
-    held = _season_posters(current)
-    numbers = [
-        str(number)
-        for number, url in _season_posters(entry).items()
-        if held.get(number) not in {None, url}
-    ]
-    if numbers:
-        changed.append(f"season {', '.join(numbers)} posters")
-    return changed
 
 
 def contribution_issue(

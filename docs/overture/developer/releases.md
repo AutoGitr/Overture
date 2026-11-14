@@ -30,7 +30,7 @@ starts the **Release check** workflow on that commit: the native Linux
 qualification and the capacity and soak validation, which CI leaves to
 releases. While that runs, it sets the version across `pyproject.toml`,
 `uv.lock`, `frontend/package.json` and `openapi/overture.json`, moves the
-`[Unreleased]` entries of the changelog under `## [X.Y.Z] - <date>` and runs
+`Unreleased` entries of the changelog under `## X.Y.Z - <date>` and runs
 the full local check. Once the Release check has passed, it pushes a signed
 release commit and `vX.Y.Z` tag together.
 

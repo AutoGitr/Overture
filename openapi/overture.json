@@ -2517,6 +2517,39 @@
             ],
             "title": "Poster Url"
           },
+          "poster_url_individual": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Individual"
+          },
+          "poster_url_matte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Matte"
+          },
+          "poster_url_overlay": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Overlay"
+          },
           "seasons": {
             "anyOf": [
               {
@@ -2687,6 +2720,39 @@
             ],
             "title": "Poster Url"
           },
+          "poster_url_individual": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Individual"
+          },
+          "poster_url_matte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Matte"
+          },
+          "poster_url_overlay": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Overlay"
+          },
           "seasons": {
             "anyOf": [
               {
@@ -2769,11 +2835,14 @@
           "tvdb_id",
           "imdb_id",
           "poster_url",
+          "poster_url_individual",
+          "poster_url_matte",
+          "poster_url_overlay",
           "background_url",
+          "seasons",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
-          "no_theme",
-          "seasons"
+          "no_theme"
         ],
         "title": "CatalogEntry",
         "type": "object"
@@ -3006,10 +3075,10 @@
           "poster_url",
           "poster_preview_url",
           "background_url",
+          "season_posters",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
           "no_theme",
-          "season_posters",
           "has_draft",
           "library_item_id",
           "library_collection_id"
@@ -3115,7 +3184,7 @@
             "title": "No Theme",
             "type": "boolean"
           },
-          "poster_url": {
+          "poster_url_individual": {
             "anyOf": [
               {
                 "type": "string"
@@ -3124,7 +3193,29 @@
                 "type": "null"
               }
             ],
-            "title": "Poster Url"
+            "title": "Poster Url Individual"
+          },
+          "poster_url_matte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Matte"
+          },
+          "poster_url_overlay": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url Overlay"
           },
           "title": {
             "title": "Title",
@@ -3161,7 +3252,9 @@
           "id",
           "tmdb_id",
           "title",
-          "poster_url",
+          "poster_url_individual",
+          "poster_url_matte",
+          "poster_url_overlay",
           "background_url",
           "youtube_id_overturedb",
           "youtube_id_themerrdb",
@@ -4416,6 +4509,21 @@
             "title": "Catalog No Theme",
             "type": "boolean"
           },
+          "catalog_selections": {
+            "anyOf": [
+              {
+                "enum": [
+                  "matching",
+                  "different"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Selections"
+          },
           "catalog_themerrdb": {
             "default": false,
             "title": "Catalog Themerrdb",
@@ -4927,6 +5035,7 @@
           "tmdb_collection_id",
           "catalog_complete",
           "catalog_themerrdb",
+          "catalog_selections",
           "has_incorrect_aspect_ratio",
           "catalog_no_theme",
           "home_order",
@@ -6298,10 +6407,11 @@
         "type": "string"
       },
       "CollectionPosterStyle": {
-        "description": "Which poster OvertureDB gives a TMDB collection.\n\n``consistent`` takes the poster in the layout every consistent collection\nposter shares; a collection without one has no OvertureDB poster.",
+        "description": "Which poster OvertureDB gives a TMDB collection.\n\n``matte`` and ``overlay`` take the consistent poster in that layout; a\ncollection without one has no OvertureDB poster.",
         "enum": [
           "individual",
-          "consistent"
+          "matte",
+          "overlay"
         ],
         "title": "CollectionPosterStyle",
         "type": "string"
@@ -6467,6 +6577,21 @@
             "default": false,
             "title": "Catalog No Theme",
             "type": "boolean"
+          },
+          "catalog_selections": {
+            "anyOf": [
+              {
+                "enum": [
+                  "matching",
+                  "different"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Selections"
           },
           "catalog_themerrdb": {
             "default": false,
@@ -6909,6 +7034,7 @@
           "tmdb_collection_id",
           "catalog_complete",
           "catalog_themerrdb",
+          "catalog_selections",
           "has_incorrect_aspect_ratio",
           "catalog_no_theme",
           "home_order"
@@ -9919,6 +10045,22 @@
             "title": "Catalog No Theme",
             "type": "boolean"
           },
+          "catalog_selections": {
+            "anyOf": [
+              {
+                "enum": [
+                  "matching",
+                  "different"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the selections the item and its OvertureDB entry both hold agree; null when no slot has a selection on both sides.",
+            "title": "Catalog Selections"
+          },
           "catalog_themerrdb": {
             "default": false,
             "title": "Catalog Themerrdb",
@@ -10348,6 +10490,7 @@
           "catalog_complete",
           "catalog_themerrdb",
           "catalog_ids",
+          "catalog_selections",
           "last_synced_at",
           "last_matched_at",
           "created_at",
@@ -11866,6 +12009,10 @@
             "title": "Table",
             "type": "string"
           },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
           "values": {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
@@ -11876,6 +12023,7 @@
         },
         "required": [
           "table",
+          "title",
           "values"
         ],
         "title": "StoredRow",
@@ -15097,6 +15245,17 @@
             "schema": {
               "$ref": "#/components/schemas/CatalogMediaType",
               "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Which poster collections show",
+            "in": "query",
+            "name": "posters",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CollectionPosterStyle",
+              "default": "individual",
+              "description": "Which poster collections show"
             }
           },
           {

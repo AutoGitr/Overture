@@ -23,6 +23,7 @@ lazy from ...schemas.collections import (
 lazy from ...schemas.records import DatabaseRecord
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
+lazy from ..catalog.agreement import collection_agreement
 lazy from ..downloads.collection_theme import collection_theme_unavailable
 lazy from ..provider_images import proxy_provider_image
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
@@ -81,6 +82,11 @@ class CollectionReader:
                 update={
                     "below_minimum": row.child_count < policy.minimum_items,
                     "home_order": policy.home_order,
+                    "catalog_selections": collection_agreement(
+                        row,
+                        catalog.get(row.tmdb_collection_id or 0),
+                        policy.overturedb_posters,
+                    ),
                     "has_incorrect_aspect_ratio": any(
                         has_incorrect_aspect_ratio(
                             slot.width,
@@ -140,7 +146,12 @@ class CollectionReader:
                 backgrounds=policy.backgrounds,
             )
             .model_copy(
-                update={"below_minimum": row.child_count < policy.minimum_items}
+                update={
+                    "below_minimum": row.child_count < policy.minimum_items,
+                    "catalog_selections": collection_agreement(
+                        row, entry, policy.overturedb_posters
+                    ),
+                }
             )
             .model_dump(),
             effective_sync_mode=policy.sync_mode,

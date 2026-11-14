@@ -13,8 +13,8 @@ which also hides its menu entry. It also carries imported ThemerrDB theme
 choices. Catalog-only runs still download images and audio from their linked
 sources; coverage and availability depend on those sources.
 
-Overture reads version 3 of the catalog, which adds consistent collection
-posters.
+Overture reads version 4 of the catalog, which gives each collection an
+individual, matte and overlay poster slot.
 
 ## Settings
 
@@ -36,7 +36,11 @@ Flip the switch beside the logo down to browse the full local catalog,
 including movies, shows and movie collections outside your library. Filter by
 artwork, season posters, either theme source, local drafts or library
 membership. Catalog links use TMDB, TVDB or IMDb identities, for example
-`/overturedb/shows/tvdb-81189`.
+`/overturedb/shows/tvdb-81189` or `/overturedb/collections/tmdb-10`.
+
+A collection carries an individual, a matte and an overlay poster. **Poster
+style** in the filters chooses which of them the collections list shows and
+the poster tab edits.
 
 Item, collection, season and member images in the OvertureDB view always use
 the catalog, with drafts overriding it everywhere. Missing images show a

@@ -1313,3 +1313,99 @@ def test_automatic_art_choices_and_colours_take_the_generated_name() -> None:
             ).all() == [("overturedb_tmdb_draw",)]
     finally:
         engine.dispose()
+
+
+_V3_COLLECTION_DRAFT = {
+    "media_type": "collection",
+    "title": "Saga",
+    "tmdb_id": 10,
+    "poster_url": "https://image.tmdb.org/t/p/original/p.jpg",
+    "background_url": None,
+    "youtube_id_overturedb": None,
+    "youtube_id_themerrdb": None,
+    "consistent_poster_url": "https://theposterdb.com/api/assets/2503",
+}
+
+
+def test_collection_poster_styles_split_into_individual_matte_and_overlay() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c9e4f1b7a2d3")
+            conn.exec_driver_sql(
+                f"INSERT INTO app_settings ({', '.join(_SETTINGS_BEFORE_AUTO_ART)}) "  # noqa: S608 -- literal test values
+                f"VALUES ({', '.join(map(str, _SETTINGS_BEFORE_AUTO_ART.values()))})"
+            )
+            command.upgrade(config, "f2b6d9a4c731")
+            conn.exec_driver_sql(
+                "UPDATE app_settings SET collection_overturedb_posters = 'consistent'"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator, "
+                "overturedb_posters) VALUES (1, 'Sagas', 0, 'consistent')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO catalog_collections (tmdb_id, title, poster_url, "
+                "consistent_poster_url, no_theme) VALUES (10, 'Saga', "
+                "'https://image.tmdb.org/t/p/original/p.jpg', "
+                "'https://theposterdb.com/api/assets/2503', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO catalog_drafts (media_type, tmdb_id, entry, updated_at) "
+                "VALUES ('collection', 10, "
+                "'" + json.dumps(_V3_COLLECTION_DRAFT) + "', '2026-08-26T12:00:00Z')"
+            )
+
+            command.upgrade(config, "a4e9c2b8f517")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_overturedb_posters FROM app_settings"
+            ).all() == [("overlay",)]
+            assert conn.exec_driver_sql(
+                "SELECT overturedb_posters FROM collection_groups"
+            ).all() == [("overlay",)]
+            assert conn.exec_driver_sql(
+                "SELECT poster_url_individual, poster_url_matte, poster_url_overlay "
+                "FROM catalog_collections"
+            ).all() == [
+                (
+                    "https://image.tmdb.org/t/p/original/p.jpg",
+                    None,
+                    "https://theposterdb.com/api/assets/2503",
+                )
+            ]
+            (draft_json,) = conn.exec_driver_sql(
+                "SELECT entry FROM catalog_drafts"
+            ).one()
+            assert json.loads(draft_json) == {
+                "media_type": "collection",
+                "title": "Saga",
+                "tmdb_id": 10,
+                "poster_url_individual": "https://image.tmdb.org/t/p/original/p.jpg",
+                "poster_url_matte": None,
+                "poster_url_overlay": "https://theposterdb.com/api/assets/2503",
+                "background_url": None,
+                "youtube_id_overturedb": None,
+                "youtube_id_themerrdb": None,
+            }
+
+            command.downgrade(config, "f2b6d9a4c731")
+            assert conn.exec_driver_sql(
+                "SELECT collection_overturedb_posters FROM app_settings"
+            ).all() == [("consistent",)]
+            assert conn.exec_driver_sql(
+                "SELECT poster_url, consistent_poster_url FROM catalog_collections"
+            ).all() == [
+                (
+                    "https://image.tmdb.org/t/p/original/p.jpg",
+                    "https://theposterdb.com/api/assets/2503",
+                )
+            ]
+            (draft_json,) = conn.exec_driver_sql(
+                "SELECT entry FROM catalog_drafts"
+            ).one()
+            assert json.loads(draft_json) == _V3_COLLECTION_DRAFT
+    finally:
+        engine.dispose()

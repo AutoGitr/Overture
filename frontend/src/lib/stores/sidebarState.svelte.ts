@@ -23,6 +23,8 @@ export const sidebarState = $state<{
   collections: { type: SidebarTab; collectionIds: number[] } | null;
   /** The TMDB results shown, in order, while the sidebar searches TMDB. */
   tmdbResults: AdvanceEntry[] | null;
+  /** The TMDB results shown that open as a collection or catalog entry. */
+  tmdbRecords: AdvanceRecord[] | null;
   /** The collections or catalog entries shown, in order, for auto-advance. */
   records: AdvanceRecord[] | null;
   /**
@@ -36,6 +38,7 @@ export const sidebarState = $state<{
   current: null,
   collections: null,
   tmdbResults: null,
+  tmdbRecords: null,
   records: null,
   view: null,
   walk: null,
@@ -47,4 +50,9 @@ export function advanceOrder(): AdvanceEntry[] {
     sidebarState.tmdbResults ??
     (sidebarState.current?.itemIds ?? []).map((id) => ({ kind: "item" as const, id }))
   );
+}
+
+/** The collections or catalog entries auto-advance moves through: the TMDB results', else the list's. */
+export function advanceRecords(): AdvanceRecord[] {
+  return sidebarState.tmdbRecords ?? sidebarState.records ?? [];
 }

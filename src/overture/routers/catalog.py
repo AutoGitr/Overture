@@ -6,7 +6,7 @@ lazy from fastapi import APIRouter, Depends, Path, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import CatalogDep
-lazy from ..domain import CatalogMediaType
+lazy from ..domain import CatalogMediaType, CollectionPosterStyle
 lazy from ..schemas.catalog import (
     CatalogCounts,
     CatalogDraftsDiscard,
@@ -128,9 +128,12 @@ async def get_catalog_counts(catalog: CatalogDep) -> CatalogCounts:
 async def list_catalog_entries(
     catalog: CatalogDep,
     media_type: Annotated[CatalogMediaType, Query(description="Entry kind")],
+    posters: Annotated[
+        CollectionPosterStyle, Query(description="Which poster collections show")
+    ] = CollectionPosterStyle.INDIVIDUAL,
 ) -> list[CatalogEntryRow]:
     """Return every catalog entry of a kind, with what the library holds of it."""
-    return await catalog.browser.list_entries(media_type)
+    return await catalog.browser.list_entries(media_type, posters=posters)
 
 
 @router.get("/catalog/{media_type}/{entry_key}")

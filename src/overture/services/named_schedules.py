@@ -16,6 +16,7 @@ lazy import logging
 lazy from collections.abc import Awaitable, Callable, Iterable, Mapping
 lazy from dataclasses import dataclass
 lazy from datetime import datetime
+lazy from functools import partial
 lazy from typing import Any
 
 lazy from pydantic import BaseModel
@@ -26,6 +27,7 @@ lazy from ..db.models.saved_schedule import SavedSchedule
 lazy from ..db.session import Database
 lazy from ..domain import ScheduleKind
 lazy from ..jobs.gate import WaitReporter
+lazy from ..jobs.runner import JobBody, scheduled
 lazy from ..repositories.saved_schedules import SavedScheduleRepository
 lazy from ..schemas.common import Status, StatusResponse
 lazy from ..schemas.schedules import (
@@ -72,8 +74,11 @@ class ScheduleRunResult:
 
 #: Runs one schedule to completion. The reporter is told what the run waits
 #: for, and ``None`` once it runs.
+#: Names the saved schedule as what started a run its cron starts; a run
+#: started by hand runs the schedule's settings but is not named after it.
+type Attribution = Callable[[JobBody], JobBody]
 type ScheduleRunner[ConfigT: BaseModel] = Callable[
-    [NamedSchedule[ConfigT], WaitReporter], Awaitable[ScheduleRunResult]
+    [NamedSchedule[ConfigT], WaitReporter, Attribution], Awaitable[ScheduleRunResult]
 ]
 
 
@@ -110,6 +115,10 @@ def job_run_summary(
     )
 
 
+def _by_hand(body: JobBody) -> JobBody:
+    return body
+
+
 @dataclass(slots=True, frozen=True)
 class _ActiveRun:
     schedule_id: int
@@ -120,7 +129,7 @@ class _ActiveRun:
 @dataclass(slots=True, frozen=True)
 class _QueuedRun:
     schedule_id: int
-    force: bool
+    by_hand: bool
 
 
 class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
@@ -251,7 +260,7 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
         async with self._database.read_session() as session:
             await self._get(SavedScheduleRepository(session), schedule_id)
         self._ensure_worker()
-        self._enqueue(schedule_id, force=True)
+        self._enqueue(schedule_id, by_hand=True)
         return StatusResponse(status=Status.QUEUED)
 
     async def reset(self, rewrite: Callable[[ConfigT], ConfigT]) -> None:
@@ -279,7 +288,7 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
         self, schedule_id: int, *, enabled: bool, cron_expression: str
     ) -> None:
         async def enqueue() -> None:
-            self._enqueue(schedule_id, force=False)
+            self._enqueue(schedule_id, by_hand=False)
 
         if self.scheduler.set_cron_job(
             _job_id(schedule_id),
@@ -316,12 +325,12 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
         ):
             raise PublicServiceError(400, "A schedule with this name already exists")
 
-    def _enqueue(self, schedule_id: int, *, force: bool) -> None:
+    def _enqueue(self, schedule_id: int, *, by_hand: bool) -> None:
         if self._closed:
             raise RuntimeError(f"{self.kind.capitalize()} schedules are stopping")
         if schedule_id not in self._pending:
             self._pending.add(schedule_id)
-            self._queue.put_nowait(_QueuedRun(schedule_id, force))
+            self._queue.put_nowait(_QueuedRun(schedule_id, by_hand))
             self._announce()
 
     def _announce(self) -> None:
@@ -386,7 +395,7 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
                 self._detach(record)
                 if record is not None
                 and record.kind == self.kind
-                and (item.force or record.enabled)
+                and (item.by_hand or record.enabled)
                 else None
             )
         if schedule is None:
@@ -396,7 +405,10 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
         self._active = _ActiveRun(schedule.id, schedule.name)
         self._announce()
         try:
-            result = await self._run(schedule, self._report)
+            attribution: Attribution = (
+                _by_hand if item.by_hand else partial(scheduled, schedule=schedule.name)
+            )
+            result = await self._run(schedule, self._report, attribution)
             async with self._database.write_session() as session:
                 record = await SavedScheduleRepository(session).get(item.schedule_id)
                 if record is not None and record.kind == self.kind:

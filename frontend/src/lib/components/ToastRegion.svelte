@@ -29,7 +29,7 @@
     position: fixed;
     right: calc(var(--space-4) + var(--safe-area-right));
     bottom: calc(var(--space-4) + var(--safe-area-bottom));
-    z-index: 3000;
+    z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
     gap: var(--space-2);

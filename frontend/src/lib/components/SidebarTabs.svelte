@@ -18,9 +18,7 @@
 
   let collections = $derived(uiState.sidebarMode === "collections");
   let library = $derived(uiState.sidebarSource === "library");
-  let collectionsButton = $derived(
-    library ? settingsState.current.collections_supported : uiState.sidebarTab === "movie",
-  );
+  let collectionsButton = $derived(!library || settingsState.current.collections_supported);
   let groups = $derived(library && uiState.collectionView === "groups");
   /** The open collections tab of the library toggles between its two views. */
   let toggles = $derived(library && collections);

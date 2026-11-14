@@ -22,7 +22,8 @@ these by their address and sends each the message its API takes:
 Assets art and theme runs, Renamer scan, server audit and its fix, OvertureDB
 sync, backup), whether a failed or stopped run is announced, which completed
 runs are (never, always, only with changes, only with errors), and whether
-only runs a schedule started count. Out of the box only failures are
+only runs a schedule's cron started count; **Run now** on a schedule is a run
+you started. Out of the box only failures are
 announced. **Send test notification** checks the address.
 
 A message never carries a configured secret; one that cannot be sent is

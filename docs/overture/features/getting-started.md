@@ -26,10 +26,15 @@ poster for every season with videos.
 
 For titles outside your library, switch the search field to **TMDB** (requires
 `TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
-finds their media folder.
+finds their media folder. TMDB results keep TMDB's order by default and sort
+by title or year; the filters then choose whether titles your library or
+OvertureDB holds are listed.
 
 Every section of the filters popup collapses, and stays as you left it. The
-item filters can also show only the titles of one **Collection**.
+item filters can also show only the titles of one **Collection**. While
+OvertureDB is on, **OvertureDB selections** lists the titles and collections
+whose selections match OvertureDB's or differ from them; only art and themes
+chosen on both sides are compared.
 
 ## Install as an app
 
@@ -53,4 +58,6 @@ backgrounds and themes, so the numbers show what still needs attention.
 Every item and collection has a database record view that lists every stored
 column of the record and of the rows that belong to it, such as seasons, art
 slots and collection libraries, apart from what Overture derives from them.
+Each row is named by what it holds, such as **Background** or **Season 2
+poster**.
 The same data is available through the [REST API](api.md).

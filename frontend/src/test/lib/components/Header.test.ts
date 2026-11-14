@@ -195,7 +195,7 @@ describe("Header", () => {
     expect(browse).not.toBeChecked();
     await fireEvent.click(browse);
     // The mode carries over to where the catalog has it.
-    await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections"));
+    await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/collections"));
     expect(screen.getByRole("link", { name: "OvertureDB" })).toHaveAttribute("href", "/");
     expect(browse).toBeChecked();
 

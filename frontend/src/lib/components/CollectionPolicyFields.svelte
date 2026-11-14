@@ -5,10 +5,10 @@
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
-    CollectionPosterStyle,
     SyncMode,
   } from "../../generated/rest/types.gen";
   import type { PolicyData } from "../utils/collectionForms.svelte";
+  import { COLLECTION_POSTER_LABELS, COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
 
   /**
    * Where settings are edited. Global defaults always hold a value; groups and
@@ -50,10 +50,9 @@
     ["light", "Light"],
     ["accent", "Accent"],
   ];
-  const OVERTUREDB_POSTERS: readonly (readonly [CollectionPosterStyle, string])[] = [
-    ["individual", "Individual"],
-    ["consistent", "Consistent"],
-  ];
+  const OVERTUREDB_POSTERS = COLLECTION_POSTER_STYLES.map(
+    (style) => [style, COLLECTION_POSTER_LABELS[style]] as const,
+  );
   const WANTED_NOT = [
     [true, "Wanted"],
     [false, "Not needed"],
@@ -174,7 +173,7 @@
     bind:value={policy.overturedb_posters}
     inherited={defaults?.overturedb_posters}
     options={OVERTUREDB_POSTERS}
-    hint="Individual takes a TMDB collection's own OvertureDB poster. Consistent takes the one in the layout every consistent poster shares, so collections look alike; a collection without one gets no OvertureDB poster. Posters you choose are contributed as the same kind."
+    hint="Individual takes a TMDB collection's own OvertureDB poster. Matte and Overlay take the consistent poster in that layout, so collections look alike; a collection without one gets no OvertureDB poster. Posters you choose are contributed as the same kind."
   />
   <InheritedSelect
     label="Background"

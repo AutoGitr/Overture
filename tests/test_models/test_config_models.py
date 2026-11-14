@@ -1,6 +1,6 @@
 """Configuration and model serialization coverage."""
 
-lazy from ipaddress import ip_network
+lazy from ipaddress import ip_address, ip_network
 lazy from typing import Any
 
 lazy import pytest
@@ -53,8 +53,8 @@ class TestSettingsValidation:
             ip_network("10.0.0.9/32"),
             ip_network("172.16.0.0/12"),
         ) == configured.TRUSTED_PROXY_CIDRS
-        assert configured.is_trusted_proxy("10.0.0.9") is True
-        assert configured.is_trusted_proxy("192.0.2.1") is False
+        assert configured.is_trusted_proxy(ip_address("10.0.0.9")) is True
+        assert configured.is_trusted_proxy(ip_address("192.0.2.1")) is False
 
     def test_rejects_missing_required_secret_material(self) -> None:
         with pytest.raises(ValidationError):

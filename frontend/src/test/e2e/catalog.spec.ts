@@ -163,7 +163,7 @@ test("catalog collections use catalog member artwork and open members in Overtur
   await page.route("**/api/tmdb/movie/11/art/poster/sources*", (route) =>
     route.fulfill({ json: { sources: {} } }),
   );
-  await logIn(page, "/overturedb/movies/collections/tmdb-10/art/poster");
+  await logIn(page, "/overturedb/collections/tmdb-10/art/poster");
   const members = page.getByRole("region", { name: "Collection members" });
   const member = members.getByRole("button", { name: "Member (2001) In library" });
   await expect(member.locator("img")).toHaveAttribute("src", poster);

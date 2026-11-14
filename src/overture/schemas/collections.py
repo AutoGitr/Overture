@@ -374,6 +374,9 @@ class CollectionRead(CollectionArtwork):
     catalog_complete: bool = False
     #: The catalog has a ThemerrDB theme for it.
     catalog_themerrdb: bool = False
+    #: Whether the selections the collection and its OvertureDB entry both hold
+    #: agree; null when no slot has a selection on both sides.
+    catalog_selections: Literal["matching", "different"] | None = None
     #: The poster or background is outside the aspect ratio tolerance.
     has_incorrect_aspect_ratio: bool = False
     #: OvertureDB says the collection has no theme music, so none is missing.

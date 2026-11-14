@@ -430,7 +430,9 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
     assert [candidate.url for candidate in disabled.by_source["tmdb"]] == [URL]
     assert disabled.by_source["overturedb"] == []
     async with database.write_session() as session:
-        session.add(CatalogCollection(tmdb_id=10, title="Saga", poster_url=URL))
+        session.add(
+            CatalogCollection(tmdb_id=10, title="Saga", poster_url_individual=URL)
+        )
     async with database.write_session() as session:
         await enable_catalog(session)
     policy = CandidatePolicy.of(AppSettings(skip_media_server_tmdb_urls=True))

@@ -25,6 +25,7 @@
   import { setSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { alphabetical } from "../utils/alphabetical";
+  import { COLLECTION_POSTER_LABELS, COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
 
   setSectionView("filters");
   const id = $props.id();
@@ -93,6 +94,11 @@
     ["empty", "Empty"],
     ["below_minimum", "Below minimum"],
   ] as const;
+  const SELECTIONS_OPTIONS = [
+    ["all", "All"],
+    ["matching", "Matching"],
+    ["different", "Different"],
+  ] as const;
   const MATCH_MODE_OPTIONS = [
     ["any", "Any selected"],
     ["all", "All selected"],
@@ -106,6 +112,7 @@
     theme: { options: COMPLETE_OPTIONS },
     overtureDb: { options: COMPLETE_OPTIONS },
     themerrDb: { options: COMPLETE_OPTIONS },
+    catalogSelections: { options: SELECTIONS_OPTIONS },
     collectionMembers: { options: MEMBERS_OPTIONS },
     collectionHolds: { options: HOLDS_OPTIONS },
     collectionKind: { options: KIND_OPTIONS },
@@ -193,11 +200,20 @@
   );
 
   let catalogDraft = $state($state.snapshot(uiState.catalogFilters));
+  let catalogPosters = $state(uiState.catalogPosters);
+  let tmdbDraft = $state($state.snapshot(uiState.tmdbFilters));
+  let tmdbFilterKeys = $derived(
+    sidebarDomain.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
+  );
+  const POSTER_OPTIONS = COLLECTION_POSTER_STYLES.map(
+    (style) => [style, COLLECTION_POSTER_LABELS[style]] as const,
+  );
   const catalogQuery = createQuery(() => ({
     ...listCatalogEntriesOptions({
-      query: {
-        media_type: uiState.sidebarMode === "collections" ? "collection" : uiState.sidebarTab,
-      },
+      query:
+        uiState.sidebarMode === "collections"
+          ? { media_type: "collection", posters: catalogPosters }
+          : { media_type: uiState.sidebarTab },
     }),
     enabled: uiState.sidebarSource === "overturedb",
   }));
@@ -213,14 +229,23 @@
 
   /** Nothing differs from the filters in use, so Apply would change nothing. */
   let unchanged = $derived(
-    uiState.sidebarSource === "overturedb"
-      ? JSON.stringify(catalogDraft) === JSON.stringify(uiState.catalogFilters)
+    uiState.searchingTmdb
+      ? JSON.stringify(tmdbDraft) === JSON.stringify(uiState.tmdbFilters)
+      : uiState.sidebarSource === "overturedb"
+      ? JSON.stringify(catalogDraft) === JSON.stringify(uiState.catalogFilters) &&
+        catalogPosters === uiState.catalogPosters
       : JSON.stringify(filters) === JSON.stringify(uiState.currentFilters),
   );
 
   function apply() {
+    if (uiState.searchingTmdb) {
+      uiState.tmdbFilters = $state.snapshot(tmdbDraft);
+      uiState.closePopup();
+      return;
+    }
     if (uiState.sidebarSource === "overturedb") {
       uiState.catalogFilters = $state.snapshot(catalogDraft);
+      uiState.setCatalogPosters(catalogPosters);
       uiState.closePopup();
       return;
     }
@@ -228,6 +253,7 @@
       ...$state.snapshot(filters),
       overtureDb: catalogEnabled ? filters.overtureDb : "all",
       themerrDb: catalogEnabled ? filters.themerrDb : "all",
+      catalogSelections: catalogEnabled ? filters.catalogSelections : "all",
     });
     uiState.closePopup();
   }
@@ -235,6 +261,7 @@
   function clear() {
     draft = defaultFilters();
     catalogDraft = sidebarDomain.defaultCatalogFilters();
+    tmdbDraft = sidebarDomain.defaultTmdbFilters();
   }
 </script>
 
@@ -351,8 +378,29 @@
     --segment-flex="1 1 0"
     --segmented-wrap="nowrap"
   >
-    {#if uiState.sidebarSource === "overturedb"}
+    {#if uiState.searchingTmdb}
+      <PopupSection label="TMDB results">
+        {#each tmdbFilterKeys as key (key)}
+          <FieldRow label={sidebarDomain.TMDB_FILTER_LABELS[key]}>
+            <SegmentedControl
+              label={sidebarDomain.TMDB_FILTER_LABELS[key]}
+              options={MEDIA_SERVER_OPTIONS}
+              bind:value={tmdbDraft[key]}
+            />
+          </FieldRow>
+        {/each}
+      </PopupSection>
+    {:else if uiState.sidebarSource === "overturedb"}
       <PopupSection label={sidebarDomain.FILTER_GROUPS.status}>
+        {#if uiState.sidebarMode === "collections"}
+          <FieldRow label="Poster style">
+            <SegmentedControl
+              label="Poster style"
+              options={POSTER_OPTIONS}
+              bind:value={catalogPosters}
+            />
+          </FieldRow>
+        {/if}
         {#each sidebarDomain.CATALOG_FILTER_KEYS as key (key)}
           {#if key !== "seasonPosters" || uiState.sidebarTab === "show"}
             <FieldRow label={sidebarDomain.CATALOG_FILTER_LABELS[key]}>

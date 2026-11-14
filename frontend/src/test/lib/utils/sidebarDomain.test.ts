@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CollectionRead, MediaItemRead } from "../../../generated/rest/types.gen";
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
+  arrangeTmdbResults,
   aspectDeviation,
   CATALOG_FILTER_KEYS,
   catalogStatus,
@@ -571,6 +572,7 @@ describe("sidebar collections", () => {
         managed: true,
         sync_failed: true,
         catalog_complete: true,
+        catalog_selections: "different",
       }),
     ];
     const titles = (filters: Partial<FilterState>, catalogEnabled = false) =>
@@ -585,6 +587,8 @@ describe("sidebar collections", () => {
     expect(titles({ collectionSync: "synced" })).toEqual(["Smart"]);
     expect(titles({ overtureDb: "complete" }, true)).toEqual(["Failing"]);
     expect(titles({ overtureDb: "complete" })).toHaveLength(3);
+    expect(titles({ catalogSelections: "different" }, true)).toEqual(["Failing"]);
+    expect(titles({ catalogSelections: "matching" }, true)).toEqual([]);
   });
 
   it("searches by the chosen field and sorts by the chosen key", () => {
@@ -926,5 +930,38 @@ describe("collection and group sorts", () => {
       "Large",
       "Empty",
     ]);
+  });
+});
+
+describe("TMDB results", () => {
+  const results = [
+    { title: "Alien 3", year: 1992, stored: true },
+    { title: "Alien", year: 1979, stored: false },
+    { title: "Aliens", year: 1986, stored: true },
+  ];
+  const arrange = (options: {
+    library?: "all" | "present" | "missing";
+    sortField?: "relevance" | "title" | "year";
+    sortDir?: "asc" | "desc";
+  }) =>
+    arrangeTmdbResults({
+      results,
+      held: (result) => ({ library: result.stored, overturedb: false }),
+      filters: { library: options.library ?? "all", overturedb: "all" },
+      keys: ["library"],
+      sortField: options.sortField ?? "relevance",
+      sortDir: options.sortDir ?? "asc",
+    }).map((result) => result.title);
+
+  it("keep TMDB's order by default and sort by title or year", () => {
+    expect(sortMenu("tmdb").map((entry) => entry.id)).toEqual(["relevance", "title", "year"]);
+    expect(arrange({})).toEqual(["Alien 3", "Alien", "Aliens"]);
+    expect(arrange({ sortField: "title" })).toEqual(["Alien", "Alien 3", "Aliens"]);
+    expect(arrange({ sortField: "year", sortDir: "desc" })).toEqual(["Alien 3", "Aliens", "Alien"]);
+  });
+
+  it("filter by whether the list holds them", () => {
+    expect(arrange({ library: "missing" })).toEqual(["Alien"]);
+    expect(arrange({ library: "present" })).toEqual(["Alien 3", "Aliens"]);
   });
 });

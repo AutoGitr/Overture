@@ -5,7 +5,9 @@ import {
   METADATA_ISSUES,
   THEME_SOURCES,
   defaultCatalogFilters,
+  defaultTmdbFilters,
   type CatalogFilters,
+  type TmdbFilters,
   type CollectionView,
   type ArtSource,
   type ArtSourceSlot,
@@ -17,6 +19,8 @@ import {
   type ThemeSource,
 } from "../utils/sidebarDomain";
 import { readJson, writeJson } from "../utils/storage";
+import type { CollectionPosterStyle } from "../../generated/rest/types.gen";
+import { COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
 import { settingsState } from "./settingsState.svelte";
 
 export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
@@ -55,6 +59,8 @@ export interface FilterState {
   theme: Completeness;
   overtureDb: Completeness;
   themerrDb: Completeness;
+  /** Whether selections held both here and in OvertureDB agree. */
+  catalogSelections: "all" | "matching" | "different";
   aspectRatio: "all" | "correct" | "incorrect";
   mediaServer: "all" | "present" | "missing";
   libraryIds: string[];
@@ -78,6 +84,7 @@ const DEFAULT_FILTERS: FilterState = {
   theme: "all",
   overtureDb: "all",
   themerrDb: "all",
+  catalogSelections: "all",
   aspectRatio: "all",
   mediaServer: "all",
   libraryIds: [],
@@ -178,6 +185,11 @@ function normalizeFilters(value: unknown): FilterState {
     theme: stringOption(source.theme, COMPLETENESS_FILTERS, defaults.theme),
     overtureDb: stringOption(source.overtureDb, COMPLETENESS_FILTERS, defaults.overtureDb),
     themerrDb: stringOption(source.themerrDb, COMPLETENESS_FILTERS, defaults.themerrDb),
+    catalogSelections: stringOption(
+      source.catalogSelections,
+      ["all", "matching", "different"] as const,
+      defaults.catalogSelections,
+    ),
     aspectRatio: stringOption(source.aspectRatio, ASPECT_RATIO_FILTERS, defaults.aspectRatio),
     mediaServer: stringOption(source.mediaServer, MEDIA_SERVER_FILTERS, defaults.mediaServer),
     libraryIds: stringArray(source.libraryIds),
@@ -223,6 +235,20 @@ class UiState {
   showFilters = $state<FilterState>(loadFilters("showFilters"));
   collectionFilters = $state<FilterState>(loadFilters("collectionFilters"));
   catalogFilters = $state<CatalogFilters>(defaultCatalogFilters());
+  tmdbFilters = $state<TmdbFilters>(defaultTmdbFilters());
+  /** Which OvertureDB poster the catalog's collections show and edit. */
+  catalogPosters = $state<CollectionPosterStyle>(
+    stringOption(
+      readJson<unknown>("overture_catalog_posters", null),
+      COLLECTION_POSTER_STYLES,
+      "individual",
+    ),
+  );
+
+  setCatalogPosters(posters: CollectionPosterStyle) {
+    this.catalogPosters = posters;
+    writeJson("overture_catalog_posters", posters);
+  }
 
   operationsTab = $state<OperationsTab>("assets");
   collectionGroupToEdit = $state("");
@@ -271,6 +297,11 @@ class UiState {
     this.collectionGroupChange = null;
   }
 
+  /** The search looks up TMDB rather than filtering the list. */
+  get searchingTmdb(): boolean {
+    return this.searchField === "tmdb";
+  }
+
   /** Which top-level tab (movies/shows) is active, derived from the URL. */
   get sidebarTab(): SidebarTab {
     return routeScope().tab;
@@ -312,7 +343,7 @@ class UiState {
     this.mobileShowDetail = false;
     const collections =
       mode === "collections" &&
-      (source === "overturedb" ? tab === "movie" : settingsState.current.collections_supported);
+      (source === "overturedb" || settingsState.current.collections_supported);
     this.#startSearch(`${source}:${tab}:${collections ? "collections" : "items"}`);
     if (source === "overturedb") goToCatalog(tab, collections ? "collections" : "items");
     else if (collections) goToCollectionsList();

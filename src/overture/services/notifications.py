@@ -60,7 +60,7 @@ async def notification_rules(
 
 
 def _title(kind: JobKind, status: LifecycleStatus) -> str:
-    return f"Overture: {label(kind.label)} {status}"
+    return f"{label(kind.label)} {status}"
 
 
 def _summary(outcomes: Mapping[JobOutcome, int]) -> str:
@@ -89,7 +89,7 @@ def message_for(
     match status:
         case LifecycleStatus.FAILED if rule.failed:
             body, level = (
-                detail or "See the run's log in Overture.",
+                detail or "See the run's log.",
                 NotifyLevel.FAILURE,
             )
         case LifecycleStatus.STOPPED if rule.stopped:
@@ -215,7 +215,7 @@ class NotificationSettings:
                 cannot be reached or refuses it.
         """
         message = NotifyMessage(
-            title="Overture: Test notification",
+            title="Test notification",
             body="Notifications reach this service.",
             level=NotifyLevel.SUCCESS,
         )

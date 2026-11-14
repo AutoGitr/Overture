@@ -33,7 +33,7 @@ describe("item collection badge", () => {
     await fireEvent.click(
       screen.getByRole("button", { name: "Open its collection, Star Wars, in OvertureDB" }),
     );
-    await waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections/tmdb-10"));
+    await waitFor(() => expect(route.pathname).toBe("/overturedb/collections/tmdb-10"));
   });
   it("links nowhere outside Overture when the catalog is disabled", () => {
     renderWithQueryClient(CollectionBadge, { tmdbId: 10, catalogEnabled: false });

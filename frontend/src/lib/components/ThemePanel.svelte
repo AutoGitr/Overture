@@ -219,7 +219,7 @@
         <span>{downloadStageLabel(job)}</span>
       </div>
       <div class="progress-bar progress-bar-sm">
-        <div class="progress-bar-fill" style="width:{job.percent}%"></div>
+        <div class="progress-bar-fill" style:width="{job.percent}%"></div>
       </div>
     </div>
   {/each}

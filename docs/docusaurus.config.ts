@@ -24,7 +24,6 @@ if (!fs.existsSync(path.resolve(overtureDbDocs))) {
 const config: Config = {
   title: "Overture",
   tagline: "Artwork, collections & themes for Plex, Jellyfin and Emby",
-  favicon: "overture-tab.svg",
   url: "https://autogitr.github.io",
   baseUrl: "/Overture/",
   organizationName: "AutoGitr",
@@ -100,14 +99,8 @@ const config: Config = {
     image: "overture-social.png",
     colorMode: { defaultMode: "dark", respectPrefersColorScheme: true },
     docs: { sidebar: { hideable: true, autoCollapseCategories: true } },
+    // The tab icon and the navbar logo follow the project open: src/theme.
     navbar: {
-      logo: {
-        alt: "Overture",
-        src: "overture-logo-inline-light.svg",
-        srcDark: "overture-logo-inline-dark.svg",
-        width: 132,
-        height: 32,
-      },
       items: [
         { type: "docSidebar", sidebarId: "docs", position: "left", label: "Overture" },
         {

@@ -39,7 +39,7 @@
     /** Search fields to choose from; a single field needs no menu. */
     searchGroups: SearchFieldGroup[];
     placeholder: string;
-    /** Sort fields to choose from; none hides the sort menu and the filters. */
+    /** Sort fields to choose from, the default first; none hides the sort menu and the filters. */
     sortFields: MenuEntry<SidebarSortField>[];
     filtersOpen: boolean;
     /** How many filters narrow the list; Reset filters clears them. */
@@ -57,7 +57,7 @@
 
   let searchInput: HTMLInputElement;
 
-  let isDefaultSort = $derived(sortField === "title" && sortDir === "asc");
+  let isDefaultSort = $derived(sortField === sortFields[0]?.id && sortDir === "asc");
   let sortLabel = $derived(sortFields.find((entry) => entry.id === sortField)?.shortLabel);
   let searchOptions = $derived(
     searchGroups.reduce((count, group) => count + group.fields.length, 0),
@@ -308,8 +308,7 @@
     align-items: center;
     gap: var(--space-1);
     min-width: 0;
-    padding: 0 var(--space-2) 0 0;
-    overflow: visible;
+    padding-inline-end: var(--space-2);
     color: var(--text-tertiary);
     background: var(--field-bg);
     border: var(--border-muted);
@@ -368,14 +367,11 @@
     font-size: var(--text-sm);
     background: transparent;
     border: none;
-    outline: none;
+    /* The wrapper draws the field; the input is only its text. */
+    box-shadow: none;
   }
 
   .search-input:first-child {
     padding-left: var(--space-2);
-  }
-
-  .search-input:focus {
-    box-shadow: none;
   }
 </style>

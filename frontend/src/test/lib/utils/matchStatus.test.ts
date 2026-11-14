@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ArtMatchResponse } from "../../../generated/rest/types.gen";
-import {
-  DEFAULT_MATCH_THRESHOLD,
-  MAX_MATCH_THRESHOLD,
-  MIN_MATCH_THRESHOLD,
-  clampMatchThreshold,
-  matchStatusLine,
-} from "../../../lib/utils/matchStatus";
+import { clampMatchThreshold, matchStatusLine } from "../../../lib/utils/matchStatus";
 import { artCandidate, artMatchResponse } from "../../helpers/fixtures";
 
 function response(overrides: Partial<ArtMatchResponse> = {}): ArtMatchResponse {
@@ -68,12 +62,6 @@ describe("matchStatusLine", () => {
     expect(matchStatusLine(response({ total_compared: 1, prefiltered: 7 }), 5).text).toBe(
       "No match - nothing within distance 5, 7 rejected on size or aspect ratio",
     );
-  });
-
-  it("exports the default threshold of 3 and valid bounds", () => {
-    expect(DEFAULT_MATCH_THRESHOLD).toBe(3);
-    expect(MIN_MATCH_THRESHOLD).toBe(0);
-    expect(MAX_MATCH_THRESHOLD).toBe(10);
   });
 
   it("clamps and sanitizes match thresholds into bounds", () => {

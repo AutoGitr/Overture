@@ -96,6 +96,13 @@ class MediaItemRead(StrictBaseModel):
             "null without an entry."
         ),
     )
+    catalog_selections: Literal["matching", "different"] | None = Field(
+        default=None,
+        description=(
+            "Whether the selections the item and its OvertureDB entry both hold "
+            "agree; null when no slot has a selection on both sides."
+        ),
+    )
 
     # Timestamps
     last_synced_at: datetime | None = None
@@ -167,6 +174,7 @@ def media_item_read_from_model(
     catalog_no_theme: bool = False,
     catalog_entry_key: str | None = None,
     catalog_ids: Literal["matching", "mismatching"] | None = None,
+    catalog_selections: Literal["matching", "different"] | None = None,
     library_collection_id: int | None = None,
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.
@@ -196,6 +204,7 @@ def media_item_read_from_model(
             "catalog_themerrdb": catalog_themerrdb,
             "library_collection_id": library_collection_id,
             "catalog_ids": catalog_ids,
+            "catalog_selections": catalog_selections,
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
     )

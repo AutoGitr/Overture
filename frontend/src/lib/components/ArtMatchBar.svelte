@@ -5,7 +5,7 @@
   import type { Snippet } from "svelte";
   import type { ArtType } from "../../generated/rest/types.gen";
   import type { ArtMatch } from "../utils/artMatch.svelte";
-  import { MAX_MATCH_THRESHOLD, MIN_MATCH_THRESHOLD } from "../utils/matchStatus";
+  import { MATCH_THRESHOLD_MAX } from "../../generated/settings";
 
   let {
     match,
@@ -58,15 +58,15 @@
     <div class="controls">
       <div
         class="threshold"
-        title={`Maximum perceptual hash distance (${MIN_MATCH_THRESHOLD}-${MAX_MATCH_THRESHOLD}). Lower is stricter.`}
+        title={`Maximum perceptual hash distance (0-${MATCH_THRESHOLD_MAX}). Lower is stricter.`}
       >
         <label for={thresholdId} class="threshold-label">Distance &le;</label>
         <input
           id={thresholdId}
           type="number"
           class="threshold-input"
-          min={MIN_MATCH_THRESHOLD}
-          max={MAX_MATCH_THRESHOLD}
+          min={0}
+          max={MATCH_THRESHOLD_MAX}
           step="1"
           bind:value={match.threshold}
           onchange={() => match.saveThreshold()}

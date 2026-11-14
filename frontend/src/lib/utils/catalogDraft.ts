@@ -12,11 +12,17 @@ import type {
 import { storeCatalogDetail } from "../rest/cache";
 import type { CatalogTarget } from "../rest/cache";
 import { createNotifier } from "../stores/notificationState.svelte";
+import type { collectionPosterField } from "./collectionPosters";
 import { errorMessage } from "./errors";
+
+/** The entry field a catalog poster tab shows and edits. */
+export type CatalogPosterField = "poster_url" | ReturnType<typeof collectionPosterField>;
 
 export type CatalogContext = {
   detail: CatalogEntryDetail;
   entry: CatalogEntry;
+  /** A collection's poster of the style the catalog view shows, else the poster. */
+  posterField: CatalogPosterField;
   target: CatalogTarget;
   draft: CatalogDraft;
   seasons: TmdbSeasonPreview[];

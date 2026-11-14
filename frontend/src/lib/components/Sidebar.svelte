@@ -90,7 +90,9 @@
     enabled: catalog.browsable && uiState.sidebarSource === "overturedb",
   }));
   const catalogCollections = createQuery(() => ({
-    ...listCatalogEntriesOptions({ query: { media_type: "collection" } }),
+    ...listCatalogEntriesOptions({
+      query: { media_type: "collection", posters: uiState.catalogPosters },
+    }),
     enabled: catalog.browsable && uiState.sidebarSource === "overturedb",
   }));
   let catalogQuery = $derived(
@@ -108,6 +110,7 @@
     collections: "overture_collection_sort",
     groups: "overture_group_sort",
     overturedb: "overture_catalog_sort",
+    tmdb: "overture_tmdb_sort",
   };
 
   function loadSortPreference(scope: SortScope, tab: SidebarTab) {
@@ -135,18 +138,24 @@
       movie: loadSortPreference("overturedb", "movie"),
       show: loadSortPreference("overturedb", "show"),
     },
+    tmdb: {
+      movie: loadSortPreference("tmdb", "movie"),
+      show: loadSortPreference("tmdb", "show"),
+    },
   });
   let groupView = $derived(uiState.collectionView === "groups");
   let currentGroup = $derived(groupView ? sidebarGroup() : null);
   /** The groups list sorts its groups; an open group its collections. */
   let sortScope = $derived<SortScope>(
-    uiState.sidebarSource === "overturedb"
-      ? "overturedb"
-      : uiState.sidebarMode !== "collections"
-        ? "library"
-        : groupView && currentGroup === null
-          ? "groups"
-          : "collections",
+    uiState.searchingTmdb
+      ? "tmdb"
+      : uiState.sidebarSource === "overturedb"
+        ? "overturedb"
+        : uiState.sidebarMode !== "collections"
+          ? "library"
+          : groupView && currentGroup === null
+            ? "groups"
+            : "collections",
   );
   let sortFields = $derived(
     sidebarDomain.sortMenu(sortScope, {
@@ -155,11 +164,14 @@
     }),
   );
   let chosenSort = $derived(sortByScope[sortScope][uiState.sidebarTab]);
-  // A saved sort this list does not offer, such as Group inside a group, falls back to Title.
+  // A saved sort this list does not offer, such as Group inside a group, gives way to its default.
   let sort = $derived<SidebarSortPreference>(
     sortFields.some((entry) => entry.id === chosenSort.field)
       ? chosenSort
-      : { field: "title", dir: "asc" },
+      : sidebarDomain.defaultSort(sortFields),
+  );
+  let tmdbFilterKeys = $derived(
+    sidebarDomain.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalog.enabled),
   );
   let catalogRows = $derived(
     sidebarDomain.filterCatalogEntries({
@@ -201,7 +213,7 @@
     scrollSave = setTimeout(() => writeJson(key, target.scrollTop, "session"), 200);
   }
 
-  let searchingTmdb = $derived(uiState.searchField === "tmdb");
+  let searchingTmdb = $derived(uiState.searchingTmdb);
   let libraryItems = $derived(uiState.sidebarTab === "movie" ? movies : shows);
 
   const filteredCollection = new CollectionMembers(() =>
@@ -230,6 +242,7 @@
       currentGroup,
       uiState.currentFilters,
       uiState.catalogFilters,
+      uiState.tmdbFilters,
       uiState.searchQuery,
       uiState.searchField,
     ]);
@@ -419,9 +432,11 @@
           ? filteredCollections.length
           : filteredItems.length,
     )}
-    sortFields={searchingTmdb ? [] : sortFields}
+    {sortFields}
     filtersOpen={uiState.openPopup === "filters"}
-    activeFilters={uiState.sidebarSource === "overturedb"
+    activeFilters={searchingTmdb
+      ? tmdbFilterKeys.filter((key) => uiState.tmdbFilters[key] !== "all").length
+      : uiState.sidebarSource === "overturedb"
       ? sidebarDomain.CATALOG_FILTER_KEYS.filter(
           (key) =>
             (key !== "seasonPosters" || uiState.sidebarTab === "show") &&
@@ -433,7 +448,8 @@
           uiState.sidebarMode,
         )}
     onResetFilters={() => {
-      if (uiState.sidebarSource === "overturedb")
+      if (searchingTmdb) uiState.tmdbFilters = sidebarDomain.defaultTmdbFilters();
+      else if (uiState.sidebarSource === "overturedb")
         uiState.catalogFilters = sidebarDomain.defaultCatalogFilters();
       else uiState.setFilters(defaultFilters());
     }}
@@ -494,6 +510,10 @@
             {catalogEntries}
             {catalogRow}
             collectionsOnly={uiState.sidebarMode === "collections"}
+            filters={uiState.tmdbFilters}
+            filterKeys={tmdbFilterKeys}
+            sortField={sort.field}
+            sortDir={sort.dir}
             onOpen={openDetail}
           />
         {:else}
@@ -524,6 +544,10 @@
           {libraryRow}
           {collections}
           collectionsOnly={uiState.sidebarMode === "collections"}
+          filters={uiState.tmdbFilters}
+          filterKeys={tmdbFilterKeys}
+          sortField={sort.field}
+          sortDir={sort.dir}
           onOpen={openDetail}
         />
       {:else if uiState.sidebarMode === "items"}

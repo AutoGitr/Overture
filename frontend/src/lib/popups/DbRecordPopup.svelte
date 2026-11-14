@@ -149,11 +149,7 @@
             {@render rows("values", "Values, such as genres and people", dbRecordFields(record.values))}
           {/if}
           {#each related as row, index (index)}
-            {@render rows(
-              `related-${index}`,
-              row.values.id === undefined ? row.table : `${row.table} ${String(row.values.id)}`,
-              dbRecordFields(row.values),
-            )}
+            {@render rows(`related-${index}`, row.title, dbRecordFields(row.values))}
           {/each}
         </section>
       {/if}

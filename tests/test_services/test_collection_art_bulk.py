@@ -194,7 +194,11 @@ async def test_collection_art_run_uploads_the_catalog_art_it_finds(
         assert row is not None
         row.tmdb_collection_id = 10
         session.add(row)
-        session.add(CatalogCollection(tmdb_id=10, title="Saga", poster_url=CATALOG_URL))
+        session.add(
+            CatalogCollection(
+                tmdb_id=10, title="Saga", poster_url_individual=CATALOG_URL
+            )
+        )
         await enable_catalog(session)
     params = BulkMatchArtRequest(
         collection_groups=["Sagas"], source_order=[ArtBulkSource.OVERTUREDB]

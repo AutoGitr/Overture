@@ -121,7 +121,9 @@ class CatalogRecordCollection(StrictBaseModel):
     id: int | None = None
     tmdb_id: int
     title: str
-    poster_url: str | None = None
+    poster_url_individual: str | None = None
+    poster_url_matte: str | None = None
+    poster_url_overlay: str | None = None
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
@@ -157,12 +159,15 @@ class CatalogEntry(StrictBaseModel):
     tvdb_id: int | None = None
     imdb_id: str | None = None
     poster_url: str | None = None
+    poster_url_individual: str | None = None
+    poster_url_matte: str | None = None
+    poster_url_overlay: str | None = None
     background_url: str | None = None
+    seasons: list[CatalogSeason] | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
     #: OvertureDB says the title has no theme music.
     no_theme: bool = False
-    seasons: list[CatalogSeason] | None = None
 
 
 class CatalogEntryRow(StrictBaseModel):
@@ -175,16 +180,17 @@ class CatalogEntryRow(StrictBaseModel):
     tmdb_id: int | None = None
     tvdb_id: int | None = None
     imdb_id: str | None = None
+    #: The poster, for a collection the one of the poster style the list asked for.
     poster_url: str | None = None
     #: A smaller rendition of the poster, when its source serves one.
     poster_preview_url: str | None = None
     background_url: str | None = None
+    #: Season posters the entry holds; shows only.
+    season_posters: int = 0
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
     #: OvertureDB says the title has no theme music.
     no_theme: bool = False
-    #: Season posters the entry holds; shows only.
-    season_posters: int = 0
     has_draft: bool = False
     #: The library item or collection the entry describes, if there is one.
     library_item_id: int | None = None
@@ -245,6 +251,9 @@ class CatalogDraftUpdate(StrictBaseModel):
     tvdb_id: int | None = None
     imdb_id: str | None = None
     poster_url: str | None = None
+    poster_url_individual: str | None = None
+    poster_url_matte: str | None = None
+    poster_url_overlay: str | None = None
     background_url: str | None = None
     youtube_id_overturedb: str | None = None
     #: True flags the title as having no theme; False clears the flag.

@@ -82,7 +82,7 @@
   }}
 />
 
-<div class="picker" bind:this={root}>
+<div class={["picker", { attached }]} bind:this={root}>
   <button
     type="button"
     class={["trigger", { active, attached }]}
@@ -117,6 +117,12 @@
   .picker {
     position: relative;
     flex-shrink: 0;
+  }
+
+  /* Attached to the start of a field, the button fills the field's height. */
+  .picker.attached {
+    display: flex;
+    align-self: stretch;
   }
 
   .trigger {
@@ -154,13 +160,12 @@
   .trigger.attached.active {
     color: var(--accent);
     background: var(--accent-muted);
-    border-right: var(--border-subtle);
   }
 
   .menu {
     position: absolute;
     top: calc(100% + 4px);
-    z-index: 200;
+    z-index: var(--z-menu);
     background: var(--bg-secondary);
     border: var(--border-accent);
     border-radius: var(--radius-sm);

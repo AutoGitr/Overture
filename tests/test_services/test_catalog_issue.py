@@ -167,3 +167,30 @@ def test_a_replacement_names_what_it_replaces_for_its_reason() -> None:
     assert "modification_reason" not in _query(
         contribution_issue(held, [], current=held).url
     )
+
+
+def test_a_collection_replacement_names_consistent_poster_before_background() -> None:
+    held = {
+        "media_type": "collection",
+        "title": "Saga",
+        "tmdb_id": 10,
+        "poster_url_individual": None,
+        "poster_url_matte": "https://image.tmdb.org/t/p/original/old_m.jpg",
+        "poster_url_overlay": "https://image.tmdb.org/t/p/original/old_o.jpg",
+        "background_url": "https://image.tmdb.org/t/p/original/old_bg.jpg",
+        "youtube_id_overturedb": None,
+        "youtube_id_themerrdb": None,
+    }
+    proposed = {
+        **held,
+        "poster_url_matte": "https://theposterdb.com/api/assets/668235",
+        "poster_url_overlay": "https://theposterdb.com/api/assets/2503",
+        "background_url": "https://image.tmdb.org/t/p/original/new_bg.jpg",
+    }
+
+    issue = contribution_issue(proposed, [], current=held)
+
+    assert _query(issue.url)["modification_reason"] == (
+        "Replaces the matte poster, overlay poster, background OvertureDB holds, "
+        "because: "
+    )

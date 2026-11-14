@@ -72,6 +72,55 @@ def _library_service(
     ).library
 
 
+_HELD = "https://image.tmdb.org/t/p/original/held.jpg"
+
+
+@pytest.mark.parametrize(
+    ("poster", "theme", "selections"),
+    [
+        # TMDB's sized rendition is the same artwork as its original.
+        ("https://image.tmdb.org/t/p/w500/held.jpg", "heldTheme01", "matching"),
+        (_HELD, None, "matching"),
+        ("https://image.tmdb.org/t/p/original/other.jpg", "heldTheme01", "different"),
+        (_HELD, "otherTheme1", "different"),
+        # Only slots selected on both sides are compared.
+        (None, None, None),
+    ],
+)
+async def test_library_reports_whether_selections_agree_with_the_catalog(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    app_config: Settings,
+    poster: str | None,
+    theme: str | None,
+    selections: str | None,
+) -> None:
+    service = _library_service(
+        config_dir=tmp_path,
+        database=database_for(one_session(db_session)),
+        app_config=app_config,
+    )
+    item = MediaItem(
+        id=1, media_type=MediaType.MOVIE, title="Heat", tmdb_id=949, youtube_id=theme
+    )
+    seed_art_slot(item, ArtType.POSTER, url=poster)
+    db_session.add_all(
+        [
+            item,
+            CatalogItem(
+                media_type=MediaType.MOVIE,
+                tmdb_id=949,
+                poster_url=_HELD,
+                youtube_id_themerrdb="heldTheme01",
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    result = await service.list_items()
+    assert result.items[0].catalog_selections == selections
+
+
 @pytest.mark.parametrize(
     ("tmdb_id", "tvdb_id", "imdb_id", "agreement"),
     [
@@ -1189,11 +1238,11 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
     record = await _service(database, ArtServer()).item_record(1)
 
     # Each row is followed by the rows referring to it; link rows add nothing.
-    assert [row.table for row in record.stored] == [
-        "media_items",
-        "seasons",
-        "art_slots",
-        "art_slots",
+    assert [(row.table, row.title) for row in record.stored] == [
+        ("media_items", "media_items 1"),
+        ("seasons", "Season 1"),
+        ("art_slots", "Season 1 poster"),
+        ("art_slots", "Poster"),
     ]
     assert record.stored[0].values["title"] == "Show"
     # The artwork row already shows what the flat poster fields copy.

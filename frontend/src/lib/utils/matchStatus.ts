@@ -12,11 +12,6 @@ import { MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX } from "../../generated/se
  */
 export const REJECTED_CANDIDATES = "rejected on size or aspect ratio";
 
-/** Single-slot match threshold bounds (pHash distance), shared with the backend. */
-export const DEFAULT_MATCH_THRESHOLD = MATCH_THRESHOLD_DEFAULT;
-export const MIN_MATCH_THRESHOLD = 0;
-export const MAX_MATCH_THRESHOLD = MATCH_THRESHOLD_MAX;
-
 /** What the candidates were compared against, as said in a status line. */
 const REFERENCE_LABELS: Record<NonNullable<ArtMatchResponse["reference"]>, string> = {
   local_file: "the local file",
@@ -24,14 +19,12 @@ const REFERENCE_LABELS: Record<NonNullable<ArtMatchResponse["reference"]>, strin
   saved_url: "the saved URL's image",
 };
 
-/** Clamp and sanitize a threshold value into valid bounds [MIN_MATCH_THRESHOLD, MAX_MATCH_THRESHOLD]. */
+/** A stored threshold as a whole pHash distance from 0 to the backend's maximum. */
 export function clampMatchThreshold(value: unknown): number {
-  if (value === null || value === undefined || value === "") {
-    return DEFAULT_MATCH_THRESHOLD;
-  }
+  if (value === null || value === undefined || value === "") return MATCH_THRESHOLD_DEFAULT;
   const parsed = Number(value);
-  if (Number.isNaN(parsed)) return DEFAULT_MATCH_THRESHOLD;
-  return Math.max(MIN_MATCH_THRESHOLD, Math.min(MAX_MATCH_THRESHOLD, Math.round(parsed)));
+  if (Number.isNaN(parsed)) return MATCH_THRESHOLD_DEFAULT;
+  return Math.max(0, Math.min(MATCH_THRESHOLD_MAX, Math.round(parsed)));
 }
 
 export interface MatchStatus {

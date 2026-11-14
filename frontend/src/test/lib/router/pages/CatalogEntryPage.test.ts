@@ -105,7 +105,7 @@ describe("catalog detail drafts", () => {
 
   it("loads collection members for the draft's corrected TMDB identity", async () => {
     settingsState.load(appSettings({ tmdb_configured: true }));
-    await navigate("/overturedb/movies/collections/:entrySlug/themes", {
+    await navigate("/overturedb/collections/:entrySlug/themes", {
       params: { entrySlug: "tmdb-10" },
     });
     const detail = catalogDetail({
@@ -145,12 +145,14 @@ describe("catalog detail drafts", () => {
     async (mediaType) => {
       settingsState.load(appSettings({ tmdb_configured: true }));
       if (mediaType === "collection")
-        await navigate("/overturedb/movies/collections/:entrySlug/art/:subtab", {
+        await navigate("/overturedb/collections/:entrySlug/art/:subtab", {
           params: { entrySlug: "tmdb-348", subtab: "poster" },
         });
       const original = "https://image.tmdb.org/t/p/original/catalog.jpg";
+      // A collection's poster tab shows the style chosen, Individual by default.
+      const field = mediaType === "collection" ? "poster_url_individual" : "poster_url";
       let detail = catalogDetail({
-        entry: catalogEntry({ media_type: mediaType, poster_url: original }),
+        entry: catalogEntry({ media_type: mediaType, [field]: original }),
       });
       mockFetchRoutes({
         [`/api/catalog/catalog/${mediaType}/tmdb-348`]: () => Response.json(detail),
@@ -158,9 +160,7 @@ describe("catalog detail drafts", () => {
           detail = {
             ...detail,
             draft:
-              init.method === "DELETE"
-                ? null
-                : catalogEntry({ ...detail.entry, poster_url: poster }),
+              init.method === "DELETE" ? null : catalogEntry({ ...detail.entry, [field]: poster }),
           };
           return Response.json(detail);
         },
@@ -305,7 +305,7 @@ describe("catalog detail drafts", () => {
 
   it("lists collection members with their library links and opens its linked collection", async () => {
     settingsState.load(appSettings({ tmdb_configured: true }));
-    await navigate("/overturedb/movies/collections/:entrySlug/themes", {
+    await navigate("/overturedb/collections/:entrySlug/themes", {
       params: { entrySlug: "tmdb-10" },
     });
     mockFetchRoutes({

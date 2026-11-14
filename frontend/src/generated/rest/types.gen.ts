@@ -1261,6 +1261,18 @@ export type CatalogDraftUpdate = {
      */
     poster_url?: string | null;
     /**
+     * Poster Url Individual
+     */
+    poster_url_individual?: string | null;
+    /**
+     * Poster Url Matte
+     */
+    poster_url_matte?: string | null;
+    /**
+     * Poster Url Overlay
+     */
+    poster_url_overlay?: string | null;
+    /**
      * Seasons
      */
     seasons?: Array<CatalogSeason> | null;
@@ -1345,6 +1357,18 @@ export type CatalogEntry = {
      * Poster Url
      */
     poster_url: string | null;
+    /**
+     * Poster Url Individual
+     */
+    poster_url_individual: string | null;
+    /**
+     * Poster Url Matte
+     */
+    poster_url_matte: string | null;
+    /**
+     * Poster Url Overlay
+     */
+    poster_url_overlay: string | null;
     /**
      * Seasons
      */
@@ -1519,9 +1543,17 @@ export type CatalogRecordCollection = {
      */
     no_theme: boolean;
     /**
-     * Poster Url
+     * Poster Url Individual
      */
-    poster_url: string | null;
+    poster_url_individual: string | null;
+    /**
+     * Poster Url Matte
+     */
+    poster_url_matte: string | null;
+    /**
+     * Poster Url Overlay
+     */
+    poster_url_overlay: string | null;
     /**
      * Title
      */
@@ -2051,6 +2083,10 @@ export type CollectionDetail = {
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
+    /**
+     * Catalog Selections
+     */
+    catalog_selections: 'matching' | 'different' | null;
     /**
      * Catalog Themerrdb
      */
@@ -2780,10 +2816,10 @@ export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title
  *
  * Which poster OvertureDB gives a TMDB collection.
  *
- * ``consistent`` takes the poster in the layout every consistent collection
- * poster shares; a collection without one has no OvertureDB poster.
+ * ``matte`` and ``overlay`` take the consistent poster in that layout; a
+ * collection without one has no OvertureDB poster.
  */
-export type CollectionPosterStyle = 'individual' | 'consistent';
+export type CollectionPosterStyle = 'individual' | 'matte' | 'overlay';
 
 /**
  * CollectionPreview
@@ -2863,6 +2899,10 @@ export type CollectionRead = {
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
+    /**
+     * Catalog Selections
+     */
+    catalog_selections: 'matching' | 'different' | null;
     /**
      * Catalog Themerrdb
      */
@@ -4384,6 +4424,12 @@ export type MediaItemRead = {
      */
     catalog_no_theme: boolean;
     /**
+     * Catalog Selections
+     *
+     * Whether the selections the item and its OvertureDB entry both hold agree; null when no slot has a selection on both sides.
+     */
+    catalog_selections: 'matching' | 'different' | null;
+    /**
      * Catalog Themerrdb
      */
     catalog_themerrdb: boolean;
@@ -5378,6 +5424,10 @@ export type StoredRow = {
      * Table
      */
     table: string;
+    /**
+     * Title
+     */
+    title: string;
     /**
      * Values
      */
@@ -7071,6 +7121,10 @@ export type ListCatalogEntriesData = {
          * Entry kind
          */
         media_type: CatalogMediaType;
+        /**
+         * Which poster collections show
+         */
+        posters?: CollectionPosterStyle;
     };
     url: '/api/catalog/catalog';
 };

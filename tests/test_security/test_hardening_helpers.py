@@ -4,7 +4,7 @@ These tests are intentionally focused on pure helper behavior so they can run
 without a live media server, database, or frontend build.
 """
 
-lazy from ipaddress import ip_network
+lazy from ipaddress import ip_address, ip_network
 
 lazy import pytest
 lazy from pydantic import ValidationError
@@ -54,14 +54,14 @@ class TestAppUrlSettings:
     ) -> None:
         app_config.APP_URL = "https://overture.example.com"
         assert app_config.secure_cookies is True
-        assert app_config.is_trusted_proxy("192.0.2.1") is False
+        assert app_config.is_trusted_proxy(ip_address("192.0.2.1")) is False
 
     def test_proxy_trust_requires_an_explicit_network(
         self, *, app_config: Settings
     ) -> None:
         app_config.TRUSTED_PROXY_CIDRS = (ip_network("10.0.0.0/8"),)
-        assert app_config.is_trusted_proxy("10.1.2.3") is True
-        assert app_config.is_trusted_proxy("192.0.2.1") is False
+        assert app_config.is_trusted_proxy(ip_address("10.1.2.3")) is True
+        assert app_config.is_trusted_proxy(ip_address("192.0.2.1")) is False
 
 
 class TestMediaRoot:

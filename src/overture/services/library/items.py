@@ -28,6 +28,7 @@ lazy from ...schemas.library import (
 )
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
+lazy from ..catalog.agreement import item_agreement
 
 
 def _catalog_complete(item: CatalogItem, *, trust_no_theme: bool) -> bool:
@@ -40,6 +41,7 @@ async def _catalog_status_item_ids(
     db: AsyncSession,
     items: Sequence[MediaItem],
     public_items: dict[int, CatalogItem],
+    public_seasons_by_item_id: dict[int, dict[int, str]],
     *,
     trust_no_theme: bool,
 ) -> tuple[set[int], set[int]]:
@@ -57,13 +59,6 @@ async def _catalog_status_item_ids(
     local_seasons_by_item_id = await SeasonRepository(
         db
     ).tracked_season_nums_by_item_ids(show_item_ids)
-    public_seasons_by_item_id = await CatalogRepository(db).season_posters_by_item_ids(
-        {
-            public_item.id
-            for public_item in public_items.values()
-            if public_item.id is not None and public_item.media_type == MediaType.SHOW
-        }
-    )
 
     complete_item_ids: set[int] = set()
     for item in items:
@@ -125,10 +120,18 @@ async def media_item_reads_with_catalog_status(
         for season in all_seasons:
             seasons_by_item[season.media_item_id].append(season)
 
-    public_items = await CatalogRepository(db).items_by_media_item_id(items)
+    catalog = CatalogRepository(db)
+    public_items = await catalog.items_by_media_item_id(items)
+    season_posters = await catalog.season_posters_by_item_ids(
+        {
+            public_item.id
+            for public_item in public_items.values()
+            if public_item.id is not None and public_item.media_type == MediaType.SHOW
+        }
+    )
     trust_no_theme = settings_row.overturedb_no_theme
     complete_item_ids, themerrdb_item_ids = await _catalog_status_item_ids(
-        db, items, public_items, trust_no_theme=trust_no_theme
+        db, items, public_items, season_posters, trust_no_theme=trust_no_theme
     )
 
     item_ids = [item.id for item in items if item.id is not None]
@@ -145,6 +148,12 @@ async def media_item_reads_with_catalog_status(
             media_item_read_from_model(
                 item,
                 catalog_ids=CatalogRepository.ids_agreement(item, public_item),
+                catalog_selections=item_agreement(
+                    item,
+                    public_item,
+                    seasons,
+                    season_posters.get(public_item.id or 0, {}) if public_item else {},
+                ),
                 catalog_complete=item.id in complete_item_ids,
                 catalog_themerrdb=item.id in themerrdb_item_ids,
                 library_collection_id=next(iter(collections.get(item.id, [])), None),

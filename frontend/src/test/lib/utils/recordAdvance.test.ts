@@ -6,17 +6,19 @@ import {
   cancelPendingAutoAdvance,
   type AutoAdvanceSettings,
 } from "../../../lib/utils/autoAdvance";
+import type { CatalogContext } from "../../../lib/utils/catalogDraft";
 import {
+  catalogPageRecord,
   handleRecordSelectionAdvance,
   nextRecordTarget,
   openNextRecord,
   type AdvanceRecord,
   type RecordSlot,
 } from "../../../lib/utils/recordAdvance";
-import { appSettings } from "../../helpers/fixtures";
+import { appSettings, catalogDetail, catalogEntry } from "../../helpers/fixtures";
 
 vi.mock("../../../lib/router/routes", () => ({
-  route: { pathname: "/overturedb/movies/collections/tmdb-1/art/poster" },
+  route: { pathname: "/overturedb/collections/tmdb-1/art/poster" },
   routedItem: () => null,
   routedItemId: () => null,
   routedCollectionId: () => null,
@@ -50,6 +52,7 @@ beforeEach(() => {
 afterEach(() => {
   cancelPendingAutoAdvance();
   sidebarState.records = null;
+  sidebarState.tmdbRecords = null;
   sidebarState.walk = null;
   settingsState.reset();
 });
@@ -132,5 +135,37 @@ describe("after a save", () => {
     expect(page.open).toHaveBeenCalledWith("season:1");
     expect(row.open).not.toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it("goes through the TMDB results shown while the sidebar searches TMDB", () => {
+    vi.useFakeTimers();
+    const listed = record("b");
+    const found = record("c");
+    sidebarState.records = [record("a", {}, ["theme"]), listed];
+    sidebarState.tmdbRecords = [record("a", {}, ["theme"]), found];
+
+    handleRecordSelectionAdvance("a", "theme", beginAutoAdvance());
+    vi.runAllTimers();
+    expect(found.open).toHaveBeenCalledWith("poster");
+    expect(listed.open).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+});
+
+describe("a catalog page", () => {
+  it("counts a collection's poster of the style shown", () => {
+    const entry = catalogEntry({
+      media_type: "collection",
+      poster_url_matte: "https://image.tmdb.org/t/p/original/matte.jpg",
+    });
+    const page = catalogPageRecord({
+      detail: catalogDetail({ entry }),
+      entry,
+      posterField: "poster_url_matte",
+      target: { media_type: "collection", entry_key: "tmdb-1" },
+      draft: {} as CatalogContext["draft"],
+      seasons: [],
+    });
+    expect(page.slots.find(({ slot }) => slot === "poster")?.complete).toBe(true);
   });
 });

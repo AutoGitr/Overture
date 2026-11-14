@@ -228,7 +228,7 @@ Every change that needs a migration must ship with one:
 and becomes the release notes.
 
 - A change users notice (behaviour, settings, API, database, packaging,
-  security) adds one line under `## [Unreleased]` in the right Keep a Changelog
+  security) adds one line under `## Unreleased` in the right Keep a Changelog
   heading, written for the person running Overture. Skip refactors, tests and
   CI. Never edit released sections.
 

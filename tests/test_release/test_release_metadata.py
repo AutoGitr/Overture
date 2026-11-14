@@ -19,13 +19,13 @@ lazy from scripts.release_metadata import (
 TODAY = date(2026, 10, 21)
 UNRELEASED_CHANGELOG = """# Changelog
 
-## [Unreleased]
+## Unreleased
 
 ### Fixed
 
 - Saved themes play again.
 
-## [1.0.0] - 2026-09-01
+## 1.0.0 - 2026-09-01
 
 ### Added
 
@@ -88,7 +88,7 @@ def test_prepare_release_updates_versions_and_releases_the_changelog(
     assert validate_release(tmp_path, tag="v1.2.3") == "1.2.3"
     changelog = (tmp_path / CHANGELOG).read_text()
     assert changelog.startswith(
-        "# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2026-10-21\n\n### Fixed\n"
+        "# Changelog\n\n## Unreleased\n\n## 1.2.3 - 2026-10-21\n\n### Fixed\n"
     )
     notes = release_notes("1.2.3", tmp_path)
     assert notes == "### Fixed\n\n- Saved themes play again.\n"
@@ -96,7 +96,7 @@ def test_prepare_release_updates_versions_and_releases_the_changelog(
 
 def test_prepare_release_requires_unreleased_entries(tmp_path: Path) -> None:
     _seed_release_tree(tmp_path, "1.0.0")
-    (tmp_path / CHANGELOG).write_text("## [Unreleased]\n\n### Fixed\n")
+    (tmp_path / CHANGELOG).write_text("## Unreleased\n\n### Fixed\n")
 
     with pytest.raises(ValueError, match="no unreleased entries"):
         prepare_release("1.0.1", tmp_path, today=TODAY)
@@ -120,11 +120,11 @@ def test_tagged_release_requires_its_changelog_section(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("changelog", "error"),
     [
-        ("## [1.0.0] - 2026-09-01\n\n- First.\n", "must start with"),
-        ("## [Unreleased]\n\n## [1.0.0]\n\n- First.\n", "no release date"),
-        ("## [Unreleased]\n\n### Improved\n\n- Faster.\n", "unknown change types"),
+        ("## 1.0.0 - 2026-09-01\n\n- First.\n", "must start with"),
+        ("## Unreleased\n\n## 1.0.0\n\n- First.\n", "no release date"),
+        ("## Unreleased\n\n### Improved\n\n- Faster.\n", "unknown change types"),
         (
-            "## [Unreleased]\n\n## [1.0.0] - 2026-09-01\n\n## [1.0.0] - 2026-09-01\n",
+            "## Unreleased\n\n## 1.0.0 - 2026-09-01\n\n## 1.0.0 - 2026-09-01\n",
             r"more than one 1\.0\.0 section",
         ),
     ],

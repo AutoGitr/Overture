@@ -14,6 +14,7 @@ lazy from sqlmodel import col, select
 lazy from starlette.types import Receive, Scope, Send
 
 lazy from ...catalog_contract.contract import (
+    COLLECTION_POSTER_FIELDS,
     catalog_art_url,
     consistent_poster_problem,
     entry_identities,
@@ -89,7 +90,7 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
     theme = _theme(item)
     if not (poster or background or theme or seasons):
         return None
-    entry: dict[str, Any] = {
+    return {
         "media_type": item.media_type.value,
         "title": item.title,
         "year": item.year,
@@ -98,12 +99,10 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
         "imdb_id": item.imdb_id,
         "poster_url": poster,
         "background_url": background,
+        **({"seasons": seasons} if item.media_type == MediaType.SHOW else {}),
         "youtube_id_overturedb": theme,
         "youtube_id_themerrdb": None,
     }
-    if item.media_type == MediaType.SHOW:
-        entry["seasons"] = seasons
-    return entry
 
 
 def collection_entry(
@@ -129,15 +128,18 @@ def collection_entry(
         theme = None
     if not (poster or background or theme):
         return None
+    chosen = collection_poster_field(posters)
     return {
         "media_type": CatalogMediaType.COLLECTION.value,
         "title": catalog.title if catalog else collection.title,
         "tmdb_id": collection.tmdb_collection_id,
-        "poster_url": None,
+        **{
+            field: poster if field == chosen else None
+            for field in COLLECTION_POSTER_FIELDS
+        },
         "background_url": background,
         "youtube_id_overturedb": theme,
         "youtube_id_themerrdb": None,
-        collection_poster_field(posters): poster,
     }
 
 
@@ -224,7 +226,7 @@ def _consistent_problem(
     poster: str | None, posters: CollectionPosterStyle
 ) -> str | None:
     """Why a collection's poster cannot be the consistent one *posters* contributes."""
-    if posters is not CollectionPosterStyle.CONSISTENT or poster is None:
+    if posters is CollectionPosterStyle.INDIVIDUAL or poster is None:
         return None
     return consistent_poster_problem(poster)
 

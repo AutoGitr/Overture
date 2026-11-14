@@ -23,6 +23,7 @@ import {
 import { settingsState } from "../stores/settingsState.svelte";
 import {
   advanceOrder,
+  advanceRecords,
   sidebarState,
   type AdvanceEntry,
   type AdvanceWalk,
@@ -252,7 +253,7 @@ function currentWalk(): AdvanceWalk {
     key: routedKey(),
     view: sidebarState.view,
     items: [...advanceOrder()],
-    records: [...(sidebarState.records ?? [])],
+    records: [...advanceRecords()],
   };
   sidebarState.walk = started;
   return started;

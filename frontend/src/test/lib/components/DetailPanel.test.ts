@@ -106,7 +106,7 @@ describe("DetailPanel", () => {
       "Select a show from the sidebar",
     );
 
-    await navigate("/overturedb/movies/collections", { replace: true });
+    await navigate("/overturedb/collections", { replace: true });
     expect(container.querySelector(".detail-empty")).toHaveTextContent(
       "Select a collection from the sidebar",
     );

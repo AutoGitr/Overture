@@ -6,8 +6,10 @@ lazy from sqlmodel import col, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...catalog_contract.contract import (
+    ART_FIELDS,
     IDENTITY_FIELDS,
     OPTIONAL_ENTRY_FIELDS,
+    POSTER_FIELDS,
     catalog_art_url,
     entry_fields,
     entry_file_stem,
@@ -21,7 +23,6 @@ lazy from ...db.models.catalog import (
     CatalogItem,
 )
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import ArtType, CatalogMediaType, CollectionPosterStyle, MediaType
 lazy from ...repositories.catalog import CatalogRepository
@@ -45,7 +46,6 @@ lazy from .entries import (
     catalog_collection_entry,
     catalog_item_entry,
     collection_poster_field,
-    shown_entry,
 )
 lazy from .issue import contribution_issue
 
@@ -83,12 +83,11 @@ def _canonical_art(entry: Entry) -> Entry:
     Raises:
         PublicServiceError: When a link is not catalog artwork.
     """
-    art = ("poster_url", "background_url", "consistent_poster_url")
-    for name in art:
+    for name in ART_FIELDS:
         if reason := refused_art_host(entry.get(name)):
             raise PublicServiceError(422, reason)
     try:
-        for name in art:
+        for name in ART_FIELDS:
             if entry.get(name):
                 entry[name] = catalog_art_url(entry[name])
         seasons: list[dict[str, Any]] = entry.get("seasons") or []
@@ -144,8 +143,16 @@ class CatalogBrowser:
         if not schedule.enabled:
             raise PublicServiceError(409, "OvertureDB is disabled")
 
-    async def list_entries(self, media_type: CatalogMediaType) -> list[CatalogEntryRow]:
-        """Return every catalog entry of a media type with its library links."""
+    async def list_entries(
+        self,
+        media_type: CatalogMediaType,
+        *,
+        posters: CollectionPosterStyle = CollectionPosterStyle.INDIVIDUAL,
+    ) -> list[CatalogEntryRow]:
+        """Return every catalog entry of a media type with its library links.
+
+        A collection's row shows its poster of the *posters* style.
+        """
         async with self._database.read_session() as session:
             await self._require_enabled(session)
             catalog = CatalogRepository(session)
@@ -156,16 +163,15 @@ class CatalogBrowser:
                 ]
             else:
                 items = await catalog.list_items(MediaType(media_type))
-                posters = await catalog.season_posters_by_item_ids(
+                seasons = await catalog.season_posters_by_item_ids(
                     {item.id for item in items if item.id is not None}
                 )
                 entries = [
-                    catalog_item_entry(item, posters.get(item.id or 0, {}))
+                    catalog_item_entry(item, seasons.get(item.id or 0, {}))
                     for item in items
                 ]
             drafts = await CatalogDraftRepository(session).list_all()
             links = await self._library_links(session, media_type)
-            posters = (await get_app_settings(session)).collection_overturedb_posters
         drafted = _draft_entries(drafts, media_type)
         return sorted(
             (self._row(entry, links, drafted, posters) for entry in entries),
@@ -201,16 +207,17 @@ class CatalogBrowser:
     ) -> CatalogEntryRow:
         identities = _identities(entry)
         link = next((links[key] for key in identities if key in links), None)
-        effective = shown_entry(
-            next((drafted[key] for key in identities if key in drafted), entry),
-            posters,
+        effective = next((drafted[key] for key in identities if key in drafted), entry)
+        poster = effective.get(
+            collection_poster_field(posters)
+            if entry["media_type"] == CatalogMediaType.COLLECTION
+            else "poster_url"
         )
-        poster = effective.get("poster_url")
         return CatalogEntryRow(
             **{
                 name: value
                 for name, value in effective.items()
-                if name not in {"seasons", "poster_url"}
+                if name not in {"seasons", *POSTER_FIELDS}
             },
             entry_key=entry_file_stem(entry),
             poster_url=poster,
@@ -287,14 +294,11 @@ class CatalogBrowser:
             media_type, _identities(entry)
         )
         links = await self._library_links(session, media_type, entry)
-        posters = (await get_app_settings(session)).collection_overturedb_posters
-        row = self._row(entry, links, {}, posters)
+        row = self._row(entry, links, {}, CollectionPosterStyle.INDIVIDUAL)
         return CatalogEntryDetail(
             entry_key=row.entry_key,
-            entry=CatalogEntry.model_validate(shown_entry(entry, posters)),
-            draft=CatalogEntry.model_validate(shown_entry(draft.entry, posters))
-            if draft
-            else None,
+            entry=CatalogEntry.model_validate(entry),
+            draft=CatalogEntry.model_validate(draft.entry) if draft else None,
             draft_issue=contribution_issue(draft.entry, [], current=entry)
             if draft
             else None,
@@ -319,19 +323,14 @@ class CatalogBrowser:
             PublicServiceError: When the changed entry breaks the contract.
         """
         changes = body.model_dump(exclude_unset=True)
-        fields = (*entry_fields(media_type), *OPTIONAL_ENTRY_FIELDS[media_type])
+        fields = {*entry_fields(media_type), *OPTIONAL_ENTRY_FIELDS[media_type]}
         if changes.get("no_theme"):
             changes["youtube_id_overturedb"] = None
-        if unknown := sorted(set(changes) - set(fields)):
+        if unknown := sorted(set(changes) - fields):
             raise PublicServiceError(
                 422, f"A {media_type} entry has no {', '.join(unknown)}"
             )
         async with self._database.write_session() as session:
-            if media_type is CatalogMediaType.COLLECTION and "poster_url" in changes:
-                posters = (
-                    await get_app_settings(session)
-                ).collection_overturedb_posters
-                changes[collection_poster_field(posters)] = changes.pop("poster_url")
             entry = await self._entry(session, media_type, entry_key)
             repository = CatalogDraftRepository(session)
             draft = await repository.find(media_type, _identities(entry))

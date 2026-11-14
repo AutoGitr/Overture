@@ -1,6 +1,7 @@
 import type { ArtCandidate, ArtMatchResponse, ArtType } from "../../generated/rest/types.gen";
 import { errorMessage } from "./errors";
-import { DEFAULT_MATCH_THRESHOLD, clampMatchThreshold, matchStatusLine } from "./matchStatus";
+import { MATCH_THRESHOLD_DEFAULT } from "../../generated/settings";
+import { clampMatchThreshold, matchStatusLine } from "./matchStatus";
 import { readJson, writeJson } from "./storage";
 
 const THRESHOLD_KEY = "artPanel_threshold";
@@ -13,7 +14,7 @@ export type ArtMatchRequest = {
 
 /** One slot's perceptual-hash match: its threshold, the run and what it found. */
 export class ArtMatch {
-  threshold = $state(clampMatchThreshold(readJson(THRESHOLD_KEY, DEFAULT_MATCH_THRESHOLD)));
+  threshold = $state(clampMatchThreshold(readJson(THRESHOLD_KEY, MATCH_THRESHOLD_DEFAULT)));
   results = $state.raw<ArtCandidate[] | null>(null);
   loading = $state(false);
   ran = $state(false);

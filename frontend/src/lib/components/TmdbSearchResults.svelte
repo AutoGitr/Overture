@@ -24,7 +24,14 @@
   } from "../router/routes";
   import { settingsState } from "../stores/settingsState.svelte";
   import { downloadState } from "../stores/downloadState.svelte";
-  import { statusTone } from "../utils/sidebarDomain";
+  import {
+    arrangeTmdbResults,
+    statusTone,
+    type SidebarSortDir,
+    type SidebarSortField,
+    type TmdbFilterKey,
+    type TmdbFilters,
+  } from "../utils/sidebarDomain";
   import { sidebarState, type AdvanceEntry } from "../stores/sidebarState.svelte";
   import { debounced } from "../utils/delayedFlag.svelte";
   import type { SidebarTab } from "../utils/sidebarDomain";
@@ -32,6 +39,11 @@
   import SidebarRow from "./SidebarRow.svelte";
   import SidebarGroupBrowser from "./SidebarGroupBrowser.svelte";
   import { remotePosterUrl } from "../utils/artDisplay";
+  import {
+    catalogRowRecord,
+    collectionRecord,
+    type AdvanceRecord,
+  } from "../utils/recordAdvance";
 
   let {
     query,
@@ -42,6 +54,10 @@
     catalogEntries,
     catalogRow,
     collectionsOnly = false,
+    filters,
+    filterKeys,
+    sortField,
+    sortDir,
     onOpen,
   }: {
     query: string;
@@ -54,6 +70,10 @@
     catalogEntries?: CatalogEntryRow[];
     catalogRow?: Snippet<[CatalogEntryRow, number, string]>;
     collectionsOnly?: boolean;
+    filters: TmdbFilters;
+    filterKeys: readonly TmdbFilterKey[];
+    sortField: SidebarSortField;
+    sortDir: SidebarSortDir;
     onOpen: (navigate: () => void) => void;
   } = $props();
 
@@ -64,14 +84,15 @@
     ...searchTmdbOptions({ query: { media_type: tab, query: search.current } }),
     enabled: search.current.length > 0,
   }));
-  let groups = $derived(
+  let foundGroups = $derived(
     resultsQuery.data?.results.filter(
       (row): row is TmdbCollectionResult => row.kind === "collection",
     ) ?? [],
   );
+  let groups = $derived(arrange(foundGroups));
   let collection = $derived(
     searchParams.get("tmdb_query") === search.current
-      ? (groups.find((group) => group.tmdb_id === Number(searchParams.get("tmdb_collection"))) ??
+      ? (foundGroups.find((group) => group.tmdb_id === Number(searchParams.get("tmdb_collection"))) ??
           null)
       : null,
   );
@@ -80,14 +101,40 @@
     enabled: collection !== null,
   }));
   let activeQuery = $derived(collection ? collectionQuery : resultsQuery);
-  let rows = $derived<TmdbItemResult[]>(
-    collection
-      ? (collectionQuery.data?.items ?? [])
-      : collectionsOnly
-        ? []
-        : (resultsQuery.data?.results.filter((row): row is TmdbItemResult => row.kind === "item") ??
-          []),
+  let rows = $derived(
+    arrange<TmdbItemResult>(
+      collection
+        ? (collectionQuery.data?.items ?? [])
+        : collectionsOnly
+          ? []
+          : (resultsQuery.data?.results.filter(
+              (row): row is TmdbItemResult => row.kind === "item",
+            ) ?? []),
+    ),
   );
+
+  function held(result: Result): Record<TmdbFilterKey, boolean> {
+    if (result.kind === "collection")
+      return {
+        library: !!storedCollection(result),
+        overturedb: !!catalogEntry(result),
+      };
+    return {
+      library: result.existing_item_id !== null || !!storedItem(result),
+      overturedb: result.catalog_entry_key !== null || !!catalogEntry(result),
+    };
+  }
+
+  function arrange<T extends Result>(results: T[]): T[] {
+    return arrangeTmdbResults({
+      results,
+      held,
+      filters,
+      keys: filterKeys,
+      sortField,
+      sortDir,
+    });
+  }
   // The library list is kept current (selections, sync, live events), while
   // a search result keeps the stored state from when it ran. Matching by TMDB
   // ID shows a title stored since then as its library row, badges included.
@@ -116,19 +163,31 @@
     return catalogByTmdbId.get(`${mediaType}:${result.tmdb_id}`);
   }
 
-  // Auto-advance moves through the titles shown, as it does through library rows.
+  // Auto-advance moves through the titles shown, as it does through library rows,
+  // and through those that open as a collection or catalog entry as through records.
   $effect(() => {
     sidebarState.tmdbResults = rows.flatMap((result): AdvanceEntry[] => {
-      if (result.kind !== "item") return [];
+      if (catalogEntry(result)) return [];
       const id = storedItem(result)?.id ?? result.existing_item_id;
       if (id !== null) return [{ kind: "item", id }];
       const { tmdb_id, title, media_type } = result;
       return [{ kind: "tmdb", tmdb_id, title, media_type }];
     });
+    sidebarState.tmdbRecords = [...groups, ...rows].flatMap((result): AdvanceRecord[] => {
+      const entry = catalogEntry(result);
+      if (entry) return [catalogRowRecord(entry)];
+      const stored = result.kind === "collection" && storedCollection(result);
+      return stored ? [collectionRecord(stored)] : [];
+    });
     return () => {
       sidebarState.tmdbResults = null;
+      sidebarState.tmdbRecords = null;
     };
   });
+
+  function storedCollection(result: TmdbCollectionResult): CollectionRead | undefined {
+    return collections.find((row) => row.tmdb_collection_id === result.tmdb_id);
+  }
 
   function isActive(result: Result): boolean {
     if (result.kind !== "item") return false;
@@ -170,7 +229,7 @@
       onOpen(() => (mode === "art" ? goToItemArt(item) : goToItemThemes(item)));
       return;
     }
-    const existing = collections.find((entry) => entry.tmdb_collection_id === result.tmdb_id);
+    const existing = storedCollection(result);
     onOpen(() =>
       existing ? goToCollectionView(existing, mode) : goToNewCollection(result.tmdb_id),
     );
@@ -228,20 +287,17 @@
     )}{:else}{@render resultRow(result, index, style)}{/if}
 {/snippet}
 {#snippet resultRow(result: Result, index: number, style: string)}
-  {@const storedCollection =
-    result.kind === "collection"
-      ? collections.find((entry) => entry.tmdb_collection_id === result.tmdb_id)
-      : undefined}
+  {@const stored = result.kind === "collection" ? storedCollection(result) : undefined}
   <SidebarRow
     {style}
     {index}
     active={isActive(result)}
     tmdbResult={result}
     hideTheme={result.kind === "collection" && settingsState.current.media_server === "emby"}
-    artStatus={statusTone(storedCollection?.art_status ?? "missing", false)}
+    artStatus={statusTone(stored?.art_status ?? "missing", false)}
     themeStatus={statusTone(
-      storedCollection?.theme_status ?? "missing",
-      !!storedCollection && downloadState.isDownloadingCollection(storedCollection.id),
+      stored?.theme_status ?? "missing",
+      !!stored && downloadState.isDownloadingCollection(stored.id),
     )}
     onSelect={() => select(result)}
     onOpenArt={() => openAssets(result, "art")}

@@ -38,11 +38,12 @@
 </div>
 
 <style>
-  /* Columns as many as fit, so options wrap only when the row is full. */
+  /* Each option is as wide as its label, so short ones sit close and the row
+     wraps only when it is full. */
   .list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
-    gap: var(--space-2) var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
   }
 
   .label {

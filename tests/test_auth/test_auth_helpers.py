@@ -57,6 +57,9 @@ async def test_session_storage_hashes_cookie_and_enforces_expiry(
             "198.51.100.20",
         ),
         (("10.0.0.0/8",), "198.51.100.20, bad-ip", "10.0.0.10"),
+        # What the client claims left of the proxies' entries is never read.
+        (("10.0.0.0/8",), "bad-ip, 198.51.100.20", "198.51.100.20"),
+        (("10.0.0.0/8",), "10.0.0.1, 198.51.100.20", "198.51.100.20"),
     ],
 )
 async def test_client_ip_respects_only_trusted_proxies(
@@ -81,6 +84,24 @@ async def test_client_ip_respects_only_trusted_proxies(
 
 def _never_verify(_password: bytes, _hash: bytes) -> bool:
     return False
+
+
+async def test_a_proxy_on_a_dual_stack_socket_is_trusted_by_its_ipv4_network(
+    app_config: Settings, database: Database
+) -> None:
+    config = app_config.model_copy(
+        update={"TRUSTED_PROXY_CIDRS": (ip_network("10.0.0.0/8"),)}
+    )
+    service = AuthService(config, database, password_verifier=_never_verify)
+    body = LoginRequest.model_validate({"password": "wrong"})
+    for _ in range(5):
+        with pytest.raises(PublicServiceError, match="Invalid credentials"):
+            await service.login(
+                body, socket_ip="::ffff:10.0.0.10", x_forwarded_for="198.51.100.20"
+            )
+    with pytest.raises(PublicServiceError) as error:
+        await service.login(body, socket_ip="198.51.100.20", x_forwarded_for="")
+    assert error.value.status_code == 429
 
 
 async def test_rate_limit_expires_and_is_isolated_between_instances(

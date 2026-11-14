@@ -201,7 +201,11 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
     with ZipFile(await export_selections(database, tmp_path)) as archive:
         entry = json.loads(archive.read("data/collections/tmdb-10.json"))
 
-    assert entry["poster_url"] == "https://image.tmdb.org/t/p/original/saga.jpg"
+    assert (
+        entry["poster_url_individual"] == "https://image.tmdb.org/t/p/original/saga.jpg"
+    )
+    assert entry["poster_url_matte"] is None
+    assert entry["poster_url_overlay"] is None
     assert entry["background_url"] is None
     assert entry["youtube_id_overturedb"] is None
 

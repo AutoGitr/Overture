@@ -64,7 +64,10 @@
   }));
   let detail = $derived(catalog?.detail);
   let catalogEntry = $derived(catalog?.entry);
-  let catalogTones = $derived(catalogEntry ? catalogStatus(catalogEntry) : null);
+  let catalogPoster = $derived(catalog ? catalog.entry[catalog.posterField] : null);
+  let catalogTones = $derived(
+    catalogEntry ? catalogStatus({ ...catalogEntry, poster_url: catalogPoster }) : null,
+  );
   let subject = $derived(item ?? preview ?? catalogEntry ?? null);
   let artType = $derived(viewArtType(view));
   const seasonsQuery = createSeasonsQuery(() => item);
@@ -82,7 +85,7 @@
   let savedArt = $derived(
     catalogEntry
       ? {
-          poster: !!catalogEntry.poster_url,
+          poster: !!catalogPoster,
           background: !!catalogEntry.background_url,
           seasons: (catalogEntry.seasons ?? []).some((season) => !!season.poster_url),
         }
@@ -116,7 +119,7 @@
     item
       ? (artPreviewState.previewFor(item, "poster") ?? itemArtDisplayUrl(item, "poster"))
       : catalogEntry
-        ? catalogEntry.poster_url
+        ? catalogPoster
         : preview
           ? remotePosterUrl(preview)
           : null,
@@ -151,7 +154,11 @@
           );
     void catalog.draft.save(
       tab === "all"
-        ? { poster_url: null, background_url: null, seasons: [] }
+        ? {
+            [catalog.posterField]: null,
+            background_url: null,
+            ...(catalog.entry.media_type === "show" ? { seasons: [] } : {}),
+          }
         : tab === "seasons"
           ? {
               seasons:
@@ -162,7 +169,7 @@
                     ),
             }
           : tab === "poster"
-            ? { poster_url: null }
+            ? { [catalog.posterField]: null }
             : { background_url: null },
     );
   }

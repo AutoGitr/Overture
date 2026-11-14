@@ -20,8 +20,9 @@ lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import stored_collection
 
-OWN = "https://image.tmdb.org/t/p/original/own.jpg"
-CONSISTENT = "https://theposterdb.com/api/assets/7"
+INDIVIDUAL = "https://image.tmdb.org/t/p/original/own.jpg"
+MATTE = "https://theposterdb.com/api/assets/668235"
+OVERLAY = "https://theposterdb.com/api/assets/2503"
 
 
 async def _choose(session: AsyncSession, posters: CollectionPosterStyle) -> None:
@@ -34,8 +35,9 @@ async def _choose(session: AsyncSession, posters: CollectionPosterStyle) -> None
 @pytest.mark.parametrize(
     ("posters", "expected"),
     [
-        (CollectionPosterStyle.INDIVIDUAL, OWN),
-        (CollectionPosterStyle.CONSISTENT, CONSISTENT),
+        (CollectionPosterStyle.INDIVIDUAL, INDIVIDUAL),
+        (CollectionPosterStyle.MATTE, MATTE),
+        (CollectionPosterStyle.OVERLAY, OVERLAY),
     ],
 )
 async def test_a_collection_takes_the_poster_the_setting_chooses(
@@ -48,7 +50,11 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
     await _choose(db_session, posters)
     db_session.add(
         CatalogCollection(
-            tmdb_id=10, title="Saga", poster_url=OWN, consistent_poster_url=CONSISTENT
+            tmdb_id=10,
+            title="Saga",
+            poster_url_individual=INDIVIDUAL,
+            poster_url_matte=MATTE,
+            poster_url_overlay=OVERLAY,
         )
     )
     row = stored_collection(title="Saga", tmdb_collection_id=10)
@@ -70,12 +76,16 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     await _choose(db_session, CollectionPosterStyle.INDIVIDUAL)
     db_session.add(
         CatalogCollection(
-            tmdb_id=10, title="Saga", poster_url=OWN, consistent_poster_url=CONSISTENT
+            tmdb_id=10,
+            title="Saga",
+            poster_url_individual=INDIVIDUAL,
+            poster_url_matte=MATTE,
+            poster_url_overlay=OVERLAY,
         )
     )
     row = stored_collection(title="Saga", tmdb_collection_id=10, group="Franchises")
     assert row.group is not None
-    row.group.overturedb_posters = CollectionPosterStyle.CONSISTENT
+    row.group.overturedb_posters = CollectionPosterStyle.MATTE
     db_session.add(row)
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
@@ -84,15 +94,15 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
         db_session, [row], app_config=app_config
     )
 
-    assert index.collection_art(row, ArtType.POSTER).value == CONSISTENT
+    assert index.collection_art(row, ArtType.POSTER).value == MATTE
 
 
 async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterdb(
     db_session: AsyncSession, tmp_path: Path, database: Database
 ) -> None:
-    await _choose(db_session, CollectionPosterStyle.CONSISTENT)
+    await _choose(db_session, CollectionPosterStyle.OVERLAY)
     for tmdb_id, url in (
-        (10, CONSISTENT),
+        (10, OVERLAY),
         (11, "https://assets.fanart.tv/fanart/a.jpg"),
     ):
         row = stored_collection(
@@ -110,8 +120,12 @@ async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterd
         refused = json.loads(archive.read("data/collections/tmdb-11.json"))
         report = archive.read(REPORT_NAME).decode()
 
-    assert (taken["poster_url"], taken["consistent_poster_url"]) == (None, CONSISTENT)
+    assert (
+        taken["poster_url_individual"],
+        taken["poster_url_matte"],
+        taken["poster_url_overlay"],
+    ) == (None, None, OVERLAY)
     # The theme still goes; only the poster a consistent one cannot be is left out.
-    assert refused["consistent_poster_url"] is None
+    assert refused["poster_url_overlay"] is None
     assert refused["youtube_id_overturedb"] == "dQw4w9WgXcQ"
     assert "Saga 11: Poster: upload consistent posters to TMDB or ThePosterDB" in report

@@ -53,15 +53,15 @@ describe("sidebar tabs", () => {
     expect(uiState.collectionView).toBe("groups");
   });
 
-  it("opens the catalog's collections from its movies, keeping the mobile sidebar visible", async () => {
+  it("opens the catalog's collections from either tab, keeping the mobile sidebar visible", async () => {
     await navigate("/overturedb/movies");
     renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 2, totalCollections: 0 });
 
     await fireEvent.click(screen.getByRole("button", { name: "Collections (0)" }));
-    await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections"));
+    await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/collections"));
     // The catalog's collections have no groups to switch to.
     await fireEvent.click(screen.getByRole("button", { name: "Collections (0)" }));
-    expect(route.pathname).toBe("/overturedb/movies/collections");
+    expect(route.pathname).toBe("/overturedb/collections");
     await fireEvent.click(screen.getByRole("button", { name: /^Movies/ }));
     await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/movies"));
 
@@ -69,7 +69,8 @@ describe("sidebar tabs", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Shows (2)" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/shows"));
     expect(uiState.mobileShowDetail).toBe(false);
-    expect(screen.queryByRole("button", { name: /^Collections/ })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Collections (0)" }));
+    await vi.waitFor(() => expect(route.pathname).toBe("/overturedb/collections"));
   });
 
   it("keeps what is typed while the collections page loads", async () => {

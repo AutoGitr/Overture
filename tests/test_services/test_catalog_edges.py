@@ -52,8 +52,6 @@ def catalog_payload() -> dict[str, Any]:
                 "imdb_id": "tt0903747",
                 "poster_url": "https://image.tmdb.org/t/p/original/poster.jpg",
                 "background_url": "https://image.tmdb.org/t/p/original/background.jpg",
-                "youtube_id_overturedb": "3U6PSWyv5sc",
-                "youtube_id_themerrdb": "secondary12",
                 "seasons": [
                     {
                         "season_num": 0,
@@ -64,6 +62,8 @@ def catalog_payload() -> dict[str, Any]:
                         "poster_url": "https://image.tmdb.org/t/p/original/s1.jpg",
                     },
                 ],
+                "youtube_id_overturedb": "3U6PSWyv5sc",
+                "youtube_id_themerrdb": "secondary12",
             },
             {
                 "media_type": "movie",

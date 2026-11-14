@@ -79,7 +79,7 @@ async def test_by_default_only_a_failed_run_is_sent_with_its_redacted_error(
         "http://apprise.test/notify/overture"
     ]
     assert json.loads(sent[0].content) == {
-        "title": "Overture: Library sync failed",
+        "title": "Library sync failed",
         "body": "Plex refused the key [REDACTED]",
         "type": "failure",
     }
@@ -115,7 +115,7 @@ async def test_a_completed_run_is_sent_when_its_condition_holds(
     assert bool(sent) is announced
     if announced:
         body = json.loads(sent[0].content)
-        assert body["title"] == "Overture: Library sync completed"
+        assert body["title"] == "Library sync completed"
         assert body["type"] == ("warning" if "Error" in outcomes else "success")
 
 

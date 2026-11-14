@@ -65,6 +65,7 @@ describe("uiState persisted filters", () => {
       theme: "all",
       overtureDb: "complete",
       themerrDb: "all",
+      catalogSelections: "all",
       aspectRatio: "all",
       mediaServer: "all",
       libraryIds: [],

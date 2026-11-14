@@ -92,7 +92,8 @@ describe("catalog sidebar", () => {
   });
   it("lists catalog collections without a media server and stops listing a disabled catalog", async () => {
     queryClient.setQueryData(
-      listCatalogEntriesOptions({ query: { media_type: "collection" } }).queryKey,
+      listCatalogEntriesOptions({ query: { media_type: "collection", posters: "individual" } })
+        .queryKey,
       [
         catalogRow({
           media_type: "collection",
@@ -107,7 +108,7 @@ describe("catalog sidebar", () => {
     await fireEvent.click(screen.getByRole("button", { name: /^Collections \(/ }));
     expect(await screen.findByRole("button", { name: "Select Star Wars" })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "Select Star Wars" }));
-    await waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections/tmdb-10"));
+    await waitFor(() => expect(route.pathname).toBe("/overturedb/collections/tmdb-10"));
     queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus({ enabled: false }));
     // The catalog layout then returns to the library; the sidebar no longer lists entries.
     await waitFor(() =>

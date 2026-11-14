@@ -175,7 +175,11 @@ export function catalogPageRecord(catalog: CatalogContext): AdvanceRecord {
   );
   return catalogRecord(
     catalog.target,
-    { ...catalog.entry, media_type: catalog.target.media_type },
+    {
+      ...catalog.entry,
+      poster_url: catalog.entry[catalog.posterField],
+      media_type: catalog.target.media_type,
+    },
     catalog.seasons.map(({ season_num }) => ({
       slot: `season:${season_num}` as const,
       complete: posters.has(season_num),

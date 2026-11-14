@@ -48,17 +48,23 @@ poster candidates.
 collection), chooses which poster OvertureDB gives a TMDB collection:
 
 - **Individual**, its own.
-- **Consistent**, one in the layout every consistent poster shares, made with
-  the [Coverlabs Silva designer](https://www.coverlabs.studio/designer/silva)
-  and hosted on TMDB or ThePosterDB; a collection without a consistent poster
-  then gets no OvertureDB poster.
+- **Matte**, one in the [DarkMatte layout](https://theposterdb.com/poster/668235)
+  by TPDB user `DarkMatte`, generated using the `"Dark Matte"` overlay at
+  [Poster Lab](https://postertools.org/poster-lab/) and hosted on TMDB or
+  ThePosterDB.
+- **Overlay**, one in the [Silva overlay layout](https://theposterdb.com/poster/2503),
+  made with the
+  [Coverlabs Silva designer](https://www.coverlabs.studio/designer/silva) and
+  hosted on TMDB or ThePosterDB.
 
-Automatic art, exports and **Contribute issue** follow each collection's
-choice, so posters you pick are contributed as the same kind; Consistent
-leaves out a poster from any other source and says so. The catalog view
-follows the global choice. See
-[consistent collection posters](/overturedb/contributing/selection-guidelines#consistent-collection-posters)
-in the OvertureDB guidelines.
+With **Matte** or **Overlay**, a collection without that poster gets no
+OvertureDB poster. Automatic art, exports and **Contribute issue** follow each
+collection's choice, so posters you pick are contributed as the same kind;
+**Matte** and **Overlay** leave out a poster from any source other than TMDB or
+ThePosterDB and say so. The catalog view shows any of the three
+([Browsing the catalog](../overturedb.md#browsing-the-catalog)); the
+OvertureDB guidelines describe the
+[consistent collection posters](/overturedb/contributing/selection-guidelines#consistent-collection-posters).
 
 ## Uploaded art and Audit
 

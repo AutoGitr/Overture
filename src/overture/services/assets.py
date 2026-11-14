@@ -11,7 +11,7 @@ lazy from ..db.session import Database
 lazy from ..domain import ScheduleKind
 lazy from ..jobs.gate import WaitReporter
 lazy from ..jobs.registry import BackgroundJobRegistry
-lazy from ..jobs.runner import JobContext, scheduled
+lazy from ..jobs.runner import JobContext
 lazy from ..jobs.slot import ManagedBackgroundJob
 lazy from ..schemas.bulk import (
     BulkAssetsRequest,
@@ -28,6 +28,7 @@ lazy from .art.matcher import ArtMatcher
 lazy from .downloads.service import DownloadService
 lazy from .local_assets.service import LocalAssets
 lazy from .named_schedules import (
+    Attribution,
     NamedSchedule,
     NamedSchedules,
     ScheduleRunResult,
@@ -140,7 +141,10 @@ class AssetsService:
         return StatusResponse(status=Status.STOPPING if any(stopping) else Status.IDLE)
 
     async def _run_schedule(
-        self, schedule: NamedSchedule[BulkAssetsRequest], report: WaitReporter
+        self,
+        schedule: NamedSchedule[BulkAssetsRequest],
+        report: WaitReporter,
+        attribution: Attribution,
     ) -> ScheduleRunResult:
         """Start the selected jobs once their slots are free, then await them.
 
@@ -166,7 +170,7 @@ class AssetsService:
             await self.background_jobs.library_gate.run(
                 "assets",
                 run.job,
-                scheduled(run.factory, schedule.name),
+                attribution(run.factory),
                 report=reporter(run.job.name),
             )
             return run.job.final_snapshot()

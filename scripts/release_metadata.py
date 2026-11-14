@@ -30,7 +30,7 @@ REQUIRED_RELEASE_FILES = (
 _PYPROJECT_VERSION = re.compile(r'(?m)^version = "[^"]+"$')
 _UV_LOCK_OVERTURE_VERSION = re.compile(r'(?m)^(name = "overture"\nversion = )"[^"]+"$')
 _UNRELEASED = "Unreleased"
-_CHANGELOG_SECTION = re.compile(r"(?m)^## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?$")
+_CHANGELOG_SECTION = re.compile(r"(?m)^## (\S+)(?: - (\d{4}-\d{2}-\d{2}))?$")
 _CHANGELOG_GROUP = re.compile(r"(?m)^### (.+)$")
 _CHANGELOG_ENTRY = re.compile(r"(?m)^- \S")
 
@@ -74,7 +74,7 @@ def _changelog_sections(root: Path) -> dict[str, str]:
     text = (root / CHANGELOG).read_text()
     matches = list(_CHANGELOG_SECTION.finditer(text))
     if not matches or matches[0].group(1) != _UNRELEASED or matches[0].group(2):
-        raise ValueError(f"{CHANGELOG} must start with a ## [{_UNRELEASED}] section")
+        raise ValueError(f"{CHANGELOG} must start with a ## {_UNRELEASED} section")
     ends = [match.start() for match in matches[1:]] + [len(text)]
     sections: dict[str, str] = {}
     for match, end in zip(matches, ends, strict=True):
@@ -137,10 +137,10 @@ def prepare_release(raw_version: str, root: Path = ROOT, *, today: date) -> str:
     if not _CHANGELOG_ENTRY.search(sections[_UNRELEASED]):
         raise ValueError(f"{CHANGELOG} has no unreleased entries")
     changelog_path = root / CHANGELOG
-    heading = f"## [{_UNRELEASED}]"
+    heading = f"## {_UNRELEASED}"
     changelog_path.write_text(
         changelog_path.read_text().replace(
-            heading, f"{heading}\n\n## [{version}] - {today.isoformat()}", 1
+            heading, f"{heading}\n\n## {version} - {today.isoformat()}", 1
         ),
         newline="\n",
     )

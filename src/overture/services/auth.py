@@ -9,6 +9,7 @@ lazy import time
 lazy from collections.abc import Callable
 lazy from dataclasses import dataclass
 lazy from datetime import datetime, timedelta
+lazy from ipaddress import IPv4Address, IPv6Address
 
 lazy from pydantic import SecretStr
 lazy from sqlmodel import col, delete, select
@@ -170,21 +171,23 @@ class AuthService:
             self.oidc.close()
 
     def _client_ip(self, socket_ip: str, x_forwarded_for: str) -> str:
-        if not self._config.is_trusted_proxy(socket_ip):
+        """The client address: the hop nearest the trusted proxies that is not one.
+
+        Each proxy appends the address it was reached from, so only the entries
+        right of the first untrusted one are vouched for; whatever the client
+        put further left, valid or not, is never read.
+        """
+        nearest = _address(socket_ip)
+        if nearest is None or not self._config.is_trusted_proxy(nearest):
             return socket_ip
-        forwarded: list[str] = []
-        for part in x_forwarded_for.split(","):
-            candidate = part.strip()
-            if not candidate:
-                continue
-            try:
-                forwarded.append(str(ipaddress.ip_address(candidate)))
-            except ValueError:
-                return socket_ip
-        for candidate in reversed(forwarded):
-            if not self._config.is_trusted_proxy(candidate):
-                return candidate
-        return forwarded[0] if forwarded else socket_ip
+        for part in reversed(x_forwarded_for.split(",")):
+            hop = _address(part.strip())
+            if hop is None:
+                break
+            nearest = hop
+            if not self._config.is_trusted_proxy(hop):
+                break
+        return str(nearest)
 
     def _password_matches(self, password: str) -> bool:
         try:
@@ -299,3 +302,14 @@ class AuthService:
     def cookie_security(self) -> tuple[bool, int]:
         """Return shared cookie security and lifetime."""
         return self._config.secure_cookies, self.session_seconds()
+
+
+def _address(value: str) -> IPv4Address | IPv6Address | None:
+    """*value* as an address, an IPv4-mapped IPv6 address as its IPv4 one."""
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return None
+    if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
+        return address.ipv4_mapped
+    return address

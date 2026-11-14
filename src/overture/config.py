@@ -4,7 +4,14 @@ lazy import os
 lazy import tempfile
 lazy import zoneinfo
 lazy from collections.abc import Mapping
-lazy from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
+lazy from ipaddress import (
+    IPv4Address,
+    IPv4Network,
+    IPv6Address,
+    IPv6Network,
+    ip_address,
+    ip_network,
+)
 lazy from pathlib import Path
 lazy from typing import Annotated, Literal, Self, cast
 lazy from urllib.parse import unquote, urlsplit, urlunsplit
@@ -387,12 +394,8 @@ class Settings(RuntimeSettings):
             raise ValueError("SONARR_URL and SONARR_API_KEY are required together")
         return self
 
-    def is_trusted_proxy(self, value: str) -> bool:
+    def is_trusted_proxy(self, address: IPv4Address | IPv6Address) -> bool:
         """Return whether an address belongs to an explicitly trusted proxy."""
-        try:
-            address = ip_address(value)
-        except ValueError:
-            return False
         return any(address in network for network in self.TRUSTED_PROXY_CIDRS)
 
     @property

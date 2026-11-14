@@ -123,7 +123,7 @@
         ? entry?.seasons?.find((season) => season.season_num === slot.seasonNum)?.poster_url
         : artType === "background"
           ? entry?.background_url
-          : entry?.poster_url;
+          : entry?.[slot.catalog.posterField];
     const original: ArtCandidate[] =
       url && slot.catalog.detail.draft
         ? [
@@ -230,7 +230,7 @@
           current = `season:${seasonNum}`;
         } else {
           saved = await catalog.draft.save(
-            artType === "background" ? { background_url: url } : { poster_url: url },
+            artType === "background" ? { background_url: url } : { [catalog.posterField]: url },
           );
           current = artType === "background" ? "background" : "poster";
         }

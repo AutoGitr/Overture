@@ -521,8 +521,6 @@ describe("Sidebar TMDB search", () => {
       "placeholder",
       "Search TMDB by title or ID...",
     );
-    expect(screen.queryByRole("button", { name: "Open filters" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Choose sort order" })).toBeNull();
     expect(sidebarState.current).toBeNull();
   });
 

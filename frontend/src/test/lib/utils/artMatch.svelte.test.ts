@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ArtMatchResponse } from "../../../generated/rest/types.gen";
 import { ArtMatch } from "../../../lib/utils/artMatch.svelte";
-import { MAX_MATCH_THRESHOLD } from "../../../lib/utils/matchStatus";
+import { MATCH_THRESHOLD_MAX } from "../../../generated/settings";
 import { artCandidate, artMatchResponse } from "../../helpers/fixtures";
 
 describe("ArtMatch", () => {
@@ -12,16 +12,16 @@ describe("ArtMatch", () => {
   it("asks for the slot with the clamped threshold, remembering it", async () => {
     const request = vi.fn(async () => artMatchResponse({ matches: [artCandidate()] }));
     const match = new ArtMatch(request);
-    match.threshold = MAX_MATCH_THRESHOLD + 5;
+    match.threshold = MATCH_THRESHOLD_MAX + 5;
 
     await match.run(7, "season_poster", 3);
 
     expect(request).toHaveBeenCalledWith({
       path: { item_id: 7, art_type: "season_poster" },
-      query: { season_id: 3, threshold: MAX_MATCH_THRESHOLD },
+      query: { season_id: 3, threshold: MATCH_THRESHOLD_MAX },
     });
-    expect(match.threshold).toBe(MAX_MATCH_THRESHOLD);
-    expect(new ArtMatch(request).threshold).toBe(MAX_MATCH_THRESHOLD);
+    expect(match.threshold).toBe(MATCH_THRESHOLD_MAX);
+    expect(new ArtMatch(request).threshold).toBe(MATCH_THRESHOLD_MAX);
     expect(match.results).toHaveLength(1);
     expect(match.settled).toBe(true);
     expect(match.status).toMatch(/^Matched 1 of 1/);

@@ -90,10 +90,12 @@ class CatalogCollection(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     tmdb_id: int = Field(unique=True)
     title: str
-    poster_url: str | None = None
+    poster_url_individual: str | None = None
+    #: The collection's consistent poster in the DarkMatte layout.
+    poster_url_matte: str | None = None
+    #: The collection's consistent poster in the Silva overlay layout.
+    poster_url_overlay: str | None = None
     background_url: str | None = None
-    #: The poster in the layout every consistent collection poster shares.
-    consistent_poster_url: str | None = None
     youtube_id_overturedb: str | None = None
     youtube_id_themerrdb: str | None = None
     #: OvertureDB says the collection has no theme music.

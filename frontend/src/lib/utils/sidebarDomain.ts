@@ -114,7 +114,14 @@ function timestamp(value: string | null): number | null {
 /** Which list a search or filter applies to. */
 export type ListScope = "library" | "collections" | "overturedb";
 /** Which list a sort applies to; each remembers its own, and groups sort as groups. */
-export type SortScope = ListScope | "groups";
+export type SortScope = ListScope | "groups" | "tmdb";
+
+/** A TMDB search result as its sorts see it, with its place in TMDB's order. */
+export interface TmdbRow {
+  title: string;
+  year: number | null;
+  rank: number;
+}
 
 /** A collection group as the sidebar lists it, with what its collections add up to. */
 export interface CollectionGroupRow {
@@ -136,6 +143,7 @@ interface SortDef {
   collections?: (row: CollectionRead) => SortKey;
   overturedb?: (row: CatalogEntryRow) => SortKey;
   groups?: (row: CollectionGroupRow) => SortKey;
+  tmdb?: (row: TmdbRow) => SortKey;
 }
 
 /** How far art is from its slot's shape, |w/h - target| / target; unmeasured art has none. */
@@ -160,11 +168,17 @@ function catalogCompleteness(entry: CatalogEntryRow): number {
   ].filter(Boolean).length;
 }
 
-/** Every sort, in menu order. */
+/** Every sort, in menu order; a list's first sort is its default. */
 export const SORTS = {
+  relevance: {
+    label: "Relevance",
+    shortLabel: "Relevance",
+    tmdb: (row) => row.rank,
+  },
   title: {
     label: "Title",
     shortLabel: "Title",
+    tmdb: (row) => row.title,
     // The server's sort title leaves out "The", "A" and the like, as the server lists it.
     library: (item) => item.sort_title || item.title,
     collections: (collection) => collection.title,
@@ -181,6 +195,7 @@ export const SORTS = {
     shortLabel: "Year",
     library: (item) => item.year,
     overturedb: (entry) => entry.year,
+    tmdb: (row) => row.year,
   },
   group: {
     label: "Group",
@@ -298,6 +313,7 @@ export function sortMenu(
 export type SidebarSortPreference = { field: SidebarSortField; dir: SidebarSortDir };
 
 const ASCENDING_SORTS: ReadonlySet<SidebarSortField> = new Set([
+  "relevance",
   "title",
   "sort_title",
   "group",
@@ -309,14 +325,65 @@ export function defaultSortDir(field: SidebarSortField): SidebarSortDir {
   return ASCENDING_SORTS.has(field) ? "asc" : "desc";
 }
 
+/** A list's default sort: its first, ascending. */
+export function defaultSort(fields: readonly MenuEntry<SidebarSortField>[]): SidebarSortPreference {
+  return { field: fields[0]?.id ?? "title", dir: "asc" };
+}
+
 export function normalizeSortPreference(value: unknown, scope: SortScope): SidebarSortPreference {
   const stored = value && typeof value === "object" ? value : {};
   const field = "field" in stored ? stored.field : undefined;
   const dir = "dir" in stored ? stored.dir : undefined;
+  const menu = sortMenu(scope);
   return {
-    field: sortMenu(scope).find((entry) => entry.id === field)?.id ?? "title",
+    field: menu.find((entry) => entry.id === field)?.id ?? defaultSort(menu).field,
     dir: dir === "desc" ? "desc" : "asc",
   };
+}
+
+export const TMDB_FILTER_LABELS = {
+  library: "In library",
+  overturedb: "In OvertureDB",
+} as const;
+export type TmdbFilterKey = keyof typeof TMDB_FILTER_LABELS;
+export type TmdbFilters = Record<TmdbFilterKey, CatalogPresence>;
+
+export function defaultTmdbFilters(): TmdbFilters {
+  return { library: "all", overturedb: "all" };
+}
+
+/**
+ * The filters TMDB results offer. A title or collection the list does not hold
+ * has none of its statuses, so only where it is held can be asked; a TMDB
+ * collection is looked up only in the list it is searched from.
+ */
+export function tmdbFilterKeys(
+  source: SidebarSource,
+  mode: SidebarMode,
+  catalogEnabled: boolean,
+): TmdbFilterKey[] {
+  if (mode === "collections") return [source];
+  return catalogEnabled ? ["library", "overturedb"] : ["library"];
+}
+
+/** TMDB results the filters keep, in the chosen order. */
+export function arrangeTmdbResults<T extends { title: string; year?: number | null }>(options: {
+  results: T[];
+  held: (result: T) => Record<TmdbFilterKey, boolean>;
+  filters: TmdbFilters;
+  keys: readonly TmdbFilterKey[];
+  sortField: SidebarSortField;
+  sortDir: SidebarSortDir;
+}): T[] {
+  const kept = options.results
+    .map((result, rank) => ({ result, rank, title: result.title, year: result.year ?? null }))
+    .filter(({ result }) => {
+      const held = options.held(result);
+      return options.keys.every((key) =>
+        matchesTriState(held[key], options.filters[key], "present"),
+      );
+    });
+  return sortBy(kept, "tmdb", options.sortField, options.sortDir).map(({ result }) => result);
 }
 
 /**
@@ -939,6 +1006,21 @@ export const FILTERS = {
     collections: (filters, catalogEnabled) =>
       catalogEnabled
         ? triState(filters.themerrDb, "complete", (row) => row.catalog_themerrdb)
+        : null,
+  },
+  catalogSelections: {
+    label: "OvertureDB selections",
+    group: "status",
+    order: 65,
+    needsCatalog: true,
+    // Only titles with a selection on both sides compare.
+    library: (filters, catalogEnabled) =>
+      catalogEnabled && filters.catalogSelections !== "all"
+        ? (item) => item.catalog_selections === filters.catalogSelections
+        : null,
+    collections: (filters, catalogEnabled) =>
+      catalogEnabled && filters.catalogSelections !== "all"
+        ? (row) => row.catalog_selections === filters.catalogSelections
         : null,
   },
   metadataIssues: {

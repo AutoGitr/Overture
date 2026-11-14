@@ -124,6 +124,12 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  /* Stacking layers, lowest first. */
+  --z-header: 100;
+  --z-menu: 200;
+  --z-overlay: 1000;
+  --z-toast: 3000;
+
   /* Page gutter: tight on phones, roomier on wide screens. */
   --gutter: clamp(var(--space-3), 2vw, var(--space-6));
 

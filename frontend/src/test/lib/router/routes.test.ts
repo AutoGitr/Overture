@@ -171,7 +171,7 @@ describe("route helpers", () => {
 describe("catalog routes", () => {
   it("derives all three sidebar dimensions from the URL", async () => {
     goToCatalog("movie", "collections");
-    await expectPath("/overturedb/movies/collections");
+    await expectPath("/overturedb/collections");
     expect(routeScope()).toEqual({ source: "overturedb", tab: "movie", mode: "collections" });
     expect(routedCatalogEntry()).toBeNull();
     goToCatalog("show");
@@ -186,7 +186,7 @@ describe("catalog routes", () => {
       const entry = { media_type, entry_key: "tmdb-10" };
       const base =
         media_type === "collection"
-          ? "/overturedb/movies/collections"
+          ? "/overturedb/collections"
           : media_type === "show"
             ? "/overturedb/shows"
             : "/overturedb/movies";

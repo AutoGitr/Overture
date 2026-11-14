@@ -199,7 +199,7 @@
   .startup-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+    z-index: var(--z-overlay);
   }
 
   .main-layout {

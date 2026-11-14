@@ -16,7 +16,7 @@ lazy from ...domain import ArtType, CollectionPosterStyle, ThemeBulkSource
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ..collections.policy import resolve_policy
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
-lazy from .entries import catalog_collection_entry, shown_entry
+lazy from .entries import catalog_collection_entry, collection_poster_field
 
 
 def catalog_art_url(
@@ -40,7 +40,7 @@ def catalog_collection_art_url(
 ) -> str | None:
     """Return a collection entry's URL for an art slot, its poster as *posters* says."""
     if art_type is ArtType.POSTER:
-        return shown_entry(catalog_collection_entry(entry), posters)["poster_url"]
+        return catalog_collection_entry(entry)[collection_poster_field(posters)]
     if art_type is ArtType.BACKGROUND:
         return entry.background_url
     return None

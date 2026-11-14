@@ -1232,6 +1232,40 @@ async def test_full_sync_collection_phase_respects_target(
     assert probe.names()[-1] == "sync.completed"
 
 
+async def test_only_a_full_sync_its_cron_starts_names_its_schedule(
+    tmp_path: Path, app_config: Settings, database: Database
+) -> None:
+    publisher = RecordingPublisher()
+    engine = make_engine(
+        FakeProvider(),
+        publisher,
+        app_config=app_config,
+        database=database,
+        config_dir=tmp_path,
+    )
+    schedule = await engine.schedules.create(
+        SyncScheduleWrite(
+            name="Nightly",
+            cron_expression="0 3 * * *",
+            config=SyncScheduleConfig(mode="full"),
+        )
+    )
+
+    await engine.schedules.start()
+    await engine.schedules.scheduler.trigger_job(f"saved_schedule:{schedule.id}")
+    await asyncio.wait_for(engine.schedules.wait_for_pending_runs(), timeout=5)
+    await engine.schedules.run_now(schedule.id)
+    await asyncio.wait_for(engine.schedules.wait_for_pending_runs(), timeout=5)
+
+    by_cron, by_hand = [
+        payload for event, payload in publisher.events if event == "sync.completed"
+    ]
+    assert by_cron["schedule"] == "Nightly"
+    # Run now runs the schedule's settings, but a person started it.
+    assert "schedule" not in by_hand
+    await engine.schedules.stop()
+
+
 async def test_a_scheduled_full_sync_names_its_schedule_and_retires_even_errors(
     tmp_path: Path, app_config: Settings, database: Database
 ) -> None:
@@ -1258,7 +1292,6 @@ async def test_a_scheduled_full_sync_names_its_schedule_and_retires_even_errors(
         payload for event, payload in publisher.events if event == "sync.completed"
     ]
     assert payload["errors"]
-    assert payload["schedule"] == "Nightly"
     # Its schedule records the errors, so even this result leaves the Sync tab.
     assert engine.job.final_snapshot() == (None, None)
     assert JobKind.SYNC not in await job_results.latest_runs(database)

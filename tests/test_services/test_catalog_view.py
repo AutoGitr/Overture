@@ -15,7 +15,6 @@ lazy from overture.db.models.catalog import (
     CatalogDraft,
 )
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     AssetStatus,
@@ -55,7 +54,9 @@ COLLECTION: dict[str, Any] = {
     "media_type": "collection",
     "title": "Star Wars Collection",
     "tmdb_id": 10,
-    "poster_url": None,
+    "poster_url_individual": None,
+    "poster_url_matte": None,
+    "poster_url_overlay": None,
     "background_url": None,
     "youtube_id_overturedb": None,
     "youtube_id_themerrdb": "JG5OsfOuEy0",
@@ -224,31 +225,39 @@ async def test_collection_drafts_take_only_collection_fields(
     assert discarded.draft is None
 
 
-async def test_a_consistent_collection_poster_is_the_poster_the_view_edits(
+async def test_collection_rows_show_the_poster_style_asked_for(
     browser: CatalogBrowser, db_session: AsyncSession
 ) -> None:
-    await db_session.merge(
-        AppSettings(
-            id=SETTINGS_ROW_ID,
-            collection_overturedb_posters=CollectionPosterStyle.CONSISTENT,
-        )
-    )
-    await db_session.commit()
-    poster = "https://image.tmdb.org/t/p/original/consistent.jpg"
+    matte = "https://image.tmdb.org/t/p/original/matte.jpg"
 
     saved = await browser.save_draft(
-        CatalogMediaType.COLLECTION, "tmdb-10", CatalogDraftUpdate(poster_url=poster)
+        CatalogMediaType.COLLECTION,
+        "tmdb-10",
+        CatalogDraftUpdate(poster_url_matte=matte),
     )
 
     assert saved.draft is not None
-    assert saved.draft.poster_url == poster
+    assert saved.draft.poster_url_matte == matte
     (draft,) = (await db_session.exec(select(CatalogDraft))).all()
-    assert (draft.entry["poster_url"], draft.entry["consistent_poster_url"]) == (
-        None,
-        poster,
-    )
-    [row] = await browser.list_entries(CatalogMediaType.COLLECTION)
-    assert row.poster_url == poster
+    assert draft.entry["poster_url_matte"] == matte
+    rows = {
+        style: await browser.list_entries(CatalogMediaType.COLLECTION, posters=style)
+        for style in CollectionPosterStyle
+    }
+    assert {style: row.poster_url for style, [row] in rows.items()} == {
+        CollectionPosterStyle.INDIVIDUAL: None,
+        CollectionPosterStyle.MATTE: matte,
+        CollectionPosterStyle.OVERLAY: None,
+    }
+
+
+async def test_a_collection_draft_has_no_plain_poster(browser: CatalogBrowser) -> None:
+    with pytest.raises(PublicServiceError, match="has no poster_url"):
+        await browser.save_draft(
+            CatalogMediaType.COLLECTION,
+            "tmdb-10",
+            CatalogDraftUpdate(poster_url="https://image.tmdb.org/t/p/original/p.jpg"),
+        )
 
 
 async def test_export_puts_drafts_first_then_selections_and_collection_themes(

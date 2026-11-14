@@ -1,13 +1,32 @@
 # Changelog
 
-All notable changes to Overture are documented in this file.
+## Unreleased
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+### Added
 
-## [Unreleased]
+- **Interface:** the **OvertureDB selections** filter lists the titles and collections whose selections match OvertureDB's or differ from them, comparing only the art and themes chosen on both sides.
+- **Interface:** searching TMDB keeps sorting (relevance, title or year) and filters by whether your library or OvertureDB holds a title.
+- **OvertureDB:** **Poster style** in the catalog's filters shows and edits a collection's individual, matte or overlay poster.
 
-## [0.2.0] - 2026-11-14
+### Changed
+
+- **Collections:** **OvertureDB posters** offers **Individual**, **Matte** and **Overlay** collection poster styles, and Overture reads version 4 of the OvertureDB catalog (`poster_url_individual`, `poster_url_matte` and `poster_url_overlay`).
+- **OvertureDB:** the catalog's collections open at `/overturedb/collections` and are listed beside both Movies and Shows.
+- **Interface:** database record rows are named by what they hold, such as **Background**; checkbox lists fit their labels.
+- **Notifications:** titles name the run without an "Overture:" prefix.
+
+### Fixed
+
+- **Notifications:** **Run now** on a schedule is a run you started, so rules limited to scheduled runs leave it out and the job panel no longer names the schedule.
+- **OvertureDB:** clearing all art of a catalog movie or collection draft is saved instead of refused.
+- **Interface:** auto-advance moves through TMDB results that open as catalog entries or collections, and counts a catalog collection's poster of the shown style.
+- **Interface:** the sidebar search field shows no inner outline, and its search-by button fills the field's height.
+
+### Security
+
+- **Authentication:** sign-in rate limiting reads the client address only from the `X-Forwarded-For` entries trusted proxies add, so a forged entry cannot share one limit between every client, and trusts a proxy reached over an IPv4-mapped IPv6 address by its IPv4 network.
+
+## 0.2.0 - 2026-11-14
 
 ### Added
 
@@ -65,7 +84,7 @@ and Overture adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - **Container:** the image applies Debian's security updates when it is built and leaves out `apt`, PyYAML and watchfiles, which Overture never uses.
 
-## [0.1.0] - 2026-11-03
+## 0.1.0 - 2026-11-03
 
 The first public release of Overture: artwork, collections and theme songs for
 Plex, Jellyfin and Emby, kept as ordinary files beside your media.

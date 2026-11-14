@@ -47,7 +47,7 @@ is the quickest start.
 | `OIDC_AUTO_LOGIN`     | No                 | `false`            | Send visitors straight to the provider; `/login?autologin=0` opens the login page                                                           |
 | `APP_URL`             | `oidc`, `both`     |                    | The public origin behind a [reverse proxy](reverse-proxy.md); required for OIDC                                                             |
 | `SESSION_EXPIRY_DAYS` | No                 | `7`                | How long a sign-in session lasts (in days)                                                                                                  |
-| `TRUSTED_PROXY_CIDRS` | No                 |                    | Comma-separated proxy addresses or networks allowed to send `X-Forwarded-For`                                                               |
+| `TRUSTED_PROXY_CIDRS` | No                 |                    | Comma-separated proxy addresses or networks whose `X-Forwarded-For` names the client that sign-in attempts are limited by                   |
 
 ## Runtime
 

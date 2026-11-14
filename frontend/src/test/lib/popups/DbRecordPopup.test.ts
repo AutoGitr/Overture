@@ -20,8 +20,16 @@ const alien = mediaItem({ id: 7, title: "Alien", tmdb_id: 348 });
 const notFound = { found: false, item: null, seasons: [] };
 const alienRecord: DatabaseRecord = {
   stored: [
-    { table: "media_items", values: { id: 7, title: "Alien", tmdb_id: 348 } },
-    { table: "seasons", values: { id: 3, media_item_id: 7, season_num: 1 } },
+    {
+      table: "media_items",
+      title: "media_items 7",
+      values: { id: 7, title: "Alien", tmdb_id: 348 },
+    },
+    {
+      table: "seasons",
+      title: "Season 1",
+      values: { id: 3, media_item_id: 7, season_num: 1 },
+    },
   ],
   values: { genre: ["Horror", "Sci-Fi"] },
   derived: { art_status: "missing" },
@@ -71,7 +79,7 @@ describe("DbRecordPopup", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Database record - Alien" })).toBeVisible();
     expect(field("title")).toHaveTextContent("Alien");
-    expect(screen.getByRole("button", { name: "seasons 3", expanded: false })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Season 1", expanded: false })).toBeInTheDocument();
     await fireEvent.click(
       screen.getByRole("button", { name: "Values, such as genres and people", expanded: false }),
     );
@@ -157,7 +165,13 @@ describe("DbRecordPopup", () => {
     });
     const { calls } = mockFetchRoutes({
       "/api/collections/12/record": {
-        stored: [{ table: "media_collections", values: { id: 12, title: "Action" } }],
+        stored: [
+          {
+            table: "media_collections",
+            title: "media_collections 12",
+            values: { id: 12, title: "Action" },
+          },
+        ],
         values: {},
         derived: {},
       },

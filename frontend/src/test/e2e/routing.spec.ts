@@ -291,7 +291,7 @@ test("catalog deep links restore movie, show, season and collection views on rel
     ["/overturedb/movies/tmdb-348/art/background", "Alien", "Background"],
     ["/overturedb/shows/tvdb-81189", "Twin Peaks", "Poster"],
     ["/overturedb/shows/tvdb-81189/art/seasons/0", "Twin Peaks", "Seasons"],
-    ["/overturedb/movies/collections/tmdb-10/themes", "Star Wars", "Themes"],
+    ["/overturedb/collections/tmdb-10/themes", "Star Wars", "Themes"],
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();

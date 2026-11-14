@@ -102,7 +102,7 @@
     background: var(--bg-primary);
     border-bottom: var(--border-subtle);
     flex-shrink: 0;
-    z-index: 100;
+    z-index: var(--z-header);
   }
 
   .header-left {

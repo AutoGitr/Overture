@@ -442,12 +442,13 @@ class ArtGeneration:
 class CollectionPosterStyle(StrEnum):
     """Which poster OvertureDB gives a TMDB collection.
 
-    ``consistent`` takes the poster in the layout every consistent collection
-    poster shares; a collection without one has no OvertureDB poster.
+    ``matte`` and ``overlay`` take the consistent poster in that layout; a
+    collection without one has no OvertureDB poster.
     """
 
     INDIVIDUAL = "individual"
-    CONSISTENT = "consistent"
+    MATTE = "matte"
+    OVERLAY = "overlay"
 
 
 class AutoArt(StrEnum):

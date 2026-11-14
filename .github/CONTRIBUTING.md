@@ -184,7 +184,7 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
   the title.
 - Update the pages in `docs/overture/` when behaviour changes, and the
   [README](README.md)'s feature list when a feature is added or removed.
-- Describe changes users notice under `## [Unreleased]` in
+- Describe changes users notice under `## Unreleased` in
   [CHANGELOG.md](CHANGELOG.md), in the same commit.
 - Leave out credentials and private media details. Report vulnerabilities as
   described in [SECURITY.md](SECURITY.md).
@@ -210,8 +210,8 @@ one in use, and that a ruleset still protects `v*` tags. It then starts the
 **Release check** workflow on that commit: the native Linux qualification and
 the capacity and soak validation, which CI leaves to releases. While that runs,
 it sets the version across `pyproject.toml`, `uv.lock`, `frontend/package.json`
-and `openapi/overture.json`, moves the `[Unreleased]` entries of
-[CHANGELOG.md](CHANGELOG.md) under `## [X.Y.Z] - <date>` and runs the full local
+and `openapi/overture.json`, moves the `Unreleased` entries of
+[CHANGELOG.md](CHANGELOG.md) under `## X.Y.Z - <date>` and runs the full local
 check. Once the Release check has passed, it pushes a signed release commit and
 `vX.Y.Z` tag together.
 
