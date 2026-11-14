@@ -25,7 +25,7 @@ dependencies = [
     "argon2-cffi==25.1.0",
     "authlib==1.9.5",
     "blake3==1.0.11",
-    "fastapi==0.162.2",
+    "fastapi==0.162.4",
     "fonttools==4.68.0",
     "httpx2==2.16.0",
     "joserfc==1.8.0",
@@ -34,7 +34,7 @@ dependencies = [
     "pydantic-settings==2.16.2",
     "python-dotenv==1.2.4",
     "sqlalchemy[asyncio]==2.1.8",
-    "sqlmodel==0.0.48",
+    "sqlmodel==0.0.49",
     "tzdata==2026.6",
     # uvicorn's "standard" extra without PyYAML and watchfiles, which only
     # YAML log configs and --reload use.
