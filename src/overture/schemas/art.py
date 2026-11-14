@@ -4,13 +4,13 @@ lazy from typing import Literal, Self
 
 lazy from pydantic import Field, model_validator
 
-lazy from ..domain import ArtDrawing, ArtStyle, ArtType
+lazy from ..domain import ArtGeneration, ArtStyle, ArtType
 lazy from .base import PublicText, StrictBaseModel
 lazy from .validators import ImageHash
 
 
 class SaveArtRequest(StrictBaseModel):
-    """The chosen artwork for one slot: a link, an uploaded image or one to draw.
+    """The chosen artwork for one slot: a link, an uploaded image or one to generate.
 
     Which slot it is comes from the request path and query, so the body only
     carries the picture itself.
@@ -19,28 +19,28 @@ class SaveArtRequest(StrictBaseModel):
     url: str | None = None
     #: An image ``POST /api/art/uploads`` kept, by the hash it returned.
     upload_hash: ImageHash | None = None
-    #: Art Overture draws in this style from a collection's title.
+    #: Art Overture generates in this style from a collection's title.
     generated: ArtStyle | None = None
-    #: Draw a poster with the title alone, without its group.
+    #: Generate a poster with the title alone, without its group.
     title_only: bool = False
     width: int | None = None
     height: int | None = None
 
     @property
-    def drawing(self) -> ArtDrawing | None:
-        """How to draw the art, when it is art to draw."""
+    def generation(self) -> ArtGeneration | None:
+        """How to generate the art, when it is art to generate."""
         if self.generated is None:
             return None
-        return ArtDrawing(self.generated, title_only=self.title_only)
+        return ArtGeneration(self.generated, title_only=self.title_only)
 
     @model_validator(mode="after")
     def validate_source(self) -> Self:
-        """Require exactly one of a link, an upload and a style to draw."""
+        """Require exactly one of a link, an upload and a style to generate."""
         chosen = (self.url, self.upload_hash, self.generated)
         if sum(value is not None for value in chosen) != 1:
             raise ValueError("Choose a link, an uploaded image or a generated style")
         if self.title_only and self.generated is None:
-            raise ValueError("Only drawn art can show the title alone")
+            raise ValueError("Only generated art can show the title alone")
         return self
 
 
@@ -69,9 +69,9 @@ class ArtCandidate(StrictBaseModel):
     art_type: ArtType | None = None
     hamming: int | None = None
     perfect_match: bool | None = None
-    #: Choosing it draws the art in this style; *url* shows what it looks like.
+    #: Choosing it generates the art in this style; *url* shows what it looks like.
     generated: ArtStyle | None = None
-    #: Choosing it draws a poster with the title alone, without its group.
+    #: Choosing it generates a poster with the title alone, without its group.
     title_only: bool = False
 
     @property

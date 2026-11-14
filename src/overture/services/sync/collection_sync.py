@@ -33,10 +33,10 @@ lazy from ...schemas.sync import SyncScheduleConfig
 lazy from ...utils.collection_formats import literal_template
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
+lazy from ..catalog.downloads import queue_catalog_themes_for_collections
 lazy from ..collections import COLLECTIONS_LOCK
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.service import DownloadService
-lazy from ..public_dataset.downloads import queue_catalog_themes_for_collections
 
 logger = logging.getLogger(__name__)
 
@@ -310,24 +310,21 @@ class CollectionSync:
                 and current.server_theme_id != previous.server_theme_id
             )
             return None, not changed
-        if self._config.JELLYFIN_COLLECTIONS_PATH and collection.path:
-            try:
-                folder = await owned_thread(
-                    collection_folder,
-                    self._config.JELLYFIN_COLLECTIONS_PATH,
-                    collection.path,
-                )
-                facts = await owned_thread(
-                    inspect_theme_file,
-                    folder,
-                    theme_file_facts(current) if current else None,
-                )
-                return facts, True
-            except OSError, ValueError:
-                logger.debug(
-                    "Collection theme folder unavailable: %s", collection.title
-                )
-        return None, False
+        try:
+            folder = await owned_thread(
+                collection_folder,
+                self._config.JELLYFIN_COLLECTIONS_PATH,
+                collection.path,
+            )
+            facts = await owned_thread(
+                inspect_theme_file,
+                folder,
+                theme_file_facts(current) if current else None,
+            )
+        except OSError, ValueError:
+            logger.debug("Collection theme folder unavailable: %s", collection.title)
+            return None, False
+        return facts, True
 
     async def _queue_incremental_choices(self, collection_ids: list[int]) -> None:
         """Use the oldest enabled incremental policy covering each collection."""

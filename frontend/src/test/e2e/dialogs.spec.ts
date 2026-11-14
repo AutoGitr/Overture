@@ -6,8 +6,8 @@ test("the ID mismatch issue shows only items whose catalog IDs differ", async ({
     request.fulfill({
       json: {
         items: [
-          mediaItem({ id: 1, title: "Mismatch", public_dataset_ids: "mismatching" }),
-          mediaItem({ id: 2, title: "Matching", public_dataset_ids: "matching" }),
+          mediaItem({ id: 1, title: "Mismatch", catalog_ids: "mismatching" }),
+          mediaItem({ id: 2, title: "Matching", catalog_ids: "matching" }),
         ],
         total: 2,
       },
@@ -252,7 +252,7 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
     return route.fulfill({ json: { backups: [] } });
   });
   // The OvertureDB popup is offered only while OvertureDB is on.
-  await page.route(/\/api\/public-dataset\/status/, (route) =>
+  await page.route(/\/api\/catalog\/status/, (route) =>
     route.fulfill({
       json: {
         enabled: true,

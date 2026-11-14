@@ -87,9 +87,9 @@ class MediaItemRead(StrictBaseModel):
     theme_status: AssetStatus = AssetStatus.MISSING
 
     # Computed
-    public_dataset_complete: bool = False
-    public_dataset_themerrdb: bool = False
-    public_dataset_ids: Literal["matching", "mismatching"] | None = Field(
+    catalog_complete: bool = False
+    catalog_themerrdb: bool = False
+    catalog_ids: Literal["matching", "mismatching"] | None = Field(
         default=None,
         description=(
             "Whether the IDs the item and its OvertureDB entry both carry agree; "
@@ -159,14 +159,14 @@ def _preview_url(slot: ArtSlot, art_type: ArtType) -> str | None:
 def media_item_read_from_model(
     item: MediaItem,
     *,
-    public_dataset_complete: bool = False,
-    public_dataset_themerrdb: bool = False,
+    catalog_complete: bool = False,
+    catalog_themerrdb: bool = False,
     seasons: Sequence[Season],
     directors: Sequence[str] = (),
     has_incorrect_aspect_ratio: bool = False,
     catalog_no_theme: bool = False,
     catalog_entry_key: str | None = None,
-    public_dataset_ids: Literal["matching", "mismatching"] | None = None,
+    catalog_ids: Literal["matching", "mismatching"] | None = None,
     library_collection_id: int | None = None,
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.
@@ -192,10 +192,10 @@ def media_item_read_from_model(
             else theme_status(item),
             "catalog_no_theme": catalog_no_theme,
             "catalog_entry_key": catalog_entry_key,
-            "public_dataset_complete": public_dataset_complete,
-            "public_dataset_themerrdb": public_dataset_themerrdb,
+            "catalog_complete": catalog_complete,
+            "catalog_themerrdb": catalog_themerrdb,
             "library_collection_id": library_collection_id,
-            "public_dataset_ids": public_dataset_ids,
+            "catalog_ids": catalog_ids,
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
     )

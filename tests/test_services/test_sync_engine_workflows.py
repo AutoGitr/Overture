@@ -42,8 +42,8 @@ lazy from overture.schemas.sync import (
     SyncScheduleWrite,
 )
 lazy from overture.services.art.phash import PhashService
+lazy from overture.services.catalog.downloads import QueuedDownloads
 lazy from overture.services.local_assets.service import LocalAssets
-lazy from overture.services.public_dataset.downloads import QueuedDownloads
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.sync import engine as module
 lazy from overture.services.sync import runner as sync_runner_module

@@ -8,9 +8,9 @@ lazy from pydantic import ValidationError
 lazy from sqlmodel import select
 
 lazy from overture.config import Settings
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import MediaCollection
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     IncrementalThemeOrder,
@@ -29,16 +29,16 @@ lazy from overture.schemas.bulk import (
     BulkAssetsScheduleWrite,
     BulkThemeRequest,
 )
-lazy from overture.services.downloads.queue import JobTarget
-lazy from overture.services.public_dataset.downloads import (
+lazy from overture.services.catalog.downloads import (
     queue_catalog_themes_for_collections,
 )
+lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.themes.collection_bulk import (
     plan_collection_themes,
     run_collection_themes,
 )
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
+lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import JobProbe
 
@@ -60,14 +60,14 @@ async def _seed(database: Database, *, saved: str | None = None) -> None:
         await session.flush()
         session.add(managing_rule(1))
         session.add(
-            PublicDatasetCollection(
+            CatalogCollection(
                 tmdb_id=10,
                 title="Saga",
                 youtube_id_overturedb="o" * 11,
                 youtube_id_themerrdb="t" * 11,
             )
         )
-        await enable_public_dataset(session)
+        await enable_catalog(session)
 
 
 @pytest.mark.parametrize(

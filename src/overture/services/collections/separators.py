@@ -37,7 +37,7 @@ class CollectionSeparators:
     """Keep a group's separator as its setting and collections say.
 
     A separator is titled after its group, spans the libraries the group's
-    collections do, holds no members and gets drawn art. Its sort title is
+    collections do, holds no members and gets generated art. Its sort title is
     the group's template with an empty title, so a template that puts the
     group first, such as ``{group} {title}``, sorts it right before them.
     Only Plex keeps empty collections, so other servers have none.

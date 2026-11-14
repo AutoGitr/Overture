@@ -37,6 +37,7 @@ lazy from .services.auth import AuthService
 lazy from .services.backup.events import BackupEvents
 lazy from .services.backup.files import BackupStore
 lazy from .services.backup.service import BackupService
+lazy from .services.catalog.service import CatalogService
 lazy from .services.collections.service import CollectionsService
 lazy from .services.downloads import DownloadService
 lazy from .services.downloads.art import DownloadArtHandler
@@ -50,7 +51,6 @@ lazy from .services.notifications import (
     NotifyingPublisher,
     RunNotifier,
 )
-lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
 lazy from .services.scheduler import SchedulerService
@@ -114,7 +114,7 @@ class RuntimeServices:
     sync: SyncEngine
     backups: BackupService
     assets: AssetsService
-    public_dataset: PublicDatasetService
+    catalog: CatalogService
     art: ArtService
     remover: AssetRemover
     library: LibraryService
@@ -146,7 +146,7 @@ class RuntimeServices:
         slots = [
             self.sync.job,
             *self.background_jobs.values(),
-            self.public_dataset.job,
+            self.catalog.job,
             self.backups.events.job,
         ]
         return {slot.lifecycle.kind: slot for slot in slots}
@@ -157,7 +157,7 @@ class RuntimeServices:
             jobs=tuple(self.job_slots.values()),
             provider_registry=self.provider_registry,
             downloads=self.downloads,
-            public_dataset=self.public_dataset,
+            catalog=self.catalog,
         )
 
     def _lifecycle(self) -> tuple[LifecycleService, ...]:
@@ -172,9 +172,9 @@ class RuntimeServices:
                 self.assets.stop,
             ),
             LifecycleService(
-                "public dataset",
-                self.public_dataset.start,
-                self.public_dataset.stop,
+                "catalog",
+                self.catalog.start,
+                self.catalog.stop,
             ),
             LifecycleService("scheduler", self.scheduler.start, self.scheduler.stop),
         )
@@ -582,7 +582,7 @@ def build_runtime(
         image_cache=image_cache,
         collections=collections.reader,
     )
-    public_dataset = PublicDatasetService(
+    catalog = CatalogService(
         scheduler=scheduler,
         publisher=events,
         app_config=app_config,
@@ -624,7 +624,7 @@ def build_runtime(
             local_assets=local_assets,
             database=database,
         ),
-        public_dataset=public_dataset,
+        catalog=catalog,
         art=art,
         remover=remover,
         library=library,
@@ -639,7 +639,7 @@ def build_runtime(
             themes=themes,
             downloads=downloads,
             publisher=events,
-            catalog=public_dataset.catalog,
+            catalog=catalog.browser,
         ),
         asset_manager=asset_manager,
         stats=stats,

@@ -16,13 +16,13 @@
     librariesLoading,
     librariesError,
     onretrylibraries,
-    publicDatasetStatusError,
+    catalogStatusError,
   }: {
     form: AssetsForm;
     librariesLoading: boolean;
     librariesError: string;
     onretrylibraries: () => void;
-    publicDatasetStatusError: string;
+    catalogStatusError: string;
   } = $props();
 
   let config = $derived(form.config);
@@ -115,8 +115,8 @@
   </WorkflowSection>
 </WorkflowCard>
 
-{#if publicDatasetStatusError}
-  <div class="option-error">{publicDatasetStatusError}</div>
+{#if catalogStatusError}
+  <div class="option-error">{catalogStatusError}</div>
 {/if}
 
 <style>

@@ -1186,3 +1186,130 @@ def test_selections_take_the_hash_of_the_file_recorded_for_them() -> None:
             }
     finally:
         engine.dispose()
+
+
+def test_catalog_rows_runs_rules_and_schedule_take_the_catalog_name() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "d2a7f5c3e9b1")
+            conn.exec_driver_sql(
+                "INSERT INTO public_dataset_items (id, media_type, tmdb_id, "
+                "no_theme) VALUES (1, 'show', 5, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO public_dataset_seasons (id, public_dataset_item_id, "
+                "season_num, poster_url) VALUES (1, 1, 1, 'https://images.test/s.jpg')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO public_dataset_collections (tmdb_id, title, no_theme) "
+                "VALUES (10, 'Star Wars Collection', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO public_dataset_drafts (media_type, tmdb_id, entry, "
+                "updated_at) VALUES ('movie', 7, '{}', '2026-11-01 00:00:00')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO job_runs (id, kind, started_at, event, summary, total, "
+                "log_total, cleared) VALUES ('r1', 'public_dataset_sync', "
+                "'2026-11-01 00:00:00', 'public-dataset.sync.completed', '{}', "
+                "0, 0, 0), "
+                "('r2', 'sync', '2026-11-01 00:00:00', 'sync.completed', '{}', 0, 0, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO notification_rules VALUES "
+                "('public_dataset_sync', 1, 0, 'always', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO task_schedule (task_name, enabled, cron_expression, "
+                "payload) VALUES ('public_dataset', 1, '0 0 * * *', '{}')"
+            )
+
+            command.upgrade(config, "c9e4b1a7d385")
+
+            assert conn.exec_driver_sql(
+                "SELECT s.season_num FROM catalog_item_seasons s "
+                "JOIN catalog_items i ON i.id = s.catalog_item_id"
+            ).all() == [(1,)]
+            assert conn.exec_driver_sql(
+                "SELECT title FROM catalog_collections"
+            ).all() == [("Star Wars Collection",)]
+            assert conn.exec_driver_sql("SELECT tmdb_id FROM catalog_drafts").all() == [
+                (7,)
+            ]
+            assert conn.exec_driver_sql(
+                "SELECT id, kind, event FROM job_runs ORDER BY id"
+            ).all() == [
+                ("r1", "catalog_sync", "catalog.sync.completed"),
+                ("r2", "sync", "sync.completed"),
+            ]
+            assert conn.exec_driver_sql(
+                "SELECT kind FROM notification_rules"
+            ).all() == [("catalog_sync",)]
+            assert conn.exec_driver_sql(
+                "SELECT task_name FROM task_schedule"
+            ).all() == [("catalog",)]
+            assert [
+                (key["referred_table"], key["constrained_columns"], key.get("options"))
+                for key in inspect(conn).get_foreign_keys("catalog_item_seasons")
+            ] == [("catalog_items", ["catalog_item_id"], {"ondelete": "CASCADE"})]
+
+            command.downgrade(config, "d2a7f5c3e9b1")
+            assert {"public_dataset_items", "public_dataset_drafts"} <= set(
+                inspect(conn).get_table_names()
+            )
+            assert conn.exec_driver_sql(
+                "SELECT kind, event FROM job_runs WHERE id = 'r1'"
+            ).all() == [("public_dataset_sync", "public-dataset.sync.completed")]
+            assert conn.exec_driver_sql(
+                "SELECT task_name FROM task_schedule"
+            ).all() == [("public_dataset",)]
+    finally:
+        engine.dispose()
+
+
+def test_automatic_art_choices_and_colours_take_the_generated_name() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c9e4f1b7a2d3")
+            conn.exec_driver_sql(
+                f"INSERT INTO app_settings ({', '.join(_SETTINGS_BEFORE_AUTO_ART)}) "  # noqa: S608 -- literal test values
+                f"VALUES ({', '.join(map(str, _SETTINGS_BEFORE_AUTO_ART.values()))})"
+            )
+            command.upgrade(config, "c9e4b1a7d385")
+            conn.exec_driver_sql(
+                "UPDATE app_settings SET collection_auto_art = 'overturedb_tmdb_draw', "
+                "collection_drawn_style = 'light'"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator, auto_art, "
+                "drawn_style) VALUES (1, 'Sagas', 0, 'draw', 'accent'), "
+                "(2, 'Studios', 0, 'tmdb', NULL)"
+            )
+
+            command.upgrade(config, "f2b6d9a4c731")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_art, collection_generated_style "
+                "FROM app_settings"
+            ).all() == [("overturedb_tmdb_generate", "light")]
+            assert conn.exec_driver_sql(
+                "SELECT auto_art, generated_style FROM collection_groups ORDER BY id"
+            ).all() == [("generate", "accent"), ("tmdb", None)]
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql("UPDATE collection_groups SET auto_art = 'draw'")
+
+            command.downgrade(config, "c9e4b1a7d385")
+            assert conn.exec_driver_sql(
+                "SELECT auto_art, drawn_style FROM collection_groups ORDER BY id"
+            ).all() == [("draw", "accent"), ("tmdb", None)]
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_art FROM app_settings"
+            ).all() == [("overturedb_tmdb_draw",)]
+    finally:
+        engine.dispose()

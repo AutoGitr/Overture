@@ -62,7 +62,7 @@ fi
 OVERTUREDB_DIR="$ROOT_DIR/../OvertureDB"
 if [ -d "$OVERTUREDB_DIR/schema" ]; then
     echo "=== Checking the OvertureDB Contract Copy ==="
-    uv run python -m scripts.dataset_contract "$OVERTUREDB_DIR" --check
+    uv run python -m scripts.catalog_contract "$OVERTUREDB_DIR" --check
 else
     echo "No OvertureDB checkout at $OVERTUREDB_DIR; skipping the contract drift check."
 fi

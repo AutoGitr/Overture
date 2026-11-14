@@ -265,8 +265,8 @@ test.describe("path-based client routing", () => {
 test("catalog deep links restore movie, show, season and collection views on reload", async ({
   page,
 }) => {
-  await page.route("**/api/public-dataset/catalog?*", (request) => request.fulfill({ json: [] }));
-  await page.route("**/api/public-dataset/catalog/*/*", (request) => {
+  await page.route("**/api/catalog/catalog?*", (request) => request.fulfill({ json: [] }));
+  await page.route("**/api/catalog/catalog/*/*", (request) => {
     const path = new URL(request.request().url()).pathname;
     const collection = path.includes("/collection/");
     const show = path.includes("/show/");

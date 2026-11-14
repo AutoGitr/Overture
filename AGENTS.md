@@ -19,7 +19,7 @@ This file adds the rules for agents.
 The two never drift:
 
 - Edit the contract only in `../OvertureDB/schema/` and copy it into
-  `src/overture/dataset_contract/`; never edit the copy.
+  `src/overture/catalog_contract/`; never edit the copy.
 - Rules both projects apply (entry validation, the catalog format, canonical
   artwork links) live in the contract and are imported from it. Never
   re-implement them in either repository, the frontend or a script.
@@ -32,17 +32,17 @@ The two never drift:
 
 Read the matching skill before working in its area and follow it.
 
-| Work | Skill |
-| --- | --- |
-| FastAPI routes, dependencies, responses, SSE | `fastapi` |
-| SQLModel models, sessions and queries | `sqlmodel` |
-| Python dependencies, lockfile, running tools | `uv` |
-| Ruff configuration and lint findings | `ruff` |
-| Svelte components and `.svelte.ts` modules | `svelte-core-bestpractices`, `svelte-code-writer` (in Claude Code, the `svelte-file-editor` subagent applies both) |
-| Server data, mutations and the query cache in the frontend | `svelte-query` |
-| Unit and component tests | `vitest` |
-| End-to-end tests and browser checks | `playwright-best-practices`, `playwright-cli` |
-| Failed end-to-end runs | `playwright-trace` |
+| Work                                                       | Skill                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| FastAPI routes, dependencies, responses, SSE               | `fastapi`                                                                                                          |
+| SQLModel models, sessions and queries                      | `sqlmodel`                                                                                                         |
+| Python dependencies, lockfile, running tools               | `uv`                                                                                                               |
+| Ruff configuration and lint findings                       | `ruff`                                                                                                             |
+| Svelte components and `.svelte.ts` modules                 | `svelte-core-bestpractices`, `svelte-code-writer` (in Claude Code, the `svelte-file-editor` subagent applies both) |
+| Server data, mutations and the query cache in the frontend | `svelte-query`                                                                                                     |
+| Unit and component tests                                   | `vitest`                                                                                                           |
+| End-to-end tests and browser checks                        | `playwright-best-practices`, `playwright-cli`                                                                      |
+| Failed end-to-end runs                                     | `playwright-trace`                                                                                                 |
 
 Run `npx` commands from skills as `bunx`.
 
@@ -114,7 +114,7 @@ got there. History belongs in commit messages and the changelog.
 - `db/models/` hold the tables, `schemas/` the API contracts and `ws/events.py`
   the registry of WebSocket events.
 - Dependencies point inward: `routers` → `services` → `repositories` → `db`, and
-  everything may use `domain`, `utils` and `dataset_contract`. `domain`,
+  everything may use `domain`, `utils` and `catalog_contract`. `domain`,
   `utils`, `jobs`, `media_servers` and `repositories` never import `services`,
   and nothing below `main.py` takes `RuntimeServices`; inject the parts needed.
 

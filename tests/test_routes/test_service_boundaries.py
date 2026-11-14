@@ -12,9 +12,9 @@ lazy from PIL import Image
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot, select_art
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.session import Database
 lazy from overture.dependencies import get_library
 lazy from overture.domain import ArtType, MediaType, ServerType
@@ -28,10 +28,10 @@ lazy from overture.runtime_paths import image_cache_path
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import MonitoredResponse
 lazy from overture.services.art.phash import PhashService
+lazy from overture.services.catalog.service import CatalogService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
-lazy from overture.services.public_dataset.service import PublicDatasetService
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
@@ -79,7 +79,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         app_config=app_config,
         database=database,
     )
-    dataset = PublicDatasetService(
+    catalog = CatalogService(
         scheduler=SchedulerService(app_config=app_config),
         publisher=events,
         app_config=app_config,
@@ -93,7 +93,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         events=events,
         provider_registry=registry,
         downloads=downloads,
-        public_dataset=dataset,
+        catalog=catalog,
     )
     async with database.write_session() as session:
         item = MediaItem(
@@ -116,7 +116,7 @@ async def test_http_services_use_bound_database_events_and_queue(
             )
         )
         session.add(
-            PublicDatasetItem(
+            CatalogItem(
                 media_type=MediaType.MOVIE,
                 tmdb_id=42,
                 title="Curated movie",
@@ -128,7 +128,9 @@ async def test_http_services_use_bound_database_events_and_queue(
     async with httpx2.AsyncClient(
         transport=httpx2.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        assert (await client.get("/api/art/1/poster/sources")).status_code == 401
+        assert (
+            await client.get("/api/library/items/1/art/poster/sources")
+        ).status_code == 401
         client.cookies.set(
             "overture_token",
             (await runtime.auth.new_session()).token.get_secret_value(),
@@ -136,26 +138,32 @@ async def test_http_services_use_bound_database_events_and_queue(
         assert (await client.patch("/api/library/items/1/monitored")).status_code == 403
         client.cookies.set(CSRF_COOKIE, "test-csrf")
         client.headers[CSRF_HEADER] = "test-csrf"
-        sources = await client.get("/api/art/1/poster/sources")
+        sources = await client.get("/api/library/items/1/art/poster/sources")
         assert sources.status_code == 200
         assert (
             sources.json()["sources"]["plex"][0]["url"]
             == "https://images.test/poster.jpg"
         )
-        assert (await client.get("/api/art/999/poster/sources")).status_code == 404
-        assert (await client.get("/api/art/1/banner/sources")).status_code == 422
-        cleared = await client.delete("/api/art/1/poster")
+        assert (
+            await client.get("/api/library/items/999/art/poster/sources")
+        ).status_code == 404
+        assert (
+            await client.get("/api/library/items/1/art/banner/sources")
+        ).status_code == 422
+        cleared = await client.delete("/api/library/items/1/art/poster")
         assert cleared.json() == {"status": "cleared"}
         monitored = await client.patch(
             "/api/library/items/1/monitored", json={"monitored": False}
         )
         assert monitored.json() == {"monitored": False}
-        queued = await client.put("/api/themes/1", json={"youtube_id": "abcdefghijk"})
+        queued = await client.put(
+            "/api/library/items/1/theme", json={"youtube_id": "abcdefghijk"}
+        )
         assert queued.status_code == 200
         queued_selection = queued.json()["selection"]
         assert queued_selection["status"] == "enqueued"
         duplicate = await client.put(
-            "/api/themes/1", json={"youtube_id": "abcdefghijk"}
+            "/api/library/items/1/theme", json={"youtube_id": "abcdefghijk"}
         )
         assert duplicate.json()["selection"] == {
             **queued_selection,
@@ -167,10 +175,10 @@ async def test_http_services_use_bound_database_events_and_queue(
             json={"monitored": False},
         )
         assert collection.status_code == 409
-        record = await client.get("/api/public-dataset/items/1/record")
+        record = await client.get("/api/catalog/items/1/record")
         assert record.status_code == 200
         assert record.json()["item"]["title"] == "Curated movie"
-        missing_sources = await client.get("/api/public-dataset/items/999/sources")
+        missing_sources = await client.get("/api/catalog/items/999/sources")
         assert missing_sources.status_code == 200
         assert missing_sources.json() == {
             "found": False,

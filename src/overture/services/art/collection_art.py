@@ -9,8 +9,8 @@ lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.art_slots import (
     ArtFileFacts,
-    art_drawing,
     art_file_facts,
+    art_generation,
     clear_art_selection,
     read_art_slot,
     record_art_file,
@@ -23,7 +23,7 @@ lazy from ...db.session import Database
 lazy from ...domain import (
     ITEM_ART_TYPES,
     UNMANAGED_REFUSAL,
-    ArtDrawing,
+    ArtGeneration,
     ArtSource,
     ArtStyle,
     ArtType,
@@ -72,12 +72,14 @@ def _headed(row: MediaCollection) -> bool:
     return row.kind is not CollectionKind.SEPARATOR and bool(row.group_name)
 
 
-def _render(row: MediaCollection, art_type: ArtType, drawing: ArtDrawing) -> bytes:
-    """Draw a collection's art as :class:`ArtDrawing` describes it."""
+def _render(
+    row: MediaCollection, art_type: ArtType, generation: ArtGeneration
+) -> bytes:
+    """Render a collection's art as :class:`ArtGeneration` describes it."""
     if art_type is ArtType.BACKGROUND:
-        return render_art(art_type, drawing.style)
-    heading = row.group_name if _headed(row) and not drawing.title_only else None
-    return render_art(art_type, drawing.style, row.title, heading)
+        return render_art(art_type, generation.style)
+    heading = row.group_name if _headed(row) and not generation.title_only else None
+    return render_art(art_type, generation.style, row.title, heading)
 
 
 class CollectionArtService:
@@ -150,9 +152,9 @@ class CollectionArtService:
     async def sources(
         self, collection_id: int, art_type: ArtType
     ) -> ArtSourcesResponse:
-        """Offer what sources have, and art drawn in each style.
+        """Offer what sources have, and art generated in each style.
 
-        Posters are drawn with the title, under the group when there is one
+        Posters are generated with the title, under the group when there is one
         and alone; backgrounds without text.
         """
         async with self._database.read_session() as db:
@@ -164,7 +166,7 @@ class CollectionArtService:
             if art_type is ArtType.POSTER and _headed(row)
             else (art_type is ArtType.POSTER,)
         )
-        drawn = [
+        generated = [
             ArtCandidate(
                 url=f"/api/collections/{collection_id}/art/{art_type}/generated/{style}"
                 + ("?title_only=true" if title_only else ""),
@@ -177,16 +179,16 @@ class CollectionArtService:
             for style in ArtStyle
         ]
         return found.model_copy(
-            update={"sources": {**found.sources, ArtSource.GENERATED: drawn}}
+            update={"sources": {**found.sources, ArtSource.GENERATED: generated}}
         )
 
-    async def drawn(
-        self, collection_id: int, art_type: ArtType, drawing: ArtDrawing
+    async def preview(
+        self, collection_id: int, art_type: ArtType, generation: ArtGeneration
     ) -> bytes:
-        """Return the PNG choosing *drawing* would draw for the collection."""
+        """Return the PNG choosing *generation* would generate for the collection."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
-        return await owned_thread(_render, row, art_type, drawing)
+        return await owned_thread(_render, row, art_type, generation)
 
     async def save(
         self,
@@ -196,38 +198,39 @@ class CollectionArtService:
     ) -> StatusResponse:
         """Upload validated bytes and record their art slot.
 
-        Art to draw is drawn from the collection's title and group, kept like
-        an upload, and recorded as generated so a new title draws it again.
+        Art to generate is generated from the collection's title and group, kept
+        like an upload, and recorded as generated so a new title generates it
+        again.
         """
-        drawing = body.drawing
+        generation = body.generation
         if (
-            drawing is not None
-            and drawing.title_only
+            generation is not None
+            and generation.title_only
             and art_type is not ArtType.POSTER
         ):
-            raise PublicServiceError(422, "Only posters are drawn with a title")
+            raise PublicServiceError(422, "Only posters are generated with a title")
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
-        if drawing is not None:
-            drawn = await self._draw(row, art_type, drawing)
+        if generation is not None:
+            upload_hash = await self._generate(row, art_type, generation)
             await self._choose(
                 collection_id,
                 art_type,
-                SaveArtRequest(upload_hash=drawn),
-                generated=drawing,
+                SaveArtRequest(upload_hash=upload_hash),
+                generated=generation,
             )
         else:
             await self._choose(collection_id, art_type, body)
         return StatusResponse(status=Status.OK)
 
-    async def _draw(
-        self, row: MediaCollection, art_type: ArtType, drawing: ArtDrawing
+    async def _generate(
+        self, row: MediaCollection, art_type: ArtType, generation: ArtGeneration
     ) -> str:
-        """Draw the collection's art as *drawing* says and keep it; return its hash."""
-        drawn = await self._uploads.store(
-            await owned_thread(_render, row, art_type, drawing)
+        """Generate the collection's art as *generation* says; return its kept hash."""
+        stored = await self._uploads.store(
+            await owned_thread(_render, row, art_type, generation)
         )
-        return drawn.upload_hash
+        return stored.upload_hash
 
     async def _choose(
         self,
@@ -235,7 +238,7 @@ class CollectionArtService:
         art_type: ArtType,
         body: SaveArtRequest,
         *,
-        generated: ArtDrawing | None = None,
+        generated: ArtGeneration | None = None,
     ) -> None:
         selection = await self._selector.prepare(art_type, body)
         if isinstance(selection.source, ArtFileFacts):
@@ -256,22 +259,22 @@ class CollectionArtService:
 
         await self._send(collection_id, art_type, data, media_type, record)
 
-    async def redraw(
+    async def regenerate(
         self, collection_id: int, art_type: ArtType, *, resend: bool
     ) -> None:
-        """Draw generated art again if what it shows changed, or *resend* it."""
+        """Generate art again if what it shows changed, or *resend* it."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
-        drawing = art_drawing(read_art_slot(row, art_type))
-        if drawing is None:
+        generation = art_generation(read_art_slot(row, art_type))
+        if generation is None:
             return
-        drawn = await self._draw(row, art_type, drawing)
-        if resend or drawn != read_art_slot(row, art_type).upload_hash:
+        upload_hash = await self._generate(row, art_type, generation)
+        if resend or upload_hash != read_art_slot(row, art_type).upload_hash:
             await self._choose(
                 collection_id,
                 art_type,
-                SaveArtRequest(upload_hash=drawn),
-                generated=drawing,
+                SaveArtRequest(upload_hash=upload_hash),
+                generated=generation,
             )
 
     async def reupload(self, collection_id: int, art_type: ArtType) -> None:

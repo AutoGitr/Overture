@@ -13,13 +13,13 @@ import { renderWithQueryClient } from "../../../helpers/render";
 
 const libraries = vi.hoisted(() => vi.fn());
 const schedules = vi.hoisted(() => vi.fn());
-const datasetStatus = vi.hoisted(() => vi.fn());
+const catalogStatus = vi.hoisted(() => vi.fn());
 const run = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
 const updateSchedule = vi.hoisted(() => vi.fn());
 const runSchedule = vi.hoisted(() => vi.fn());
 const collections = vi.hoisted(() => vi.fn());
-const defaultDatasetStatus = vi.hoisted(() => ({
+const defaultCatalogStatus = vi.hoisted(() => ({
   enabled: false,
   repo_url: "https://example.test/repo",
   catalog_url: "https://example.test/catalog.jsonl.gz",
@@ -34,7 +34,7 @@ vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../generated/rest/sdk.gen")>()),
   listServerLibraries: async () => ({ data: await libraries() }),
   listSyncSchedules: async () => ({ data: await schedules() }),
-  getPublicDatasetStatus: async () => ({ data: await datasetStatus() }),
+  getCatalogStatus: async () => ({ data: await catalogStatus() }),
   listCollectionGroups: async () => ({ data: ["Sagas", "Ungrouped"] }),
   listCollections: async () => ({ data: await collections() }),
 }));
@@ -95,7 +95,7 @@ describe("Sync tab", () => {
     createSchedule.mockReset().mockResolvedValue(SAVED_POLL);
     updateSchedule.mockReset().mockResolvedValue(SAVED_POLL);
     runSchedule.mockReset().mockResolvedValue({ status: "queued" });
-    datasetStatus.mockReset().mockResolvedValue(defaultDatasetStatus);
+    catalogStatus.mockReset().mockResolvedValue(defaultCatalogStatus);
     collections.mockReset().mockResolvedValue([]);
   });
 
@@ -294,8 +294,8 @@ describe("Sync tab", () => {
   });
 
   it("saves new-media polling downloads only when OvertureDB is enabled", async () => {
-    datasetStatus.mockResolvedValue({
-      ...defaultDatasetStatus,
+    catalogStatus.mockResolvedValue({
+      ...defaultCatalogStatus,
       enabled: true,
     });
     await renderSync();
@@ -337,13 +337,13 @@ describe("Sync tab", () => {
     );
   });
 
-  it("requires known dataset settings before saving a schedule", async () => {
-    datasetStatus.mockRejectedValueOnce(new Error("Dataset status unavailable"));
+  it("requires known catalog settings before saving a schedule", async () => {
+    catalogStatus.mockRejectedValueOnce(new Error("Catalog status unavailable"));
     await renderSync();
     await fireEvent.input(screen.getByPlaceholderText("Hourly sync"), {
       target: { value: "Nightly" },
     });
-    await within(screen.getByRole("tabpanel")).findByText("Dataset status unavailable");
+    await within(screen.getByRole("tabpanel")).findByText("Catalog status unavailable");
     expect(screen.getByRole("button", { name: "Save schedule" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
 

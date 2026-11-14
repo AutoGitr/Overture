@@ -11,7 +11,7 @@ lazy from urllib.parse import urlencode
 lazy import httpx2
 lazy from pydantic import TypeAdapter
 
-lazy from ...dataset_contract.contract import canonical_art_url
+lazy from ...catalog_contract.contract import canonical_art_url
 lazy from ...domain import ArtType, CollectionOrder, MediaType
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label

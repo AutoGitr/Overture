@@ -1,4 +1,4 @@
-"""Public dataset REST and WebSocket schemas."""
+"""Catalog REST and WebSocket schemas."""
 
 lazy from datetime import datetime
 lazy from typing import Annotated, Literal
@@ -11,17 +11,17 @@ lazy from .base import PublicText, StrictBaseModel
 lazy from .common import JobEnvelope
 
 
-class PublicDatasetEnabledRequest(StrictBaseModel):
-    """Validate the public dataset enabled request payload."""
+class CatalogEnabledRequest(StrictBaseModel):
+    """Validate the catalog enabled request payload."""
 
     enabled: bool
 
 
 #: How the last catalog sync went.
-type PublicDatasetSyncOutcome = Literal["never_synced", "success", "failed"]
+type CatalogSyncOutcome = Literal["never_synced", "success", "failed"]
 
 
-class PublicDatasetSyncStats(StrictBaseModel):
+class CatalogSyncStats(StrictBaseModel):
     """What one catalog sync downloaded and imported."""
 
     entries: int = 0
@@ -37,29 +37,29 @@ class PublicDatasetSyncStats(StrictBaseModel):
     schema_version: int | None = None
 
 
-class PublicDatasetStatus(StrictBaseModel):
-    """Public dataset status response."""
+class CatalogStatus(StrictBaseModel):
+    """Catalog status response."""
 
     enabled: bool
     repo_url: str
     catalog_url: str
     last_synced_at: datetime | None = None
-    last_status: PublicDatasetSyncOutcome = "never_synced"
-    last_stats: PublicDatasetSyncStats | None = None
+    last_status: CatalogSyncOutcome = "never_synced"
+    last_stats: CatalogSyncStats | None = None
     next_run: str | None = None
     timezone: str
 
 
-class PublicDatasetSyncEvent(JobEnvelope):
-    """WebSocket payload for public dataset sync lifecycle events."""
+class CatalogSyncEvent(JobEnvelope):
+    """WebSocket payload for catalog sync lifecycle events."""
 
     started_at: str | None = None
     finished_at: str | None = None
-    stats: PublicDatasetSyncStats = Field(default_factory=PublicDatasetSyncStats)
+    stats: CatalogSyncStats = Field(default_factory=CatalogSyncStats)
 
 
-class PublicDatasetSeasonSource(StrictBaseModel):
-    """One public dataset season source."""
+class CatalogSeasonSource(StrictBaseModel):
+    """One catalog season source."""
 
     season_num: int
     season_id: int | None = None
@@ -67,8 +67,8 @@ class PublicDatasetSeasonSource(StrictBaseModel):
     candidate: ArtCandidate
 
 
-class PublicDatasetSourcesItem(StrictBaseModel):
-    """Item-level public dataset sources."""
+class CatalogSourcesItem(StrictBaseModel):
+    """Item-level catalog sources."""
 
     poster: list[ArtCandidate] = Field(default_factory=list[ArtCandidate])
     background: list[ArtCandidate] = Field(default_factory=list[ArtCandidate])
@@ -78,18 +78,18 @@ class PublicDatasetSourcesItem(StrictBaseModel):
     entry_key: str | None = None
 
 
-class PublicDatasetSources(StrictBaseModel):
-    """Public dataset sources response."""
+class CatalogSources(StrictBaseModel):
+    """Catalog sources response."""
 
     found: bool
-    item: PublicDatasetSourcesItem | None = None
-    seasons: list[PublicDatasetSeasonSource] = Field(
-        default_factory=list[PublicDatasetSeasonSource]
+    item: CatalogSourcesItem | None = None
+    seasons: list[CatalogSeasonSource] = Field(
+        default_factory=list[CatalogSeasonSource]
     )
 
 
-class PublicDatasetRecordItem(StrictBaseModel):
-    """Persisted public dataset item record."""
+class CatalogRecordItem(StrictBaseModel):
+    """Persisted catalog item record."""
 
     id: int | None = None
     media_type: MediaType
@@ -106,17 +106,17 @@ class PublicDatasetRecordItem(StrictBaseModel):
     catalog_synced_at: datetime | None = None
 
 
-class PublicDatasetRecordSeason(StrictBaseModel):
-    """Persisted public dataset season record."""
+class CatalogRecordSeason(StrictBaseModel):
+    """Persisted catalog season record."""
 
     id: int | None = None
-    public_dataset_item_id: int
+    catalog_item_id: int
     season_num: int
     poster_url: str | None = None
 
 
-class PublicDatasetRecordCollection(StrictBaseModel):
-    """Persisted public dataset collection record."""
+class CatalogRecordCollection(StrictBaseModel):
+    """Persisted catalog collection record."""
 
     id: int | None = None
     tmdb_id: int
@@ -129,14 +129,14 @@ class PublicDatasetRecordCollection(StrictBaseModel):
     catalog_synced_at: datetime | None = None
 
 
-class PublicDatasetRecord(StrictBaseModel):
-    """Public dataset record response."""
+class CatalogRecord(StrictBaseModel):
+    """Catalog record response."""
 
     found: bool
-    item: PublicDatasetRecordItem | None = None
-    collection: PublicDatasetRecordCollection | None = None
-    seasons: list[PublicDatasetRecordSeason] = Field(
-        default_factory=list[PublicDatasetRecordSeason]
+    item: CatalogRecordItem | None = None
+    collection: CatalogRecordCollection | None = None
+    seasons: list[CatalogRecordSeason] = Field(
+        default_factory=list[CatalogRecordSeason]
     )
 
 

@@ -7,7 +7,7 @@ import {
 } from "../../generated/ws";
 import { assetManagerState } from "../stores/assetManagerState.svelte";
 import { matchState, themeJobState } from "../stores/bulkJobState.svelte";
-import { backupState, publicDatasetSyncState, syncState } from "../stores/jobStates.svelte";
+import { backupState, catalogSyncState, syncState } from "../stores/jobStates.svelte";
 import { serverAuditFixState } from "../stores/serverAuditFixState.svelte";
 import { notify } from "../stores/notificationState.svelte";
 import { serverAuditState } from "../stores/serverAuditState.svelte";
@@ -21,7 +21,7 @@ export const JOB_STATES = {
   asset_scan: assetManagerState,
   server_audit: serverAuditState,
   server_audit_fix: serverAuditFixState,
-  public_dataset_sync: publicDatasetSyncState,
+  catalog_sync: catalogSyncState,
   backup: backupState,
 } as const;
 

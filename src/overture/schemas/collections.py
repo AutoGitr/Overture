@@ -8,9 +8,9 @@ lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 lazy from ..db.art_slots import flattened_art, read_art_slot
 lazy from ..db.completion import collection_art_completion, collection_theme_status
+lazy from ..db.models.catalog import CatalogCollection
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import MediaCollection
-lazy from ..db.models.public_dataset import PublicDatasetCollection
 lazy from ..domain import (
     SMART_CUSTOM_ORDER,
     ArtSource,
@@ -371,9 +371,9 @@ class CollectionRead(CollectionArtwork):
     monitored: bool = True
     tmdb_collection_id: int | None = None
     #: The catalog has an OvertureDB theme for the collection's TMDB collection.
-    public_dataset_complete: bool = False
+    catalog_complete: bool = False
     #: The catalog has a ThemerrDB theme for it.
-    public_dataset_themerrdb: bool = False
+    catalog_themerrdb: bool = False
     #: The poster or background is outside the aspect ratio tolerance.
     has_incorrect_aspect_ratio: bool = False
     #: OvertureDB says the collection has no theme music, so none is missing.
@@ -449,7 +449,7 @@ def _server_image_version(server_url: str | None) -> str | None:
 
 def collection_read(
     row: MediaCollection,
-    catalog: PublicDatasetCollection | None,
+    catalog: CatalogCollection | None,
     rule: CollectionRule | None,
     *,
     trust_no_theme: bool,
@@ -509,10 +509,8 @@ def collection_read(
         catalog_no_theme=no_theme,
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
-        public_dataset_complete=bool(
-            catalog and (catalog.youtube_id_overturedb or no_theme)
-        ),
-        public_dataset_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
+        catalog_complete=bool(catalog and (catalog.youtube_id_overturedb or no_theme)),
+        catalog_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
 
 
@@ -553,13 +551,6 @@ class CollectionMonitoredEvent(StrictBaseModel):
     monitored: bool
 
 
-class CollectionThemeSources(StrictBaseModel):
-    """The catalog's theme candidates for a matched collection."""
-
-    youtube_id_overturedb: str | None = None
-    youtube_id_themerrdb: str | None = None
-
-
 class CollectionPolicyBase(StrictBaseModel):
     """Shared policy and media server display configuration."""
 
@@ -568,8 +559,8 @@ class CollectionPolicyBase(StrictBaseModel):
     delete_below_minimum: bool | None = None
     #: What a sync chooses for a slot with no art chosen.
     auto_art: AutoArt | None = None
-    #: The colours of art Overture draws for it automatically.
-    drawn_style: ArtStyle | None = None
+    #: The colours of art Overture generates for it automatically.
+    generated_style: ArtStyle | None = None
     #: Which of a TMDB collection's OvertureDB posters it takes and contributes.
     overturedb_posters: CollectionPosterStyle | None = None
     #: Whether it needs a background; without one, a poster makes its art complete.

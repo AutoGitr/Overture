@@ -10,8 +10,8 @@ lazy from ..schemas.media_server import media_server_status
 lazy from ..schemas.realtime import RealtimeJobSnapshot, RealtimeSnapshot
 lazy from ..utils.time import utc_now_iso
 lazy from ..utils.types import JsonValue
+lazy from .catalog.service import CatalogService
 lazy from .downloads import DownloadService
-lazy from .public_dataset.service import PublicDatasetService
 
 
 def _job_snapshot(job: ManagedBackgroundJob) -> RealtimeJobSnapshot | None:
@@ -31,7 +31,7 @@ def _job_snapshot(job: ManagedBackgroundJob) -> RealtimeJobSnapshot | None:
 class RealtimeSnapshotBuilder:
     """Capture one realtime snapshot without holding the event lock over I/O.
 
-    Reading the download queue and the dataset status are round trips; the
+    Reading the download queue and the catalog status are round trips; the
     job slots are process-local dictionaries. Capturing the latter with
     the watermark keeps later events replayable, while gathering the former
     outside the lock keeps jobs free to publish progress.
@@ -40,7 +40,7 @@ class RealtimeSnapshotBuilder:
     jobs: Collection[ManagedBackgroundJob]
     provider_registry: ProviderRegistry
     downloads: DownloadService
-    public_dataset: PublicDatasetService
+    catalog: CatalogService
 
     def capture(self) -> Mapping[str, Any]:
         """Read process-local projections at the snapshot watermark."""
@@ -57,7 +57,7 @@ class RealtimeSnapshotBuilder:
         """Read the parts of the snapshot that need I/O."""
         return {
             "downloads": await self.downloads.snapshot_events(),
-            "public_dataset_status": await self.public_dataset.get_status(),
+            "catalog_status": await self.catalog.get_status(),
         }
 
     def finish(

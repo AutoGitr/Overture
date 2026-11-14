@@ -15,7 +15,7 @@ import { renderWithQueryClient } from "../../helpers/render";
 vi.mock("../../../generated/rest/sdk.gen", () => ({
   getFolderRoots: vi.fn(() => Promise.resolve({ data: { movies: [], shows: [] } })),
   getLibraries: vi.fn(() => Promise.resolve({ data: [] })),
-  getPublicDatasetStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
+  getCatalogStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
   listBulkAssetsSchedules: vi.fn(() => Promise.resolve({ data: [] })),
   listServerLibraries: vi.fn(() => Promise.resolve({ data: [] })),
   listSyncSchedules: vi.fn(() => Promise.resolve({ data: [] })),

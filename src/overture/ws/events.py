@@ -9,6 +9,7 @@ lazy from ..jobs.kinds import JobKind, LifecycleStatus
 lazy from ..schemas.asset_manager import AssetScanProgressEvent
 lazy from ..schemas.backup import BackupJobEvent
 lazy from ..schemas.bulk import BulkArtJobEvent, BulkThemeJobEvent
+lazy from ..schemas.catalog import CatalogStatus, CatalogSyncEvent
 lazy from ..schemas.collections import (
     CollectionMonitoredEvent,
     CollectionThemeUpdatedEvent,
@@ -24,7 +25,6 @@ lazy from ..schemas.library import (
     LibraryItemUpsertedEvent,
 )
 lazy from ..schemas.media_server import MediaServerStatus
-lazy from ..schemas.public_dataset import PublicDatasetStatus, PublicDatasetSyncEvent
 lazy from ..schemas.realtime import RealtimeSnapshot
 lazy from ..schemas.schedules import SchedulesChangedEvent
 lazy from ..schemas.server_audit import ServerAuditFixEvent, ServerAuditProgressEvent
@@ -104,7 +104,7 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         "collection.monitored": WebSocketEventDefinition(
             "collection.monitored", CollectionMonitoredEvent
         ),
-        **_lifecycle_events(JobKind.PUBLIC_DATASET_SYNC, PublicDatasetSyncEvent),
+        **_lifecycle_events(JobKind.CATALOG_SYNC, CatalogSyncEvent),
         **_lifecycle_events(JobKind.BACKUP, BackupJobEvent),
         "library.item.upserted": WebSocketEventDefinition(
             "library.item.upserted",
@@ -117,9 +117,9 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         "library.items.changed": WebSocketEventDefinition(
             "library.items.changed", BulkItemOperationResult
         ),
-        "public-dataset.updated": WebSocketEventDefinition(
-            "public-dataset.updated",
-            PublicDatasetStatus,
+        "catalog.updated": WebSocketEventDefinition(
+            "catalog.updated",
+            CatalogStatus,
             exclude_none=False,
         ),
         "item.updated": WebSocketEventDefinition("item.updated", ItemUpdatedEvent),

@@ -4,7 +4,7 @@ import RedirectToLibrary from "../../../../lib/router/pages/RedirectToLibrary.sv
 import { navigate, route } from "../../../../lib/router/routes";
 import { queryClient } from "../../../../lib/rest/queryClient";
 import { mockFetch, mockFetchRoutes, type FetchCall } from "../../../helpers/fetch";
-import { appSettings, publicDatasetStatus } from "../../../helpers/fixtures";
+import { appSettings, catalogStatus } from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
 describe("RedirectToLibrary", () => {
@@ -23,7 +23,7 @@ describe("RedirectToLibrary", () => {
     async ({ movies, shows, expected }) => {
       mockFetchRoutes({
         "/api/settings": appSettings({ media_server: "plex" }),
-        "/api/public-dataset/status": publicDatasetStatus(),
+        "/api/catalog/status": catalogStatus(),
         "/api/library/libraries": ({ url }: FetchCall) =>
           Response.json(
             (url.includes("media_type=movie") ? movies : shows)
@@ -49,7 +49,7 @@ describe("RedirectToLibrary", () => {
     async ({ enabled, browse, expected }) => {
       mockFetchRoutes({
         "/api/settings": appSettings({ media_server: null, overturedb_browse: browse }),
-        "/api/public-dataset/status": publicDatasetStatus({ enabled }),
+        "/api/catalog/status": catalogStatus({ enabled }),
         "/api/library/libraries": [],
       });
 

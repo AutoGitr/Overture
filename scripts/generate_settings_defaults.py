@@ -2,7 +2,7 @@
 
 lazy import json
 
-lazy from overture.dataset_contract.contract import (
+lazy from overture.catalog_contract.contract import (
     ASPECT_RATIOS,
 )
 lazy from overture.db.models.settings import AppSettingsBase

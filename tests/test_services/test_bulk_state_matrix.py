@@ -15,11 +15,11 @@ lazy from overture.db.art_slots import (
     read_art_slot,
     select_art,
 )
-lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import (
-    PublicDatasetItem,
-    PublicDatasetSeason,
+lazy from overture.db.models.catalog import (
+    CatalogItem,
+    CatalogItemSeason,
 )
+lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -45,7 +45,7 @@ lazy from tests.bulk_helpers import (
     Context,
     art_matcher,
     as_job_context,
-    enable_public_dataset,
+    enable_catalog,
     fast_fingerprints,
     make_bulk_downloads,
     no_tags,
@@ -75,7 +75,7 @@ PLANNED_ACTIONS = frozenset({"set", "no_match", "recent"})
 @pytest.mark.parametrize("asset", ["theme", "poster", "background", "season_poster"])
 @pytest.mark.parametrize("server", ["plex", "jellyfin", "emby"])
 @pytest.mark.parametrize("mode", ["default", "overwrite"])
-async def test_dataset_only_state_matrix(
+async def test_catalog_only_state_matrix(
     asset: str,
     server: str,
     mode: str,
@@ -88,13 +88,13 @@ async def test_dataset_only_state_matrix(
     """Every combination must produce the right action, log, counters and rows.
 
     Cross product: selection, file on disk (identical to the catalog image or
-    not), a stale cached presence flag, recent check, dataset absent/empty/
+    not), a stale cached presence flag, recent check, catalog absent/empty/
     populated, and media-server identity. Repeat for every asset and server
     adapter. Downloads are never executed and no network is used.
     """
     app_config.MEDIA_SERVER = ServerType(server)
     storage = AssetStorage(app_config=app_config)
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     expected: dict[str, str] = {}
     on_disk: dict[int, bool] = {}
     cached_flags: dict[int, bool] = {}
@@ -279,7 +279,7 @@ def seed_case(
     if public == "absent":
         return available
     session.add(
-        PublicDatasetItem(
+        CatalogItem(
             id=number,
             media_type=media_type,
             tmdb_id=number,
@@ -290,8 +290,8 @@ def seed_case(
     )
     if available and is_season:
         session.add(
-            PublicDatasetSeason(
-                public_dataset_item_id=number,
+            CatalogItemSeason(
+                catalog_item_id=number,
                 season_num=1,
                 poster_url="https://public.test/image.jpg",
             )

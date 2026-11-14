@@ -41,7 +41,7 @@ function snapshot(sequence = 0, currentEpoch = epoch) {
       server_time: new Date().toISOString(),
       jobs: [],
       downloads: [],
-      public_dataset_status: {
+      catalog_status: {
         enabled: false,
         repo_url: "https://example.invalid/repo",
         catalog_url: "https://example.invalid/catalog",

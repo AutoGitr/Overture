@@ -1,12 +1,12 @@
 import { createQuery } from "@tanstack/svelte-query";
-import { getPublicDatasetStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
+import { getCatalogStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
 import { settingsState } from "../stores/settingsState.svelte";
 
 /** Whether OvertureDB is on and may be browsed; create it while a component initialises. */
 export class CatalogBrowsing {
-  #status = createQuery(() => getPublicDatasetStatusOptions());
+  #status = createQuery(() => getCatalogStatusOptions());
 
-  /** The dataset status has loaded, so `browsable` is final rather than assumed. */
+  /** The catalog status has loaded, so `browsable` is final rather than assumed. */
   get loaded() {
     return this.#status.isSuccess;
   }

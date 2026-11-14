@@ -6,7 +6,7 @@ lazy from urllib.parse import urlencode
 lazy from sqlalchemy.orm import QueryableAttribute, selectinload
 lazy from sqlmodel import col, select
 
-lazy from ...dataset_contract.contract import (
+lazy from ...catalog_contract.contract import (
     ISSUE_FORM_FIELDS,
     ISSUE_FORMS,
     validate_entry,
@@ -16,14 +16,14 @@ lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...repositories.public_dataset import PublicDatasetRepository
-lazy from ...schemas.public_dataset import ContributionIssue
+lazy from ...repositories.catalog import CatalogRepository
+lazy from ...schemas.catalog import ContributionIssue
 lazy from ...utils.errors import PublicServiceError
 lazy from ..collections.policy import resolve_policy
-lazy from .catalog import PUBLIC_DATASET_REPO_URL
 lazy from .entries import catalog_collection_entry, catalog_item_entry
 lazy from .export import collection_entry, collection_refusals, item_entry, refusals
 lazy from .lookup import find_public_item
+lazy from .remote import OVERTUREDB_REPO_URL
 
 #: The kind each issue form's title starts with, as its template writes it.
 _TITLE_KINDS = {"movie": "Movie", "show": "Show", "collection": "Collection"}
@@ -113,7 +113,7 @@ def contribution_issue(
     if entry.get("no_theme"):
         notes.append("Tick No theme on the form")
     return ContributionIssue(
-        url=f"{PUBLIC_DATASET_REPO_URL}/issues/new?{urlencode(query)}", notes=notes
+        url=f"{OVERTUREDB_REPO_URL}/issues/new?{urlencode(query)}", notes=notes
     )
 
 
@@ -135,9 +135,7 @@ async def item_issue(item_id: int, *, database: Database) -> ContributionIssue:
             raise PublicServiceError(404, "Item not found")
         current = None
         if (public := await find_public_item(session, item)) is not None:
-            seasons = await PublicDatasetRepository(session).list_seasons(
-                public.id or 0
-            )
+            seasons = await CatalogRepository(session).list_seasons(public.id or 0)
             current = catalog_item_entry(
                 public,
                 {
@@ -163,7 +161,7 @@ async def collection_issue(
             return ContributionIssue(
                 reason="Only collections matched to a TMDB collection are in OvertureDB"
             )
-        catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
+        catalog = await CatalogRepository(session).collections_by_tmdb_id(
             {row.tmdb_collection_id}
         )
         posters = resolve_policy(

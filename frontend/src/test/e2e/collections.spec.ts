@@ -343,7 +343,7 @@ test("groups hide collections until opened, preserve browsing on asset navigatio
   await expect(page.getByText(/Set a TMDB collection ID to browse its artwork too/)).toBeVisible();
   await page.getByRole("tab", { name: "Background", exact: true }).click();
   await expect(page.getByText(/Set a TMDB collection ID to browse its artwork too/)).toBeVisible();
-  // Without a TMDB collection there is still art to draw, so both tabs ask.
+  // Without a TMDB collection there is still art to generate, so both tabs ask.
   await expect.poll(() => candidateRequests).toBe(2);
   await page.reload();
   if (await page.getByRole("button", { name: "Toggle sidebar" }).isVisible())

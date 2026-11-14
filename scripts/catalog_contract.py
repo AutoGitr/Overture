@@ -3,7 +3,7 @@
 lazy import argparse
 lazy from pathlib import Path
 
-DESTINATION = Path(__file__).resolve().parents[1] / "src/overture/dataset_contract"
+DESTINATION = Path(__file__).resolve().parents[1] / "src/overture/catalog_contract"
 
 
 def main() -> int:
@@ -24,7 +24,7 @@ def main() -> int:
             if not target.exists() or target.read_text() != source:
                 print(
                     f"Overture's copy of the OvertureDB contract differs: {name}. "
-                    "Update it with: uv run python -m scripts.dataset_contract "
+                    "Update it with: uv run python -m scripts.catalog_contract "
                     "<OvertureDB checkout> (run in Overture)"
                 )
                 return 1

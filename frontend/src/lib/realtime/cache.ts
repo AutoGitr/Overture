@@ -1,5 +1,5 @@
-import { getPublicDatasetStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
-import type { PublicDatasetStatus } from "../../generated/rest/types.gen";
+import { getCatalogStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
+import type { CatalogStatus } from "../../generated/rest/types.gen";
 import type { DownloadJobEvent, ServerWebSocketDataMessage } from "../../generated/ws";
 import {
   applyBulkItemOperation,
@@ -65,9 +65,9 @@ export function refreshRemovedDownloadTargets(
   if (collectionsChanged) void invalidateTags(["collections"]).catch(reportRefreshFailure);
 }
 
-/** Store the dataset status the snapshot carried, for the views that read it. */
-export function storePublicDatasetStatus(status: PublicDatasetStatus): void {
-  queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, status);
+/** Store the catalog status the snapshot carried, for the views that read it. */
+export function storeCatalogStatus(status: CatalogStatus): void {
+  queryClient.setQueryData(getCatalogStatusOptions().queryKey, status);
 }
 
 /** Keep the REST caches consistent with one applied realtime event. */
@@ -76,7 +76,7 @@ export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void 
     message.event === "collections.changed" ||
     (message.event === "collection.updated" && !syncState.running)
   ) {
-    void invalidateTags(["collections", "public-dataset", "library"]);
+    void invalidateTags(["collections", "catalog", "library"]);
   }
   if (message.event === "collection.monitored") {
     patchCollection(message.data.collection_id, { monitored: message.data.monitored });
@@ -106,8 +106,8 @@ export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void 
     removeLibraryItem(message.data.media_item_id);
   }
 
-  if (message.event === "public-dataset.updated") {
-    storePublicDatasetStatus(message.data);
+  if (message.event === "catalog.updated") {
+    storeCatalogStatus(message.data);
     void invalidateReconnectData().catch(reportRefreshFailure);
   }
 

@@ -20,7 +20,7 @@
   import {
     createSyncScheduleMutation,
     deleteSyncScheduleMutation,
-    getPublicDatasetStatusOptions,
+    getCatalogStatusOptions,
     listCollectionsOptions,
     listServerLibrariesOptions,
     listSyncSchedulesOptions,
@@ -81,8 +81,8 @@
     ...listServerLibrariesOptions(),
     enabled: isActive,
   }));
-  const datasetStatusQuery = createQuery(() => ({
-    ...getPublicDatasetStatusOptions(),
+  const catalogStatusQuery = createQuery(() => ({
+    ...getCatalogStatusOptions(),
     enabled: isActive,
   }));
   syncSelection.restore();
@@ -96,10 +96,10 @@
   /** Results show exactly while a run exists, never ahead of the server's answer. */
   let hasResults = $derived(syncState.hasRun);
   const feedback = createNotifier();
-  let publicDatasetEnabled = $derived(!!datasetStatusQuery.data?.enabled);
-  let publicDatasetStatusError = $derived(
-    datasetStatusQuery.error
-      ? errorMessage(datasetStatusQuery.error, "Failed to load OvertureDB status")
+  let catalogEnabled = $derived(!!catalogStatusQuery.data?.enabled);
+  let catalogStatusError = $derived(
+    catalogStatusQuery.error
+      ? errorMessage(catalogStatusQuery.error, "Failed to load OvertureDB status")
       : "",
   );
   let loading = $derived(librariesQuery.isPending);
@@ -200,7 +200,7 @@
       ? scheduleMode === "full"
         ? "Choose a library or collections"
         : "Choose a library"
-      : !datasetStatusQuery.isSuccess
+      : !catalogStatusQuery.isSuccess
         ? "Waiting for the OvertureDB status"
         : !scheduleController.name.trim()
           ? "Name the schedule"
@@ -249,7 +249,7 @@
   }
 
   function scheduleConfig(): SyncScheduleConfigInput {
-    const incremental = scheduleMode === "incremental" && publicDatasetEnabled;
+    const incremental = scheduleMode === "incremental" && catalogEnabled;
     return {
       mode: scheduleMode,
       // Polling only adds items, so it leaves collections alone.
@@ -369,41 +369,41 @@
             <label
               class={[
                 "form-row justify-between",
-                { "option-card-disabled": !publicDatasetEnabled },
+                { "option-card-disabled": !catalogEnabled },
               ]}
             >
               <span>Download OvertureDB art for new media</span>
               <input
                 type="checkbox"
                 bind:checked={downloadOvertureDbArt}
-                disabled={!publicDatasetEnabled}
+                disabled={!catalogEnabled}
               />
             </label>
             <label
               class={[
                 "form-row justify-between",
-                { "option-card-disabled": !publicDatasetEnabled },
+                { "option-card-disabled": !catalogEnabled },
               ]}
             >
               <span>Download themes for new media</span>
               <select
                 class="select-compact"
                 bind:value={downloadThemes}
-                disabled={!publicDatasetEnabled}
+                disabled={!catalogEnabled}
               >
                 {#each Object.entries(THEME_ORDER_LABELS) as [value, label] (value)}
                   <option {value}>{label}</option>
                 {/each}
               </select>
             </label>
-            {#if !publicDatasetEnabled && !publicDatasetStatusError}
+            {#if !catalogEnabled && !catalogStatusError}
               <p class="hint">Enable OvertureDB to use these.</p>
             {/if}
           {/if}
-          {#if publicDatasetStatusError}
+          {#if catalogStatusError}
             <div class="heading-row">
-              <span class="option-error">{publicDatasetStatusError}</span>
-              <button class="btn btn-ghost btn-sm" onclick={() => datasetStatusQuery.refetch()}>
+              <span class="option-error">{catalogStatusError}</span>
+              <button class="btn btn-ghost btn-sm" onclick={() => catalogStatusQuery.refetch()}>
                 Retry
               </button>
             </div>

@@ -11,9 +11,9 @@ lazy from pydantic import ValidationError
 lazy from starlette.routing import BaseRoute
 
 lazy from overture.config import Settings
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -130,7 +130,7 @@ class TestRestResponseContracts:
                 "collections",
                 "themes",
                 "backups",
-                "dataset",
+                "catalog",
                 "schedules",
                 "asset_manager",
                 "provider_registry",
@@ -331,7 +331,7 @@ class TestCollectionResponseMappers:
     def test_collection_mapper_combines_server_state_provenance_and_catalog(
         self,
     ) -> None:
-        catalog = PublicDatasetCollection(
+        catalog = CatalogCollection(
             tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="a" * 11
         )
         read = collection_read(
@@ -356,11 +356,11 @@ class TestCollectionResponseMappers:
         assert read.youtube_id == "abcDEF12345"
         assert read.monitored is False
         assert read.tmdb_collection_id == 10
-        assert (read.public_dataset_complete, read.public_dataset_themerrdb) == (
+        assert (read.catalog_complete, read.catalog_themerrdb) == (
             False,
             True,
         )
-        assert renamed.public_dataset_themerrdb is False
+        assert renamed.catalog_themerrdb is False
 
     def test_collection_theme_status_mapper_uses_reconciled_collection(self) -> None:
         row = self._row(
@@ -423,7 +423,10 @@ class TestArtRequestContract:
     ) -> None:
         schema = test_app.openapi()
         art_type = self._parameter(
-            "/api/art/{item_id}/{art_type}", "put", "art_type", test_app=test_app
+            "/api/library/items/{item_id}/art/{art_type}",
+            "put",
+            "art_type",
+            test_app=test_app,
         )
         enum_name = art_type["schema"]["$ref"].rsplit("/", 1)[-1]
         declared = schema["components"]["schemas"][enum_name]["enum"]
@@ -434,7 +437,7 @@ class TestArtRequestContract:
         self, *, test_app: FastAPI
     ) -> None:
         threshold = self._parameter(
-            "/api/art/{item_id}/{art_type}/match",
+            "/api/library/items/{item_id}/art/{art_type}/match",
             "post",
             "threshold",
             test_app=test_app,

@@ -11,18 +11,18 @@
   let {
     tmdbId,
     libraryCollectionId = null,
-    datasetEnabled,
+    catalogEnabled,
   }: {
     tmdbId: number;
     libraryCollectionId?: number | null;
-    datasetEnabled: boolean;
+    catalogEnabled: boolean;
   } = $props();
   const catalog = createQuery(() => ({
     ...getCatalogEntryOptions({ path: { media_type: "collection", entry_key: `tmdb-${tmdbId}` } }),
-    enabled: datasetEnabled && libraryCollectionId === null,
+    enabled: catalogEnabled && libraryCollectionId === null,
     retry: false,
   }));
-  let entry = $derived(datasetEnabled ? catalog.data : null);
+  let entry = $derived(catalogEnabled ? catalog.data : null);
 </script>
 
 {#if libraryCollectionId !== null}

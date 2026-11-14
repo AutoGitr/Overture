@@ -1,4 +1,4 @@
-"""Public dataset query helpers."""
+"""Catalog query helpers."""
 
 lazy from collections.abc import Collection, Iterator, Sequence
 lazy from itertools import batched
@@ -7,13 +7,13 @@ lazy from typing import Literal
 lazy from sqlmodel import and_, col, delete, or_, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..dataset_contract.contract import IDENTITY_FIELDS
-lazy from ..db.models.media_item import MediaItem
-lazy from ..db.models.public_dataset import (
-    PublicDatasetCollection,
-    PublicDatasetItem,
-    PublicDatasetSeason,
+lazy from ..catalog_contract.contract import IDENTITY_FIELDS
+lazy from ..db.models.catalog import (
+    CatalogCollection,
+    CatalogItem,
+    CatalogItemSeason,
 )
+lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import MediaType
 
@@ -21,30 +21,30 @@ lazy from ..domain import MediaType
 type _ExternalId = tuple[str, str, int | str]
 
 
-class PublicDatasetRepository:
-    """Centralize public dataset item and season lookups."""
+class CatalogRepository:
+    """Centralize catalog item and season lookups."""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def clear_catalog(self) -> None:
-        """Delete every persisted public dataset row.
+        """Delete every persisted catalog row.
 
         Seasons hang off their item through a cascading foreign key, so
         removing the items removes them too.
         """
-        await self.session.exec(delete(PublicDatasetItem))
-        await self.session.exec(delete(PublicDatasetCollection))
+        await self.session.exec(delete(CatalogItem))
+        await self.session.exec(delete(CatalogCollection))
         await self.session.flush()
 
     async def collections_by_tmdb_id(
         self, tmdb_ids: Collection[int]
-    ) -> dict[int, PublicDatasetCollection]:
+    ) -> dict[int, CatalogCollection]:
         """Return the catalog's collections with these TMDB collection IDs."""
-        found: dict[int, PublicDatasetCollection] = {}
+        found: dict[int, CatalogCollection] = {}
         for batch in batched(tmdb_ids, CHUNK_SIZE, strict=False):
-            stmt = select(PublicDatasetCollection).where(
-                col(PublicDatasetCollection.tmdb_id).in_(batch)
+            stmt = select(CatalogCollection).where(
+                col(CatalogCollection.tmdb_id).in_(batch)
             )
             found.update(
                 (collection.tmdb_id, collection)
@@ -53,7 +53,7 @@ class PublicDatasetRepository:
         return found
 
     @staticmethod
-    def _external_ids(item: MediaItem | PublicDatasetItem) -> Iterator[_ExternalId]:
+    def _external_ids(item: MediaItem | CatalogItem) -> Iterator[_ExternalId]:
         """Yield the item's usable external IDs, most preferred (TMDB) first."""
         for field in IDENTITY_FIELDS:
             value = getattr(item, field)
@@ -62,7 +62,7 @@ class PublicDatasetRepository:
 
     @classmethod
     def ids_agreement(
-        cls, item: MediaItem, public_item: PublicDatasetItem | None
+        cls, item: MediaItem, public_item: CatalogItem | None
     ) -> Literal["matching", "mismatching"] | None:
         """Say whether the IDs both carry agree; ``None`` when there is no entry."""
         if public_item is None:
@@ -76,8 +76,8 @@ class PublicDatasetRepository:
 
     async def items_by_media_item_id(
         self, items: Sequence[MediaItem]
-    ) -> dict[int, PublicDatasetItem]:
-        """Return the public dataset row for each stored item, in one query."""
+    ) -> dict[int, CatalogItem]:
+        """Return the catalog row for each stored item, in one query."""
         return {
             item.id: public_item
             for item, public_item in zip(
@@ -86,10 +86,8 @@ class PublicDatasetRepository:
             if item.id is not None and public_item is not None
         }
 
-    async def match_items(
-        self, items: Sequence[MediaItem]
-    ) -> list[PublicDatasetItem | None]:
-        """Return each item's public dataset row, or ``None``, in input order.
+    async def match_items(self, items: Sequence[MediaItem]) -> list[CatalogItem | None]:
+        """Return each item's catalog row, or ``None``, in input order.
 
         Every external ID the batch carries goes into a single ``OR`` of
         ``IN`` clauses, so resolving one item and resolving ten thousand cost
@@ -104,19 +102,19 @@ class PublicDatasetRepository:
             return [None] * len(items)
 
         result = await self.session.exec(
-            select(PublicDatasetItem).where(
+            select(CatalogItem).where(
                 or_(
                     *(
                         and_(
-                            col(PublicDatasetItem.media_type) == media_type,
-                            col(getattr(PublicDatasetItem, field)).in_(values),
+                            col(CatalogItem.media_type) == media_type,
+                            col(getattr(CatalogItem, field)).in_(values),
                         )
                         for (media_type, field), values in wanted.items()
                     )
                 )
             )
         )
-        by_external_id: dict[_ExternalId, PublicDatasetItem] = {}
+        by_external_id: dict[_ExternalId, CatalogItem] = {}
         for public_item in result.all():
             for external_id in self._external_ids(public_item):
                 by_external_id.setdefault(external_id, public_item)
@@ -135,59 +133,50 @@ class PublicDatasetRepository:
 
     async def list_items(
         self, media_type: MediaType, tmdb_ids: Collection[int] | None = None
-    ) -> list[PublicDatasetItem]:
+    ) -> list[CatalogItem]:
         """Return catalog entries of a media type, optionally limited to TMDB IDs."""
-        stmt = select(PublicDatasetItem).where(
-            col(PublicDatasetItem.media_type) == media_type
-        )
+        stmt = select(CatalogItem).where(col(CatalogItem.media_type) == media_type)
         if tmdb_ids is not None:
-            stmt = stmt.where(col(PublicDatasetItem.tmdb_id).in_(tmdb_ids))
+            stmt = stmt.where(col(CatalogItem.tmdb_id).in_(tmdb_ids))
         return list((await self.session.exec(stmt)).all())
 
     async def find_item(
         self, media_type: MediaType, field: str, value: int | str
-    ) -> PublicDatasetItem | None:
+    ) -> CatalogItem | None:
         """Return the catalog entry of a media type with one identifier."""
-        stmt = select(PublicDatasetItem).where(
-            col(PublicDatasetItem.media_type) == media_type,
-            col(getattr(PublicDatasetItem, field)) == value,
+        stmt = select(CatalogItem).where(
+            col(CatalogItem.media_type) == media_type,
+            col(getattr(CatalogItem, field)) == value,
         )
         return (await self.session.exec(stmt)).first()
 
-    async def list_collections(self) -> list[PublicDatasetCollection]:
+    async def list_collections(self) -> list[CatalogCollection]:
         """Return every catalog collection."""
-        return list((await self.session.exec(select(PublicDatasetCollection))).all())
+        return list((await self.session.exec(select(CatalogCollection))).all())
 
-    async def list_seasons(
-        self, public_dataset_item_id: int
-    ) -> list[PublicDatasetSeason]:
-        """Return public dataset seasons for an item ordered by season number."""
+    async def list_seasons(self, catalog_item_id: int) -> list[CatalogItemSeason]:
+        """Return catalog seasons for an item ordered by season number."""
         result = await self.session.exec(
-            select(PublicDatasetSeason)
-            .where(
-                col(PublicDatasetSeason.public_dataset_item_id)
-                == public_dataset_item_id
-            )
-            .order_by(col(PublicDatasetSeason.season_num))
+            select(CatalogItemSeason)
+            .where(col(CatalogItemSeason.catalog_item_id) == catalog_item_id)
+            .order_by(col(CatalogItemSeason.season_num))
         )
         return list(result.all())
 
     async def season_posters_by_item_ids(
-        self, public_dataset_item_ids: set[int]
+        self, catalog_item_ids: set[int]
     ) -> dict[int, dict[int, str]]:
         """Return poster URLs by season number, keyed by public item ID."""
-        if not public_dataset_item_ids:
+        if not catalog_item_ids:
             return {}
         result = await self.session.exec(
             select(
-                PublicDatasetSeason.public_dataset_item_id,
-                PublicDatasetSeason.season_num,
-                PublicDatasetSeason.poster_url,
+                CatalogItemSeason.catalog_item_id,
+                CatalogItemSeason.season_num,
+                CatalogItemSeason.poster_url,
             ).where(
-                col(PublicDatasetSeason.public_dataset_item_id).in_(
-                    public_dataset_item_ids
-                ),
-                col(PublicDatasetSeason.poster_url).is_not(None),
+                col(CatalogItemSeason.catalog_item_id).in_(catalog_item_ids),
+                col(CatalogItemSeason.poster_url).is_not(None),
             )
         )
         posters: dict[int, dict[int, str]] = {}

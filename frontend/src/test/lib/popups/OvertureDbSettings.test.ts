@@ -2,12 +2,12 @@ import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getSettingsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import SettingsPopup from "../../../lib/popups/SettingsPopup.svelte";
-import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
+import { storeCatalogStatus } from "../../../lib/realtime/cache";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { appSettings, publicDatasetStatus } from "../../helpers/fixtures";
+import { appSettings, catalogStatus } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 describe("OvertureDB in Settings", () => {
@@ -20,10 +20,10 @@ describe("OvertureDB in Settings", () => {
   });
 
   it("saves the switch apart from the app settings", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: false }));
+    storeCatalogStatus(catalogStatus({ enabled: false }));
     const { calls } = mockFetchRoutes({
       "/api/settings": appSettings(),
-      "/api/public-dataset/enabled": publicDatasetStatus({ enabled: true }),
+      "/api/catalog/enabled": catalogStatus({ enabled: true }),
     });
     renderWithQueryClient(SettingsPopup);
     expect(
@@ -37,12 +37,12 @@ describe("OvertureDB in Settings", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(uiState.openPopup).toBeNull());
-    const enabled = calls.find((call) => call.url === "/api/public-dataset/enabled");
+    const enabled = calls.find((call) => call.url === "/api/catalog/enabled");
     expect(JSON.parse(String(enabled?.init.body))).toEqual({ enabled: true });
   });
 
   it("saves the No theme flag with the app settings and leaves the switch alone", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    storeCatalogStatus(catalogStatus({ enabled: true }));
     const { calls } = mockFetchRoutes({ "/api/settings": appSettings() });
     renderWithQueryClient(SettingsPopup);
 
@@ -52,7 +52,7 @@ describe("OvertureDB in Settings", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(uiState.openPopup).toBeNull());
-    expect(calls.some((call) => call.url === "/api/public-dataset/enabled")).toBe(false);
+    expect(calls.some((call) => call.url === "/api/catalog/enabled")).toBe(false);
     const saved = calls.find((call) => call.url === "/api/settings");
     expect(JSON.parse(String(saved?.init.body))).toMatchObject({ overturedb_no_theme: false });
   });

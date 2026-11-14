@@ -13,8 +13,8 @@ lazy from typing import Any, Self
 lazy import httpx2
 lazy from sqlalchemy.exc import SQLAlchemyError
 
+lazy from ...catalog_contract.contract import art_source
 lazy from ...config import Settings
-lazy from ...dataset_contract.contract import art_source
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings, get_app_settings
@@ -28,14 +28,14 @@ lazy from ...domain import (
 )
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.registry import ProviderRegistry
-lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
 lazy from ...utils.image import is_valid_aspect_ratio, is_valid_image_format
+lazy from ..catalog.index import catalog_collection_art_url
+lazy from ..catalog.lookup import build_candidate, get_art_candidates
 lazy from ..collections.policy import resolve_policy
-lazy from ..public_dataset.index import catalog_collection_art_url
-lazy from ..public_dataset.lookup import build_candidate, get_art_candidates
-lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from ..server_identity import resolve_server_item_id
 
 logger = logging.getLogger(__name__)
@@ -292,11 +292,11 @@ class ArtCandidates:
     ) -> list[ArtCandidate]:
         async with self._database.read_session() as session:
             schedule = await load_schedule(
-                session, PUBLIC_DATASET_SCHEDULE, timezone=self._app_config.TZ
+                session, CATALOG_SCHEDULE, timezone=self._app_config.TZ
             )
             if not schedule.enabled or not collection.tmdb_collection_id:
                 return []
-            entries = await PublicDatasetRepository(session).collections_by_tmdb_id(
+            entries = await CatalogRepository(session).collections_by_tmdb_id(
                 {collection.tmdb_collection_id}
             )
             entry = entries.get(collection.tmdb_collection_id)

@@ -12,7 +12,7 @@ lazy from sqlmodel import and_, case, col, delete, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select, SelectOfScalar
 
-lazy from ..dataset_contract.contract import IDENTITY_FIELDS
+lazy from ..catalog_contract.contract import IDENTITY_FIELDS
 lazy from ..db.completion import HOLDS_FILES
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
@@ -450,17 +450,6 @@ class MediaItemRepository:
             for field, value in zip(IDENTITY_FIELDS, values, strict=True):
                 if value is not None:
                     found.setdefault((field, value), item_id)
-        return found
-
-    async def tmdb_collection_ids(self, item_ids: list[int]) -> list[int | None]:
-        """Return the TMDB collection of each visible item among *item_ids*."""
-        found: list[int | None] = []
-        for batch in batched(item_ids, CHUNK_SIZE, strict=False):
-            stmt = select(MediaItem.tmdb_collection_id).where(
-                col(MediaItem.id).in_(batch),
-                col(MediaItem.server_removed_at).is_(None),
-            )
-            found.extend(await self.session.exec(stmt))
         return found
 
     async def titles_needing_tmdb_facts(

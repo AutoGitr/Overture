@@ -1,4 +1,4 @@
-import { getPublicDatasetStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { getCatalogStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { session } from "../../../lib/auth/session.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
@@ -79,7 +79,7 @@ describe("session", () => {
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(uiState.openPopup).toBeNull();
     expect(syncState.running).toBe(false);
-    expect(queryClient.getQueryData(getPublicDatasetStatusOptions().queryKey)).toBeUndefined();
+    expect(queryClient.getQueryData(getCatalogStatusOptions().queryKey)).toBeUndefined();
     expect(session.error).toBe("");
   });
 

@@ -105,7 +105,7 @@ jobs:
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if has_changed '^(src/|scripts/(contracts|generate_ws_types|generate_settings_defaults|dataset_contract|sync_skills)\.py$|openapi/|frontend/src/generated/|frontend/(package\.json|bun\.lock|openapi-ts\.config\.ts|\.prettierrc)$|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/)'; then
+          if has_changed '^(src/|scripts/(contracts|generate_ws_types|generate_settings_defaults|catalog_contract|sync_skills)\.py$|openapi/|frontend/src/generated/|frontend/(package\.json|bun\.lock|openapi-ts\.config\.ts|\.prettierrc)$|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/)'; then
             echo "contracts=true" >> "$GITHUB_OUTPUT"
           else
             echo "contracts=false" >> "$GITHUB_OUTPUT"
@@ -269,7 +269,7 @@ jobs:
           persist-credentials: false
 
       - name: Check the vendored OvertureDB contract
-        run: uv run --locked python -m scripts.dataset_contract OvertureDB --check
+        run: uv run --locked python -m scripts.catalog_contract OvertureDB --check
 
       - name: Check agent skills
         run: uv run --locked python -m scripts.sync_skills --check

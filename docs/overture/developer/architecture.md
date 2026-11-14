@@ -33,7 +33,7 @@ flowchart LR
   the entries.
 
 The two never drift. The contract is edited only in `../OvertureDB/schema/`
-and copied into `src/overture/dataset_contract/`; rules both projects apply
+and copied into `src/overture/catalog_contract/`; rules both projects apply
 (entry validation, the catalog format, canonical artwork links) live in the
 contract and are imported from it. A change on one side that affects the other
 is finished on both sides in the same task, and `SCHEMA_VERSION` is bumped
@@ -54,7 +54,7 @@ when the other side cannot read a catalog change as it stands.
   `ws/events.py` the registry of WebSocket events.
 
 Dependencies point inward: `routers` → `services` → `repositories` → `db`,
-and everything may use `domain`, `utils` and `dataset_contract`. `domain`,
+and everything may use `domain`, `utils` and `catalog_contract`. `domain`,
 `utils`, `jobs`, `media_servers` and `repositories` never import `services`.
 
 ### Transactions and side effects

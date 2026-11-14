@@ -10,15 +10,14 @@ lazy from overture.dependencies import (
     get_asset_manager,
     get_assets,
     get_backups,
+    get_catalog,
     get_collection_editor,
     get_collection_groups,
     get_collection_reader,
     get_database,
-    get_events,
     get_job_slots,
     get_library,
     get_provider_registry,
-    get_public_dataset,
     get_runtime,
     get_server_audit,
     get_settings,
@@ -61,12 +60,11 @@ def test_dependency_getters() -> None:
     assert get_themes(runtime) is runtime.themes
     assert get_tmdb_items(runtime) is runtime.tmdb_items
     assert get_backups(runtime) is runtime.backups
-    assert get_public_dataset(runtime) is runtime.public_dataset
+    assert get_catalog(runtime) is runtime.catalog
     assert get_assets(runtime) is runtime.assets
     assert get_asset_manager(runtime) is runtime.asset_manager
     assert get_stats(runtime) is runtime.stats
     assert get_provider_registry(runtime) is runtime.provider_registry
     assert get_tmdb(runtime) is runtime.tmdb
-    assert get_events(runtime) is runtime.events
     assert get_websockets(runtime) is runtime.websockets
     assert get_job_slots(runtime) is runtime.job_slots

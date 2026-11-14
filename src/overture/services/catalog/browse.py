@@ -5,8 +5,7 @@ lazy from typing import Any
 lazy from sqlmodel import col, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...config import Settings
-lazy from ...dataset_contract.contract import (
+lazy from ...catalog_contract.contract import (
     IDENTITY_FIELDS,
     OPTIONAL_ENTRY_FIELDS,
     catalog_art_url,
@@ -15,19 +14,20 @@ lazy from ...dataset_contract.contract import (
     parse_entry_file_stem,
     validate_entry,
 )
-lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.public_dataset import (
-    PublicDatasetCollection,
-    PublicDatasetDraft,
-    PublicDatasetItem,
+lazy from ...config import Settings
+lazy from ...db.models.catalog import (
+    CatalogCollection,
+    CatalogDraft,
+    CatalogItem,
 )
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import ArtType, CatalogMediaType, CollectionPosterStyle, MediaType
+lazy from ...repositories.catalog import CatalogRepository
+lazy from ...repositories.catalog_drafts import CatalogDraftRepository
 lazy from ...repositories.media_items import MediaItemRepository
-lazy from ...repositories.public_dataset import PublicDatasetRepository
-lazy from ...repositories.public_dataset_drafts import PublicDatasetDraftRepository
-lazy from ...schemas.public_dataset import (
+lazy from ...schemas.catalog import (
     CatalogCounts,
     CatalogDraftsDiscard,
     CatalogDraftsDiscarded,
@@ -39,7 +39,7 @@ lazy from ...schemas.public_dataset import (
 lazy from ...utils.art_urls import art_preview_url, refused_art_host
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
-lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from .entries import (
     Entry,
     catalog_collection_entry,
@@ -51,7 +51,7 @@ lazy from .issue import contribution_issue
 
 
 def _draft_entries(
-    drafts: list[PublicDatasetDraft], media_type: CatalogMediaType
+    drafts: list[CatalogDraft], media_type: CatalogMediaType
 ) -> dict[tuple[str, int | str], Entry]:
     return {
         (field, value): draft.entry
@@ -114,8 +114,8 @@ class CatalogBrowser:
             def items(kind: MediaType):
                 return (
                     select(func.count())
-                    .select_from(PublicDatasetItem)
-                    .where(col(PublicDatasetItem.media_type) == kind)
+                    .select_from(CatalogItem)
+                    .where(col(CatalogItem.media_type) == kind)
                     .scalar_subquery()
                 )
 
@@ -125,10 +125,10 @@ class CatalogBrowser:
                         items(MediaType.MOVIE),
                         items(MediaType.SHOW),
                         select(func.count())
-                        .select_from(PublicDatasetCollection)
+                        .select_from(CatalogCollection)
                         .scalar_subquery(),
                         select(func.count())
-                        .select_from(PublicDatasetDraft)
+                        .select_from(CatalogDraft)
                         .scalar_subquery(),
                     )
                 )
@@ -139,7 +139,7 @@ class CatalogBrowser:
 
     async def _require_enabled(self, session: AsyncSession) -> None:
         schedule = await load_schedule(
-            session, PUBLIC_DATASET_SCHEDULE, timezone=self._config.TZ
+            session, CATALOG_SCHEDULE, timezone=self._config.TZ
         )
         if not schedule.enabled:
             raise PublicServiceError(409, "OvertureDB is disabled")
@@ -148,7 +148,7 @@ class CatalogBrowser:
         """Return every catalog entry of a media type with its library links."""
         async with self._database.read_session() as session:
             await self._require_enabled(session)
-            catalog = PublicDatasetRepository(session)
+            catalog = CatalogRepository(session)
             if media_type is CatalogMediaType.COLLECTION:
                 entries = [
                     catalog_collection_entry(row)
@@ -163,7 +163,7 @@ class CatalogBrowser:
                     catalog_item_entry(item, posters.get(item.id or 0, {}))
                     for item in items
                 ]
-            drafts = await PublicDatasetDraftRepository(session).list_all()
+            drafts = await CatalogDraftRepository(session).list_all()
             links = await self._library_links(session, media_type)
             posters = (await get_app_settings(session)).collection_overturedb_posters
         drafted = _draft_entries(drafts, media_type)
@@ -176,10 +176,10 @@ class CatalogBrowser:
         """Return catalog movie rows with draft overrides for collection members."""
         async with self._database.read_session() as session:
             await self._require_enabled(session)
-            items = await PublicDatasetRepository(session).list_items(
+            items = await CatalogRepository(session).list_items(
                 MediaType.MOVIE, tmdb_ids
             )
-            drafts = await PublicDatasetDraftRepository(session).list_all()
+            drafts = await CatalogDraftRepository(session).list_all()
         drafted = _draft_entries(drafts, CatalogMediaType.MOVIE)
         return {
             item.tmdb_id: self._row(
@@ -263,7 +263,7 @@ class CatalogBrowser:
             field, value = parse_entry_file_stem(entry_key)
         except ValueError as exc:
             raise PublicServiceError(404, "Catalog entry not found") from exc
-        catalog = PublicDatasetRepository(session)
+        catalog = CatalogRepository(session)
         if media_type is CatalogMediaType.COLLECTION:
             found = (
                 await catalog.collections_by_tmdb_id({value})
@@ -283,7 +283,7 @@ class CatalogBrowser:
     async def _detail(
         self, session: AsyncSession, media_type: CatalogMediaType, entry: Entry
     ) -> CatalogEntryDetail:
-        draft = await PublicDatasetDraftRepository(session).find(
+        draft = await CatalogDraftRepository(session).find(
             media_type, _identities(entry)
         )
         links = await self._library_links(session, media_type, entry)
@@ -333,7 +333,7 @@ class CatalogBrowser:
                 ).collection_overturedb_posters
                 changes[collection_poster_field(posters)] = changes.pop("poster_url")
             entry = await self._entry(session, media_type, entry_key)
-            repository = PublicDatasetDraftRepository(session)
+            repository = CatalogDraftRepository(session)
             draft = await repository.find(media_type, _identities(entry))
             proposed = _with_theme_flag(
                 _canonical_art({**(draft.entry if draft else entry), **changes})
@@ -353,7 +353,7 @@ class CatalogBrowser:
                 if draft is not None:
                     await session.delete(draft)
             else:
-                draft = draft or PublicDatasetDraft(
+                draft = draft or CatalogDraft(
                     media_type=media_type, entry=proposed, updated_at=utc_now()
                 )
                 draft.sqlmodel_update(
@@ -377,7 +377,7 @@ class CatalogBrowser:
         """Remove an entry's draft."""
         async with self._database.write_session() as session:
             entry = await self._entry(session, media_type, entry_key)
-            draft = await PublicDatasetDraftRepository(session).find(
+            draft = await CatalogDraftRepository(session).find(
                 media_type, _identities(entry)
             )
             if draft is not None:
@@ -391,7 +391,7 @@ class CatalogBrowser:
         """Remove the drafts of the named entries; names without one are skipped."""
         discarded = 0
         async with self._database.write_session() as session:
-            drafts = PublicDatasetDraftRepository(session)
+            drafts = CatalogDraftRepository(session)
             for entry_key in dict.fromkeys(body.entry_keys):
                 try:
                     entry = await self._entry(session, media_type, entry_key)

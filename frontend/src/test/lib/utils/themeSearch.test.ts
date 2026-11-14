@@ -96,7 +96,7 @@ describe("themeSearch helpers", () => {
       expect(merged[1]?.badges).toEqual([{ label: "ThemerrDB", variant: "warning" }]);
     });
 
-    it("deduplicates search results that match existing selected or dataset themes and enriches metadata", () => {
+    it("deduplicates search results that match existing selected or catalog themes and enriches metadata", () => {
       const item = mediaItem({
         title: "Alien",
         youtube_id: "selected_yt",

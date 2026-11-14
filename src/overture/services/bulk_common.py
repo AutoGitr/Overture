@@ -35,11 +35,11 @@ lazy from ..repositories.seasons import SeasonRepository
 lazy from ..schemas.art import ArtMatchResponse
 lazy from ..schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from ..utils.time import utc_now
+lazy from .catalog.index import CatalogPick
 lazy from .downloads.queue import JobTarget
 lazy from .downloads.service import DownloadService
 lazy from .downloads.watch import DownloadWatch
 lazy from .local_assets.service import LocalAssets
-lazy from .public_dataset.index import CatalogPick
 
 logger = logging.getLogger(__name__)
 

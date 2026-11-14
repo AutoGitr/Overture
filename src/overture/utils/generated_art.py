@@ -1,4 +1,4 @@
-"""Artwork Overture draws from a title, for collections that have none.
+"""Artwork Overture generates from a title, for collections that have none.
 
 The bundled Noto fonts draw the text, so any script a title uses renders and
 the same title and style always give the same bytes.
@@ -15,7 +15,7 @@ lazy from PIL import Image, ImageDraw, ImageFont
 
 lazy from ..domain import ArtStyle, ArtType
 
-#: The size each art type is drawn at, as servers display them.
+#: The size each art type is generated at, as servers display them.
 _SIZES = {ArtType.POSTER: (1000, 1500), ArtType.BACKGROUND: (3840, 2160)}
 #: The most lines a title wraps to before its size shrinks instead.
 _MAX_LINES = 4

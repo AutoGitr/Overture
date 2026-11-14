@@ -2,7 +2,7 @@ import {
   getItemOptions,
   getCollectionOptions,
   getCatalogEntryOptions,
-  getPublicDatasetItemIssueQueryKey,
+  getCatalogItemIssueQueryKey,
   getSeasonsOptions,
   listBulkAssetsSchedulesQueryKey,
   listSyncSchedulesQueryKey,
@@ -123,7 +123,7 @@ export function upsertLibraryItem(item: MediaItemRead): void {
   queryClient.setQueryData(getItemOptions({ path: { item_id: item.id } }).queryKey, item);
   // The issue contributing the item carries its selections.
   void queryClient.invalidateQueries({
-    queryKey: getPublicDatasetItemIssueQueryKey({ path: { item_id: item.id } }),
+    queryKey: getCatalogItemIssueQueryKey({ path: { item_id: item.id } }),
     exact: true,
   });
   observer?.itemUpdated(item);
@@ -307,7 +307,7 @@ export function invalidateTags(tags: readonly ApiTag[], throwOnError = false): P
 
 export function invalidateReconnectData(): Promise<void> {
   return invalidateTags(
-    ["library", "collections", "settings", "public-dataset", "sync", "backups", "bulk"],
+    ["library", "collections", "settings", "catalog", "sync", "backups", "bulk"],
     true,
   );
 }

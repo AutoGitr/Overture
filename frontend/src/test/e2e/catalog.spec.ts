@@ -33,15 +33,15 @@ test("catalog seasons and sidebar use draft artwork and placeholders instead of 
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ tmdb_configured: true }) }),
   );
-  await page.route("**/api/public-dataset/catalog?*", (route) =>
+  await page.route("**/api/catalog/catalog?*", (route) =>
     route.fulfill({
       json: [catalogRow({ ...detail.entry, ...detail.draft, entry_key: detail.entry_key })],
     }),
   );
-  await page.route("**/api/public-dataset/catalog/show/tmdb-1396", (route) =>
+  await page.route("**/api/catalog/catalog/show/tmdb-1396", (route) =>
     route.fulfill({ json: detail }),
   );
-  await page.route("**/api/public-dataset/catalog/show/tmdb-1396/draft", (route) => {
+  await page.route("**/api/catalog/catalog/show/tmdb-1396/draft", (route) => {
     detail = {
       ...detail,
       draft:
@@ -110,8 +110,8 @@ test("catalog collections use catalog member artwork and open members in Overtur
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ tmdb_configured: true }) }),
   );
-  await page.route("**/api/public-dataset/catalog?*", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/public-dataset/catalog/collection/tmdb-10", (route) =>
+  await page.route("**/api/catalog/catalog?*", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/catalog/catalog/collection/tmdb-10", (route) =>
     route.fulfill({
       json: catalogDetail({
         entry_key: "tmdb-10",
@@ -151,7 +151,7 @@ test("catalog collections use catalog member artwork and open members in Overtur
       },
     });
   });
-  await page.route("**/api/public-dataset/catalog/movie/tmdb-11", (route) =>
+  await page.route("**/api/catalog/catalog/movie/tmdb-11", (route) =>
     route.fulfill({
       json: catalogDetail({
         entry_key: "tmdb-11",

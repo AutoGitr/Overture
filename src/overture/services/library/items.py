@@ -7,17 +7,17 @@ lazy from sqlmodel import col, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
-lazy from ...dataset_contract.contract import IDENTITY_FIELDS, entry_file_stem
+lazy from ...catalog_contract.contract import IDENTITY_FIELDS, entry_file_stem
 lazy from ...db.art_slots import find_art_slot
 lazy from ...db.completion import holds_files
+lazy from ...db.models.catalog import CatalogItem
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import PublicDatasetItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import ArtType, AspectRatioTolerance, MediaType, TermKind
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.library import (
@@ -30,16 +30,16 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
 
 
-def _public_dataset_complete(item: PublicDatasetItem, *, trust_no_theme: bool) -> bool:
+def _catalog_complete(item: CatalogItem, *, trust_no_theme: bool) -> bool:
     # A title flagged as having no theme lacks no theme, when the user trusts the flag.
     themed = item.youtube_id_overturedb or (trust_no_theme and item.no_theme)
     return bool(item.poster_url and item.background_url and themed)
 
 
-async def _public_dataset_status_item_ids(
+async def _catalog_status_item_ids(
     db: AsyncSession,
     items: Sequence[MediaItem],
-    public_items: dict[int, PublicDatasetItem],
+    public_items: dict[int, CatalogItem],
     *,
     trust_no_theme: bool,
 ) -> tuple[set[int], set[int]]:
@@ -57,9 +57,7 @@ async def _public_dataset_status_item_ids(
     local_seasons_by_item_id = await SeasonRepository(
         db
     ).tracked_season_nums_by_item_ids(show_item_ids)
-    public_seasons_by_item_id = await PublicDatasetRepository(
-        db
-    ).season_posters_by_item_ids(
+    public_seasons_by_item_id = await CatalogRepository(db).season_posters_by_item_ids(
         {
             public_item.id
             for public_item in public_items.values()
@@ -72,7 +70,7 @@ async def _public_dataset_status_item_ids(
         if item.id is None:
             continue
         public_item = public_items.get(item.id)
-        if not public_item or not _public_dataset_complete(
+        if not public_item or not _catalog_complete(
             public_item, trust_no_theme=trust_no_theme
         ):
             continue
@@ -104,7 +102,7 @@ def _has_incorrect_aspect_ratio(
     )
 
 
-async def media_item_reads_with_public_dataset_status(
+async def media_item_reads_with_catalog_status(
     db: AsyncSession,
     items: Sequence[MediaItem],
 ) -> list[MediaItemRead]:
@@ -127,9 +125,9 @@ async def media_item_reads_with_public_dataset_status(
         for season in all_seasons:
             seasons_by_item[season.media_item_id].append(season)
 
-    public_items = await PublicDatasetRepository(db).items_by_media_item_id(items)
+    public_items = await CatalogRepository(db).items_by_media_item_id(items)
     trust_no_theme = settings_row.overturedb_no_theme
-    complete_item_ids, themerrdb_item_ids = await _public_dataset_status_item_ids(
+    complete_item_ids, themerrdb_item_ids = await _catalog_status_item_ids(
         db, items, public_items, trust_no_theme=trust_no_theme
     )
 
@@ -146,11 +144,9 @@ async def media_item_reads_with_public_dataset_status(
         reads.append(
             media_item_read_from_model(
                 item,
-                public_dataset_ids=PublicDatasetRepository.ids_agreement(
-                    item, public_item
-                ),
-                public_dataset_complete=item.id in complete_item_ids,
-                public_dataset_themerrdb=item.id in themerrdb_item_ids,
+                catalog_ids=CatalogRepository.ids_agreement(item, public_item),
+                catalog_complete=item.id in complete_item_ids,
+                catalog_themerrdb=item.id in themerrdb_item_ids,
                 library_collection_id=next(iter(collections.get(item.id, [])), None),
                 seasons=seasons,
                 directors=directors.get(item.id, ()),
@@ -225,7 +221,7 @@ async def emit_library_items_upserted(
             await db.exec(select(MediaItem).where(col(MediaItem.id).in_(item_ids)))
         ).all()
         removed = [item for item in items if item.server_removed_at is not None]
-        reads = await media_item_reads_with_public_dataset_status(
+        reads = await media_item_reads_with_catalog_status(
             db, [item for item in items if item.server_removed_at is None]
         )
 
@@ -247,7 +243,7 @@ async def library_item_read(item_id: int, *, database: Database) -> MediaItemRea
         PublicServiceError: When the item does not exist.
     """
     async with database.read_session() as db:
-        (read,) = await media_item_reads_with_public_dataset_status(
+        (read,) = await media_item_reads_with_catalog_status(
             db, [await require_item(db, item_id)]
         )
     return read

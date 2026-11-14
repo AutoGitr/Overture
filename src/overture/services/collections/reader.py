@@ -3,16 +3,16 @@
 lazy from fastapi import Response
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ...catalog_contract.contract import entry_file_stem
 lazy from ...config import Settings
-lazy from ...dataset_contract.contract import entry_file_stem
 lazy from ...db.art_slots import find_art_slot
+lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ITEM_ART_TYPES, ArtType, CollectionKind, ImageSize
 lazy from ...integrations.proxy import ProxyClientManager
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...repositories.records import RecordRepository
 lazy from ...schemas.collections import (
     CollectionDefaults,
@@ -25,7 +25,7 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
 lazy from ..downloads.collection_theme import collection_theme_unavailable
 lazy from ..provider_images import proxy_provider_image
-lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from .access import CollectionAccess
 lazy from .membership import display_order
 lazy from .policy import resolve_policy
@@ -34,14 +34,12 @@ lazy from .rules import rule_read
 
 async def catalog_collections(
     session: AsyncSession, tmdb_ids: set[int], *, app_config: Settings
-) -> dict[int, PublicDatasetCollection]:
+) -> dict[int, CatalogCollection]:
     """Return the catalog's entries for these TMDB collections, if it is enabled."""
-    schedule = await load_schedule(
-        session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
-    )
+    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
     if not schedule.enabled or not tmdb_ids:
         return {}
-    return await PublicDatasetRepository(session).collections_by_tmdb_id(tmdb_ids)
+    return await CatalogRepository(session).collections_by_tmdb_id(tmdb_ids)
 
 
 class CollectionReader:

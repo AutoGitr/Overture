@@ -10,11 +10,11 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import (
-    PublicDatasetCollection,
-    PublicDatasetDraft,
+lazy from overture.db.models.catalog import (
+    CatalogCollection,
+    CatalogDraft,
 )
+lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -26,27 +26,27 @@ lazy from overture.domain import (
 )
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.schemas.bulk import BulkThemeRequest
-lazy from overture.schemas.collections import collection_read
-lazy from overture.schemas.public_dataset import (
+lazy from overture.schemas.catalog import (
     CatalogDraftsDiscard,
     CatalogDraftUpdate,
     CatalogSeason,
-    PublicDatasetSyncStats,
+    CatalogSyncStats,
 )
-lazy from overture.services.public_dataset import staging
-lazy from overture.services.public_dataset.browse import CatalogBrowser
-lazy from overture.services.public_dataset.export import export_selections
-lazy from overture.services.public_dataset.index import NO_THEME
+lazy from overture.schemas.collections import collection_read
+lazy from overture.services.catalog import staging
+lazy from overture.services.catalog.browse import CatalogBrowser
+lazy from overture.services.catalog.export import export_selections
+lazy from overture.services.catalog.index import NO_THEME
 lazy from overture.services.schedule_store import (
-    PUBLIC_DATASET_SCHEDULE,
+    CATALOG_SCHEDULE,
     save_schedule,
 )
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
-lazy from tests.test_services.test_public_dataset_edges import (
+lazy from tests.test_services.test_catalog_edges import (
     catalog_jsonl,
     catalog_payload,
 )
@@ -64,13 +64,13 @@ COLLECTION: dict[str, Any] = {
 
 async def _import_catalog(
     session: AsyncSession, tmp_path: Path, app_config: Settings
-) -> PublicDatasetSyncStats:
+) -> CatalogSyncStats:
     payload = catalog_payload()
     payload["entries"].append(COLLECTION)
     path, stage = tmp_path / "catalog.jsonl", tmp_path / "stage.sqlite"
     path.write_bytes(catalog_jsonl(payload))
     await staging.prepare(path, stage, app_config=app_config)
-    stats = PublicDatasetSyncStats()
+    stats = CatalogSyncStats()
     await staging.replace(session, stage, utc_now(), stats)
     await session.commit()
     return stats
@@ -85,7 +85,7 @@ async def browser(
     database: Database,
 ) -> CatalogBrowser:
     await _import_catalog(db_session, tmp_path, app_config)
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     return CatalogBrowser(database=database, app_config=app_config)
 
 
@@ -95,7 +95,7 @@ async def test_collection_entries_are_stored_apart_from_titles(
     stats = await _import_catalog(db_session, tmp_path, app_config)
 
     assert (stats.items, stats.movies, stats.shows, stats.collections) == (2, 1, 1, 1)
-    (collection,) = (await db_session.exec(select(PublicDatasetCollection))).all()
+    (collection,) = (await db_session.exec(select(CatalogCollection))).all()
     assert (collection.tmdb_id, collection.youtube_id_themerrdb) == (
         10,
         "JG5OsfOuEy0",
@@ -110,7 +110,7 @@ async def test_the_catalog_view_needs_overturedb_enabled(
     database: Database,
 ) -> None:
     await _import_catalog(db_session, tmp_path, app_config)
-    await save_schedule(db_session, PUBLIC_DATASET_SCHEDULE, enabled=False)
+    await save_schedule(db_session, CATALOG_SCHEDULE, enabled=False)
     await db_session.commit()
     browser = CatalogBrowser(database=database, app_config=app_config)
 
@@ -242,7 +242,7 @@ async def test_a_consistent_collection_poster_is_the_poster_the_view_edits(
 
     assert saved.draft is not None
     assert saved.draft.poster_url == poster
-    (draft,) = (await db_session.exec(select(PublicDatasetDraft))).all()
+    (draft,) = (await db_session.exec(select(CatalogDraft))).all()
     assert (draft.entry["poster_url"], draft.entry["consistent_poster_url"]) == (
         None,
         poster,
@@ -398,8 +398,8 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
     path, stage = tmp_path / "catalog.jsonl", tmp_path / "stage.sqlite"
     path.write_bytes(catalog_jsonl(payload))
     await staging.prepare(path, stage, app_config=app_config)
-    await staging.replace(db_session, stage, utc_now(), PublicDatasetSyncStats())
-    await enable_public_dataset(db_session)
+    await staging.replace(db_session, stage, utc_now(), CatalogSyncStats())
+    await enable_catalog(db_session)
     db_session.add(
         stored_collection(
             id=1,
@@ -444,14 +444,14 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
     )
     flagged = collection_read(
         row,
-        PublicDatasetCollection(tmdb_id=10, title="Saga", no_theme=True),
+        CatalogCollection(tmdb_id=10, title="Saga", no_theme=True),
         None,
         trust_no_theme=True,
         backgrounds=True,
     )
     assert flagged.theme_status is AssetStatus.COMPLETE
     assert flagged.catalog_no_theme
-    assert flagged.public_dataset_complete
+    assert flagged.catalog_complete
     assert (
         collection_read(row, None, None, trust_no_theme=True, backgrounds=True)
     ).theme_status is AssetStatus.MISSING

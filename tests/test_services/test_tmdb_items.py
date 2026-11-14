@@ -12,8 +12,8 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot, select_art
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
@@ -33,16 +33,16 @@ lazy from overture.integrations.tmdb import (
     TmdbTitle,
 )
 lazy from overture.schemas.art import ArtCandidate, SaveArtRequest
-lazy from overture.schemas.public_dataset import CatalogDraftUpdate
+lazy from overture.schemas.catalog import CatalogDraftUpdate
 lazy from overture.schemas.themes import SelectThemeRequest, ThemeSearchResult
 lazy from overture.schemas.tmdb import TmdbItemResult
 lazy from overture.services.art import service as art_module
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
+lazy from overture.services.catalog.browse import CatalogBrowser
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
-lazy from overture.services.public_dataset.browse import CatalogBrowser
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
@@ -51,10 +51,10 @@ lazy from overture.services.tmdb_items import TmdbItemsService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
-lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
+lazy from tests.bulk_helpers import disable_catalog, enable_catalog
 lazy from tests.factories import (
+    CatalogItemFactory,
     MediaItemFactory,
-    PublicDatasetItemFactory,
     seed_art_slot,
 )
 lazy from tests.publishers import NullEventPublisher
@@ -322,14 +322,14 @@ async def test_catalog_members_use_only_catalog_or_draft_artwork(
     db_session.add_all(
         [
             library,
-            PublicDatasetItem(
+            CatalogItem(
                 media_type=MediaType.MOVIE,
                 tmdb_id=603,
                 title="Catalog Matrix",
                 year=1999,
                 poster_url=f"{IMAGE}/catalog.jpg",
             ),
-            PublicDatasetItem(
+            CatalogItem(
                 media_type=MediaType.MOVIE,
                 tmdb_id=604,
                 title="Unillustrated movie",
@@ -338,7 +338,7 @@ async def test_catalog_members_use_only_catalog_or_draft_artwork(
         ]
     )
     await db_session.commit()
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     browser = CatalogBrowser(database=database, app_config=tmdb_config)
     service = _service(app_config=tmdb_config, database=database, tmdb=Tmdb())
 
@@ -382,7 +382,7 @@ async def test_catalog_members_use_only_catalog_or_draft_artwork(
 async def test_catalog_member_artwork_requires_an_enabled_catalog(
     db_session: AsyncSession, *, tmdb_config: Settings, database: Database
 ) -> None:
-    await disable_public_dataset(db_session)
+    await disable_catalog(db_session)
     with pytest.raises(PublicServiceError, match="disabled") as exc:
         await _service(app_config=tmdb_config, database=database).collection(
             2344, artwork_source="overturedb"
@@ -500,7 +500,7 @@ async def test_the_first_theme_stores_the_item_with_the_video_details(
 
 async def test_unsaved_items_see_overturedb_artwork(
     db_session: AsyncSession,
-    public_dataset_item_factory: PublicDatasetItemFactory,
+    catalog_item_factory: CatalogItemFactory,
     *,
     tmdb_config: Settings,
     database: Database,
@@ -508,12 +508,12 @@ async def test_unsaved_items_see_overturedb_artwork(
     db_session.add_all(
         [
             TaskSchedule(
-                task_name="public_dataset",
+                task_name="catalog",
                 enabled=True,
                 cron_expression="0 0 * * *",
                 payload={},
             ),
-            public_dataset_item_factory(
+            catalog_item_factory(
                 tmdb_id=603,
                 poster_url=f"{IMAGE}/curated.jpg",
                 youtube_id_overturedb="abcDEF123_4",
@@ -524,11 +524,11 @@ async def test_unsaved_items_see_overturedb_artwork(
     service = _service(app_config=tmdb_config, database=database)
 
     sources = await service.art_sources(MediaType.MOVIE, 603, ArtType.POSTER, None)
-    dataset = await service.public_dataset_sources(MediaType.MOVIE, 603)
+    catalog = await service.catalog_sources(MediaType.MOVIE, 603)
 
     assert [c.url for c in sources.sources["overturedb"]] == [f"{IMAGE}/curated.jpg"]
-    assert dataset.item is not None
-    assert dataset.item.youtube_id_overturedb == "abcDEF123_4"
+    assert catalog.item is not None
+    assert catalog.item.youtube_id_overturedb == "abcDEF123_4"
     assert await _items(db_session) == []
 
 

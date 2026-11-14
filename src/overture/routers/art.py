@@ -1,4 +1,4 @@
-"""Art router - sources, save, clear, match.
+"""Art router - uploads, removal options, and each item art slot.
 
 Every artwork operation acts on one slot, and a slot is named by the item, the
 art type, and - for season artwork - the season. All three live in the request
@@ -29,7 +29,7 @@ lazy from .parameters import (
     SeasonIdQuery,
 )
 
-router = APIRouter(prefix="/art", tags=["art"], dependencies=[Depends(require_auth)])
+router = APIRouter(tags=["art"], dependencies=[Depends(require_auth)])
 
 #: The upload body is the image file itself.
 _IMAGE_BODY: dict[str, Any] = {
@@ -60,7 +60,7 @@ async def _image_body(request: Request) -> bytes:
     return bytes(data)
 
 
-@router.post("/uploads", openapi_extra=_IMAGE_BODY)
+@router.post("/art/uploads", openapi_extra=_IMAGE_BODY)
 async def upload_art(request: Request, uploads: ArtUploadsDep) -> ArtUploadResponse:
     """Keep an uploaded JPEG or PNG until an art slot selects it.
 
@@ -70,7 +70,7 @@ async def upload_art(request: Request, uploads: ArtUploadsDep) -> ArtUploadRespo
     return await uploads.store(await _image_body(request))
 
 
-@router.get("/{item_id}/{art_type}/sources")
+@router.get("/library/items/{item_id}/art/{art_type}/sources")
 async def get_art_sources(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
@@ -85,7 +85,7 @@ async def get_art_sources(
     )
 
 
-@router.post("/{item_id}/{art_type}/match")
+@router.post("/library/items/{item_id}/art/{art_type}/match")
 async def match_art(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
@@ -104,7 +104,7 @@ async def match_art(
     )
 
 
-@router.put("/{item_id}/{art_type}")
+@router.put("/library/items/{item_id}/art/{art_type}")
 async def save_art(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
@@ -124,7 +124,7 @@ async def save_art(
     )
 
 
-@router.delete("/{item_id}/{art_type}")
+@router.delete("/library/items/{item_id}/art/{art_type}")
 async def remove_art(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
@@ -139,7 +139,7 @@ async def remove_art(
     return await art.remove(item_id, art_type, removal, season_id)
 
 
-@router.delete("/{item_id}")
+@router.delete("/library/items/{item_id}/art")
 async def remove_all_art(
     item_id: ItemIdPath, removal: Annotated[AssetRemoval, Query()], art: ArtDep
 ) -> StatusResponse:
@@ -147,7 +147,7 @@ async def remove_all_art(
     return await art.remove(item_id, "art", removal)
 
 
-@router.post("/removal-options")
+@router.post("/art/removal-options")
 async def get_removal_options(
     target: RemovalTarget, remover: RemoverDep
 ) -> RemovalOptions:

@@ -17,7 +17,7 @@ export const realtimeSnapshot = snapshotFixture({
   epoch,
   server_time: new Date().toISOString(),
 });
-const publicDatasetStatus = realtimeSnapshot.public_dataset_status;
+const catalogStatus = realtimeSnapshot.catalog_status;
 
 /** The app's live connection, driven from the test. */
 export interface Realtime {
@@ -140,19 +140,17 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       await page.route("**/api/bulk/assets/schedules", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/media-server/libraries", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/sync/schedules", (route) => route.fulfill({ json: [] }));
-      await page.route("**/api/art/*/*/sources**", (route) =>
+      await page.route("**/api/library/items/*/art/*/sources**", (route) =>
         route.fulfill({ json: { current_url: null, sources: {} } }),
       );
-      await page.route("**/api/public-dataset/status", (route) =>
-        route.fulfill({ json: publicDatasetStatus }),
-      );
-      await page.route("**/api/public-dataset/items/*/record", (route) =>
+      await page.route("**/api/catalog/status", (route) => route.fulfill({ json: catalogStatus }));
+      await page.route("**/api/catalog/items/*/record", (route) =>
         route.fulfill({ json: { found: false } }),
       );
-      await page.route("**/api/public-dataset/items/*/sources", (route) =>
+      await page.route("**/api/catalog/items/*/sources", (route) =>
         route.fulfill({ json: { found: false, item: null, seasons: [] } }),
       );
-      await page.route("**/api/public-dataset/sync", (route) =>
+      await page.route("**/api/catalog/sync", (route) =>
         route.fulfill({ json: { status: "started" } }),
       );
       await page.route("**/api/realtime/snapshot", (route) =>

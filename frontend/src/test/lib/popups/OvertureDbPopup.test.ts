@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCatalogCountsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { queryClient } from "../../../lib/rest/queryClient";
 import OvertureDbPopup from "../../../lib/popups/OvertureDbPopup.svelte";
-import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
-import { publicDatasetSyncState } from "../../../lib/stores/jobStates.svelte";
+import { storeCatalogStatus } from "../../../lib/realtime/cache";
+import { catalogSyncState } from "../../../lib/stores/jobStates.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { catalogRow, publicDatasetStatus } from "../../helpers/fixtures";
+import { catalogRow, catalogStatus } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -15,7 +15,7 @@ const failure = (detail: string) => () => Response.json({ detail }, { status: 40
 
 describe("OvertureDbPopup", () => {
   beforeEach(() => {
-    publicDatasetSyncState.reset();
+    catalogSyncState.reset();
     uiState.closePopup();
     queryClient.clear();
     queryClient.setQueryData(getCatalogCountsOptions().queryKey, {
@@ -27,7 +27,7 @@ describe("OvertureDbPopup", () => {
   });
 
   it("renders the repository as a clickable link when configured", () => {
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
 
     renderWithQueryClient(OvertureDbPopup);
 
@@ -38,7 +38,7 @@ describe("OvertureDbPopup", () => {
   });
 
   it("renders Not configured when repo_url is absent", () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: false, repo_url: "" }));
+    storeCatalogStatus(catalogStatus({ enabled: false, repo_url: "" }));
 
     renderWithQueryClient(OvertureDbPopup);
 
@@ -47,8 +47,8 @@ describe("OvertureDbPopup", () => {
   });
 
   it("shows what the last sync imported", () => {
-    storePublicDatasetStatus(
-      publicDatasetStatus({
+    storeCatalogStatus(
+      catalogStatus({
         last_stats: {
           entries: 130,
           collections: 0,
@@ -75,7 +75,7 @@ describe("OvertureDbPopup", () => {
   });
 
   it("counts drafts across movies, shows and collections beside export", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
     queryClient.setQueryData(getCatalogCountsOptions().queryKey, {
       movies: 1,
       shows: 1,
@@ -89,7 +89,7 @@ describe("OvertureDbPopup", () => {
   });
 
   it("links a bulk contribution issue to the repository", () => {
-    storePublicDatasetStatus(publicDatasetStatus({ repo_url: "https://github.com/o/r/" }));
+    storeCatalogStatus(catalogStatus({ repo_url: "https://github.com/o/r/" }));
 
     renderWithQueryClient(OvertureDbPopup);
 
@@ -102,23 +102,23 @@ describe("OvertureDbPopup", () => {
 
 describe("OvertureDbPopup sync", () => {
   beforeEach(() => {
-    publicDatasetSyncState.reset();
+    catalogSyncState.reset();
   });
 
   it("starts a sync and shows it running from the click", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
-    mockFetchRoutes({ "/api/public-dataset/sync": { status: "started" } });
+    storeCatalogStatus(catalogStatus({ enabled: true }));
+    mockFetchRoutes({ "/api/catalog/sync": { status: "started" } });
     renderWithQueryClient(OvertureDbPopup);
 
     await fireEvent.click(screen.getByRole("button", { name: "Sync OvertureDB Now" }));
 
     expect(await screen.findByRole("button", { name: "Syncing..." })).toBeDisabled();
-    expect(publicDatasetSyncState.running).toBe(true);
+    expect(catalogSyncState.running).toBe(true);
   });
 
   it("explains a sync refused because OvertureDB is disabled on the server", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
-    mockFetchRoutes({ "/api/public-dataset/sync": { status: "disabled" } });
+    storeCatalogStatus(catalogStatus({ enabled: true }));
+    mockFetchRoutes({ "/api/catalog/sync": { status: "disabled" } });
     renderWithQueryClient(OvertureDbPopup);
 
     await fireEvent.click(screen.getByRole("button", { name: "Sync OvertureDB Now" }));
@@ -126,12 +126,12 @@ describe("OvertureDbPopup sync", () => {
     expect(
       await screen.findByText("Enable OvertureDB in Settings before syncing."),
     ).toBeInTheDocument();
-    expect(publicDatasetSyncState.running).toBe(false);
+    expect(catalogSyncState.running).toBe(false);
   });
 
   it("reports a failed sync request", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
-    mockFetchRoutes({ "/api/public-dataset/sync": failure("Catalog unreachable") });
+    storeCatalogStatus(catalogStatus({ enabled: true }));
+    mockFetchRoutes({ "/api/catalog/sync": failure("Catalog unreachable") });
     renderWithQueryClient(OvertureDbPopup);
 
     await fireEvent.click(screen.getByRole("button", { name: "Sync OvertureDB Now" }));
@@ -143,7 +143,7 @@ describe("OvertureDbPopup sync", () => {
 
 describe("OvertureDbPopup export", () => {
   beforeEach(() => {
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:selections"),
@@ -158,7 +158,7 @@ describe("OvertureDbPopup export", () => {
 
   it("downloads the saved selections as a ZIP", async () => {
     mockFetchRoutes({
-      "/api/public-dataset/export": () =>
+      "/api/catalog/export": () =>
         new Response("zip", { headers: { "Content-Type": "application/zip" } }),
     });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
@@ -176,7 +176,7 @@ describe("OvertureDbPopup export", () => {
   });
 
   it("offers to discard the exported drafts once the export succeeds", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    storeCatalogStatus(catalogStatus({ enabled: true }));
     queryClient.setQueryData(getCatalogCountsOptions().queryKey, {
       movies: 2,
       shows: 0,
@@ -184,9 +184,9 @@ describe("OvertureDbPopup export", () => {
       drafts: 1,
     });
     const { calls } = mockFetchRoutes({
-      "/api/public-dataset/export": () =>
+      "/api/catalog/export": () =>
         new Response("zip", { headers: { "Content-Type": "application/zip" } }),
-      "/api/public-dataset/catalog": ({ url }: { url: string }) =>
+      "/api/catalog/catalog": ({ url }: { url: string }) =>
         Response.json(
           url.includes("media_type=movie")
             ? [
@@ -195,7 +195,7 @@ describe("OvertureDbPopup export", () => {
               ]
             : [],
         ),
-      "/api/public-dataset/catalog/movie/drafts": { discarded: 1 },
+      "/api/catalog/catalog/movie/drafts": { discarded: 1 },
     });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     renderWithQueryClient(OvertureDbPopup);
@@ -212,7 +212,7 @@ describe("OvertureDbPopup export", () => {
   });
 
   it("reports a failed export", async () => {
-    mockFetchRoutes({ "/api/public-dataset/export": failure("Nothing to export") });
+    mockFetchRoutes({ "/api/catalog/export": failure("Nothing to export") });
     renderWithQueryClient(OvertureDbPopup);
 
     await fireEvent.click(screen.getByRole("button", { name: "Export selections" }));

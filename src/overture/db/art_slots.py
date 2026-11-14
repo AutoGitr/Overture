@@ -10,7 +10,7 @@ lazy from dataclasses import asdict, dataclass, fields
 lazy from functools import cache
 lazy from operator import attrgetter
 
-lazy from ..domain import ArtDrawing, ArtSource, ArtType
+lazy from ..domain import ArtGeneration, ArtSource, ArtType
 lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
 lazy from .models.art import ArtSlot
 lazy from .models.media_collection import MediaCollection
@@ -238,7 +238,7 @@ def select_upload(
     art_type: ArtType,
     upload_hash: str,
     *,
-    generated: ArtDrawing | None = None,
+    generated: ArtGeneration | None = None,
 ) -> ArtSlot:
     """Record the kept image *upload_hash* as the slot's selected artwork.
 
@@ -254,11 +254,11 @@ def select_upload(
     return slot
 
 
-def art_drawing(slot: ArtSlot) -> ArtDrawing | None:
+def art_generation(slot: ArtSlot) -> ArtGeneration | None:
     """Return how Overture drew the slot's art, if it drew it."""
     if slot.generated_style is None:
         return None
-    return ArtDrawing(slot.generated_style, title_only=slot.generated_title_only)
+    return ArtGeneration(slot.generated_style, title_only=slot.generated_title_only)
 
 
 def clear_art_selection(

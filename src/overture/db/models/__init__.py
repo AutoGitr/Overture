@@ -5,6 +5,12 @@ lazy from .art import (
     ArtSlot,
 )
 lazy from .auth_session import AuthSession
+lazy from .catalog import (
+    CatalogCollection,
+    CatalogDraft,
+    CatalogItem,
+    CatalogItemSeason,
+)
 lazy from .collection_group import CollectionGroup
 lazy from .collection_rule import CollectionRule
 lazy from .download_job import DownloadJob
@@ -17,12 +23,6 @@ lazy from .media_collection import (
 )
 lazy from .media_item import MediaItem
 lazy from .notification import NotificationRule
-lazy from .public_dataset import (
-    PublicDatasetCollection,
-    PublicDatasetDraft,
-    PublicDatasetItem,
-    PublicDatasetSeason,
-)
 lazy from .saved_schedule import SavedSchedule
 lazy from .schedule import TaskSchedule
 lazy from .season import Season
@@ -43,6 +43,10 @@ __all__ = [
     "AppSettingsBase",
     "ArtSlot",
     "AuthSession",
+    "CatalogCollection",
+    "CatalogDraft",
+    "CatalogItem",
+    "CatalogItemSeason",
     "CollectionGroup",
     "CollectionLibrary",
     "CollectionRule",
@@ -56,10 +60,6 @@ __all__ = [
     "MediaItem",
     "MediaItemTerm",
     "NotificationRule",
-    "PublicDatasetCollection",
-    "PublicDatasetDraft",
-    "PublicDatasetItem",
-    "PublicDatasetSeason",
     "SavedSchedule",
     "Season",
     "TaskSchedule",

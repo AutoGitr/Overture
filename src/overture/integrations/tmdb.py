@@ -6,8 +6,8 @@ lazy from typing import Any, Literal
 
 lazy import httpx2
 
+lazy from ..catalog_contract.contract import canonical_art_url
 lazy from ..config import Settings
-lazy from ..dataset_contract.contract import canonical_art_url
 lazy from ..domain import (
     ArtSource,
     ArtType,

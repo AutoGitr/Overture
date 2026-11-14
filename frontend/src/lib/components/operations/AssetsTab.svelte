@@ -17,7 +17,7 @@
     createBulkAssetsScheduleMutation,
     deleteBulkAssetsScheduleMutation,
     getLibrariesOptions,
-    getPublicDatasetStatusOptions,
+    getCatalogStatusOptions,
     listBulkAssetsSchedulesOptions,
     runBulkAssetsScheduleMutation,
     startBulkAssetsMutation,
@@ -52,8 +52,8 @@
     ...getLibrariesOptions({ query: { media_type: "show" } }),
     enabled: isActive,
   }));
-  const datasetStatusQuery = createQuery(() => ({
-    ...getPublicDatasetStatusOptions(),
+  const catalogStatusQuery = createQuery(() => ({
+    ...getCatalogStatusOptions(),
     enabled: isActive,
   }));
   let movieLibraries: LibrarySectionRead[] = $derived(movieLibrariesQuery.data ?? []);
@@ -64,10 +64,10 @@
     return error ? errorMessage(error, "Failed to load libraries") : "";
   });
   // Sources OvertureDB serves are left out while it is off, never unselected.
-  let publicDatasetEnabled = $derived(!!datasetStatusQuery.data?.enabled);
-  let publicDatasetStatusError = $derived(
-    datasetStatusQuery.error
-      ? errorMessage(datasetStatusQuery.error, "Failed to load OvertureDB status")
+  let catalogEnabled = $derived(!!catalogStatusQuery.data?.enabled);
+  let catalogStatusError = $derived(
+    catalogStatusQuery.error
+      ? errorMessage(catalogStatusQuery.error, "Failed to load OvertureDB status")
       : "",
   );
   let collectionsSupported = $derived(settingsState.current.collections_supported);
@@ -76,7 +76,7 @@
     movieLibraries: () => movieLibraries,
     showLibraries: () => showLibraries,
     librariesLoaded: () => librariesLoaded,
-    publicDatasetEnabled: () => publicDatasetEnabled,
+    catalogEnabled: () => catalogEnabled,
     collectionGroups,
   });
   const config = form.config;
@@ -197,7 +197,7 @@
         void movieLibrariesQuery.refetch();
         void showLibrariesQuery.refetch();
       }}
-      {publicDatasetStatusError}
+      {catalogStatusError}
     />
 
     <AssetsSchedulePanel

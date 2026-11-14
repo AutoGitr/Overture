@@ -57,7 +57,7 @@ function filterItems(
   return filterSidebarItems({
     items,
     filters: defaultFilters(),
-    publicDatasetEnabled: false,
+    catalogEnabled: false,
     searchQuery: "",
     searchField: "title",
     sortField: "title",
@@ -115,18 +115,18 @@ describe("sidebar domain helpers", () => {
 describe("sidebar item filters", () => {
   it("finds catalog ID mismatches only while OvertureDB is enabled", () => {
     const items = [
-      mediaItem({ title: "Mismatch", public_dataset_ids: "mismatching" }),
-      mediaItem({ id: 2, title: "Match", public_dataset_ids: "matching", tmdb_id: 1 }),
+      mediaItem({ title: "Mismatch", catalog_ids: "mismatching" }),
+      mediaItem({ id: 2, title: "Match", catalog_ids: "matching", tmdb_id: 1 }),
       mediaItem({ id: 3, title: "Uncatalogued" }),
     ];
     const filters = withFilters({ metadataIssues: { flags: ["id_mismatch"], mode: "all" } });
-    expect(filterItems(items, { filters, publicDatasetEnabled: true })).toEqual(["Mismatch"]);
+    expect(filterItems(items, { filters, catalogEnabled: true })).toEqual(["Mismatch"]);
     expect(
       filterItems(items, {
         filters: withFilters({
           metadataIssues: { flags: ["id_mismatch", "no_tmdb_id"], mode: "any" },
         }),
-        publicDatasetEnabled: true,
+        catalogEnabled: true,
       }),
     ).toEqual(["Mismatch", "Uncatalogued"]);
     expect(filterItems(items, { filters })).toEqual(["Match", "Mismatch", "Uncatalogued"]);
@@ -257,22 +257,22 @@ describe("sidebar item filters", () => {
     expect(bySource("poster", ["plex", "tpdb"])).toEqual(["Curated", "Poster DB"]);
   });
 
-  it("filters items by themerrdb status only while the public dataset is enabled", () => {
+  it("filters items by themerrdb status only while the catalog is enabled", () => {
     const items = [
-      mediaItem({ id: 1, title: "Theme match", public_dataset_themerrdb: true }),
-      mediaItem({ id: 2, title: "No Theme", public_dataset_themerrdb: false }),
+      mediaItem({ id: 1, title: "Theme match", catalog_themerrdb: true }),
+      mediaItem({ id: 2, title: "No Theme", catalog_themerrdb: false }),
     ];
 
     expect(
       filterItems(items, {
         filters: withFilters({ themerrDb: "complete" }),
-        publicDatasetEnabled: true,
+        catalogEnabled: true,
       }),
     ).toEqual(["Theme match"]);
     expect(
       filterItems(items, {
         filters: withFilters({ themerrDb: "incomplete" }),
-        publicDatasetEnabled: true,
+        catalogEnabled: true,
       }),
     ).toEqual(["No Theme"]);
     expect(filterItems(items, { filters: withFilters({ themerrDb: "complete" }) })).toHaveLength(2);
@@ -493,7 +493,7 @@ function filterCollections(
   return filterSidebarCollections({
     collections,
     filters: withFilters({}),
-    publicDatasetEnabled: false,
+    catalogEnabled: false,
     searchQuery: "",
     searchField: "title",
     sortField: "title",
@@ -570,11 +570,11 @@ describe("sidebar collections", () => {
         title: "Failing",
         managed: true,
         sync_failed: true,
-        public_dataset_complete: true,
+        catalog_complete: true,
       }),
     ];
-    const titles = (filters: Partial<FilterState>, publicDatasetEnabled = false) =>
-      filterCollections(collections, { filters: withFilters(filters), publicDatasetEnabled });
+    const titles = (filters: Partial<FilterState>, catalogEnabled = false) =>
+      filterCollections(collections, { filters: withFilters(filters), catalogEnabled });
 
     expect(titles({ collectionMembers: "unmanaged" })).toEqual(["Manual"]);
     expect(titles({ collectionMembers: "managed" })).toEqual(["Failing", "Smart"]);
@@ -765,7 +765,7 @@ describe("catalog filters", () => {
 
 describe("sidebar registry", () => {
   it("places every list's filters in order, libraries first and status filters together", () => {
-    const options = { tab: "movie", datasetEnabled: true, smart: true, collections: true } as const;
+    const options = { tab: "movie", catalogEnabled: true, smart: true, collections: true } as const;
     const groups = Object.keys(FILTER_GROUPS);
     for (const mode of ["items", "collections"] as const) {
       const sections = filterSections(mode, options);
@@ -781,7 +781,7 @@ describe("sidebar registry", () => {
     expect(filterSections("collections", { ...options, smart: false })).not.toContain(
       "collectionKind",
     );
-    expect(filterSections("items", { ...options, datasetEnabled: false })).not.toContain(
+    expect(filterSections("items", { ...options, catalogEnabled: false })).not.toContain(
       "overtureDb",
     );
     const items = filterSections("items", options);

@@ -16,10 +16,10 @@ lazy from overture.domain import (
     MediaType,
     ThemeBulkSource,
 )
+lazy from overture.services.catalog import downloads as module
+lazy from overture.services.catalog.index import CatalogPick
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
-lazy from overture.services.public_dataset import downloads as module
-lazy from overture.services.public_dataset.index import CatalogPick
 lazy from overture.utils.locks import KeyedLock
 lazy from tests.factories import (
     MediaItemFactory,
@@ -101,7 +101,7 @@ class FakeIndex:
 
 
 def _bind_index(monkeypatch: pytest.MonkeyPatch, index: FakeIndex) -> None:
-    """Hand the module a ready-made index instead of querying the dataset."""
+    """Hand the module a ready-made index instead of querying the catalog."""
 
     class _Builder:
         @staticmethod
@@ -110,7 +110,7 @@ def _bind_index(monkeypatch: pytest.MonkeyPatch, index: FakeIndex) -> None:
         ) -> FakeIndex:
             return index
 
-    monkeypatch.setattr(module, "PublicDatasetIndex", _Builder)
+    monkeypatch.setattr(module, "CatalogIndex", _Builder)
 
 
 async def test_returns_default_stats_when_item_ids_empty(

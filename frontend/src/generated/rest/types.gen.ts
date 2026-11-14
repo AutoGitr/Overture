@@ -107,8 +107,8 @@ export type AppSettingsRead = {
      * Collection Delete When Inactive
      */
     collection_delete_when_inactive: boolean;
-    collection_drawn_style: ArtStyle;
     collection_filtering_default: CollectionFiltering;
+    collection_generated_style: ArtStyle;
     /**
      * Collection Import Unmanaged
      */
@@ -286,8 +286,8 @@ export type AppSettingsUpdate = {
      * Collection Delete When Inactive
      */
     collection_delete_when_inactive?: boolean | null;
-    collection_drawn_style?: ArtStyle | null;
     collection_filtering_default?: CollectionFiltering | null;
+    collection_generated_style?: ArtStyle | null;
     /**
      * Collection Import Unmanaged
      */
@@ -527,7 +527,7 @@ export type ArtSourcesResponse = {
 /**
  * ArtStyle
  *
- * How Overture draws artwork it generates from a title.
+ * The colours of art Overture generates from a title.
  */
 export type ArtStyle = 'dark' | 'light' | 'accent';
 
@@ -683,10 +683,10 @@ export type AutoAdvance = 'off' | 'slots' | 'slots_and_items';
  * What a sync does for a collection's art slot that has none chosen.
  *
  * The value names what it tries, first to last: the catalog sources whose
- * best art it takes, then, with ``draw``, art drawn from the title. OvertureDB's
- * curated art always comes before TMDB's.
+ * best art it takes, then, with ``generate``, art generated from the title.
+ * OvertureDB's curated art always comes before TMDB's.
  */
-export type AutoArt = 'off' | 'overturedb' | 'tmdb' | 'overturedb_tmdb' | 'overturedb_draw' | 'tmdb_draw' | 'overturedb_tmdb_draw' | 'draw';
+export type AutoArt = 'off' | 'overturedb' | 'tmdb' | 'overturedb_tmdb' | 'overturedb_generate' | 'tmdb_generate' | 'overturedb_tmdb_generate' | 'generate';
 
 /**
  * AutoUnmonitor
@@ -1311,6 +1311,18 @@ export type CatalogDraftsDiscarded = {
 };
 
 /**
+ * CatalogEnabledRequest
+ *
+ * Validate the catalog enabled request payload.
+ */
+export type CatalogEnabledRequest = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+};
+
+/**
  * CatalogEntry
  *
  * A catalog entry; fields its media type does not carry are ``None``.
@@ -1467,6 +1479,149 @@ export type CatalogEntryRow = {
 export type CatalogMediaType = 'movie' | 'show' | 'collection';
 
 /**
+ * CatalogRecord
+ *
+ * Catalog record response.
+ */
+export type CatalogRecord = {
+    collection: CatalogRecordCollection | null;
+    /**
+     * Found
+     */
+    found: boolean;
+    item: CatalogRecordItem | null;
+    /**
+     * Seasons
+     */
+    seasons: Array<CatalogRecordSeason>;
+};
+
+/**
+ * CatalogRecordCollection
+ *
+ * Persisted catalog collection record.
+ */
+export type CatalogRecordCollection = {
+    /**
+     * Background Url
+     */
+    background_url: string | null;
+    /**
+     * Catalog Synced At
+     */
+    catalog_synced_at: string | null;
+    /**
+     * Id
+     */
+    id: number | null;
+    /**
+     * No Theme
+     */
+    no_theme: boolean;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
+};
+
+/**
+ * CatalogRecordItem
+ *
+ * Persisted catalog item record.
+ */
+export type CatalogRecordItem = {
+    /**
+     * Background Url
+     */
+    background_url: string | null;
+    /**
+     * Catalog Synced At
+     */
+    catalog_synced_at: string | null;
+    /**
+     * Id
+     */
+    id: number | null;
+    /**
+     * Imdb Id
+     */
+    imdb_id: string | null;
+    media_type: MediaType;
+    /**
+     * No Theme
+     */
+    no_theme: boolean;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
+    /**
+     * Title
+     */
+    title: string | null;
+    /**
+     * Tmdb Id
+     */
+    tmdb_id: number | null;
+    /**
+     * Tvdb Id
+     */
+    tvdb_id: number | null;
+    /**
+     * Year
+     */
+    year: number | null;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
+};
+
+/**
+ * CatalogRecordSeason
+ *
+ * Persisted catalog season record.
+ */
+export type CatalogRecordSeason = {
+    /**
+     * Catalog Item Id
+     */
+    catalog_item_id: number;
+    /**
+     * Id
+     */
+    id: number | null;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
+    /**
+     * Season Num
+     */
+    season_num: number;
+};
+
+/**
  * CatalogSeason
  *
  * One season poster of a catalog entry.
@@ -1480,6 +1635,160 @@ export type CatalogSeason = {
      * Season Num
      */
     season_num: number;
+};
+
+/**
+ * CatalogSeasonSource
+ *
+ * One catalog season source.
+ */
+export type CatalogSeasonSource = {
+    candidate: ArtCandidate;
+    /**
+     * Poster Url
+     */
+    poster_url: string;
+    /**
+     * Season Id
+     */
+    season_id: number | null;
+    /**
+     * Season Num
+     */
+    season_num: number;
+};
+
+/**
+ * CatalogSources
+ *
+ * Catalog sources response.
+ */
+export type CatalogSources = {
+    /**
+     * Found
+     */
+    found: boolean;
+    item: CatalogSourcesItem | null;
+    /**
+     * Seasons
+     */
+    seasons: Array<CatalogSeasonSource>;
+};
+
+/**
+ * CatalogSourcesItem
+ *
+ * Item-level catalog sources.
+ */
+export type CatalogSourcesItem = {
+    /**
+     * Background
+     */
+    background: Array<ArtCandidate>;
+    /**
+     * Entry Key
+     */
+    entry_key: string | null;
+    /**
+     * Poster
+     */
+    poster: Array<ArtCandidate>;
+    /**
+     * Youtube Id Overturedb
+     */
+    youtube_id_overturedb: string | null;
+    /**
+     * Youtube Id Themerrdb
+     */
+    youtube_id_themerrdb: string | null;
+};
+
+/**
+ * CatalogStatus
+ *
+ * Catalog status response.
+ */
+export type CatalogStatus = {
+    /**
+     * Catalog Url
+     */
+    catalog_url: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    last_stats: CatalogSyncStats | null;
+    last_status: CatalogSyncOutcome;
+    /**
+     * Last Synced At
+     */
+    last_synced_at: string | null;
+    /**
+     * Next Run
+     */
+    next_run: string | null;
+    /**
+     * Repo Url
+     */
+    repo_url: string;
+    /**
+     * Timezone
+     */
+    timezone: string;
+};
+
+export type CatalogSyncOutcome = 'never_synced' | 'success' | 'failed';
+
+/**
+ * CatalogSyncStats
+ *
+ * What one catalog sync downloaded and imported.
+ */
+export type CatalogSyncStats = {
+    /**
+     * Catalog Bytes
+     */
+    catalog_bytes: number;
+    /**
+     * Catalog Uncompressed Bytes
+     */
+    catalog_uncompressed_bytes: number;
+    /**
+     * Catalog Url
+     */
+    catalog_url: string | null;
+    /**
+     * Collections
+     */
+    collections: number;
+    /**
+     * Entries
+     */
+    entries: number;
+    /**
+     * Errors
+     */
+    errors: number;
+    /**
+     * Items
+     */
+    items: number;
+    /**
+     * Movies
+     */
+    movies: number;
+    /**
+     * Schema Version
+     */
+    schema_version: number | null;
+    /**
+     * Seasons
+     */
+    seasons: number;
+    /**
+     * Shows
+     */
+    shows: number;
 };
 
 /**
@@ -1650,7 +1959,7 @@ export type CollectionDefaults = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    drawn_style: ArtStyle | null;
+    generated_style: ArtStyle | null;
     /**
      * Home Order
      */
@@ -1731,6 +2040,10 @@ export type CollectionDetail = {
      */
     below_minimum: boolean;
     /**
+     * Catalog Complete
+     */
+    catalog_complete: boolean;
+    /**
      * Catalog Entry Key
      */
     catalog_entry_key: string | null;
@@ -1738,6 +2051,10 @@ export type CollectionDetail = {
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
+    /**
+     * Catalog Themerrdb
+     */
+    catalog_themerrdb: boolean;
     /**
      * Catalog Title
      */
@@ -1825,14 +2142,6 @@ export type CollectionDetail = {
      * Poster Width
      */
     poster_width: number | null;
-    /**
-     * Public Dataset Complete
-     */
-    public_dataset_complete: boolean;
-    /**
-     * Public Dataset Themerrdb
-     */
-    public_dataset_themerrdb: boolean;
     rule: CollectionRuleRead | null;
     /**
      * Server Added At
@@ -2159,7 +2468,7 @@ export type CollectionGroupPolicyInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    drawn_style?: ArtStyle | null;
+    generated_style?: ArtStyle | null;
     generator?: CollectionGeneratorInput | null;
     /**
      * Home Order
@@ -2225,7 +2534,7 @@ export type CollectionGroupPolicyOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    drawn_style: ArtStyle | null;
+    generated_style: ArtStyle | null;
     generator: CollectionGeneratorOutput | null;
     /**
      * Home Order
@@ -2547,9 +2856,17 @@ export type CollectionRead = {
      */
     below_minimum: boolean;
     /**
+     * Catalog Complete
+     */
+    catalog_complete: boolean;
+    /**
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
+    /**
+     * Catalog Themerrdb
+     */
+    catalog_themerrdb: boolean;
     /**
      * Child Count
      */
@@ -2628,14 +2945,6 @@ export type CollectionRead = {
      * Poster Width
      */
     poster_width: number | null;
-    /**
-     * Public Dataset Complete
-     */
-    public_dataset_complete: boolean;
-    /**
-     * Public Dataset Themerrdb
-     */
-    public_dataset_themerrdb: boolean;
     /**
      * Server Added At
      */
@@ -2792,7 +3101,7 @@ export type CollectionRuleRead = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    drawn_style: ArtStyle | null;
+    generated_style: ArtStyle | null;
     /**
      * Home Order
      */
@@ -2874,7 +3183,7 @@ export type CollectionRuleWriteInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    drawn_style?: ArtStyle | null;
+    generated_style?: ArtStyle | null;
     /**
      * Home Order
      */
@@ -2947,7 +3256,7 @@ export type CollectionRuleWriteOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    drawn_style: ArtStyle | null;
+    generated_style: ArtStyle | null;
     /**
      * Home Order
      */
@@ -3137,22 +3446,6 @@ export type CollectionThemeDownloadTarget = {
      * Title
      */
     title: string;
-};
-
-/**
- * CollectionThemeSources
- *
- * The catalog's theme candidates for a matched collection.
- */
-export type CollectionThemeSources = {
-    /**
-     * Youtube Id Overturedb
-     */
-    youtube_id_overturedb: string | null;
-    /**
-     * Youtube Id Themerrdb
-     */
-    youtube_id_themerrdb: string | null;
 };
 
 /**
@@ -3734,7 +4027,7 @@ export type ItemSelectionResponse = {
  *
  * One kind of job; its value names it in events and persisted results.
  */
-export type JobKind = 'sync' | 'bulk_art' | 'bulk_theme' | 'asset_scan' | 'server_audit' | 'server_audit_fix' | 'public_dataset_sync' | 'backup' | 'download';
+export type JobKind = 'sync' | 'bulk_art' | 'bulk_theme' | 'asset_scan' | 'server_audit' | 'server_audit_fix' | 'catalog_sync' | 'backup' | 'download';
 
 /**
  * JobLogEntry
@@ -4073,13 +4366,27 @@ export type MediaItemRead = {
      */
     background_width: number | null;
     /**
+     * Catalog Complete
+     */
+    catalog_complete: boolean;
+    /**
      * Catalog Entry Key
      */
     catalog_entry_key: string | null;
     /**
+     * Catalog Ids
+     *
+     * Whether the IDs the item and its OvertureDB entry both carry agree; null without an entry.
+     */
+    catalog_ids: 'matching' | 'mismatching' | null;
+    /**
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
+    /**
+     * Catalog Themerrdb
+     */
+    catalog_themerrdb: boolean;
     /**
      * Created At
      */
@@ -4151,20 +4458,6 @@ export type MediaItemRead = {
      * Poster Width
      */
     poster_width: number | null;
-    /**
-     * Public Dataset Complete
-     */
-    public_dataset_complete: boolean;
-    /**
-     * Public Dataset Ids
-     *
-     * Whether the IDs the item and its OvertureDB entry both carry agree; null without an entry.
-     */
-    public_dataset_ids: 'matching' | 'mismatching' | null;
-    /**
-     * Public Dataset Themerrdb
-     */
-    public_dataset_themerrdb: boolean;
     season_posters_status: AssetStatus;
     /**
      * Server Added At
@@ -4387,315 +4680,6 @@ export type NotifyCompleted = 'never' | 'always' | 'changes' | 'errors';
 export type NotifyService = 'apprise' | 'discord' | 'slack' | 'telegram' | 'gotify' | 'ntfy';
 
 /**
- * PublicDatasetEnabledRequest
- *
- * Validate the public dataset enabled request payload.
- */
-export type PublicDatasetEnabledRequest = {
-    /**
-     * Enabled
-     */
-    enabled: boolean;
-};
-
-/**
- * PublicDatasetRecord
- *
- * Public dataset record response.
- */
-export type PublicDatasetRecord = {
-    collection: PublicDatasetRecordCollection | null;
-    /**
-     * Found
-     */
-    found: boolean;
-    item: PublicDatasetRecordItem | null;
-    /**
-     * Seasons
-     */
-    seasons: Array<PublicDatasetRecordSeason>;
-};
-
-/**
- * PublicDatasetRecordCollection
- *
- * Persisted public dataset collection record.
- */
-export type PublicDatasetRecordCollection = {
-    /**
-     * Background Url
-     */
-    background_url: string | null;
-    /**
-     * Catalog Synced At
-     */
-    catalog_synced_at: string | null;
-    /**
-     * Id
-     */
-    id: number | null;
-    /**
-     * No Theme
-     */
-    no_theme: boolean;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Tmdb Id
-     */
-    tmdb_id: number;
-    /**
-     * Youtube Id Overturedb
-     */
-    youtube_id_overturedb: string | null;
-    /**
-     * Youtube Id Themerrdb
-     */
-    youtube_id_themerrdb: string | null;
-};
-
-/**
- * PublicDatasetRecordItem
- *
- * Persisted public dataset item record.
- */
-export type PublicDatasetRecordItem = {
-    /**
-     * Background Url
-     */
-    background_url: string | null;
-    /**
-     * Catalog Synced At
-     */
-    catalog_synced_at: string | null;
-    /**
-     * Id
-     */
-    id: number | null;
-    /**
-     * Imdb Id
-     */
-    imdb_id: string | null;
-    media_type: MediaType;
-    /**
-     * No Theme
-     */
-    no_theme: boolean;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Title
-     */
-    title: string | null;
-    /**
-     * Tmdb Id
-     */
-    tmdb_id: number | null;
-    /**
-     * Tvdb Id
-     */
-    tvdb_id: number | null;
-    /**
-     * Year
-     */
-    year: number | null;
-    /**
-     * Youtube Id Overturedb
-     */
-    youtube_id_overturedb: string | null;
-    /**
-     * Youtube Id Themerrdb
-     */
-    youtube_id_themerrdb: string | null;
-};
-
-/**
- * PublicDatasetRecordSeason
- *
- * Persisted public dataset season record.
- */
-export type PublicDatasetRecordSeason = {
-    /**
-     * Id
-     */
-    id: number | null;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Public Dataset Item Id
-     */
-    public_dataset_item_id: number;
-    /**
-     * Season Num
-     */
-    season_num: number;
-};
-
-/**
- * PublicDatasetSeasonSource
- *
- * One public dataset season source.
- */
-export type PublicDatasetSeasonSource = {
-    candidate: ArtCandidate;
-    /**
-     * Poster Url
-     */
-    poster_url: string;
-    /**
-     * Season Id
-     */
-    season_id: number | null;
-    /**
-     * Season Num
-     */
-    season_num: number;
-};
-
-/**
- * PublicDatasetSources
- *
- * Public dataset sources response.
- */
-export type PublicDatasetSources = {
-    /**
-     * Found
-     */
-    found: boolean;
-    item: PublicDatasetSourcesItem | null;
-    /**
-     * Seasons
-     */
-    seasons: Array<PublicDatasetSeasonSource>;
-};
-
-/**
- * PublicDatasetSourcesItem
- *
- * Item-level public dataset sources.
- */
-export type PublicDatasetSourcesItem = {
-    /**
-     * Background
-     */
-    background: Array<ArtCandidate>;
-    /**
-     * Entry Key
-     */
-    entry_key: string | null;
-    /**
-     * Poster
-     */
-    poster: Array<ArtCandidate>;
-    /**
-     * Youtube Id Overturedb
-     */
-    youtube_id_overturedb: string | null;
-    /**
-     * Youtube Id Themerrdb
-     */
-    youtube_id_themerrdb: string | null;
-};
-
-/**
- * PublicDatasetStatus
- *
- * Public dataset status response.
- */
-export type PublicDatasetStatus = {
-    /**
-     * Catalog Url
-     */
-    catalog_url: string;
-    /**
-     * Enabled
-     */
-    enabled: boolean;
-    last_stats: PublicDatasetSyncStats | null;
-    last_status: PublicDatasetSyncOutcome;
-    /**
-     * Last Synced At
-     */
-    last_synced_at: string | null;
-    /**
-     * Next Run
-     */
-    next_run: string | null;
-    /**
-     * Repo Url
-     */
-    repo_url: string;
-    /**
-     * Timezone
-     */
-    timezone: string;
-};
-
-export type PublicDatasetSyncOutcome = 'never_synced' | 'success' | 'failed';
-
-/**
- * PublicDatasetSyncStats
- *
- * What one catalog sync downloaded and imported.
- */
-export type PublicDatasetSyncStats = {
-    /**
-     * Catalog Bytes
-     */
-    catalog_bytes: number;
-    /**
-     * Catalog Uncompressed Bytes
-     */
-    catalog_uncompressed_bytes: number;
-    /**
-     * Catalog Url
-     */
-    catalog_url: string | null;
-    /**
-     * Collections
-     */
-    collections: number;
-    /**
-     * Entries
-     */
-    entries: number;
-    /**
-     * Errors
-     */
-    errors: number;
-    /**
-     * Items
-     */
-    items: number;
-    /**
-     * Movies
-     */
-    movies: number;
-    /**
-     * Schema Version
-     */
-    schema_version: number | null;
-    /**
-     * Seasons
-     */
-    seasons: number;
-    /**
-     * Shows
-     */
-    shows: number;
-};
-
-/**
  * PublicError
  *
  * Stable public error object.
@@ -4780,6 +4764,7 @@ export type RealtimeJobSnapshot = {
  * Process-local realtime state at one event-stream watermark.
  */
 export type RealtimeSnapshot = {
+    catalog_status: CatalogStatus;
     /**
      * Downloads
      */
@@ -4793,7 +4778,6 @@ export type RealtimeSnapshot = {
      */
     jobs: Array<RealtimeJobSnapshot>;
     media_server: MediaServerStatus;
-    public_dataset_status: PublicDatasetStatus;
     /**
      * Sequence
      */
@@ -4897,7 +4881,7 @@ export type RenameStatus = 'renamed' | 'conflict' | 'error';
 /**
  * SaveArtRequest
  *
- * The chosen artwork for one slot: a link, an uploaded image or one to draw.
+ * The chosen artwork for one slot: a link, an uploaded image or one to generate.
  *
  * Which slot it is comes from the request path and query, so the body only
  * carries the picture itself.
@@ -6337,279 +6321,6 @@ export type UploadArtResponses = {
 
 export type UploadArtResponse = UploadArtResponses[keyof UploadArtResponses];
 
-export type RemoveAllArtData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-    };
-    query?: {
-        /**
-         * Forget
-         */
-        forget?: boolean;
-        /**
-         * Delete File
-         */
-        delete_file?: boolean;
-        /**
-         * Delete From Server
-         */
-        delete_from_server?: boolean;
-    };
-    url: '/api/art/{item_id}';
-};
-
-export type RemoveAllArtErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RemoveAllArtError = RemoveAllArtErrors[keyof RemoveAllArtErrors];
-
-export type RemoveAllArtResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type RemoveAllArtResponse = RemoveAllArtResponses[keyof RemoveAllArtResponses];
-
-export type RemoveArtData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-        /**
-         * Which artwork slot
-         */
-        art_type: ArtType;
-    };
-    query?: {
-        /**
-         * Forget
-         */
-        forget?: boolean;
-        /**
-         * Delete File
-         */
-        delete_file?: boolean;
-        /**
-         * Delete From Server
-         */
-        delete_from_server?: boolean;
-        /**
-         * Season Id
-         *
-         * The season; omit to remove every season's poster
-         */
-        season_id?: number | null;
-    };
-    url: '/api/art/{item_id}/{art_type}';
-};
-
-export type RemoveArtErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RemoveArtError = RemoveArtErrors[keyof RemoveArtErrors];
-
-export type RemoveArtResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type RemoveArtResponse = RemoveArtResponses[keyof RemoveArtResponses];
-
-export type SaveArtData = {
-    body: SaveArtRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-        /**
-         * Which artwork slot
-         */
-        art_type: ArtType;
-    };
-    query?: {
-        /**
-         * Season Id
-         *
-         * Required for season_poster, ignored otherwise
-         */
-        season_id?: number | null;
-    };
-    url: '/api/art/{item_id}/{art_type}';
-};
-
-export type SaveArtErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SaveArtError = SaveArtErrors[keyof SaveArtErrors];
-
-export type SaveArtResponses = {
-    /**
-     * Successful Response
-     */
-    200: ItemSelectionResponse;
-};
-
-export type SaveArtResponse = SaveArtResponses[keyof SaveArtResponses];
-
-export type MatchArtData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-        /**
-         * Which artwork slot
-         */
-        art_type: ArtType;
-    };
-    query?: {
-        /**
-         * Season Id
-         *
-         * Required for season_poster, ignored otherwise
-         */
-        season_id?: number | null;
-        /**
-         * Threshold
-         */
-        threshold?: number;
-    };
-    url: '/api/art/{item_id}/{art_type}/match';
-};
-
-export type MatchArtErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type MatchArtError = MatchArtErrors[keyof MatchArtErrors];
-
-export type MatchArtResponses = {
-    /**
-     * Successful Response
-     */
-    200: ArtMatchResponse;
-};
-
-export type MatchArtResponse = MatchArtResponses[keyof MatchArtResponses];
-
-export type GetArtSourcesData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-        /**
-         * Which artwork slot
-         */
-        art_type: ArtType;
-    };
-    query?: {
-        /**
-         * Season Id
-         *
-         * Required for season_poster, ignored otherwise
-         */
-        season_id?: number | null;
-    };
-    url: '/api/art/{item_id}/{art_type}/sources';
-};
-
-export type GetArtSourcesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetArtSourcesError = GetArtSourcesErrors[keyof GetArtSourcesErrors];
-
-export type GetArtSourcesResponses = {
-    /**
-     * Successful Response
-     */
-    200: ArtSourcesResponse;
-};
-
-export type GetArtSourcesResponse = GetArtSourcesResponses[keyof GetArtSourcesResponses];
-
 export type RenameAssetsData = {
     body: RenameRequest;
     headers?: {
@@ -7343,6 +7054,625 @@ export type StopBulkAssetsResponses = {
 };
 
 export type StopBulkAssetsResponse = StopBulkAssetsResponses[keyof StopBulkAssetsResponses];
+
+export type ListCatalogEntriesData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+    };
+    url: '/api/catalog/catalog';
+};
+
+export type ListCatalogEntriesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListCatalogEntriesError = ListCatalogEntriesErrors[keyof ListCatalogEntriesErrors];
+
+export type ListCatalogEntriesResponses = {
+    /**
+     * Response List Catalog Entries
+     *
+     * Successful Response
+     */
+    200: Array<CatalogEntryRow>;
+};
+
+export type ListCatalogEntriesResponse = ListCatalogEntriesResponses[keyof ListCatalogEntriesResponses];
+
+export type GetCatalogCountsData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/catalog/catalog/counts';
+};
+
+export type GetCatalogCountsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogCountsError = GetCatalogCountsErrors[keyof GetCatalogCountsErrors];
+
+export type GetCatalogCountsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogCounts;
+};
+
+export type GetCatalogCountsResponse = GetCatalogCountsResponses[keyof GetCatalogCountsResponses];
+
+export type DiscardCatalogDraftsData = {
+    body: CatalogDraftsDiscard;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+    };
+    query?: never;
+    url: '/api/catalog/catalog/{media_type}/drafts';
+};
+
+export type DiscardCatalogDraftsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DiscardCatalogDraftsError = DiscardCatalogDraftsErrors[keyof DiscardCatalogDraftsErrors];
+
+export type DiscardCatalogDraftsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogDraftsDiscarded;
+};
+
+export type DiscardCatalogDraftsResponse = DiscardCatalogDraftsResponses[keyof DiscardCatalogDraftsResponses];
+
+export type GetCatalogEntryData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/catalog/catalog/{media_type}/{entry_key}';
+};
+
+export type GetCatalogEntryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogEntryError = GetCatalogEntryErrors[keyof GetCatalogEntryErrors];
+
+export type GetCatalogEntryResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogEntryDetail;
+};
+
+export type GetCatalogEntryResponse = GetCatalogEntryResponses[keyof GetCatalogEntryResponses];
+
+export type DiscardCatalogDraftData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/catalog/catalog/{media_type}/{entry_key}/draft';
+};
+
+export type DiscardCatalogDraftErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DiscardCatalogDraftError = DiscardCatalogDraftErrors[keyof DiscardCatalogDraftErrors];
+
+export type DiscardCatalogDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogEntryDetail;
+};
+
+export type DiscardCatalogDraftResponse = DiscardCatalogDraftResponses[keyof DiscardCatalogDraftResponses];
+
+export type SaveCatalogDraftData = {
+    body: CatalogDraftUpdate;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/catalog/catalog/{media_type}/{entry_key}/draft';
+};
+
+export type SaveCatalogDraftErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SaveCatalogDraftError = SaveCatalogDraftErrors[keyof SaveCatalogDraftErrors];
+
+export type SaveCatalogDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogEntryDetail;
+};
+
+export type SaveCatalogDraftResponse = SaveCatalogDraftResponses[keyof SaveCatalogDraftResponses];
+
+export type GetCatalogEntryRecordData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Entry kind
+         */
+        media_type: CatalogMediaType;
+        /**
+         * Entry Key
+         *
+         * Entry name, as its file is named: tmdb-603
+         */
+        entry_key: string;
+    };
+    query?: never;
+    url: '/api/catalog/catalog/{media_type}/{entry_key}/record';
+};
+
+export type GetCatalogEntryRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogEntryRecordError = GetCatalogEntryRecordErrors[keyof GetCatalogEntryRecordErrors];
+
+export type GetCatalogEntryRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogRecord;
+};
+
+export type GetCatalogEntryRecordResponse = GetCatalogEntryRecordResponses[keyof GetCatalogEntryRecordResponses];
+
+export type GetCatalogCollectionIssueData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query?: never;
+    url: '/api/catalog/collections/{collection_id}/issue';
+};
+
+export type GetCatalogCollectionIssueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogCollectionIssueError = GetCatalogCollectionIssueErrors[keyof GetCatalogCollectionIssueErrors];
+
+export type GetCatalogCollectionIssueResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContributionIssue;
+};
+
+export type GetCatalogCollectionIssueResponse = GetCatalogCollectionIssueResponses[keyof GetCatalogCollectionIssueResponses];
+
+export type GetCatalogCollectionRecordData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Collection Id
+         *
+         * Collection ID
+         */
+        collection_id: number;
+    };
+    query?: never;
+    url: '/api/catalog/collections/{collection_id}/record';
+};
+
+export type GetCatalogCollectionRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogCollectionRecordError = GetCatalogCollectionRecordErrors[keyof GetCatalogCollectionRecordErrors];
+
+export type GetCatalogCollectionRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogRecord;
+};
+
+export type GetCatalogCollectionRecordResponse = GetCatalogCollectionRecordResponses[keyof GetCatalogCollectionRecordResponses];
+
+export type SetCatalogEnabledData = {
+    body: CatalogEnabledRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/catalog/enabled';
+};
+
+export type SetCatalogEnabledErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SetCatalogEnabledError = SetCatalogEnabledErrors[keyof SetCatalogEnabledErrors];
+
+export type SetCatalogEnabledResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogStatus;
+};
+
+export type SetCatalogEnabledResponse = SetCatalogEnabledResponses[keyof SetCatalogEnabledResponses];
+
+export type ExportCatalogSelectionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/catalog/export';
+};
+
+export type ExportCatalogSelectionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExportCatalogSelectionsError = ExportCatalogSelectionsErrors[keyof ExportCatalogSelectionsErrors];
+
+export type ExportCatalogSelectionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: Blob | File;
+};
+
+export type ExportCatalogSelectionsResponse = ExportCatalogSelectionsResponses[keyof ExportCatalogSelectionsResponses];
+
+export type GetCatalogItemIssueData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/catalog/items/{item_id}/issue';
+};
+
+export type GetCatalogItemIssueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogItemIssueError = GetCatalogItemIssueErrors[keyof GetCatalogItemIssueErrors];
+
+export type GetCatalogItemIssueResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContributionIssue;
+};
+
+export type GetCatalogItemIssueResponse = GetCatalogItemIssueResponses[keyof GetCatalogItemIssueResponses];
+
+export type GetCatalogRecordData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/catalog/items/{item_id}/record';
+};
+
+export type GetCatalogRecordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogRecordError = GetCatalogRecordErrors[keyof GetCatalogRecordErrors];
+
+export type GetCatalogRecordResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogRecord;
+};
+
+export type GetCatalogRecordResponse = GetCatalogRecordResponses[keyof GetCatalogRecordResponses];
+
+export type GetCatalogSourcesData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/catalog/items/{item_id}/sources';
+};
+
+export type GetCatalogSourcesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogSourcesError = GetCatalogSourcesErrors[keyof GetCatalogSourcesErrors];
+
+export type GetCatalogSourcesResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogSources;
+};
+
+export type GetCatalogSourcesResponse = GetCatalogSourcesResponses[keyof GetCatalogSourcesResponses];
+
+export type GetCatalogStatusData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/catalog/status';
+};
+
+export type GetCatalogStatusErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCatalogStatusError = GetCatalogStatusErrors[keyof GetCatalogStatusErrors];
+
+export type GetCatalogStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogStatus;
+};
+
+export type GetCatalogStatusResponse = GetCatalogStatusResponses[keyof GetCatalogStatusResponses];
+
+export type SyncCatalogNowData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/catalog/sync';
+};
+
+export type SyncCatalogNowErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SyncCatalogNowError = SyncCatalogNowErrors[keyof SyncCatalogNowErrors];
+
+export type SyncCatalogNowResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type SyncCatalogNowResponse = SyncCatalogNowResponses[keyof SyncCatalogNowResponses];
 
 export type ListCollectionsData = {
     body?: never;
@@ -8972,46 +9302,6 @@ export type SaveCollectionRuleResponses = {
 
 export type SaveCollectionRuleResponse = SaveCollectionRuleResponses[keyof SaveCollectionRuleResponses];
 
-export type GetCollectionSourcesData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Collection Id
-         *
-         * Collection ID
-         */
-        collection_id: number;
-    };
-    query?: never;
-    url: '/api/collections/{collection_id}/sources';
-};
-
-export type GetCollectionSourcesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetCollectionSourcesError = GetCollectionSourcesErrors[keyof GetCollectionSourcesErrors];
-
-export type GetCollectionSourcesResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionThemeSources;
-};
-
-export type GetCollectionSourcesResponse = GetCollectionSourcesResponses[keyof GetCollectionSourcesResponses];
-
 export type RemoveCollectionThemeData = {
     body?: never;
     headers?: {
@@ -9481,6 +9771,279 @@ export type GetItemResponses = {
 
 export type GetItemResponse = GetItemResponses[keyof GetItemResponses];
 
+export type RemoveAllArtData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
+    url: '/api/library/items/{item_id}/art';
+};
+
+export type RemoveAllArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RemoveAllArtError = RemoveAllArtErrors[keyof RemoveAllArtErrors];
+
+export type RemoveAllArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type RemoveAllArtResponse = RemoveAllArtResponses[keyof RemoveAllArtResponses];
+
+export type RemoveArtData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+        /**
+         * Season Id
+         *
+         * The season; omit to remove every season's poster
+         */
+        season_id?: number | null;
+    };
+    url: '/api/library/items/{item_id}/art/{art_type}';
+};
+
+export type RemoveArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RemoveArtError = RemoveArtErrors[keyof RemoveArtErrors];
+
+export type RemoveArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type RemoveArtResponse = RemoveArtResponses[keyof RemoveArtResponses];
+
+export type SaveArtData = {
+    body: SaveArtRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query?: {
+        /**
+         * Season Id
+         *
+         * Required for season_poster, ignored otherwise
+         */
+        season_id?: number | null;
+    };
+    url: '/api/library/items/{item_id}/art/{art_type}';
+};
+
+export type SaveArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SaveArtError = SaveArtErrors[keyof SaveArtErrors];
+
+export type SaveArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: ItemSelectionResponse;
+};
+
+export type SaveArtResponse = SaveArtResponses[keyof SaveArtResponses];
+
+export type MatchArtData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query?: {
+        /**
+         * Season Id
+         *
+         * Required for season_poster, ignored otherwise
+         */
+        season_id?: number | null;
+        /**
+         * Threshold
+         */
+        threshold?: number;
+    };
+    url: '/api/library/items/{item_id}/art/{art_type}/match';
+};
+
+export type MatchArtErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MatchArtError = MatchArtErrors[keyof MatchArtErrors];
+
+export type MatchArtResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtMatchResponse;
+};
+
+export type MatchArtResponse = MatchArtResponses[keyof MatchArtResponses];
+
+export type GetArtSourcesData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+        /**
+         * Which artwork slot
+         */
+        art_type: ArtType;
+    };
+    query?: {
+        /**
+         * Season Id
+         *
+         * Required for season_poster, ignored otherwise
+         */
+        season_id?: number | null;
+    };
+    url: '/api/library/items/{item_id}/art/{art_type}/sources';
+};
+
+export type GetArtSourcesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetArtSourcesError = GetArtSourcesErrors[keyof GetArtSourcesErrors];
+
+export type GetArtSourcesResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtSourcesResponse;
+};
+
+export type GetArtSourcesResponse = GetArtSourcesResponses[keyof GetArtSourcesResponses];
+
 export type ServeLocalImageData = {
     body?: never;
     headers?: {
@@ -9712,6 +10275,99 @@ export type GetSeasonsResponses = {
 };
 
 export type GetSeasonsResponse = GetSeasonsResponses[keyof GetSeasonsResponses];
+
+export type RemoveThemeData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+        /**
+         * Delete File
+         */
+        delete_file?: boolean;
+        /**
+         * Delete From Server
+         */
+        delete_from_server?: boolean;
+    };
+    url: '/api/library/items/{item_id}/theme';
+};
+
+export type RemoveThemeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RemoveThemeError = RemoveThemeErrors[keyof RemoveThemeErrors];
+
+export type RemoveThemeResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type RemoveThemeResponse = RemoveThemeResponses[keyof RemoveThemeResponses];
+
+export type SelectThemeData = {
+    body: SelectThemeRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Item Id
+         *
+         * Media item ID
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/library/items/{item_id}/theme';
+};
+
+export type SelectThemeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SelectThemeError = SelectThemeErrors[keyof SelectThemeErrors];
+
+export type SelectThemeResponses = {
+    /**
+     * Successful Response
+     */
+    200: ItemSelectionResponse;
+};
+
+export type SelectThemeResponse = SelectThemeResponses[keyof SelectThemeResponses];
 
 export type GetLibrariesData = {
     body?: never;
@@ -10039,625 +10695,6 @@ export type SendTestNotificationResponses = {
 };
 
 export type SendTestNotificationResponse = SendTestNotificationResponses[keyof SendTestNotificationResponses];
-
-export type ListCatalogEntriesData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query: {
-        /**
-         * Entry kind
-         */
-        media_type: CatalogMediaType;
-    };
-    url: '/api/public-dataset/catalog';
-};
-
-export type ListCatalogEntriesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListCatalogEntriesError = ListCatalogEntriesErrors[keyof ListCatalogEntriesErrors];
-
-export type ListCatalogEntriesResponses = {
-    /**
-     * Response List Catalog Entries
-     *
-     * Successful Response
-     */
-    200: Array<CatalogEntryRow>;
-};
-
-export type ListCatalogEntriesResponse = ListCatalogEntriesResponses[keyof ListCatalogEntriesResponses];
-
-export type GetCatalogCountsData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/public-dataset/catalog/counts';
-};
-
-export type GetCatalogCountsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetCatalogCountsError = GetCatalogCountsErrors[keyof GetCatalogCountsErrors];
-
-export type GetCatalogCountsResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogCounts;
-};
-
-export type GetCatalogCountsResponse = GetCatalogCountsResponses[keyof GetCatalogCountsResponses];
-
-export type DiscardCatalogDraftsData = {
-    body: CatalogDraftsDiscard;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Entry kind
-         */
-        media_type: CatalogMediaType;
-    };
-    query?: never;
-    url: '/api/public-dataset/catalog/{media_type}/drafts';
-};
-
-export type DiscardCatalogDraftsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DiscardCatalogDraftsError = DiscardCatalogDraftsErrors[keyof DiscardCatalogDraftsErrors];
-
-export type DiscardCatalogDraftsResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogDraftsDiscarded;
-};
-
-export type DiscardCatalogDraftsResponse = DiscardCatalogDraftsResponses[keyof DiscardCatalogDraftsResponses];
-
-export type GetCatalogEntryData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Entry kind
-         */
-        media_type: CatalogMediaType;
-        /**
-         * Entry Key
-         *
-         * Entry name, as its file is named: tmdb-603
-         */
-        entry_key: string;
-    };
-    query?: never;
-    url: '/api/public-dataset/catalog/{media_type}/{entry_key}';
-};
-
-export type GetCatalogEntryErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetCatalogEntryError = GetCatalogEntryErrors[keyof GetCatalogEntryErrors];
-
-export type GetCatalogEntryResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogEntryDetail;
-};
-
-export type GetCatalogEntryResponse = GetCatalogEntryResponses[keyof GetCatalogEntryResponses];
-
-export type DiscardCatalogDraftData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Entry kind
-         */
-        media_type: CatalogMediaType;
-        /**
-         * Entry Key
-         *
-         * Entry name, as its file is named: tmdb-603
-         */
-        entry_key: string;
-    };
-    query?: never;
-    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/draft';
-};
-
-export type DiscardCatalogDraftErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DiscardCatalogDraftError = DiscardCatalogDraftErrors[keyof DiscardCatalogDraftErrors];
-
-export type DiscardCatalogDraftResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogEntryDetail;
-};
-
-export type DiscardCatalogDraftResponse = DiscardCatalogDraftResponses[keyof DiscardCatalogDraftResponses];
-
-export type SaveCatalogDraftData = {
-    body: CatalogDraftUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Entry kind
-         */
-        media_type: CatalogMediaType;
-        /**
-         * Entry Key
-         *
-         * Entry name, as its file is named: tmdb-603
-         */
-        entry_key: string;
-    };
-    query?: never;
-    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/draft';
-};
-
-export type SaveCatalogDraftErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SaveCatalogDraftError = SaveCatalogDraftErrors[keyof SaveCatalogDraftErrors];
-
-export type SaveCatalogDraftResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogEntryDetail;
-};
-
-export type SaveCatalogDraftResponse = SaveCatalogDraftResponses[keyof SaveCatalogDraftResponses];
-
-export type GetCatalogEntryRecordData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Entry kind
-         */
-        media_type: CatalogMediaType;
-        /**
-         * Entry Key
-         *
-         * Entry name, as its file is named: tmdb-603
-         */
-        entry_key: string;
-    };
-    query?: never;
-    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/record';
-};
-
-export type GetCatalogEntryRecordErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetCatalogEntryRecordError = GetCatalogEntryRecordErrors[keyof GetCatalogEntryRecordErrors];
-
-export type GetCatalogEntryRecordResponses = {
-    /**
-     * Successful Response
-     */
-    200: PublicDatasetRecord;
-};
-
-export type GetCatalogEntryRecordResponse = GetCatalogEntryRecordResponses[keyof GetCatalogEntryRecordResponses];
-
-export type GetPublicDatasetCollectionIssueData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Collection Id
-         *
-         * Collection ID
-         */
-        collection_id: number;
-    };
-    query?: never;
-    url: '/api/public-dataset/collections/{collection_id}/issue';
-};
-
-export type GetPublicDatasetCollectionIssueErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPublicDatasetCollectionIssueError = GetPublicDatasetCollectionIssueErrors[keyof GetPublicDatasetCollectionIssueErrors];
-
-export type GetPublicDatasetCollectionIssueResponses = {
-    /**
-     * Successful Response
-     */
-    200: ContributionIssue;
-};
-
-export type GetPublicDatasetCollectionIssueResponse = GetPublicDatasetCollectionIssueResponses[keyof GetPublicDatasetCollectionIssueResponses];
-
-export type GetPublicDatasetCollectionRecordData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Collection Id
-         *
-         * Collection ID
-         */
-        collection_id: number;
-    };
-    query?: never;
-    url: '/api/public-dataset/collections/{collection_id}/record';
-};
-
-export type GetPublicDatasetCollectionRecordErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPublicDatasetCollectionRecordError = GetPublicDatasetCollectionRecordErrors[keyof GetPublicDatasetCollectionRecordErrors];
-
-export type GetPublicDatasetCollectionRecordResponses = {
-    /**
-     * Successful Response
-     */
-    200: PublicDatasetRecord;
-};
-
-export type GetPublicDatasetCollectionRecordResponse = GetPublicDatasetCollectionRecordResponses[keyof GetPublicDatasetCollectionRecordResponses];
-
-export type SetPublicDatasetEnabledData = {
-    body: PublicDatasetEnabledRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/public-dataset/enabled';
-};
-
-export type SetPublicDatasetEnabledErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SetPublicDatasetEnabledError = SetPublicDatasetEnabledErrors[keyof SetPublicDatasetEnabledErrors];
-
-export type SetPublicDatasetEnabledResponses = {
-    /**
-     * Successful Response
-     */
-    200: PublicDatasetStatus;
-};
-
-export type SetPublicDatasetEnabledResponse = SetPublicDatasetEnabledResponses[keyof SetPublicDatasetEnabledResponses];
-
-export type ExportPublicDatasetSelectionsData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/public-dataset/export';
-};
-
-export type ExportPublicDatasetSelectionsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ExportPublicDatasetSelectionsError = ExportPublicDatasetSelectionsErrors[keyof ExportPublicDatasetSelectionsErrors];
-
-export type ExportPublicDatasetSelectionsResponses = {
-    /**
-     * Successful Response
-     */
-    200: Blob | File;
-};
-
-export type ExportPublicDatasetSelectionsResponse = ExportPublicDatasetSelectionsResponses[keyof ExportPublicDatasetSelectionsResponses];
-
-export type GetPublicDatasetItemIssueData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-    };
-    query?: never;
-    url: '/api/public-dataset/items/{item_id}/issue';
-};
-
-export type GetPublicDatasetItemIssueErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPublicDatasetItemIssueError = GetPublicDatasetItemIssueErrors[keyof GetPublicDatasetItemIssueErrors];
-
-export type GetPublicDatasetItemIssueResponses = {
-    /**
-     * Successful Response
-     */
-    200: ContributionIssue;
-};
-
-export type GetPublicDatasetItemIssueResponse = GetPublicDatasetItemIssueResponses[keyof GetPublicDatasetItemIssueResponses];
-
-export type GetPublicDatasetRecordData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-    };
-    query?: never;
-    url: '/api/public-dataset/items/{item_id}/record';
-};
-
-export type GetPublicDatasetRecordErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPublicDatasetRecordError = GetPublicDatasetRecordErrors[keyof GetPublicDatasetRecordErrors];
-
-export type GetPublicDatasetRecordResponses = {
-    /**
-     * Successful Response
-     */
-    200: PublicDatasetRecord;
-};
-
-export type GetPublicDatasetRecordResponse = GetPublicDatasetRecordResponses[keyof GetPublicDatasetRecordResponses];
-
-export type GetPublicDatasetSourcesData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-    };
-    query?: never;
-    url: '/api/public-dataset/items/{item_id}/sources';
-};
-
-export type GetPublicDatasetSourcesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPublicDatasetSourcesError = GetPublicDatasetSourcesErrors[keyof GetPublicDatasetSourcesErrors];
-
-export type GetPublicDatasetSourcesResponses = {
-    /**
-     * Successful Response
-     */
-    200: PublicDatasetSources;
-};
-
-export type GetPublicDatasetSourcesResponse = GetPublicDatasetSourcesResponses[keyof GetPublicDatasetSourcesResponses];
-
-export type GetPublicDatasetStatusData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/public-dataset/status';
-};
-
-export type GetPublicDatasetStatusErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPublicDatasetStatusError = GetPublicDatasetStatusErrors[keyof GetPublicDatasetStatusErrors];
-
-export type GetPublicDatasetStatusResponses = {
-    /**
-     * Successful Response
-     */
-    200: PublicDatasetStatus;
-};
-
-export type GetPublicDatasetStatusResponse = GetPublicDatasetStatusResponses[keyof GetPublicDatasetStatusResponses];
-
-export type SyncPublicDatasetNowData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/public-dataset/sync';
-};
-
-export type SyncPublicDatasetNowErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SyncPublicDatasetNowError = SyncPublicDatasetNowErrors[keyof SyncPublicDatasetNowErrors];
-
-export type SyncPublicDatasetNowResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type SyncPublicDatasetNowResponse = SyncPublicDatasetNowResponses[keyof SyncPublicDatasetNowResponses];
 
 export type ReadyData = {
     body?: never;
@@ -11311,99 +11348,6 @@ export type SearchYoutubeResponses = {
 
 export type SearchYoutubeResponse = SearchYoutubeResponses[keyof SearchYoutubeResponses];
 
-export type RemoveThemeData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-    };
-    query?: {
-        /**
-         * Forget
-         */
-        forget?: boolean;
-        /**
-         * Delete File
-         */
-        delete_file?: boolean;
-        /**
-         * Delete From Server
-         */
-        delete_from_server?: boolean;
-    };
-    url: '/api/themes/{item_id}';
-};
-
-export type RemoveThemeErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RemoveThemeError = RemoveThemeErrors[keyof RemoveThemeErrors];
-
-export type RemoveThemeResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type RemoveThemeResponse = RemoveThemeResponses[keyof RemoveThemeResponses];
-
-export type SelectThemeData = {
-    body: SelectThemeRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Item Id
-         *
-         * Media item ID
-         */
-        item_id: number;
-    };
-    query?: never;
-    url: '/api/themes/{item_id}';
-};
-
-export type SelectThemeErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type SelectThemeError = SelectThemeErrors[keyof SelectThemeErrors];
-
-export type SelectThemeResponses = {
-    /**
-     * Successful Response
-     */
-    200: ItemSelectionResponse;
-};
-
-export type SelectThemeResponse = SelectThemeResponses[keyof SelectThemeResponses];
-
 export type GetTmdbCollectionData = {
     body?: never;
     headers?: {
@@ -11685,7 +11629,7 @@ export type GetTmdbArtSourcesResponses = {
 
 export type GetTmdbArtSourcesResponse = GetTmdbArtSourcesResponses[keyof GetTmdbArtSourcesResponses];
 
-export type GetTmdbPublicDatasetSourcesData = {
+export type GetTmdbCatalogSourcesData = {
     body?: never;
     headers?: {
         /**
@@ -11708,26 +11652,26 @@ export type GetTmdbPublicDatasetSourcesData = {
         tmdb_id: number;
     };
     query?: never;
-    url: '/api/tmdb/{media_type}/{tmdb_id}/public-dataset';
+    url: '/api/tmdb/{media_type}/{tmdb_id}/catalog';
 };
 
-export type GetTmdbPublicDatasetSourcesErrors = {
+export type GetTmdbCatalogSourcesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type GetTmdbPublicDatasetSourcesError = GetTmdbPublicDatasetSourcesErrors[keyof GetTmdbPublicDatasetSourcesErrors];
+export type GetTmdbCatalogSourcesError = GetTmdbCatalogSourcesErrors[keyof GetTmdbCatalogSourcesErrors];
 
-export type GetTmdbPublicDatasetSourcesResponses = {
+export type GetTmdbCatalogSourcesResponses = {
     /**
      * Successful Response
      */
-    200: PublicDatasetSources;
+    200: CatalogSources;
 };
 
-export type GetTmdbPublicDatasetSourcesResponse = GetTmdbPublicDatasetSourcesResponses[keyof GetTmdbPublicDatasetSourcesResponses];
+export type GetTmdbCatalogSourcesResponse = GetTmdbCatalogSourcesResponses[keyof GetTmdbCatalogSourcesResponses];
 
 export type SelectTmdbThemeData = {
     body: SelectThemeRequest;

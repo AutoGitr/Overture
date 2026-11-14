@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getPublicDatasetStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { getCatalogStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import type { DownloadJobEvent } from "../../../generated/ws";
 import {
   applyRestCachePolicy,
@@ -13,7 +13,7 @@ import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
   itemDownload,
   mediaItem,
-  publicDatasetStatus,
+  catalogStatus,
   wsMessage as message,
 } from "../../helpers/fixtures";
 
@@ -65,14 +65,14 @@ describe("realtime REST cache policy", () => {
 
   it("invalidates collections and catalog links when matching or membership changes", () => {
     applyRestCachePolicy(message("collections.changed", null));
-    expect(rest.invalidateTags).toHaveBeenCalledWith(["collections", "public-dataset", "library"]);
+    expect(rest.invalidateTags).toHaveBeenCalledWith(["collections", "catalog", "library"]);
   });
 
   it("refreshes individual collection changes while coalescing full sync updates", () => {
     applyRestCachePolicy(message("collection.updated", { collection_id: 1 }));
     expect(rest.invalidateTags).toHaveBeenCalledExactlyOnceWith([
       "collections",
-      "public-dataset",
+      "catalog",
       "library",
     ]);
     rest.invalidateTags.mockClear();
@@ -126,12 +126,12 @@ describe("realtime REST cache policy", () => {
     expect(rest.removeLibraryItem).toHaveBeenCalledWith(3);
   });
 
-  it("stores a new dataset status and re-reads what depends on it", () => {
-    const status = publicDatasetStatus({ enabled: false });
+  it("stores a new catalog status and re-reads what depends on it", () => {
+    const status = catalogStatus({ enabled: false });
 
-    applyRestCachePolicy(message("public-dataset.updated", status));
+    applyRestCachePolicy(message("catalog.updated", status));
 
-    expect(queryClient.getQueryData(getPublicDatasetStatusOptions().queryKey)).toEqual(status);
+    expect(queryClient.getQueryData(getCatalogStatusOptions().queryKey)).toEqual(status);
     expect(rest.invalidateReconnectData).toHaveBeenCalledOnce();
   });
 

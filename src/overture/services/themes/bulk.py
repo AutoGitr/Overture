@@ -42,11 +42,11 @@ lazy from ..bulk_common import (
     report_unloaded,
     scope_chunks,
 )
+lazy from ..catalog.index import NO_THEME, CatalogIndex
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..local_assets.service import LocalAssets
-lazy from ..public_dataset.index import NO_THEME, PublicDatasetIndex
 lazy from .collection_bulk import plan_collection_themes, run_collection_themes
 lazy from .youtube_resolver import YouTubeResolver
 
@@ -58,11 +58,11 @@ type ThemeTarget = None
 
 @dataclass(frozen=True, slots=True)
 class BulkThemeWork:
-    """One batch of items to visit, and the dataset rows and history for them."""
+    """One batch of items to visit, and the catalog rows and history for them."""
 
     items: list[MediaItem]
     search_format: str
-    public_index: PublicDatasetIndex = field(default_factory=PublicDatasetIndex.empty)
+    public_index: CatalogIndex = field(default_factory=CatalogIndex.empty)
     #: YouTube IDs that failed to download before, by item ID.
     failed_themes: dict[int, set[str]] = field(default_factory=dict[int, set[str]])
 
@@ -358,7 +358,7 @@ async def plan_bulk_themes(
     Items that :func:`planned_outcome` decides are only counted; the rest are
     kept as IDs for :func:`load_theme_batch`.
     """
-    dataset_only = all(source.catalog for source in params.source_order)
+    catalog_only = all(source.catalog for source in params.source_order)
     plan = AssetPlan[ThemeTarget]()
     # A run over collections alone has no items; libraries may run beside them.
     if params.collection_scope and not params.library_ids:
@@ -366,14 +366,12 @@ async def plan_bulk_themes(
     async with aclosing(scope_chunks(params, database=database, chunk=chunk)) as chunks:
         async for session, items in chunks:
             # Every run reads the catalog: a title it flags has no theme to find.
-            index = await PublicDatasetIndex.build(
-                session, items, app_config=app_config
-            )
+            index = await CatalogIndex.build(session, items, app_config=app_config)
             failed_themes = (
                 await DownloadJobRepository(session).failed_themes_by_item(
                     [item.id for item in items if item.id is not None]
                 )
-                if dataset_only
+                if catalog_only
                 else {}
             )
             for item in items:
@@ -387,7 +385,7 @@ async def plan_bulk_themes(
                     and not theme_file_holds_selection(item),
                     last_checked=item.last_matched_at,
                     catalog=None
-                    if not dataset_only
+                    if not catalog_only
                     else index.theme(
                         item,
                         params.source_order,
@@ -425,9 +423,9 @@ async def load_theme_batch(
         )
         app_settings = await get_app_settings(session)
         index = (
-            await PublicDatasetIndex.build(session, items, app_config=app_config)
+            await CatalogIndex.build(session, items, app_config=app_config)
             if any(source.catalog for source in params.source_order)
-            else PublicDatasetIndex.empty()
+            else CatalogIndex.empty()
         )
         failed_themes = await DownloadJobRepository(session).failed_themes_by_item(
             item_ids

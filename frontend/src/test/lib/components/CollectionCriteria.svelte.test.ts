@@ -600,7 +600,7 @@ describe("collection criteria", () => {
       minimum_items: 2,
       delete_below_minimum: null,
       auto_art: null,
-      drawn_style: null,
+      generated_style: null,
       overturedb_posters: null,
       backgrounds: null,
       auto_match_theme: null,

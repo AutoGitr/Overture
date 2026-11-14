@@ -30,7 +30,7 @@ test("sidebar row hit areas preserve selection, poster links, and badge actions"
     }),
   );
   await page.route("**/api/themes/search?**", (route) => route.fulfill({ json: { results: [] } }));
-  await page.route("**/api/public-dataset/items/*/sources", (route) =>
+  await page.route("**/api/catalog/items/*/sources", (route) =>
     route.fulfill({ json: { found: false, item: null, seasons: [] } }),
   );
   await logIn(page);
@@ -130,7 +130,7 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   await page.route("**/api/settings", (route) =>
     route.fulfill({ json: appSettings({ tmdb_configured: true, auto_match_art: false }) }),
   );
-  await page.route("**/api/public-dataset/catalog?*", (route) => {
+  await page.route("**/api/catalog/catalog?*", (route) => {
     const type = new URL(route.request().url()).searchParams.get("media_type");
     return route.fulfill({
       json:
@@ -142,10 +142,10 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
           : [],
     });
   });
-  await page.route("**/api/public-dataset/catalog/movie/tmdb-348", (route) =>
+  await page.route("**/api/catalog/catalog/movie/tmdb-348", (route) =>
     route.fulfill({ json: detail }),
   );
-  await page.route("**/api/public-dataset/catalog/movie/tmdb-348/draft", (route) => {
+  await page.route("**/api/catalog/catalog/movie/tmdb-348/draft", (route) => {
     detail = {
       ...detail,
       draft:

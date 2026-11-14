@@ -10,12 +10,12 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import select_art
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import (
     MediaCollection,
     MediaCollectionMember,
 )
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
@@ -50,7 +50,7 @@ lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
+lazy from tests.bulk_helpers import disable_catalog, enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.factories import seed_art_slot
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
@@ -202,21 +202,21 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
         )
     )
     db_session.add(
-        PublicDatasetCollection(
+        CatalogCollection(
             tmdb_id=10, title="Star Wars Collection", youtube_id_overturedb="a" * 11
         )
     )
     await db_session.commit()
-    await disable_public_dataset(db_session)
+    await disable_catalog(db_session)
     service = _service(app_config=app_config, database=database)
 
     disabled = await service.reader.listed()
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     enabled = {c.id: c for c in await service.reader.listed()}
 
     assert sorted(c.id for c in disabled) == [1, 2]
-    assert not any(c.public_dataset_complete for c in disabled)
-    assert enabled[1].public_dataset_complete is True
+    assert not any(c.catalog_complete for c in disabled)
+    assert enabled[1].catalog_complete is True
     assert enabled[2].has_theme is True
     assert enabled[2].theme_status == "partial"
 
@@ -247,12 +247,12 @@ async def test_get_collection_lists_members_and_catalog_candidates(
         for item in (newer, older)
     )
     db_session.add(
-        PublicDatasetCollection(
+        CatalogCollection(
             tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="b" * 11
         )
     )
     await db_session.commit()
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
 
     detail = await _service(app_config=app_config, database=database).reader.get(1)
 

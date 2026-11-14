@@ -69,7 +69,7 @@ class AppSettingsBase(SQLModel):
     collection_auto_art: AutoArt = Field(
         default=AutoArt.OFF, sa_type=enum_type(AutoArt)
     )
-    collection_drawn_style: ArtStyle = Field(
+    collection_generated_style: ArtStyle = Field(
         default=ArtStyle.DARK, sa_type=enum_type(ArtStyle)
     )
     collection_overturedb_posters: CollectionPosterStyle = Field(

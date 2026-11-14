@@ -4,11 +4,7 @@ import type {
   RealtimeSnapshot,
   ServerWebSocketDataMessage,
 } from "../../generated/ws";
-import {
-  applyRestCachePolicy,
-  refreshRemovedDownloadTargets,
-  storePublicDatasetStatus,
-} from "./cache";
+import { applyRestCachePolicy, refreshRemovedDownloadTargets, storeCatalogStatus } from "./cache";
 import { projectRealtimeMessage, projectRealtimeSnapshot } from "./projector";
 import { serverClock } from "./serverClock";
 
@@ -58,7 +54,7 @@ class RealtimeStream {
     this.downloads = snapshotDownloads(snapshot);
     projectRealtimeSnapshot(snapshot, continuing);
     refreshRemovedDownloadTargets(previous, this.downloads);
-    storePublicDatasetStatus(snapshot.public_dataset_status);
+    storeCatalogStatus(snapshot.catalog_status);
     mediaServerState.store(snapshot.media_server);
     return true;
   }

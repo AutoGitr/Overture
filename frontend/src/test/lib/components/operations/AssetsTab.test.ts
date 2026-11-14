@@ -33,7 +33,7 @@ const reads = vi.hoisted(() => ({
           : [],
     }),
   ),
-  getPublicDatasetStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
+  getCatalogStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
   clearJobSnapshot: vi.fn(() => Promise.resolve({ data: { status: "cleared" } })),
   listCollectionGroups: vi.fn(() => Promise.resolve({ data: ["Sagas"] })),
 }));
@@ -480,11 +480,11 @@ describe("AssetsPopup", () => {
     expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
   });
 
-  it("preserves preferred sources while dataset status is unavailable", async () => {
+  it("preserves preferred sources while catalog status is unavailable", async () => {
     localStorage.setItem("assetsPopup_selectedArtSources", '["overturedb"]');
-    reads.getPublicDatasetStatus.mockRejectedValueOnce(new Error("Dataset unavailable"));
+    reads.getCatalogStatus.mockRejectedValueOnce(new Error("Catalog unavailable"));
     renderWithQueryClient(OperationsPopup);
-    await assetsPanel().findByText("Dataset unavailable");
+    await assetsPanel().findByText("Catalog unavailable");
     await screen.findByRole("checkbox", { name: /Movies/ });
     expect(localStorage.getItem("assetsPopup_selectedArtSources")).toBe('["overturedb"]');
   });

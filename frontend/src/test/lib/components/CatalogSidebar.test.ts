@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  getPublicDatasetStatusOptions,
+  getCatalogStatusOptions,
   listCatalogEntriesOptions,
   searchTmdbOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
@@ -13,7 +13,7 @@ import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { defaultCatalogFilters } from "../../../lib/utils/sidebarDomain";
-import { appSettings, catalogRow, mediaItem, publicDatasetStatus } from "../../helpers/fixtures";
+import { appSettings, catalogRow, mediaItem, catalogStatus } from "../../helpers/fixtures";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -39,7 +39,7 @@ describe("catalog sidebar", () => {
     uiState.searchQuery = "";
     uiState.searchField = "title";
     await navigate("/overturedb/movies");
-    queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, publicDatasetStatus());
+    queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus());
     queryClient.setQueryData(
       listCatalogEntriesOptions({ query: { media_type: "movie" } }).queryKey,
       [alien, arrival],
@@ -90,7 +90,7 @@ describe("catalog sidebar", () => {
     expect(screen.queryByRole("button", { name: "Select Arrival" })).toBeNull();
     expect(uiState.currentFilters).toEqual(libraryFilters);
   });
-  it("lists catalog collections without a media server and stops listing a disabled dataset", async () => {
+  it("lists catalog collections without a media server and stops listing a disabled catalog", async () => {
     queryClient.setQueryData(
       listCatalogEntriesOptions({ query: { media_type: "collection" } }).queryKey,
       [
@@ -108,10 +108,7 @@ describe("catalog sidebar", () => {
     expect(await screen.findByRole("button", { name: "Select Star Wars" })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "Select Star Wars" }));
     await waitFor(() => expect(route.pathname).toBe("/overturedb/movies/collections/tmdb-10"));
-    queryClient.setQueryData(
-      getPublicDatasetStatusOptions().queryKey,
-      publicDatasetStatus({ enabled: false }),
-    );
+    queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus({ enabled: false }));
     // The catalog layout then returns to the library; the sidebar no longer lists entries.
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Select Star Wars" })).toBeNull(),

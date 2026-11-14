@@ -8,11 +8,11 @@ lazy from pydantic import ValidationError
 
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import MediaType
+lazy from overture.schemas.catalog import CatalogStatus
 lazy from overture.schemas.library import (
     LibraryItemUpsertedEvent,
     media_item_read_from_model,
 )
-lazy from overture.schemas.public_dataset import PublicDatasetStatus
 lazy from overture.ws.events import EVENT_REGISTRY, validate_event_payload
 
 
@@ -162,7 +162,7 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
             "server_time": "2026-05-21T00:00:00+00:00",
             "jobs": [],
             "downloads": [],
-            "public_dataset_status": {
+            "catalog_status": {
                 "enabled": False,
                 "repo_url": "https://example.test/repo.git",
                 "catalog_url": "https://example.test/catalog.jsonl",
@@ -183,7 +183,7 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
         },
         "library.item.removed": {"media_item_id": 1},
         "library.items.changed": {"item_ids": [1, 2], "operation": "artwork"},
-        "public-dataset.updated": {
+        "catalog.updated": {
             "enabled": True,
             "repo_url": "https://example.test/repo.git",
             "catalog_url": "https://example.test/catalog.jsonl",
@@ -220,9 +220,9 @@ _PREFIX_SAMPLE_PAYLOADS: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
-        "public-dataset.sync.",
+        "catalog.sync.",
         {
-            "job": {"kind": "public_dataset_sync", "status": "progress"},
+            "job": {"kind": "catalog_sync", "status": "progress"},
             "stats": {"entries": 1, "errors": 0},
         },
     ),
@@ -269,18 +269,18 @@ def test_library_item_event_carries_every_field_including_nulls() -> None:
     assert item["year"] is None
 
 
-def test_public_dataset_event_carries_every_field_including_nulls() -> None:
+def test_catalog_event_carries_every_field_including_nulls() -> None:
 
-    status = PublicDatasetStatus(
+    status = CatalogStatus(
         enabled=False,
         repo_url="https://example.test/repo.git",
         catalog_url="https://example.test/catalog.jsonl",
         timezone="UTC",
     )
-    payload = validate_event_payload("public-dataset.updated", status)
+    payload = validate_event_payload("catalog.updated", status)
 
     assert payload is not None
-    assert set(payload) == set(PublicDatasetStatus.model_fields)
+    assert set(payload) == set(CatalogStatus.model_fields)
     assert payload["last_synced_at"] is None
 
 

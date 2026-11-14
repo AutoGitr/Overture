@@ -323,7 +323,7 @@ describe("collection management", () => {
     ).toMatchObject({ tmdb_collection_id: 99 });
   });
 
-  it("shows collection artwork status, clears a selected slot, and offers drawn art without an ID", async () => {
+  it("shows collection artwork status, clears a selected slot, and offers generated art without an ID", async () => {
     const selected = {
       ...detail,
       poster_url: "https://example.test/poster.jpg",
@@ -367,7 +367,7 @@ describe("collection management", () => {
       ),
     );
     expect(await screen.findByText(/Set a TMDB collection ID to browse/)).toBeVisible();
-    // Choosing drawn art sends its style, which the server draws from the title.
+    // Choosing generated art sends its style, which the server generates from the title.
     await fireEvent.click(await screen.findByRole("button", { name: /generated/i }));
     await waitFor(() =>
       expect(

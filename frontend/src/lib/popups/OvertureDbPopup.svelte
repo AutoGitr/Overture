@@ -2,16 +2,16 @@
   import { countOf } from "../utils/plural";
   import ExternalLink from "@lucide/svelte/icons/external-link";
   import { createMutation, createQuery } from "@tanstack/svelte-query";
-  import { exportPublicDatasetSelections } from "../../generated/rest/sdk.gen";
-  import type { PublicDatasetStatus, PublicDatasetSyncOutcome } from "../../generated/rest/types.gen";
+  import { exportCatalogSelections } from "../../generated/rest/sdk.gen";
+  import type { CatalogStatus, CatalogSyncOutcome } from "../../generated/rest/types.gen";
   import {
-    getPublicDatasetStatusOptions,
+    getCatalogStatusOptions,
     getCatalogCountsOptions,
-    syncPublicDatasetNowMutation,
+    syncCatalogNowMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { confirmAction, createNotifier } from "../stores/notificationState.svelte";
   import { discardDrafts, draftedEntries } from "../utils/catalogDrafts";
-  import { publicDatasetSyncState } from "../stores/jobStates.svelte";
+  import { catalogSyncState } from "../stores/jobStates.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
   import { formatBytes, formatDateInTimezone } from "../utils/popupFormat";
@@ -20,23 +20,23 @@
   import DataStatus from "../components/DataStatus.svelte";
   import PendingButton from "../components/PendingButton.svelte";
 
-  const SYNC_OUTCOMES: Record<PublicDatasetSyncOutcome, string> = {
+  const SYNC_OUTCOMES: Record<CatalogSyncOutcome, string> = {
     never_synced: "Never synced",
     success: "Succeeded",
     failed: "Failed",
   };
 
-  const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
+  const catalogQuery = createQuery(() => getCatalogStatusOptions());
 
   const countsQuery = createQuery(() => ({
     ...getCatalogCountsOptions(),
-    enabled: datasetQuery.data?.enabled === true,
+    enabled: catalogQuery.data?.enabled === true,
   }));
   let draftCount = $derived(countsQuery.data?.drafts ?? null);
 
   const feedback = createNotifier();
   const exportRequest = createMutation(() => ({
-    mutationFn: async () => (await exportPublicDatasetSelections({ throwOnError: true })).data,
+    mutationFn: async () => (await exportCatalogSelections({ throwOnError: true })).data,
   }));
 
   async function exportSelections() {
@@ -75,19 +75,19 @@
       feedback.error(errorMessage(err, "Could not discard the drafts"));
     }
   }
-  let publicDatasetStatus = $derived<PublicDatasetStatus | null>(datasetQuery.data ?? null);
-  let savedEnabled = $derived(!!publicDatasetStatus?.enabled);
-  let stats = $derived(publicDatasetStatus?.last_stats ?? null);
-  const syncRequest = createMutation(() => syncPublicDatasetNowMutation());
+  let catalogStatus = $derived<CatalogStatus | null>(catalogQuery.data ?? null);
+  let savedEnabled = $derived(!!catalogStatus?.enabled);
+  let stats = $derived(catalogStatus?.last_stats ?? null);
+  const syncRequest = createMutation(() => syncCatalogNowMutation());
   // A sync always runs for a while, so show it from the click instead of after a settle delay.
-  let publicDatasetBusy = $derived(syncRequest.isPending || publicDatasetSyncState.running);
+  let catalogBusy = $derived(syncRequest.isPending || catalogSyncState.running);
 
   function formatDateTime(value: string | null | undefined) {
-    return value ? formatDateInTimezone(value, publicDatasetStatus?.timezone) : "Never";
+    return value ? formatDateInTimezone(value, catalogStatus?.timezone) : "Never";
   }
 
-  async function syncPublicDatasetNow() {
-    if (publicDatasetBusy) return;
+  async function syncCatalogNow() {
+    if (catalogBusy) return;
     feedback.clear();
     try {
       const result = await syncRequest.mutateAsync({});
@@ -95,7 +95,7 @@
         feedback.warning("Enable OvertureDB in Settings before syncing.");
         return;
       }
-      publicDatasetSyncState.markStartAccepted();
+      catalogSyncState.markStartAccepted();
     } catch (err) {
       feedback.error(errorMessage(err, "OvertureDB sync failed"));
     }
@@ -106,60 +106,60 @@
   <CardColumn>
     <DataStatus
       label="OvertureDB status"
-      error={datasetQuery.error}
-      loading={datasetQuery.isFetching}
-      hasData={!!publicDatasetStatus}
-      onretry={() => datasetQuery.refetch()}
+      error={catalogQuery.error}
+      loading={catalogQuery.isFetching}
+      hasData={!!catalogStatus}
+      onretry={() => catalogQuery.refetch()}
     />
-    {#if publicDatasetStatus}
+    {#if catalogStatus}
 
       <div class="option-card">
         <span class="form-label">Status</span>
         <div class="options-col">
-          <div class="dataset-meta">
+          <div class="catalog-meta">
             <span>Repository</span>
-            {#if publicDatasetStatus?.repo_url}
+            {#if catalogStatus?.repo_url}
               <a
-                href={publicDatasetStatus.repo_url}
+                href={catalogStatus.repo_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="dataset-link"
-                title={publicDatasetStatus.repo_url}
+                class="catalog-link"
+                title={catalogStatus.repo_url}
               >
-                <code>{publicDatasetStatus.repo_url}</code>
+                <code>{catalogStatus.repo_url}</code>
                 <ExternalLink size={12} />
               </a>
             {:else}
               <code>Not configured</code>
             {/if}
           </div>
-          <div class="dataset-meta">
+          <div class="catalog-meta">
             <span>Catalog</span>
-            <code>{publicDatasetStatus?.catalog_url || "Not configured"}</code>
+            <code>{catalogStatus?.catalog_url || "Not configured"}</code>
           </div>
-          <div class="dataset-meta">
+          <div class="catalog-meta">
             <span>Last sync</span>
-            <span>{formatDateTime(publicDatasetStatus?.last_synced_at)}</span>
+            <span>{formatDateTime(catalogStatus?.last_synced_at)}</span>
           </div>
-          <div class="dataset-meta">
+          <div class="catalog-meta">
             <span>Status</span>
-            <span>{SYNC_OUTCOMES[publicDatasetStatus?.last_status ?? "never_synced"]}</span>
+            <span>{SYNC_OUTCOMES[catalogStatus?.last_status ?? "never_synced"]}</span>
           </div>
-          <div class="dataset-meta">
+          <div class="catalog-meta">
             <span>Next sync</span>
             <span>
-              {savedEnabled ? formatDateTime(publicDatasetStatus?.next_run) : "Disabled"}
+              {savedEnabled ? formatDateTime(catalogStatus?.next_run) : "Disabled"}
             </span>
           </div>
           <button
             class="btn btn-secondary btn-sm self-start"
-            onclick={syncPublicDatasetNow}
-            disabled={!savedEnabled || publicDatasetBusy || !!datasetQuery.error}
+            onclick={syncCatalogNow}
+            disabled={!savedEnabled || catalogBusy || !!catalogQuery.error}
           >
-            {publicDatasetBusy ? "Syncing..." : "Sync OvertureDB Now"}
+            {catalogBusy ? "Syncing..." : "Sync OvertureDB Now"}
           </button>
-          {#if publicDatasetSyncState.error}
-            <span class="dataset-error" role="alert">{publicDatasetSyncState.error}</span>
+          {#if catalogSyncState.error}
+            <span class="catalog-error" role="alert">{catalogSyncState.error}</span>
           {/if}
         </div>
       </div>
@@ -175,15 +175,15 @@
             {/each}
           </div>
           <div class="options-col">
-            <div class="dataset-meta">
+            <div class="catalog-meta">
               <span>Compressed</span>
               <span>{formatBytes(stats.catalog_bytes)}</span>
             </div>
-            <div class="dataset-meta">
+            <div class="catalog-meta">
               <span>Unpacked</span>
               <span>{formatBytes(stats.catalog_uncompressed_bytes)}</span>
             </div>
-            <div class="dataset-meta">
+            <div class="catalog-meta">
               <span>Schema</span>
               <span>{stats.schema_version ?? "Unknown"}</span>
             </div>
@@ -225,10 +225,10 @@
           >
             Export selections
           </PendingButton>
-          {#if publicDatasetStatus?.repo_url}
+          {#if catalogStatus?.repo_url}
             <a
               class="btn btn-secondary btn-sm"
-              href={`${publicDatasetStatus.repo_url.replace(/\/$/, "")}/issues/new?template=bulk.yml`}
+              href={`${catalogStatus.repo_url.replace(/\/$/, "")}/issues/new?template=bulk.yml`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -245,7 +245,7 @@
 </PopupShell>
 
 <style>
-  .dataset-meta {
+  .catalog-meta {
     display: grid;
     grid-template-columns: 110px minmax(0, 1fr);
     gap: var(--space-3);
@@ -253,13 +253,13 @@
     font-size: var(--text-xs);
     color: var(--text-secondary);
   }
-  .dataset-meta code {
+  .catalog-meta code {
     min-width: 0;
     word-break: break-all;
     white-space: normal;
     color: var(--text-tertiary);
   }
-  .dataset-link {
+  .catalog-link {
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
@@ -268,24 +268,24 @@
     color: var(--accent);
     text-decoration: none;
   }
-  .dataset-link:hover {
+  .catalog-link:hover {
     color: var(--accent-hover);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
-  .dataset-link:focus-visible {
+  .catalog-link:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
-  .dataset-link code {
+  .catalog-link code {
     color: inherit;
     cursor: pointer;
   }
-  .dataset-link :global(svg) {
+  .catalog-link :global(svg) {
     flex-shrink: 0;
   }
-  .dataset-error {
+  .catalog-error {
     font-size: var(--text-xs);
     color: var(--danger);
   }
@@ -314,7 +314,7 @@
   }
 
   @media (max-width: 480px) {
-    .dataset-meta {
+    .catalog-meta {
       grid-template-columns: 80px minmax(0, 1fr);
     }
 

@@ -1,7 +1,7 @@
 ---
 sidebar_position: 5
 title: Operations
-description: Sync, Assets, Renamer and Audit, by hand or on a schedule.
+description: Sync, Assets, Renamer and Server audit, by hand or on a schedule.
 ---
 
 # Operations
@@ -10,12 +10,12 @@ Operations do the work in bulk for the libraries and folders you pick, and run
 in the background, so you can close the browser; **Stop** keeps what has
 finished.
 
-| Operation | What it does                                                                                                                                                               |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sync      | Imports library items, folders, seasons and existing local assets. Full sync also hides items removed from the server and keeps their files.                               |
-| Assets    | Fills artwork and themes for monitored items using your chosen sources and order. Runs manually or on a schedule.                                                          |
-| Renamer   | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                                                    |
-| Audit     | Compares local assets, and optionally the images Overture uploaded to collections, with the server; fixes selected differences and checks whether the changes took effect. |
+| Operation    | What it does                                                                                                                                                               |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sync         | Imports library items, folders, seasons and existing local assets. Full sync also hides items removed from the server and keeps their files.                               |
+| Assets       | Fills artwork and themes for monitored items using your chosen sources and order. Runs manually or on a schedule.                                                          |
+| Renamer      | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                                                    |
+| Server audit | Compares local assets, and optionally the images Overture uploaded to collections, with the server; fixes selected differences and checks whether the changes took effect. |
 
 A run you start keeps its results on screen until you choose **Clear results**
 or the next run starts. A scheduled run, including an incremental poll, never
@@ -93,18 +93,18 @@ Renamer scans the selected libraries for asset files with other names than the
 ones in [Files](files.md) and lists them; you choose which to rename. A
 Renamer scan also notices files deleted outside Overture.
 
-## Audit
+## Server audit
 
-Audit compares the local assets on disk with what the server displays and
+Server audit compares the local assets on disk with what the server displays and
 plays, and optionally the images Overture uploaded to collections with the
-server's copies. Fix the selected differences, and Audit checks whether the
-changes took effect. If the server shows old artwork, run Audit and check the
+server's copies. Fix the selected differences, and Server audit checks whether the
+changes took effect. If the server shows old artwork, run Server audit and check the
 server's local-assets setting.
 
 ## Schedules
 
 **Schedules** use five-field cron in your time zone (`TZ`). One operation runs
-at a time: Sync, Assets, Renamer and Audit each wait for whichever is running,
+at a time: Sync, Assets, Renamer and Server audit each wait for whichever is running,
 and a scheduled run waits its turn. Downloads, such as the art and themes you
 choose by hand, run beside any of them.
 

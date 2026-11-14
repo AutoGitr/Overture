@@ -10,7 +10,7 @@ For Linux `x86_64` with systemd.
 
 The archive bundles its own Python, web interface, FFmpeg and Deno, so
 installation runs offline. It needs glibc 2.28 or newer, as in Debian 12+,
-Ubuntu 22.04+, RHEL 8+, Fedora or Arch; the installer checks this. Drawn
+Ubuntu 22.04+, RHEL 8+, Fedora or Arch; the installer checks this. Generated
 collection art lays out Arabic and Hebrew titles with the system's FriBiDi
 library (`libfribidi0` or `fribidi`), which most distributions install.
 

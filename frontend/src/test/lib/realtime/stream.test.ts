@@ -9,7 +9,7 @@ import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
   logEntry,
   loggedLines,
-  publicDatasetStatus,
+  catalogStatus,
   realtimeSnapshot,
   wsMessage,
 } from "../../helpers/fixtures";
@@ -17,7 +17,7 @@ import {
 function snapshot(sequence: number) {
   return realtimeSnapshot({
     sequence,
-    public_dataset_status: publicDatasetStatus({ enabled: false }),
+    catalog_status: catalogStatus({ enabled: false }),
   });
 }
 

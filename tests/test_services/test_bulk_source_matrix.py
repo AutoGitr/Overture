@@ -16,9 +16,9 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import ArtFileFacts, select_art
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -48,8 +48,8 @@ lazy from tests.bulk_helpers import (
     Context,
     art_matcher,
     as_job_context,
-    disable_public_dataset,
-    enable_public_dataset,
+    disable_catalog,
+    enable_catalog,
     fast_fingerprints,
     make_bulk_downloads,
     no_tags,
@@ -95,7 +95,7 @@ def planned(
     saved: str | None,
     recent: bool,
     overwrite: bool,
-    dataset_only: bool,
+    catalog_only: bool,
     offer: str | None,
     misses: list[str],
     enabled: bool,
@@ -107,7 +107,7 @@ def planned(
     """
     if saved is not None and not overwrite:
         return None
-    if dataset_only and offer is None:
+    if catalog_only and offer is None:
         outcome = JobOutcome.NO_MATCH if enabled else JobOutcome.SKIPPED
         return Expected(outcome, "; ".join(misses), planned=True)
     if recent:
@@ -196,7 +196,7 @@ def expected_art(
         saved=case.saved,
         recent=case.recent,
         overwrite=overwrite,
-        dataset_only=order == (ArtBulkSource.OVERTUREDB,),
+        catalog_only=order == (ArtBulkSource.OVERTUREDB,),
         offer=offer,
         misses=[miss],
         enabled=enabled,
@@ -272,7 +272,7 @@ async def test_art_source_matrix(
     database: Database,
 ) -> None:
     storage = AssetStorage(app_config=app_config)
-    await (enable_public_dataset if enabled else disable_public_dataset)(db_session)
+    await (enable_catalog if enabled else disable_catalog)(db_session)
     cases: dict[int, ArtCase] = {}
     expected: dict[str, Expected] = {}
     for number, case in enumerate(ART_CASES, 1):
@@ -300,7 +300,7 @@ async def test_art_source_matrix(
             )
         if case.catalog != "absent":
             db_session.add(
-                PublicDatasetItem(
+                CatalogItem(
                     id=number,
                     media_type=MediaType.MOVIE,
                     tmdb_id=number,
@@ -448,7 +448,7 @@ def expected_theme(
         saved=ids["saved"],
         recent=case.recent,
         overwrite=overwrite,
-        dataset_only=all(source.catalog for source in order),
+        catalog_only=all(source.catalog for source in order),
         offer=offer,
         misses=misses,
         enabled=enabled,
@@ -519,7 +519,7 @@ async def test_theme_source_matrix(
     app_config: Settings,
     database: Database,
 ) -> None:
-    await (enable_public_dataset if enabled else disable_public_dataset)(db_session)
+    await (enable_catalog if enabled else disable_catalog)(db_session)
     cases: dict[int, ThemeCase] = {}
     expected: dict[str, Expected] = {}
     for number, case in enumerate(THEME_CASES, 1):
@@ -546,7 +546,7 @@ async def test_theme_source_matrix(
         )
         if case.overturedb != "absent" or case.themerrdb != "none":
             db_session.add(
-                PublicDatasetItem(
+                CatalogItem(
                     id=number,
                     media_type=MediaType.MOVIE,
                     tmdb_id=number,

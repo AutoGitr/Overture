@@ -4,7 +4,7 @@ lazy from typing import Annotated
 
 lazy from pydantic import AfterValidator, Field
 
-lazy from ..dataset_contract.contract import YOUTUBE_ID_PATTERN
+lazy from ..catalog_contract.contract import YOUTUBE_ID_PATTERN
 lazy from ..domain import UNMANAGED_GROUP
 lazy from ..utils.cron import validate_cron_expression
 

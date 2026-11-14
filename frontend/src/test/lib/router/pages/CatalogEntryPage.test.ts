@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   getCatalogEntryOptions,
-  getPublicDatasetStatusOptions,
+  getCatalogStatusOptions,
 } from "../../../../generated/rest/@tanstack/svelte-query.gen";
 import type { CatalogDraftUpdate } from "../../../../generated/rest/types.gen";
 import CatalogEntryPage from "../../../../lib/router/pages/CatalogEntryPage.svelte";
@@ -16,7 +16,7 @@ import {
   artCandidate,
   catalogDetail,
   catalogEntry,
-  publicDatasetStatus,
+  catalogStatus,
 } from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
@@ -26,7 +26,7 @@ describe("catalog detail drafts", () => {
   beforeEach(async () => {
     queryClient.clear();
     settingsState.load(appSettings());
-    queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, publicDatasetStatus());
+    queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus());
     await navigate("/overturedb/movies/:entrySlug/art/:subtab", {
       params: { entrySlug: "tmdb-348", subtab: "poster" },
     });
@@ -35,8 +35,8 @@ describe("catalog detail drafts", () => {
   function server(initial = catalogDetail()) {
     let detail = initial;
     const result = mockFetchRoutes({
-      "/api/public-dataset/catalog/movie/tmdb-348": () => Response.json(detail),
-      "/api/public-dataset/catalog/movie/tmdb-348/draft": ({ init }: { init: RequestInit }) => {
+      "/api/catalog/catalog/movie/tmdb-348": () => Response.json(detail),
+      "/api/catalog/catalog/movie/tmdb-348/draft": ({ init }: { init: RequestInit }) => {
         detail = {
           ...detail,
           draft:
@@ -70,11 +70,11 @@ describe("catalog detail drafts", () => {
       }),
     });
     const { calls } = mockFetchRoutes({
-      "/api/public-dataset/catalog/show/tvdb-81189": detail,
+      "/api/catalog/catalog/show/tvdb-81189": detail,
       "/api/tmdb/show/1396/art/poster/sources": {
         sources: { tmdb: [artCandidate({ url: poster })] },
       },
-      "/api/public-dataset/catalog/show/tmdb-1396/draft": {
+      "/api/catalog/catalog/show/tmdb-1396/draft": {
         ...detail,
         draft: { ...detail.entry, poster_url: poster },
       },
@@ -100,7 +100,7 @@ describe("catalog detail drafts", () => {
             (!call.init.method || call.init.method === "GET"),
         )
         .map((call) => new URL(call.url, "http://localhost").pathname),
-    ).toEqual(["/api/public-dataset/catalog/show/tvdb-81189"]);
+    ).toEqual(["/api/catalog/catalog/show/tvdb-81189"]);
   });
 
   it("loads collection members for the draft's corrected TMDB identity", async () => {
@@ -114,7 +114,7 @@ describe("catalog detail drafts", () => {
       draft: catalogEntry({ media_type: "collection", title: "Corrected collection", tmdb_id: 21 }),
     });
     const { calls } = mockFetchRoutes({
-      "/api/public-dataset/catalog/collection/tmdb-10": detail,
+      "/api/catalog/catalog/collection/tmdb-10": detail,
       "/api/tmdb/collections/21": {
         tmdb_id: 21,
         title: "Corrected collection",
@@ -153,12 +153,8 @@ describe("catalog detail drafts", () => {
         entry: catalogEntry({ media_type: mediaType, poster_url: original }),
       });
       mockFetchRoutes({
-        [`/api/public-dataset/catalog/${mediaType}/tmdb-348`]: () => Response.json(detail),
-        [`/api/public-dataset/catalog/${mediaType}/tmdb-348/draft`]: ({
-          init,
-        }: {
-          init: RequestInit;
-        }) => {
+        [`/api/catalog/catalog/${mediaType}/tmdb-348`]: () => Response.json(detail),
+        [`/api/catalog/catalog/${mediaType}/tmdb-348/draft`]: ({ init }: { init: RequestInit }) => {
           detail = {
             ...detail,
             draft:
@@ -242,8 +238,8 @@ describe("catalog detail drafts", () => {
       params: { entrySlug: "tmdb-348", subtab: "background" },
     });
     const { calls } = mockFetchRoutes({
-      "/api/public-dataset/catalog/movie/tmdb-348": catalogDetail(),
-      "/api/public-dataset/catalog/movie/tmdb-348/draft": () =>
+      "/api/catalog/catalog/movie/tmdb-348": catalogDetail(),
+      "/api/catalog/catalog/movie/tmdb-348/draft": () =>
         Response.json({ detail: "Use catalog artwork" }, { status: 422 }),
     });
     renderWithQueryClient(CatalogEntryPage);
@@ -278,8 +274,8 @@ describe("catalog detail drafts", () => {
       }),
     });
     const { calls } = mockFetchRoutes({
-      "/api/public-dataset/catalog/show/tvdb-81189": () => Response.json(detail),
-      "/api/public-dataset/catalog/show/tvdb-81189/draft": ({ init }: { init: RequestInit }) => {
+      "/api/catalog/catalog/show/tvdb-81189": () => Response.json(detail),
+      "/api/catalog/catalog/show/tvdb-81189/draft": ({ init }: { init: RequestInit }) => {
         const body: CatalogDraftUpdate = JSON.parse(String(init.body));
         detail = { ...detail, draft: { ...detail.entry, seasons: body.seasons ?? [] } };
         return Response.json(detail);
@@ -313,7 +309,7 @@ describe("catalog detail drafts", () => {
       params: { entrySlug: "tmdb-10" },
     });
     mockFetchRoutes({
-      "/api/public-dataset/catalog/collection/tmdb-10": catalogDetail({
+      "/api/catalog/catalog/collection/tmdb-10": catalogDetail({
         entry_key: "tmdb-10",
         entry: catalogEntry({ media_type: "collection", tmdb_id: 10, title: "Star Wars" }),
         library_collection_id: 12,
@@ -347,10 +343,10 @@ describe("catalog detail drafts", () => {
 
   it("keeps a draft visible if discarding it fails", async () => {
     mockFetchRoutes({
-      "/api/public-dataset/catalog/movie/tmdb-348": catalogDetail({
+      "/api/catalog/catalog/movie/tmdb-348": catalogDetail({
         draft: catalogEntry({ poster_url: poster }),
       }),
-      "/api/public-dataset/catalog/movie/tmdb-348/draft": () =>
+      "/api/catalog/catalog/movie/tmdb-348/draft": () =>
         Response.json({ detail: "Try again" }, { status: 422 }),
     });
     renderWithQueryClient(CatalogEntryPage);
@@ -366,11 +362,11 @@ describe("catalog detail drafts", () => {
     const initial = catalogDetail({ draft: catalogEntry({ poster_url: poster }) });
     let finish: ((response: Response) => void) | undefined;
     mockFetchRoutes({
-      "/api/public-dataset/catalog/movie/tmdb-348": initial,
+      "/api/catalog/catalog/movie/tmdb-348": initial,
       "/api/tmdb/movie/348/art/poster/sources": {
         sources: { tmdb: [artCandidate({ url: poster })] },
       },
-      "/api/public-dataset/catalog/movie/tmdb-348/draft": () =>
+      "/api/catalog/catalog/movie/tmdb-348/draft": () =>
         new Promise<Response>((resolve) => {
           finish = resolve;
         }),
@@ -391,10 +387,7 @@ describe("catalog detail drafts", () => {
   });
 
   it("does not request a catalog entry while OvertureDB is disabled", async () => {
-    queryClient.setQueryData(
-      getPublicDatasetStatusOptions().queryKey,
-      publicDatasetStatus({ enabled: false }),
-    );
+    queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus({ enabled: false }));
     const { calls } = mockFetchRoutes({});
     renderWithQueryClient(CatalogEntryPage);
     expect(screen.getByText("Enable OvertureDB to browse the catalog.")).toBeInTheDocument();

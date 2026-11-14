@@ -49,7 +49,7 @@
   title="Setup"
   description={creatingSet
     ? "One collection per value in the library, such as each decade, kept up to date."
-    : "Which libraries it draws from, its title and its group."}
+    : "Which libraries it spans, its title and its group."}
   busy={editor.busy}
 >
   {#if draft}

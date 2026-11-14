@@ -30,6 +30,10 @@ lazy from ...schemas.sync import (
     SyncScheduleResponse,
 )
 lazy from ...utils.time import format_duration, utc_now
+lazy from ..catalog.downloads import (
+    QueuedDownloads,
+    queue_overturedb_downloads_for_items,
+)
 lazy from ..downloads.service import DownloadService
 lazy from ..local_assets.service import LocalAssets
 lazy from ..named_schedules import (
@@ -37,10 +41,6 @@ lazy from ..named_schedules import (
     NamedSchedules,
     ScheduleRunResult,
     job_run_summary,
-)
-lazy from ..public_dataset.downloads import (
-    QueuedDownloads,
-    queue_overturedb_downloads_for_items,
 )
 lazy from ..scheduler import SchedulerService
 lazy from .collection_sync import CollectionSync

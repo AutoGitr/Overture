@@ -1,4 +1,4 @@
-import { appSettings, publicDatasetStatus } from "../../helpers/fixtures";
+import { appSettings, catalogStatus } from "../../helpers/fixtures";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -15,11 +15,11 @@ import { renderWithQueryClient } from "../../helpers/render";
 
 const updateSettings = vi.hoisted(() => vi.fn());
 const getSettings = vi.hoisted(() => vi.fn());
-const getPublicDatasetStatus = vi.hoisted(() => vi.fn());
+const getCatalogStatus = vi.hoisted(() => vi.fn());
 vi.mock("../../../generated/rest/sdk.gen", () => ({
   updateSettings,
   getSettings,
-  getPublicDatasetStatus,
+  getCatalogStatus,
 }));
 
 function storedSettings() {
@@ -41,7 +41,7 @@ function storedSettings() {
 describe("SettingsPopup", () => {
   beforeEach(() => {
     queryClient.clear();
-    getPublicDatasetStatus.mockResolvedValue({ data: publicDatasetStatus() });
+    getCatalogStatus.mockResolvedValue({ data: catalogStatus() });
     uiState.openPopupByName("settings");
     settingsState.load(
       appSettings({

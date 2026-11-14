@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, type MutationOptions, queryOptions } from '@tanstack/svelte-query';
 
 import { client } from '../client.gen';
-import { adoptCollection, authConfig, bulkOperateCollections, bulkOperateItems, bulkSetCollectionMonitored, checkConnectivity, clearJobSnapshot, createApiKey, createBackup, createBulkAssetsSchedule, createCollection, createSyncSchedule, deleteApiKey, deleteBulkAssetsSchedule, deleteCollection, deleteCollectionGroup, deleteItem, deleteSyncSchedule, discardCatalogDraft, discardCatalogDrafts, exportPublicDatasetSelections, fixAuditFindings, getArtSources, getBackupSchedule, getCatalogCounts, getCatalogEntry, getCatalogEntryRecord, getCollection, getCollectionArrOptions, getCollectionArtSources, getCollectionCapabilities, getCollectionDefaults, getCollectionGroupPolicy, getCollectionMissing, getCollectionRecord, getCollectionSources, getCollectionTheme, getFolderRoots, getGeneratedCollectionArt, getItem, getItemRecord, getJobLog, getJobResults, getLibraries, getNotifications, getPublicDatasetCollectionIssue, getPublicDatasetCollectionRecord, getPublicDatasetItemIssue, getPublicDatasetRecord, getPublicDatasetSources, getPublicDatasetStatus, getRealtimeSnapshot, getRemovalOptions, getSeasons, getServerWebLinks, getSettings, getStats, getSyncStatus, getTmdbArtSources, getTmdbCollection, getTmdbItem, getTmdbPublicDatasetSources, health, listApiKeys, listBackups, listBulkAssetsSchedules, listCatalogEntries, listCollectionFieldValues, listCollectionGroups, listCollections, listCollectionSets, listItems, listRadarrTags, listServerLibraries, listSonarrTags, listSyncSchedules, login, logout, matchArt, matchCollectionArt, me, oidcCallback, oidcLogin, type Options, orphanCollection, planCollectionAdoption, previewCollection, previewCollectionSet, proxyCollectionImage, proxyItemProviderArt, proxySeasonProviderArt, ready, recommendCollectionKind, removeAllArt, removeAllCollectionArt, removeArt, removeCollectionArt, removeCollectionTheme, removeTheme, renameAssets, renameCollectionGroup, requestCollectionMissing, runBulkAssetsSchedule, runSync, runSyncSchedule, saveArt, saveCatalogDraft, saveCollectionArt, saveCollectionGroupPolicy, saveCollectionRule, saveTmdbArt, searchMdblistLists, searchTmdb, searchTmdbPeople, searchYoutube, selectTheme, selectTmdbTheme, sendTestNotification, serveCollectionLocalImage, serveLocalImage, serveLocalSeasonImage, setCollectionMembers, setCollectionMonitored, setCollectionTheme, setMonitored, setPublicDatasetEnabled, startBulkAssets, startScan, startServerAudit, stopAuditFix, stopBulkAssets, stopScan, stopServerAudit, stopSync, syncPublicDatasetNow, updateBackupSchedule, updateBulkAssetsSchedule, updateCollection, updateNotifications, updateSettings, updateSyncSchedule, uploadArt } from '../sdk.gen';
-import type { AdoptCollectionData, AdoptCollectionError, AdoptCollectionResponse, AuthConfigData, AuthConfigResponse, BulkOperateCollectionsData, BulkOperateCollectionsError, BulkOperateCollectionsResponse, BulkOperateItemsData, BulkOperateItemsError, BulkOperateItemsResponse, BulkSetCollectionMonitoredData, BulkSetCollectionMonitoredError, BulkSetCollectionMonitoredResponse, CheckConnectivityData, CheckConnectivityError, CheckConnectivityResponse, ClearJobSnapshotData, ClearJobSnapshotError, ClearJobSnapshotResponse, CreateApiKeyData, CreateApiKeyError, CreateApiKeyResponse, CreateBackupData, CreateBackupError, CreateBackupResponse, CreateBulkAssetsScheduleData, CreateBulkAssetsScheduleError, CreateBulkAssetsScheduleResponse, CreateCollectionData, CreateCollectionError, CreateCollectionResponse, CreateSyncScheduleData, CreateSyncScheduleError, CreateSyncScheduleResponse, DeleteApiKeyData, DeleteApiKeyError, DeleteApiKeyResponse, DeleteBulkAssetsScheduleData, DeleteBulkAssetsScheduleError, DeleteBulkAssetsScheduleResponse, DeleteCollectionData, DeleteCollectionError, DeleteCollectionGroupData, DeleteCollectionGroupError, DeleteCollectionGroupResponse, DeleteCollectionResponse, DeleteItemData, DeleteItemError, DeleteItemResponse, DeleteSyncScheduleData, DeleteSyncScheduleError, DeleteSyncScheduleResponse, DiscardCatalogDraftData, DiscardCatalogDraftError, DiscardCatalogDraftResponse, DiscardCatalogDraftsData, DiscardCatalogDraftsError, DiscardCatalogDraftsResponse, ExportPublicDatasetSelectionsData, ExportPublicDatasetSelectionsError, ExportPublicDatasetSelectionsResponse, FixAuditFindingsData, FixAuditFindingsError, FixAuditFindingsResponse, GetArtSourcesData, GetArtSourcesError, GetArtSourcesResponse, GetBackupScheduleData, GetBackupScheduleError, GetBackupScheduleResponse, GetCatalogCountsData, GetCatalogCountsError, GetCatalogCountsResponse, GetCatalogEntryData, GetCatalogEntryError, GetCatalogEntryRecordData, GetCatalogEntryRecordError, GetCatalogEntryRecordResponse, GetCatalogEntryResponse, GetCollectionArrOptionsData, GetCollectionArrOptionsError, GetCollectionArrOptionsResponse, GetCollectionArtSourcesData, GetCollectionArtSourcesError, GetCollectionArtSourcesResponse, GetCollectionCapabilitiesData, GetCollectionCapabilitiesError, GetCollectionCapabilitiesResponse, GetCollectionData, GetCollectionDefaultsData, GetCollectionDefaultsError, GetCollectionDefaultsResponse, GetCollectionError, GetCollectionGroupPolicyData, GetCollectionGroupPolicyError, GetCollectionGroupPolicyResponse, GetCollectionMissingData, GetCollectionMissingError, GetCollectionMissingResponse, GetCollectionRecordData, GetCollectionRecordError, GetCollectionRecordResponse, GetCollectionResponse, GetCollectionSourcesData, GetCollectionSourcesError, GetCollectionSourcesResponse, GetCollectionThemeData, GetCollectionThemeError, GetCollectionThemeResponse, GetFolderRootsData, GetFolderRootsError, GetFolderRootsResponse, GetGeneratedCollectionArtData, GetGeneratedCollectionArtError, GetItemData, GetItemError, GetItemRecordData, GetItemRecordError, GetItemRecordResponse, GetItemResponse, GetJobLogData, GetJobLogError, GetJobLogResponse, GetJobResultsData, GetJobResultsError, GetJobResultsResponse, GetLibrariesData, GetLibrariesError, GetLibrariesResponse, GetNotificationsData, GetNotificationsError, GetNotificationsResponse, GetPublicDatasetCollectionIssueData, GetPublicDatasetCollectionIssueError, GetPublicDatasetCollectionIssueResponse, GetPublicDatasetCollectionRecordData, GetPublicDatasetCollectionRecordError, GetPublicDatasetCollectionRecordResponse, GetPublicDatasetItemIssueData, GetPublicDatasetItemIssueError, GetPublicDatasetItemIssueResponse, GetPublicDatasetRecordData, GetPublicDatasetRecordError, GetPublicDatasetRecordResponse, GetPublicDatasetSourcesData, GetPublicDatasetSourcesError, GetPublicDatasetSourcesResponse, GetPublicDatasetStatusData, GetPublicDatasetStatusError, GetPublicDatasetStatusResponse, GetRealtimeSnapshotData, GetRealtimeSnapshotError, GetRealtimeSnapshotResponse, GetRemovalOptionsData, GetRemovalOptionsError, GetRemovalOptionsResponse, GetSeasonsData, GetSeasonsError, GetSeasonsResponse, GetServerWebLinksData, GetServerWebLinksError, GetServerWebLinksResponse, GetSettingsData, GetSettingsError, GetSettingsResponse, GetStatsData, GetStatsError, GetStatsResponse, GetSyncStatusData, GetSyncStatusError, GetSyncStatusResponse, GetTmdbArtSourcesData, GetTmdbArtSourcesError, GetTmdbArtSourcesResponse, GetTmdbCollectionData, GetTmdbCollectionError, GetTmdbCollectionResponse, GetTmdbItemData, GetTmdbItemError, GetTmdbItemResponse, GetTmdbPublicDatasetSourcesData, GetTmdbPublicDatasetSourcesError, GetTmdbPublicDatasetSourcesResponse, HealthData, HealthResponse2, ListApiKeysData, ListApiKeysError, ListApiKeysResponse, ListBackupsData, ListBackupsError, ListBackupsResponse, ListBulkAssetsSchedulesData, ListBulkAssetsSchedulesError, ListBulkAssetsSchedulesResponse, ListCatalogEntriesData, ListCatalogEntriesError, ListCatalogEntriesResponse, ListCollectionFieldValuesData, ListCollectionFieldValuesError, ListCollectionFieldValuesResponse, ListCollectionGroupsData, ListCollectionGroupsError, ListCollectionGroupsResponse, ListCollectionsData, ListCollectionsError, ListCollectionSetsData, ListCollectionSetsError, ListCollectionSetsResponse, ListCollectionsResponse, ListItemsData, ListItemsError, ListItemsResponse, ListRadarrTagsData, ListRadarrTagsError, ListRadarrTagsResponse, ListServerLibrariesData, ListServerLibrariesError, ListServerLibrariesResponse, ListSonarrTagsData, ListSonarrTagsError, ListSonarrTagsResponse, ListSyncSchedulesData, ListSyncSchedulesError, ListSyncSchedulesResponse, LoginData, LoginError, LoginResponse2, LogoutData, LogoutResponse2, MatchArtData, MatchArtError, MatchArtResponse, MatchCollectionArtData, MatchCollectionArtError, MatchCollectionArtResponse, MeData, MeError, MeResponse2, OidcCallbackData, OidcLoginData, OidcLoginError, OrphanCollectionData, OrphanCollectionError, OrphanCollectionResponse, PlanCollectionAdoptionData, PlanCollectionAdoptionError, PlanCollectionAdoptionResponse, PreviewCollectionData, PreviewCollectionError, PreviewCollectionResponse, PreviewCollectionSetData, PreviewCollectionSetError, PreviewCollectionSetResponse, ProxyCollectionImageData, ProxyCollectionImageError, ProxyItemProviderArtData, ProxyItemProviderArtError, ProxySeasonProviderArtData, ProxySeasonProviderArtError, ReadyData, ReadyError, ReadyResponse, RecommendCollectionKindData, RecommendCollectionKindError, RecommendCollectionKindResponse, RemoveAllArtData, RemoveAllArtError, RemoveAllArtResponse, RemoveAllCollectionArtData, RemoveAllCollectionArtError, RemoveAllCollectionArtResponse, RemoveArtData, RemoveArtError, RemoveArtResponse, RemoveCollectionArtData, RemoveCollectionArtError, RemoveCollectionArtResponse, RemoveCollectionThemeData, RemoveCollectionThemeError, RemoveCollectionThemeResponse, RemoveThemeData, RemoveThemeError, RemoveThemeResponse, RenameAssetsData, RenameAssetsError, RenameAssetsResponse, RenameCollectionGroupData, RenameCollectionGroupError, RenameCollectionGroupResponse, RequestCollectionMissingData, RequestCollectionMissingError, RequestCollectionMissingResponse, RunBulkAssetsScheduleData, RunBulkAssetsScheduleError, RunBulkAssetsScheduleResponse, RunSyncData, RunSyncError, RunSyncResponse, RunSyncScheduleData, RunSyncScheduleError, RunSyncScheduleResponse, SaveArtData, SaveArtError, SaveArtResponse, SaveCatalogDraftData, SaveCatalogDraftError, SaveCatalogDraftResponse, SaveCollectionArtData, SaveCollectionArtError, SaveCollectionArtResponse, SaveCollectionGroupPolicyData, SaveCollectionGroupPolicyError, SaveCollectionGroupPolicyResponse, SaveCollectionRuleData, SaveCollectionRuleError, SaveCollectionRuleResponse, SaveTmdbArtData, SaveTmdbArtError, SaveTmdbArtResponse, SearchMdblistListsData, SearchMdblistListsError, SearchMdblistListsResponse, SearchTmdbData, SearchTmdbError, SearchTmdbPeopleData, SearchTmdbPeopleError, SearchTmdbPeopleResponse, SearchTmdbResponse, SearchYoutubeData, SearchYoutubeError, SearchYoutubeResponse, SelectThemeData, SelectThemeError, SelectThemeResponse, SelectTmdbThemeData, SelectTmdbThemeError, SelectTmdbThemeResponse, SendTestNotificationData, SendTestNotificationError, SendTestNotificationResponse, ServeCollectionLocalImageData, ServeCollectionLocalImageError, ServeLocalImageData, ServeLocalImageError, ServeLocalSeasonImageData, ServeLocalSeasonImageError, SetCollectionMembersData, SetCollectionMembersError, SetCollectionMembersResponse, SetCollectionMonitoredData, SetCollectionMonitoredError, SetCollectionMonitoredResponse, SetCollectionThemeData, SetCollectionThemeError, SetCollectionThemeResponse2, SetMonitoredData, SetMonitoredError, SetMonitoredResponse, SetPublicDatasetEnabledData, SetPublicDatasetEnabledError, SetPublicDatasetEnabledResponse, StartBulkAssetsData, StartBulkAssetsError, StartBulkAssetsResponse, StartScanData, StartScanError, StartScanResponse, StartServerAuditData, StartServerAuditError, StartServerAuditResponse, StopAuditFixData, StopAuditFixError, StopAuditFixResponse, StopBulkAssetsData, StopBulkAssetsError, StopBulkAssetsResponse, StopScanData, StopScanError, StopScanResponse, StopServerAuditData, StopServerAuditError, StopServerAuditResponse, StopSyncData, StopSyncError, StopSyncResponse, SyncPublicDatasetNowData, SyncPublicDatasetNowError, SyncPublicDatasetNowResponse, UpdateBackupScheduleData, UpdateBackupScheduleError, UpdateBackupScheduleResponse, UpdateBulkAssetsScheduleData, UpdateBulkAssetsScheduleError, UpdateBulkAssetsScheduleResponse, UpdateCollectionData, UpdateCollectionError, UpdateCollectionResponse, UpdateNotificationsData, UpdateNotificationsError, UpdateNotificationsResponse, UpdateSettingsData, UpdateSettingsError, UpdateSettingsResponse, UpdateSyncScheduleData, UpdateSyncScheduleError, UpdateSyncScheduleResponse, UploadArtData, UploadArtError, UploadArtResponse } from '../types.gen';
+import { adoptCollection, authConfig, bulkOperateCollections, bulkOperateItems, bulkSetCollectionMonitored, checkConnectivity, clearJobSnapshot, createApiKey, createBackup, createBulkAssetsSchedule, createCollection, createSyncSchedule, deleteApiKey, deleteBulkAssetsSchedule, deleteCollection, deleteCollectionGroup, deleteItem, deleteSyncSchedule, discardCatalogDraft, discardCatalogDrafts, exportCatalogSelections, fixAuditFindings, getArtSources, getBackupSchedule, getCatalogCollectionIssue, getCatalogCollectionRecord, getCatalogCounts, getCatalogEntry, getCatalogEntryRecord, getCatalogItemIssue, getCatalogRecord, getCatalogSources, getCatalogStatus, getCollection, getCollectionArrOptions, getCollectionArtSources, getCollectionCapabilities, getCollectionDefaults, getCollectionGroupPolicy, getCollectionMissing, getCollectionRecord, getCollectionTheme, getFolderRoots, getGeneratedCollectionArt, getItem, getItemRecord, getJobLog, getJobResults, getLibraries, getNotifications, getRealtimeSnapshot, getRemovalOptions, getSeasons, getServerWebLinks, getSettings, getStats, getSyncStatus, getTmdbArtSources, getTmdbCatalogSources, getTmdbCollection, getTmdbItem, health, listApiKeys, listBackups, listBulkAssetsSchedules, listCatalogEntries, listCollectionFieldValues, listCollectionGroups, listCollections, listCollectionSets, listItems, listRadarrTags, listServerLibraries, listSonarrTags, listSyncSchedules, login, logout, matchArt, matchCollectionArt, me, oidcCallback, oidcLogin, type Options, orphanCollection, planCollectionAdoption, previewCollection, previewCollectionSet, proxyCollectionImage, proxyItemProviderArt, proxySeasonProviderArt, ready, recommendCollectionKind, removeAllArt, removeAllCollectionArt, removeArt, removeCollectionArt, removeCollectionTheme, removeTheme, renameAssets, renameCollectionGroup, requestCollectionMissing, runBulkAssetsSchedule, runSync, runSyncSchedule, saveArt, saveCatalogDraft, saveCollectionArt, saveCollectionGroupPolicy, saveCollectionRule, saveTmdbArt, searchMdblistLists, searchTmdb, searchTmdbPeople, searchYoutube, selectTheme, selectTmdbTheme, sendTestNotification, serveCollectionLocalImage, serveLocalImage, serveLocalSeasonImage, setCatalogEnabled, setCollectionMembers, setCollectionMonitored, setCollectionTheme, setMonitored, startBulkAssets, startScan, startServerAudit, stopAuditFix, stopBulkAssets, stopScan, stopServerAudit, stopSync, syncCatalogNow, updateBackupSchedule, updateBulkAssetsSchedule, updateCollection, updateNotifications, updateSettings, updateSyncSchedule, uploadArt } from '../sdk.gen';
+import type { AdoptCollectionData, AdoptCollectionError, AdoptCollectionResponse, AuthConfigData, AuthConfigResponse, BulkOperateCollectionsData, BulkOperateCollectionsError, BulkOperateCollectionsResponse, BulkOperateItemsData, BulkOperateItemsError, BulkOperateItemsResponse, BulkSetCollectionMonitoredData, BulkSetCollectionMonitoredError, BulkSetCollectionMonitoredResponse, CheckConnectivityData, CheckConnectivityError, CheckConnectivityResponse, ClearJobSnapshotData, ClearJobSnapshotError, ClearJobSnapshotResponse, CreateApiKeyData, CreateApiKeyError, CreateApiKeyResponse, CreateBackupData, CreateBackupError, CreateBackupResponse, CreateBulkAssetsScheduleData, CreateBulkAssetsScheduleError, CreateBulkAssetsScheduleResponse, CreateCollectionData, CreateCollectionError, CreateCollectionResponse, CreateSyncScheduleData, CreateSyncScheduleError, CreateSyncScheduleResponse, DeleteApiKeyData, DeleteApiKeyError, DeleteApiKeyResponse, DeleteBulkAssetsScheduleData, DeleteBulkAssetsScheduleError, DeleteBulkAssetsScheduleResponse, DeleteCollectionData, DeleteCollectionError, DeleteCollectionGroupData, DeleteCollectionGroupError, DeleteCollectionGroupResponse, DeleteCollectionResponse, DeleteItemData, DeleteItemError, DeleteItemResponse, DeleteSyncScheduleData, DeleteSyncScheduleError, DeleteSyncScheduleResponse, DiscardCatalogDraftData, DiscardCatalogDraftError, DiscardCatalogDraftResponse, DiscardCatalogDraftsData, DiscardCatalogDraftsError, DiscardCatalogDraftsResponse, ExportCatalogSelectionsData, ExportCatalogSelectionsError, ExportCatalogSelectionsResponse, FixAuditFindingsData, FixAuditFindingsError, FixAuditFindingsResponse, GetArtSourcesData, GetArtSourcesError, GetArtSourcesResponse, GetBackupScheduleData, GetBackupScheduleError, GetBackupScheduleResponse, GetCatalogCollectionIssueData, GetCatalogCollectionIssueError, GetCatalogCollectionIssueResponse, GetCatalogCollectionRecordData, GetCatalogCollectionRecordError, GetCatalogCollectionRecordResponse, GetCatalogCountsData, GetCatalogCountsError, GetCatalogCountsResponse, GetCatalogEntryData, GetCatalogEntryError, GetCatalogEntryRecordData, GetCatalogEntryRecordError, GetCatalogEntryRecordResponse, GetCatalogEntryResponse, GetCatalogItemIssueData, GetCatalogItemIssueError, GetCatalogItemIssueResponse, GetCatalogRecordData, GetCatalogRecordError, GetCatalogRecordResponse, GetCatalogSourcesData, GetCatalogSourcesError, GetCatalogSourcesResponse, GetCatalogStatusData, GetCatalogStatusError, GetCatalogStatusResponse, GetCollectionArrOptionsData, GetCollectionArrOptionsError, GetCollectionArrOptionsResponse, GetCollectionArtSourcesData, GetCollectionArtSourcesError, GetCollectionArtSourcesResponse, GetCollectionCapabilitiesData, GetCollectionCapabilitiesError, GetCollectionCapabilitiesResponse, GetCollectionData, GetCollectionDefaultsData, GetCollectionDefaultsError, GetCollectionDefaultsResponse, GetCollectionError, GetCollectionGroupPolicyData, GetCollectionGroupPolicyError, GetCollectionGroupPolicyResponse, GetCollectionMissingData, GetCollectionMissingError, GetCollectionMissingResponse, GetCollectionRecordData, GetCollectionRecordError, GetCollectionRecordResponse, GetCollectionResponse, GetCollectionThemeData, GetCollectionThemeError, GetCollectionThemeResponse, GetFolderRootsData, GetFolderRootsError, GetFolderRootsResponse, GetGeneratedCollectionArtData, GetGeneratedCollectionArtError, GetItemData, GetItemError, GetItemRecordData, GetItemRecordError, GetItemRecordResponse, GetItemResponse, GetJobLogData, GetJobLogError, GetJobLogResponse, GetJobResultsData, GetJobResultsError, GetJobResultsResponse, GetLibrariesData, GetLibrariesError, GetLibrariesResponse, GetNotificationsData, GetNotificationsError, GetNotificationsResponse, GetRealtimeSnapshotData, GetRealtimeSnapshotError, GetRealtimeSnapshotResponse, GetRemovalOptionsData, GetRemovalOptionsError, GetRemovalOptionsResponse, GetSeasonsData, GetSeasonsError, GetSeasonsResponse, GetServerWebLinksData, GetServerWebLinksError, GetServerWebLinksResponse, GetSettingsData, GetSettingsError, GetSettingsResponse, GetStatsData, GetStatsError, GetStatsResponse, GetSyncStatusData, GetSyncStatusError, GetSyncStatusResponse, GetTmdbArtSourcesData, GetTmdbArtSourcesError, GetTmdbArtSourcesResponse, GetTmdbCatalogSourcesData, GetTmdbCatalogSourcesError, GetTmdbCatalogSourcesResponse, GetTmdbCollectionData, GetTmdbCollectionError, GetTmdbCollectionResponse, GetTmdbItemData, GetTmdbItemError, GetTmdbItemResponse, HealthData, HealthResponse2, ListApiKeysData, ListApiKeysError, ListApiKeysResponse, ListBackupsData, ListBackupsError, ListBackupsResponse, ListBulkAssetsSchedulesData, ListBulkAssetsSchedulesError, ListBulkAssetsSchedulesResponse, ListCatalogEntriesData, ListCatalogEntriesError, ListCatalogEntriesResponse, ListCollectionFieldValuesData, ListCollectionFieldValuesError, ListCollectionFieldValuesResponse, ListCollectionGroupsData, ListCollectionGroupsError, ListCollectionGroupsResponse, ListCollectionsData, ListCollectionsError, ListCollectionSetsData, ListCollectionSetsError, ListCollectionSetsResponse, ListCollectionsResponse, ListItemsData, ListItemsError, ListItemsResponse, ListRadarrTagsData, ListRadarrTagsError, ListRadarrTagsResponse, ListServerLibrariesData, ListServerLibrariesError, ListServerLibrariesResponse, ListSonarrTagsData, ListSonarrTagsError, ListSonarrTagsResponse, ListSyncSchedulesData, ListSyncSchedulesError, ListSyncSchedulesResponse, LoginData, LoginError, LoginResponse2, LogoutData, LogoutResponse2, MatchArtData, MatchArtError, MatchArtResponse, MatchCollectionArtData, MatchCollectionArtError, MatchCollectionArtResponse, MeData, MeError, MeResponse2, OidcCallbackData, OidcLoginData, OidcLoginError, OrphanCollectionData, OrphanCollectionError, OrphanCollectionResponse, PlanCollectionAdoptionData, PlanCollectionAdoptionError, PlanCollectionAdoptionResponse, PreviewCollectionData, PreviewCollectionError, PreviewCollectionResponse, PreviewCollectionSetData, PreviewCollectionSetError, PreviewCollectionSetResponse, ProxyCollectionImageData, ProxyCollectionImageError, ProxyItemProviderArtData, ProxyItemProviderArtError, ProxySeasonProviderArtData, ProxySeasonProviderArtError, ReadyData, ReadyError, ReadyResponse, RecommendCollectionKindData, RecommendCollectionKindError, RecommendCollectionKindResponse, RemoveAllArtData, RemoveAllArtError, RemoveAllArtResponse, RemoveAllCollectionArtData, RemoveAllCollectionArtError, RemoveAllCollectionArtResponse, RemoveArtData, RemoveArtError, RemoveArtResponse, RemoveCollectionArtData, RemoveCollectionArtError, RemoveCollectionArtResponse, RemoveCollectionThemeData, RemoveCollectionThemeError, RemoveCollectionThemeResponse, RemoveThemeData, RemoveThemeError, RemoveThemeResponse, RenameAssetsData, RenameAssetsError, RenameAssetsResponse, RenameCollectionGroupData, RenameCollectionGroupError, RenameCollectionGroupResponse, RequestCollectionMissingData, RequestCollectionMissingError, RequestCollectionMissingResponse, RunBulkAssetsScheduleData, RunBulkAssetsScheduleError, RunBulkAssetsScheduleResponse, RunSyncData, RunSyncError, RunSyncResponse, RunSyncScheduleData, RunSyncScheduleError, RunSyncScheduleResponse, SaveArtData, SaveArtError, SaveArtResponse, SaveCatalogDraftData, SaveCatalogDraftError, SaveCatalogDraftResponse, SaveCollectionArtData, SaveCollectionArtError, SaveCollectionArtResponse, SaveCollectionGroupPolicyData, SaveCollectionGroupPolicyError, SaveCollectionGroupPolicyResponse, SaveCollectionRuleData, SaveCollectionRuleError, SaveCollectionRuleResponse, SaveTmdbArtData, SaveTmdbArtError, SaveTmdbArtResponse, SearchMdblistListsData, SearchMdblistListsError, SearchMdblistListsResponse, SearchTmdbData, SearchTmdbError, SearchTmdbPeopleData, SearchTmdbPeopleError, SearchTmdbPeopleResponse, SearchTmdbResponse, SearchYoutubeData, SearchYoutubeError, SearchYoutubeResponse, SelectThemeData, SelectThemeError, SelectThemeResponse, SelectTmdbThemeData, SelectTmdbThemeError, SelectTmdbThemeResponse, SendTestNotificationData, SendTestNotificationError, SendTestNotificationResponse, ServeCollectionLocalImageData, ServeCollectionLocalImageError, ServeLocalImageData, ServeLocalImageError, ServeLocalSeasonImageData, ServeLocalSeasonImageError, SetCatalogEnabledData, SetCatalogEnabledError, SetCatalogEnabledResponse, SetCollectionMembersData, SetCollectionMembersError, SetCollectionMembersResponse, SetCollectionMonitoredData, SetCollectionMonitoredError, SetCollectionMonitoredResponse, SetCollectionThemeData, SetCollectionThemeError, SetCollectionThemeResponse2, SetMonitoredData, SetMonitoredError, SetMonitoredResponse, StartBulkAssetsData, StartBulkAssetsError, StartBulkAssetsResponse, StartScanData, StartScanError, StartScanResponse, StartServerAuditData, StartServerAuditError, StartServerAuditResponse, StopAuditFixData, StopAuditFixError, StopAuditFixResponse, StopBulkAssetsData, StopBulkAssetsError, StopBulkAssetsResponse, StopScanData, StopScanError, StopScanResponse, StopServerAuditData, StopServerAuditError, StopServerAuditResponse, StopSyncData, StopSyncError, StopSyncResponse, SyncCatalogNowData, SyncCatalogNowError, SyncCatalogNowResponse, UpdateBackupScheduleData, UpdateBackupScheduleError, UpdateBackupScheduleResponse, UpdateBulkAssetsScheduleData, UpdateBulkAssetsScheduleError, UpdateBulkAssetsScheduleResponse, UpdateCollectionData, UpdateCollectionError, UpdateCollectionResponse, UpdateNotificationsData, UpdateNotificationsError, UpdateNotificationsResponse, UpdateSettingsData, UpdateSettingsError, UpdateSettingsResponse, UpdateSyncScheduleData, UpdateSyncScheduleError, UpdateSyncScheduleResponse, UploadArtData, UploadArtError, UploadArtResponse } from '../types.gen';
 
 /**
  * Get Removal Options
@@ -46,137 +46,6 @@ export const uploadArtMutation = (options?: Partial<Options<UploadArtData>>): Mu
     };
     return mutationOptions;
 };
-
-/**
- * Remove All Art
- *
- * Remove every art slot of an item and its seasons.
- */
-export const removeAllArtMutation = (options?: Partial<Options<RemoveAllArtData>>): MutationOptions<RemoveAllArtResponse, RemoveAllArtError, Options<RemoveAllArtData>> => {
-    const mutationOptions: MutationOptions<RemoveAllArtResponse, RemoveAllArtError, Options<RemoveAllArtData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await removeAllArt({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-/**
- * Remove Art
- *
- * Forget a slot's art, delete its local file or the server's copy.
- */
-export const removeArtMutation = (options?: Partial<Options<RemoveArtData>>): MutationOptions<RemoveArtResponse, RemoveArtError, Options<RemoveArtData>> => {
-    const mutationOptions: MutationOptions<RemoveArtResponse, RemoveArtError, Options<RemoveArtData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await removeArt({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-/**
- * Save Art
- *
- * Record the chosen artwork for one slot and enqueue its download.
- *
- * An item without a local folder only records the choice.
- */
-export const saveArtMutation = (options?: Partial<Options<SaveArtData>>): MutationOptions<SaveArtResponse, SaveArtError, Options<SaveArtData>> => {
-    const mutationOptions: MutationOptions<SaveArtResponse, SaveArtError, Options<SaveArtData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await saveArt({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-/**
- * Match Art
- *
- * Run pHash match for one slot.
- */
-export const matchArtMutation = (options?: Partial<Options<MatchArtData>>): MutationOptions<MatchArtResponse, MatchArtError, Options<MatchArtData>> => {
-    const mutationOptions: MutationOptions<MatchArtResponse, MatchArtError, Options<MatchArtData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await matchArt({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-export type QueryKey<TOptions extends Options> = [
-    Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
-        _id: string;
-        _infinite?: boolean;
-        tags?: ReadonlyArray<string>;
-    }
-];
-
-const createQueryKey = <TOptions extends Options>(id: string, options?: TOptions, infinite?: boolean, tags?: ReadonlyArray<string>): [
-    QueryKey<TOptions>[0]
-] => {
-    const params: QueryKey<TOptions>[0] = { _id: id, baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl } as QueryKey<TOptions>[0];
-    if (infinite) {
-        params._infinite = infinite;
-    }
-    if (tags) {
-        params.tags = tags;
-    }
-    if (options?.body) {
-        params.body = options.body;
-    }
-    if (options?.headers) {
-        params.headers = options.headers;
-    }
-    if (options?.path) {
-        params.path = options.path;
-    }
-    if (options?.query) {
-        params.query = options.query;
-    }
-    return [params];
-};
-
-export const getArtSourcesQueryKey = (options: Options<GetArtSourcesData>) => createQueryKey('getArtSources', options, false, ['art']);
-
-/**
- * Get Art Sources
- *
- * Fetch art options from TMDB and/or the configured media server.
- */
-export const getArtSourcesOptions = (options: Options<GetArtSourcesData>) => queryOptions<GetArtSourcesResponse, GetArtSourcesError, GetArtSourcesResponse, ReturnType<typeof getArtSourcesQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getArtSources({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getArtSourcesQueryKey(options)
-});
 
 /**
  * Rename Assets
@@ -233,6 +102,39 @@ export const stopScanMutation = (options?: Partial<Options<StopScanData>>): Muta
         }
     };
     return mutationOptions;
+};
+
+export type QueryKey<TOptions extends Options> = [
+    Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
+        _id: string;
+        _infinite?: boolean;
+        tags?: ReadonlyArray<string>;
+    }
+];
+
+const createQueryKey = <TOptions extends Options>(id: string, options?: TOptions, infinite?: boolean, tags?: ReadonlyArray<string>): [
+    QueryKey<TOptions>[0]
+] => {
+    const params: QueryKey<TOptions>[0] = { _id: id, baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl } as QueryKey<TOptions>[0];
+    if (infinite) {
+        params._infinite = infinite;
+    }
+    if (tags) {
+        params.tags = tags;
+    }
+    if (options?.body) {
+        params.body = options.body;
+    }
+    if (options?.headers) {
+        params.headers = options.headers;
+    }
+    if (options?.path) {
+        params.path = options.path;
+    }
+    if (options?.query) {
+        params.query = options.query;
+    }
+    return [params];
 };
 
 export const listApiKeysQueryKey = (options?: Options<ListApiKeysData>) => createQueryKey('listApiKeys', options, false, ['auth']);
@@ -613,6 +515,321 @@ export const stopBulkAssetsMutation = (options?: Partial<Options<StopBulkAssetsD
     const mutationOptions: MutationOptions<StopBulkAssetsResponse, StopBulkAssetsError, Options<StopBulkAssetsData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await stopBulkAssets({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listCatalogEntriesQueryKey = (options: Options<ListCatalogEntriesData>) => createQueryKey('listCatalogEntries', options, false, ['catalog']);
+
+/**
+ * List Catalog Entries
+ *
+ * Return every catalog entry of a kind, with what the library holds of it.
+ */
+export const listCatalogEntriesOptions = (options: Options<ListCatalogEntriesData>) => queryOptions<ListCatalogEntriesResponse, ListCatalogEntriesError, ListCatalogEntriesResponse, ReturnType<typeof listCatalogEntriesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listCatalogEntries({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listCatalogEntriesQueryKey(options)
+});
+
+export const getCatalogCountsQueryKey = (options?: Options<GetCatalogCountsData>) => createQueryKey('getCatalogCounts', options, false, ['catalog']);
+
+/**
+ * Get Catalog Counts
+ *
+ * Return catalog and draft counts without reading every entry.
+ */
+export const getCatalogCountsOptions = (options?: Options<GetCatalogCountsData>) => queryOptions<GetCatalogCountsResponse, GetCatalogCountsError, GetCatalogCountsResponse, ReturnType<typeof getCatalogCountsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogCounts({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogCountsQueryKey(options)
+});
+
+/**
+ * Discard Catalog Drafts
+ *
+ * Discard the local drafts of the named entries.
+ */
+export const discardCatalogDraftsMutation = (options?: Partial<Options<DiscardCatalogDraftsData>>): MutationOptions<DiscardCatalogDraftsResponse, DiscardCatalogDraftsError, Options<DiscardCatalogDraftsData>> => {
+    const mutationOptions: MutationOptions<DiscardCatalogDraftsResponse, DiscardCatalogDraftsError, Options<DiscardCatalogDraftsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await discardCatalogDrafts({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getCatalogEntryQueryKey = (options: Options<GetCatalogEntryData>) => createQueryKey('getCatalogEntry', options, false, ['catalog']);
+
+/**
+ * Get Catalog Entry
+ *
+ * Return one catalog entry with its local draft.
+ */
+export const getCatalogEntryOptions = (options: Options<GetCatalogEntryData>) => queryOptions<GetCatalogEntryResponse, GetCatalogEntryError, GetCatalogEntryResponse, ReturnType<typeof getCatalogEntryQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogEntry({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogEntryQueryKey(options)
+});
+
+/**
+ * Discard Catalog Draft
+ *
+ * Discard an entry's local draft.
+ */
+export const discardCatalogDraftMutation = (options?: Partial<Options<DiscardCatalogDraftData>>): MutationOptions<DiscardCatalogDraftResponse, DiscardCatalogDraftError, Options<DiscardCatalogDraftData>> => {
+    const mutationOptions: MutationOptions<DiscardCatalogDraftResponse, DiscardCatalogDraftError, Options<DiscardCatalogDraftData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await discardCatalogDraft({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Save Catalog Draft
+ *
+ * Change an entry's local draft, to contribute later.
+ */
+export const saveCatalogDraftMutation = (options?: Partial<Options<SaveCatalogDraftData>>): MutationOptions<SaveCatalogDraftResponse, SaveCatalogDraftError, Options<SaveCatalogDraftData>> => {
+    const mutationOptions: MutationOptions<SaveCatalogDraftResponse, SaveCatalogDraftError, Options<SaveCatalogDraftData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await saveCatalogDraft({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getCatalogEntryRecordQueryKey = (options: Options<GetCatalogEntryRecordData>) => createQueryKey('getCatalogEntryRecord', options, false, ['catalog']);
+
+/**
+ * Get Catalog Entry Record
+ *
+ * Return the catalog record an entry name identifies.
+ */
+export const getCatalogEntryRecordOptions = (options: Options<GetCatalogEntryRecordData>) => queryOptions<GetCatalogEntryRecordResponse, GetCatalogEntryRecordError, GetCatalogEntryRecordResponse, ReturnType<typeof getCatalogEntryRecordQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogEntryRecord({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogEntryRecordQueryKey(options)
+});
+
+export const getCatalogCollectionIssueQueryKey = (options: Options<GetCatalogCollectionIssueData>) => createQueryKey('getCatalogCollectionIssue', options, false, ['catalog']);
+
+/**
+ * Get Catalog Collection Issue
+ *
+ * Return a prefilled issue contributing a collection's art and theme.
+ */
+export const getCatalogCollectionIssueOptions = (options: Options<GetCatalogCollectionIssueData>) => queryOptions<GetCatalogCollectionIssueResponse, GetCatalogCollectionIssueError, GetCatalogCollectionIssueResponse, ReturnType<typeof getCatalogCollectionIssueQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogCollectionIssue({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogCollectionIssueQueryKey(options)
+});
+
+export const getCatalogCollectionRecordQueryKey = (options: Options<GetCatalogCollectionRecordData>) => createQueryKey('getCatalogCollectionRecord', options, false, ['catalog']);
+
+/**
+ * Get Catalog Collection Record
+ *
+ * Return the catalog record of a library collection.
+ */
+export const getCatalogCollectionRecordOptions = (options: Options<GetCatalogCollectionRecordData>) => queryOptions<GetCatalogCollectionRecordResponse, GetCatalogCollectionRecordError, GetCatalogCollectionRecordResponse, ReturnType<typeof getCatalogCollectionRecordQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogCollectionRecord({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogCollectionRecordQueryKey(options)
+});
+
+/**
+ * Set Catalog Enabled
+ *
+ * Turn the catalog on or off.
+ */
+export const setCatalogEnabledMutation = (options?: Partial<Options<SetCatalogEnabledData>>): MutationOptions<SetCatalogEnabledResponse, SetCatalogEnabledError, Options<SetCatalogEnabledData>> => {
+    const mutationOptions: MutationOptions<SetCatalogEnabledResponse, SetCatalogEnabledError, Options<SetCatalogEnabledData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await setCatalogEnabled({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const exportCatalogSelectionsQueryKey = (options?: Options<ExportCatalogSelectionsData>) => createQueryKey('exportCatalogSelections', options, false, ['catalog']);
+
+/**
+ * Export Catalog Selections
+ *
+ * Download saved selections as an archive for an OvertureDB contribution.
+ */
+export const exportCatalogSelectionsOptions = (options?: Options<ExportCatalogSelectionsData>) => queryOptions<ExportCatalogSelectionsResponse, ExportCatalogSelectionsError, ExportCatalogSelectionsResponse, ReturnType<typeof exportCatalogSelectionsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await exportCatalogSelections({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: exportCatalogSelectionsQueryKey(options)
+});
+
+export const getCatalogItemIssueQueryKey = (options: Options<GetCatalogItemIssueData>) => createQueryKey('getCatalogItemIssue', options, false, ['catalog']);
+
+/**
+ * Get Catalog Item Issue
+ *
+ * Return a prefilled issue contributing an item's saved selections.
+ */
+export const getCatalogItemIssueOptions = (options: Options<GetCatalogItemIssueData>) => queryOptions<GetCatalogItemIssueResponse, GetCatalogItemIssueError, GetCatalogItemIssueResponse, ReturnType<typeof getCatalogItemIssueQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogItemIssue({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogItemIssueQueryKey(options)
+});
+
+export const getCatalogRecordQueryKey = (options: Options<GetCatalogRecordData>) => createQueryKey('getCatalogRecord', options, false, ['catalog']);
+
+/**
+ * Get Catalog Record
+ *
+ * Return catalog record.
+ */
+export const getCatalogRecordOptions = (options: Options<GetCatalogRecordData>) => queryOptions<GetCatalogRecordResponse, GetCatalogRecordError, GetCatalogRecordResponse, ReturnType<typeof getCatalogRecordQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogRecord({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogRecordQueryKey(options)
+});
+
+export const getCatalogSourcesQueryKey = (options: Options<GetCatalogSourcesData>) => createQueryKey('getCatalogSources', options, false, ['catalog']);
+
+/**
+ * Get Catalog Sources
+ *
+ * Return catalog sources, including a normal not-found result.
+ */
+export const getCatalogSourcesOptions = (options: Options<GetCatalogSourcesData>) => queryOptions<GetCatalogSourcesResponse, GetCatalogSourcesError, GetCatalogSourcesResponse, ReturnType<typeof getCatalogSourcesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogSources({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogSourcesQueryKey(options)
+});
+
+export const getCatalogStatusQueryKey = (options?: Options<GetCatalogStatusData>) => createQueryKey('getCatalogStatus', options, false, ['catalog']);
+
+/**
+ * Get Catalog Status
+ *
+ * Return catalog status.
+ */
+export const getCatalogStatusOptions = (options?: Options<GetCatalogStatusData>) => queryOptions<GetCatalogStatusResponse, GetCatalogStatusError, GetCatalogStatusResponse, ReturnType<typeof getCatalogStatusQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCatalogStatus({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCatalogStatusQueryKey(options)
+});
+
+/**
+ * Sync Catalog Now
+ *
+ * Sync catalog now.
+ */
+export const syncCatalogNowMutation = (options?: Partial<Options<SyncCatalogNowData>>): MutationOptions<SyncCatalogNowResponse, SyncCatalogNowError, Options<SyncCatalogNowData>> => {
+    const mutationOptions: MutationOptions<SyncCatalogNowResponse, SyncCatalogNowError, Options<SyncCatalogNowData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await syncCatalogNow({
                 ...options,
                 ...fnOptions,
                 throwOnError: true
@@ -1174,7 +1391,7 @@ export const getGeneratedCollectionArtQueryKey = (options: Options<GetGeneratedC
 /**
  * Get Generated Collection Art
  *
- * Return the art Overture would draw for the collection in *style*.
+ * Return the art Overture would generate for the collection in *style*.
  */
 export const getGeneratedCollectionArtOptions = (options: Options<GetGeneratedCollectionArtData>) => queryOptions<unknown, GetGeneratedCollectionArtError, unknown, ReturnType<typeof getGeneratedCollectionArtQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -1402,26 +1619,6 @@ export const saveCollectionRuleMutation = (options?: Partial<Options<SaveCollect
     };
     return mutationOptions;
 };
-
-export const getCollectionSourcesQueryKey = (options: Options<GetCollectionSourcesData>) => createQueryKey('getCollectionSources', options, false, ['collections']);
-
-/**
- * Get Collection Sources
- *
- * Return the matched catalog's collection theme candidates.
- */
-export const getCollectionSourcesOptions = (options: Options<GetCollectionSourcesData>) => queryOptions<GetCollectionSourcesResponse, GetCollectionSourcesError, GetCollectionSourcesResponse, ReturnType<typeof getCollectionSourcesQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getCollectionSources({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getCollectionSourcesQueryKey(options)
-});
 
 /**
  * Remove Collection Theme
@@ -1719,6 +1916,104 @@ export const getItemOptions = (options: Options<GetItemData>) => queryOptions<Ge
     queryKey: getItemQueryKey(options)
 });
 
+/**
+ * Remove All Art
+ *
+ * Remove every art slot of an item and its seasons.
+ */
+export const removeAllArtMutation = (options?: Partial<Options<RemoveAllArtData>>): MutationOptions<RemoveAllArtResponse, RemoveAllArtError, Options<RemoveAllArtData>> => {
+    const mutationOptions: MutationOptions<RemoveAllArtResponse, RemoveAllArtError, Options<RemoveAllArtData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeAllArt({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Remove Art
+ *
+ * Forget a slot's art, delete its local file or the server's copy.
+ */
+export const removeArtMutation = (options?: Partial<Options<RemoveArtData>>): MutationOptions<RemoveArtResponse, RemoveArtError, Options<RemoveArtData>> => {
+    const mutationOptions: MutationOptions<RemoveArtResponse, RemoveArtError, Options<RemoveArtData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeArt({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Save Art
+ *
+ * Record the chosen artwork for one slot and enqueue its download.
+ *
+ * An item without a local folder only records the choice.
+ */
+export const saveArtMutation = (options?: Partial<Options<SaveArtData>>): MutationOptions<SaveArtResponse, SaveArtError, Options<SaveArtData>> => {
+    const mutationOptions: MutationOptions<SaveArtResponse, SaveArtError, Options<SaveArtData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await saveArt({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Match Art
+ *
+ * Run pHash match for one slot.
+ */
+export const matchArtMutation = (options?: Partial<Options<MatchArtData>>): MutationOptions<MatchArtResponse, MatchArtError, Options<MatchArtData>> => {
+    const mutationOptions: MutationOptions<MatchArtResponse, MatchArtError, Options<MatchArtData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await matchArt({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getArtSourcesQueryKey = (options: Options<GetArtSourcesData>) => createQueryKey('getArtSources', options, false, ['art']);
+
+/**
+ * Get Art Sources
+ *
+ * Fetch art options from TMDB and/or the configured media server.
+ */
+export const getArtSourcesOptions = (options: Options<GetArtSourcesData>) => queryOptions<GetArtSourcesResponse, GetArtSourcesError, GetArtSourcesResponse, ReturnType<typeof getArtSourcesQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getArtSources({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getArtSourcesQueryKey(options)
+});
+
 export const serveLocalImageQueryKey = (options: Options<ServeLocalImageData>) => createQueryKey('serveLocalImage', options, false, ['library']);
 
 /**
@@ -1817,6 +2112,46 @@ export const getSeasonsOptions = (options: Options<GetSeasonsData>) => queryOpti
     },
     queryKey: getSeasonsQueryKey(options)
 });
+
+/**
+ * Remove Theme
+ *
+ * Forget an item's theme, delete its local file or the server's copy.
+ */
+export const removeThemeMutation = (options?: Partial<Options<RemoveThemeData>>): MutationOptions<RemoveThemeResponse, RemoveThemeError, Options<RemoveThemeData>> => {
+    const mutationOptions: MutationOptions<RemoveThemeResponse, RemoveThemeError, Options<RemoveThemeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeTheme({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Select Theme
+ *
+ * Select an item's theme and download it.
+ *
+ * An item without a local folder only records the choice.
+ */
+export const selectThemeMutation = (options?: Partial<Options<SelectThemeData>>): MutationOptions<SelectThemeResponse, SelectThemeError, Options<SelectThemeData>> => {
+    const mutationOptions: MutationOptions<SelectThemeResponse, SelectThemeError, Options<SelectThemeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await selectTheme({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
 
 export const getLibrariesQueryKey = (options?: Options<GetLibrariesData>) => createQueryKey('getLibraries', options, false, ['library']);
 
@@ -1966,321 +2301,6 @@ export const sendTestNotificationMutation = (options?: Partial<Options<SendTestN
     const mutationOptions: MutationOptions<SendTestNotificationResponse, SendTestNotificationError, Options<SendTestNotificationData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await sendTestNotification({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-export const listCatalogEntriesQueryKey = (options: Options<ListCatalogEntriesData>) => createQueryKey('listCatalogEntries', options, false, ['public-dataset']);
-
-/**
- * List Catalog Entries
- *
- * Return every catalog entry of a kind, with what the library holds of it.
- */
-export const listCatalogEntriesOptions = (options: Options<ListCatalogEntriesData>) => queryOptions<ListCatalogEntriesResponse, ListCatalogEntriesError, ListCatalogEntriesResponse, ReturnType<typeof listCatalogEntriesQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await listCatalogEntries({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: listCatalogEntriesQueryKey(options)
-});
-
-export const getCatalogCountsQueryKey = (options?: Options<GetCatalogCountsData>) => createQueryKey('getCatalogCounts', options, false, ['public-dataset']);
-
-/**
- * Get Catalog Counts
- *
- * Return catalog and draft counts without reading every entry.
- */
-export const getCatalogCountsOptions = (options?: Options<GetCatalogCountsData>) => queryOptions<GetCatalogCountsResponse, GetCatalogCountsError, GetCatalogCountsResponse, ReturnType<typeof getCatalogCountsQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getCatalogCounts({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getCatalogCountsQueryKey(options)
-});
-
-/**
- * Discard Catalog Drafts
- *
- * Discard the local drafts of the named entries.
- */
-export const discardCatalogDraftsMutation = (options?: Partial<Options<DiscardCatalogDraftsData>>): MutationOptions<DiscardCatalogDraftsResponse, DiscardCatalogDraftsError, Options<DiscardCatalogDraftsData>> => {
-    const mutationOptions: MutationOptions<DiscardCatalogDraftsResponse, DiscardCatalogDraftsError, Options<DiscardCatalogDraftsData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await discardCatalogDrafts({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-export const getCatalogEntryQueryKey = (options: Options<GetCatalogEntryData>) => createQueryKey('getCatalogEntry', options, false, ['public-dataset']);
-
-/**
- * Get Catalog Entry
- *
- * Return one catalog entry with its local draft.
- */
-export const getCatalogEntryOptions = (options: Options<GetCatalogEntryData>) => queryOptions<GetCatalogEntryResponse, GetCatalogEntryError, GetCatalogEntryResponse, ReturnType<typeof getCatalogEntryQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getCatalogEntry({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getCatalogEntryQueryKey(options)
-});
-
-/**
- * Discard Catalog Draft
- *
- * Discard an entry's local draft.
- */
-export const discardCatalogDraftMutation = (options?: Partial<Options<DiscardCatalogDraftData>>): MutationOptions<DiscardCatalogDraftResponse, DiscardCatalogDraftError, Options<DiscardCatalogDraftData>> => {
-    const mutationOptions: MutationOptions<DiscardCatalogDraftResponse, DiscardCatalogDraftError, Options<DiscardCatalogDraftData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await discardCatalogDraft({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-/**
- * Save Catalog Draft
- *
- * Change an entry's local draft, to contribute later.
- */
-export const saveCatalogDraftMutation = (options?: Partial<Options<SaveCatalogDraftData>>): MutationOptions<SaveCatalogDraftResponse, SaveCatalogDraftError, Options<SaveCatalogDraftData>> => {
-    const mutationOptions: MutationOptions<SaveCatalogDraftResponse, SaveCatalogDraftError, Options<SaveCatalogDraftData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await saveCatalogDraft({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-export const getCatalogEntryRecordQueryKey = (options: Options<GetCatalogEntryRecordData>) => createQueryKey('getCatalogEntryRecord', options, false, ['public-dataset']);
-
-/**
- * Get Catalog Entry Record
- *
- * Return the catalog record an entry name identifies.
- */
-export const getCatalogEntryRecordOptions = (options: Options<GetCatalogEntryRecordData>) => queryOptions<GetCatalogEntryRecordResponse, GetCatalogEntryRecordError, GetCatalogEntryRecordResponse, ReturnType<typeof getCatalogEntryRecordQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getCatalogEntryRecord({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getCatalogEntryRecordQueryKey(options)
-});
-
-export const getPublicDatasetCollectionIssueQueryKey = (options: Options<GetPublicDatasetCollectionIssueData>) => createQueryKey('getPublicDatasetCollectionIssue', options, false, ['public-dataset']);
-
-/**
- * Get Public Dataset Collection Issue
- *
- * Return a prefilled issue contributing a collection's art and theme.
- */
-export const getPublicDatasetCollectionIssueOptions = (options: Options<GetPublicDatasetCollectionIssueData>) => queryOptions<GetPublicDatasetCollectionIssueResponse, GetPublicDatasetCollectionIssueError, GetPublicDatasetCollectionIssueResponse, ReturnType<typeof getPublicDatasetCollectionIssueQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getPublicDatasetCollectionIssue({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getPublicDatasetCollectionIssueQueryKey(options)
-});
-
-export const getPublicDatasetCollectionRecordQueryKey = (options: Options<GetPublicDatasetCollectionRecordData>) => createQueryKey('getPublicDatasetCollectionRecord', options, false, ['public-dataset']);
-
-/**
- * Get Public Dataset Collection Record
- *
- * Return the catalog record of a library collection.
- */
-export const getPublicDatasetCollectionRecordOptions = (options: Options<GetPublicDatasetCollectionRecordData>) => queryOptions<GetPublicDatasetCollectionRecordResponse, GetPublicDatasetCollectionRecordError, GetPublicDatasetCollectionRecordResponse, ReturnType<typeof getPublicDatasetCollectionRecordQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getPublicDatasetCollectionRecord({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getPublicDatasetCollectionRecordQueryKey(options)
-});
-
-/**
- * Set Public Dataset Enabled
- *
- * Turn the public dataset on or off.
- */
-export const setPublicDatasetEnabledMutation = (options?: Partial<Options<SetPublicDatasetEnabledData>>): MutationOptions<SetPublicDatasetEnabledResponse, SetPublicDatasetEnabledError, Options<SetPublicDatasetEnabledData>> => {
-    const mutationOptions: MutationOptions<SetPublicDatasetEnabledResponse, SetPublicDatasetEnabledError, Options<SetPublicDatasetEnabledData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await setPublicDatasetEnabled({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-export const exportPublicDatasetSelectionsQueryKey = (options?: Options<ExportPublicDatasetSelectionsData>) => createQueryKey('exportPublicDatasetSelections', options, false, ['public-dataset']);
-
-/**
- * Export Public Dataset Selections
- *
- * Download saved selections as an archive for an OvertureDB contribution.
- */
-export const exportPublicDatasetSelectionsOptions = (options?: Options<ExportPublicDatasetSelectionsData>) => queryOptions<ExportPublicDatasetSelectionsResponse, ExportPublicDatasetSelectionsError, ExportPublicDatasetSelectionsResponse, ReturnType<typeof exportPublicDatasetSelectionsQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await exportPublicDatasetSelections({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: exportPublicDatasetSelectionsQueryKey(options)
-});
-
-export const getPublicDatasetItemIssueQueryKey = (options: Options<GetPublicDatasetItemIssueData>) => createQueryKey('getPublicDatasetItemIssue', options, false, ['public-dataset']);
-
-/**
- * Get Public Dataset Item Issue
- *
- * Return a prefilled issue contributing an item's saved selections.
- */
-export const getPublicDatasetItemIssueOptions = (options: Options<GetPublicDatasetItemIssueData>) => queryOptions<GetPublicDatasetItemIssueResponse, GetPublicDatasetItemIssueError, GetPublicDatasetItemIssueResponse, ReturnType<typeof getPublicDatasetItemIssueQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getPublicDatasetItemIssue({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getPublicDatasetItemIssueQueryKey(options)
-});
-
-export const getPublicDatasetRecordQueryKey = (options: Options<GetPublicDatasetRecordData>) => createQueryKey('getPublicDatasetRecord', options, false, ['public-dataset']);
-
-/**
- * Get Public Dataset Record
- *
- * Return public dataset record.
- */
-export const getPublicDatasetRecordOptions = (options: Options<GetPublicDatasetRecordData>) => queryOptions<GetPublicDatasetRecordResponse, GetPublicDatasetRecordError, GetPublicDatasetRecordResponse, ReturnType<typeof getPublicDatasetRecordQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getPublicDatasetRecord({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getPublicDatasetRecordQueryKey(options)
-});
-
-export const getPublicDatasetSourcesQueryKey = (options: Options<GetPublicDatasetSourcesData>) => createQueryKey('getPublicDatasetSources', options, false, ['public-dataset']);
-
-/**
- * Get Public Dataset Sources
- *
- * Return public dataset sources, including a normal not-found result.
- */
-export const getPublicDatasetSourcesOptions = (options: Options<GetPublicDatasetSourcesData>) => queryOptions<GetPublicDatasetSourcesResponse, GetPublicDatasetSourcesError, GetPublicDatasetSourcesResponse, ReturnType<typeof getPublicDatasetSourcesQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getPublicDatasetSources({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getPublicDatasetSourcesQueryKey(options)
-});
-
-export const getPublicDatasetStatusQueryKey = (options?: Options<GetPublicDatasetStatusData>) => createQueryKey('getPublicDatasetStatus', options, false, ['public-dataset']);
-
-/**
- * Get Public Dataset Status
- *
- * Return public dataset status.
- */
-export const getPublicDatasetStatusOptions = (options?: Options<GetPublicDatasetStatusData>) => queryOptions<GetPublicDatasetStatusResponse, GetPublicDatasetStatusError, GetPublicDatasetStatusResponse, ReturnType<typeof getPublicDatasetStatusQueryKey>>({
-    queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getPublicDatasetStatus({
-            ...options,
-            ...queryKey[0],
-            signal,
-            throwOnError: true
-        });
-        return data;
-    },
-    queryKey: getPublicDatasetStatusQueryKey(options)
-});
-
-/**
- * Sync Public Dataset Now
- *
- * Sync public dataset now.
- */
-export const syncPublicDatasetNowMutation = (options?: Partial<Options<SyncPublicDatasetNowData>>): MutationOptions<SyncPublicDatasetNowResponse, SyncPublicDatasetNowError, Options<SyncPublicDatasetNowData>> => {
-    const mutationOptions: MutationOptions<SyncPublicDatasetNowResponse, SyncPublicDatasetNowError, Options<SyncPublicDatasetNowData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await syncPublicDatasetNow({
                 ...options,
                 ...fnOptions,
                 throwOnError: true
@@ -2663,46 +2683,6 @@ export const searchYoutubeOptions = (options?: Options<SearchYoutubeData>) => qu
     queryKey: searchYoutubeQueryKey(options)
 });
 
-/**
- * Remove Theme
- *
- * Forget an item's theme, delete its local file or the server's copy.
- */
-export const removeThemeMutation = (options?: Partial<Options<RemoveThemeData>>): MutationOptions<RemoveThemeResponse, RemoveThemeError, Options<RemoveThemeData>> => {
-    const mutationOptions: MutationOptions<RemoveThemeResponse, RemoveThemeError, Options<RemoveThemeData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await removeTheme({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
-/**
- * Select Theme
- *
- * Select an item's theme and download it.
- *
- * An item without a local folder only records the choice.
- */
-export const selectThemeMutation = (options?: Partial<Options<SelectThemeData>>): MutationOptions<SelectThemeResponse, SelectThemeError, Options<SelectThemeData>> => {
-    const mutationOptions: MutationOptions<SelectThemeResponse, SelectThemeError, Options<SelectThemeData>> = {
-        mutationFn: async (fnOptions) => {
-            const { data } = await selectTheme({
-                ...options,
-                ...fnOptions,
-                throwOnError: true
-            });
-            return data;
-        }
-    };
-    return mutationOptions;
-};
-
 export const getTmdbCollectionQueryKey = (options: Options<GetTmdbCollectionData>) => createQueryKey('getTmdbCollection', options, false, ['tmdb']);
 
 /**
@@ -2822,16 +2802,16 @@ export const getTmdbArtSourcesOptions = (options: Options<GetTmdbArtSourcesData>
     queryKey: getTmdbArtSourcesQueryKey(options)
 });
 
-export const getTmdbPublicDatasetSourcesQueryKey = (options: Options<GetTmdbPublicDatasetSourcesData>) => createQueryKey('getTmdbPublicDatasetSources', options, false, ['tmdb']);
+export const getTmdbCatalogSourcesQueryKey = (options: Options<GetTmdbCatalogSourcesData>) => createQueryKey('getTmdbCatalogSources', options, false, ['tmdb']);
 
 /**
- * Get Tmdb Public Dataset Sources
+ * Get Tmdb Catalog Sources
  *
  * Look up what OvertureDB holds for an unsaved item.
  */
-export const getTmdbPublicDatasetSourcesOptions = (options: Options<GetTmdbPublicDatasetSourcesData>) => queryOptions<GetTmdbPublicDatasetSourcesResponse, GetTmdbPublicDatasetSourcesError, GetTmdbPublicDatasetSourcesResponse, ReturnType<typeof getTmdbPublicDatasetSourcesQueryKey>>({
+export const getTmdbCatalogSourcesOptions = (options: Options<GetTmdbCatalogSourcesData>) => queryOptions<GetTmdbCatalogSourcesResponse, GetTmdbCatalogSourcesError, GetTmdbCatalogSourcesResponse, ReturnType<typeof getTmdbCatalogSourcesQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
-        const { data } = await getTmdbPublicDatasetSources({
+        const { data } = await getTmdbCatalogSources({
             ...options,
             ...queryKey[0],
             signal,
@@ -2839,7 +2819,7 @@ export const getTmdbPublicDatasetSourcesOptions = (options: Options<GetTmdbPubli
         });
         return data;
     },
-    queryKey: getTmdbPublicDatasetSourcesQueryKey(options)
+    queryKey: getTmdbCatalogSourcesQueryKey(options)
 });
 
 /**

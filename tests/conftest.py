@@ -37,13 +37,13 @@ lazy from sqlalchemy.ext.asyncio import (
 lazy from sqlmodel import insert
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from overture.catalog_contract.contract import ART_HOSTS
 lazy from overture.config import Settings
-lazy from overture.dataset_contract.contract import ART_HOSTS
 lazy from overture.db import metadata
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
@@ -61,9 +61,9 @@ lazy from overture.utils.rate_limit import RateLimitPause
 lazy from tests.factories import (
     AppSettingsFactory,
     ArtSpec,
+    CatalogItemFactory,
     DownloadJobFactory,
     MediaItemFactory,
-    PublicDatasetItemFactory,
     ScheduleFactory,
     SeasonFactory,
     seed_art_slot,
@@ -472,18 +472,18 @@ def download_job_factory() -> DownloadJobFactory:
 
 
 @pytest.fixture
-def public_dataset_item_factory() -> PublicDatasetItemFactory:
-    def factory(**overrides: Any) -> PublicDatasetItem:
+def catalog_item_factory() -> CatalogItemFactory:
+    def factory(**overrides: Any) -> CatalogItem:
         values: dict[str, Any] = {
             "id": 1,
             "media_type": MediaType.MOVIE,
             "tmdb_id": 123,
-            "title": "Dataset Movie",
+            "title": "Catalog Movie",
             "poster_url": "https://images.test/poster.jpg",
         }
         values.update(overrides)
         values["media_type"] = MediaType(values["media_type"])
-        return PublicDatasetItem(**values)
+        return CatalogItem(**values)
 
     return factory
 

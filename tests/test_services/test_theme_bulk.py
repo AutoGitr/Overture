@@ -30,7 +30,7 @@ lazy from tests.bulk_helpers import (
     Context,
     as_job_context,
     bind_stamper,
-    enable_public_dataset,
+    enable_catalog,
     make_bulk_downloads,
     movie_item,
     progress_logs,
@@ -289,7 +289,7 @@ async def test_bulk_theme_skip_recent_suppresses_source_lookup(
 
 
 @pytest.mark.parametrize("source", ["overturedb", "themerrdb"])
-async def test_bulk_theme_items_without_dataset_theme_are_counted_in_one_step(
+async def test_bulk_theme_items_without_catalog_theme_are_counted_in_one_step(
     monkeypatch: pytest.MonkeyPatch,
     db_session: AsyncSession,
     *,
@@ -297,7 +297,7 @@ async def test_bulk_theme_items_without_dataset_theme_are_counted_in_one_step(
     database: Database,
     source: Literal["overturedb", "themerrdb"],
 ) -> None:
-    """Items no dataset serves are decided while planning, in one line."""
+    """Items no catalog serves are decided while planning, in one line."""
 
     async def unexpected(*_args: object, **_kwargs: object):
         raise AssertionError("planned items are never read")
@@ -311,7 +311,7 @@ async def test_bulk_theme_items_without_dataset_theme_are_counted_in_one_step(
         )
         for n in range(1, 151)
     )
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
     bind_stamper(monkeypatch, theme_bulk)
@@ -454,7 +454,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_title_was_already_downloa
     ]
 
 
-async def test_bulk_theme_single_item_without_dataset_theme_has_singular_plurality(
+async def test_bulk_theme_single_item_without_catalog_theme_has_singular_plurality(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     db_session.add(
@@ -462,7 +462,7 @@ async def test_bulk_theme_single_item_without_dataset_theme_has_singular_plurali
             id=1, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
         )
     )
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
 
     context = Context()
     await theme_bulk.run_bulk_themes(

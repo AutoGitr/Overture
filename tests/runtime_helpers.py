@@ -40,13 +40,13 @@ lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import RuntimeServices
 lazy from overture.runtime_paths import database_path, image_cache_path
 lazy from overture.schemas.art import ArtCandidate
+lazy from overture.schemas.catalog import (
+    CatalogRecord,
+    CatalogSources,
+    CatalogStatus,
+)
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.schemas.downloads import DownloadJobEvent
-lazy from overture.schemas.public_dataset import (
-    PublicDatasetRecord,
-    PublicDatasetSources,
-    PublicDatasetStatus,
-)
 lazy from overture.schemas.schedules import ScheduleWrite
 lazy from overture.schemas.settings import ConnectivityStatusResponse
 lazy from overture.schemas.sync import SyncRunRequest
@@ -61,6 +61,8 @@ lazy from overture.services.auth import AuthService
 lazy from overture.services.backup.events import BackupEvents
 lazy from overture.services.backup.files import BackupStore
 lazy from overture.services.backup.service import BackupService
+lazy from overture.services.catalog.browse import CatalogBrowser
+lazy from overture.services.catalog.service import CatalogService
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.downloads.art import DownloadArtHandler
 lazy from overture.services.downloads.events import DownloadEventPublisher
@@ -72,8 +74,6 @@ lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.named_schedules import NamedSchedules
 lazy from overture.services.notifications import NotificationSettings, RunNotifier
-lazy from overture.services.public_dataset.browse import CatalogBrowser
-lazy from overture.services.public_dataset.service import PublicDatasetService
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_audit.service import ServerAuditService
@@ -345,10 +345,10 @@ class NoopAssets(AssetsService):
         self.schedules = NoopSchedules(app_config=app_config)
 
 
-class NoopPublicDataset(PublicDatasetService):
+class NoopCatalog(CatalogService):
     def __init__(self, *, app_config: Settings) -> None:
         self.job = ManagedBackgroundJob(
-            ManagedJobLifecycle(JobKind.PUBLIC_DATASET_SYNC), NullEventPublisher()
+            ManagedJobLifecycle(JobKind.CATALOG_SYNC), NullEventPublisher()
         )
         self.scheduler = SchedulerService(app_config=app_config)
         self._running = False
@@ -362,16 +362,16 @@ class NoopPublicDataset(PublicDatasetService):
         return None
 
     @override
-    async def get_status(self) -> PublicDatasetStatus:
+    async def get_status(self) -> CatalogStatus:
         return self._noop_status(enabled=False)
 
     @override
-    async def set_enabled(self, enabled: bool) -> PublicDatasetStatus:
+    async def set_enabled(self, enabled: bool) -> CatalogStatus:
         return self._noop_status(enabled=enabled)
 
     @staticmethod
-    def _noop_status(*, enabled: bool) -> PublicDatasetStatus:
-        return PublicDatasetStatus(
+    def _noop_status(*, enabled: bool) -> CatalogStatus:
+        return CatalogStatus(
             enabled=enabled,
             repo_url="https://example.invalid/repo",
             catalog_url="https://example.invalid/catalog",
@@ -379,12 +379,12 @@ class NoopPublicDataset(PublicDatasetService):
         )
 
     @override
-    async def get_sources_for_item(self, item_id: int) -> PublicDatasetSources:
-        raise NotImplementedError("Provide a dataset service for item lookup tests")
+    async def get_sources_for_item(self, item_id: int) -> CatalogSources:
+        raise NotImplementedError("Provide a catalog service for item lookup tests")
 
     @override
-    async def get_record_for_item(self, item_id: int) -> PublicDatasetRecord:
-        raise NotImplementedError("Provide a dataset service for item lookup tests")
+    async def get_record_for_item(self, item_id: int) -> CatalogRecord:
+        raise NotImplementedError("Provide a catalog service for item lookup tests")
 
     @override
     def start_background_sync(self) -> bool:
@@ -465,7 +465,7 @@ def make_runtime(
     sync: SyncEngine | None = None,
     backups: BackupService | None = None,
     assets: AssetsService | None = None,
-    public_dataset: PublicDatasetService | None = None,
+    catalog: CatalogService | None = None,
     phash: PhashService | None = None,
     asset_storage: AssetStorage | None = None,
     art_matcher: ArtMatcher | None = None,
@@ -517,11 +517,7 @@ def make_runtime(
         else backups
     )
     assets = unused(AssetsService) if assets is None else assets
-    public_dataset = (
-        NoopPublicDataset(app_config=app_config)
-        if public_dataset is None
-        else public_dataset
-    )
+    catalog = NoopCatalog(app_config=app_config) if catalog is None else catalog
     phash = unused(PhashService) if phash is None else phash
     asset_storage = (
         AssetStorage(app_config=app_config) if asset_storage is None else asset_storage
@@ -670,7 +666,7 @@ def make_runtime(
         sync=sync,
         backups=backups,
         assets=assets,
-        public_dataset=public_dataset,
+        catalog=catalog,
         phash=phash,
         asset_storage=asset_storage,
         art_matcher=art_matcher,

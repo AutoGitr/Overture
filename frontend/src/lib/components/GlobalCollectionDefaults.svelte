@@ -21,7 +21,7 @@
     minimum_items: "collection_minimum_items",
     delete_below_minimum: "collection_delete_below_minimum",
     auto_art: "collection_auto_art",
-    drawn_style: "collection_drawn_style",
+    generated_style: "collection_generated_style",
     overturedb_posters: "collection_overturedb_posters",
     backgrounds: "collection_backgrounds",
     auto_match_theme: "collection_auto_match_theme",

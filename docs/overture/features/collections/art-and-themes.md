@@ -1,17 +1,17 @@
 ---
 sidebar_position: 6
 title: Art and themes
-description: Automatic and drawn collection art, OvertureDB posters and collection themes.
+description: Automatic and generated collection art, OvertureDB posters and collection themes.
 ---
 
 # Art and themes
 
 Collection posters and backgrounds come from OvertureDB, TMDB, local-image
 matching against the server's current image, your own uploads, or art Overture
-draws from the title; they are uploaded to the media server. Collection themes
+generates from the title; they are uploaded to the media server. Collection themes
 use OvertureDB and ThemerrDB in the configured order.
 
-## Art drawn from the title
+## Art generated from the title
 
 Every collection's poster and background candidates end with a **Generated**
 row, one image per style (dark, light and accent) showing its title under its
@@ -20,8 +20,8 @@ other art, and its source shows as **Generated**.
 
 A poster always shows the title; a grouped collection's is offered under its
 group and with the title alone, centred. A background never shows text, as the
-media server draws the title over it. Art drawn either way is drawn again when
-the collection's title or group changes.
+media server draws the title over it. Art generated either way is generated again
+when the collection's title or group changes.
 
 ## Automatic art
 
@@ -30,11 +30,11 @@ what a sync does for a slot no one chose:
 
 - **Off**
 - The best art of **OvertureDB**, **TMDB** (the franchise's art, or a listed
-  person's photo), or **OvertureDB, then TMDB**, each optionally **else draw**
-- **Draw**
+  person's photo), or **OvertureDB, then TMDB**, each optionally **else generate**
+- **Generate**
 
-The media server's own art is never taken. Drawing makes a poster with the
-title and a background without text, in the **Drawn colours** (dark, light or
+The media server's own art is never taken. Generating makes a poster with the
+title and a background without text, in the **Generated colours** (dark, light or
 accent). A collection whose **Background** is **Not needed** gets no
 background: its poster completes its art, as OvertureDB's No theme completes a
 theme.

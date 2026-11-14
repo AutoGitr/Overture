@@ -55,12 +55,12 @@ lazy from ..bulk_common import (
     report_downloads,
     report_unloaded,
 )
+lazy from ..catalog.index import CatalogIndex
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..library.items import emit_library_item_upserted
 lazy from ..local_assets.service import LocalAssets
-lazy from ..public_dataset.index import PublicDatasetIndex
 lazy from .bulk_targets import target_art_slot
 lazy from .bulk_work import load_art_batch, plan_bulk_art
 lazy from .collection_art import CollectionArtService
@@ -134,7 +134,7 @@ async def _from_overturedb(
     season: Season | None,
     *,
     local: ArtFileFacts | None,
-    index: PublicDatasetIndex,
+    index: CatalogIndex,
     notes: _Notes,
 ) -> _Decision | None:
     pick = index.art(item, art_type, season=season)
@@ -303,7 +303,7 @@ async def _settle_saved(run: _ArtRun, slot: _Slot, saved: SavedArt) -> None:
 
 
 async def _resolve(
-    run: _ArtRun, slot: _Slot, index: PublicDatasetIndex
+    run: _ArtRun, slot: _Slot, index: CatalogIndex
 ) -> tuple[_Decision | None, _Notes]:
     """Try the enabled sources in order until one decides."""
     notes = _Notes()
@@ -423,7 +423,7 @@ type _Outcome = tuple[_Decision | None, _Notes] | SavedArt | Exception
 
 
 async def _decide(
-    run: _ArtRun, slot: _Slot, *, index: PublicDatasetIndex
+    run: _ArtRun, slot: _Slot, *, index: CatalogIndex
 ) -> tuple[_Slot, _Outcome]:
     """Ask the enabled sources about one slot; nothing is written or reported.
 

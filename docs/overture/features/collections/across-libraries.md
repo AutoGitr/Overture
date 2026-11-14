@@ -1,7 +1,7 @@
 ---
 sidebar_position: 5
 title: Collections across libraries
-description: One collection drawing from several libraries, and what each server holds.
+description: One collection spanning several libraries, and what each server holds.
 ---
 
 # Collections across libraries

@@ -33,7 +33,7 @@ Errors in the web interface include a request ID that also appears in the log.
 | `GET /api/media-server/links`                                | Where the server's web app opens items and collections                      |
 | `GET /api/library/items/{id}/record`                         | A title's stored rows and derived values, such as genres and people         |
 | `GET /api/collections/{id}/record`                           | A collection's stored rows and derived values                               |
-| `GET /api/collections/{id}/art/{art_type}/generated/{style}` | Art drawn from the collection's title                                       |
+| `GET /api/collections/{id}/art/{art_type}/generated/{style}` | Art generated from the collection's title                                   |
 
 ## Live updates
 

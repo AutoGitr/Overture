@@ -16,18 +16,18 @@ PACKAGE = "overture"
 ALLOWED: dict[str, frozenset[str]] = {
     name: frozenset(allowed)
     for name, allowed in {
-        "dataset_contract": (),
+        "catalog_contract": (),
         "version": (),
         "runtime_paths": (),
         "passwords": (),
-        "domain": ("dataset_contract",),
-        "utils": ("config", "dataset_contract", "domain"),
+        "domain": ("catalog_contract",),
+        "utils": ("config", "catalog_contract", "domain"),
         "config": ("domain", "passwords", "utils"),
         "db": ("domain", "utils"),
-        "repositories": ("dataset_contract", "db", "domain", "utils"),
-        "integrations": ("config", "dataset_contract", "domain", "schemas", "utils"),
+        "repositories": ("catalog_contract", "db", "domain", "utils"),
+        "integrations": ("config", "catalog_contract", "domain", "schemas", "utils"),
         "schemas": (
-            "dataset_contract",
+            "catalog_contract",
             "db",
             "domain",
             "integrations",
@@ -40,7 +40,7 @@ ALLOWED: dict[str, frozenset[str]] = {
         "jobs": ("db", "protocols", "schemas", "utils", "ws"),
         "media_servers": (
             "config",
-            "dataset_contract",
+            "catalog_contract",
             "domain",
             "integrations",
             "jobs",
@@ -50,7 +50,7 @@ ALLOWED: dict[str, frozenset[str]] = {
         ),
         "services": (
             "config",
-            "dataset_contract",
+            "catalog_contract",
             "db",
             "domain",
             "integrations",

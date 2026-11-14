@@ -11,10 +11,10 @@ lazy from typing import Any, Protocol
 
 lazy from overture.db.art_slots import art_slot
 lazy from overture.db.models.art import ArtSlot
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
@@ -54,10 +54,10 @@ class DownloadJobFactory(Protocol):
     def __call__(self, **overrides: Any) -> DownloadJob: ...
 
 
-class PublicDatasetItemFactory(Protocol):
-    """Build a :class:`PublicDatasetItem` row."""
+class CatalogItemFactory(Protocol):
+    """Build a :class:`CatalogItem` row."""
 
-    def __call__(self, **overrides: Any) -> PublicDatasetItem: ...
+    def __call__(self, **overrides: Any) -> CatalogItem: ...
 
 
 def seed_art_slot(

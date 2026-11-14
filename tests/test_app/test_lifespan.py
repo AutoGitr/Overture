@@ -87,7 +87,7 @@ async def test_runtime_starts_and_stops_managers_in_order(
         ("sync", "sync"),
         ("backups", "backup"),
         ("assets", "assets"),
-        ("public_dataset", "public_dataset"),
+        ("catalog", "catalog"),
     ):
 
         async def start(name: str = label) -> None:
@@ -118,7 +118,7 @@ async def test_runtime_starts_and_stops_managers_in_order(
         "sync.start",
         "backup.start",
         "assets.start",
-        "public_dataset.start",
+        "catalog.start",
     ]
     await asyncio.wait_for(connectivity_done.wait(), timeout=1)
     assert "status.map" in events
@@ -127,7 +127,7 @@ async def test_runtime_starts_and_stops_managers_in_order(
 
     assert events[-11:] == [
         "background_jobs.stop",
-        "public_dataset.stop",
+        "catalog.stop",
         "assets.stop",
         "backup.stop",
         "sync.stop",

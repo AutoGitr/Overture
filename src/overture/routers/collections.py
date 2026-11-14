@@ -20,7 +20,7 @@ lazy from ..dependencies import (
 lazy from ..domain import (
     MATCH_THRESHOLD_DEFAULT,
     MATCH_THRESHOLD_MAX,
-    ArtDrawing,
+    ArtGeneration,
     ArtStyle,
     FilterField,
 )
@@ -56,7 +56,6 @@ lazy from ..schemas.collections import (
     CollectionSetEntry,
     CollectionSetPreview,
     CollectionSetSummary,
-    CollectionThemeSources,
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     KindRecommendation,
@@ -258,19 +257,6 @@ async def get_collection(
 ) -> CollectionDetail:
     """Return one collection with its members and catalog themes."""
     return await reader.get(collection_id)
-
-
-@router.get("/{collection_id}/sources")
-async def get_collection_sources(
-    collection_id: CollectionIdPath,
-    reader: CollectionReaderDep,
-) -> CollectionThemeSources:
-    """Return the matched catalog's collection theme candidates."""
-    detail = await reader.get(collection_id)
-    return CollectionThemeSources(
-        youtube_id_overturedb=detail.youtube_id_overturedb,
-        youtube_id_themerrdb=detail.youtube_id_themerrdb,
-    )
 
 
 @router.get("/{collection_id}/missing")
@@ -482,10 +468,10 @@ async def get_generated_collection_art(
     art: CollectionArtDep,
     title_only: bool = False,
 ) -> Response:
-    """Return the art Overture would draw for the collection in *style*."""
+    """Return the art Overture would generate for the collection in *style*."""
     return Response(
-        await art.drawn(
-            collection_id, art_type, ArtDrawing(style, title_only=title_only)
+        await art.preview(
+            collection_id, art_type, ArtGeneration(style, title_only=title_only)
         ),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},

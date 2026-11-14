@@ -40,10 +40,10 @@
     ["overturedb", "OvertureDB"],
     ["tmdb", "TMDB"],
     ["overturedb_tmdb", "OvertureDB, then TMDB"],
-    ["overturedb_draw", "OvertureDB, else draw"],
-    ["tmdb_draw", "TMDB, else draw"],
-    ["overturedb_tmdb_draw", "OvertureDB, then TMDB, else draw"],
-    ["draw", "Draw"],
+    ["overturedb_generate", "OvertureDB, else generate"],
+    ["tmdb_generate", "TMDB, else generate"],
+    ["overturedb_tmdb_generate", "OvertureDB, then TMDB, else generate"],
+    ["generate", "Generate"],
   ];
   const STYLES: readonly (readonly [ArtStyle, string])[] = [
     ["dark", "Dark"],
@@ -158,15 +158,15 @@
     bind:value={policy.auto_art}
     inherited={defaults?.auto_art}
     options={AUTO_ART}
-    hint="After a sync, fills art no one chose with the best art of the first source that has any: OvertureDB's catalog art, or TMDB's art of the franchise or a listed person. Draw draws a poster with the title and a background without."
+    hint="After a sync, fills art no one chose with the best art of the first source that has any: OvertureDB's catalog art, or TMDB's art of the franchise or a listed person. Generate makes a poster with the title and a background without."
   />
   <InheritedSelect
-    label="Drawn colours"
+    label="Generated colours"
     {inherits}
-    bind:value={policy.drawn_style}
-    inherited={defaults?.drawn_style}
+    bind:value={policy.generated_style}
+    inherited={defaults?.generated_style}
     options={STYLES}
-    hint="The colours of art Automatic art draws, and of a group's separator."
+    hint="The colours of art Automatic art generates, and of a group's separator."
   />
   <InheritedSelect
     label="OvertureDB posters"

@@ -6,7 +6,7 @@ lazy from datetime import UTC
 lazy import pytest
 lazy from starlette.requests import Request
 
-lazy from overture.dataset_contract.contract import ASPECT_TOLERANCE
+lazy from overture.catalog_contract.contract import ASPECT_TOLERANCE
 lazy from overture.domain import ArtType, AspectRatioTolerance
 lazy from overture.utils.http_security import (
     CSRF_COOKIE,

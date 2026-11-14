@@ -3,7 +3,7 @@
   import { Router } from "sv-router";
   import { onMount, tick } from "svelte";
   import {
-    getPublicDatasetStatusOptions,
+    getCatalogStatusOptions,
     getSettingsOptions,
     listItemsOptions,
   } from "./generated/rest/@tanstack/svelte-query.gen";
@@ -34,11 +34,11 @@
   const moviesOptions = listItemsOptions({ query: { media_type: "movie" } });
   const showOptions = listItemsOptions({ query: { media_type: "show" } });
   const settingsOptions = getSettingsOptions();
-  const publicDatasetOptions = getPublicDatasetStatusOptions();
+  const catalogOptions = getCatalogStatusOptions();
   const moviesQuery = createQuery(() => moviesOptions);
   const showQuery = createQuery(() => showOptions);
   const settingsQuery = createQuery(() => settingsOptions);
-  const publicDatasetQuery = createQuery(() => publicDatasetOptions);
+  const catalogQuery = createQuery(() => catalogOptions);
 
   let movies = $derived(moviesQuery.data?.items ?? []);
   let shows = $derived(showQuery.data?.items ?? []);
@@ -48,7 +48,7 @@
       { name: "Movies", query: moviesQuery },
       { name: "Shows", query: showQuery },
       { name: "Settings", query: settingsQuery },
-      { name: "OvertureDB", query: publicDatasetQuery },
+      { name: "OvertureDB", query: catalogQuery },
     ].filter(({ query }) => query.isError),
   );
   let liveNotice = $derived.by((): { tone: NoticeTone; title: string; message: string } | null => {
@@ -101,7 +101,7 @@
       queryClient.fetchQuery(moviesOptions),
       queryClient.fetchQuery(showOptions),
       queryClient.fetchQuery(settingsOptions),
-      queryClient.fetchQuery(publicDatasetOptions),
+      queryClient.fetchQuery(catalogOptions),
     ]);
     await tick();
     await waitForHiddenLayoutFrame();

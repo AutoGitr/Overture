@@ -12,33 +12,33 @@ lazy import httpx2
 lazy from sqlmodel import insert
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...config import Settings
-lazy from ...dataset_contract.contract import (
+lazy from ...catalog_contract.contract import (
     SCHEMA_VERSION,
     entry_identities,
     read_catalog,
 )
-lazy from ...db.models.public_dataset import (
-    PublicDatasetCollection,
-    PublicDatasetItem,
-    PublicDatasetSeason,
+lazy from ...config import Settings
+lazy from ...db.models.catalog import (
+    CatalogCollection,
+    CatalogItem,
+    CatalogItemSeason,
 )
 lazy from ...db.session import PAGE_SIZE
 lazy from ...domain import CatalogMediaType
 lazy from ...integrations.http import create_client
-lazy from ...repositories.public_dataset import PublicDatasetRepository
-lazy from ...schemas.public_dataset import PublicDatasetSyncStats
+lazy from ...repositories.catalog import CatalogRepository
+lazy from ...schemas.catalog import CatalogSyncStats
 lazy from ...utils.threads import owned_thread
-lazy from . import catalog
+lazy from . import remote
 
 
-async def download(path: Path, stats: PublicDatasetSyncStats) -> None:
+async def download(path: Path, stats: CatalogSyncStats) -> None:
     """Stream a bounded, complete gzip member to disk, noting its size in *stats*.
 
     Raises:
         ValueError: When the catalog cannot be downloaded in full.
     """
-    url = catalog.PUBLIC_DATASET_CATALOG_URL
+    url = remote.CATALOG_URL
     decoder = zlib.decompressobj(zlib.MAX_WBITS | 16)
     compressed = expanded = 0
     try:
@@ -48,14 +48,14 @@ async def download(path: Path, stats: PublicDatasetSyncStats) -> None:
                     response.raise_for_status()
                     async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
                         compressed += len(chunk)
-                        if compressed > catalog.MAX_CATALOG_COMPRESSED_BYTES:
+                        if compressed > remote.MAX_CATALOG_COMPRESSED_BYTES:
                             raise ValueError("Catalog exceeds compressed size limit")
                         pending = chunk
                         while pending:
                             data = decoder.decompress(pending, 64 * 1024)
                             pending = decoder.unconsumed_tail
                             expanded += len(data)
-                            if expanded > catalog.MAX_CATALOG_UNCOMPRESSED_BYTES:
+                            if expanded > remote.MAX_CATALOG_UNCOMPRESSED_BYTES:
                                 raise ValueError(
                                     "Catalog exceeds decompressed size limit"
                                 )
@@ -63,7 +63,7 @@ async def download(path: Path, stats: PublicDatasetSyncStats) -> None:
         if not decoder.eof or decoder.unused_data:
             raise ValueError("Catalog is not one complete gzip stream")
     except (httpx2.HTTPError, OSError, ValueError, zlib.error) as exc:
-        raise ValueError("Public dataset catalog download failed") from exc
+        raise ValueError("catalog download failed") from exc
     stats.catalog_url = url
     stats.catalog_bytes = compressed
     stats.catalog_uncompressed_bytes = expanded
@@ -93,7 +93,7 @@ def _stage(path: Path, database: Path) -> int:
                 )
             stage.commit()
         except sqlite3.IntegrityError as exc:
-            raise ValueError("Duplicate dataset identity") from exc
+            raise ValueError("Duplicate catalog identity") from exc
     return count
 
 
@@ -113,7 +113,7 @@ async def prepare(path: Path, database: Path, *, app_config: Settings) -> int:
     count = await owned_thread(_stage, path, database)
     after = 0
     while batch := await owned_thread(_batch, database, after):
-        await catalog.check_catalog_urls(
+        await remote.check_catalog_urls(
             [entry for _, entry in batch], app_config=app_config
         )
         after = batch[-1][0]
@@ -124,10 +124,10 @@ async def replace(
     session: AsyncSession,
     database: Path,
     synced_at: datetime,
-    stats: PublicDatasetSyncStats,
+    stats: CatalogSyncStats,
 ) -> None:
     """Atomically replace live rows using bounded bulk inserts."""
-    await PublicDatasetRepository(session).clear_catalog()
+    await CatalogRepository(session).clear_catalog()
     after = 0
     while batch := await owned_thread(_batch, database, after):
         items: list[dict[str, Any]] = []
@@ -149,7 +149,7 @@ async def replace(
                 continue
             items.append(row)
             seasons.extend(
-                {"public_dataset_item_id": key, **season}
+                {"catalog_item_id": key, **season}
                 for season in entry.get("seasons", [])
             )
             stats.items += 1
@@ -158,10 +158,10 @@ async def replace(
             else:
                 stats.shows += 1
         if items:
-            await session.exec(insert(PublicDatasetItem), params=items)
+            await session.exec(insert(CatalogItem), params=items)
         if collections:
-            await session.exec(insert(PublicDatasetCollection), params=collections)
+            await session.exec(insert(CatalogCollection), params=collections)
         if seasons:
-            await session.exec(insert(PublicDatasetSeason), params=seasons)
+            await session.exec(insert(CatalogItemSeason), params=seasons)
         stats.seasons += len(seasons)
         after = batch[-1][0]

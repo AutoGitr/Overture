@@ -1,40 +1,40 @@
-"""Public-dataset candidate and record lookup from the local database."""
+"""Catalog candidate and record lookup from the local database."""
 
 lazy from collections.abc import Sequence
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...config import Settings
-lazy from ...dataset_contract.contract import (
+lazy from ...catalog_contract.contract import (
     IDENTITY_FIELDS,
     entry_file_stem,
     parse_entry_file_stem,
 )
+lazy from ...config import Settings
+lazy from ...db.models.catalog import CatalogItem
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import PublicDatasetItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...domain import ArtType, CatalogMediaType, MediaType
-lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.art import ArtCandidate
-lazy from ...schemas.public_dataset import (
-    PublicDatasetRecord,
-    PublicDatasetRecordCollection,
-    PublicDatasetRecordItem,
-    PublicDatasetRecordSeason,
-    PublicDatasetSeasonSource,
-    PublicDatasetSources,
-    PublicDatasetSourcesItem,
+lazy from ...schemas.catalog import (
+    CatalogRecord,
+    CatalogRecordCollection,
+    CatalogRecordItem,
+    CatalogRecordSeason,
+    CatalogSeasonSource,
+    CatalogSources,
+    CatalogSourcesItem,
 )
 lazy from ...utils.art_urls import art_preview_url, art_source_label
-lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
-lazy from .index import PublicDatasetIndex, catalog_art_url
+lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from .index import CatalogIndex, catalog_art_url
 
 
 def build_candidate(url: str | None, art_type: ArtType) -> ArtCandidate | None:
-    """Build a public-dataset artwork candidate."""
+    """Build a catalog artwork candidate."""
     if not url:
         return None
     return ArtCandidate(
@@ -49,19 +49,19 @@ def build_candidate(url: str | None, art_type: ArtType) -> ArtCandidate | None:
 async def find_public_item(
     session: AsyncSession,
     item: MediaItem,
-) -> PublicDatasetItem | None:
-    """Return the matching public-dataset row for a stored or unsaved item."""
-    return (await PublicDatasetRepository(session).match_items([item]))[0]
+) -> CatalogItem | None:
+    """Return the matching catalog row for a stored or unsaved item."""
+    return (await CatalogRepository(session).match_items([item]))[0]
 
 
 def art_candidates(
-    index: PublicDatasetIndex,
+    index: CatalogIndex,
     item: MediaItem,
     art_type: ArtType,
     *,
     season: Season | None = None,
 ) -> list[ArtCandidate]:
-    """Return the dataset's candidate for one art slot from a built index."""
+    """Return the catalog's candidate for one art slot from a built index."""
     candidate = build_candidate(index.art_url(item, art_type, season=season), art_type)
     return [candidate] if candidate else []
 
@@ -74,11 +74,11 @@ async def get_art_candidates(
     *,
     app_config: Settings,
 ) -> list[ArtCandidate]:
-    """Return public-dataset art candidates for one stored or unsaved item.
+    """Return catalog art candidates for one stored or unsaved item.
 
-    Returns an empty list when the dataset is disabled or no entry is found.
+    Returns an empty list when the catalog is disabled or no entry is found.
     Callers walking several items should build one
-    :class:`~overture.services.public_dataset.index.PublicDatasetIndex` for the
+    :class:`~overture.services.catalog.index.CatalogIndex` for the
     whole batch and read it with :func:`art_candidates` instead.
     """
     if not await _enabled(session, app_config=app_config):
@@ -87,9 +87,7 @@ async def get_art_candidates(
     if public_item is None or public_item.id is None:
         return []
     season_posters = (
-        await PublicDatasetRepository(session).season_posters_by_item_ids(
-            {public_item.id}
-        )
+        await CatalogRepository(session).season_posters_by_item_ids({public_item.id})
         if art_type.owned_by_season
         else {}
     )
@@ -103,24 +101,22 @@ async def get_art_candidates(
 
 
 async def _enabled(session: AsyncSession, *, app_config: Settings) -> bool:
-    """Return whether the public dataset is switched on."""
-    schedule = await load_schedule(
-        session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
-    )
+    """Return whether the catalog is switched on."""
+    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
     return schedule.enabled
 
 
 async def get_sources_for_item(
     item_id: int, *, app_config: Settings, database: Database
-) -> PublicDatasetSources:
-    """Return available public-dataset art sources for a local media item.
+) -> CatalogSources:
+    """Return available catalog art sources for a local media item.
 
-    Nothing is found when the dataset is disabled or holds no entry.
+    Nothing is found when the catalog is disabled or holds no entry.
     """
     async with database.read_session() as session:
         item = await session.get(MediaItem, item_id)
         if not item:
-            return PublicDatasetSources(found=False)
+            return CatalogSources(found=False)
         return await sources_for(
             session,
             item,
@@ -135,26 +131,26 @@ async def sources_for(
     local_seasons: Sequence[Season],
     *,
     app_config: Settings,
-) -> PublicDatasetSources:
-    """Return the public-dataset sources for a stored or unsaved item.
+) -> CatalogSources:
+    """Return the catalog sources for a stored or unsaved item.
 
     *local_seasons* give each season candidate its ``season_id``.
     """
     if not await _enabled(session, app_config=app_config):
-        return PublicDatasetSources(found=False)
+        return CatalogSources(found=False)
 
     public_item = await find_public_item(session, item)
     if not public_item or public_item.id is None:
-        return PublicDatasetSources(found=False)
+        return CatalogSources(found=False)
 
-    seasons = await PublicDatasetRepository(session).list_seasons(public_item.id)
+    seasons = await CatalogRepository(session).list_seasons(public_item.id)
     season_ids_by_num = {s.season_num: s.id for s in local_seasons}
     poster = build_candidate(public_item.poster_url, ArtType.POSTER)
     background = build_candidate(public_item.background_url, ArtType.BACKGROUND)
 
-    return PublicDatasetSources(
+    return CatalogSources(
         found=True,
-        item=PublicDatasetSourcesItem(
+        item=CatalogSourcesItem(
             poster=[poster] if poster else [],
             background=[background] if background else [],
             youtube_id_overturedb=public_item.youtube_id_overturedb,
@@ -164,7 +160,7 @@ async def sources_for(
             ),
         ),
         seasons=[
-            PublicDatasetSeasonSource(
+            CatalogSeasonSource(
                 season_num=season.season_num,
                 season_id=season_ids_by_num.get(season.season_num),
                 poster_url=season.poster_url,
@@ -177,51 +173,47 @@ async def sources_for(
     )
 
 
-async def get_record_for_item(
-    item_id: int, *, database: Database
-) -> PublicDatasetRecord:
-    """Return the public-dataset DB rows for a local media item, if any."""
+async def get_record_for_item(item_id: int, *, database: Database) -> CatalogRecord:
+    """Return the catalog DB rows for a local media item, if any."""
     async with database.read_session() as session:
         item = await session.get(MediaItem, item_id)
         if not item:
-            return PublicDatasetRecord(found=False)
+            return CatalogRecord(found=False)
         return await _item_record(session, await find_public_item(session, item))
 
 
 async def _item_record(
-    session: AsyncSession, public_item: PublicDatasetItem | None
-) -> PublicDatasetRecord:
+    session: AsyncSession, public_item: CatalogItem | None
+) -> CatalogRecord:
     if public_item is None or public_item.id is None:
-        return PublicDatasetRecord(found=False)
-    seasons = await PublicDatasetRepository(session).list_seasons(public_item.id)
-    return PublicDatasetRecord(
+        return CatalogRecord(found=False)
+    seasons = await CatalogRepository(session).list_seasons(public_item.id)
+    return CatalogRecord(
         found=True,
-        item=PublicDatasetRecordItem.model_validate(public_item),
-        seasons=[PublicDatasetRecordSeason.model_validate(s) for s in seasons],
+        item=CatalogRecordItem.model_validate(public_item),
+        seasons=[CatalogRecordSeason.model_validate(s) for s in seasons],
     )
 
 
 async def _collection_record(
     session: AsyncSession, tmdb_id: int | None
-) -> PublicDatasetRecord:
+) -> CatalogRecord:
     found = (
-        await PublicDatasetRepository(session).collections_by_tmdb_id({tmdb_id})
+        await CatalogRepository(session).collections_by_tmdb_id({tmdb_id})
         if tmdb_id is not None
         else {}
     )
     if not found:
-        return PublicDatasetRecord(found=False)
-    return PublicDatasetRecord(
+        return CatalogRecord(found=False)
+    return CatalogRecord(
         found=True,
-        collection=PublicDatasetRecordCollection.model_validate(
-            next(iter(found.values()))
-        ),
+        collection=CatalogRecordCollection.model_validate(next(iter(found.values()))),
     )
 
 
 async def get_record_for_collection(
     collection_id: int, *, database: Database
-) -> PublicDatasetRecord:
+) -> CatalogRecord:
     """Return the catalog row for a library collection's TMDB collection, if any."""
     async with database.read_session() as session:
         row = await session.get(MediaCollection, collection_id)
@@ -232,17 +224,17 @@ async def get_record_for_collection(
 
 async def get_record_for_entry(
     media_type: CatalogMediaType, entry_key: str, *, database: Database
-) -> PublicDatasetRecord:
+) -> CatalogRecord:
     """Return the catalog rows an entry name identifies, if any."""
     try:
         field, value = parse_entry_file_stem(entry_key)
     except ValueError:
-        return PublicDatasetRecord(found=False)
+        return CatalogRecord(found=False)
     async with database.read_session() as session:
         if media_type is CatalogMediaType.COLLECTION:
             tmdb_id = value if field == "tmdb_id" and isinstance(value, int) else None
             return await _collection_record(session, tmdb_id)
-        public_item = await PublicDatasetRepository(session).find_item(
+        public_item = await CatalogRepository(session).find_item(
             MediaType(media_type), field, value
         )
         return await _item_record(session, public_item)

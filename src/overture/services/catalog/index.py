@@ -7,20 +7,20 @@ lazy from typing import Self
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
+lazy from ...db.models.catalog import CatalogCollection, CatalogItem
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import PublicDatasetCollection, PublicDatasetItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ArtType, CollectionPosterStyle, ThemeBulkSource
-lazy from ...repositories.public_dataset import PublicDatasetRepository
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ..collections.policy import resolve_policy
-lazy from ..schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from .entries import catalog_collection_entry, shown_entry
 
 
 def catalog_art_url(
-    public_item: PublicDatasetItem,
+    public_item: CatalogItem,
     season_posters: Mapping[int, str],
     art_type: ArtType,
     season_num: int | None,
@@ -36,7 +36,7 @@ def catalog_art_url(
 
 
 def catalog_collection_art_url(
-    entry: PublicDatasetCollection, art_type: ArtType, posters: CollectionPosterStyle
+    entry: CatalogCollection, art_type: ArtType, posters: CollectionPosterStyle
 ) -> str | None:
     """Return a collection entry's URL for an art slot, its poster as *posters* says."""
     if art_type is ArtType.POSTER:
@@ -74,27 +74,27 @@ class CatalogPick:
 NO_THEME = "OvertureDB: this title has no theme"
 
 #: Why OvertureDB offers nothing while the user has it switched off.
-DATASET_DISABLED = "OvertureDB is disabled"
+CATALOG_DISABLED = "OvertureDB is disabled"
 
 
 @dataclass(frozen=True, slots=True)
-class PublicDatasetIndex:
+class CatalogIndex:
     """What OvertureDB holds for a known set of local media items.
 
     :func:`build` resolves a batch in two queries; each per-target artwork
     lookup then reads this index without further database access.
 
-    An index built while the dataset is disabled is empty, so a caller that
+    An index built while the catalog is disabled is empty, so a caller that
     asks it questions gets the same answer as one that checked the schedule
     first: nothing on offer.
     """
 
-    items: dict[int, PublicDatasetItem]
+    items: dict[int, CatalogItem]
     season_posters: dict[int, dict[int, str]]
     #: Whether OvertureDB is enabled; a disabled index holds nothing.
     enabled: bool = True
-    collections: dict[int, PublicDatasetCollection] = field(
-        default_factory=dict[int, PublicDatasetCollection]
+    collections: dict[int, CatalogCollection] = field(
+        default_factory=dict[int, CatalogCollection]
     )
     #: Whether the user lets OvertureDB's No theme flag count as a theme.
     trust_no_theme: bool = True
@@ -113,11 +113,11 @@ class PublicDatasetIndex:
     ) -> Self:
         """Resolve catalog themes for a bounded batch of collections."""
         schedule = await load_schedule(
-            session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
+            session, CATALOG_SCHEDULE, timezone=app_config.TZ
         )
         if not schedule.enabled:
             return cls.empty(enabled=False)
-        entries = await PublicDatasetRepository(session).collections_by_tmdb_id(
+        entries = await CatalogRepository(session).collections_by_tmdb_id(
             {
                 row.tmdb_collection_id
                 for row in collections
@@ -146,14 +146,14 @@ class PublicDatasetIndex:
     async def build(
         cls, session: AsyncSession, items: Sequence[MediaItem], *, app_config: Settings
     ) -> Self:
-        """Resolve the dataset's rows for *items*, or nothing when disabled."""
+        """Resolve the catalog's rows for *items*, or nothing when disabled."""
         schedule = await load_schedule(
-            session, PUBLIC_DATASET_SCHEDULE, timezone=app_config.TZ
+            session, CATALOG_SCHEDULE, timezone=app_config.TZ
         )
         if not schedule.enabled or not items:
             return cls.empty(enabled=schedule.enabled)
 
-        repository = PublicDatasetRepository(session)
+        repository = CatalogRepository(session)
         matched = await repository.items_by_media_item_id(items)
         season_posters = await repository.season_posters_by_item_ids(
             {
@@ -175,7 +175,7 @@ class PublicDatasetIndex:
         *,
         season: Season | None = None,
     ) -> str | None:
-        """Return the dataset's URL for one art slot, if it has one."""
+        """Return the catalog's URL for one art slot, if it has one."""
         public_item = self.items.get(item.id) if item.id is not None else None
         if public_item is None or public_item.id is None:
             return None
@@ -265,7 +265,7 @@ class PublicDatasetIndex:
     def _missing(self, item: MediaItem | MediaCollection, what: str) -> str:
         """Say why OvertureDB has nothing: disabled, no entry, or *what*."""
         if not self.enabled:
-            return DATASET_DISABLED
+            return CATALOG_DISABLED
         if (
             isinstance(item, MediaCollection)
             and item.tmdb_collection_id not in self.collections
@@ -290,7 +290,7 @@ class PublicDatasetIndex:
 
 
 def _catalog_youtube_id(
-    public_item: PublicDatasetItem | PublicDatasetCollection, source: ThemeBulkSource
+    public_item: CatalogItem | CatalogCollection, source: ThemeBulkSource
 ) -> str | None:
     """Return one catalog's theme video ID for an entry."""
     match source:

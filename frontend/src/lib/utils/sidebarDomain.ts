@@ -638,7 +638,7 @@ interface MetadataIssueCheck {
   label: string;
   showOnly?: boolean;
   /** Only checked while OvertureDB is enabled. */
-  needsDataset?: boolean;
+  needsCatalog?: boolean;
   library: (item: MediaItemRead) => boolean;
   /** Collections have only some of an item's metadata. */
   collections?: (collection: CollectionRead) => boolean;
@@ -661,8 +661,8 @@ export const METADATA_ISSUE_CHECKS: Record<MetadataIssue, MetadataIssueCheck> = 
   },
   id_mismatch: {
     label: "ID mismatch",
-    needsDataset: true,
-    library: (item) => item.public_dataset_ids === "mismatching",
+    needsCatalog: true,
+    library: (item) => item.catalog_ids === "mismatching",
   },
 };
 export const METADATA_ISSUES = alphabetical(
@@ -673,22 +673,22 @@ export const METADATA_ISSUES = alphabetical(
 /** Whether *flag* can be checked in the list: OvertureDB's issues need it enabled. */
 function issueAvailable(
   flag: MetadataIssue,
-  publicDatasetEnabled: boolean,
+  catalogEnabled: boolean,
   mode: SidebarMode = "items",
 ): boolean {
   const check = METADATA_ISSUE_CHECKS[flag];
-  return (publicDatasetEnabled || !check.needsDataset) && (mode === "items" || !!check.collections);
+  return (catalogEnabled || !check.needsCatalog) && (mode === "items" || !!check.collections);
 }
 
 export function metadataIssuesFor(
   tab: SidebarTab,
-  publicDatasetEnabled: boolean,
+  catalogEnabled: boolean,
   mode: SidebarMode = "items",
 ): MetadataIssue[] {
   return METADATA_ISSUES.filter(
     (flag) =>
       (tab === "show" || !METADATA_ISSUE_CHECKS[flag].showOnly) &&
-      issueAvailable(flag, publicDatasetEnabled, mode),
+      issueAvailable(flag, catalogEnabled, mode),
   );
 }
 
@@ -749,17 +749,17 @@ interface FilterDef {
   order: number;
   mediaTypes?: readonly SidebarTab[];
   /** Shown only while OvertureDB is enabled. */
-  needsDataset?: boolean;
+  needsCatalog?: boolean;
   /** Shown only where the server has smart collections. */
   needsSmart?: boolean;
   /** Shown only where the server has collections. */
   needsCollections?: boolean;
   library?: (
     filters: FilterState,
-    datasetEnabled: boolean,
+    catalogEnabled: boolean,
     members: ReadonlySet<number>,
   ) => Predicate<MediaItemRead> | null;
-  collections?: (filters: FilterState, datasetEnabled: boolean) => Predicate<CollectionRead> | null;
+  collections?: (filters: FilterState, catalogEnabled: boolean) => Predicate<CollectionRead> | null;
 }
 
 function triState<T>(
@@ -785,11 +785,11 @@ function resolutionPredicate(filters: FilterState): Predicate<Row> | null {
 
 function issuesPredicate<T>(
   filters: FilterState,
-  datasetEnabled: boolean,
+  catalogEnabled: boolean,
   check: (flag: MetadataIssueCheck) => ((row: T) => boolean) | undefined,
 ): Predicate<T> | null {
   const checks = filters.metadataIssues.flags
-    .filter((flag) => issueAvailable(flag, datasetEnabled))
+    .filter((flag) => issueAvailable(flag, catalogEnabled))
     .flatMap((flag) => check(METADATA_ISSUE_CHECKS[flag]) ?? []);
   if (!checks.length) return null;
   return filters.metadataIssues.mode === "any"
@@ -821,7 +821,7 @@ export const FILTERS = {
     group: "collection",
     order: 350,
     needsCollections: true,
-    library: (filters, _datasetEnabled, members) =>
+    library: (filters, _catalogEnabled, members) =>
       filters.collectionId === null ? null : (item) => members.has(item.id),
   },
   collectionHolds: {
@@ -917,38 +917,38 @@ export const FILTERS = {
     label: "OvertureDB",
     group: "status",
     order: 50,
-    needsDataset: true,
-    library: (filters, datasetEnabled) =>
-      datasetEnabled
-        ? triState(filters.overtureDb, "complete", (item) => item.public_dataset_complete)
+    needsCatalog: true,
+    library: (filters, catalogEnabled) =>
+      catalogEnabled
+        ? triState(filters.overtureDb, "complete", (item) => item.catalog_complete)
         : null,
-    collections: (filters, datasetEnabled) =>
-      datasetEnabled
-        ? triState(filters.overtureDb, "complete", (row) => row.public_dataset_complete)
+    collections: (filters, catalogEnabled) =>
+      catalogEnabled
+        ? triState(filters.overtureDb, "complete", (row) => row.catalog_complete)
         : null,
   },
   themerrDb: {
     label: "ThemerrDB",
     group: "status",
     order: 60,
-    needsDataset: true,
-    library: (filters, datasetEnabled) =>
-      datasetEnabled
-        ? triState(filters.themerrDb, "complete", (item) => item.public_dataset_themerrdb)
+    needsCatalog: true,
+    library: (filters, catalogEnabled) =>
+      catalogEnabled
+        ? triState(filters.themerrDb, "complete", (item) => item.catalog_themerrdb)
         : null,
-    collections: (filters, datasetEnabled) =>
-      datasetEnabled
-        ? triState(filters.themerrDb, "complete", (row) => row.public_dataset_themerrdb)
+    collections: (filters, catalogEnabled) =>
+      catalogEnabled
+        ? triState(filters.themerrDb, "complete", (row) => row.catalog_themerrdb)
         : null,
   },
   metadataIssues: {
     label: "Metadata issues",
     group: "metadata",
     order: 400,
-    library: (filters, datasetEnabled) =>
-      issuesPredicate(filters, datasetEnabled, (check) => check.library),
-    collections: (filters, datasetEnabled) =>
-      issuesPredicate(filters, datasetEnabled, (check) => check.collections),
+    library: (filters, catalogEnabled) =>
+      issuesPredicate(filters, catalogEnabled, (check) => check.library),
+    collections: (filters, catalogEnabled) =>
+      issuesPredicate(filters, catalogEnabled, (check) => check.collections),
   },
   collectionMembers: {
     label: "Management",
@@ -1000,7 +1000,7 @@ export type FilterKey = keyof typeof FILTERS;
 /** The filter sections a list shows, in order. */
 export function filterSections(
   mode: SidebarMode,
-  options: { tab: SidebarTab; datasetEnabled: boolean; smart: boolean; collections: boolean },
+  options: { tab: SidebarTab; catalogEnabled: boolean; smart: boolean; collections: boolean },
 ): FilterKey[] {
   const scope = mode === "collections" ? "collections" : "library";
   return keysOf(FILTERS)
@@ -1009,7 +1009,7 @@ export function filterSections(
       return (
         !!filter[scope] &&
         (!filter.mediaTypes || filter.mediaTypes.includes(options.tab)) &&
-        (!filter.needsDataset || options.datasetEnabled) &&
+        (!filter.needsCatalog || options.catalogEnabled) &&
         (!filter.needsSmart || options.smart) &&
         (!filter.needsCollections || options.collections)
       );
@@ -1019,40 +1019,40 @@ export function filterSections(
 
 function libraryPredicates(
   filters: FilterState,
-  datasetEnabled: boolean,
+  catalogEnabled: boolean,
   members: ReadonlySet<number> = new Set(),
 ): Predicate<MediaItemRead>[] {
   return keysOf(FILTERS).flatMap((key) => {
     const filter: FilterDef = FILTERS[key];
-    return filter.library?.(filters, datasetEnabled, members) ?? [];
+    return filter.library?.(filters, catalogEnabled, members) ?? [];
   });
 }
 
 function collectionPredicates(
   filters: FilterState,
-  datasetEnabled: boolean,
+  catalogEnabled: boolean,
 ): Predicate<CollectionRead>[] {
   return keysOf(FILTERS).flatMap((key) => {
     const filter: FilterDef = FILTERS[key];
-    return filter.collections?.(filters, datasetEnabled) ?? [];
+    return filter.collections?.(filters, catalogEnabled) ?? [];
   });
 }
 
 /** How many of the list's filters narrow it now. */
 export function activeFilterCount(
   filters: FilterState,
-  publicDatasetEnabled: boolean,
+  catalogEnabled: boolean,
   mode: SidebarMode,
 ): number {
   return mode === "collections"
-    ? collectionPredicates(filters, publicDatasetEnabled).length
-    : libraryPredicates(filters, publicDatasetEnabled).length;
+    ? collectionPredicates(filters, catalogEnabled).length
+    : libraryPredicates(filters, catalogEnabled).length;
 }
 
 export function filterSidebarItems(options: {
   items: MediaItemRead[];
   filters: FilterState;
-  publicDatasetEnabled: boolean;
+  catalogEnabled: boolean;
   collectionMembers?: ReadonlySet<number>;
   searchQuery: string;
   searchField: SidebarSearchField;
@@ -1061,7 +1061,7 @@ export function filterSidebarItems(options: {
 }): MediaItemRead[] {
   const predicates = libraryPredicates(
     options.filters,
-    options.publicDatasetEnabled,
+    options.catalogEnabled,
     options.collectionMembers,
   );
   const query = options.searchQuery.trim();
@@ -1074,13 +1074,13 @@ export function filterSidebarItems(options: {
 export function filterSidebarCollections(options: {
   collections: CollectionRead[];
   filters: FilterState;
-  publicDatasetEnabled: boolean;
+  catalogEnabled: boolean;
   searchQuery: string;
   searchField: SidebarSearchField;
   sortField: SidebarSortField;
   sortDir: SidebarSortDir;
 }): CollectionRead[] {
-  const predicates = collectionPredicates(options.filters, options.publicDatasetEnabled);
+  const predicates = collectionPredicates(options.filters, options.catalogEnabled);
   const query = options.searchQuery.trim();
   const matcher = search(options.searchField)?.collections;
   if (query && matcher) predicates.push(matcher(query));

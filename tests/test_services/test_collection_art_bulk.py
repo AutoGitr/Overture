@@ -11,8 +11,8 @@ lazy from overture.db.art_slots import (
     record_art_file,
     select_art,
 )
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtBulkSource,
@@ -36,7 +36,7 @@ lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import disable_public_dataset, enable_public_dataset
+lazy from tests.bulk_helpers import disable_catalog, enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import JobProbe
 
@@ -108,7 +108,7 @@ async def test_slots_no_source_can_serve_are_decided_together_while_planning(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     await _seed(database)
-    await disable_public_dataset(db_session)
+    await disable_catalog(db_session)
 
     plan = await plan_collection_art(
         BulkMatchArtRequest(collection_groups=["Sagas"]),
@@ -194,10 +194,8 @@ async def test_collection_art_run_uploads_the_catalog_art_it_finds(
         assert row is not None
         row.tmdb_collection_id = 10
         session.add(row)
-        session.add(
-            PublicDatasetCollection(tmdb_id=10, title="Saga", poster_url=CATALOG_URL)
-        )
-        await enable_public_dataset(session)
+        session.add(CatalogCollection(tmdb_id=10, title="Saga", poster_url=CATALOG_URL))
+        await enable_catalog(session)
     params = BulkMatchArtRequest(
         collection_groups=["Sagas"], source_order=[ArtBulkSource.OVERTUREDB]
     )

@@ -23,7 +23,7 @@ lazy from overture.services.themes.bulk import load_theme_batch, plan_bulk_theme
 lazy from overture.utils.time import utc_now
 lazy from tests.factories import MediaItemFactory, SeasonFactory
 lazy from tests.runtime_helpers import make_local_assets, row_id
-lazy from tests.test_services.test_bulk_public_dataset_prefilter import visits
+lazy from tests.test_services.test_bulk_catalog_prefilter import visits
 
 
 @pytest.mark.parametrize(

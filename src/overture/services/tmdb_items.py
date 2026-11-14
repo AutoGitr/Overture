@@ -26,9 +26,9 @@ lazy from ..integrations.tmdb import TMDBClient, TmdbDetails, TmdbTitle
 lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..repositories.seasons import SeasonRepository
 lazy from ..schemas.art import ArtSourcesResponse, SaveArtRequest
+lazy from ..schemas.catalog import CatalogSources
 lazy from ..schemas.common import SaveSelectionResponse
 lazy from ..schemas.library import ItemSelectionResponse
-lazy from ..schemas.public_dataset import PublicDatasetSources
 lazy from ..schemas.themes import SelectThemeRequest
 lazy from ..schemas.tmdb import (
     TmdbCollectionResponse,
@@ -45,12 +45,12 @@ lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
 lazy from .art.candidates import CandidatePolicy
 lazy from .art.service import ArtService
+lazy from .catalog.browse import CatalogBrowser
+lazy from .catalog.lookup import sources_for
 lazy from .downloads.service import DownloadService
 lazy from .library.items import (
     emit_library_item_upserted,
 )
-lazy from .public_dataset.browse import CatalogBrowser
-lazy from .public_dataset.lookup import sources_for
 lazy from .themes.service import ThemesService
 
 logger = logging.getLogger(__name__)
@@ -330,9 +330,9 @@ class TmdbItemsService:
             unsaved_item(details), art_type, _season_num(details, art_type, season_num)
         )
 
-    async def public_dataset_sources(
+    async def catalog_sources(
         self, media_type: MediaType, tmdb_id: int
-    ) -> PublicDatasetSources:
+    ) -> CatalogSources:
         """Return what OvertureDB holds for an unsaved item."""
         details = await self._details(media_type, tmdb_id)
         async with self._database.read_session() as db:

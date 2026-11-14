@@ -46,7 +46,7 @@ order:
    values, such as release order and names without "The" and "Collection" for
    TMDB franchises. A dimension adds no minimum or **Most common only** of its
    own. Then the libraries, the title (a set's title template, where
-   `{value}s` turns 1990 into 1990s) and the group. A collection can draw from
+   `{value}s` turns 1990 into 1990s) and the group. A collection can span
    several libraries, of movies, shows or both, and the libraries of a saved
    collection can change: see
    [Collections across libraries](across-libraries.md).
@@ -59,7 +59,7 @@ order:
    Sonarr.
 4. **Settings**: sort and limit, Sync mode (Sync removes members that stop
    matching, Append keeps them), minimum, [Automatic art](art-and-themes.md),
-   Drawn colours, Background (Not needed makes a poster complete the
+   Generated colours, Background (Not needed makes a poster complete the
    collection's art), automatic theme, Request missing, Member label, Radarr or
    Sonarr tag, Plex's collection mode, filtering (smart collections only: Plex
    evaluates a smart filter, such as Unplayed, for each user; a regular
@@ -122,7 +122,7 @@ them.
 - [Collection sets](sets.md): one collection per value.
 - [Groups](groups.md): shared settings, defaults and separators.
 - [Collections across libraries](across-libraries.md).
-- [Art and themes](art-and-themes.md): automatic and drawn art, OvertureDB
+- [Art and themes](art-and-themes.md): automatic and generated art, OvertureDB
   posters.
 - [Managing collections](managing.md): adopt, orphan, delete, requests and
   tags.

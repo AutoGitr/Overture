@@ -29,7 +29,7 @@
   setSectionView("filters");
   const id = $props.id();
   const catalogBrowsing = new CatalogBrowsing();
-  let datasetEnabled = $derived(catalogBrowsing.enabled);
+  let catalogEnabled = $derived(catalogBrowsing.enabled);
 
   let draft = $state<FilterState>($state.snapshot(uiState.currentFilters));
 
@@ -141,12 +141,12 @@
     ),
   );
   let metadataIssueOptions = $derived(
-    sidebarDomain.metadataIssuesFor(uiState.sidebarTab, datasetEnabled, uiState.sidebarMode),
+    sidebarDomain.metadataIssuesFor(uiState.sidebarTab, catalogEnabled, uiState.sidebarMode),
   );
   let groupedSections = $derived.by(() => {
     const shown = sidebarDomain.filterSections(uiState.sidebarMode, {
       tab: uiState.sidebarTab,
-      datasetEnabled,
+      catalogEnabled,
       smart: !!capabilities.data?.smart,
       collections: settingsState.current.collections_supported,
     });
@@ -226,8 +226,8 @@
     }
     uiState.setFilters({
       ...$state.snapshot(filters),
-      overtureDb: datasetEnabled ? filters.overtureDb : "all",
-      themerrDb: datasetEnabled ? filters.themerrDb : "all",
+      overtureDb: catalogEnabled ? filters.overtureDb : "all",
+      themerrDb: catalogEnabled ? filters.themerrDb : "all",
     });
     uiState.closePopup();
   }
@@ -416,7 +416,7 @@
 
       <BulkOperationsCard
         {filters}
-        publicDatasetEnabled={datasetEnabled}
+        catalogEnabled={catalogEnabled}
         itemsRequest={bulkItemsRequest}
         collectionsRequest={bulkSetCollectionMonitoredRequest}
       />

@@ -8,8 +8,8 @@
     getCatalogEntryRecordOptions,
     getCollectionRecordOptions,
     getItemRecordOptions,
-    getPublicDatasetCollectionRecordOptions,
-    getPublicDatasetRecordOptions,
+    getCatalogCollectionRecordOptions,
+    getCatalogRecordOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import CardColumn from "../components/CardColumn.svelte";
   import DataStatus from "../components/DataStatus.svelte";
@@ -47,14 +47,14 @@
   let copiedField = $state<string | null>(null);
   // One OvertureDB record query per subject; only the open subject's runs.
   const itemRecordQuery = createQuery(() => ({
-    ...getPublicDatasetRecordOptions({ path: { item_id: itemId ?? 0 } }),
+    ...getCatalogRecordOptions({ path: { item_id: itemId ?? 0 } }),
     enabled: itemId !== null,
   }));
   const collectionRecordQuery = createQuery(() => ({
-    ...getPublicDatasetCollectionRecordOptions({ path: { collection_id: collectionId ?? 0 } }),
+    ...getCatalogCollectionRecordOptions({ path: { collection_id: collectionId ?? 0 } }),
     enabled: collectionId !== null,
   }));
-  const catalogRecordQuery = createQuery(() => ({
+  const catalogEntryRecordQuery = createQuery(() => ({
     ...getCatalogEntryRecordOptions({
       path: catalogEntry ?? { media_type: "movie", entry_key: "" },
     }),
@@ -68,15 +68,15 @@
     enabled: catalogEntry !== null,
   }));
   let draft = $derived(catalogEntry ? (catalogDetailQuery.data?.draft ?? null) : null);
-  let publicDatasetRecordQuery = $derived(
+  let catalogRecordQuery = $derived(
     catalogEntry
-      ? catalogRecordQuery
+      ? catalogEntryRecordQuery
       : collectionId !== null
         ? collectionRecordQuery
         : itemRecordQuery,
   );
-  let publicDatasetRecord = $derived(
-    publicDatasetRecordQuery.data?.found ? publicDatasetRecordQuery.data : null,
+  let catalogRecord = $derived(
+    catalogRecordQuery.data?.found ? catalogRecordQuery.data : null,
   );
 
   /** Clears the "copied" mark; a later copy restarts it. */
@@ -96,7 +96,7 @@
     }
   }
 
-  let publicDatasetSeasons = $derived(publicDatasetRecord?.seasons ?? []);
+  let catalogSeasons = $derived(catalogRecord?.seasons ?? []);
 </script>
 
 {#snippet rows(key: string, title: string, fields: DisplayField[])}
@@ -166,12 +166,12 @@
     {#if catalogEntry || record}
       <DataStatus
         label="OvertureDB record"
-        error={publicDatasetRecordQuery.error}
-        loading={publicDatasetRecordQuery.isFetching}
-        hasData={publicDatasetRecordQuery.data !== undefined}
-        onretry={() => publicDatasetRecordQuery.refetch()}
+        error={catalogRecordQuery.error}
+        loading={catalogRecordQuery.isFetching}
+        hasData={catalogRecordQuery.data !== undefined}
+        onretry={() => catalogRecordQuery.refetch()}
       />
-      {#if publicDatasetRecordQuery.data && !publicDatasetRecord}
+      {#if catalogRecordQuery.data && !catalogRecord}
         <p class="hint">OvertureDB has no entry for this.</p>
       {/if}
       {#if draft}
@@ -180,22 +180,22 @@
           {@render fieldTable(dbRecordFields(draft))}
         </section>
       {/if}
-      {#if publicDatasetRecord?.collection}
+      {#if catalogRecord?.collection}
         <section class="option-card">
           <h3 class="form-label">OvertureDB Collection</h3>
-          {@render fieldTable(dbRecordFields(publicDatasetRecord.collection))}
+          {@render fieldTable(dbRecordFields(catalogRecord.collection))}
         </section>
       {/if}
-      {#if publicDatasetRecord?.item}
+      {#if catalogRecord?.item}
         <section class="option-card">
           <h3 class="form-label">OvertureDB Item</h3>
-          {@render fieldTable(dbRecordFields(publicDatasetRecord.item))}
+          {@render fieldTable(dbRecordFields(catalogRecord.item))}
         </section>
 
-        {#if publicDatasetSeasons.length > 0}
+        {#if catalogSeasons.length > 0}
           <section class="option-card">
             <h3 class="form-label">OvertureDB Seasons</h3>
-            {#each publicDatasetSeasons as season (season.season_num)}
+            {#each catalogSeasons as season (season.season_num)}
               {@render rows(
                 `od-${season.season_num}`,
                 `Season ${season.season_num}`,

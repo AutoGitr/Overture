@@ -14,7 +14,7 @@ media, with optional loudness normalization.
 ## YouTube search
 
 YouTube theme searches show up to 20 results within the theme duration
-limits, drawn from the first 50 videos YouTube finds. With **Auto-search
+limits, chosen from the first 50 videos YouTube finds. With **Auto-search
 themes on load** (Settings, on by default) a title's themes are searched for as
 soon as you open them; turn it off to search only when you choose **Search**.
 

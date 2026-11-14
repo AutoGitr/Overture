@@ -16,13 +16,13 @@ lazy from overture.db.art_slots import (
     read_art_slot,
     record_art_file,
 )
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import (
     MediaCollection,
     MediaCollectionMember,
 )
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -50,7 +50,7 @@ lazy from overture.services.collections.theme_files import (
 lazy from overture.services.sync.collection_sync import CollectionSync
 lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnrichment
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset, make_bulk_downloads
+lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry, unused
@@ -571,11 +571,9 @@ async def test_a_newly_imported_collection_waits_for_adoption_before_themes(
     await _seed_movies(database)
     async with database.write_session() as session:
         session.add(
-            PublicDatasetCollection(
-                tmdb_id=10, title="Saga", youtube_id_overturedb="o" * 11
-            )
+            CatalogCollection(tmdb_id=10, title="Saga", youtube_id_overturedb="o" * 11)
         )
-        await enable_public_dataset(session)
+        await enable_catalog(session)
     await _run(
         Server(_collection("saga", "m0", "m1", "unknown", tmdb_id=10)),
         database,

@@ -7,13 +7,13 @@ lazy from zipfile import ZipFile
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.dataset_contract.contract import validate_entries
+lazy from overture.catalog_contract.contract import validate_entries
 lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, ThemeBulkSource
-lazy from overture.services.public_dataset.export import (
+lazy from overture.services.catalog.export import (
     REPORT_NAME,
     export_archive,
     export_selections,

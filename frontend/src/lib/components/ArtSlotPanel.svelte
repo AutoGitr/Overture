@@ -104,7 +104,7 @@
       },
     }),
     // Without a TMDB collection there may still be a listed person's art, and
-    // there is always art to draw from the title.
+    // there is always art to generate from the title.
     enabled: slot.kind === "collection",
   }));
   let sourcesQuery = $derived(
@@ -453,7 +453,7 @@
         {showSource}
         onSelect={(art) =>
           saveArt(
-            // A drawn candidate is drawn again on saving, from the current title.
+            // A generated candidate is generated again on saving, from the current title.
             art.generated
               ? { generated: art.generated, title_only: art.title_only }
               : { url: art.url, width: art.width, height: art.height },

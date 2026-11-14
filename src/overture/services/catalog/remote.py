@@ -1,15 +1,15 @@
-"""Public-dataset catalog download, validation, and persistence replacement."""
+"""Where OvertureDB publishes the catalog, and the checks on its artwork links."""
 
 lazy import asyncio
 lazy from typing import Any
 
+lazy from ...catalog_contract.contract import entry_art_urls
 lazy from ...config import Settings
-lazy from ...dataset_contract.contract import entry_art_urls
 lazy from ...utils.art_urls import public_art_url
 
-PUBLIC_DATASET_REPO_URL = "https://github.com/AutoGitr/OvertureDB"
+OVERTUREDB_REPO_URL = "https://github.com/AutoGitr/OvertureDB"
 #: The catalog OvertureDB publishes on GitHub Pages, as one gzip stream.
-PUBLIC_DATASET_CATALOG_URL = "https://AutoGitr.github.io/OvertureDB/catalog.jsonl.gz"
+CATALOG_URL = "https://AutoGitr.github.io/OvertureDB/catalog.jsonl.gz"
 MAX_CATALOG_COMPRESSED_BYTES = 50 * 1024 * 1024
 MAX_CATALOG_UNCOMPRESSED_BYTES = 250 * 1024 * 1024
 #: Artwork hosts checked at once while a catalog is validated.

@@ -11,12 +11,12 @@ lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import ArtFileFacts, read_art_slot
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
-    ArtDrawing,
+    ArtGeneration,
     ArtSource,
     ArtStyle,
     ArtType,
@@ -48,7 +48,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.generated_art import FONT_FILES, font_coverage, render_art
 lazy from overture.utils.image import THUMB_EXTENSION
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 lazy from tests.test_services.test_collection_management import Provider
@@ -430,9 +430,9 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
     assert [candidate.url for candidate in disabled.by_source["tmdb"]] == [URL]
     assert disabled.by_source["overturedb"] == []
     async with database.write_session() as session:
-        session.add(PublicDatasetCollection(tmdb_id=10, title="Saga", poster_url=URL))
+        session.add(CatalogCollection(tmdb_id=10, title="Saga", poster_url=URL))
     async with database.write_session() as session:
-        await enable_public_dataset(session)
+        await enable_catalog(session)
     policy = CandidatePolicy.of(AppSettings(skip_media_server_tmdb_urls=True))
     enabled = await candidates.gather_collection(row, ArtType.POSTER, policy)
     assert enabled.by_source["overturedb"][0].url == URL
@@ -450,7 +450,7 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
     )
 
 
-async def test_drawn_collection_art_is_offered_chosen_and_drawn_again_for_a_new_title(
+async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_title(
     tmp_path: Path, database: Database, app_config: Settings
 ) -> None:
     provider = ArtProvider(app_config)
@@ -503,13 +503,13 @@ async def test_drawn_collection_art_is_offered_chosen_and_drawn_again_for_a_new_
             ArtType.BACKGROUND,
             SaveArtRequest(generated=ArtStyle.DARK, title_only=True),
         )
-    # What matching compares never includes art to draw.
+    # What matching compares never includes art to generate.
     assert (
         ArtSource.GENERATED
         not in (await service.collections.found(1, ArtType.POSTER)).sources
     )
-    preview = await service.collections.drawn(
-        1, ArtType.POSTER, ArtDrawing(ArtStyle.DARK)
+    preview = await service.collections.preview(
+        1, ArtType.POSTER, ArtGeneration(ArtStyle.DARK)
     )
     assert Image.open(BytesIO(preview)).size == (1000, 1500)
 
@@ -525,20 +525,20 @@ async def test_drawn_collection_art_is_offered_chosen_and_drawn_again_for_a_new_
             == ArtSource.GENERATED
         )
 
-    # The same title draws the same image, which stays on the server as it is.
-    await service.collections.redraw(1, ArtType.POSTER, resend=False)
+    # The same title generates the same image, which stays on the server as it is.
+    await service.collections.regenerate(1, ArtType.POSTER, resend=False)
     assert len(provider.uploads) == 1
     async with database.write_session() as session:
         renamed = await CollectionRepository(session).get(1)
         assert renamed is not None
         renamed.title = "Trilogy"
         session.add(renamed)
-    await service.collections.redraw(1, ArtType.POSTER, resend=False)
+    await service.collections.regenerate(1, ArtType.POSTER, resend=False)
     assert len(provider.uploads) == 2
     assert provider.uploads[-1][1] != preview
 
 
-def test_drawn_art_is_the_same_for_the_same_title() -> None:
+def test_generated_art_is_the_same_for_the_same_title() -> None:
     first = render_art(ArtType.BACKGROUND, ArtStyle.LIGHT, "Studio Ghibli", "Studios")
     assert first == render_art(
         ArtType.BACKGROUND, ArtStyle.LIGHT, "Studio Ghibli", "Studios"
@@ -547,7 +547,7 @@ def test_drawn_art_is_the_same_for_the_same_title() -> None:
     # Art without a title is the style's colours alone.
     untitled = render_art(ArtType.BACKGROUND, ArtStyle.LIGHT)
     assert untitled not in {first, render_art(ArtType.BACKGROUND, ArtStyle.DARK)}
-    # A title without a heading is drawn alone, with no rule above it.
+    # A title without a heading is generated alone, with no rule above it.
     alone = render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas")
     assert alone != render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas", "Sagas")
 
@@ -571,7 +571,7 @@ def test_bundled_fonts_draw_every_character_of_a_title(title: str) -> None:
     assert Image.open(BytesIO(render_art(ArtType.POSTER, ArtStyle.DARK, title)))
 
 
-async def test_drawn_backgrounds_never_show_text_and_title_only_posters_stay_so(
+async def test_generated_backgrounds_never_show_text_and_title_only_posters_stay_so(
     database: Database, app_config: Settings, tmp_path: Path
 ) -> None:
     provider = ArtProvider(app_config)
@@ -626,8 +626,8 @@ async def test_drawn_backgrounds_never_show_text_and_title_only_posters_stay_so(
         )
         row.title = "Renamed"
         session.add(row)
-    await service.collections.redraw(1, ArtType.BACKGROUND, resend=False)
-    await service.collections.redraw(1, ArtType.POSTER, resend=False)
+    await service.collections.regenerate(1, ArtType.BACKGROUND, resend=False)
+    await service.collections.regenerate(1, ArtType.POSTER, resend=False)
 
     # The background shows no title, so a new one leaves it as it is.
     assert [art_type for art_type, *_ in provider.uploads] == [

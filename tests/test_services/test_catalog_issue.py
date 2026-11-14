@@ -10,7 +10,7 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType
-lazy from overture.services.public_dataset.issue import (
+lazy from overture.services.catalog.issue import (
     collection_issue,
     contribution_issue,
     item_issue,

@@ -33,7 +33,7 @@ lazy from tests.bulk_helpers import (
     art_matcher,
     as_job_context,
     bind_stamper,
-    enable_public_dataset,
+    enable_catalog,
     make_bulk_downloads,
     movie_item,
     progress_logs,
@@ -188,7 +188,7 @@ async def test_bulk_art_overturedb_only_no_matches_when_source_unavailable(
 @pytest.mark.parametrize(
     ("movies", "line"), [(150, "300 art slots"), (1, "2 art slots")]
 )
-async def test_bulk_art_targets_without_dataset_art_are_counted_in_one_step(
+async def test_bulk_art_targets_without_catalog_art_are_counted_in_one_step(
     movies: int,
     line: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -197,7 +197,7 @@ async def test_bulk_art_targets_without_dataset_art_are_counted_in_one_step(
     app_config: Settings,
     database: Database,
 ) -> None:
-    """Slots no dataset serves are decided while planning, in one line."""
+    """Slots no catalog serves are decided while planning, in one line."""
 
     async def unexpected(*_args: object, **_kwargs: object):
         raise AssertionError("planned targets are never read or matched")
@@ -211,7 +211,7 @@ async def test_bulk_art_targets_without_dataset_art_are_counted_in_one_step(
         )
         for n in range(1, movies + 1)
     )
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
     monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected)
@@ -451,7 +451,7 @@ async def test_bulk_art_says_a_recently_checked_target_was_skipped(
     ]
 
 
-async def test_bulk_art_single_target_without_dataset_art_has_singular_plurality(
+async def test_bulk_art_single_target_without_catalog_art_has_singular_plurality(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     db_session.add(
@@ -459,7 +459,7 @@ async def test_bulk_art_single_target_without_dataset_art_has_singular_plurality
             id=1, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
         )
     )
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
 
     context = Context()
     await art_bulk.run_bulk_art_match(

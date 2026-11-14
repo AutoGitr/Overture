@@ -14,18 +14,18 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.schedule import TaskSchedule
 lazy from ..schemas.backup import BackupRetention
-lazy from ..schemas.public_dataset import (
-    PublicDatasetSyncOutcome,
-    PublicDatasetSyncStats,
+lazy from ..schemas.catalog import (
+    CatalogSyncOutcome,
+    CatalogSyncStats,
 )
 lazy from ..utils.time import utc_now
 
 SYNC_SERVER_TASK_NAME = "sync_server"
 BACKUP_TASK_NAME = "backup"
-PUBLIC_DATASET_TASK_NAME = "public_dataset"
+CATALOG_TASK_NAME = "catalog"
 
 DEFAULT_BACKUP_CRON = "0 3 * * *"
-DEFAULT_PUBLIC_DATASET_CRON = "0 0 * * *"
+DEFAULT_CATALOG_CRON = "0 0 * * *"
 
 
 class SchedulePayload(BaseModel):
@@ -49,12 +49,12 @@ class BackupPayload(SchedulePayload):
     retention: BackupRetention = Field(default_factory=BackupRetention)
 
 
-class PublicDatasetPayload(SchedulePayload):
+class CatalogPayload(SchedulePayload):
     """Settings and last-run bookkeeping for the OvertureDB catalog sync."""
 
     last_synced_at: datetime | None = None
-    last_status: PublicDatasetSyncOutcome = "never_synced"
-    last_stats: PublicDatasetSyncStats | None = None
+    last_status: CatalogSyncOutcome = "never_synced"
+    last_stats: CatalogSyncStats | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -83,10 +83,10 @@ SYNC_SERVER_SCHEDULE = ScheduleSpec(SYNC_SERVER_TASK_NAME, SyncServerPayload)
 BACKUP_SCHEDULE = ScheduleSpec(
     BACKUP_TASK_NAME, BackupPayload, DEFAULT_BACKUP_CRON, default_enabled=True
 )
-PUBLIC_DATASET_SCHEDULE = ScheduleSpec(
-    PUBLIC_DATASET_TASK_NAME,
-    PublicDatasetPayload,
-    DEFAULT_PUBLIC_DATASET_CRON,
+CATALOG_SCHEDULE = ScheduleSpec(
+    CATALOG_TASK_NAME,
+    CatalogPayload,
+    DEFAULT_CATALOG_CRON,
     default_enabled=True,
 )
 

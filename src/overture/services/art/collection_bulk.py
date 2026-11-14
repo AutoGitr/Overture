@@ -28,7 +28,7 @@ lazy from ..bulk_common import (
     no_match_reason,
     planned_outcome,
 )
-lazy from ..public_dataset.index import CatalogPick, PublicDatasetIndex
+lazy from ..catalog.index import CatalogIndex, CatalogPick
 lazy from .collection_art import CollectionArtService, uploaded_image
 lazy from .perfect_match import accepted_matches, comparison_threshold
 
@@ -54,7 +54,7 @@ def _offer(
     row: MediaCollection,
     art_type: ArtType,
     params: BulkMatchArtRequest,
-    index: PublicDatasetIndex,
+    index: CatalogIndex,
 ) -> CatalogPick | None:
     """What decides a slot while planning: the catalog's offer or why nothing can.
 
@@ -84,13 +84,11 @@ async def _index(
     *,
     app_config: Settings,
     session: AsyncSession,
-) -> PublicDatasetIndex:
+) -> CatalogIndex:
     """OvertureDB's entries for *rows*, read only when the run asks OvertureDB."""
     if ArtBulkSource.OVERTUREDB not in params.source_order:
-        return PublicDatasetIndex.empty()
-    return await PublicDatasetIndex.build_collections(
-        session, rows, app_config=app_config
-    )
+        return CatalogIndex.empty()
+    return await CatalogIndex.build_collections(session, rows, app_config=app_config)
 
 
 async def plan_collection_art(
@@ -142,7 +140,7 @@ async def _choose(
     params: BulkMatchArtRequest,
     *,
     art: CollectionArtService,
-    index: PublicDatasetIndex,
+    index: CatalogIndex,
 ) -> tuple[JobOutcome, str, SaveArtRequest | None]:
     """Return the outcome, its reason and the artwork to upload, if any."""
     saved = saved_art(read_art_slot(row, art_type))

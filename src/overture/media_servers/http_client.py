@@ -4,8 +4,7 @@ lazy import asyncio
 lazy import logging
 lazy from abc import ABC, abstractmethod
 lazy from collections import deque
-lazy from collections.abc import AsyncGenerator, AsyncIterator, Callable, Hashable
-lazy from contextlib import asynccontextmanager
+lazy from collections.abc import AsyncIterator, Callable, Hashable
 lazy from dataclasses import dataclass, field
 lazy from typing import Any, ClassVar
 
@@ -206,18 +205,6 @@ class MediaServerHttpClient(ABC):
         if method not in {"GET", "HEAD"}:
             self._cache.invalidate()
         return response
-
-    @asynccontextmanager
-    async def _stream(self, path: str) -> AsyncGenerator[httpx2.Response]:
-        """Stream a GET response, failing the way :meth:`_request` does."""
-        client = await self.get_client()
-        try:
-            async with client.stream("GET", path) as response:
-                response.raise_for_status()
-                self.health.record(MediaServerState.REACHABLE)
-                yield response
-        except httpx2.HTTPError as exc:
-            raise self._error(exc) from exc
 
     async def _pages[T](
         self,

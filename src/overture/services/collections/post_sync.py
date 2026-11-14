@@ -78,16 +78,15 @@ class PostSyncStep(Protocol):
 
 
 class AutoAssets:
-    """Match or draw art, and match the catalog's theme.
+    """Match or generate art, and match the catalog's theme.
 
     A slot with no art chosen gets what the policy's Automatic art says: the
     best art of the first source in its order that has any (OvertureDB's
     catalog art, or TMDB's art of the franchise or a listed person), else art
-    drawn in the policy's style, a poster with the title and a background
-    without. A collection
-    that needs no background gets none, and a separator's poster is always
-    drawn. Art drawn earlier is drawn again when the title or group it shows
-    changed.
+    generated in the policy's style, a poster with the title and a background
+    without. A collection that needs no background gets none, and a
+    separator's poster is always generated. Art generated earlier is generated
+    again when the title or group it shows changed.
     """
 
     name = "Automatic assets"
@@ -113,7 +112,7 @@ class AutoAssets:
             slot = read_art_slot(row, art_type)
             saved = saved_art(slot)
             if slot.generated_style is not None:
-                await self._art.redraw(
+                await self._art.regenerate(
                     collection_id, art_type, resend=synced.new_copies
                 )
             elif saved is not None:
@@ -126,23 +125,23 @@ class AutoAssets:
             elif art_type is ArtType.BACKGROUND and not policy.backgrounds:
                 continue
             elif art_type is ArtType.POSTER and row.kind is CollectionKind.SEPARATOR:
-                await self._draw(synced, art_type)
+                await self._generate(synced, art_type)
             elif policy.auto_art.sources and (
                 url := await self._matched(
                     collection_id, art_type, policy.auto_art.sources
                 )
             ):
                 await self._art.save(collection_id, art_type, SaveArtRequest(url=url))
-            elif policy.auto_art.draws:
-                await self._draw(synced, art_type)
+            elif policy.auto_art.generates:
+                await self._generate(synced, art_type)
         await self._theme(synced)
 
-    async def _draw(self, synced: SyncedCollection, art_type: ArtType) -> None:
-        """Draw the slot's art in the policy's style."""
+    async def _generate(self, synced: SyncedCollection, art_type: ArtType) -> None:
+        """Generate the slot's art in the policy's style."""
         await self._art.save(
             synced.collection_id,
             art_type,
-            SaveArtRequest(generated=synced.policy.drawn_style),
+            SaveArtRequest(generated=synced.policy.generated_style),
         )
 
     async def _matched(

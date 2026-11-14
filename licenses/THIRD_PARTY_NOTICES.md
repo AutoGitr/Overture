@@ -41,7 +41,7 @@ from the [Fontsource](https://fontsource.org/fonts/inter) v5.3.0 distribution of
 [Inter](https://github.com/rsms/inter), under the SIL Open Font License 1.1 in
 `frontend/public/fonts/OFL.txt`.
 
-Art Overture draws from collection titles uses the
+Art Overture generates from collection titles uses the
 [Noto](https://notofonts.github.io/) fonts Noto Sans, Noto Sans Arabic, Hebrew,
 Devanagari, Thai, Symbols and Symbols 2, Noto Sans CJK JP and Noto Emoji, under
 the SIL Open Font License 1.1 in `src/overture/utils/fonts/OFL.txt`.

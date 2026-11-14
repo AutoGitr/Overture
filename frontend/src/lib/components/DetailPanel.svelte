@@ -2,7 +2,7 @@
   import Database from "@lucide/svelte/icons/database";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
-  import { getPublicDatasetItemIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
+  import { getCatalogItemIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { createSeasonsQuery, createServerLinks } from "../rest/queries";
@@ -59,7 +59,7 @@
 
   const actions = new ItemRecordActions(() => item);
   const itemIssue = createQuery(() => ({
-    ...getPublicDatasetItemIssueOptions({ path: { item_id: item?.id ?? 0 } }),
+    ...getCatalogItemIssueOptions({ path: { item_id: item?.id ?? 0 } }),
     enabled: !!item && catalogBrowsing.enabled,
   }));
   let detail = $derived(catalog?.detail);
@@ -242,7 +242,7 @@
       <CollectionBadge
         tmdbId={item.tmdb_collection_id}
         libraryCollectionId={item.library_collection_id}
-        datasetEnabled={catalogBrowsing.enabled}
+        catalogEnabled={catalogBrowsing.enabled}
       />
     {/if}
     <ContributeIssueLink issue={detail ? detail.draft_issue : item ? itemIssue.data : null} />

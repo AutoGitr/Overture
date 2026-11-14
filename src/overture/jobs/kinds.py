@@ -23,7 +23,7 @@ class JobKind(StrEnum):
     ASSET_SCAN = "asset_scan"
     SERVER_AUDIT = "server_audit"
     SERVER_AUDIT_FIX = "server_audit_fix"
-    PUBLIC_DATASET_SYNC = "public_dataset_sync"
+    CATALOG_SYNC = "catalog_sync"
     BACKUP = "backup"
     DOWNLOAD = "download"
 
@@ -62,7 +62,7 @@ _EVENT_PREFIXES = frozendict(
         JobKind.ASSET_SCAN: "assets.scan",
         JobKind.SERVER_AUDIT: "server.audit",
         JobKind.SERVER_AUDIT_FIX: "server.audit.fix",
-        JobKind.PUBLIC_DATASET_SYNC: "public-dataset.sync",
+        JobKind.CATALOG_SYNC: "catalog.sync",
         JobKind.BACKUP: "backup",
         JobKind.DOWNLOAD: "download",
     }
@@ -75,7 +75,7 @@ _LABELS = frozendict(
         JobKind.ASSET_SCAN: "Renamer scan",
         JobKind.SERVER_AUDIT: "server audit",
         JobKind.SERVER_AUDIT_FIX: "server audit fix",
-        JobKind.PUBLIC_DATASET_SYNC: "OvertureDB sync",
+        JobKind.CATALOG_SYNC: "OvertureDB sync",
         JobKind.BACKUP: "backup",
         JobKind.DOWNLOAD: "download",
     }

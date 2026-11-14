@@ -46,13 +46,13 @@
   /** Operations on everything the filters and search currently match. */
   let {
     filters,
-    publicDatasetEnabled,
+    catalogEnabled,
     itemsRequest,
     collectionsRequest,
   }: {
     /** The filters being edited, not yet applied to the sidebar. */
     filters: FilterState;
-    publicDatasetEnabled: boolean;
+    catalogEnabled: boolean;
     itemsRequest: Request<BulkItemOperation, BulkItemOperationResult>;
     collectionsRequest: Request<BulkCollectionOperation, BulkCollectionOperationResult>;
   } = $props();
@@ -82,7 +82,7 @@
       ? filterSidebarItems({
           items: itemsQuery.data?.items ?? [],
           filters,
-          publicDatasetEnabled,
+          catalogEnabled,
           collectionMembers: filteredCollection.ids,
           searchQuery: uiState.searchQuery,
           searchField: uiState.searchField,
@@ -96,7 +96,7 @@
       ? filterSidebarCollections({
           collections: collectionsQuery.data ?? [],
           filters,
-          publicDatasetEnabled,
+          catalogEnabled,
           searchQuery: uiState.searchQuery,
           searchField: uiState.searchField,
           sortField: "title",

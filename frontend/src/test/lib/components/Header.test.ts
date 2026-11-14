@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Header from "../../../lib/components/Header.svelte";
 import { session } from "../../../lib/auth/session.svelte";
 import { matchState, themeJobState } from "../../../lib/stores/bulkJobState.svelte";
-import { getPublicDatasetStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { getCatalogStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { navigate, route } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
@@ -13,8 +13,8 @@ import { renderWithQueryClient } from "../../helpers/render";
 
 function browseCatalog(enabled: boolean) {
   settingsState.load(appSettings({ overturedb_browse: true }));
-  queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, {
-    ...realtimeSnapshot().public_dataset_status,
+  queryClient.setQueryData(getCatalogStatusOptions().queryKey, {
+    ...realtimeSnapshot().catalog_status,
     enabled,
   });
 }

@@ -3,8 +3,8 @@
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import { createMutation, createQuery } from "@tanstack/svelte-query";
   import {
-    getPublicDatasetSourcesOptions,
-    getTmdbPublicDatasetSourcesOptions,
+    getCatalogSourcesOptions,
+    getTmdbCatalogSourcesOptions,
     selectThemeMutation,
     selectTmdbThemeMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -47,7 +47,7 @@
   } = $props();
 
   const catalogBrowsing = new CatalogBrowsing();
-  let datasetEnabled = $derived(catalogBrowsing.enabled);
+  let catalogEnabled = $derived(catalogBrowsing.enabled);
   let catalogEntry = $derived(catalog?.entry);
   let subject = $derived(item ?? preview ?? catalogEntry);
 
@@ -65,27 +65,27 @@
   );
   // Keyed on the item, so responses stay with the item they were requested for.
   const itemSourcesQuery = createQuery(() => ({
-    ...getPublicDatasetSourcesOptions({ path: { item_id: item?.id ?? 0 } }),
-    enabled: !!item && !catalog && datasetEnabled,
+    ...getCatalogSourcesOptions({ path: { item_id: item?.id ?? 0 } }),
+    enabled: !!item && !catalog && catalogEnabled,
   }));
   const tmdbSourcesQuery = createQuery(() => ({
-    ...getTmdbPublicDatasetSourcesOptions({
+    ...getTmdbCatalogSourcesOptions({
       path: { media_type: preview?.media_type ?? "movie", tmdb_id: preview?.tmdb_id ?? 0 },
     }),
-    enabled: !!preview && !catalog && datasetEnabled,
+    enabled: !!preview && !catalog && catalogEnabled,
   }));
   let publicSourcesQuery = $derived(preview ? tmdbSourcesQuery : itemSourcesQuery);
-  let datasetSource = $derived(
-    catalogEntry ?? (datasetEnabled ? publicSourcesQuery.data?.item : null),
+  let catalogSource = $derived(
+    catalogEntry ?? (catalogEnabled ? publicSourcesQuery.data?.item : null),
   );
-  // The themes shown whatever is searched for: the current one and the dataset's.
+  // The themes shown whatever is searched for: the current one and the catalog's.
   let candidateVideoIds = $derived([
     ...new Set(
       [
         item?.youtube_id,
         catalog?.detail.entry.youtube_id_overturedb,
-        datasetSource?.youtube_id_overturedb,
-        datasetSource?.youtube_id_themerrdb,
+        catalogSource?.youtube_id_overturedb,
+        catalogSource?.youtube_id_themerrdb,
       ]
         .map((id) => id?.trim())
         .filter((id): id is string => Boolean(id)),
@@ -101,7 +101,7 @@
           : null,
   );
 
-  /** The subject's current and dataset themes first, then the videos found. */
+  /** The subject's current and catalog themes first, then the videos found. */
   function presentResults(results: ThemeSearchResult[]) {
     return mergeThemeResults({
       item: catalogEntry
@@ -112,8 +112,8 @@
             youtube_duration: null,
           }
         : item,
-      overtureDbId: datasetSource?.youtube_id_overturedb,
-      themerrDbId: datasetSource?.youtube_id_themerrdb,
+      overtureDbId: catalogSource?.youtube_id_overturedb,
+      themerrDbId: catalogSource?.youtube_id_themerrdb,
       searchResults: results,
     });
   }
@@ -199,7 +199,7 @@
 </script>
 
 <div class="theme-panel">
-  {#if datasetEnabled && !catalog}
+  {#if catalogEnabled && !catalog}
     <DataStatus
       label="OvertureDB theme"
       error={publicSourcesQuery.error}

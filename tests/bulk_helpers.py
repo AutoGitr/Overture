@@ -7,8 +7,8 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
@@ -27,8 +27,8 @@ lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.bulk_common import AssetPlan
+lazy from overture.services.catalog.index import CatalogIndex
 lazy from overture.services.downloads.service import DownloadService
-lazy from overture.services.public_dataset.index import PublicDatasetIndex
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
@@ -167,11 +167,11 @@ def use_theme_work(
     monkeypatch.setattr(theme_bulk, "load_theme_batch", loaded)
 
 
-async def enable_public_dataset(session: AsyncSession) -> None:
+async def enable_catalog(session: AsyncSession) -> None:
     """Switch OvertureDB on, as the user does with Enable OvertureDB."""
     await session.merge(
         TaskSchedule(
-            task_name="public_dataset",
+            task_name="catalog",
             enabled=True,
             cron_expression="0 0 * * *",
             payload={},
@@ -180,11 +180,11 @@ async def enable_public_dataset(session: AsyncSession) -> None:
     await session.commit()
 
 
-async def disable_public_dataset(session: AsyncSession) -> None:
+async def disable_catalog(session: AsyncSession) -> None:
     """Switch OvertureDB off, which it is not unless the user says so."""
     await session.merge(
         TaskSchedule(
-            task_name="public_dataset",
+            task_name="catalog",
             enabled=False,
             cron_expression="0 0 * * *",
             payload={},
@@ -193,10 +193,10 @@ async def disable_public_dataset(session: AsyncSession) -> None:
     await session.commit()
 
 
-def public_index(item_id: int, **fields: Any) -> PublicDatasetIndex:
-    """Build an index holding one dataset row for *item_id*."""
-    return PublicDatasetIndex(
-        {item_id: PublicDatasetItem(id=99, media_type=MediaType.MOVIE, **fields)}, {}
+def public_index(item_id: int, **fields: Any) -> CatalogIndex:
+    """Build an index holding one catalog row for *item_id*."""
+    return CatalogIndex(
+        {item_id: CatalogItem(id=99, media_type=MediaType.MOVIE, **fields)}, {}
     )
 
 

@@ -211,7 +211,7 @@
     sidebarDomain.filterSidebarItems({
       items: libraryItems,
       filters: uiState.currentFilters,
-      publicDatasetEnabled: catalog.enabled,
+      catalogEnabled: catalog.enabled,
       collectionMembers: filteredCollection.ids,
       searchQuery: uiState.searchQuery,
       searchField: uiState.searchField,
@@ -257,7 +257,7 @@
     sidebarDomain.filterSidebarCollections({
       collections,
       filters: uiState.currentFilters,
-      publicDatasetEnabled: catalog.enabled,
+      catalogEnabled: catalog.enabled,
       searchQuery: uiState.searchQuery,
       searchField: uiState.searchField,
       sortField: sort.field,

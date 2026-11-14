@@ -1,4 +1,4 @@
-"""Public dataset parsing and candidate edge cases."""
+"""Catalog parsing and candidate edge cases."""
 
 lazy import gzip
 lazy import json
@@ -10,21 +10,21 @@ lazy import pytest
 lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy import overture.services.public_dataset.catalog as catalog_mod
-lazy from overture.config import Settings
-lazy from overture.dataset_contract.contract import (
+lazy import overture.services.catalog.remote as catalog_mod
+lazy from overture.catalog_contract.contract import (
     SCHEMA_VERSION,
     dump_catalog,
     read_catalog,
 )
+lazy from overture.config import Settings
+lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetItem
 lazy from overture.domain import ArtType, MediaType, ThemeBulkSource
-lazy from overture.repositories.public_dataset import PublicDatasetRepository
-lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
-lazy from overture.services.public_dataset import staging
-lazy from overture.services.public_dataset.index import PublicDatasetIndex
-lazy from overture.services.public_dataset.lookup import (
+lazy from overture.repositories.catalog import CatalogRepository
+lazy from overture.schemas.catalog import CatalogSyncStats
+lazy from overture.services.catalog import staging
+lazy from overture.services.catalog.index import CatalogIndex
+lazy from overture.services.catalog.lookup import (
     build_candidate,
 )
 lazy from overture.utils.time import utc_now
@@ -34,7 +34,7 @@ lazy from tests.http_mock import RecordingMockTransport
 def catalog_payload() -> dict[str, Any]:
     """A catalog in exactly the shape OvertureDB publishes.
 
-    ``generated_at``, ``third_party_notices`` and ``sources`` are the dataset's
+    ``generated_at``, ``third_party_notices`` and ``sources`` are the catalog's
     own bookkeeping: Overture stores none of them and must not choke on them.
     """
     return {
@@ -143,7 +143,7 @@ def test_read_catalog_rejects_anything_but_the_contract() -> None:
             list(read_catalog(content.splitlines()))
 
 
-def test_public_dataset_candidate_shapes_source_and_preview() -> None:
+def test_catalog_candidate_shapes_source_and_preview() -> None:
     candidate = build_candidate(
         "https://image.tmdb.org/t/p/original/poster.jpg", ArtType.POSTER
     )
@@ -161,7 +161,7 @@ async def test_download_catalog_streams_the_gzip_catalog_and_reports_stats(
 ) -> None:
     monkeypatch.setattr(
         catalog_mod,
-        "PUBLIC_DATASET_CATALOG_URL",
+        "CATALOG_URL",
         "https://acme.github.io/db/catalog.jsonl.gz",
     )
     content = catalog_jsonl(catalog_payload())
@@ -180,7 +180,7 @@ async def test_download_catalog_streams_the_gzip_catalog_and_reports_stats(
     monkeypatch.setattr(staging, "create_client", mock_client)
 
     path = tmp_path / "catalog.jsonl"
-    stats = PublicDatasetSyncStats()
+    stats = CatalogSyncStats()
     await staging.download(path, stats)
 
     assert transport.called
@@ -197,7 +197,7 @@ async def test_catalog_decompression_rejects_payload_over_limit(
     monkeypatch.setattr(catalog_mod, "MAX_CATALOG_UNCOMPRESSED_BYTES", 100)
     monkeypatch.setattr(
         catalog_mod,
-        "PUBLIC_DATASET_CATALOG_URL",
+        "CATALOG_URL",
         "https://catalog.test/catalog.jsonl.gz",
     )
     transport = RecordingMockTransport(
@@ -211,14 +211,14 @@ async def test_catalog_decompression_rejects_payload_over_limit(
 
     monkeypatch.setattr(staging, "create_client", mock_client)
     with pytest.raises(ValueError, match="download failed"):
-        await staging.download(tmp_path / "catalog.jsonl", PublicDatasetSyncStats())
+        await staging.download(tmp_path / "catalog.jsonl", CatalogSyncStats())
 
 
 async def test_replace_catalog_persists_entries_field_for_field(
     db_session: AsyncSession, tmp_path: Path, *, app_config: Settings
 ) -> None:
     """A downloaded catalog lands in the database with nothing renamed."""
-    stats = PublicDatasetSyncStats()
+    stats = CatalogSyncStats()
 
     source = tmp_path / "catalog.jsonl"
     stage = tmp_path / "catalog.sqlite"
@@ -232,7 +232,7 @@ async def test_replace_catalog_persists_entries_field_for_field(
     assert stats.movies == 1
     assert stats.seasons == 2
 
-    stored = (await db_session.exec(select(PublicDatasetItem))).all()
+    stored = (await db_session.exec(select(CatalogItem))).all()
     by_type = {item.media_type: item for item in stored}
     assert set(by_type) == {MediaType.MOVIE, MediaType.SHOW}
 
@@ -245,38 +245,38 @@ async def test_replace_catalog_persists_entries_field_for_field(
     assert show.youtube_id_themerrdb == "secondary12"
     assert show.id is not None
 
-    seasons = await PublicDatasetRepository(db_session).list_seasons(show.id)
+    seasons = await CatalogRepository(db_session).list_seasons(show.id)
     assert [season.season_num for season in seasons] == [0, 1]
 
 
 BOTH = (ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB)
 
 
-def test_public_dataset_index_youtube_id_prefers_primary_and_falls_back() -> None:
+def test_catalog_index_youtube_id_prefers_primary_and_falls_back() -> None:
     item1 = MediaItem(id=1, media_type=MediaType.MOVIE, title="Item 1")
     item2 = MediaItem(id=2, media_type=MediaType.MOVIE, title="Item 2")
     item3 = MediaItem(id=3, media_type=MediaType.MOVIE, title="Item 3")
 
-    p1 = PublicDatasetItem(
+    p1 = CatalogItem(
         id=10,
         media_type=MediaType.MOVIE,
         youtube_id_overturedb="primary_123",
         youtube_id_themerrdb="secondary12",
     )
-    p2 = PublicDatasetItem(
+    p2 = CatalogItem(
         id=20,
         media_type=MediaType.MOVIE,
         youtube_id_overturedb=None,
         youtube_id_themerrdb="secondary12",
     )
-    p3 = PublicDatasetItem(
+    p3 = CatalogItem(
         id=30,
         media_type=MediaType.MOVIE,
         youtube_id_overturedb=None,
         youtube_id_themerrdb=None,
     )
 
-    index = PublicDatasetIndex(items={1: p1, 2: p2, 3: p3}, season_posters={})
+    index = CatalogIndex(items={1: p1, 2: p2, 3: p3}, season_posters={})
 
     for item, overturedb, themerrdb in (
         (item1, "primary_123", "secondary12"),

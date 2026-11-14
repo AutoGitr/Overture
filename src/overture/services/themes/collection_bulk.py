@@ -21,12 +21,12 @@ lazy from ..bulk_common import (
     queue_and_report,
     queue_download,
 )
+lazy from ..catalog.index import NO_THEME, CatalogIndex
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.collection_theme import collection_themes_unavailable
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
-lazy from ..public_dataset.index import NO_THEME, PublicDatasetIndex
 
 
 async def plan_collection_themes(
@@ -45,7 +45,7 @@ async def plan_collection_themes(
                 collection_groups=params.collection_groups,
                 include_unmonitored=params.include_unmonitored,
             )
-            index = await PublicDatasetIndex.build_collections(
+            index = await CatalogIndex.build_collections(
                 session, rows, app_config=app_config
             )
             failed = await DownloadJobRepository(session).failed_themes_by_collection(
@@ -87,15 +87,14 @@ async def _refresh_file(
         FolderThemes,
     ):
         return row
-    root = app_config.JELLYFIN_COLLECTIONS_PATH
-    if root is None or row.server_path is None:
-        raise ValueError("The collection theme folder is unavailable")
     async with downloads.asset_locks.acquire(f"collection:{row.id}"):
         async with database.read_session() as session:
             current = await session.get(MediaCollection, row.id)
         if current is None:
             raise ValueError("Collection no longer exists")
-        folder = await owned_thread(collection_folder, root, current.server_path or "")
+        folder = await owned_thread(
+            collection_folder, app_config.JELLYFIN_COLLECTIONS_PATH, current.server_path
+        )
         facts = await owned_thread(
             inspect_theme_file, folder, theme_file_facts(current)
         )
@@ -135,7 +134,7 @@ async def run_collection_themes(
             rows = await CollectionRepository(session).bulk_targets(
                 collection_ids=list(batch), include_unmonitored=True
             )
-            index = await PublicDatasetIndex.build_collections(
+            index = await CatalogIndex.build_collections(
                 session, rows, app_config=app_config
             )
             failed = await DownloadJobRepository(session).failed_themes_by_collection(

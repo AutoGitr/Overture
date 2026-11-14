@@ -11,13 +11,13 @@ lazy import asyncio
 lazy from typing import NewType
 lazy from urllib.parse import urlsplit
 
-lazy from ..config import Settings, in_plex_direct_domain
-lazy from ..dataset_contract.contract import (
+lazy from ..catalog_contract.contract import (
     CATALOG_ART_SOURCE_LABELS,
     art_source,
     canonical_art_url,
     preview_art_url,
 )
+lazy from ..config import Settings, in_plex_direct_domain
 lazy from ..domain import ArtSource, ArtType
 lazy from .security import remove_sensitive_url_params
 lazy from .ssrf import is_private_url

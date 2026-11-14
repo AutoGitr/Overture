@@ -65,7 +65,7 @@ describe("source order helpers", () => {
     expect(normaliseSelectedSources(["overturedb", "bogus"], defaults)).toEqual(["overturedb"]);
   });
 
-  it("filters enabled sources by selection and dataset availability", () => {
+  it("filters enabled sources by selection and catalog availability", () => {
     expect(enabledSources(["local_art_matching", "overturedb"], ["overturedb"], false)).toEqual([]);
     expect(enabledSources(["local_art_matching", "overturedb"], ["overturedb"], true)).toEqual([
       "overturedb",
@@ -93,7 +93,7 @@ describe("source order helpers", () => {
     expect(moveOrderedSource(order, "overturedb", "overturedb")).toBe(order);
   });
 
-  it("reports dataset sources as disabled only when the dataset is off", () => {
+  it("reports catalog sources as disabled only when the catalog is off", () => {
     expect(sourceDisabled("overturedb", false)).toBe(true);
     expect(sourceDisabled("overturedb", true)).toBe(false);
     expect(sourceDisabled("themerrdb", false)).toBe(true);

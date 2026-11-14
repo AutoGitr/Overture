@@ -13,7 +13,7 @@ lazy from sqlalchemy.orm import QueryableAttribute, selectinload
 lazy from sqlmodel import col, select
 lazy from starlette.types import Receive, Scope, Send
 
-lazy from ...dataset_contract.contract import (
+lazy from ...catalog_contract.contract import (
     catalog_art_url,
     consistent_poster_problem,
     entry_identities,
@@ -22,9 +22,9 @@ lazy from ...dataset_contract.contract import (
     validate_entry,
 )
 lazy from ...db.art_slots import read_art_slot
+lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.models.public_dataset import PublicDatasetCollection
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import PAGE_SIZE, Database
@@ -35,9 +35,9 @@ lazy from ...domain import (
     MediaType,
     ThemeBulkSource,
 )
+lazy from ...repositories.catalog import CatalogRepository
+lazy from ...repositories.catalog_drafts import CatalogDraftRepository
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.public_dataset import PublicDatasetRepository
-lazy from ...repositories.public_dataset_drafts import PublicDatasetDraftRepository
 lazy from ...utils.art_urls import art_refusals
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.temporary import create_operation_directory
@@ -108,7 +108,7 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
 
 def collection_entry(
     collection: MediaCollection,
-    catalog: PublicDatasetCollection | None,
+    catalog: CatalogCollection | None,
     posters: CollectionPosterStyle,
 ) -> dict[str, Any] | None:
     """Return a matched collection's art and theme as a catalog entry, if any.
@@ -260,7 +260,7 @@ async def export_selections(database: Database, directory: Path) -> Path:
     await owned_thread(_initialize, directory)
     left_out: list[str] = []
     async with database.read_session() as session:
-        drafts = await PublicDatasetDraftRepository(session).list_all()
+        drafts = await CatalogDraftRepository(session).list_all()
     await owned_thread(
         _stage_batch,
         directory,
@@ -305,7 +305,7 @@ async def export_selections(database: Database, directory: Path) -> Path:
         after = items[-1].id or after
     async with database.read_session() as session:
         collections = await CollectionRepository(session).list_listed()
-        catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
+        catalog = await CatalogRepository(session).collections_by_tmdb_id(
             {row.tmdb_collection_id for row in collections if row.tmdb_collection_id}
         )
         settings = await get_app_settings(session)

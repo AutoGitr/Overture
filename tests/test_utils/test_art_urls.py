@@ -7,12 +7,12 @@ enters Overture goes through it.
 
 lazy import pytest
 
+lazy from overture.catalog_contract.contract import ART_HOSTS, art_source
 lazy from overture.config import Settings
-lazy from overture.dataset_contract.contract import ART_HOSTS, art_source
 lazy from overture.domain import ArtSource, ArtType, ServerType
 lazy from overture.integrations.tmdb import extract_art
 lazy from overture.schemas.art import ArtCandidate
-lazy from overture.services.public_dataset.lookup import build_candidate
+lazy from overture.services.catalog.lookup import build_candidate
 lazy from overture.utils.art_urls import (
     art_preview_url,
     art_source_label,

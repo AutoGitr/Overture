@@ -61,7 +61,7 @@ lazy from ..themes.service import ThemesService
 lazy from .items import (
     emit_library_item_removed,
     emit_library_item_upserted,
-    media_item_reads_with_public_dataset_status,
+    media_item_reads_with_catalog_status,
     require_item,
     season_reads,
 )
@@ -183,20 +183,20 @@ class LibraryService:
         """
         async with self._database.read_session() as db:
             items = await MediaItemRepository(db).list_visible(media_type)
-            reads = await media_item_reads_with_public_dataset_status(db, items)
+            reads = await media_item_reads_with_catalog_status(db, items)
         return MediaItemListResponse(items=reads, total=len(reads))
 
     async def get_item(self, item_id: int) -> MediaItemRead:
         """Get a single media item."""
         async with self._database.read_session() as db:
             item = await require_item(db, item_id)
-            return (await media_item_reads_with_public_dataset_status(db, [item]))[0]
+            return (await media_item_reads_with_catalog_status(db, [item]))[0]
 
     async def item_record(self, item_id: int) -> DatabaseRecord:
         """Return an item's stored rows and what the API derives from them."""
         async with self._database.read_session() as db:
             item = await require_item(db, item_id)
-            read = (await media_item_reads_with_public_dataset_status(db, [item]))[0]
+            read = (await media_item_reads_with_catalog_status(db, [item]))[0]
             stored = await RecordRepository(db).rows(MediaItem, item_id)
             values = await TermRepository(db).values_of(item_id)
         return DatabaseRecord.of(stored, read, values)

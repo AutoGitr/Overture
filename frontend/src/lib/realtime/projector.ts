@@ -10,7 +10,7 @@ import { artPreviewState } from "../stores/artPreviewState.svelte";
 import { downloadState } from "../stores/downloadState.svelte";
 import { mediaServerState } from "../stores/mediaServerState.svelte";
 import { invalidateSchedules } from "../rest/cache";
-import { storePublicDatasetStatus } from "./cache";
+import { storeCatalogStatus } from "./cache";
 import {
   announceJobEvent,
   clearJobSnapshot,
@@ -44,7 +44,7 @@ const PROJECTION_HANDLERS: WebSocketHandlerMap = {
   "library.item.upserted": () => {},
   "library.item.removed": () => {},
   "library.items.changed": () => {},
-  "public-dataset.updated": (data) => storePublicDatasetStatus(data),
+  "catalog.updated": (data) => storeCatalogStatus(data),
   "item.updated": () => {},
   "job.snapshot.cleared": (data) => {
     clearJobSnapshot(data.kind);

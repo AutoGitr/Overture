@@ -9,15 +9,15 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import select_art
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, CollectionPosterStyle
-lazy from overture.services.public_dataset.export import REPORT_NAME, export_selections
-lazy from overture.services.public_dataset.index import PublicDatasetIndex
+lazy from overture.services.catalog.export import REPORT_NAME, export_selections
+lazy from overture.services.catalog.index import CatalogIndex
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import stored_collection
 
 OWN = "https://image.tmdb.org/t/p/original/own.jpg"
@@ -44,10 +44,10 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
     posters: CollectionPosterStyle,
     expected: str,
 ) -> None:
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     await _choose(db_session, posters)
     db_session.add(
-        PublicDatasetCollection(
+        CatalogCollection(
             tmdb_id=10, title="Saga", poster_url=OWN, consistent_poster_url=CONSISTENT
         )
     )
@@ -56,7 +56,7 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await PublicDatasetIndex.build_collections(
+    index = await CatalogIndex.build_collections(
         db_session, [row], app_config=app_config
     )
 
@@ -66,10 +66,10 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
 async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     db_session: AsyncSession, app_config: Settings
 ) -> None:
-    await enable_public_dataset(db_session)
+    await enable_catalog(db_session)
     await _choose(db_session, CollectionPosterStyle.INDIVIDUAL)
     db_session.add(
-        PublicDatasetCollection(
+        CatalogCollection(
             tmdb_id=10, title="Saga", poster_url=OWN, consistent_poster_url=CONSISTENT
         )
     )
@@ -80,7 +80,7 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await PublicDatasetIndex.build_collections(
+    index = await CatalogIndex.build_collections(
         db_session, [row], app_config=app_config
     )
 

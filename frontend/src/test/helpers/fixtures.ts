@@ -14,12 +14,12 @@ import type {
   CatalogEntryDetail,
   CatalogEntryRow,
   MediaItemRead,
-  PublicDatasetRecord,
-  PublicDatasetRecordItem,
-  PublicDatasetRecordSeason,
+  CatalogRecord,
+  CatalogRecordItem,
+  CatalogRecordSeason,
   SeasonRead,
   ThemeSearchResult,
-  PublicDatasetStatus,
+  CatalogStatus,
 } from "../../generated/rest/types.gen";
 import type {
   DownloadJobEvent,
@@ -80,9 +80,9 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     poster_source: null,
     poster_url: null,
     poster_width: null,
-    public_dataset_complete: false,
-    public_dataset_themerrdb: false,
-    public_dataset_ids: null,
+    catalog_complete: false,
+    catalog_themerrdb: false,
+    catalog_ids: null,
     season_posters_status: "missing",
     server_added_at: null,
     server_item_id: null,
@@ -175,8 +175,8 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     has_theme: false,
     id: 1,
     tmdb_collection_id: null,
-    public_dataset_complete: false,
-    public_dataset_themerrdb: false,
+    catalog_complete: false,
+    catalog_themerrdb: false,
     library_ids: ["1"],
     media_types: ["movie"],
     monitored: false,
@@ -200,7 +200,7 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     auto_art: null,
     auto_match_theme: null,
     backgrounds: null,
-    drawn_style: null,
+    generated_style: null,
     overturedb_posters: null,
     libraries: [
       {
@@ -442,9 +442,7 @@ export function themeSearchResult(overrides: Partial<ThemeSearchResult> = {}): T
   };
 }
 
-export function publicDatasetRecordItem(
-  overrides: Partial<PublicDatasetRecordItem> = {},
-): PublicDatasetRecordItem {
+export function catalogRecordItem(overrides: Partial<CatalogRecordItem> = {}): CatalogRecordItem {
   return {
     background_url: null,
     catalog_synced_at: null,
@@ -463,34 +461,30 @@ export function publicDatasetRecordItem(
   };
 }
 
-export function publicDatasetRecordSeason(
-  overrides: Partial<PublicDatasetRecordSeason> = {},
-): PublicDatasetRecordSeason {
+export function catalogRecordSeason(
+  overrides: Partial<CatalogRecordSeason> = {},
+): CatalogRecordSeason {
   return {
     id: null,
     poster_url: null,
-    public_dataset_item_id: 1,
+    catalog_item_id: 1,
     season_num: 1,
     ...overrides,
   };
 }
 
-export function publicDatasetRecord(
-  overrides: Partial<PublicDatasetRecord> = {},
-): PublicDatasetRecord {
+export function catalogRecord(overrides: Partial<CatalogRecord> = {}): CatalogRecord {
   const { item, seasons, collection, ...recordOverrides } = overrides;
   return {
     found: true,
-    item: item === undefined ? publicDatasetRecordItem() : item,
+    item: item === undefined ? catalogRecordItem() : item,
     collection: collection ?? null,
     seasons: seasons ?? [],
     ...recordOverrides,
   };
 }
 
-export function publicDatasetStatus(
-  overrides: Partial<PublicDatasetStatus> = {},
-): PublicDatasetStatus {
+export function catalogStatus(overrides: Partial<CatalogStatus> = {}): CatalogStatus {
   return {
     enabled: true,
     repo_url: "https://github.com/AutoGitr/OvertureDB",
@@ -522,7 +516,7 @@ export function realtimeSnapshot(overrides: Partial<RealtimeSnapshot> = {}): Rea
     server_time: "2026-01-01T12:00:00Z",
     jobs: [],
     downloads: [],
-    public_dataset_status: publicDatasetStatus(),
+    catalog_status: catalogStatus(),
     media_server: { state: "reachable", message: "" },
     ...overrides,
   };

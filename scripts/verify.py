@@ -108,8 +108,8 @@ lazy from urllib.parse import parse_qs, urlsplit
 
 lazy import httpx2
 
+lazy from overture.catalog_contract.contract import ISSUE_FORMS
 lazy from overture.config import Settings
-lazy from overture.dataset_contract.contract import ISSUE_FORMS
 lazy from overture.domain import (
     ArtStyle,
     ArtType,
@@ -604,14 +604,14 @@ class Library:
 
     async def check_issues(self) -> None:
         """A sample of contribution issues open the form of their media type."""
-        status = await self.overture.get("/api/public-dataset/status")
+        status = await self.overture.get("/api/catalog/status")
         if not status["enabled"]:
             return
         for item in self.items[:ISSUE_SAMPLE]:
             case = self.case("issue", item["title"])
             try:
                 issue = await self.overture.get(
-                    f"/api/public-dataset/items/{item['id']}/issue"
+                    f"/api/catalog/items/{item['id']}/issue"
                 )
             except ApiError as exc:
                 case.error = str(exc)

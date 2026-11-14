@@ -10,9 +10,9 @@ import {
   catalogDetail,
   catalogEntry,
   mediaItem,
-  publicDatasetRecord,
-  publicDatasetRecordItem,
-  publicDatasetRecordSeason,
+  catalogRecord,
+  catalogRecordItem,
+  catalogRecordSeason,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -61,7 +61,7 @@ describe("DbRecordPopup", () => {
   it("groups what the database stores apart from what the API derives", async () => {
     const { calls } = mockFetchRoutes({
       "/api/library/items/7/record": alienRecord,
-      "/api/public-dataset/items/7/record": notFound,
+      "/api/catalog/items/7/record": notFound,
     });
 
     await renderPopup();
@@ -85,7 +85,7 @@ describe("DbRecordPopup", () => {
   it("copies a value and marks only the field copied last", async () => {
     mockFetchRoutes({
       "/api/library/items/7/record": alienRecord,
-      "/api/public-dataset/items/7/record": notFound,
+      "/api/catalog/items/7/record": notFound,
     });
     const writeText = vi.fn().mockResolvedValue(undefined);
     stubClipboard(writeText);
@@ -103,7 +103,7 @@ describe("DbRecordPopup", () => {
   it("asks for a manual copy when the clipboard is unavailable", async () => {
     mockFetchRoutes({
       "/api/library/items/7/record": alienRecord,
-      "/api/public-dataset/items/7/record": notFound,
+      "/api/catalog/items/7/record": notFound,
     });
     stubClipboard();
     await renderPopup();
@@ -122,7 +122,7 @@ describe("DbRecordPopup", () => {
     mockFetchRoutes({
       "/api/library/items/7/record": () =>
         available ? Response.json(alienRecord) : Response.json({ detail: "Down" }, { status: 404 }),
-      "/api/public-dataset/items/7/record": notFound,
+      "/api/catalog/items/7/record": notFound,
     });
     await renderPopup();
 
@@ -138,9 +138,9 @@ describe("DbRecordPopup", () => {
   it("shows the matching OvertureDB record and its seasons", async () => {
     mockFetchRoutes({
       "/api/library/items/7/record": alienRecord,
-      "/api/public-dataset/items/7/record": publicDatasetRecord({
-        item: publicDatasetRecordItem({ title: "Alien", tmdb_id: 348 }),
-        seasons: [publicDatasetRecordSeason({ season_num: 2 })],
+      "/api/catalog/items/7/record": catalogRecord({
+        item: catalogRecordItem({ title: "Alien", tmdb_id: 348 }),
+        seasons: [catalogRecordSeason({ season_num: 2 })],
       }),
     });
 
@@ -161,7 +161,7 @@ describe("DbRecordPopup", () => {
         values: {},
         derived: {},
       },
-      "/api/public-dataset/collections/12/record": {
+      "/api/catalog/collections/12/record": {
         found: true,
         item: null,
         seasons: [],
@@ -179,8 +179,8 @@ describe("DbRecordPopup", () => {
       await screen.findByRole("heading", { name: "OvertureDB Collection" }),
     ).toBeInTheDocument();
     expect(calls.map((call) => call.url).toSorted()).toEqual([
+      "/api/catalog/collections/12/record",
       "/api/collections/12/record",
-      "/api/public-dataset/collections/12/record",
     ]);
   });
 
@@ -188,8 +188,8 @@ describe("DbRecordPopup", () => {
     goToCatalogEntry({ media_type: "movie", entry_key: "tmdb-348" });
     await waitFor(() => expect(route.params.entrySlug).toBe("tmdb-348"));
     mockFetchRoutes({
-      "/api/public-dataset/catalog/movie/tmdb-348/record": publicDatasetRecord(),
-      "/api/public-dataset/catalog/movie/tmdb-348": catalogDetail({
+      "/api/catalog/catalog/movie/tmdb-348/record": catalogRecord(),
+      "/api/catalog/catalog/movie/tmdb-348": catalogDetail({
         draft: catalogEntry({ poster_url: "https://image.test/draft.jpg" }),
       }),
     });

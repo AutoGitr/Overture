@@ -2,15 +2,15 @@
   import { createMutation, createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { invalidateTags } from "../rest/cache";
   import {
-    getPublicDatasetStatusOptions,
+    getCatalogStatusOptions,
     getSettingsOptions,
-    setPublicDatasetEnabledMutation,
+    setCatalogEnabledMutation,
     updateSettingsMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { ASPECT_TOLERANCES, DEFAULT_APP_SETTINGS } from "../../generated/settings";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
-  import { publicDatasetSyncState } from "../stores/jobStates.svelte";
+  import { catalogSyncState } from "../stores/jobStates.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import {
@@ -55,11 +55,11 @@
   const showSaving = delayedFlag(() => saving);
   const feedback = createNotifier();
   const updateSettingsRequest = createMutation(() => updateSettingsMutation());
-  const datasetQuery = createQuery(() => getPublicDatasetStatusOptions());
-  const saveDatasetEnabledRequest = createMutation(() => setPublicDatasetEnabledMutation());
+  const catalogQuery = createQuery(() => getCatalogStatusOptions());
+  const saveCatalogEnabledRequest = createMutation(() => setCatalogEnabledMutation());
   /** The OvertureDB switch, which its schedule holds rather than the app settings. */
-  let datasetEnabled = $derived(datasetQuery.data?.enabled ?? false);
-  let datasetEnabledDirty = $derived(datasetEnabled !== (datasetQuery.data?.enabled ?? false));
+  let catalogEnabled = $derived(catalogQuery.data?.enabled ?? false);
+  let catalogEnabledDirty = $derived(catalogEnabled !== (catalogQuery.data?.enabled ?? false));
 
   let appearance = $state<AppearancePreferences>({
     ...loadAppearancePreferences(),
@@ -74,11 +74,11 @@
       const previous = settingsState.current;
       const fresh = await updateSettingsRequest.mutateAsync({ body: draft });
       queryClient.setQueryData(getSettingsOptions().queryKey, fresh);
-      if (datasetEnabledDirty) {
-        const status = await saveDatasetEnabledRequest.mutateAsync({
-          body: { enabled: datasetEnabled },
+      if (catalogEnabledDirty) {
+        const status = await saveCatalogEnabledRequest.mutateAsync({
+          body: { enabled: catalogEnabled },
         });
-        queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, status);
+        queryClient.setQueryData(getCatalogStatusOptions().queryKey, status);
       }
       // Refetch in the background: art candidates come from remote sources, and
       // waiting for them made saving slow. Library items carry
@@ -273,16 +273,16 @@
       <PopupSection label="OvertureDB">
         <DataStatus
           label="OvertureDB status"
-          error={datasetQuery.error}
-          loading={datasetQuery.isFetching}
-          hasData={datasetQuery.data !== undefined}
-          onretry={() => datasetQuery.refetch()}
+          error={catalogQuery.error}
+          loading={catalogQuery.isFetching}
+          hasData={catalogQuery.data !== undefined}
+          onretry={() => catalogQuery.refetch()}
         />
-        {#if datasetQuery.data}
+        {#if catalogQuery.data}
           <OvertureDbSettings
             bind:draft
-            bind:enabled={datasetEnabled}
-            disabled={publicDatasetSyncState.running}
+            bind:enabled={catalogEnabled}
+            disabled={catalogSyncState.running}
           />
         {/if}
       </PopupSection>

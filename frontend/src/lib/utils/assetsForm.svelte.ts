@@ -35,7 +35,7 @@ export interface AssetsFormSource {
   movieLibraries(): LibrarySectionRead[];
   showLibraries(): LibrarySectionRead[];
   librariesLoaded(): boolean;
-  publicDatasetEnabled(): boolean;
+  catalogEnabled(): boolean;
   collectionGroups(): string[];
 }
 
@@ -97,7 +97,7 @@ export class AssetsForm {
   }
 
   /** Catalog sources stay chosen while OvertureDB is off; they are only left out. */
-  readonly disabledSources = $derived.by(() => disabledSources(this.source.publicDatasetEnabled()));
+  readonly disabledSources = $derived.by(() => disabledSources(this.source.catalogEnabled()));
 
   /** The saved library choice, less libraries the server no longer has. */
   readonly selectedLibraries = $derived.by(() =>
@@ -146,7 +146,7 @@ export class AssetsForm {
     enabledSources(
       this.config.artSourceOrder,
       this.config.selectedArtSources,
-      this.source.publicDatasetEnabled(),
+      this.source.catalogEnabled(),
     ),
   );
 
@@ -154,7 +154,7 @@ export class AssetsForm {
     enabledSources(
       this.config.themeSourceOrder,
       this.config.selectedThemeSources,
-      this.source.publicDatasetEnabled(),
+      this.source.catalogEnabled(),
     ),
   );
 

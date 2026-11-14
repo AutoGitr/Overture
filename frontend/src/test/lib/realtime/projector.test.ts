@@ -1,5 +1,5 @@
 import { queryClient } from "../../../lib/rest/queryClient";
-import { getPublicDatasetStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { getCatalogStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   projectRealtimeMessage,
@@ -8,10 +8,10 @@ import {
 } from "../../../lib/realtime/projector";
 import { downloadState } from "../../../lib/stores/downloadState.svelte";
 import { notify } from "../../../lib/stores/notificationState.svelte";
-import { publicDatasetSyncState, syncState } from "../../../lib/stores/jobStates.svelte";
+import { catalogSyncState, syncState } from "../../../lib/stores/jobStates.svelte";
 import {
   itemDownload,
-  publicDatasetStatus,
+  catalogStatus,
   realtimeSnapshot,
   wsMessage as event,
 } from "../../helpers/fixtures";
@@ -85,7 +85,7 @@ describe("realtime projection", () => {
 
   it("resumes the jobs a continuing snapshot names and forgets the others", () => {
     syncState.handleStarted({ total: 5 });
-    publicDatasetSyncState.handleStarted({});
+    catalogSyncState.handleStarted({});
 
     projectRealtimeSnapshot(
       realtimeSnapshot({
@@ -98,40 +98,36 @@ describe("realtime projection", () => {
 
     expect(syncState.running).toBe(true);
     expect(syncState.done).toBe(2);
-    expect(publicDatasetSyncState.status).toBe("idle");
+    expect(catalogSyncState.status).toBe("idle");
     expect(downloadState.activeCount).toBe(1);
   });
 });
 
 describe("OvertureDB sync liveness", () => {
-  beforeEach(() => publicDatasetSyncState.reset());
+  beforeEach(() => catalogSyncState.reset());
 
   it("stays released once the sync ends, whatever the status broadcast says", () => {
     projectRealtimeMessage(
-      event(
-        "public-dataset.sync.started",
-        { job: { kind: "public_dataset_sync", status: "started" } },
-        1,
-      ),
+      event("catalog.sync.started", { job: { kind: "catalog_sync", status: "started" } }, 1),
     );
-    expect(publicDatasetSyncState.running).toBe(true);
+    expect(catalogSyncState.running).toBe(true);
 
     projectRealtimeMessage(
       event(
-        "public-dataset.sync.completed",
+        "catalog.sync.completed",
         {
-          job: { kind: "public_dataset_sync", status: "completed" },
+          job: { kind: "catalog_sync", status: "completed" },
           finished_at: "2026-01-01T00:00:00+00:00",
         },
         2,
       ),
     );
-    expect(publicDatasetSyncState.running).toBe(false);
+    expect(catalogSyncState.running).toBe(false);
 
     projectRealtimeMessage(
       event(
-        "public-dataset.updated",
-        publicDatasetStatus({
+        "catalog.updated",
+        catalogStatus({
           last_synced_at: "2026-01-01T00:00:00+00:00",
           last_status: "success",
         }),
@@ -139,26 +135,22 @@ describe("OvertureDB sync liveness", () => {
       ),
     );
 
-    expect(publicDatasetSyncState.running).toBe(false);
-    expect(queryClient.getQueryData(getPublicDatasetStatusOptions().queryKey)?.last_status).toBe(
+    expect(catalogSyncState.running).toBe(false);
+    expect(queryClient.getQueryData(getCatalogStatusOptions().queryKey)?.last_status).toBe(
       "success",
     );
   });
 
   it("reports the failure and releases the button", () => {
     projectRealtimeMessage(
-      event(
-        "public-dataset.sync.started",
-        { job: { kind: "public_dataset_sync", status: "started" } },
-        1,
-      ),
+      event("catalog.sync.started", { job: { kind: "catalog_sync", status: "started" } }, 1),
     );
     projectRealtimeMessage(
       event(
-        "public-dataset.sync.failed",
+        "catalog.sync.failed",
         {
           job: {
-            kind: "public_dataset_sync",
+            kind: "catalog_sync",
             status: "failed",
             error: { message: "catalog unreachable" },
           },
@@ -167,7 +159,7 @@ describe("OvertureDB sync liveness", () => {
       ),
     );
 
-    expect(publicDatasetSyncState.running).toBe(false);
-    expect(publicDatasetSyncState.error).toBe("catalog unreachable");
+    expect(catalogSyncState.running).toBe(false);
+    expect(catalogSyncState.error).toBe("catalog unreachable");
   });
 });

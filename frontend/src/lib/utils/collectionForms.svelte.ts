@@ -59,7 +59,7 @@ export type PolicyData = {
   minimum_items?: number | null;
   delete_below_minimum?: boolean | null;
   auto_art?: AutoArt | null;
-  drawn_style?: ArtStyle | null;
+  generated_style?: ArtStyle | null;
   overturedb_posters?: CollectionPosterStyle | null;
   backgrounds?: boolean | null;
   auto_match_theme?: boolean | null;
@@ -102,7 +102,7 @@ export function defaultRule(): CollectionRuleWriteInput {
     minimum_items: null,
     delete_below_minimum: null,
     auto_art: null,
-    drawn_style: null,
+    generated_style: null,
     overturedb_posters: null,
     backgrounds: null,
     auto_match_theme: null,
@@ -895,7 +895,7 @@ const RULE_POLICY = [
   "minimum_items",
   "delete_below_minimum",
   "auto_art",
-  "drawn_style",
+  "generated_style",
   "overturedb_posters",
   "backgrounds",
   "auto_match_theme",

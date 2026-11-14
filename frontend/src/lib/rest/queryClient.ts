@@ -20,8 +20,8 @@ const STALE_TIME_BY_OPERATION: Readonly<Record<string, number>> = {
   // Where the server's web app opens titles changes only with the server.
   getServerWebLinks: EXPENSIVE_STALE_TIME,
   listCollectionFieldValues: LIST_STALE_TIME,
-  getPublicDatasetStatus: STATUS_STALE_TIME,
-  getPublicDatasetRecord: LIST_STALE_TIME,
+  getCatalogStatus: STATUS_STALE_TIME,
+  getCatalogRecord: LIST_STALE_TIME,
   listBackups: LIST_STALE_TIME,
   listBulkAssetsSchedules: LIST_STALE_TIME,
   listCollections: LIST_STALE_TIME,

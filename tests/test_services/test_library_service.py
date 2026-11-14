@@ -14,15 +14,15 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import select_art
+lazy from overture.db.models.catalog import (
+    CatalogItem,
+    CatalogItemSeason,
+)
 lazy from overture.db.models.media_collection import (
     MediaCollection,
     MediaCollectionMember,
 )
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import (
-    PublicDatasetItem,
-    PublicDatasetSeason,
-)
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
@@ -112,7 +112,7 @@ async def test_library_reports_whether_catalog_ids_agree(
         )
     )
     db_session.add(
-        PublicDatasetItem(
+        CatalogItem(
             media_type=MediaType.SHOW,
             tmdb_id=10,
             tvdb_id=20,
@@ -123,8 +123,8 @@ async def test_library_reports_whether_catalog_ids_agree(
 
     result = await service.list_items()
     detail = await service.get_item(1)
-    assert result.items[0].public_dataset_ids == agreement
-    assert detail.public_dataset_ids == agreement
+    assert result.items[0].catalog_ids == agreement
+    assert detail.catalog_ids == agreement
 
 
 @pytest.mark.parametrize(
@@ -267,7 +267,7 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
     missing_hash.youtube_duration = 90
 
     db_session.add(
-        PublicDatasetItem(
+        CatalogItem(
             id=1,
             media_type=MediaType.MOVIE,
             tmdb_id=1,
@@ -288,7 +288,7 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
     rows = {item.title: item for item in result.items}
     assert rows["Complete Movie"].art_status == "complete"
     assert rows["Complete Movie"].theme_status == "complete"
-    assert rows["Complete Movie"].public_dataset_complete is True
+    assert rows["Complete Movie"].catalog_complete is True
     assert rows["Missing Hash Movie"].art_status == "partial"
     assert rows["Missing Hash Movie"].poster_status == "partial"
     assert rows["Missing Hash Movie"].theme_status == "partial"
@@ -327,7 +327,7 @@ async def test_list_items_reports_where_selected_artwork_comes_from(
     )
     select_art(unlisted, ArtType.POSTER, PublicArtUrl(catalog_poster))
     db_session.add(
-        PublicDatasetItem(
+        CatalogItem(
             media_type=MediaType.MOVIE,
             tmdb_id=1,
             poster_url=catalog_poster,
@@ -400,7 +400,7 @@ async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
                 season_num=1,
                 file_count=5,
             ),
-            PublicDatasetItem(
+            CatalogItem(
                 id=1000,
                 media_type=MediaType.SHOW,
                 tvdb_id=100,
@@ -408,7 +408,7 @@ async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
                 background_url="https://db.test/show-bg.jpg",
                 youtube_id_overturedb="showTheme01",
             ),
-            PublicDatasetItem(
+            CatalogItem(
                 id=1001,
                 media_type=MediaType.SHOW,
                 tvdb_id=101,
@@ -416,7 +416,7 @@ async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
                 background_url="https://db.test/missing-bg.jpg",
                 youtube_id_overturedb="showTheme02",
             ),
-            PublicDatasetItem(
+            CatalogItem(
                 id=1002,
                 media_type=MediaType.SHOW,
                 tvdb_id=102,
@@ -424,8 +424,8 @@ async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
                 background_url="https://db.test/no-local-bg.jpg",
                 youtube_id_overturedb="showTheme03",
             ),
-            PublicDatasetSeason(
-                public_dataset_item_id=1000,
+            CatalogItemSeason(
+                catalog_item_id=1000,
                 season_num=1,
                 poster_url="https://db.test/show-s1.jpg",
             ),
@@ -434,9 +434,7 @@ async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
     await db_session.commit()
 
     result = await library_service.list_items(media_type=MediaType.SHOW)
-    status_by_title = {
-        item.title: item.public_dataset_complete for item in result.items
-    }
+    status_by_title = {item.title: item.catalog_complete for item in result.items}
 
     assert status_by_title == {
         "Complete Show": True,
@@ -934,7 +932,7 @@ async def test_refresh_imports_unchanged_recorded_file_when_cache_is_cold(
     assert image_cache.has_thumb(file_hash)
 
 
-async def test_public_dataset_themerrdb_separation_and_completeness(
+async def test_catalog_themerrdb_separation_and_completeness(
     tmp_path: Path,
     db_session: AsyncSession,
     *,
@@ -946,12 +944,12 @@ async def test_public_dataset_themerrdb_separation_and_completeness(
         app_config=app_config,
     )
     # Item with only themerrdb:
-    # public_dataset_complete should be False, themerrdb True
+    # catalog_complete should be False, themerrdb True
     item1 = MediaItem(
         id=10, media_type=MediaType.MOVIE, title="Themerr Only Movie", tmdb_id=100
     )
     # Item with overturedb art and theme:
-    # public_dataset_complete should be True, themerrdb False
+    # catalog_complete should be True, themerrdb False
     item2 = MediaItem(
         id=20, media_type=MediaType.MOVIE, title="Overture Complete Movie", tmdb_id=200
     )
@@ -960,14 +958,14 @@ async def test_public_dataset_themerrdb_separation_and_completeness(
 
     db_session.add_all(
         [
-            PublicDatasetItem(
+            CatalogItem(
                 media_type=MediaType.MOVIE,
                 tmdb_id=100,
                 poster_url="https://db.test/p1.jpg",
                 background_url="https://db.test/b1.jpg",
                 youtube_id_themerrdb="themerrYtId",
             ),
-            PublicDatasetItem(
+            CatalogItem(
                 media_type=MediaType.MOVIE,
                 tmdb_id=200,
                 poster_url="https://db.test/p2.jpg",
@@ -982,12 +980,12 @@ async def test_public_dataset_themerrdb_separation_and_completeness(
     by_title = {item.title: item for item in result.items}
 
     t1 = by_title["Themerr Only Movie"]
-    assert t1.public_dataset_complete is False
-    assert t1.public_dataset_themerrdb is True
+    assert t1.catalog_complete is False
+    assert t1.catalog_themerrdb is True
 
     t2 = by_title["Overture Complete Movie"]
-    assert t2.public_dataset_complete is True
-    assert t2.public_dataset_themerrdb is False
+    assert t2.catalog_complete is True
+    assert t2.catalog_themerrdb is False
 
 
 async def test_bulk_set_monitored(

@@ -136,13 +136,13 @@
             "title": "Collection Delete When Inactive",
             "type": "boolean"
           },
-          "collection_drawn_style": {
-            "$ref": "#/components/schemas/ArtStyle",
-            "default": "dark"
-          },
           "collection_filtering_default": {
             "$ref": "#/components/schemas/CollectionFiltering",
             "default": "user"
+          },
+          "collection_generated_style": {
+            "$ref": "#/components/schemas/ArtStyle",
+            "default": "dark"
           },
           "collection_import_unmanaged": {
             "default": true,
@@ -386,7 +386,7 @@
           "collection_minimum_items",
           "collection_delete_below_minimum",
           "collection_auto_art",
-          "collection_drawn_style",
+          "collection_generated_style",
           "collection_overturedb_posters",
           "collection_backgrounds",
           "collection_auto_match_theme",
@@ -553,20 +553,20 @@
             ],
             "title": "Collection Delete When Inactive"
           },
-          "collection_drawn_style": {
+          "collection_filtering_default": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ArtStyle"
+                "$ref": "#/components/schemas/CollectionFiltering"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "collection_filtering_default": {
+          "collection_generated_style": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/CollectionFiltering"
+                "$ref": "#/components/schemas/ArtStyle"
               },
               {
                 "type": "null"
@@ -1173,7 +1173,7 @@
         "type": "object"
       },
       "ArtStyle": {
-        "description": "How Overture draws artwork it generates from a title.",
+        "description": "The colours of art Overture generates from a title.",
         "enum": [
           "dark",
           "light",
@@ -1419,16 +1419,16 @@
         "type": "string"
       },
       "AutoArt": {
-        "description": "What a sync does for a collection's art slot that has none chosen.\n\nThe value names what it tries, first to last: the catalog sources whose\nbest art it takes, then, with ``draw``, art drawn from the title. OvertureDB's\ncurated art always comes before TMDB's.",
+        "description": "What a sync does for a collection's art slot that has none chosen.\n\nThe value names what it tries, first to last: the catalog sources whose\nbest art it takes, then, with ``generate``, art generated from the title.\nOvertureDB's curated art always comes before TMDB's.",
         "enum": [
           "off",
           "overturedb",
           "tmdb",
           "overturedb_tmdb",
-          "overturedb_draw",
-          "tmdb_draw",
-          "overturedb_tmdb_draw",
-          "draw"
+          "overturedb_generate",
+          "tmdb_generate",
+          "overturedb_tmdb_generate",
+          "generate"
         ],
         "title": "AutoArt",
         "type": "string"
@@ -2627,6 +2627,21 @@
         "title": "CatalogDraftsDiscarded",
         "type": "object"
       },
+      "CatalogEnabledRequest": {
+        "additionalProperties": false,
+        "description": "Validate the catalog enabled request payload.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "CatalogEnabledRequest",
+        "type": "object"
+      },
       "CatalogEntry": {
         "additionalProperties": false,
         "description": "A catalog entry; fields its media type does not carry are ``None``.",
@@ -3012,6 +3027,347 @@
         "title": "CatalogMediaType",
         "type": "string"
       },
+      "CatalogRecord": {
+        "additionalProperties": false,
+        "description": "Catalog record response.",
+        "properties": {
+          "collection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogRecordCollection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogRecordItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seasons": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogRecordSeason"
+            },
+            "title": "Seasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "found",
+          "item",
+          "collection",
+          "seasons"
+        ],
+        "title": "CatalogRecord",
+        "type": "object"
+      },
+      "CatalogRecordCollection": {
+        "additionalProperties": false,
+        "description": "Persisted catalog collection record.",
+        "properties": {
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "catalog_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Synced At"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "no_theme": {
+            "default": false,
+            "title": "No Theme",
+            "type": "boolean"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_id": {
+            "title": "Tmdb Id",
+            "type": "integer"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "id",
+          "tmdb_id",
+          "title",
+          "poster_url",
+          "background_url",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb",
+          "no_theme",
+          "catalog_synced_at"
+        ],
+        "title": "CatalogRecordCollection",
+        "type": "object"
+      },
+      "CatalogRecordItem": {
+        "additionalProperties": false,
+        "description": "Persisted catalog item record.",
+        "properties": {
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          },
+          "catalog_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Synced At"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "imdb_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Id"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "no_theme": {
+            "default": false,
+            "title": "No Theme",
+            "type": "boolean"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "tvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "id",
+          "media_type",
+          "tmdb_id",
+          "tvdb_id",
+          "imdb_id",
+          "title",
+          "year",
+          "poster_url",
+          "background_url",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb",
+          "no_theme",
+          "catalog_synced_at"
+        ],
+        "title": "CatalogRecordItem",
+        "type": "object"
+      },
+      "CatalogRecordSeason": {
+        "additionalProperties": false,
+        "description": "Persisted catalog season record.",
+        "properties": {
+          "catalog_item_id": {
+            "title": "Catalog Item Id",
+            "type": "integer"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "season_num": {
+            "title": "Season Num",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "catalog_item_id",
+          "season_num",
+          "poster_url"
+        ],
+        "title": "CatalogRecordSeason",
+        "type": "object"
+      },
       "CatalogSeason": {
         "additionalProperties": false,
         "description": "One season poster of a catalog entry.",
@@ -3031,6 +3387,305 @@
           "poster_url"
         ],
         "title": "CatalogSeason",
+        "type": "object"
+      },
+      "CatalogSeasonSource": {
+        "additionalProperties": false,
+        "description": "One catalog season source.",
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/ArtCandidate"
+          },
+          "poster_url": {
+            "title": "Poster Url",
+            "type": "string"
+          },
+          "season_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Id"
+          },
+          "season_num": {
+            "title": "Season Num",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "season_num",
+          "season_id",
+          "poster_url",
+          "candidate"
+        ],
+        "title": "CatalogSeasonSource",
+        "type": "object"
+      },
+      "CatalogSources": {
+        "additionalProperties": false,
+        "description": "Catalog sources response.",
+        "properties": {
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogSourcesItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seasons": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogSeasonSource"
+            },
+            "title": "Seasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "found",
+          "item",
+          "seasons"
+        ],
+        "title": "CatalogSources",
+        "type": "object"
+      },
+      "CatalogSourcesItem": {
+        "additionalProperties": false,
+        "description": "Item-level catalog sources.",
+        "properties": {
+          "background": {
+            "items": {
+              "$ref": "#/components/schemas/ArtCandidate"
+            },
+            "title": "Background",
+            "type": "array"
+          },
+          "entry_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Key"
+          },
+          "poster": {
+            "items": {
+              "$ref": "#/components/schemas/ArtCandidate"
+            },
+            "title": "Poster",
+            "type": "array"
+          },
+          "youtube_id_overturedb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Overturedb"
+          },
+          "youtube_id_themerrdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id Themerrdb"
+          }
+        },
+        "required": [
+          "poster",
+          "background",
+          "youtube_id_overturedb",
+          "youtube_id_themerrdb",
+          "entry_key"
+        ],
+        "title": "CatalogSourcesItem",
+        "type": "object"
+      },
+      "CatalogStatus": {
+        "additionalProperties": false,
+        "description": "Catalog status response.",
+        "properties": {
+          "catalog_url": {
+            "title": "Catalog Url",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_stats": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogSyncStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_status": {
+            "$ref": "#/components/schemas/CatalogSyncOutcome",
+            "default": "never_synced"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "next_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run"
+          },
+          "repo_url": {
+            "title": "Repo Url",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "repo_url",
+          "catalog_url",
+          "last_synced_at",
+          "last_status",
+          "last_stats",
+          "next_run",
+          "timezone"
+        ],
+        "title": "CatalogStatus",
+        "type": "object"
+      },
+      "CatalogSyncOutcome": {
+        "enum": [
+          "never_synced",
+          "success",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "CatalogSyncStats": {
+        "additionalProperties": false,
+        "description": "What one catalog sync downloaded and imported.",
+        "properties": {
+          "catalog_bytes": {
+            "default": 0,
+            "title": "Catalog Bytes",
+            "type": "integer"
+          },
+          "catalog_uncompressed_bytes": {
+            "default": 0,
+            "title": "Catalog Uncompressed Bytes",
+            "type": "integer"
+          },
+          "catalog_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Url"
+          },
+          "collections": {
+            "default": 0,
+            "title": "Collections",
+            "type": "integer"
+          },
+          "entries": {
+            "default": 0,
+            "title": "Entries",
+            "type": "integer"
+          },
+          "errors": {
+            "default": 0,
+            "title": "Errors",
+            "type": "integer"
+          },
+          "items": {
+            "default": 0,
+            "title": "Items",
+            "type": "integer"
+          },
+          "movies": {
+            "default": 0,
+            "title": "Movies",
+            "type": "integer"
+          },
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Version"
+          },
+          "seasons": {
+            "default": 0,
+            "title": "Seasons",
+            "type": "integer"
+          },
+          "shows": {
+            "default": 0,
+            "title": "Shows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entries",
+          "items",
+          "movies",
+          "shows",
+          "collections",
+          "seasons",
+          "errors",
+          "catalog_url",
+          "catalog_bytes",
+          "catalog_uncompressed_bytes",
+          "schema_version"
+        ],
+        "title": "CatalogSyncStats",
         "type": "object"
       },
       "CollectionAdoption": {
@@ -3455,7 +4110,7 @@
             ],
             "title": "Delete When Inactive"
           },
-          "drawn_style": {
+          "generated_style": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArtStyle"
@@ -3601,7 +4256,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_art",
-          "drawn_style",
+          "generated_style",
           "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
@@ -3740,6 +4395,11 @@
             "title": "Below Minimum",
             "type": "boolean"
           },
+          "catalog_complete": {
+            "default": false,
+            "title": "Catalog Complete",
+            "type": "boolean"
+          },
           "catalog_entry_key": {
             "anyOf": [
               {
@@ -3754,6 +4414,11 @@
           "catalog_no_theme": {
             "default": false,
             "title": "Catalog No Theme",
+            "type": "boolean"
+          },
+          "catalog_themerrdb": {
+            "default": false,
+            "title": "Catalog Themerrdb",
             "type": "boolean"
           },
           "catalog_title": {
@@ -3973,16 +4638,6 @@
               }
             ],
             "title": "Poster Width"
-          },
-          "public_dataset_complete": {
-            "default": false,
-            "title": "Public Dataset Complete",
-            "type": "boolean"
-          },
-          "public_dataset_themerrdb": {
-            "default": false,
-            "title": "Public Dataset Themerrdb",
-            "type": "boolean"
           },
           "rule": {
             "anyOf": [
@@ -4270,8 +4925,8 @@
           "theme_status",
           "monitored",
           "tmdb_collection_id",
-          "public_dataset_complete",
-          "public_dataset_themerrdb",
+          "catalog_complete",
+          "catalog_themerrdb",
           "has_incorrect_aspect_ratio",
           "catalog_no_theme",
           "home_order",
@@ -4770,7 +5425,7 @@
             ],
             "title": "Delete When Inactive"
           },
-          "drawn_style": {
+          "generated_style": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArtStyle"
@@ -5037,7 +5692,7 @@
             ],
             "title": "Delete When Inactive"
           },
-          "drawn_style": {
+          "generated_style": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArtStyle"
@@ -5198,7 +5853,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_art",
-          "drawn_style",
+          "generated_style",
           "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
@@ -5803,9 +6458,19 @@
             "title": "Below Minimum",
             "type": "boolean"
           },
+          "catalog_complete": {
+            "default": false,
+            "title": "Catalog Complete",
+            "type": "boolean"
+          },
           "catalog_no_theme": {
             "default": false,
             "title": "Catalog No Theme",
+            "type": "boolean"
+          },
+          "catalog_themerrdb": {
+            "default": false,
+            "title": "Catalog Themerrdb",
             "type": "boolean"
           },
           "child_count": {
@@ -6003,16 +6668,6 @@
               }
             ],
             "title": "Poster Width"
-          },
-          "public_dataset_complete": {
-            "default": false,
-            "title": "Public Dataset Complete",
-            "type": "boolean"
-          },
-          "public_dataset_themerrdb": {
-            "default": false,
-            "title": "Public Dataset Themerrdb",
-            "type": "boolean"
           },
           "server_added_at": {
             "anyOf": [
@@ -6252,8 +6907,8 @@
           "theme_status",
           "monitored",
           "tmdb_collection_id",
-          "public_dataset_complete",
-          "public_dataset_themerrdb",
+          "catalog_complete",
+          "catalog_themerrdb",
           "has_incorrect_aspect_ratio",
           "catalog_no_theme",
           "home_order"
@@ -6442,7 +7097,7 @@
             ],
             "title": "Delete When Inactive"
           },
-          "drawn_style": {
+          "generated_style": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArtStyle"
@@ -6648,7 +7303,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_art",
-          "drawn_style",
+          "generated_style",
           "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
@@ -6785,7 +7440,7 @@
             ],
             "title": "Delete When Inactive"
           },
-          "drawn_style": {
+          "generated_style": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArtStyle"
@@ -7067,7 +7722,7 @@
             ],
             "title": "Delete When Inactive"
           },
-          "drawn_style": {
+          "generated_style": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ArtStyle"
@@ -7240,7 +7895,7 @@
           "minimum_items",
           "delete_below_minimum",
           "auto_art",
-          "drawn_style",
+          "generated_style",
           "overturedb_posters",
           "backgrounds",
           "auto_match_theme",
@@ -7540,40 +8195,6 @@
           "source"
         ],
         "title": "CollectionThemeDownloadTarget",
-        "type": "object"
-      },
-      "CollectionThemeSources": {
-        "additionalProperties": false,
-        "description": "The catalog's theme candidates for a matched collection.",
-        "properties": {
-          "youtube_id_overturedb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Overturedb"
-          },
-          "youtube_id_themerrdb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Themerrdb"
-          }
-        },
-        "required": [
-          "youtube_id_overturedb",
-          "youtube_id_themerrdb"
-        ],
-        "title": "CollectionThemeSources",
         "type": "object"
       },
       "CollectionThemeStatusResponse": {
@@ -8669,7 +9290,7 @@
           "asset_scan",
           "server_audit",
           "server_audit_fix",
-          "public_dataset_sync",
+          "catalog_sync",
           "backup",
           "download"
         ],
@@ -9261,6 +9882,11 @@
             ],
             "title": "Background Width"
           },
+          "catalog_complete": {
+            "default": false,
+            "title": "Catalog Complete",
+            "type": "boolean"
+          },
           "catalog_entry_key": {
             "anyOf": [
               {
@@ -9272,9 +9898,30 @@
             ],
             "title": "Catalog Entry Key"
           },
+          "catalog_ids": {
+            "anyOf": [
+              {
+                "enum": [
+                  "matching",
+                  "mismatching"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the IDs the item and its OvertureDB entry both carry agree; null without an entry.",
+            "title": "Catalog Ids"
+          },
           "catalog_no_theme": {
             "default": false,
             "title": "Catalog No Theme",
+            "type": "boolean"
+          },
+          "catalog_themerrdb": {
+            "default": false,
+            "title": "Catalog Themerrdb",
             "type": "boolean"
           },
           "created_at": {
@@ -9460,32 +10107,6 @@
               }
             ],
             "title": "Poster Width"
-          },
-          "public_dataset_complete": {
-            "default": false,
-            "title": "Public Dataset Complete",
-            "type": "boolean"
-          },
-          "public_dataset_ids": {
-            "anyOf": [
-              {
-                "enum": [
-                  "matching",
-                  "mismatching"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Whether the IDs the item and its OvertureDB entry both carry agree; null without an entry.",
-            "title": "Public Dataset Ids"
-          },
-          "public_dataset_themerrdb": {
-            "default": false,
-            "title": "Public Dataset Themerrdb",
-            "type": "boolean"
           },
           "season_posters_status": {
             "$ref": "#/components/schemas/AssetStatus",
@@ -9724,9 +10345,9 @@
           "theme_file_hash",
           "theme_duration",
           "theme_status",
-          "public_dataset_complete",
-          "public_dataset_themerrdb",
-          "public_dataset_ids",
+          "catalog_complete",
+          "catalog_themerrdb",
+          "catalog_ids",
           "last_synced_at",
           "last_matched_at",
           "created_at",
@@ -9984,661 +10605,6 @@
         "title": "NotifyService",
         "type": "string"
       },
-      "PublicDatasetEnabledRequest": {
-        "additionalProperties": false,
-        "description": "Validate the public dataset enabled request payload.",
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "PublicDatasetEnabledRequest",
-        "type": "object"
-      },
-      "PublicDatasetRecord": {
-        "additionalProperties": false,
-        "description": "Public dataset record response.",
-        "properties": {
-          "collection": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PublicDatasetRecordCollection"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "found": {
-            "title": "Found",
-            "type": "boolean"
-          },
-          "item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PublicDatasetRecordItem"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seasons": {
-            "items": {
-              "$ref": "#/components/schemas/PublicDatasetRecordSeason"
-            },
-            "title": "Seasons",
-            "type": "array"
-          }
-        },
-        "required": [
-          "found",
-          "item",
-          "collection",
-          "seasons"
-        ],
-        "title": "PublicDatasetRecord",
-        "type": "object"
-      },
-      "PublicDatasetRecordCollection": {
-        "additionalProperties": false,
-        "description": "Persisted public dataset collection record.",
-        "properties": {
-          "background_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Url"
-          },
-          "catalog_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Catalog Synced At"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "no_theme": {
-            "default": false,
-            "title": "No Theme",
-            "type": "boolean"
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "tmdb_id": {
-            "title": "Tmdb Id",
-            "type": "integer"
-          },
-          "youtube_id_overturedb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Overturedb"
-          },
-          "youtube_id_themerrdb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Themerrdb"
-          }
-        },
-        "required": [
-          "id",
-          "tmdb_id",
-          "title",
-          "poster_url",
-          "background_url",
-          "youtube_id_overturedb",
-          "youtube_id_themerrdb",
-          "no_theme",
-          "catalog_synced_at"
-        ],
-        "title": "PublicDatasetRecordCollection",
-        "type": "object"
-      },
-      "PublicDatasetRecordItem": {
-        "additionalProperties": false,
-        "description": "Persisted public dataset item record.",
-        "properties": {
-          "background_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Url"
-          },
-          "catalog_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Catalog Synced At"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "imdb_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Imdb Id"
-          },
-          "media_type": {
-            "$ref": "#/components/schemas/MediaType"
-          },
-          "no_theme": {
-            "default": false,
-            "title": "No Theme",
-            "type": "boolean"
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          },
-          "tmdb_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tmdb Id"
-          },
-          "tvdb_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tvdb Id"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year"
-          },
-          "youtube_id_overturedb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Overturedb"
-          },
-          "youtube_id_themerrdb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Themerrdb"
-          }
-        },
-        "required": [
-          "id",
-          "media_type",
-          "tmdb_id",
-          "tvdb_id",
-          "imdb_id",
-          "title",
-          "year",
-          "poster_url",
-          "background_url",
-          "youtube_id_overturedb",
-          "youtube_id_themerrdb",
-          "no_theme",
-          "catalog_synced_at"
-        ],
-        "title": "PublicDatasetRecordItem",
-        "type": "object"
-      },
-      "PublicDatasetRecordSeason": {
-        "additionalProperties": false,
-        "description": "Persisted public dataset season record.",
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "public_dataset_item_id": {
-            "title": "Public Dataset Item Id",
-            "type": "integer"
-          },
-          "season_num": {
-            "title": "Season Num",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "public_dataset_item_id",
-          "season_num",
-          "poster_url"
-        ],
-        "title": "PublicDatasetRecordSeason",
-        "type": "object"
-      },
-      "PublicDatasetSeasonSource": {
-        "additionalProperties": false,
-        "description": "One public dataset season source.",
-        "properties": {
-          "candidate": {
-            "$ref": "#/components/schemas/ArtCandidate"
-          },
-          "poster_url": {
-            "title": "Poster Url",
-            "type": "string"
-          },
-          "season_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Season Id"
-          },
-          "season_num": {
-            "title": "Season Num",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "season_num",
-          "season_id",
-          "poster_url",
-          "candidate"
-        ],
-        "title": "PublicDatasetSeasonSource",
-        "type": "object"
-      },
-      "PublicDatasetSources": {
-        "additionalProperties": false,
-        "description": "Public dataset sources response.",
-        "properties": {
-          "found": {
-            "title": "Found",
-            "type": "boolean"
-          },
-          "item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PublicDatasetSourcesItem"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seasons": {
-            "items": {
-              "$ref": "#/components/schemas/PublicDatasetSeasonSource"
-            },
-            "title": "Seasons",
-            "type": "array"
-          }
-        },
-        "required": [
-          "found",
-          "item",
-          "seasons"
-        ],
-        "title": "PublicDatasetSources",
-        "type": "object"
-      },
-      "PublicDatasetSourcesItem": {
-        "additionalProperties": false,
-        "description": "Item-level public dataset sources.",
-        "properties": {
-          "background": {
-            "items": {
-              "$ref": "#/components/schemas/ArtCandidate"
-            },
-            "title": "Background",
-            "type": "array"
-          },
-          "entry_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entry Key"
-          },
-          "poster": {
-            "items": {
-              "$ref": "#/components/schemas/ArtCandidate"
-            },
-            "title": "Poster",
-            "type": "array"
-          },
-          "youtube_id_overturedb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Overturedb"
-          },
-          "youtube_id_themerrdb": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id Themerrdb"
-          }
-        },
-        "required": [
-          "poster",
-          "background",
-          "youtube_id_overturedb",
-          "youtube_id_themerrdb",
-          "entry_key"
-        ],
-        "title": "PublicDatasetSourcesItem",
-        "type": "object"
-      },
-      "PublicDatasetStatus": {
-        "additionalProperties": false,
-        "description": "Public dataset status response.",
-        "properties": {
-          "catalog_url": {
-            "title": "Catalog Url",
-            "type": "string"
-          },
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "last_stats": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PublicDatasetSyncStats"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "last_status": {
-            "$ref": "#/components/schemas/PublicDatasetSyncOutcome",
-            "default": "never_synced"
-          },
-          "last_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Synced At"
-          },
-          "next_run": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Run"
-          },
-          "repo_url": {
-            "title": "Repo Url",
-            "type": "string"
-          },
-          "timezone": {
-            "title": "Timezone",
-            "type": "string"
-          }
-        },
-        "required": [
-          "enabled",
-          "repo_url",
-          "catalog_url",
-          "last_synced_at",
-          "last_status",
-          "last_stats",
-          "next_run",
-          "timezone"
-        ],
-        "title": "PublicDatasetStatus",
-        "type": "object"
-      },
-      "PublicDatasetSyncOutcome": {
-        "enum": [
-          "never_synced",
-          "success",
-          "failed"
-        ],
-        "type": "string"
-      },
-      "PublicDatasetSyncStats": {
-        "additionalProperties": false,
-        "description": "What one catalog sync downloaded and imported.",
-        "properties": {
-          "catalog_bytes": {
-            "default": 0,
-            "title": "Catalog Bytes",
-            "type": "integer"
-          },
-          "catalog_uncompressed_bytes": {
-            "default": 0,
-            "title": "Catalog Uncompressed Bytes",
-            "type": "integer"
-          },
-          "catalog_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Catalog Url"
-          },
-          "collections": {
-            "default": 0,
-            "title": "Collections",
-            "type": "integer"
-          },
-          "entries": {
-            "default": 0,
-            "title": "Entries",
-            "type": "integer"
-          },
-          "errors": {
-            "default": 0,
-            "title": "Errors",
-            "type": "integer"
-          },
-          "items": {
-            "default": 0,
-            "title": "Items",
-            "type": "integer"
-          },
-          "movies": {
-            "default": 0,
-            "title": "Movies",
-            "type": "integer"
-          },
-          "schema_version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Schema Version"
-          },
-          "seasons": {
-            "default": 0,
-            "title": "Seasons",
-            "type": "integer"
-          },
-          "shows": {
-            "default": 0,
-            "title": "Shows",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "entries",
-          "items",
-          "movies",
-          "shows",
-          "collections",
-          "seasons",
-          "errors",
-          "catalog_url",
-          "catalog_bytes",
-          "catalog_uncompressed_bytes",
-          "schema_version"
-        ],
-        "title": "PublicDatasetSyncStats",
-        "type": "object"
-      },
       "PublicError": {
         "additionalProperties": false,
         "description": "Stable public error object.",
@@ -10767,6 +10733,9 @@
         "additionalProperties": false,
         "description": "Process-local realtime state at one event-stream watermark.",
         "properties": {
+          "catalog_status": {
+            "$ref": "#/components/schemas/CatalogStatus"
+          },
           "downloads": {
             "items": {
               "$ref": "#/components/schemas/DownloadJobEvent"
@@ -10788,9 +10757,6 @@
           "media_server": {
             "$ref": "#/components/schemas/MediaServerStatus"
           },
-          "public_dataset_status": {
-            "$ref": "#/components/schemas/PublicDatasetStatus"
-          },
           "sequence": {
             "title": "Sequence",
             "type": "integer"
@@ -10806,7 +10772,7 @@
           "server_time",
           "jobs",
           "downloads",
-          "public_dataset_status",
+          "catalog_status",
           "media_server"
         ],
         "title": "RealtimeSnapshot",
@@ -10966,7 +10932,7 @@
       },
       "SaveArtRequest": {
         "additionalProperties": false,
-        "description": "The chosen artwork for one slot: a link, an uploaded image or one to draw.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
+        "description": "The chosen artwork for one slot: a link, an uploaded image or one to generate.\n\nWhich slot it is comes from the request path and query, so the body only\ncarries the picture itself.",
         "properties": {
           "generated": {
             "anyOf": [
@@ -13491,623 +13457,6 @@
         ]
       }
     },
-    "/api/art/{item_id}": {
-      "delete": {
-        "description": "Remove every art slot of an item and its seasons.",
-        "operationId": "remove_all_art",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "forget",
-            "required": false,
-            "schema": {
-              "default": true,
-              "title": "Forget",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "delete_file",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Delete File",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "delete_from_server",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Delete From Server",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Remove All Art",
-        "tags": [
-          "art"
-        ]
-      }
-    },
-    "/api/art/{item_id}/{art_type}": {
-      "delete": {
-        "description": "Forget a slot's art, delete its local file or the server's copy.",
-        "operationId": "remove_art",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Which artwork slot",
-            "in": "path",
-            "name": "art_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ArtType",
-              "description": "Which artwork slot"
-            }
-          },
-          {
-            "in": "query",
-            "name": "forget",
-            "required": false,
-            "schema": {
-              "default": true,
-              "title": "Forget",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "delete_file",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Delete File",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "delete_from_server",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Delete From Server",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "The season; omit to remove every season's poster",
-            "in": "query",
-            "name": "season_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The season; omit to remove every season's poster",
-              "title": "Season Id"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Remove Art",
-        "tags": [
-          "art"
-        ]
-      },
-      "put": {
-        "description": "Record the chosen artwork for one slot and enqueue its download.\n\nAn item without a local folder only records the choice.",
-        "operationId": "save_art",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Which artwork slot",
-            "in": "path",
-            "name": "art_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ArtType",
-              "description": "Which artwork slot"
-            }
-          },
-          {
-            "description": "Required for season_poster, ignored otherwise",
-            "in": "query",
-            "name": "season_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Required for season_poster, ignored otherwise",
-              "title": "Season Id"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveArtRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemSelectionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Save Art",
-        "tags": [
-          "art"
-        ]
-      }
-    },
-    "/api/art/{item_id}/{art_type}/match": {
-      "post": {
-        "description": "Run pHash match for one slot.",
-        "operationId": "match_art",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Which artwork slot",
-            "in": "path",
-            "name": "art_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ArtType",
-              "description": "Which artwork slot"
-            }
-          },
-          {
-            "description": "Required for season_poster, ignored otherwise",
-            "in": "query",
-            "name": "season_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Required for season_poster, ignored otherwise",
-              "title": "Season Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "threshold",
-            "required": false,
-            "schema": {
-              "default": 3,
-              "maximum": 10,
-              "minimum": 0,
-              "title": "Threshold",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArtMatchResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Match Art",
-        "tags": [
-          "art"
-        ]
-      }
-    },
-    "/api/art/{item_id}/{art_type}/sources": {
-      "get": {
-        "description": "Fetch art options from TMDB and/or the configured media server.",
-        "operationId": "get_art_sources",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Which artwork slot",
-            "in": "path",
-            "name": "art_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ArtType",
-              "description": "Which artwork slot"
-            }
-          },
-          {
-            "description": "Required for season_poster, ignored otherwise",
-            "in": "query",
-            "name": "season_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Required for season_poster, ignored otherwise",
-              "title": "Season Id"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArtSourcesResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Art Sources",
-        "tags": [
-          "art"
-        ]
-      }
-    },
     "/api/asset-manager/rename": {
       "post": {
         "description": "Rename a list of files. Never overwrites existing targets.",
@@ -15732,6 +15081,1384 @@
         "summary": "Stop Bulk Assets",
         "tags": [
           "bulk"
+        ]
+      }
+    },
+    "/api/catalog/catalog": {
+      "get": {
+        "description": "Return every catalog entry of a kind, with what the library holds of it.",
+        "operationId": "list_catalog_entries",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogEntryRow"
+                  },
+                  "title": "Response List Catalog Entries",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Catalog Entries",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/catalog/counts": {
+      "get": {
+        "description": "Return catalog and draft counts without reading every entry.",
+        "operationId": "get_catalog_counts",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Counts",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/catalog/{media_type}/drafts": {
+      "delete": {
+        "description": "Discard the local drafts of the named entries.",
+        "operationId": "discard_catalog_drafts",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogDraftsDiscard"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogDraftsDiscarded"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Catalog Drafts",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/catalog/{media_type}/{entry_key}": {
+      "get": {
+        "description": "Return one catalog entry with its local draft.",
+        "operationId": "get_catalog_entry",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntryDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Entry",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/catalog/{media_type}/{entry_key}/draft": {
+      "delete": {
+        "description": "Discard an entry's local draft.",
+        "operationId": "discard_catalog_draft",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntryDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Catalog Draft",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "put": {
+        "description": "Change an entry's local draft, to contribute later.",
+        "operationId": "save_catalog_draft",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogDraftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntryDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Catalog Draft",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/catalog/{media_type}/{entry_key}/record": {
+      "get": {
+        "description": "Return the catalog record an entry name identifies.",
+        "operationId": "get_catalog_entry_record",
+        "parameters": [
+          {
+            "description": "Entry kind",
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogMediaType",
+              "description": "Entry kind"
+            }
+          },
+          {
+            "description": "Entry name, as its file is named: tmdb-603",
+            "in": "path",
+            "name": "entry_key",
+            "required": true,
+            "schema": {
+              "description": "Entry name, as its file is named: tmdb-603",
+              "title": "Entry Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Entry Record",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/collections/{collection_id}/issue": {
+      "get": {
+        "description": "Return a prefilled issue contributing a collection's art and theme.",
+        "operationId": "get_catalog_collection_issue",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContributionIssue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Collection Issue",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/collections/{collection_id}/record": {
+      "get": {
+        "description": "Return the catalog record of a library collection.",
+        "operationId": "get_catalog_collection_record",
+        "parameters": [
+          {
+            "description": "Collection ID",
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "description": "Collection ID",
+              "exclusiveMinimum": 0,
+              "title": "Collection Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Collection Record",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/enabled": {
+      "put": {
+        "description": "Turn the catalog on or off.",
+        "operationId": "set_catalog_enabled",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogEnabledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Catalog Enabled",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/export": {
+      "get": {
+        "description": "Download saved selections as an archive for an OvertureDB contribution.",
+        "operationId": "export_catalog_selections",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Catalog Selections",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/items/{item_id}/issue": {
+      "get": {
+        "description": "Return a prefilled issue contributing an item's saved selections.",
+        "operationId": "get_catalog_item_issue",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContributionIssue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Item Issue",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/items/{item_id}/record": {
+      "get": {
+        "description": "Return catalog record.",
+        "operationId": "get_catalog_record",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Record",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/items/{item_id}/sources": {
+      "get": {
+        "description": "Return catalog sources, including a normal not-found result.",
+        "operationId": "get_catalog_sources",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogSources"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Sources",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/status": {
+      "get": {
+        "description": "Return catalog status.",
+        "operationId": "get_catalog_status",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Status",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/sync": {
+      "post": {
+        "description": "Sync catalog now.",
+        "operationId": "sync_catalog_now",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Catalog Now",
+        "tags": [
+          "catalog"
         ]
       }
     },
@@ -18296,7 +19023,7 @@
     },
     "/api/collections/{collection_id}/art/{art_type}/generated/{style}": {
       "get": {
-        "description": "Return the art Overture would draw for the collection in *style*.",
+        "description": "Return the art Overture would generate for the collection in *style*.",
         "operationId": "get_generated_collection_art",
         "parameters": [
           {
@@ -19500,92 +20227,6 @@
         ]
       }
     },
-    "/api/collections/{collection_id}/sources": {
-      "get": {
-        "description": "Return the matched catalog's collection theme candidates.",
-        "operationId": "get_collection_sources",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionThemeSources"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Collection Sources",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
     "/api/collections/{collection_id}/theme": {
       "delete": {
         "description": "Forget a collection's theme, delete the server's copy or its file.",
@@ -20624,6 +21265,623 @@
         ]
       }
     },
+    "/api/library/items/{item_id}/art": {
+      "delete": {
+        "description": "Remove every art slot of an item and its seasons.",
+        "operationId": "remove_all_art",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove All Art",
+        "tags": [
+          "art"
+        ]
+      }
+    },
+    "/api/library/items/{item_id}/art/{art_type}": {
+      "delete": {
+        "description": "Forget a slot's art, delete its local file or the server's copy.",
+        "operationId": "remove_art",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The season; omit to remove every season's poster",
+            "in": "query",
+            "name": "season_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The season; omit to remove every season's poster",
+              "title": "Season Id"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Art",
+        "tags": [
+          "art"
+        ]
+      },
+      "put": {
+        "description": "Record the chosen artwork for one slot and enqueue its download.\n\nAn item without a local folder only records the choice.",
+        "operationId": "save_art",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Required for season_poster, ignored otherwise",
+            "in": "query",
+            "name": "season_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Required for season_poster, ignored otherwise",
+              "title": "Season Id"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveArtRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Art",
+        "tags": [
+          "art"
+        ]
+      }
+    },
+    "/api/library/items/{item_id}/art/{art_type}/match": {
+      "post": {
+        "description": "Run pHash match for one slot.",
+        "operationId": "match_art",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Required for season_poster, ignored otherwise",
+            "in": "query",
+            "name": "season_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Required for season_poster, ignored otherwise",
+              "title": "Season Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "threshold",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Threshold",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtMatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Match Art",
+        "tags": [
+          "art"
+        ]
+      }
+    },
+    "/api/library/items/{item_id}/art/{art_type}/sources": {
+      "get": {
+        "description": "Fetch art options from TMDB and/or the configured media server.",
+        "operationId": "get_art_sources",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which artwork slot",
+            "in": "path",
+            "name": "art_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ArtType",
+              "description": "Which artwork slot"
+            }
+          },
+          {
+            "description": "Required for season_poster, ignored otherwise",
+            "in": "query",
+            "name": "season_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Required for season_poster, ignored otherwise",
+              "title": "Season Id"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtSourcesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Art Sources",
+        "tags": [
+          "art"
+        ]
+      }
+    },
     "/api/library/items/{item_id}/local-image/{art_type}": {
       "get": {
         "description": "Serve a locally stored poster or background for a movie or show.",
@@ -21139,6 +22397,214 @@
         "summary": "Get Seasons",
         "tags": [
           "library"
+        ]
+      }
+    },
+    "/api/library/items/{item_id}/theme": {
+      "delete": {
+        "description": "Forget an item's theme, delete its local file or the server's copy.",
+        "operationId": "remove_theme",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forget",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Forget",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_file",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete File",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delete_from_server",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Delete From Server",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Theme",
+        "tags": [
+          "themes"
+        ]
+      },
+      "put": {
+        "description": "Select an item's theme and download it.\n\nAn item without a local folder only records the choice.",
+        "operationId": "select_theme",
+        "parameters": [
+          {
+            "description": "Media item ID",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Media item ID",
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectThemeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemSelectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Theme",
+        "tags": [
+          "themes"
         ]
       }
     },
@@ -21885,1384 +23351,6 @@
         "summary": "Send Test Notification",
         "tags": [
           "notifications"
-        ]
-      }
-    },
-    "/api/public-dataset/catalog": {
-      "get": {
-        "description": "Return every catalog entry of a kind, with what the library holds of it.",
-        "operationId": "list_catalog_entries",
-        "parameters": [
-          {
-            "description": "Entry kind",
-            "in": "query",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CatalogMediaType",
-              "description": "Entry kind"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CatalogEntryRow"
-                  },
-                  "title": "Response List Catalog Entries",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Catalog Entries",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/catalog/counts": {
-      "get": {
-        "description": "Return catalog and draft counts without reading every entry.",
-        "operationId": "get_catalog_counts",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogCounts"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Catalog Counts",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/catalog/{media_type}/drafts": {
-      "delete": {
-        "description": "Discard the local drafts of the named entries.",
-        "operationId": "discard_catalog_drafts",
-        "parameters": [
-          {
-            "description": "Entry kind",
-            "in": "path",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CatalogMediaType",
-              "description": "Entry kind"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CatalogDraftsDiscard"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogDraftsDiscarded"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Discard Catalog Drafts",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/catalog/{media_type}/{entry_key}": {
-      "get": {
-        "description": "Return one catalog entry with its local draft.",
-        "operationId": "get_catalog_entry",
-        "parameters": [
-          {
-            "description": "Entry kind",
-            "in": "path",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CatalogMediaType",
-              "description": "Entry kind"
-            }
-          },
-          {
-            "description": "Entry name, as its file is named: tmdb-603",
-            "in": "path",
-            "name": "entry_key",
-            "required": true,
-            "schema": {
-              "description": "Entry name, as its file is named: tmdb-603",
-              "title": "Entry Key",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogEntryDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Catalog Entry",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/catalog/{media_type}/{entry_key}/draft": {
-      "delete": {
-        "description": "Discard an entry's local draft.",
-        "operationId": "discard_catalog_draft",
-        "parameters": [
-          {
-            "description": "Entry kind",
-            "in": "path",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CatalogMediaType",
-              "description": "Entry kind"
-            }
-          },
-          {
-            "description": "Entry name, as its file is named: tmdb-603",
-            "in": "path",
-            "name": "entry_key",
-            "required": true,
-            "schema": {
-              "description": "Entry name, as its file is named: tmdb-603",
-              "title": "Entry Key",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogEntryDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Discard Catalog Draft",
-        "tags": [
-          "public-dataset"
-        ]
-      },
-      "put": {
-        "description": "Change an entry's local draft, to contribute later.",
-        "operationId": "save_catalog_draft",
-        "parameters": [
-          {
-            "description": "Entry kind",
-            "in": "path",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CatalogMediaType",
-              "description": "Entry kind"
-            }
-          },
-          {
-            "description": "Entry name, as its file is named: tmdb-603",
-            "in": "path",
-            "name": "entry_key",
-            "required": true,
-            "schema": {
-              "description": "Entry name, as its file is named: tmdb-603",
-              "title": "Entry Key",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CatalogDraftUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogEntryDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Save Catalog Draft",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/catalog/{media_type}/{entry_key}/record": {
-      "get": {
-        "description": "Return the catalog record an entry name identifies.",
-        "operationId": "get_catalog_entry_record",
-        "parameters": [
-          {
-            "description": "Entry kind",
-            "in": "path",
-            "name": "media_type",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/CatalogMediaType",
-              "description": "Entry kind"
-            }
-          },
-          {
-            "description": "Entry name, as its file is named: tmdb-603",
-            "in": "path",
-            "name": "entry_key",
-            "required": true,
-            "schema": {
-              "description": "Entry name, as its file is named: tmdb-603",
-              "title": "Entry Key",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetRecord"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Catalog Entry Record",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/collections/{collection_id}/issue": {
-      "get": {
-        "description": "Return a prefilled issue contributing a collection's art and theme.",
-        "operationId": "get_public_dataset_collection_issue",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContributionIssue"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Public Dataset Collection Issue",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/collections/{collection_id}/record": {
-      "get": {
-        "description": "Return the catalog record of a library collection.",
-        "operationId": "get_public_dataset_collection_record",
-        "parameters": [
-          {
-            "description": "Collection ID",
-            "in": "path",
-            "name": "collection_id",
-            "required": true,
-            "schema": {
-              "description": "Collection ID",
-              "exclusiveMinimum": 0,
-              "title": "Collection Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetRecord"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Public Dataset Collection Record",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/enabled": {
-      "put": {
-        "description": "Turn the public dataset on or off.",
-        "operationId": "set_public_dataset_enabled",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PublicDatasetEnabledRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetStatus"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Set Public Dataset Enabled",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/export": {
-      "get": {
-        "description": "Download saved selections as an archive for an OvertureDB contribution.",
-        "operationId": "export_public_dataset_selections",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/zip": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Export Public Dataset Selections",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/items/{item_id}/issue": {
-      "get": {
-        "description": "Return a prefilled issue contributing an item's saved selections.",
-        "operationId": "get_public_dataset_item_issue",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContributionIssue"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Public Dataset Item Issue",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/items/{item_id}/record": {
-      "get": {
-        "description": "Return public dataset record.",
-        "operationId": "get_public_dataset_record",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetRecord"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Public Dataset Record",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/items/{item_id}/sources": {
-      "get": {
-        "description": "Return public dataset sources, including a normal not-found result.",
-        "operationId": "get_public_dataset_sources",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetSources"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Public Dataset Sources",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/status": {
-      "get": {
-        "description": "Return public dataset status.",
-        "operationId": "get_public_dataset_status",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetStatus"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Public Dataset Status",
-        "tags": [
-          "public-dataset"
-        ]
-      }
-    },
-    "/api/public-dataset/sync": {
-      "post": {
-        "description": "Sync public dataset now.",
-        "operationId": "sync_public_dataset_now",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Sync Public Dataset Now",
-        "tags": [
-          "public-dataset"
         ]
       }
     },
@@ -24752,214 +24840,6 @@
         ]
       }
     },
-    "/api/themes/{item_id}": {
-      "delete": {
-        "description": "Forget an item's theme, delete its local file or the server's copy.",
-        "operationId": "remove_theme",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "forget",
-            "required": false,
-            "schema": {
-              "default": true,
-              "title": "Forget",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "delete_file",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Delete File",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "delete_from_server",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Delete From Server",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Remove Theme",
-        "tags": [
-          "themes"
-        ]
-      },
-      "put": {
-        "description": "Select an item's theme and download it.\n\nAn item without a local folder only records the choice.",
-        "operationId": "select_theme",
-        "parameters": [
-          {
-            "description": "Media item ID",
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "description": "Media item ID",
-              "title": "Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SelectThemeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemSelectionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Select Theme",
-        "tags": [
-          "themes"
-        ]
-      }
-    },
     "/api/tmdb/collections/{collection_id}": {
       "get": {
         "description": "List the movies of a TMDB collection.",
@@ -25598,10 +25478,10 @@
         ]
       }
     },
-    "/api/tmdb/{media_type}/{tmdb_id}/public-dataset": {
+    "/api/tmdb/{media_type}/{tmdb_id}/catalog": {
       "get": {
         "description": "Look up what OvertureDB holds for an unsaved item.",
-        "operationId": "get_tmdb_public_dataset_sources",
+        "operationId": "get_tmdb_catalog_sources",
         "parameters": [
           {
             "description": "Media type ('movie' or 'show')",
@@ -25671,7 +25551,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicDatasetSources"
+                  "$ref": "#/components/schemas/CatalogSources"
                 }
               }
             },
@@ -25688,7 +25568,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Get Tmdb Public Dataset Sources",
+        "summary": "Get Tmdb Catalog Sources",
         "tags": [
           "tmdb"
         ]

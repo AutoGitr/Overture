@@ -100,7 +100,7 @@ async def test_get_settings_creates_default_row(
         result.collection_minimum_items,
         result.collection_delete_below_minimum,
         result.collection_auto_art,
-        result.collection_drawn_style,
+        result.collection_generated_style,
         result.collection_backgrounds,
         result.collection_delete_when_inactive,
     ) == (2, True, AutoArt.OFF, ArtStyle.DARK, True, True)

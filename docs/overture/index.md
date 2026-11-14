@@ -44,7 +44,7 @@ server expects, so Plex, Jellyfin and Emby pick them up as local assets.
   including unreleased titles. Save choices now; Overture downloads them when a
   sync finds their media folders.
 - **Keep the library tidy.** Use Renamer to standardize asset filenames and
-  Audit to check whether your server displays and plays the files on disk.
+  Server audit to check whether your server displays and plays the files on disk.
 - **Installable app.** Overture is a full progressive web app: install it from
   the browser on desktop or phone for its own window, with Movies and Shows
   shortcuts and updates applied automatically.
@@ -54,7 +54,7 @@ server expects, so Plex, Jellyfin and Emby pick them up as local assets.
 - **Hands-off libraries.** Schedule Sync and Assets with OvertureDB as the only
   artwork source and OvertureDB, ThemerrDB or both for themes. Let them import
   new media and fill gaps as the catalog grows. Check in occasionally to run
-  Renamer and Audit, and review the titles outside the catalog.
+  Renamer and Server audit, and review the titles outside the catalog.
 - **Mix automation and personal choices.** Let the catalog cover most of your
   library and override specific items with your own choices. Assets skips
   saved choices by default, so scheduled runs fill the gaps around your
@@ -63,7 +63,7 @@ server expects, so Plex, Jellyfin and Emby pick them up as local assets.
   and themes item by item, and keep your selections private. Sync reads your
   existing local files; sharing to OvertureDB is always an explicit action.
 - **Organize an existing collection.** Use local-image matching to identify the
-  artwork you already have, Renamer to standardize filenames, and Audit to
+  artwork you already have, Renamer to standardize filenames, and Server audit to
   check that your server uses your local assets.
 - **Contribute to OvertureDB.** Use the catalog coverage filters to find gaps,
   choose artwork and themes as drafts, and export them as a batch. TMDB search

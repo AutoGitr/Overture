@@ -223,12 +223,11 @@ async def test_collection_routes_delegate_to_service() -> None:
     result = await collections_router.bulk_operate_collections(service.bulk, bulk)
     assert result.collection_ids == [1]
 
-    # Get collection & theme sources
+    # The collection carries its catalog theme candidates
     item = await collections_router.get_collection(1, service.reader)
     assert item.id == 1
-    sources = await collections_router.get_collection_sources(1, service.reader)
-    assert sources.youtube_id_overturedb == "yt1"
-    assert sources.youtube_id_themerrdb == "yt2"
+    assert item.youtube_id_overturedb == "yt1"
+    assert item.youtube_id_themerrdb == "yt2"
 
     # Theme ops
     theme = await collections_router.get_collection_theme(1, service.themes)

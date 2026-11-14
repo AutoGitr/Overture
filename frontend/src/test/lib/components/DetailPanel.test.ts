@@ -7,8 +7,8 @@ import { ApiError } from "../../../lib/rest/transport";
 import { navigate, route } from "../../../lib/router/routes";
 import { artPreviewState } from "../../../lib/stores/artPreviewState.svelte";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
-import { getPublicDatasetStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
-import { mediaItem, publicDatasetStatus, season } from "../../helpers/fixtures";
+import { getCatalogStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { mediaItem, catalogStatus, season } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 const {
@@ -169,7 +169,7 @@ describe("DetailPanel", () => {
   });
 
   it("opens an item's OvertureDB entry in the same view", async () => {
-    queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, publicDatasetStatus());
+    queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus());
     renderWithQueryClient(DetailPanel, {
       item: mediaItem({ id: 7, title: "Alien", catalog_entry_key: "tmdb-348" }),
     });
@@ -183,7 +183,7 @@ describe("DetailPanel", () => {
     ["OvertureDB is off", { enabled: false }, true],
     ["sidebar browsing is off", {}, false],
   ] as const)("offers no OvertureDB link while %s", (_case, status, browse) => {
-    queryClient.setQueryData(getPublicDatasetStatusOptions().queryKey, publicDatasetStatus(status));
+    queryClient.setQueryData(getCatalogStatusOptions().queryKey, catalogStatus(status));
     settingsState.load({ ...settingsState.current, overturedb_browse: browse });
     onTestFinished(() => settingsState.reset());
     renderWithQueryClient(DetailPanel, {

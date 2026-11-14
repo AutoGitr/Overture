@@ -27,7 +27,7 @@ lazy from ..downloads.collection_theme import (
 )
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
-lazy from .index import PublicDatasetIndex
+lazy from .index import CatalogIndex
 
 
 @dataclass(slots=True)
@@ -51,7 +51,7 @@ class QueuedDownloads:
 
 
 def _art_targets(
-    index: PublicDatasetIndex, item: MediaItem, seasons: list[Season]
+    index: CatalogIndex, item: MediaItem, seasons: list[Season]
 ) -> list[JobTarget]:
     """Return the catalog artwork of the item's slots without a local file.
 
@@ -80,7 +80,7 @@ def _art_targets(
 
 async def _queue_item(
     session: AsyncSession,
-    index: PublicDatasetIndex,
+    index: CatalogIndex,
     item: MediaItem,
     seasons: list[Season],
     *,
@@ -132,7 +132,7 @@ async def queue_overturedb_downloads_for_items(
         items = await MediaItemRepository(session).list_bulk_targets(
             item_ids=item_ids, include_unmonitored=True
         )
-        index = await PublicDatasetIndex.build(session, items, app_config=app_config)
+        index = await CatalogIndex.build(session, items, app_config=app_config)
 
     for item in items:
         if item.id is None:
@@ -185,7 +185,7 @@ async def queue_catalog_themes_for_collections(
             rows = await CollectionRepository(session).bulk_targets(
                 collection_ids=list(batch)
             )
-            index = await PublicDatasetIndex.build_collections(
+            index = await CatalogIndex.build_collections(
                 session, rows, app_config=app_config
             )
         for row in rows:

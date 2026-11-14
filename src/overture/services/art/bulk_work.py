@@ -20,8 +20,8 @@ lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ..bulk_common import AssetPlan, planned_outcome, scope_chunks
+lazy from ..catalog.index import CatalogIndex
 lazy from ..local_assets.service import LocalAssets
-lazy from ..public_dataset.index import PublicDatasetIndex
 lazy from .bulk_targets import last_checked_at, target_art_slot
 
 BulkArtWorkItem = tuple[MediaItem, ArtType, Season | None]
@@ -35,7 +35,7 @@ class BulkArtWork:
     """One batch of slots to visit, and OvertureDB's rows for them."""
 
     targets: list[BulkArtWorkItem]
-    public_index: PublicDatasetIndex = field(default_factory=PublicDatasetIndex.empty)
+    public_index: CatalogIndex = field(default_factory=CatalogIndex.empty)
 
 
 def split_art_types(
@@ -66,7 +66,7 @@ async def plan_bulk_art(
     kept as IDs for :func:`load_art_batch`.
     """
     item_art_types, season_art_types = split_art_types(params.art_types)
-    dataset_only = all(source.catalog for source in params.source_order)
+    catalog_only = all(source.catalog for source in params.source_order)
     plan = AssetPlan[ArtTarget]()
     # A run over collections alone has no items; libraries may run beside them.
     if params.collection_scope and not params.library_ids:
@@ -86,8 +86,8 @@ async def plan_bulk_art(
                 else []
             )
             index = (
-                await PublicDatasetIndex.build(session, items, app_config=app_config)
-                if dataset_only
+                await CatalogIndex.build(session, items, app_config=app_config)
+                if catalog_only
                 else None
             )
             seasons_by_item: defaultdict[int, list[Season]] = defaultdict(list)
@@ -160,9 +160,9 @@ async def load_art_batch(
             )
         }
         index = (
-            await PublicDatasetIndex.build(session, items, app_config=app_config)
+            await CatalogIndex.build(session, items, app_config=app_config)
             if ArtBulkSource.OVERTUREDB in params.source_order
-            else PublicDatasetIndex.empty()
+            else CatalogIndex.empty()
         )
     targets: list[BulkArtWorkItem] = []
     for item in items:

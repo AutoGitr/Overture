@@ -10,16 +10,21 @@ lazy from ...utils.file import compute_file_hash
 lazy from ...utils.path import same_revision
 
 
-def collection_folder(root: Path, collection_path: str) -> Path:
+def collection_folder(root: Path | None, collection_path: str | None) -> Path:
     """Return Overture's view of the folder the server keeps a collection in.
 
-    Only the folder's name is used: the server's own path means nothing inside
-    Overture, and a single name cannot climb out of *root*.
+    *root* is ``JELLYFIN_COLLECTIONS_PATH`` and *collection_path* the server's
+    path of the collection. Only the folder's name is used: the server's own
+    path means nothing inside Overture, and a single name cannot climb out of
+    *root*.
 
     Raises:
-        ValueError: When the name is unusable or no such folder is in *root*.
+        ValueError: When no root is set, the name is unusable or no such
+            folder is in *root*.
     """
-    name = server_path(collection_path).name
+    if root is None:
+        raise ValueError("Set JELLYFIN_COLLECTIONS_PATH to store collection themes")
+    name = server_path(collection_path or "").name
     if name in {"", ".", ".."}:
         raise ValueError("The media server gave the collection no folder name")
     try:

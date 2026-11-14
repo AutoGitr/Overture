@@ -4,7 +4,7 @@ lazy import logging
 lazy from typing import Any
 
 lazy from ... import protocols
-lazy from ...dataset_contract.contract import ART_SOURCE_LABELS
+lazy from ...catalog_contract.contract import ART_SOURCE_LABELS
 lazy from ...db.models.download_job import DownloadJob
 lazy from ...domain import ArtSource, JobStatus, JobType
 lazy from ...jobs.kinds import DownloadStatus, JobKind

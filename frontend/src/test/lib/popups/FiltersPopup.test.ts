@@ -1,5 +1,5 @@
 import { fireEvent, waitFor, within } from "@testing-library/svelte";
-import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
+import { storeCatalogStatus } from "../../../lib/realtime/cache";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   listCatalogEntriesOptions,
@@ -19,7 +19,7 @@ import {
   collection,
   collectionCapabilities,
   mediaItem,
-  publicDatasetStatus,
+  catalogStatus,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
@@ -33,7 +33,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     uiState.setFilters(defaultFilters());
     uiState.searchQuery = "";
     uiState.searchField = "title";
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: false }));
+    storeCatalogStatus(catalogStatus({ enabled: false }));
     queryClient.setQueryData(listItemsOptions({ query: { media_type: "show" } }).queryKey, {
       items: [],
       total: 0,
@@ -41,7 +41,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   });
 
   it("offers an ID mismatch as a metadata issue while OvertureDB is enabled", async () => {
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    storeCatalogStatus(catalogStatus({ enabled: true }));
     const view = renderWithQueryClient(FiltersPopup);
     const issues = view.getByRole("region", { name: "Metadata issues" });
     await fireEvent.click(within(issues).getByRole("checkbox", { name: "ID mismatch" }));
@@ -154,7 +154,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   });
 
   it("applies the media server and themerrdb filter drafts when active", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
     const view = renderWithQueryClient(FiltersPopup);
 
     await fireEvent.click(view.getByRole("radio", { name: "Missing" }));
@@ -580,7 +580,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
   it("discards the drafts of the catalog entries the filters match", async () => {
     await navigate("/overturedb/movies");
-    storePublicDatasetStatus(publicDatasetStatus({ enabled: true }));
+    storeCatalogStatus(catalogStatus({ enabled: true }));
     queryClient.setQueryData(
       listCatalogEntriesOptions({ query: { media_type: "movie" } }).queryKey,
       [
@@ -589,7 +589,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       ],
     );
     const { calls } = mockFetchRoutes({
-      "/api/public-dataset/catalog/movie/drafts": { discarded: 1 },
+      "/api/catalog/catalog/movie/drafts": { discarded: 1 },
     });
     const view = renderWithQueryClient(FiltersPopup);
 

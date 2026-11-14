@@ -11,8 +11,8 @@ lazy from fastapi import APIRouter, Depends, Path, Query
 lazy from ..dependencies import TmdbItemsDep
 lazy from ..domain import CatalogMediaType
 lazy from ..schemas.art import ArtSourcesResponse, SaveArtRequest
+lazy from ..schemas.catalog import CatalogSources
 lazy from ..schemas.library import ItemSelectionResponse
-lazy from ..schemas.public_dataset import PublicDatasetSources
 lazy from ..schemas.themes import SelectThemeRequest
 lazy from ..schemas.tmdb import (
     TmdbCollectionResponse,
@@ -85,14 +85,14 @@ async def get_tmdb_art_sources(
     return await tmdb_items.art_sources(media_type, tmdb_id, art_type, season_num)
 
 
-@router.get("/{media_type}/{tmdb_id}/public-dataset")
-async def get_tmdb_public_dataset_sources(
+@router.get("/{media_type}/{tmdb_id}/catalog")
+async def get_tmdb_catalog_sources(
     media_type: MediaTypePath,
     tmdb_id: TmdbIdPath,
     tmdb_items: TmdbItemsDep,
-) -> PublicDatasetSources:
+) -> CatalogSources:
     """Look up what OvertureDB holds for an unsaved item."""
-    return await tmdb_items.public_dataset_sources(media_type, tmdb_id)
+    return await tmdb_items.catalog_sources(media_type, tmdb_id)
 
 
 @router.put("/{media_type}/{tmdb_id}/art/{art_type}")

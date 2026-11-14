@@ -7,12 +7,12 @@ import { bulkAssetsSchedule } from "../../helpers/fixtures";
 const movies: LibrarySectionRead[] = [{ id: "1", title: "Movies", media_type: "movie", count: 10 }];
 const shows: LibrarySectionRead[] = [{ id: "2", title: "Shows", media_type: "movie", count: 4 }];
 
-function form({ dataset = true, loaded = true } = {}) {
+function form({ catalog = true, loaded = true } = {}) {
   return new AssetsForm({
     movieLibraries: () => movies,
     showLibraries: () => shows,
     librariesLoaded: () => loaded,
-    publicDatasetEnabled: () => dataset,
+    catalogEnabled: () => catalog,
     collectionGroups: () => ["Sagas", "Studios"],
   });
 }
@@ -52,7 +52,7 @@ describe("AssetsForm", () => {
   });
 
   it("leaves OvertureDB sources out while the catalog is off, without unselecting them", () => {
-    const assets = form({ dataset: false });
+    const assets = form({ catalog: false });
 
     assets.toggleArtSource("overturedb");
 

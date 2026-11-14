@@ -1,6 +1,6 @@
-"""Public dataset service: scheduling, sync lifecycle, and status.
+"""Catalog service: scheduling, sync lifecycle, and status.
 
-Catalog I/O lives in ``catalog``. Candidate and record lookup lives in ``lookup``.
+Catalog I/O lives in ``remote``. Candidate and record lookup lives in ``lookup``.
 """
 
 lazy import logging
@@ -19,26 +19,26 @@ lazy from ...jobs.lifecycle import ManagedJobLifecycle
 lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, log_entry
 lazy from ...jobs.runner import JobContext
 lazy from ...jobs.slot import ManagedBackgroundJob
-lazy from ...schemas.common import Status, StatusResponse
-lazy from ...schemas.public_dataset import (
+lazy from ...schemas.catalog import (
+    CatalogRecord,
+    CatalogSources,
+    CatalogStatus,
+    CatalogSyncStats,
     ContributionIssue,
-    PublicDatasetRecord,
-    PublicDatasetSources,
-    PublicDatasetStatus,
-    PublicDatasetSyncStats,
 )
+lazy from ...schemas.common import Status, StatusResponse
 lazy from ...utils.temporary import operation_directory
 lazy from ...utils.time import utc_now, utc_now_iso
 lazy from ..schedule_store import (
-    PUBLIC_DATASET_SCHEDULE,
-    PublicDatasetPayload,
+    CATALOG_SCHEDULE,
+    CatalogPayload,
     Schedule,
     load_schedule,
     patch_payload,
     save_schedule,
 )
 lazy from ..scheduler import SchedulerService
-lazy from . import catalog, staging
+lazy from . import remote, staging
 lazy from .browse import CatalogBrowser
 lazy from .export import export_archive
 lazy from .issue import collection_issue, item_issue
@@ -52,13 +52,13 @@ lazy from .lookup import (
 logger = logging.getLogger(__name__)
 
 #: The scheduler job that syncs the catalog.
-_SCHEDULED_SYNC_JOB = "public_dataset_sync"
+_SCHEDULED_SYNC_JOB = "catalog_sync"
 
 
-class PublicDatasetService:
-    """Scheduling, sync lifecycle, and status for the public dataset.
+class CatalogService:
+    """Scheduling, sync lifecycle, and status for the catalog.
 
-    Heavy lifting is split across ``catalog``, ``lookup`` and ``browse``.
+    Heavy lifting is split across ``remote``, ``lookup`` and ``browse``.
     """
 
     def __init__(
@@ -75,26 +75,26 @@ class PublicDatasetService:
         self._config_dir = config_dir
         self._publisher = publisher
         self.scheduler = scheduler
-        self.catalog = CatalogBrowser(database=database, app_config=app_config)
+        self.browser = CatalogBrowser(database=database, app_config=app_config)
         self.job = ManagedBackgroundJob(
             ManagedJobLifecycle(
-                JobKind.PUBLIC_DATASET_SYNC,
-                event_job_id="public-dataset:sync",
-                target={"catalog_url": catalog.PUBLIC_DATASET_CATALOG_URL},
+                JobKind.CATALOG_SYNC,
+                event_job_id="catalog:sync",
+                target={"catalog_url": remote.CATALOG_URL},
             ),
             publisher,
             database=database,
         )
 
     async def start(self) -> None:
-        """Start the public dataset scheduler, and a first sync when none has run.
+        """Start the catalog scheduler, and a first sync when none has run.
 
         OvertureDB starts enabled, so a new install has the catalog without
         waiting for the schedule.
         """
         async with self._database.read_session() as session:
             schedule = await load_schedule(
-                session, PUBLIC_DATASET_SCHEDULE, timezone=self._app_config.TZ
+                session, CATALOG_SCHEDULE, timezone=self._app_config.TZ
             )
         self._schedule_job(schedule)
         if schedule.enabled and schedule.payload.last_synced_at is None:
@@ -102,38 +102,36 @@ class PublicDatasetService:
         logger.debug("OvertureDB scheduler started")
 
     async def stop(self) -> None:
-        """Stop the public dataset scheduler."""
+        """Stop the catalog scheduler."""
         await self.job.shutdown()
         logger.debug("OvertureDB scheduler stopped")
 
-    async def set_enabled(self, enabled: bool) -> PublicDatasetStatus:
+    async def set_enabled(self, enabled: bool) -> CatalogStatus:
         """Persist enabled state and reschedule accordingly."""
         async with self._database.write_session() as session:
             schedule = await save_schedule(
                 session,
-                PUBLIC_DATASET_SCHEDULE,
+                CATALOG_SCHEDULE,
                 enabled=enabled,
                 timezone=self._app_config.TZ,
             )
         self._schedule_job(schedule)
         return self.status_from_schedule(schedule)
 
-    async def get_status(self) -> PublicDatasetStatus:
-        """Return the public dataset's state and its last sync."""
+    async def get_status(self) -> CatalogStatus:
+        """Return the catalog's state and its last sync."""
         async with self._database.read_session() as session:
             schedule = await load_schedule(
-                session, PUBLIC_DATASET_SCHEDULE, timezone=self._app_config.TZ
+                session, CATALOG_SCHEDULE, timezone=self._app_config.TZ
             )
         return self.status_from_schedule(schedule)
 
-    def status_from_schedule(
-        self, schedule: Schedule[PublicDatasetPayload]
-    ) -> PublicDatasetStatus:
+    def status_from_schedule(self, schedule: Schedule[CatalogPayload]) -> CatalogStatus:
         """Return the public status a saved schedule describes."""
-        return PublicDatasetStatus(
+        return CatalogStatus(
             enabled=schedule.enabled,
-            repo_url=catalog.PUBLIC_DATASET_REPO_URL,
-            catalog_url=catalog.PUBLIC_DATASET_CATALOG_URL,
+            repo_url=remote.OVERTUREDB_REPO_URL,
+            catalog_url=remote.CATALOG_URL,
             last_synced_at=schedule.payload.last_synced_at,
             last_status=schedule.payload.last_status,
             last_stats=schedule.payload.last_stats,
@@ -141,7 +139,7 @@ class PublicDatasetService:
             next_run=self.scheduler.job_info(_SCHEDULED_SYNC_JOB).next_run,
         )
 
-    def _schedule_job(self, schedule: Schedule[PublicDatasetPayload]) -> None:
+    def _schedule_job(self, schedule: Schedule[CatalogPayload]) -> None:
         if self.scheduler.set_cron_job(
             _SCHEDULED_SYNC_JOB,
             enabled=schedule.enabled,
@@ -157,7 +155,7 @@ class PublicDatasetService:
             logger.info("Skipped a scheduled OvertureDB sync: one is already running")
 
     async def sync_now(self) -> StatusResponse:
-        """Start a catalog sync, unless the dataset is off or one is running."""
+        """Start a catalog sync, unless the catalog is off or one is running."""
         if not (await self.get_status()).enabled:
             return StatusResponse(status=Status.DISABLED)
         return StatusResponse.start(self.start_background_sync())
@@ -167,7 +165,7 @@ class PublicDatasetService:
         status: str,
         *,
         context: JobContext,
-        stats: PublicDatasetSyncStats,
+        stats: CatalogSyncStats,
         log: JobLogEntry | None = None,
         error: str | None = None,
         snapshot: bool = False,
@@ -182,9 +180,9 @@ class PublicDatasetService:
         )
 
     async def run_sync(self, context: JobContext) -> None:
-        """Download, validate, and persist the public-dataset catalog."""
+        """Download, validate, and persist the catalog."""
         synced_at = utc_now()
-        stats = PublicDatasetSyncStats()
+        stats = CatalogSyncStats()
 
         try:
             await self._publish_sync_event(
@@ -216,7 +214,7 @@ class PublicDatasetService:
                     await staging.replace(session, snapshot, synced_at, stats)
                     await patch_payload(
                         session,
-                        PUBLIC_DATASET_SCHEDULE,
+                        CATALOG_SCHEDULE,
                         last_status="success",
                         last_synced_at=synced_at,
                         last_stats=stats,
@@ -241,7 +239,7 @@ class PublicDatasetService:
             async with self._database.write_session() as session:
                 await patch_payload(
                     session,
-                    PUBLIC_DATASET_SCHEDULE,
+                    CATALOG_SCHEDULE,
                     last_status="failed",
                     last_stats=stats,
                 )
@@ -266,9 +264,7 @@ class PublicDatasetService:
                 ),
                 snapshot=True,
             )
-        await self._publisher.broadcast(
-            "public-dataset.updated", await self.get_status()
-        )
+        await self._publisher.broadcast("catalog.updated", await self.get_status())
 
     def start_background_sync(self) -> bool:
         """Kick off a background sync task; returns False if already running."""
@@ -278,8 +274,8 @@ class PublicDatasetService:
         """Export saved selections as an archive for an OvertureDB contribution."""
         return await export_archive(self._database, self._config_dir)
 
-    async def get_sources_for_item(self, item_id: int) -> PublicDatasetSources:
-        """Look up public dataset candidates for an item."""
+    async def get_sources_for_item(self, item_id: int) -> CatalogSources:
+        """Look up catalog candidates for an item."""
         return await get_sources_for_item(
             item_id, app_config=self._app_config, database=self._database
         )
@@ -292,19 +288,17 @@ class PublicDatasetService:
         """Return the issue contributing one collection's art and theme."""
         return await collection_issue(collection_id, database=self._database)
 
-    async def get_record_for_item(self, item_id: int) -> PublicDatasetRecord:
-        """Look up public dataset record for an item."""
+    async def get_record_for_item(self, item_id: int) -> CatalogRecord:
+        """Look up catalog record for an item."""
         return await get_record_for_item(item_id, database=self._database)
 
-    async def get_record_for_collection(
-        self, collection_id: int
-    ) -> PublicDatasetRecord:
+    async def get_record_for_collection(self, collection_id: int) -> CatalogRecord:
         """Look up the catalog record of a library collection."""
         return await get_record_for_collection(collection_id, database=self._database)
 
     async def get_record_for_entry(
         self, media_type: CatalogMediaType, entry_key: str
-    ) -> PublicDatasetRecord:
+    ) -> CatalogRecord:
         """Look up the catalog record an entry name identifies."""
         return await get_record_for_entry(
             media_type, entry_key, database=self._database

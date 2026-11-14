@@ -13,18 +13,18 @@ lazy from sqlalchemy.ext.asyncio import async_sessionmaker
 lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from overture.catalog_contract.contract import SCHEMA_VERSION
 lazy from overture.config import Settings
-lazy from overture.dataset_contract.contract import SCHEMA_VERSION
-lazy from overture.db.models.public_dataset import PublicDatasetItem
-lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
-lazy from overture.services.public_dataset import catalog, staging
-lazy from overture.services.public_dataset.service import PublicDatasetService
-lazy from overture.services.schedule_store import PUBLIC_DATASET_SCHEDULE, load_schedule
+lazy from overture.db.models.catalog import CatalogItem
+lazy from overture.schemas.catalog import CatalogSyncStats
+lazy from overture.services.catalog import remote, staging
+lazy from overture.services.catalog.service import CatalogService
+lazy from overture.services.schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.time import utc_now
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, database_for
-lazy from tests.test_services.test_public_dataset_edges import (
+lazy from tests.test_services.test_catalog_edges import (
     catalog_jsonl,
     catalog_payload,
 )
@@ -45,8 +45,8 @@ async def test_gzip_requires_one_complete_bounded_stream(
         lambda _request: httpx2.Response(200, content=content)
     )
     monkeypatch.setattr(
-        catalog,
-        "PUBLIC_DATASET_CATALOG_URL",
+        remote,
+        "CATALOG_URL",
         "https://catalog.test/catalog.jsonl.gz",
     )
 
@@ -55,7 +55,7 @@ async def test_gzip_requires_one_complete_bounded_stream(
 
     monkeypatch.setattr(staging, "create_client", mock_client)
     with pytest.raises(ValueError, match="download failed"):
-        await staging.download(tmp_path / "catalog.jsonl", PublicDatasetSyncStats())
+        await staging.download(tmp_path / "catalog.jsonl", CatalogSyncStats())
 
 
 async def test_url_checks_deduplicate_urls_and_dns_with_bounded_concurrency(
@@ -84,10 +84,10 @@ async def test_url_checks_deduplicate_urls_and_dns_with_bounded_concurrency(
         }
         for index in range(80)
     ]
-    await catalog.check_catalog_urls(entries, app_config=app_config)
+    await remote.check_catalog_urls(entries, app_config=app_config)
     assert 1 < peak <= 16
     assert calls == Counter({f"art{index}.test": 1 for index in range(20)})
-    await catalog.check_catalog_urls(entries, app_config=app_config)
+    await remote.check_catalog_urls(entries, app_config=app_config)
     assert set(calls.values()) == {2}
 
 
@@ -101,7 +101,7 @@ async def test_catalog_replacement_is_atomic(
     app_config: Settings,
 ) -> None:
     database = database_for(isolated_session_factory)
-    service = PublicDatasetService(
+    service = CatalogService(
         scheduler=SchedulerService(app_config=app_config),
         publisher=NullEventPublisher(),
         app_config=app_config,
@@ -114,9 +114,7 @@ async def test_catalog_replacement_is_atomic(
     original_path.write_bytes(catalog_jsonl(original))
     await staging.prepare(original_path, original_stage, app_config=app_config)
     async with isolated_session_factory() as session:
-        await staging.replace(
-            session, original_stage, utc_now(), PublicDatasetSyncStats()
-        )
+        await staging.replace(session, original_stage, utc_now(), CatalogSyncStats())
         await session.commit()
 
     incoming = catalog_payload()
@@ -127,7 +125,7 @@ async def test_catalog_replacement_is_atomic(
     elif failure == "unsafe_url":
         incoming["entries"][1]["poster_url"] = "https://127.0.0.1/private.jpg"
 
-    async def download(path: Path, stats: PublicDatasetSyncStats) -> None:
+    async def download(path: Path, stats: CatalogSyncStats) -> None:
         await asyncio.to_thread(path.write_bytes, catalog_jsonl(incoming))
         stats.catalog_url = "https://catalog.test/catalog.jsonl.gz"
         stats.schema_version = SCHEMA_VERSION
@@ -145,15 +143,13 @@ async def test_catalog_replacement_is_atomic(
     probe = JobProbe(lifecycle=service.job.lifecycle)
     await service.run_sync(probe.context)
     event, payload = probe.terminal()
-    assert event == (
-        "public-dataset.sync.failed" if failure else "public-dataset.sync.completed"
-    )
+    assert event == ("catalog.sync.failed" if failure else "catalog.sync.completed")
     async with isolated_session_factory() as session:
-        rows = (await session.exec(select(PublicDatasetItem))).all()
+        rows = (await session.exec(select(CatalogItem))).all()
         assert {row.title for row in rows} == (
             {"Breaking Bad", "Heat"} if failure else {"Updated show", "Updated movie"}
         )
-        schedule = await load_schedule(session, PUBLIC_DATASET_SCHEDULE)
+        schedule = await load_schedule(session, CATALOG_SCHEDULE)
         assert schedule.payload.last_status == ("failed" if failure else "success")
         assert bool(schedule.payload.last_synced_at) is (failure is None)
         assert payload["stats"]["items"] == (0 if failure else 2)

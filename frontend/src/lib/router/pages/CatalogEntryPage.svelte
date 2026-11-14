@@ -2,7 +2,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import {
     getCatalogEntryOptions,
-    getPublicDatasetStatusOptions,
+    getCatalogStatusOptions,
     getTmdbCollectionOptions,
     getTmdbItemOptions,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
@@ -15,7 +15,7 @@
   import { routedCatalogEntry, routedItemView } from "../routes";
 
   let target = $derived(routedCatalogEntry());
-  const status = createQuery(() => getPublicDatasetStatusOptions());
+  const status = createQuery(() => getCatalogStatusOptions());
   const query = createQuery(() => ({
     ...getCatalogEntryOptions({ path: target ?? { media_type: "movie", entry_key: "" } }),
     enabled: !!target && status.data?.enabled === true,

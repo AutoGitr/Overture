@@ -5,7 +5,6 @@ lazy from typing import Annotated
 lazy from fastapi import Depends
 lazy from starlette.requests import HTTPConnection
 
-lazy from . import protocols
 lazy from .config import Settings
 lazy from .db.session import Database
 lazy from .integrations.tmdb import TMDBClient
@@ -20,6 +19,7 @@ lazy from .services.asset_manager.service import AssetManagerService
 lazy from .services.assets import AssetsService
 lazy from .services.auth import AuthService
 lazy from .services.backup.service import BackupService
+lazy from .services.catalog.service import CatalogService
 lazy from .services.collections.arr_requests import CollectionArr
 lazy from .services.collections.bulk import CollectionBulk
 lazy from .services.collections.discovery import CollectionDiscovery
@@ -30,7 +30,6 @@ lazy from .services.collections.set_runner import CollectionSets
 lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
 lazy from .services.notifications import NotificationSettings
-lazy from .services.public_dataset.service import PublicDatasetService
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
 lazy from .services.server_audit.service import ServerAuditService
@@ -168,9 +167,9 @@ def get_backups(runtime: RuntimeDep) -> BackupService:
     return runtime.backups
 
 
-def get_public_dataset(runtime: RuntimeDep) -> PublicDatasetService:
-    """Resolve the public dataset domain service."""
-    return runtime.public_dataset
+def get_catalog(runtime: RuntimeDep) -> CatalogService:
+    """Resolve the catalog domain service."""
+    return runtime.catalog
 
 
 def get_assets(runtime: RuntimeDep) -> AssetsService:
@@ -201,11 +200,6 @@ def get_provider_registry(runtime: RuntimeDep) -> ProviderRegistry:
 def get_tmdb(runtime: RuntimeDep) -> TMDBClient:
     """Resolve the TMDB client."""
     return runtime.tmdb
-
-
-def get_events(runtime: RuntimeDep) -> protocols.EventPublisher:
-    """Resolve the event publisher."""
-    return runtime.events
 
 
 def get_websockets(runtime: RuntimeDep) -> ConnectionManager:
@@ -243,14 +237,13 @@ CollectionArrDep = Annotated[CollectionArr, Depends(get_collection_arr)]
 ThemesDep = Annotated[ThemesService, Depends(get_themes)]
 TmdbItemsDep = Annotated[TmdbItemsService, Depends(get_tmdb_items)]
 BackupsDep = Annotated[BackupService, Depends(get_backups)]
-PublicDatasetDep = Annotated[PublicDatasetService, Depends(get_public_dataset)]
+CatalogDep = Annotated[CatalogService, Depends(get_catalog)]
 AssetsDep = Annotated[AssetsService, Depends(get_assets)]
 AssetManagerDep = Annotated[AssetManagerService, Depends(get_asset_manager)]
 StatsDep = Annotated[StatsService, Depends(get_stats)]
 NotificationsDep = Annotated[NotificationSettings, Depends(get_notifications)]
 ProviderRegistryDep = Annotated[ProviderRegistry, Depends(get_provider_registry)]
 TmdbDep = Annotated[TMDBClient, Depends(get_tmdb)]
-EventsDep = Annotated[protocols.EventPublisher, Depends(get_events)]
 WebSocketsDep = Annotated[ConnectionManager, Depends(get_websockets)]
 JobSlotsDep = Annotated[dict[JobKind, ManagedBackgroundJob], Depends(get_job_slots)]
 RealtimeSnapshotDep = Annotated[RealtimeSnapshotBuilder, Depends(get_realtime_snapshot)]

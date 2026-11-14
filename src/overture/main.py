@@ -34,12 +34,12 @@ lazy from .routers.auth import require_auth
 lazy from .routers.auth import router as auth_router
 lazy from .routers.backup import router as backup_router
 lazy from .routers.bulk_assets import router as bulk_assets_router
+lazy from .routers.catalog import router as catalog_router
 lazy from .routers.collections import router as collections_router
 lazy from .routers.job_snapshots import router as job_snapshots_router
 lazy from .routers.library import router as library_router
 lazy from .routers.media_server import router as media_server_router
 lazy from .routers.notifications import router as notifications_router
-lazy from .routers.public_dataset import router as public_dataset_router
 lazy from .routers.realtime import router as realtime_router
 lazy from .routers.server_audit import router as server_audit_router
 lazy from .routers.settings import router as settings_router
@@ -188,7 +188,7 @@ def _register_api_routes(app: FastAPI) -> None:
         job_snapshots_router,
         media_server_router,
         notifications_router,
-        public_dataset_router,
+        catalog_router,
         realtime_router,
         server_audit_router,
         settings_router,

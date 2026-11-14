@@ -11,7 +11,7 @@ lazy from typing import Any, cast
 
 lazy import httpx2
 
-lazy from ..dataset_contract.contract import YOUTUBE_ID_PATTERN
+lazy from ..catalog_contract.contract import YOUTUBE_ID_PATTERN
 lazy from ..domain import ThemeIdSource
 lazy from .process import PROBE_SLOTS, run_process
 lazy from .temporary import operation_directory

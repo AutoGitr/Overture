@@ -9,13 +9,13 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.schemas.backup import BackupRetention
-lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
+lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.services.schedule_store import (
     BACKUP_SCHEDULE,
-    PUBLIC_DATASET_SCHEDULE,
+    CATALOG_SCHEDULE,
     SYNC_SERVER_SCHEDULE,
     BackupPayload,
-    PublicDatasetPayload,
+    CatalogPayload,
     load_schedule,
     patch_payload,
     save_schedule,
@@ -40,7 +40,7 @@ async def test_loading_an_unsaved_schedule_returns_defaults_and_writes_no_row(
     """
     server = await load_schedule(db_session, SYNC_SERVER_SCHEDULE)
     backup = await load_schedule(db_session, BACKUP_SCHEDULE)
-    public = await load_schedule(db_session, PUBLIC_DATASET_SCHEDULE)
+    public = await load_schedule(db_session, CATALOG_SCHEDULE)
 
     assert server.payload.last_media_server is None
     assert server.enabled is False
@@ -58,19 +58,19 @@ async def test_saving_a_schedule_round_trips_its_typed_payload(
 ) -> None:
     saved = await save_schedule(
         db_session,
-        PUBLIC_DATASET_SCHEDULE,
+        CATALOG_SCHEDULE,
         enabled=True,
-        payload=PublicDatasetPayload(
+        payload=CatalogPayload(
             last_synced_at=SYNCED,
             last_status="success",
-            last_stats=PublicDatasetSyncStats(items=3),
+            last_stats=CatalogSyncStats(items=3),
         ),
     )
 
     assert saved.enabled is True
     assert saved.payload.last_synced_at == SYNCED
     assert saved.payload.last_status == "success"
-    assert saved.payload.last_stats == PublicDatasetSyncStats(items=3)
+    assert saved.payload.last_stats == CatalogSyncStats(items=3)
 
 
 async def test_patching_a_payload_leaves_the_other_fields_alone(
@@ -78,30 +78,30 @@ async def test_patching_a_payload_leaves_the_other_fields_alone(
 ) -> None:
     await save_schedule(
         db_session,
-        PUBLIC_DATASET_SCHEDULE,
-        payload=PublicDatasetPayload(
-            last_status="success", last_stats=PublicDatasetSyncStats(items=3)
+        CATALOG_SCHEDULE,
+        payload=CatalogPayload(
+            last_status="success", last_stats=CatalogSyncStats(items=3)
         ),
     )
 
     patched = await patch_payload(
         db_session,
-        PUBLIC_DATASET_SCHEDULE,
+        CATALOG_SCHEDULE,
         last_synced_at=PATCHED,
     )
 
     assert patched.payload.last_synced_at == PATCHED
     assert patched.payload.last_status == "success"
-    assert patched.payload.last_stats == PublicDatasetSyncStats(items=3)
+    assert patched.payload.last_stats == CatalogSyncStats(items=3)
 
 
 async def test_patching_rejects_unknown_fields_and_invalid_values(
     db_session: AsyncSession,
 ) -> None:
     with pytest.raises(ValueError, match="Unknown schedule payload fields"):
-        await patch_payload(db_session, PUBLIC_DATASET_SCHEDULE, app_config=None)
+        await patch_payload(db_session, CATALOG_SCHEDULE, app_config=None)
     with pytest.raises(ValidationError):
-        await patch_payload(db_session, PUBLIC_DATASET_SCHEDULE, last_status="ok")
+        await patch_payload(db_session, CATALOG_SCHEDULE, last_status="ok")
 
 
 async def test_out_of_range_payload_values_are_rejected_not_clamped() -> None:

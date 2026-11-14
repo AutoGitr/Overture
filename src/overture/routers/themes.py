@@ -12,12 +12,10 @@ lazy from ..schemas.themes import SearchRequest, SelectThemeRequest, ThemeSearch
 lazy from .auth import require_auth
 lazy from .parameters import ItemIdPath
 
-router = APIRouter(
-    prefix="/themes", tags=["themes"], dependencies=[Depends(require_auth)]
-)
+router = APIRouter(tags=["themes"], dependencies=[Depends(require_auth)])
 
 
-@router.get("/search")
+@router.get("/themes/search")
 async def search_youtube(
     params: Annotated[SearchRequest, Query()], themes: ThemesDep
 ) -> ThemeSearchResponse:
@@ -25,7 +23,7 @@ async def search_youtube(
     return await themes.search(params)
 
 
-@router.put("/{item_id}")
+@router.put("/library/items/{item_id}/theme")
 async def select_theme(
     item_id: ItemIdPath, body: SelectThemeRequest, themes: ThemesDep
 ) -> ItemSelectionResponse:
@@ -36,7 +34,7 @@ async def select_theme(
     return await themes.select(item_id, body.youtube_id)
 
 
-@router.delete("/{item_id}")
+@router.delete("/library/items/{item_id}/theme")
 async def remove_theme(
     item_id: ItemIdPath,
     removal: Annotated[AssetRemoval, Query()],

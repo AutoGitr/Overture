@@ -21,7 +21,7 @@ export async function discardDrafts(entries: readonly CatalogEntryRow[]): Promis
     });
     discarded += data.discarded;
   }
-  await invalidateTags(["public-dataset"]);
+  await invalidateTags(["catalog"]);
   return discarded;
 }
 

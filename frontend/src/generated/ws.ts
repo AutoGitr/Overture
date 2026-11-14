@@ -3,9 +3,9 @@
 // Models that also appear in openapi.json are imported from the REST bundle
 // rather than redeclared, so both generators describe one type universe.
 
-import type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicDatasetStatus, PublicDatasetSyncOutcome, PublicDatasetSyncStats, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+import type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
-export type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicDatasetStatus, PublicDatasetSyncOutcome, PublicDatasetSyncStats, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+export type { ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
 export type LifecycleStatus = "started" | "progress" | "completed" | "stopped" | "failed";
 
@@ -199,7 +199,7 @@ export interface CollectionMonitoredEvent {
   monitored: boolean;
 }
 
-export interface PublicDatasetSyncEvent {
+export interface CatalogSyncEvent {
   job?: JobMetadata | null;
   log?: JobLogEntry | null;
   run_id?: string | null;
@@ -210,7 +210,7 @@ export interface PublicDatasetSyncEvent {
   } | null;
   started_at?: string | null;
   finished_at?: string | null;
-  stats?: PublicDatasetSyncStats;
+  stats?: CatalogSyncStats;
 }
 
 export interface BackupJobEvent {
@@ -255,7 +255,7 @@ export interface SchedulesChangedEvent {
 }
 
 /** A tag the REST query keys carry. */
-export type ApiTag = "art" | "asset-manager" | "auth" | "backups" | "bulk" | "collections" | "health" | "job-snapshots" | "library" | "media-server" | "notifications" | "public-dataset" | "realtime" | "server-audit" | "settings" | "stats" | "sync" | "themes" | "tmdb";
+export type ApiTag = "art" | "asset-manager" | "auth" | "backups" | "bulk" | "catalog" | "collections" | "health" | "job-snapshots" | "library" | "media-server" | "notifications" | "realtime" | "server-audit" | "settings" | "stats" | "sync" | "themes" | "tmdb";
 
 /** The prefix of each job kind's lifecycle events. */
 export const JOB_EVENT_PREFIXES = {
@@ -265,7 +265,7 @@ export const JOB_EVENT_PREFIXES = {
   asset_scan: "assets.scan",
   server_audit: "server.audit",
   server_audit_fix: "server.audit.fix",
-  public_dataset_sync: "public-dataset.sync",
+  catalog_sync: "catalog.sync",
   backup: "backup",
   download: "download",
 } as const satisfies Record<JobKind, string>;
@@ -278,7 +278,7 @@ export const JOB_KIND_LABELS = {
   asset_scan: "Renamer scan",
   server_audit: "server audit",
   server_audit_fix: "server audit fix",
-  public_dataset_sync: "OvertureDB sync",
+  catalog_sync: "OvertureDB sync",
   backup: "backup",
   download: "download",
 } as const satisfies Record<JobKind, string>;
@@ -330,11 +330,11 @@ export interface WebSocketPayloadMap {
   'collections.changed': null;
   'collection.updated': CollectionUpdatedEvent;
   'collection.monitored': CollectionMonitoredEvent;
-  'public-dataset.sync.started': PublicDatasetSyncEvent;
-  'public-dataset.sync.progress': PublicDatasetSyncEvent;
-  'public-dataset.sync.completed': PublicDatasetSyncEvent;
-  'public-dataset.sync.stopped': PublicDatasetSyncEvent;
-  'public-dataset.sync.failed': PublicDatasetSyncEvent;
+  'catalog.sync.started': CatalogSyncEvent;
+  'catalog.sync.progress': CatalogSyncEvent;
+  'catalog.sync.completed': CatalogSyncEvent;
+  'catalog.sync.stopped': CatalogSyncEvent;
+  'catalog.sync.failed': CatalogSyncEvent;
   'backup.started': BackupJobEvent;
   'backup.progress': BackupJobEvent;
   'backup.completed': BackupJobEvent;
@@ -343,7 +343,7 @@ export interface WebSocketPayloadMap {
   'library.item.upserted': LibraryItemUpsertedEvent;
   'library.item.removed': LibraryItemRemovedEvent;
   'library.items.changed': BulkItemOperationResult;
-  'public-dataset.updated': PublicDatasetStatus;
+  'catalog.updated': CatalogStatus;
   'item.updated': ItemUpdatedEvent;
   'job.snapshot.cleared': JobSnapshotClearedEvent;
   'schedules.changed': SchedulesChangedEvent;
@@ -392,11 +392,11 @@ export const WEBSOCKET_EVENTS = [
   'collections.changed',
   'collection.updated',
   'collection.monitored',
-  'public-dataset.sync.started',
-  'public-dataset.sync.progress',
-  'public-dataset.sync.completed',
-  'public-dataset.sync.stopped',
-  'public-dataset.sync.failed',
+  'catalog.sync.started',
+  'catalog.sync.progress',
+  'catalog.sync.completed',
+  'catalog.sync.stopped',
+  'catalog.sync.failed',
   'backup.started',
   'backup.progress',
   'backup.completed',
@@ -405,7 +405,7 @@ export const WEBSOCKET_EVENTS = [
   'library.item.upserted',
   'library.item.removed',
   'library.items.changed',
-  'public-dataset.updated',
+  'catalog.updated',
   'item.updated',
   'job.snapshot.cleared',
   'schedules.changed',

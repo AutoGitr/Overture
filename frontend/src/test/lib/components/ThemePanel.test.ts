@@ -1,13 +1,13 @@
 import { appSettings } from "../../helpers/fixtures";
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
-import { storePublicDatasetStatus } from "../../../lib/realtime/cache";
+import { storeCatalogStatus } from "../../../lib/realtime/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ThemePanel from "../../../lib/components/ThemePanel.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import type { MediaItemRead, TmdbItemPreview } from "../../../generated/rest/types.gen";
-import { publicDatasetStatus, mediaItem } from "../../helpers/fixtures";
+import { catalogStatus, mediaItem } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 type Shown = { item: MediaItemRead | null; preview: TmdbItemPreview | null };
@@ -29,8 +29,8 @@ function renderPanel() {
 
 const {
   selectTheme,
-  getPublicDatasetSources,
-  getTmdbPublicDatasetSources,
+  getCatalogSources,
+  getTmdbCatalogSources,
   openPersistedItem,
   upsertLibraryItem,
   searchYoutube,
@@ -39,8 +39,8 @@ const {
   routed,
 } = vi.hoisted(() => ({
   selectTheme: vi.fn(),
-  getPublicDatasetSources: vi.fn(),
-  getTmdbPublicDatasetSources: vi.fn(),
+  getCatalogSources: vi.fn(),
+  getTmdbCatalogSources: vi.fn(),
   openPersistedItem: vi.fn(),
   upsertLibraryItem: vi.fn(),
   searchYoutube: vi.fn(),
@@ -50,8 +50,8 @@ const {
 }));
 vi.mock("../../../generated/rest/sdk.gen", () => ({
   selectTheme,
-  getPublicDatasetSources,
-  getTmdbPublicDatasetSources,
+  getCatalogSources,
+  getTmdbCatalogSources,
   searchYoutube,
   selectTmdbTheme,
 }));
@@ -100,14 +100,14 @@ describe("ThemePanel search", () => {
   });
 
   it("treats a missing OvertureDB entry as a normal empty result", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
-    getPublicDatasetSources.mockResolvedValue({
+    storeCatalogStatus(catalogStatus());
+    getCatalogSources.mockResolvedValue({
       data: { found: false, item: null, seasons: [] },
     });
 
     renderPanel();
 
-    await waitFor(() => expect(getPublicDatasetSources).toHaveBeenCalled());
+    await waitFor(() => expect(getCatalogSources).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText(/OvertureDB theme:/)).not.toBeInTheDocument();
   });
@@ -148,11 +148,11 @@ describe("ThemePanel search", () => {
       choices: ["secondary12"],
     },
   ])(
-    "offers distinct, unselected dataset themes in the unified grid: $primary / $secondary / $current",
+    "offers distinct, unselected catalog themes in the unified grid: $primary / $secondary / $current",
     async ({ primary, secondary, current, choices }) => {
-      storePublicDatasetStatus(publicDatasetStatus());
+      storeCatalogStatus(catalogStatus());
       showItem(mediaItem({ id: 7, youtube_id: current }));
-      getPublicDatasetSources.mockResolvedValue({
+      getCatalogSources.mockResolvedValue({
         data: {
           found: true,
           item: { youtube_id_overturedb: primary, youtube_id_themerrdb: secondary },
@@ -176,7 +176,7 @@ describe("ThemePanel search", () => {
         ),
       );
 
-      storePublicDatasetStatus(publicDatasetStatus({ enabled: false }));
+      storeCatalogStatus(catalogStatus({ enabled: false }));
       await waitFor(() =>
         expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument(),
       );
@@ -197,7 +197,7 @@ describe("ThemePanel search", () => {
   });
 
   it("loads currently selected video first, then OvertureDB, then ThemerrDB, then YouTube search with correct badges and deduplication", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
     showItem(
       mediaItem({
         id: 7,
@@ -206,7 +206,7 @@ describe("ThemePanel search", () => {
         youtube_title: "Alien Current Theme",
       }),
     );
-    getPublicDatasetSources.mockResolvedValue({
+    getCatalogSources.mockResolvedValue({
       data: {
         found: true,
         item: {
@@ -241,7 +241,7 @@ describe("ThemePanel search", () => {
 
     renderPanel();
 
-    // Wait for dataset sources and search results to settle into the grid
+    // Wait for catalog sources and search results to settle into the grid
     await waitFor(() => {
       const iframes = screen.getAllByTitle(/.+/);
       expect(iframes).toHaveLength(4);
@@ -269,14 +269,14 @@ describe("ThemePanel search", () => {
   });
 
   it("enriches ThemerrDB and OvertureDB selections with YouTube title, channel, and duration", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
     showItem(
       mediaItem({
         id: 7,
         title: "Alien",
       }),
     );
-    getPublicDatasetSources.mockResolvedValue({
+    getCatalogSources.mockResolvedValue({
       data: {
         found: true,
         item: {
@@ -404,9 +404,9 @@ describe("ThemePanel search", () => {
     expect(searchYoutube).not.toHaveBeenCalled();
   });
 
-  it("fetches dataset themes apart from the search, which runs only once", async () => {
-    storePublicDatasetStatus(publicDatasetStatus());
-    getPublicDatasetSources.mockResolvedValue({
+  it("fetches catalog themes apart from the search, which runs only once", async () => {
+    storeCatalogStatus(catalogStatus());
+    getCatalogSources.mockResolvedValue({
       data: {
         found: true,
         item: { youtube_id_overturedb: "overture_yt", youtube_id_themerrdb: null },
@@ -434,7 +434,7 @@ describe("ThemePanel for TMDB titles", () => {
     settingsState.load(
       appSettings({ workflow: "themes", theme_search_format: "{title} {year} theme" }),
     );
-    storePublicDatasetStatus(publicDatasetStatus());
+    storeCatalogStatus(catalogStatus());
     showPreview({
       media_type: "movie",
       tmdb_id: 603,
@@ -448,7 +448,7 @@ describe("ThemePanel for TMDB titles", () => {
       existing_item_id: null,
       seasons: [],
     });
-    getTmdbPublicDatasetSources.mockResolvedValue({
+    getTmdbCatalogSources.mockResolvedValue({
       data: { found: false, item: null, seasons: [] },
     });
     searchYoutube.mockResolvedValue({
@@ -468,10 +468,10 @@ describe("ThemePanel for TMDB titles", () => {
         expect.objectContaining({ query: { query: "The Matrix 1999 theme", limit: 20 } }),
       ),
     );
-    expect(getTmdbPublicDatasetSources).toHaveBeenCalledWith(
+    expect(getTmdbCatalogSources).toHaveBeenCalledWith(
       expect.objectContaining({ path: { media_type: "movie", tmdb_id: 603 } }),
     );
-    expect(getPublicDatasetSources).not.toHaveBeenCalled();
+    expect(getCatalogSources).not.toHaveBeenCalled();
 
     await screen.findByText("Main Theme");
     await fireEvent.click(screen.getByRole("button", { name: "Select" }));

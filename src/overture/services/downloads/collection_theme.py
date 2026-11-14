@@ -18,9 +18,9 @@ lazy from ...media_servers.adapters import (
     UploadThemes,
 )
 lazy from ...media_servers.registry import CollectionProvider
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.downloads import DownloadJobRepository
-lazy from ...repositories.public_dataset import PublicDatasetRepository
 lazy from ...utils.assets import THEME_FILENAME
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
@@ -52,11 +52,12 @@ async def theme_folder(
     """Resolve a stored collection's trusted theme folder."""
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(collection_id)
-    root = app_config.JELLYFIN_COLLECTIONS_PATH
-    if row is None or row.server_path is None or root is None:
-        raise DownloadError("The collection has no folder for its theme")
+    if row is None:
+        raise DownloadError("Collection no longer exists")
     try:
-        return await owned_thread(collection_folder, root, row.server_path)
+        return await owned_thread(
+            collection_folder, app_config.JELLYFIN_COLLECTIONS_PATH, row.server_path
+        )
     except ValueError as exc:
         raise DownloadError(str(exc)) from exc
 
@@ -74,12 +75,11 @@ async def collection_theme_unavailable(
     if row.server_item_id is None:
         return None
     if provider and isinstance(provider.collections, FolderThemes):
-        root = app_config.JELLYFIN_COLLECTIONS_PATH
-        if root is None or not row.server_path:
-            return "The collection has no folder for its theme"
         try:
-            await owned_thread(collection_folder, root, row.server_path)
-        except (OSError, ValueError) as exc:
+            await owned_thread(
+                collection_folder, app_config.JELLYFIN_COLLECTIONS_PATH, row.server_path
+            )
+        except ValueError as exc:
             return str(exc)
     return None
 
@@ -139,7 +139,7 @@ async def collection_theme_source(
     session: AsyncSession, row: MediaCollection, youtube_id: str | None
 ) -> ThemeBulkSource:
     """Return where a collection's theme video comes from: a catalog, else a search."""
-    catalog = await PublicDatasetRepository(session).collections_by_tmdb_id(
+    catalog = await CatalogRepository(session).collections_by_tmdb_id(
         {row.tmdb_collection_id} if row.tmdb_collection_id else set()
     )
     entry = catalog.get(row.tmdb_collection_id or 0)

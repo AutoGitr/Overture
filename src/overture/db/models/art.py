@@ -80,10 +80,10 @@ class ArtSlot(SQLModel, table=True):
     #: The selection is an image someone uploaded, kept in the image cache
     #: under this hash. A slot selects a link or an upload, never both.
     upload_hash: str | None = None
-    #: The selected upload is one Overture drew in this style from the
-    #: owner's title, and draws again when the title changes.
+    #: The selected upload is one Overture generated in this style from the
+    #: owner's title, and generates again when the title changes.
     generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
-    #: The drawn poster shows the title alone, without its group.
+    #: The generated poster shows the title alone, without its group.
     generated_title_only: bool = Field(default=False, nullable=False)
     #: The hash of the file Overture wrote or verified for the selection; a
     #: recorded file with another hash was replaced outside Overture.

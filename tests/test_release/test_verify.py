@@ -147,9 +147,9 @@ _FIXED: dict[str, Any] = {
     },
     # A field both evaluate is recommended to the wrong kind.
     "/api/collections/recommend-kind": {"kind": "regular", "reason": "Why."},
-    "/api/public-dataset/status": {"enabled": True},
-    "/api/public-dataset/items/1/issue": _issue("movie.yml", "Alien"),
-    "/api/public-dataset/items/2/issue": _issue("show.yml", "Aliens"),
+    "/api/catalog/status": {"enabled": True},
+    "/api/catalog/items/1/issue": _issue("movie.yml", "Alien"),
+    "/api/catalog/items/2/issue": _issue("show.yml", "Aliens"),
     "/api/collections/tags/radarr": [{"id": 1, "label": "requests"}],
     "/api/collections/arr-options": {"root_folders": [], "quality_profiles": []},
 }

@@ -71,5 +71,5 @@ async def test_standalone_starts_and_refuses_server_bound_routes(
             refused = client.get(path)
             assert refused.status_code == 409
             assert refused.json()["detail"] == "No media server is configured"
-        assert client.get("/api/public-dataset/status").status_code == 200
+        assert client.get("/api/catalog/status").status_code == 200
     assert runtime.provider_registry.health.current.state is MediaServerState.UNKNOWN

@@ -16,15 +16,15 @@ lazy from sqlmodel import func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture import protocols
+lazy from overture.catalog_contract.contract import SCHEMA_VERSION
 lazy from overture.config import Settings
-lazy from overture.dataset_contract.contract import SCHEMA_VERSION
 lazy from overture.db import metadata
+lazy from overture.db.models.catalog import (
+    CatalogItem,
+    CatalogItemSeason,
+)
 lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import (
-    PublicDatasetItem,
-    PublicDatasetSeason,
-)
 lazy from overture.db.session import as_writer, configure_sqlite
 lazy from overture.domain import (
     CollectionOrder,
@@ -36,15 +36,15 @@ lazy from overture.domain import (
 lazy from overture.media_servers.adapters import ServerItem
 lazy from overture.repositories.collections import CollectionItem, CollectionRepository
 lazy from overture.repositories.terms import TermRepository
+lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.schemas.collections import FieldCondition, FilterGroup
-lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
+lazy from overture.services.catalog import remote, staging
 lazy from overture.services.collections.criteria import (
     CriteriaContext,
     criteria_terms,
     evaluate,
     order_items,
 )
-lazy from overture.services.public_dataset import catalog, staging
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.time import utc_now
 lazy from overture.utils.types import JsonValue
@@ -52,7 +52,7 @@ lazy from overture.ws.connection_manager import ConnectionManager
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopDownloads, database_for, make_local_assets
 lazy from tests.sync_helpers import sync_full
-lazy from tests.test_services.test_public_dataset_edges import (
+lazy from tests.test_services.test_catalog_edges import (
     catalog_jsonl,
     catalog_payload,
 )
@@ -166,12 +166,12 @@ async def test_catalog_import_stays_bounded_and_deduplicates_dns(
         resolutions += 1
         return url
 
-    monkeypatch.setattr(catalog, "public_art_url", public_url)
+    monkeypatch.setattr(remote, "public_art_url", public_url)
     engine = await _database(tmp_path / "catalog.db")
     sessions = async_sessionmaker(
         as_writer(engine), class_=AsyncSession, expire_on_commit=False
     )
-    stats = PublicDatasetSyncStats(entries=entry_count, schema_version=SCHEMA_VERSION)
+    stats = CatalogSyncStats(entries=entry_count, schema_version=SCHEMA_VERSION)
 
     tracemalloc.start()
     started = time.perf_counter()
@@ -193,12 +193,10 @@ async def test_catalog_import_stays_bounded_and_deduplicates_dns(
     try:
         async with sessions() as session:
             items = (
-                await session.exec(select(func.count()).select_from(PublicDatasetItem))
+                await session.exec(select(func.count()).select_from(CatalogItem))
             ).one()
             seasons = (
-                await session.exec(
-                    select(func.count()).select_from(PublicDatasetSeason)
-                )
+                await session.exec(select(func.count()).select_from(CatalogItemSeason))
             ).one()
         assert 1 <= resolutions <= (entry_count + 99) // 100
         assert items == entry_count

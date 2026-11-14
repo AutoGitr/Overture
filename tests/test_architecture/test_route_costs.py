@@ -27,12 +27,12 @@ _TITLES = 100
 _MOST_STATEMENTS = 40
 
 #: Reads that page through the library, a few statements per page.
-_PAGED = {"/api/public-dataset/export"}
+_PAGED = {"/api/catalog/export"}
 #: Reads that return every title or collection, with the entities each may build.
 _LISTINGS = {
     "/api/collections": 3,
     "/api/library/items": 3,
-    "/api/public-dataset/export": 3,
+    "/api/catalog/export": 3,
     "/api/stats": 3,
 }
 

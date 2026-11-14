@@ -7,7 +7,7 @@ import { mediaServerState } from "../lib/stores/mediaServerState.svelte";
 import { realtimeConnectionState } from "../lib/stores/realtimeConnectionState.svelte";
 import { uiState } from "../lib/stores/uiState.svelte";
 import { type FetchCall, mockFetchRoutes } from "./helpers/fetch";
-import { mediaItem, publicDatasetStatus } from "./helpers/fixtures";
+import { mediaItem, catalogStatus } from "./helpers/fixtures";
 import { renderWithQueryClient } from "./helpers/render";
 
 const { realtimeTransport } = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ function backend(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
     "/api/library/items": libraryItems,
     "/api/settings": { workflow: "art" },
-    "/api/public-dataset/status": publicDatasetStatus(),
+    "/api/catalog/status": catalogStatus(),
     ...overrides,
   });
 }

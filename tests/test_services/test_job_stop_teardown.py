@@ -42,7 +42,7 @@ async def test_all_operation_kinds_recover_one_durable_terminal_summary(
         {"scheduled": False}
         if kind is JobKind.BACKUP
         else {"stats": {"entries": 3}}
-        if kind is JobKind.PUBLIC_DATASET_SYNC
+        if kind is JobKind.CATALOG_SYNC
         else {"done": 3, "total": 9}
     )
 

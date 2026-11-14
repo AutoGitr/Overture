@@ -17,7 +17,7 @@ test("shows and clears OvertureDB sync feedback from realtime state", async ({
 
   const syncRequest = page.waitForRequest(
     (request) =>
-      request.method() === "POST" && new URL(request.url()).pathname === "/api/public-dataset/sync",
+      request.method() === "POST" && new URL(request.url()).pathname === "/api/catalog/sync",
   );
   await syncButton.click();
   await syncRequest;
@@ -27,9 +27,9 @@ test("shows and clears OvertureDB sync feedback from realtime state", async ({
   realtime.emit({
     epoch,
     sequence: 1,
-    event: "public-dataset.sync.completed",
+    event: "catalog.sync.completed",
     data: {
-      job: { kind: "public_dataset_sync", status: "completed" },
+      job: { kind: "catalog_sync", status: "completed" },
       finished_at: "2026-01-01T00:00:00+00:00",
     },
   });

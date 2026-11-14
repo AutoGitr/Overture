@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AdoptCollectionData, AdoptCollectionErrors, AdoptCollectionResponses, AuthConfigData, AuthConfigResponses, BulkOperateCollectionsData, BulkOperateCollectionsErrors, BulkOperateCollectionsResponses, BulkOperateItemsData, BulkOperateItemsErrors, BulkOperateItemsResponses, BulkSetCollectionMonitoredData, BulkSetCollectionMonitoredErrors, BulkSetCollectionMonitoredResponses, CheckConnectivityData, CheckConnectivityErrors, CheckConnectivityResponses, ClearJobSnapshotData, ClearJobSnapshotErrors, ClearJobSnapshotResponses, CreateApiKeyData, CreateApiKeyErrors, CreateApiKeyResponses, CreateBackupData, CreateBackupErrors, CreateBackupResponses, CreateBulkAssetsScheduleData, CreateBulkAssetsScheduleErrors, CreateBulkAssetsScheduleResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, CreateSyncScheduleData, CreateSyncScheduleErrors, CreateSyncScheduleResponses, DeleteApiKeyData, DeleteApiKeyErrors, DeleteApiKeyResponses, DeleteBulkAssetsScheduleData, DeleteBulkAssetsScheduleErrors, DeleteBulkAssetsScheduleResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionGroupData, DeleteCollectionGroupErrors, DeleteCollectionGroupResponses, DeleteCollectionResponses, DeleteItemData, DeleteItemErrors, DeleteItemResponses, DeleteSyncScheduleData, DeleteSyncScheduleErrors, DeleteSyncScheduleResponses, DiscardCatalogDraftData, DiscardCatalogDraftErrors, DiscardCatalogDraftResponses, DiscardCatalogDraftsData, DiscardCatalogDraftsErrors, DiscardCatalogDraftsResponses, ExportPublicDatasetSelectionsData, ExportPublicDatasetSelectionsErrors, ExportPublicDatasetSelectionsResponses, FixAuditFindingsData, FixAuditFindingsErrors, FixAuditFindingsResponses, GetArtSourcesData, GetArtSourcesErrors, GetArtSourcesResponses, GetBackupScheduleData, GetBackupScheduleErrors, GetBackupScheduleResponses, GetCatalogCountsData, GetCatalogCountsErrors, GetCatalogCountsResponses, GetCatalogEntryData, GetCatalogEntryErrors, GetCatalogEntryRecordData, GetCatalogEntryRecordErrors, GetCatalogEntryRecordResponses, GetCatalogEntryResponses, GetCollectionArrOptionsData, GetCollectionArrOptionsErrors, GetCollectionArrOptionsResponses, GetCollectionArtSourcesData, GetCollectionArtSourcesErrors, GetCollectionArtSourcesResponses, GetCollectionCapabilitiesData, GetCollectionCapabilitiesErrors, GetCollectionCapabilitiesResponses, GetCollectionData, GetCollectionDefaultsData, GetCollectionDefaultsErrors, GetCollectionDefaultsResponses, GetCollectionErrors, GetCollectionGroupPolicyData, GetCollectionGroupPolicyErrors, GetCollectionGroupPolicyResponses, GetCollectionMissingData, GetCollectionMissingErrors, GetCollectionMissingResponses, GetCollectionRecordData, GetCollectionRecordErrors, GetCollectionRecordResponses, GetCollectionResponses, GetCollectionSourcesData, GetCollectionSourcesErrors, GetCollectionSourcesResponses, GetCollectionThemeData, GetCollectionThemeErrors, GetCollectionThemeResponses, GetFolderRootsData, GetFolderRootsErrors, GetFolderRootsResponses, GetGeneratedCollectionArtData, GetGeneratedCollectionArtErrors, GetGeneratedCollectionArtResponses, GetItemData, GetItemErrors, GetItemRecordData, GetItemRecordErrors, GetItemRecordResponses, GetItemResponses, GetJobLogData, GetJobLogErrors, GetJobLogResponses, GetJobResultsData, GetJobResultsErrors, GetJobResultsResponses, GetLibrariesData, GetLibrariesErrors, GetLibrariesResponses, GetNotificationsData, GetNotificationsErrors, GetNotificationsResponses, GetPublicDatasetCollectionIssueData, GetPublicDatasetCollectionIssueErrors, GetPublicDatasetCollectionIssueResponses, GetPublicDatasetCollectionRecordData, GetPublicDatasetCollectionRecordErrors, GetPublicDatasetCollectionRecordResponses, GetPublicDatasetItemIssueData, GetPublicDatasetItemIssueErrors, GetPublicDatasetItemIssueResponses, GetPublicDatasetRecordData, GetPublicDatasetRecordErrors, GetPublicDatasetRecordResponses, GetPublicDatasetSourcesData, GetPublicDatasetSourcesErrors, GetPublicDatasetSourcesResponses, GetPublicDatasetStatusData, GetPublicDatasetStatusErrors, GetPublicDatasetStatusResponses, GetRealtimeSnapshotData, GetRealtimeSnapshotErrors, GetRealtimeSnapshotResponses, GetRemovalOptionsData, GetRemovalOptionsErrors, GetRemovalOptionsResponses, GetSeasonsData, GetSeasonsErrors, GetSeasonsResponses, GetServerWebLinksData, GetServerWebLinksErrors, GetServerWebLinksResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetStatsData, GetStatsErrors, GetStatsResponses, GetSyncStatusData, GetSyncStatusErrors, GetSyncStatusResponses, GetTmdbArtSourcesData, GetTmdbArtSourcesErrors, GetTmdbArtSourcesResponses, GetTmdbCollectionData, GetTmdbCollectionErrors, GetTmdbCollectionResponses, GetTmdbItemData, GetTmdbItemErrors, GetTmdbItemResponses, GetTmdbPublicDatasetSourcesData, GetTmdbPublicDatasetSourcesErrors, GetTmdbPublicDatasetSourcesResponses, HealthData, HealthResponses, ListApiKeysData, ListApiKeysErrors, ListApiKeysResponses, ListBackupsData, ListBackupsErrors, ListBackupsResponses, ListBulkAssetsSchedulesData, ListBulkAssetsSchedulesErrors, ListBulkAssetsSchedulesResponses, ListCatalogEntriesData, ListCatalogEntriesErrors, ListCatalogEntriesResponses, ListCollectionFieldValuesData, ListCollectionFieldValuesErrors, ListCollectionFieldValuesResponses, ListCollectionGroupsData, ListCollectionGroupsErrors, ListCollectionGroupsResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionSetsData, ListCollectionSetsErrors, ListCollectionSetsResponses, ListCollectionsResponses, ListItemsData, ListItemsErrors, ListItemsResponses, ListRadarrTagsData, ListRadarrTagsErrors, ListRadarrTagsResponses, ListServerLibrariesData, ListServerLibrariesErrors, ListServerLibrariesResponses, ListSonarrTagsData, ListSonarrTagsErrors, ListSonarrTagsResponses, ListSyncSchedulesData, ListSyncSchedulesErrors, ListSyncSchedulesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, MatchArtData, MatchArtErrors, MatchArtResponses, MatchCollectionArtData, MatchCollectionArtErrors, MatchCollectionArtResponses, MeData, MeErrors, MeResponses, OidcCallbackData, OidcCallbackResponses, OidcLoginData, OidcLoginErrors, OidcLoginResponses, OrphanCollectionData, OrphanCollectionErrors, OrphanCollectionResponses, PlanCollectionAdoptionData, PlanCollectionAdoptionErrors, PlanCollectionAdoptionResponses, PreviewCollectionData, PreviewCollectionErrors, PreviewCollectionResponses, PreviewCollectionSetData, PreviewCollectionSetErrors, PreviewCollectionSetResponses, ProxyCollectionImageData, ProxyCollectionImageErrors, ProxyCollectionImageResponses, ProxyItemProviderArtData, ProxyItemProviderArtErrors, ProxyItemProviderArtResponses, ProxySeasonProviderArtData, ProxySeasonProviderArtErrors, ProxySeasonProviderArtResponses, ReadyData, ReadyErrors, ReadyResponses, RecommendCollectionKindData, RecommendCollectionKindErrors, RecommendCollectionKindResponses, RemoveAllArtData, RemoveAllArtErrors, RemoveAllArtResponses, RemoveAllCollectionArtData, RemoveAllCollectionArtErrors, RemoveAllCollectionArtResponses, RemoveArtData, RemoveArtErrors, RemoveArtResponses, RemoveCollectionArtData, RemoveCollectionArtErrors, RemoveCollectionArtResponses, RemoveCollectionThemeData, RemoveCollectionThemeErrors, RemoveCollectionThemeResponses, RemoveThemeData, RemoveThemeErrors, RemoveThemeResponses, RenameAssetsData, RenameAssetsErrors, RenameAssetsResponses, RenameCollectionGroupData, RenameCollectionGroupErrors, RenameCollectionGroupResponses, RequestCollectionMissingData, RequestCollectionMissingErrors, RequestCollectionMissingResponses, RunBulkAssetsScheduleData, RunBulkAssetsScheduleErrors, RunBulkAssetsScheduleResponses, RunSyncData, RunSyncErrors, RunSyncResponses, RunSyncScheduleData, RunSyncScheduleErrors, RunSyncScheduleResponses, SaveArtData, SaveArtErrors, SaveArtResponses, SaveCatalogDraftData, SaveCatalogDraftErrors, SaveCatalogDraftResponses, SaveCollectionArtData, SaveCollectionArtErrors, SaveCollectionArtResponses, SaveCollectionGroupPolicyData, SaveCollectionGroupPolicyErrors, SaveCollectionGroupPolicyResponses, SaveCollectionRuleData, SaveCollectionRuleErrors, SaveCollectionRuleResponses, SaveTmdbArtData, SaveTmdbArtErrors, SaveTmdbArtResponses, SearchMdblistListsData, SearchMdblistListsErrors, SearchMdblistListsResponses, SearchTmdbData, SearchTmdbErrors, SearchTmdbPeopleData, SearchTmdbPeopleErrors, SearchTmdbPeopleResponses, SearchTmdbResponses, SearchYoutubeData, SearchYoutubeErrors, SearchYoutubeResponses, SelectThemeData, SelectThemeErrors, SelectThemeResponses, SelectTmdbThemeData, SelectTmdbThemeErrors, SelectTmdbThemeResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, ServeCollectionLocalImageData, ServeCollectionLocalImageErrors, ServeCollectionLocalImageResponses, ServeLocalImageData, ServeLocalImageErrors, ServeLocalImageResponses, ServeLocalSeasonImageData, ServeLocalSeasonImageErrors, ServeLocalSeasonImageResponses, SetCollectionMembersData, SetCollectionMembersErrors, SetCollectionMembersResponses, SetCollectionMonitoredData, SetCollectionMonitoredErrors, SetCollectionMonitoredResponses, SetCollectionThemeData, SetCollectionThemeErrors, SetCollectionThemeResponses, SetMonitoredData, SetMonitoredErrors, SetMonitoredResponses, SetPublicDatasetEnabledData, SetPublicDatasetEnabledErrors, SetPublicDatasetEnabledResponses, StartBulkAssetsData, StartBulkAssetsErrors, StartBulkAssetsResponses, StartScanData, StartScanErrors, StartScanResponses, StartServerAuditData, StartServerAuditErrors, StartServerAuditResponses, StopAuditFixData, StopAuditFixErrors, StopAuditFixResponses, StopBulkAssetsData, StopBulkAssetsErrors, StopBulkAssetsResponses, StopScanData, StopScanErrors, StopScanResponses, StopServerAuditData, StopServerAuditErrors, StopServerAuditResponses, StopSyncData, StopSyncErrors, StopSyncResponses, SyncPublicDatasetNowData, SyncPublicDatasetNowErrors, SyncPublicDatasetNowResponses, UpdateBackupScheduleData, UpdateBackupScheduleErrors, UpdateBackupScheduleResponses, UpdateBulkAssetsScheduleData, UpdateBulkAssetsScheduleErrors, UpdateBulkAssetsScheduleResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateNotificationsData, UpdateNotificationsErrors, UpdateNotificationsResponses, UpdateSettingsData, UpdateSettingsErrors, UpdateSettingsResponses, UpdateSyncScheduleData, UpdateSyncScheduleErrors, UpdateSyncScheduleResponses, UploadArtData, UploadArtErrors, UploadArtResponses } from './types.gen';
+import type { AdoptCollectionData, AdoptCollectionErrors, AdoptCollectionResponses, AuthConfigData, AuthConfigResponses, BulkOperateCollectionsData, BulkOperateCollectionsErrors, BulkOperateCollectionsResponses, BulkOperateItemsData, BulkOperateItemsErrors, BulkOperateItemsResponses, BulkSetCollectionMonitoredData, BulkSetCollectionMonitoredErrors, BulkSetCollectionMonitoredResponses, CheckConnectivityData, CheckConnectivityErrors, CheckConnectivityResponses, ClearJobSnapshotData, ClearJobSnapshotErrors, ClearJobSnapshotResponses, CreateApiKeyData, CreateApiKeyErrors, CreateApiKeyResponses, CreateBackupData, CreateBackupErrors, CreateBackupResponses, CreateBulkAssetsScheduleData, CreateBulkAssetsScheduleErrors, CreateBulkAssetsScheduleResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, CreateSyncScheduleData, CreateSyncScheduleErrors, CreateSyncScheduleResponses, DeleteApiKeyData, DeleteApiKeyErrors, DeleteApiKeyResponses, DeleteBulkAssetsScheduleData, DeleteBulkAssetsScheduleErrors, DeleteBulkAssetsScheduleResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionGroupData, DeleteCollectionGroupErrors, DeleteCollectionGroupResponses, DeleteCollectionResponses, DeleteItemData, DeleteItemErrors, DeleteItemResponses, DeleteSyncScheduleData, DeleteSyncScheduleErrors, DeleteSyncScheduleResponses, DiscardCatalogDraftData, DiscardCatalogDraftErrors, DiscardCatalogDraftResponses, DiscardCatalogDraftsData, DiscardCatalogDraftsErrors, DiscardCatalogDraftsResponses, ExportCatalogSelectionsData, ExportCatalogSelectionsErrors, ExportCatalogSelectionsResponses, FixAuditFindingsData, FixAuditFindingsErrors, FixAuditFindingsResponses, GetArtSourcesData, GetArtSourcesErrors, GetArtSourcesResponses, GetBackupScheduleData, GetBackupScheduleErrors, GetBackupScheduleResponses, GetCatalogCollectionIssueData, GetCatalogCollectionIssueErrors, GetCatalogCollectionIssueResponses, GetCatalogCollectionRecordData, GetCatalogCollectionRecordErrors, GetCatalogCollectionRecordResponses, GetCatalogCountsData, GetCatalogCountsErrors, GetCatalogCountsResponses, GetCatalogEntryData, GetCatalogEntryErrors, GetCatalogEntryRecordData, GetCatalogEntryRecordErrors, GetCatalogEntryRecordResponses, GetCatalogEntryResponses, GetCatalogItemIssueData, GetCatalogItemIssueErrors, GetCatalogItemIssueResponses, GetCatalogRecordData, GetCatalogRecordErrors, GetCatalogRecordResponses, GetCatalogSourcesData, GetCatalogSourcesErrors, GetCatalogSourcesResponses, GetCatalogStatusData, GetCatalogStatusErrors, GetCatalogStatusResponses, GetCollectionArrOptionsData, GetCollectionArrOptionsErrors, GetCollectionArrOptionsResponses, GetCollectionArtSourcesData, GetCollectionArtSourcesErrors, GetCollectionArtSourcesResponses, GetCollectionCapabilitiesData, GetCollectionCapabilitiesErrors, GetCollectionCapabilitiesResponses, GetCollectionData, GetCollectionDefaultsData, GetCollectionDefaultsErrors, GetCollectionDefaultsResponses, GetCollectionErrors, GetCollectionGroupPolicyData, GetCollectionGroupPolicyErrors, GetCollectionGroupPolicyResponses, GetCollectionMissingData, GetCollectionMissingErrors, GetCollectionMissingResponses, GetCollectionRecordData, GetCollectionRecordErrors, GetCollectionRecordResponses, GetCollectionResponses, GetCollectionThemeData, GetCollectionThemeErrors, GetCollectionThemeResponses, GetFolderRootsData, GetFolderRootsErrors, GetFolderRootsResponses, GetGeneratedCollectionArtData, GetGeneratedCollectionArtErrors, GetGeneratedCollectionArtResponses, GetItemData, GetItemErrors, GetItemRecordData, GetItemRecordErrors, GetItemRecordResponses, GetItemResponses, GetJobLogData, GetJobLogErrors, GetJobLogResponses, GetJobResultsData, GetJobResultsErrors, GetJobResultsResponses, GetLibrariesData, GetLibrariesErrors, GetLibrariesResponses, GetNotificationsData, GetNotificationsErrors, GetNotificationsResponses, GetRealtimeSnapshotData, GetRealtimeSnapshotErrors, GetRealtimeSnapshotResponses, GetRemovalOptionsData, GetRemovalOptionsErrors, GetRemovalOptionsResponses, GetSeasonsData, GetSeasonsErrors, GetSeasonsResponses, GetServerWebLinksData, GetServerWebLinksErrors, GetServerWebLinksResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetStatsData, GetStatsErrors, GetStatsResponses, GetSyncStatusData, GetSyncStatusErrors, GetSyncStatusResponses, GetTmdbArtSourcesData, GetTmdbArtSourcesErrors, GetTmdbArtSourcesResponses, GetTmdbCatalogSourcesData, GetTmdbCatalogSourcesErrors, GetTmdbCatalogSourcesResponses, GetTmdbCollectionData, GetTmdbCollectionErrors, GetTmdbCollectionResponses, GetTmdbItemData, GetTmdbItemErrors, GetTmdbItemResponses, HealthData, HealthResponses, ListApiKeysData, ListApiKeysErrors, ListApiKeysResponses, ListBackupsData, ListBackupsErrors, ListBackupsResponses, ListBulkAssetsSchedulesData, ListBulkAssetsSchedulesErrors, ListBulkAssetsSchedulesResponses, ListCatalogEntriesData, ListCatalogEntriesErrors, ListCatalogEntriesResponses, ListCollectionFieldValuesData, ListCollectionFieldValuesErrors, ListCollectionFieldValuesResponses, ListCollectionGroupsData, ListCollectionGroupsErrors, ListCollectionGroupsResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionSetsData, ListCollectionSetsErrors, ListCollectionSetsResponses, ListCollectionsResponses, ListItemsData, ListItemsErrors, ListItemsResponses, ListRadarrTagsData, ListRadarrTagsErrors, ListRadarrTagsResponses, ListServerLibrariesData, ListServerLibrariesErrors, ListServerLibrariesResponses, ListSonarrTagsData, ListSonarrTagsErrors, ListSonarrTagsResponses, ListSyncSchedulesData, ListSyncSchedulesErrors, ListSyncSchedulesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, MatchArtData, MatchArtErrors, MatchArtResponses, MatchCollectionArtData, MatchCollectionArtErrors, MatchCollectionArtResponses, MeData, MeErrors, MeResponses, OidcCallbackData, OidcCallbackResponses, OidcLoginData, OidcLoginErrors, OidcLoginResponses, OrphanCollectionData, OrphanCollectionErrors, OrphanCollectionResponses, PlanCollectionAdoptionData, PlanCollectionAdoptionErrors, PlanCollectionAdoptionResponses, PreviewCollectionData, PreviewCollectionErrors, PreviewCollectionResponses, PreviewCollectionSetData, PreviewCollectionSetErrors, PreviewCollectionSetResponses, ProxyCollectionImageData, ProxyCollectionImageErrors, ProxyCollectionImageResponses, ProxyItemProviderArtData, ProxyItemProviderArtErrors, ProxyItemProviderArtResponses, ProxySeasonProviderArtData, ProxySeasonProviderArtErrors, ProxySeasonProviderArtResponses, ReadyData, ReadyErrors, ReadyResponses, RecommendCollectionKindData, RecommendCollectionKindErrors, RecommendCollectionKindResponses, RemoveAllArtData, RemoveAllArtErrors, RemoveAllArtResponses, RemoveAllCollectionArtData, RemoveAllCollectionArtErrors, RemoveAllCollectionArtResponses, RemoveArtData, RemoveArtErrors, RemoveArtResponses, RemoveCollectionArtData, RemoveCollectionArtErrors, RemoveCollectionArtResponses, RemoveCollectionThemeData, RemoveCollectionThemeErrors, RemoveCollectionThemeResponses, RemoveThemeData, RemoveThemeErrors, RemoveThemeResponses, RenameAssetsData, RenameAssetsErrors, RenameAssetsResponses, RenameCollectionGroupData, RenameCollectionGroupErrors, RenameCollectionGroupResponses, RequestCollectionMissingData, RequestCollectionMissingErrors, RequestCollectionMissingResponses, RunBulkAssetsScheduleData, RunBulkAssetsScheduleErrors, RunBulkAssetsScheduleResponses, RunSyncData, RunSyncErrors, RunSyncResponses, RunSyncScheduleData, RunSyncScheduleErrors, RunSyncScheduleResponses, SaveArtData, SaveArtErrors, SaveArtResponses, SaveCatalogDraftData, SaveCatalogDraftErrors, SaveCatalogDraftResponses, SaveCollectionArtData, SaveCollectionArtErrors, SaveCollectionArtResponses, SaveCollectionGroupPolicyData, SaveCollectionGroupPolicyErrors, SaveCollectionGroupPolicyResponses, SaveCollectionRuleData, SaveCollectionRuleErrors, SaveCollectionRuleResponses, SaveTmdbArtData, SaveTmdbArtErrors, SaveTmdbArtResponses, SearchMdblistListsData, SearchMdblistListsErrors, SearchMdblistListsResponses, SearchTmdbData, SearchTmdbErrors, SearchTmdbPeopleData, SearchTmdbPeopleErrors, SearchTmdbPeopleResponses, SearchTmdbResponses, SearchYoutubeData, SearchYoutubeErrors, SearchYoutubeResponses, SelectThemeData, SelectThemeErrors, SelectThemeResponses, SelectTmdbThemeData, SelectTmdbThemeErrors, SelectTmdbThemeResponses, SendTestNotificationData, SendTestNotificationErrors, SendTestNotificationResponses, ServeCollectionLocalImageData, ServeCollectionLocalImageErrors, ServeCollectionLocalImageResponses, ServeLocalImageData, ServeLocalImageErrors, ServeLocalImageResponses, ServeLocalSeasonImageData, ServeLocalSeasonImageErrors, ServeLocalSeasonImageResponses, SetCatalogEnabledData, SetCatalogEnabledErrors, SetCatalogEnabledResponses, SetCollectionMembersData, SetCollectionMembersErrors, SetCollectionMembersResponses, SetCollectionMonitoredData, SetCollectionMonitoredErrors, SetCollectionMonitoredResponses, SetCollectionThemeData, SetCollectionThemeErrors, SetCollectionThemeResponses, SetMonitoredData, SetMonitoredErrors, SetMonitoredResponses, StartBulkAssetsData, StartBulkAssetsErrors, StartBulkAssetsResponses, StartScanData, StartScanErrors, StartScanResponses, StartServerAuditData, StartServerAuditErrors, StartServerAuditResponses, StopAuditFixData, StopAuditFixErrors, StopAuditFixResponses, StopBulkAssetsData, StopBulkAssetsErrors, StopBulkAssetsResponses, StopScanData, StopScanErrors, StopScanResponses, StopServerAuditData, StopServerAuditErrors, StopServerAuditResponses, StopSyncData, StopSyncErrors, StopSyncResponses, SyncCatalogNowData, SyncCatalogNowErrors, SyncCatalogNowResponses, UpdateBackupScheduleData, UpdateBackupScheduleErrors, UpdateBackupScheduleResponses, UpdateBulkAssetsScheduleData, UpdateBulkAssetsScheduleErrors, UpdateBulkAssetsScheduleResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateNotificationsData, UpdateNotificationsErrors, UpdateNotificationsResponses, UpdateSettingsData, UpdateSettingsErrors, UpdateSettingsResponses, UpdateSyncScheduleData, UpdateSyncScheduleErrors, UpdateSyncScheduleResponses, UploadArtData, UploadArtErrors, UploadArtResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -49,50 +49,6 @@ export const uploadArt = <ThrowOnError extends boolean = false>(options: Options
         ...options.headers
     }
 });
-
-/**
- * Remove All Art
- *
- * Remove every art slot of an item and its seasons.
- */
-export const removeAllArt = <ThrowOnError extends boolean = false>(options: Options<RemoveAllArtData, ThrowOnError>): RequestResult<RemoveAllArtResponses, RemoveAllArtErrors, ThrowOnError> => (options.client ?? client).delete<RemoveAllArtResponses, RemoveAllArtErrors, ThrowOnError>({ url: '/api/art/{item_id}', ...options });
-
-/**
- * Remove Art
- *
- * Forget a slot's art, delete its local file or the server's copy.
- */
-export const removeArt = <ThrowOnError extends boolean = false>(options: Options<RemoveArtData, ThrowOnError>): RequestResult<RemoveArtResponses, RemoveArtErrors, ThrowOnError> => (options.client ?? client).delete<RemoveArtResponses, RemoveArtErrors, ThrowOnError>({ url: '/api/art/{item_id}/{art_type}', ...options });
-
-/**
- * Save Art
- *
- * Record the chosen artwork for one slot and enqueue its download.
- *
- * An item without a local folder only records the choice.
- */
-export const saveArt = <ThrowOnError extends boolean = false>(options: Options<SaveArtData, ThrowOnError>): RequestResult<SaveArtResponses, SaveArtErrors, ThrowOnError> => (options.client ?? client).put<SaveArtResponses, SaveArtErrors, ThrowOnError>({
-    url: '/api/art/{item_id}/{art_type}',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Match Art
- *
- * Run pHash match for one slot.
- */
-export const matchArt = <ThrowOnError extends boolean = false>(options: Options<MatchArtData, ThrowOnError>): RequestResult<MatchArtResponses, MatchArtErrors, ThrowOnError> => (options.client ?? client).post<MatchArtResponses, MatchArtErrors, ThrowOnError>({ url: '/api/art/{item_id}/{art_type}/match', ...options });
-
-/**
- * Get Art Sources
- *
- * Fetch art options from TMDB and/or the configured media server.
- */
-export const getArtSources = <ThrowOnError extends boolean = false>(options: Options<GetArtSourcesData, ThrowOnError>): RequestResult<GetArtSourcesResponses, GetArtSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetArtSourcesResponses, GetArtSourcesErrors, ThrowOnError>({ url: '/api/art/{item_id}/{art_type}/sources', ...options });
 
 /**
  * Rename Assets
@@ -317,6 +273,139 @@ export const stopBulkAssets = <ThrowOnError extends boolean = false>(options?: O
         ...options?.headers
     }
 });
+
+/**
+ * List Catalog Entries
+ *
+ * Return every catalog entry of a kind, with what the library holds of it.
+ */
+export const listCatalogEntries = <ThrowOnError extends boolean = false>(options: Options<ListCatalogEntriesData, ThrowOnError>): RequestResult<ListCatalogEntriesResponses, ListCatalogEntriesErrors, ThrowOnError> => (options.client ?? client).get<ListCatalogEntriesResponses, ListCatalogEntriesErrors, ThrowOnError>({ url: '/api/catalog/catalog', ...options });
+
+/**
+ * Get Catalog Counts
+ *
+ * Return catalog and draft counts without reading every entry.
+ */
+export const getCatalogCounts = <ThrowOnError extends boolean = false>(options?: Options<GetCatalogCountsData, ThrowOnError>): RequestResult<GetCatalogCountsResponses, GetCatalogCountsErrors, ThrowOnError> => (options?.client ?? client).get<GetCatalogCountsResponses, GetCatalogCountsErrors, ThrowOnError>({ url: '/api/catalog/catalog/counts', ...options });
+
+/**
+ * Discard Catalog Drafts
+ *
+ * Discard the local drafts of the named entries.
+ */
+export const discardCatalogDrafts = <ThrowOnError extends boolean = false>(options: Options<DiscardCatalogDraftsData, ThrowOnError>): RequestResult<DiscardCatalogDraftsResponses, DiscardCatalogDraftsErrors, ThrowOnError> => (options.client ?? client).delete<DiscardCatalogDraftsResponses, DiscardCatalogDraftsErrors, ThrowOnError>({
+    url: '/api/catalog/catalog/{media_type}/drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Catalog Entry
+ *
+ * Return one catalog entry with its local draft.
+ */
+export const getCatalogEntry = <ThrowOnError extends boolean = false>(options: Options<GetCatalogEntryData, ThrowOnError>): RequestResult<GetCatalogEntryResponses, GetCatalogEntryErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogEntryResponses, GetCatalogEntryErrors, ThrowOnError>({ url: '/api/catalog/catalog/{media_type}/{entry_key}', ...options });
+
+/**
+ * Discard Catalog Draft
+ *
+ * Discard an entry's local draft.
+ */
+export const discardCatalogDraft = <ThrowOnError extends boolean = false>(options: Options<DiscardCatalogDraftData, ThrowOnError>): RequestResult<DiscardCatalogDraftResponses, DiscardCatalogDraftErrors, ThrowOnError> => (options.client ?? client).delete<DiscardCatalogDraftResponses, DiscardCatalogDraftErrors, ThrowOnError>({ url: '/api/catalog/catalog/{media_type}/{entry_key}/draft', ...options });
+
+/**
+ * Save Catalog Draft
+ *
+ * Change an entry's local draft, to contribute later.
+ */
+export const saveCatalogDraft = <ThrowOnError extends boolean = false>(options: Options<SaveCatalogDraftData, ThrowOnError>): RequestResult<SaveCatalogDraftResponses, SaveCatalogDraftErrors, ThrowOnError> => (options.client ?? client).put<SaveCatalogDraftResponses, SaveCatalogDraftErrors, ThrowOnError>({
+    url: '/api/catalog/catalog/{media_type}/{entry_key}/draft',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Catalog Entry Record
+ *
+ * Return the catalog record an entry name identifies.
+ */
+export const getCatalogEntryRecord = <ThrowOnError extends boolean = false>(options: Options<GetCatalogEntryRecordData, ThrowOnError>): RequestResult<GetCatalogEntryRecordResponses, GetCatalogEntryRecordErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogEntryRecordResponses, GetCatalogEntryRecordErrors, ThrowOnError>({ url: '/api/catalog/catalog/{media_type}/{entry_key}/record', ...options });
+
+/**
+ * Get Catalog Collection Issue
+ *
+ * Return a prefilled issue contributing a collection's art and theme.
+ */
+export const getCatalogCollectionIssue = <ThrowOnError extends boolean = false>(options: Options<GetCatalogCollectionIssueData, ThrowOnError>): RequestResult<GetCatalogCollectionIssueResponses, GetCatalogCollectionIssueErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogCollectionIssueResponses, GetCatalogCollectionIssueErrors, ThrowOnError>({ url: '/api/catalog/collections/{collection_id}/issue', ...options });
+
+/**
+ * Get Catalog Collection Record
+ *
+ * Return the catalog record of a library collection.
+ */
+export const getCatalogCollectionRecord = <ThrowOnError extends boolean = false>(options: Options<GetCatalogCollectionRecordData, ThrowOnError>): RequestResult<GetCatalogCollectionRecordResponses, GetCatalogCollectionRecordErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogCollectionRecordResponses, GetCatalogCollectionRecordErrors, ThrowOnError>({ url: '/api/catalog/collections/{collection_id}/record', ...options });
+
+/**
+ * Set Catalog Enabled
+ *
+ * Turn the catalog on or off.
+ */
+export const setCatalogEnabled = <ThrowOnError extends boolean = false>(options: Options<SetCatalogEnabledData, ThrowOnError>): RequestResult<SetCatalogEnabledResponses, SetCatalogEnabledErrors, ThrowOnError> => (options.client ?? client).put<SetCatalogEnabledResponses, SetCatalogEnabledErrors, ThrowOnError>({
+    url: '/api/catalog/enabled',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Export Catalog Selections
+ *
+ * Download saved selections as an archive for an OvertureDB contribution.
+ */
+export const exportCatalogSelections = <ThrowOnError extends boolean = false>(options?: Options<ExportCatalogSelectionsData, ThrowOnError>): RequestResult<ExportCatalogSelectionsResponses, ExportCatalogSelectionsErrors, ThrowOnError> => (options?.client ?? client).get<ExportCatalogSelectionsResponses, ExportCatalogSelectionsErrors, ThrowOnError>({ url: '/api/catalog/export', ...options });
+
+/**
+ * Get Catalog Item Issue
+ *
+ * Return a prefilled issue contributing an item's saved selections.
+ */
+export const getCatalogItemIssue = <ThrowOnError extends boolean = false>(options: Options<GetCatalogItemIssueData, ThrowOnError>): RequestResult<GetCatalogItemIssueResponses, GetCatalogItemIssueErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogItemIssueResponses, GetCatalogItemIssueErrors, ThrowOnError>({ url: '/api/catalog/items/{item_id}/issue', ...options });
+
+/**
+ * Get Catalog Record
+ *
+ * Return catalog record.
+ */
+export const getCatalogRecord = <ThrowOnError extends boolean = false>(options: Options<GetCatalogRecordData, ThrowOnError>): RequestResult<GetCatalogRecordResponses, GetCatalogRecordErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogRecordResponses, GetCatalogRecordErrors, ThrowOnError>({ url: '/api/catalog/items/{item_id}/record', ...options });
+
+/**
+ * Get Catalog Sources
+ *
+ * Return catalog sources, including a normal not-found result.
+ */
+export const getCatalogSources = <ThrowOnError extends boolean = false>(options: Options<GetCatalogSourcesData, ThrowOnError>): RequestResult<GetCatalogSourcesResponses, GetCatalogSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogSourcesResponses, GetCatalogSourcesErrors, ThrowOnError>({ url: '/api/catalog/items/{item_id}/sources', ...options });
+
+/**
+ * Get Catalog Status
+ *
+ * Return catalog status.
+ */
+export const getCatalogStatus = <ThrowOnError extends boolean = false>(options?: Options<GetCatalogStatusData, ThrowOnError>): RequestResult<GetCatalogStatusResponses, GetCatalogStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetCatalogStatusResponses, GetCatalogStatusErrors, ThrowOnError>({ url: '/api/catalog/status', ...options });
+
+/**
+ * Sync Catalog Now
+ *
+ * Sync catalog now.
+ */
+export const syncCatalogNow = <ThrowOnError extends boolean = false>(options?: Options<SyncCatalogNowData, ThrowOnError>): RequestResult<SyncCatalogNowResponses, SyncCatalogNowErrors, ThrowOnError> => (options?.client ?? client).post<SyncCatalogNowResponses, SyncCatalogNowErrors, ThrowOnError>({ url: '/api/catalog/sync', ...options });
 
 /**
  * List Collections
@@ -601,7 +690,7 @@ export const saveCollectionArt = <ThrowOnError extends boolean = false>(options:
 /**
  * Get Generated Collection Art
  *
- * Return the art Overture would draw for the collection in *style*.
+ * Return the art Overture would generate for the collection in *style*.
  */
 export const getGeneratedCollectionArt = <ThrowOnError extends boolean = false>(options: Options<GetGeneratedCollectionArtData, ThrowOnError>): RequestResult<GetGeneratedCollectionArtResponses, GetGeneratedCollectionArtErrors, ThrowOnError> => (options.client ?? client).get<GetGeneratedCollectionArtResponses, GetGeneratedCollectionArtErrors, ThrowOnError>({ url: '/api/collections/{collection_id}/art/{art_type}/generated/{style}', ...options });
 
@@ -711,13 +800,6 @@ export const saveCollectionRule = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Get Collection Sources
- *
- * Return the matched catalog's collection theme candidates.
- */
-export const getCollectionSources = <ThrowOnError extends boolean = false>(options: Options<GetCollectionSourcesData, ThrowOnError>): RequestResult<GetCollectionSourcesResponses, GetCollectionSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetCollectionSourcesResponses, GetCollectionSourcesErrors, ThrowOnError>({ url: '/api/collections/{collection_id}/sources', ...options });
-
-/**
  * Remove Collection Theme
  *
  * Forget a collection's theme, delete the server's copy or its file.
@@ -816,6 +898,50 @@ export const deleteItem = <ThrowOnError extends boolean = false>(options: Option
 export const getItem = <ThrowOnError extends boolean = false>(options: Options<GetItemData, ThrowOnError>): RequestResult<GetItemResponses, GetItemErrors, ThrowOnError> => (options.client ?? client).get<GetItemResponses, GetItemErrors, ThrowOnError>({ url: '/api/library/items/{item_id}', ...options });
 
 /**
+ * Remove All Art
+ *
+ * Remove every art slot of an item and its seasons.
+ */
+export const removeAllArt = <ThrowOnError extends boolean = false>(options: Options<RemoveAllArtData, ThrowOnError>): RequestResult<RemoveAllArtResponses, RemoveAllArtErrors, ThrowOnError> => (options.client ?? client).delete<RemoveAllArtResponses, RemoveAllArtErrors, ThrowOnError>({ url: '/api/library/items/{item_id}/art', ...options });
+
+/**
+ * Remove Art
+ *
+ * Forget a slot's art, delete its local file or the server's copy.
+ */
+export const removeArt = <ThrowOnError extends boolean = false>(options: Options<RemoveArtData, ThrowOnError>): RequestResult<RemoveArtResponses, RemoveArtErrors, ThrowOnError> => (options.client ?? client).delete<RemoveArtResponses, RemoveArtErrors, ThrowOnError>({ url: '/api/library/items/{item_id}/art/{art_type}', ...options });
+
+/**
+ * Save Art
+ *
+ * Record the chosen artwork for one slot and enqueue its download.
+ *
+ * An item without a local folder only records the choice.
+ */
+export const saveArt = <ThrowOnError extends boolean = false>(options: Options<SaveArtData, ThrowOnError>): RequestResult<SaveArtResponses, SaveArtErrors, ThrowOnError> => (options.client ?? client).put<SaveArtResponses, SaveArtErrors, ThrowOnError>({
+    url: '/api/library/items/{item_id}/art/{art_type}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Match Art
+ *
+ * Run pHash match for one slot.
+ */
+export const matchArt = <ThrowOnError extends boolean = false>(options: Options<MatchArtData, ThrowOnError>): RequestResult<MatchArtResponses, MatchArtErrors, ThrowOnError> => (options.client ?? client).post<MatchArtResponses, MatchArtErrors, ThrowOnError>({ url: '/api/library/items/{item_id}/art/{art_type}/match', ...options });
+
+/**
+ * Get Art Sources
+ *
+ * Fetch art options from TMDB and/or the configured media server.
+ */
+export const getArtSources = <ThrowOnError extends boolean = false>(options: Options<GetArtSourcesData, ThrowOnError>): RequestResult<GetArtSourcesResponses, GetArtSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetArtSourcesResponses, GetArtSourcesErrors, ThrowOnError>({ url: '/api/library/items/{item_id}/art/{art_type}/sources', ...options });
+
+/**
  * Serve Local Image
  *
  * Serve a locally stored poster or background for a movie or show.
@@ -856,6 +982,29 @@ export const getItemRecord = <ThrowOnError extends boolean = false>(options: Opt
  * Get season list for a show.
  */
 export const getSeasons = <ThrowOnError extends boolean = false>(options: Options<GetSeasonsData, ThrowOnError>): RequestResult<GetSeasonsResponses, GetSeasonsErrors, ThrowOnError> => (options.client ?? client).get<GetSeasonsResponses, GetSeasonsErrors, ThrowOnError>({ url: '/api/library/items/{item_id}/seasons', ...options });
+
+/**
+ * Remove Theme
+ *
+ * Forget an item's theme, delete its local file or the server's copy.
+ */
+export const removeTheme = <ThrowOnError extends boolean = false>(options: Options<RemoveThemeData, ThrowOnError>): RequestResult<RemoveThemeResponses, RemoveThemeErrors, ThrowOnError> => (options.client ?? client).delete<RemoveThemeResponses, RemoveThemeErrors, ThrowOnError>({ url: '/api/library/items/{item_id}/theme', ...options });
+
+/**
+ * Select Theme
+ *
+ * Select an item's theme and download it.
+ *
+ * An item without a local folder only records the choice.
+ */
+export const selectTheme = <ThrowOnError extends boolean = false>(options: Options<SelectThemeData, ThrowOnError>): RequestResult<SelectThemeResponses, SelectThemeErrors, ThrowOnError> => (options.client ?? client).put<SelectThemeResponses, SelectThemeErrors, ThrowOnError>({
+    url: '/api/library/items/{item_id}/theme',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Get Libraries
@@ -919,139 +1068,6 @@ export const updateNotifications = <ThrowOnError extends boolean = false>(option
  * Send a test notification to ``NOTIFY_URL``.
  */
 export const sendTestNotification = <ThrowOnError extends boolean = false>(options?: Options<SendTestNotificationData, ThrowOnError>): RequestResult<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError> => (options?.client ?? client).post<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError>({ url: '/api/notifications/test', ...options });
-
-/**
- * List Catalog Entries
- *
- * Return every catalog entry of a kind, with what the library holds of it.
- */
-export const listCatalogEntries = <ThrowOnError extends boolean = false>(options: Options<ListCatalogEntriesData, ThrowOnError>): RequestResult<ListCatalogEntriesResponses, ListCatalogEntriesErrors, ThrowOnError> => (options.client ?? client).get<ListCatalogEntriesResponses, ListCatalogEntriesErrors, ThrowOnError>({ url: '/api/public-dataset/catalog', ...options });
-
-/**
- * Get Catalog Counts
- *
- * Return catalog and draft counts without reading every entry.
- */
-export const getCatalogCounts = <ThrowOnError extends boolean = false>(options?: Options<GetCatalogCountsData, ThrowOnError>): RequestResult<GetCatalogCountsResponses, GetCatalogCountsErrors, ThrowOnError> => (options?.client ?? client).get<GetCatalogCountsResponses, GetCatalogCountsErrors, ThrowOnError>({ url: '/api/public-dataset/catalog/counts', ...options });
-
-/**
- * Discard Catalog Drafts
- *
- * Discard the local drafts of the named entries.
- */
-export const discardCatalogDrafts = <ThrowOnError extends boolean = false>(options: Options<DiscardCatalogDraftsData, ThrowOnError>): RequestResult<DiscardCatalogDraftsResponses, DiscardCatalogDraftsErrors, ThrowOnError> => (options.client ?? client).delete<DiscardCatalogDraftsResponses, DiscardCatalogDraftsErrors, ThrowOnError>({
-    url: '/api/public-dataset/catalog/{media_type}/drafts',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Get Catalog Entry
- *
- * Return one catalog entry with its local draft.
- */
-export const getCatalogEntry = <ThrowOnError extends boolean = false>(options: Options<GetCatalogEntryData, ThrowOnError>): RequestResult<GetCatalogEntryResponses, GetCatalogEntryErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogEntryResponses, GetCatalogEntryErrors, ThrowOnError>({ url: '/api/public-dataset/catalog/{media_type}/{entry_key}', ...options });
-
-/**
- * Discard Catalog Draft
- *
- * Discard an entry's local draft.
- */
-export const discardCatalogDraft = <ThrowOnError extends boolean = false>(options: Options<DiscardCatalogDraftData, ThrowOnError>): RequestResult<DiscardCatalogDraftResponses, DiscardCatalogDraftErrors, ThrowOnError> => (options.client ?? client).delete<DiscardCatalogDraftResponses, DiscardCatalogDraftErrors, ThrowOnError>({ url: '/api/public-dataset/catalog/{media_type}/{entry_key}/draft', ...options });
-
-/**
- * Save Catalog Draft
- *
- * Change an entry's local draft, to contribute later.
- */
-export const saveCatalogDraft = <ThrowOnError extends boolean = false>(options: Options<SaveCatalogDraftData, ThrowOnError>): RequestResult<SaveCatalogDraftResponses, SaveCatalogDraftErrors, ThrowOnError> => (options.client ?? client).put<SaveCatalogDraftResponses, SaveCatalogDraftErrors, ThrowOnError>({
-    url: '/api/public-dataset/catalog/{media_type}/{entry_key}/draft',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Get Catalog Entry Record
- *
- * Return the catalog record an entry name identifies.
- */
-export const getCatalogEntryRecord = <ThrowOnError extends boolean = false>(options: Options<GetCatalogEntryRecordData, ThrowOnError>): RequestResult<GetCatalogEntryRecordResponses, GetCatalogEntryRecordErrors, ThrowOnError> => (options.client ?? client).get<GetCatalogEntryRecordResponses, GetCatalogEntryRecordErrors, ThrowOnError>({ url: '/api/public-dataset/catalog/{media_type}/{entry_key}/record', ...options });
-
-/**
- * Get Public Dataset Collection Issue
- *
- * Return a prefilled issue contributing a collection's art and theme.
- */
-export const getPublicDatasetCollectionIssue = <ThrowOnError extends boolean = false>(options: Options<GetPublicDatasetCollectionIssueData, ThrowOnError>): RequestResult<GetPublicDatasetCollectionIssueResponses, GetPublicDatasetCollectionIssueErrors, ThrowOnError> => (options.client ?? client).get<GetPublicDatasetCollectionIssueResponses, GetPublicDatasetCollectionIssueErrors, ThrowOnError>({ url: '/api/public-dataset/collections/{collection_id}/issue', ...options });
-
-/**
- * Get Public Dataset Collection Record
- *
- * Return the catalog record of a library collection.
- */
-export const getPublicDatasetCollectionRecord = <ThrowOnError extends boolean = false>(options: Options<GetPublicDatasetCollectionRecordData, ThrowOnError>): RequestResult<GetPublicDatasetCollectionRecordResponses, GetPublicDatasetCollectionRecordErrors, ThrowOnError> => (options.client ?? client).get<GetPublicDatasetCollectionRecordResponses, GetPublicDatasetCollectionRecordErrors, ThrowOnError>({ url: '/api/public-dataset/collections/{collection_id}/record', ...options });
-
-/**
- * Set Public Dataset Enabled
- *
- * Turn the public dataset on or off.
- */
-export const setPublicDatasetEnabled = <ThrowOnError extends boolean = false>(options: Options<SetPublicDatasetEnabledData, ThrowOnError>): RequestResult<SetPublicDatasetEnabledResponses, SetPublicDatasetEnabledErrors, ThrowOnError> => (options.client ?? client).put<SetPublicDatasetEnabledResponses, SetPublicDatasetEnabledErrors, ThrowOnError>({
-    url: '/api/public-dataset/enabled',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Export Public Dataset Selections
- *
- * Download saved selections as an archive for an OvertureDB contribution.
- */
-export const exportPublicDatasetSelections = <ThrowOnError extends boolean = false>(options?: Options<ExportPublicDatasetSelectionsData, ThrowOnError>): RequestResult<ExportPublicDatasetSelectionsResponses, ExportPublicDatasetSelectionsErrors, ThrowOnError> => (options?.client ?? client).get<ExportPublicDatasetSelectionsResponses, ExportPublicDatasetSelectionsErrors, ThrowOnError>({ url: '/api/public-dataset/export', ...options });
-
-/**
- * Get Public Dataset Item Issue
- *
- * Return a prefilled issue contributing an item's saved selections.
- */
-export const getPublicDatasetItemIssue = <ThrowOnError extends boolean = false>(options: Options<GetPublicDatasetItemIssueData, ThrowOnError>): RequestResult<GetPublicDatasetItemIssueResponses, GetPublicDatasetItemIssueErrors, ThrowOnError> => (options.client ?? client).get<GetPublicDatasetItemIssueResponses, GetPublicDatasetItemIssueErrors, ThrowOnError>({ url: '/api/public-dataset/items/{item_id}/issue', ...options });
-
-/**
- * Get Public Dataset Record
- *
- * Return public dataset record.
- */
-export const getPublicDatasetRecord = <ThrowOnError extends boolean = false>(options: Options<GetPublicDatasetRecordData, ThrowOnError>): RequestResult<GetPublicDatasetRecordResponses, GetPublicDatasetRecordErrors, ThrowOnError> => (options.client ?? client).get<GetPublicDatasetRecordResponses, GetPublicDatasetRecordErrors, ThrowOnError>({ url: '/api/public-dataset/items/{item_id}/record', ...options });
-
-/**
- * Get Public Dataset Sources
- *
- * Return public dataset sources, including a normal not-found result.
- */
-export const getPublicDatasetSources = <ThrowOnError extends boolean = false>(options: Options<GetPublicDatasetSourcesData, ThrowOnError>): RequestResult<GetPublicDatasetSourcesResponses, GetPublicDatasetSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetPublicDatasetSourcesResponses, GetPublicDatasetSourcesErrors, ThrowOnError>({ url: '/api/public-dataset/items/{item_id}/sources', ...options });
-
-/**
- * Get Public Dataset Status
- *
- * Return public dataset status.
- */
-export const getPublicDatasetStatus = <ThrowOnError extends boolean = false>(options?: Options<GetPublicDatasetStatusData, ThrowOnError>): RequestResult<GetPublicDatasetStatusResponses, GetPublicDatasetStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetPublicDatasetStatusResponses, GetPublicDatasetStatusErrors, ThrowOnError>({ url: '/api/public-dataset/status', ...options });
-
-/**
- * Sync Public Dataset Now
- *
- * Sync public dataset now.
- */
-export const syncPublicDatasetNow = <ThrowOnError extends boolean = false>(options?: Options<SyncPublicDatasetNowData, ThrowOnError>): RequestResult<SyncPublicDatasetNowResponses, SyncPublicDatasetNowErrors, ThrowOnError> => (options?.client ?? client).post<SyncPublicDatasetNowResponses, SyncPublicDatasetNowErrors, ThrowOnError>({ url: '/api/public-dataset/sync', ...options });
 
 /**
  * Ready
@@ -1232,29 +1248,6 @@ export const stopSync = <ThrowOnError extends boolean = false>(options?: Options
 export const searchYoutube = <ThrowOnError extends boolean = false>(options?: Options<SearchYoutubeData, ThrowOnError>): RequestResult<SearchYoutubeResponses, SearchYoutubeErrors, ThrowOnError> => (options?.client ?? client).get<SearchYoutubeResponses, SearchYoutubeErrors, ThrowOnError>({ url: '/api/themes/search', ...options });
 
 /**
- * Remove Theme
- *
- * Forget an item's theme, delete its local file or the server's copy.
- */
-export const removeTheme = <ThrowOnError extends boolean = false>(options: Options<RemoveThemeData, ThrowOnError>): RequestResult<RemoveThemeResponses, RemoveThemeErrors, ThrowOnError> => (options.client ?? client).delete<RemoveThemeResponses, RemoveThemeErrors, ThrowOnError>({ url: '/api/themes/{item_id}', ...options });
-
-/**
- * Select Theme
- *
- * Select an item's theme and download it.
- *
- * An item without a local folder only records the choice.
- */
-export const selectTheme = <ThrowOnError extends boolean = false>(options: Options<SelectThemeData, ThrowOnError>): RequestResult<SelectThemeResponses, SelectThemeErrors, ThrowOnError> => (options.client ?? client).put<SelectThemeResponses, SelectThemeErrors, ThrowOnError>({
-    url: '/api/themes/{item_id}',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
  * Get Tmdb Collection
  *
  * List the movies of a TMDB collection.
@@ -1304,11 +1297,11 @@ export const saveTmdbArt = <ThrowOnError extends boolean = false>(options: Optio
 export const getTmdbArtSources = <ThrowOnError extends boolean = false>(options: Options<GetTmdbArtSourcesData, ThrowOnError>): RequestResult<GetTmdbArtSourcesResponses, GetTmdbArtSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetTmdbArtSourcesResponses, GetTmdbArtSourcesErrors, ThrowOnError>({ url: '/api/tmdb/{media_type}/{tmdb_id}/art/{art_type}/sources', ...options });
 
 /**
- * Get Tmdb Public Dataset Sources
+ * Get Tmdb Catalog Sources
  *
  * Look up what OvertureDB holds for an unsaved item.
  */
-export const getTmdbPublicDatasetSources = <ThrowOnError extends boolean = false>(options: Options<GetTmdbPublicDatasetSourcesData, ThrowOnError>): RequestResult<GetTmdbPublicDatasetSourcesResponses, GetTmdbPublicDatasetSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetTmdbPublicDatasetSourcesResponses, GetTmdbPublicDatasetSourcesErrors, ThrowOnError>({ url: '/api/tmdb/{media_type}/{tmdb_id}/public-dataset', ...options });
+export const getTmdbCatalogSources = <ThrowOnError extends boolean = false>(options: Options<GetTmdbCatalogSourcesData, ThrowOnError>): RequestResult<GetTmdbCatalogSourcesResponses, GetTmdbCatalogSourcesErrors, ThrowOnError> => (options.client ?? client).get<GetTmdbCatalogSourcesResponses, GetTmdbCatalogSourcesErrors, ThrowOnError>({ url: '/api/tmdb/{media_type}/{tmdb_id}/catalog', ...options });
 
 /**
  * Select Tmdb Theme

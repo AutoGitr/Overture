@@ -41,8 +41,8 @@ which Plex cannot apply to it; it takes the next order the settings give.
 ## Separators
 
 **Separator**, a Plex group setting in **Collection groups**, heads the group
-with an empty collection titled after it, with a poster drawn in the group's
-Drawn colours and showing the group's name alone, in each library its
+with an empty collection titled after it, with a poster generated in the group's
+Generated colours and showing the group's name alone, in each library its
 collections use. Its sort title is the group's sort title template with an
 empty title, so it sorts right before the group's collections. A separated
 group whose sort title is not set anywhere sorts its collections as

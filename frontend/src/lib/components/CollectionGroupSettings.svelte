@@ -209,7 +209,7 @@
     {#if group !== UNGROUPED_GROUP && settingsState.current.media_server === "plex"}
       <FieldRow
         label="Separator"
-        hint="An empty collection titled after the group, with drawn art, sorted right before the group's collections. Without a sort title set anywhere, they sort as {'{group} {title}'}; one that puts the group first keeps it there."
+        hint="An empty collection titled after the group, with generated art, sorted right before the group's collections. Without a sort title set anywhere, they sort as {'{group} {title}'}; one that puts the group first keeps it there."
       >
         <input type="checkbox" aria-label="Separator" bind:checked={form.separator} />
       </FieldRow>

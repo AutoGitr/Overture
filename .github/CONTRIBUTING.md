@@ -116,7 +116,7 @@ or `src/overture/media_servers/`, and turn each problem it reports into a test.
   Emby API specs by version and digest. A changed upstream spec fails until you
   review it and update the pin.
 - **OvertureDB contract.** Edit it in `../OvertureDB/schema/`, then copy it here
-  with `uv run python -m scripts.dataset_contract ../OvertureDB`.
+  with `uv run python -m scripts.catalog_contract ../OvertureDB`.
 - **Database migrations.** After changing a model in `src/overture/db/models/`, run
   `uv run alembic revision --autogenerate -m "<summary>"`, review the result and
   add a test in `tests/test_database/test_migrations.py`. Migrations run

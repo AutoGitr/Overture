@@ -18,9 +18,9 @@ lazy from overture.db.art_slots import (
     select_art,
     select_upload,
 )
+lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.public_dataset import PublicDatasetCollection
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
@@ -117,7 +117,7 @@ lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import enable_public_dataset
+lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import library_rule, stored_collection
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -1019,7 +1019,7 @@ async def test_inherited_placeholders_resolve_group_before_global(
     global_defaults = await manager.service.reader.inherited_policy()
     assert (
         global_defaults.auto_art,
-        global_defaults.drawn_style,
+        global_defaults.generated_style,
         global_defaults.backgrounds,
     ) == (AutoArt.OFF, ArtStyle.DARK, True)
 
@@ -1286,12 +1286,10 @@ async def test_rule_sync_uses_shared_automatic_art_and_theme_pipelines(
             )
         )
         session.add(
-            PublicDatasetCollection(
-                tmdb_id=10, title="Saga", youtube_id_overturedb="a" * 11
-            )
+            CatalogCollection(tmdb_id=10, title="Saga", youtube_id_overturedb="a" * 11)
         )
     async with database.write_session() as session:
-        await enable_public_dataset(session)
+        await enable_catalog(session)
     await manager.service.editor.save_rule(
         identity,
         library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
@@ -3767,13 +3765,13 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
         ]
 
 
-async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
+async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     manager: Manager, database: Database
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
         await session.merge(
-            settings_row(collection_auto_art=AutoArt.OVERTUREDB_TMDB_DRAW)
+            settings_row(collection_auto_art=AutoArt.OVERTUREDB_TMDB_GENERATE)
         )
         row = await CollectionRepository(session).get(identity)
         assert row is not None
@@ -3788,7 +3786,7 @@ async def test_automatic_art_keeps_an_upload_and_draws_a_missing_poster(
     manager.art.fail = True
     manager.art.selections.clear()
     await manager.service.groups.save_policy(
-        "Ungrouped", CollectionGroupPolicy(auto_art=AutoArt.DRAW)
+        "Ungrouped", CollectionGroupPolicy(auto_art=AutoArt.GENERATE)
     )
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -3828,14 +3826,14 @@ async def test_automatic_art_takes_the_first_source_in_its_order(
     assert manager.art.urls == urls
 
 
-async def test_automatic_art_never_takes_the_servers_own_art_and_draws_without_any(
+async def test_automatic_art_never_takes_the_servers_own_art_and_generates_without_any(
     manager: Manager, database: Database
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_art=AutoArt.OVERTUREDB_DRAW,
+                collection_auto_art=AutoArt.OVERTUREDB_GENERATE,
                 collection_backgrounds=False,
             )
         )
@@ -3991,14 +3989,14 @@ async def test_generator_validation_rejects_sources_when_plex_counts(
 
 
 @pytest.mark.parametrize("backgrounds", [True, False])
-async def test_automatic_drawing_titles_posters_and_draws_backgrounds_it_needs(
+async def test_automatic_generation_titles_posters_and_generates_backgrounds_it_needs(
     manager: Manager, database: Database, backgrounds: bool
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_art=AutoArt.DRAW, collection_backgrounds=backgrounds
+                collection_auto_art=AutoArt.GENERATE, collection_backgrounds=backgrounds
             )
         )
     manager.art.selections.clear()

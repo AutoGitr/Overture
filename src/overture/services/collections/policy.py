@@ -45,7 +45,7 @@ class CollectionPolicy:
     minimum_items: int
     delete_below_minimum: bool
     auto_art: AutoArt
-    drawn_style: ArtStyle
+    generated_style: ArtStyle
     overturedb_posters: CollectionPosterStyle
     backgrounds: bool
     auto_match_theme: bool
@@ -93,10 +93,10 @@ def resolve_policy(
             group.auto_art if group else None,
             defaults.collection_auto_art,
         ),
-        drawn_style=inherit(
-            rule.drawn_style if rule else None,
-            group.drawn_style if group else None,
-            defaults.collection_drawn_style,
+        generated_style=inherit(
+            rule.generated_style if rule else None,
+            group.generated_style if group else None,
+            defaults.collection_generated_style,
         ),
         overturedb_posters=inherit(
             rule.overturedb_posters if rule else None,

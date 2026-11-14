@@ -4,8 +4,8 @@ lazy from dataclasses import dataclass
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ...catalog_contract.contract import canonical_art_url
 lazy from ...config import Settings
-lazy from ...dataset_contract.contract import canonical_art_url
 lazy from ...db.art_slots import ArtFileFacts
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
@@ -132,8 +132,8 @@ class ArtSelector:
         """Validate the chosen artwork before anything is recorded.
 
         Raises:
-            PublicServiceError: 422 for art to draw, which only a collection
-                has a title for; its service draws it and chooses the upload.
+            PublicServiceError: 422 for art to generate, which only a collection
+                has a title for; its service generates it and chooses the upload.
         """
         if body.generated is not None:
             raise PublicServiceError(422, "Only collections have generated art")

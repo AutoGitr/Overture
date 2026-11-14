@@ -38,7 +38,7 @@ class PolicyOverrides(SQLModel):
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
     auto_art: AutoArt | None = Field(default=None, sa_type=enum_type(AutoArt))
-    drawn_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
+    generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
     overturedb_posters: CollectionPosterStyle | None = Field(
         default=None, sa_type=enum_type(CollectionPosterStyle)
     )

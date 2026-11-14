@@ -111,7 +111,7 @@ export function normaliseSelectedSources<T extends string>(
 }
 
 /** Whether a source is a curated catalog, which only an enabled OvertureDB provides. */
-function isDatasetSource(source: string): boolean {
+function isCatalogSource(source: string): boolean {
   return CATALOG_SOURCES.some((catalog) => catalog === source);
 }
 
@@ -119,11 +119,10 @@ function isDatasetSource(source: string): boolean {
 export function enabledSources<T extends string>(
   sourceOrder: T[],
   selectedSources: T[],
-  publicDatasetEnabled: boolean,
+  catalogEnabled: boolean,
 ): T[] {
   return sourceOrder.filter(
-    (source) =>
-      selectedSources.includes(source) && (!isDatasetSource(source) || publicDatasetEnabled),
+    (source) => selectedSources.includes(source) && (!isCatalogSource(source) || catalogEnabled),
   );
 }
 
@@ -136,14 +135,14 @@ export function moveOrderedSource<T extends string>(sourceOrder: T[], source: T,
   return reordered;
 }
 
-/** Return whether a source is unavailable (currently dataset sources, when disabled). */
-export function sourceDisabled(source: string, publicDatasetEnabled: boolean): boolean {
-  return isDatasetSource(source) && !publicDatasetEnabled;
+/** Return whether a source is unavailable (currently catalog sources, when disabled). */
+export function sourceDisabled(source: string, catalogEnabled: boolean): boolean {
+  return isCatalogSource(source) && !catalogEnabled;
 }
 
 /** Return the list of sources that should render as disabled. */
-export function disabledSources(publicDatasetEnabled: boolean): readonly string[] {
-  return publicDatasetEnabled ? [] : CATALOG_SOURCES;
+export function disabledSources(catalogEnabled: boolean): readonly string[] {
+  return catalogEnabled ? [] : CATALOG_SOURCES;
 }
 
 export interface BulkAssetsRequestParams {

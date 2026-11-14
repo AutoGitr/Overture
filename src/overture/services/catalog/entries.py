@@ -2,8 +2,8 @@
 
 lazy from typing import Any
 
-lazy from ...dataset_contract.contract import entry_fields
-lazy from ...db.models.public_dataset import PublicDatasetCollection, PublicDatasetItem
+lazy from ...catalog_contract.contract import entry_fields
+lazy from ...db.models.catalog import CatalogCollection, CatalogItem
 lazy from ...domain import CatalogMediaType, CollectionPosterStyle, MediaType
 
 type Entry = dict[str, Any]
@@ -29,9 +29,7 @@ def shown_entry(entry: Entry, posters: CollectionPosterStyle) -> Entry:
     return shown
 
 
-def catalog_item_entry(
-    item: PublicDatasetItem, season_posters: dict[int, str]
-) -> Entry:
+def catalog_item_entry(item: CatalogItem, season_posters: dict[int, str]) -> Entry:
     """Return a stored movie or show as the contract spells the entry."""
     entry: Entry = {
         name: getattr(item, name)
@@ -48,7 +46,7 @@ def catalog_item_entry(
     return entry
 
 
-def catalog_collection_entry(collection: PublicDatasetCollection) -> Entry:
+def catalog_collection_entry(collection: CatalogCollection) -> Entry:
     """Return a stored collection as the contract spells the entry."""
     entry: Entry = {
         name: CatalogMediaType.COLLECTION.value

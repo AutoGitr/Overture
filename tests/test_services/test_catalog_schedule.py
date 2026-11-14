@@ -1,4 +1,4 @@
-"""Public dataset and schedule helper coverage."""
+"""Catalog and schedule helper coverage."""
 
 lazy import asyncio
 lazy from contextlib import asynccontextmanager
@@ -8,23 +8,23 @@ lazy from pathlib import Path
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy import overture.services.public_dataset.service as service_module
+lazy import overture.services.catalog.service as service_module
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType
 lazy from overture.schemas.art import ArtCandidate
-lazy from overture.schemas.public_dataset import PublicDatasetSyncStats
-lazy from overture.services.public_dataset.catalog import (
-    PUBLIC_DATASET_CATALOG_URL,
-    PUBLIC_DATASET_REPO_URL,
-)
-lazy from overture.services.public_dataset.lookup import (
+lazy from overture.schemas.catalog import CatalogSyncStats
+lazy from overture.services.catalog.lookup import (
     build_candidate,
 )
-lazy from overture.services.public_dataset.service import PublicDatasetService
+lazy from overture.services.catalog.remote import (
+    CATALOG_URL,
+    OVERTUREDB_REPO_URL,
+)
+lazy from overture.services.catalog.service import CatalogService
 lazy from overture.services.schedule_store import (
     BackupPayload,
-    PublicDatasetPayload,
+    CatalogPayload,
     Schedule,
     ScheduleSpec,
     SyncServerPayload,
@@ -35,7 +35,7 @@ lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import database_for
 
 
-class TestPublicDatasetHelper:
+class TestCatalogHelper:
     async def test_set_enabled_returns_scheduler_next_run(
         self,
         tmp_path: Path,
@@ -59,21 +59,21 @@ class TestPublicDatasetHelper:
 
         async def fake_save(
             _session: AsyncSession,
-            _spec: ScheduleSpec[PublicDatasetPayload],
+            _spec: ScheduleSpec[CatalogPayload],
             *,
             enabled: bool,
             **_kwargs: object,
-        ) -> Schedule[PublicDatasetPayload]:
+        ) -> Schedule[CatalogPayload]:
             return Schedule(
                 enabled=enabled,
                 cron_expression="0 3 * * *",
-                payload=PublicDatasetPayload(),
+                payload=CatalogPayload(),
                 updated_at=None,
                 timezone=app_config.TZ,
             )
 
         database = database_for(session_factory)
-        service = PublicDatasetService(
+        service = CatalogService(
             scheduler=SchedulerService(app_config=app_config),
             publisher=NullEventPublisher(),
             app_config=app_config,
@@ -109,7 +109,7 @@ class TestPublicDatasetHelper:
             art_type=ArtType.POSTER,
         )
 
-        service = PublicDatasetService(
+        service = CatalogService(
             scheduler=SchedulerService(app_config=app_config),
             publisher=NullEventPublisher(),
             app_config=app_config,
@@ -121,10 +121,10 @@ class TestPublicDatasetHelper:
                 Schedule(
                     enabled=True,
                     cron_expression="0 0 * * *",
-                    payload=PublicDatasetPayload(
+                    payload=CatalogPayload(
                         last_synced_at=datetime(2026, 1, 1, tzinfo=UTC),
                         last_status="success",
-                        last_stats=PublicDatasetSyncStats(items=4),
+                        last_stats=CatalogSyncStats(items=4),
                     ),
                     updated_at=None,
                     timezone=app_config.TZ,
@@ -134,9 +134,9 @@ class TestPublicDatasetHelper:
             asyncio.run(service.stop())
 
         assert status.enabled is True
-        assert status.repo_url == PUBLIC_DATASET_REPO_URL
-        assert status.catalog_url == PUBLIC_DATASET_CATALOG_URL
-        assert status.last_stats == PublicDatasetSyncStats(items=4)
+        assert status.repo_url == OVERTUREDB_REPO_URL
+        assert status.catalog_url == CATALOG_URL
+        assert status.last_stats == CatalogSyncStats(items=4)
 
 
 class TestScheduleHelper:
@@ -158,7 +158,7 @@ class TestScheduleHelper:
         ).model_dump() == {
             "retention": {"latest": 5, "daily": 7, "weekly": 4, "monthly": 6},
         }
-        assert PublicDatasetPayload().model_dump() == {
+        assert CatalogPayload().model_dump() == {
             "last_synced_at": None,
             "last_status": "never_synced",
             "last_stats": None,
@@ -173,28 +173,26 @@ class TestScheduleHelper:
 @pytest.mark.parametrize(
     ("payload", "enabled", "starts"),
     [
-        (PublicDatasetPayload(), True, True),
+        (CatalogPayload(), True, True),
         (
-            PublicDatasetPayload(last_synced_at=datetime(2026, 1, 1, tzinfo=UTC)),
+            CatalogPayload(last_synced_at=datetime(2026, 1, 1, tzinfo=UTC)),
             True,
             False,
         ),
-        (PublicDatasetPayload(), False, False),
+        (CatalogPayload(), False, False),
     ],
 )
 async def test_a_first_start_syncs_the_catalog_overturedb_starts_enabled_with(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    payload: PublicDatasetPayload,
+    payload: CatalogPayload,
     enabled: bool,
     starts: bool,
     *,
     app_config: Settings,
     database: Database,
 ) -> None:
-    async def saved(
-        *_args: object, **_kwargs: object
-    ) -> Schedule[PublicDatasetPayload]:
+    async def saved(*_args: object, **_kwargs: object) -> Schedule[CatalogPayload]:
         return Schedule(
             enabled=enabled,
             cron_expression="0 3 * * *",
@@ -202,7 +200,7 @@ async def test_a_first_start_syncs_the_catalog_overturedb_starts_enabled_with(
             updated_at=None,
         )
 
-    service = PublicDatasetService(
+    service = CatalogService(
         scheduler=SchedulerService(app_config=app_config),
         publisher=NullEventPublisher(),
         app_config=app_config,
