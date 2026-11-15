@@ -25,7 +25,7 @@
   import { setSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { alphabetical } from "../utils/alphabetical";
-  import { COLLECTION_POSTER_LABELS, COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
+  import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
 
   setSectionView("filters");
   const id = $props.id();
@@ -112,7 +112,10 @@
     theme: { options: COMPLETE_OPTIONS },
     overtureDb: { options: COMPLETE_OPTIONS },
     themerrDb: { options: COMPLETE_OPTIONS },
-    catalogSelections: { options: SELECTIONS_OPTIONS },
+    catalogPoster: { options: SELECTIONS_OPTIONS },
+    catalogBackground: { options: SELECTIONS_OPTIONS },
+    catalogSeasonPosters: { options: SELECTIONS_OPTIONS },
+    catalogTheme: { options: SELECTIONS_OPTIONS },
     collectionMembers: { options: MEMBERS_OPTIONS },
     collectionHolds: { options: HOLDS_OPTIONS },
     collectionKind: { options: KIND_OPTIONS },
@@ -205,9 +208,6 @@
   let tmdbFilterKeys = $derived(
     sidebarDomain.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
   );
-  const POSTER_OPTIONS = COLLECTION_POSTER_STYLES.map(
-    (style) => [style, COLLECTION_POSTER_LABELS[style]] as const,
-  );
   const catalogQuery = createQuery(() => ({
     ...listCatalogEntriesOptions({
       query:
@@ -249,12 +249,8 @@
       uiState.closePopup();
       return;
     }
-    uiState.setFilters({
-      ...$state.snapshot(filters),
-      overtureDb: catalogEnabled ? filters.overtureDb : "all",
-      themerrDb: catalogEnabled ? filters.themerrDb : "all",
-      catalogSelections: catalogEnabled ? filters.catalogSelections : "all",
-    });
+    const applied = $state.snapshot(filters);
+    uiState.setFilters(catalogEnabled ? applied : sidebarDomain.withoutCatalogFilters(applied, defaultFilters()));
     uiState.closePopup();
   }
 
@@ -396,7 +392,7 @@
           <FieldRow label="Poster style">
             <SegmentedControl
               label="Poster style"
-              options={POSTER_OPTIONS}
+              options={COLLECTION_POSTER_OPTIONS}
               bind:value={catalogPosters}
             />
           </FieldRow>

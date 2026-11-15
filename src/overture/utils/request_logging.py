@@ -77,7 +77,7 @@ async def request_logging_middleware(
     failure: Exception | None = None
     try:
         response = await call_next(request)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- any unhandled error becomes a logged 500
         failure = exc
         response = add_security_headers(
             JSONResponse({"detail": "Internal server error"}, status_code=500),

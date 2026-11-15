@@ -10,6 +10,21 @@ lazy from .art import ArtCandidate
 lazy from .base import PublicText, StrictBaseModel
 lazy from .common import JobEnvelope
 
+type Agreement = Literal["matching", "different"]
+
+
+class CatalogSelections(StrictBaseModel):
+    """How each of a title's selections compares with what OvertureDB holds.
+
+    A selection only one side has is different; both having none matches.
+    """
+
+    poster: Agreement
+    background: Agreement
+    #: Every tracked season's poster; null for movies and collections.
+    season_posters: Agreement | None = None
+    theme: Agreement
+
 
 class CatalogEnabledRequest(StrictBaseModel):
     """Validate the catalog enabled request payload."""

@@ -108,14 +108,14 @@ describe("FiltersPopup edits one draft of the filter set", () => {
         name: "Poster",
       }),
     );
-    await fireEvent.click(view.getByRole("checkbox", { name: "ThePosterDB" }));
+    await fireEvent.click(view.getByRole("checkbox", { name: "TPDb" }));
     await fireEvent.click(view.getByRole("checkbox", { name: "TMDB" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
     expect(uiState.movieFilters.artSource).toEqual({
       artType: "poster",
       // Sources keep the list's alphabetical order.
-      sources: ["tpdb", "tmdb"],
+      sources: ["tmdb", "tpdb"],
     });
     expect(view.queryByRole("checkbox", { name: "OvertureDB" })).toBeNull();
   });

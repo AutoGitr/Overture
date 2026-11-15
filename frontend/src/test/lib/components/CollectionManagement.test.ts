@@ -379,6 +379,49 @@ describe("collection management", () => {
     );
   });
 
+  it("contributes a chosen poster as the picked style unless OvertureDB holds it as another", async () => {
+    const own = "https://image.tmdb.org/t/p/original/own.jpg";
+    const matte = "https://theposterdb.com/api/assets/2503";
+    const { calls } = mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/capabilities": capabilities,
+      "/api/collections/12/rule": rule,
+      "/api/collections/12": { ...detail, tmdb_collection_id: 10, poster_style: "overlay" },
+      "/api/collections/12/art/poster/sources": {
+        sources: {
+          overturedb: [artCandidate({ url: matte, source: "tpdb", poster_style: "matte" })],
+          tmdb: [artCandidate({ url: own })],
+        },
+        current_url: null,
+      },
+      "/api/collections/12/art/poster": { status: "ok" },
+    });
+    goToCollectionView(detail, "art");
+    renderWithQueryClient(CollectionPage);
+    const picker = await screen.findByRole("radiogroup", { name: "Contribute to OvertureDB as" });
+    // It starts from the style of the poster the collection has.
+    expect(within(picker).getByRole("radio", { name: "Overlay" })).toBeChecked();
+    await fireEvent.click(within(picker).getByRole("radio", { name: "Individual" }));
+    const saves = () =>
+      calls
+        .filter((call) => call.init.method === "PUT" && call.url.endsWith("/art/poster"))
+        .map((call) => JSON.parse(String(call.init.body)) as Record<string, unknown>);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Use artwork .* from TMDB$/ }),
+    );
+    await waitFor(() => expect(saves()).toHaveLength(1));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Use matte poster artwork .* from TPDb$/ }),
+    );
+    await waitFor(() => expect(saves()).toHaveLength(2));
+
+    expect(saves().map((body) => [body.url, body.poster_style])).toEqual([
+      [own, "individual"],
+      [matte, "matte"],
+    ]);
+  });
+
   it("creates a collection from explicit TMDB IDs", async () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},

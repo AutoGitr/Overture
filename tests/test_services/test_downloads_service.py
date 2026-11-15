@@ -53,7 +53,7 @@ lazy from overture.services.themes.youtube_resolver import (
     YouTubeResolver,
 )
 lazy from overture.utils.file import compute_bytes_hash
-lazy from overture.utils.image import RateLimitedError
+lazy from overture.utils.image import RATE_LIMIT_RETRIES, RateLimitedError
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
@@ -725,6 +725,7 @@ async def test_process_art_job_allows_trusted_private_media_server_url(
             "headers": {"X-Plex-Token": "server-token"},
             # The art lane's workers bound its downloads, not the shared gate.
             "transfer_slots": None,
+            "rate_limit_retries": RATE_LIMIT_RETRIES,
         }
     ]
     # Trusted private media-server URLs are not persisted as the stored URL

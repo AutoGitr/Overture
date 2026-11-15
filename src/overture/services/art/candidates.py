@@ -15,6 +15,7 @@ lazy from sqlalchemy.exc import SQLAlchemyError
 
 lazy from ...catalog_contract.contract import art_source
 lazy from ...config import Settings
+lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import AppSettings, get_app_settings
@@ -24,6 +25,7 @@ lazy from ...domain import (
     ArtType,
     AspectRatioTolerance,
     CatalogMediaType,
+    CollectionPosterStyle,
     TmdbLanguageFilter,
 )
 lazy from ...integrations.tmdb import TMDBClient
@@ -32,7 +34,11 @@ lazy from ...repositories.catalog import CatalogRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
 lazy from ...utils.image import is_valid_aspect_ratio, is_valid_image_format
-lazy from ..catalog.index import catalog_collection_art_url
+lazy from ..catalog.entries import (
+    catalog_collection_entry,
+    collection_poster_field,
+    held_poster_style,
+)
 lazy from ..catalog.lookup import build_candidate, get_art_candidates
 lazy from ..collections.policy import resolve_policy
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
@@ -82,13 +88,22 @@ class CandidateSources:
     def flat(self) -> list[ArtCandidate]:
         """Return every candidate once, the first source offering a URL keeping it.
 
-        TMDB comes first, so it sorts higher when match scores tie.
+        Sources are in :func:`in_source_order`, so TMDB's art sorts higher when
+        match scores tie.
         """
         unique: dict[str, ArtCandidate] = {}
         for candidates in self.by_source.values():
             for candidate in candidates:
                 unique.setdefault(candidate.url, candidate)
         return list(unique.values())
+
+
+def in_source_order(
+    by_source: dict[str, list[ArtCandidate]],
+) -> dict[str, list[ArtCandidate]]:
+    """*by_source* as the art panel lists it: TMDB first, OvertureDB last."""
+    rank: dict[str, int] = {ArtSource.TMDB: 0, ArtSource.OVERTUREDB: 2}
+    return dict(sorted(by_source.items(), key=lambda pair: rank.get(pair[0], 1)))
 
 
 class ArtCandidates:
@@ -128,13 +143,13 @@ class ArtCandidates:
             lookups[ArtSource.TMDB] = self._tmdb_candidates(
                 item, art_type, season_num, policy
             )
-        if item.id is not None and not policy.disable_media_server_art:
-            lookups[self._providers.provider.server_type] = self._server_candidates(
-                item.id, art_type, season_id, policy
-            )
         if include_overturedb:
             lookups[ArtSource.OVERTUREDB] = self._overturedb_candidates(
                 item, art_type, season_num
+            )
+        if item.id is not None and not policy.disable_media_server_art:
+            lookups[self._providers.provider.server_type] = self._server_candidates(
+                item.id, art_type, season_id, policy
             )
         return await self._resolve(item.title, lookups)
 
@@ -153,7 +168,7 @@ class ArtCandidates:
                 raise result
             else:
                 sources.by_source[name] = result
-        return sources
+        return CandidateSources(in_source_order(sources.by_source), sources.errors)
 
     async def _tmdb_candidates(
         self,
@@ -225,7 +240,11 @@ class ArtCandidates:
     async def gather_collection(
         self, collection: MediaCollection, art_type: ArtType, policy: CandidatePolicy
     ) -> CandidateSources:
-        """Use the same source policy, ordering and error handling for collections."""
+        """Use the same source policy, ordering and error handling for collections.
+
+        OvertureDB offers each of its posters, the collection's own style
+        first; any link OvertureDB holds as a poster is marked with its style.
+        """
         person = (
             self._collection_person(collection)
             if collection.tmdb_collection_id is None and art_type is ArtType.POSTER
@@ -233,9 +252,8 @@ class ArtCandidates:
         )
         if collection.tmdb_collection_id is None and person is None:
             return CandidateSources()
-        lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {
-            ArtSource.OVERTUREDB: self._collection_catalog(collection, art_type)
-        }
+        entry, posters = await self._collection_entry(collection)
+        lookups: dict[str, Coroutine[Any, Any, list[ArtCandidate]]] = {}
         if self._app_config.tmdb_configured and collection.tmdb_collection_id:
             lookups[ArtSource.TMDB] = self._collection_tmdb(
                 collection.tmdb_collection_id, art_type, policy
@@ -246,7 +264,27 @@ class ArtCandidates:
             lookups[self._providers.provider.server_type] = self._server_art(
                 collection.server_item_id, art_type, policy
             )
-        return await self._resolve(collection.title, lookups)
+        found = await self._resolve(collection.title, lookups)
+        if art_type is ArtType.POSTER:
+            found = CandidateSources(
+                {
+                    name: [
+                        candidate.model_copy(
+                            update={
+                                "poster_style": held_poster_style(entry, candidate.url)
+                            }
+                        )
+                        for candidate in candidates
+                    ]
+                    for name, candidates in found.by_source.items()
+                },
+                found.errors,
+            )
+        catalog = _catalog_collection_candidates(entry, art_type, posters)
+        return CandidateSources(
+            in_source_order({ArtSource.OVERTUREDB: catalog, **found.by_source}),
+            found.errors,
+        )
 
     @staticmethod
     def _collection_person(collection: MediaCollection) -> int | None:
@@ -287,22 +325,42 @@ class ArtCandidates:
             if policy.accepts(candidate, art_type)
         ]
 
-    async def _collection_catalog(
-        self, collection: MediaCollection, art_type: ArtType
-    ) -> list[ArtCandidate]:
+    async def _collection_entry(
+        self, collection: MediaCollection
+    ) -> tuple[CatalogCollection | None, CollectionPosterStyle]:
+        """OvertureDB's entry for the collection, if enabled, and its poster style."""
         async with self._database.read_session() as session:
             schedule = await load_schedule(
                 session, CATALOG_SCHEDULE, timezone=self._app_config.TZ
             )
-            if not schedule.enabled or not collection.tmdb_collection_id:
-                return []
-            entries = await CatalogRepository(session).collections_by_tmdb_id(
-                {collection.tmdb_collection_id}
-            )
-            entry = entries.get(collection.tmdb_collection_id)
             posters = resolve_policy(
                 await get_app_settings(session), collection.group, collection.rule
             ).overturedb_posters
-        url = catalog_collection_art_url(entry, art_type, posters) if entry else None
-        candidate = build_candidate(url, art_type)
+            if not schedule.enabled or not collection.tmdb_collection_id:
+                return None, posters
+            entries = await CatalogRepository(session).collections_by_tmdb_id(
+                {collection.tmdb_collection_id}
+            )
+        return entries.get(collection.tmdb_collection_id), posters
+
+
+def _catalog_collection_candidates(
+    entry: CatalogCollection | None,
+    art_type: ArtType,
+    posters: CollectionPosterStyle,
+) -> list[ArtCandidate]:
+    """OvertureDB's art for a collection slot; posters of style *posters* first."""
+    if entry is None:
+        return []
+    if art_type is not ArtType.POSTER:
+        candidate = build_candidate(entry.background_url, art_type)
         return [candidate] if candidate else []
+    held = catalog_collection_entry(entry)
+    styles = sorted(CollectionPosterStyle, key=lambda style: style is not posters)
+    return [
+        candidate.model_copy(update={"poster_style": style})
+        for style in styles
+        if (
+            candidate := build_candidate(held[collection_poster_field(style)], art_type)
+        )
+    ]

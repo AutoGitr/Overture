@@ -566,7 +566,7 @@ async def test_save_art_rejects_source_links_that_name_no_image(
             season_id=None,
         )
     assert exc_info.value.status_code == 400
-    assert "ThePosterDB" in exc_info.value.message
+    assert "TPDb" in exc_info.value.message
 
 
 async def test_save_art_downloads_the_canonical_full_size_link(

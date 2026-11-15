@@ -8,7 +8,7 @@
     SyncMode,
   } from "../../generated/rest/types.gen";
   import type { PolicyData } from "../utils/collectionForms.svelte";
-  import { COLLECTION_POSTER_LABELS, COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
+  import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
 
   /**
    * Where settings are edited. Global defaults always hold a value; groups and
@@ -39,20 +39,17 @@
     ["off", "Off"],
     ["overturedb", "OvertureDB"],
     ["tmdb", "TMDB"],
+    ["generate", "Generate"],
     ["overturedb_tmdb", "OvertureDB, then TMDB"],
     ["overturedb_generate", "OvertureDB, else generate"],
-    ["tmdb_generate", "TMDB, else generate"],
     ["overturedb_tmdb_generate", "OvertureDB, then TMDB, else generate"],
-    ["generate", "Generate"],
+    ["tmdb_generate", "TMDB, else generate"],
   ];
   const STYLES: readonly (readonly [ArtStyle, string])[] = [
     ["dark", "Dark"],
     ["light", "Light"],
     ["accent", "Accent"],
   ];
-  const OVERTUREDB_POSTERS = COLLECTION_POSTER_STYLES.map(
-    (style) => [style, COLLECTION_POSTER_LABELS[style]] as const,
-  );
   const WANTED_NOT = [
     [true, "Wanted"],
     [false, "Not needed"],
@@ -172,8 +169,8 @@
     {inherits}
     bind:value={policy.overturedb_posters}
     inherited={defaults?.overturedb_posters}
-    options={OVERTUREDB_POSTERS}
-    hint="Individual takes a TMDB collection's own OvertureDB poster. Matte and Overlay take the consistent poster in that layout, so collections look alike; a collection without one gets no OvertureDB poster. Posters you choose are contributed as the same kind."
+    options={COLLECTION_POSTER_OPTIONS}
+    hint="Individual takes a TMDB collection's own OvertureDB poster. Matte and Overlay take the consistent poster in that layout, so collections look alike; a collection without one gets no OvertureDB poster. A poster you choose is contributed as the style you pick beside it, whatever this says later."
   />
   <InheritedSelect
     label="Background"
@@ -328,8 +325,7 @@
     rows="3"
     value={policy.summary_format ?? ""}
     placeholder={defaults?.summary_format || (inherits ? "Default" : "The server's")}
-    oninput={(event) => (policy.summary_format = event.currentTarget.value || null)}
-  ></textarea>
+    oninput={(event) => (policy.summary_format = event.currentTarget.value || null)}></textarea>
   <span class="hint"
     >Text or a template with &#123;title&#125;, &#123;group&#125;, &#123;start_date&#125;,
     &#123;end_date&#125;, &#123;summary&#125; (the server's) and &#123;source_summary&#125; (the

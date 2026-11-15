@@ -66,6 +66,7 @@ lazy from .services.themes.youtube_resolver import (
     theme_runtime_available,
 )
 lazy from .services.tmdb_items import TmdbItemsService
+lazy from .utils.file import process_owner
 lazy from .utils.security import Redactor
 lazy from .utils.temporary import clean_abandoned_operations
 lazy from .utils.threads import owned_thread
@@ -183,11 +184,10 @@ class RuntimeServices:
         """Start runtime services in dependency order."""
         config = self.app_settings
         logger.info(
-            "Overture %s starting (Python %s, UID %d, GID %d, timezone %s)",
+            "Overture %s starting (Python %s, %s, timezone %s)",
             app_version,
             sys.version.split()[0],
-            getattr(os, "getuid", lambda: -1)(),
-            getattr(os, "getgid", lambda: -1)(),
+            process_owner(),
             config.TZ,
         )
         if config.MEDIA_SERVER is None:
@@ -312,7 +312,7 @@ class RuntimeServices:
             await task
         except asyncio.CancelledError:
             return
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one task's failure must not stop the others shutting down
             self._shutdown_errors.append(name)
             logger.warning("The %s task failed during shutdown: %s", name, exc)
 
@@ -350,7 +350,7 @@ class RuntimeServices:
                 async with self.database.engine.connect() as conn:
                     await conn.execute(text("SELECT 1"))
             checks["database"] = True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- readiness reports any failure as not ready
             logger.warning("Readiness check could not reach the database: %s", exc)
         return checks
 
@@ -363,10 +363,9 @@ class RuntimeServices:
                 f"Could not create persistent config directory {self.config_dir}"
             ) from exc
         if not self.config_dir.is_dir() or not os.access(self.config_dir, os.W_OK):
-            current_uid = os.getuid() if hasattr(os, "getuid") else "unknown"
             raise RuntimeError(
                 f"Persistent config directory {self.config_dir} is not writable "
-                f"by the current user (uid={current_uid})"
+                f"by {process_owner()}"
             )
 
     async def _log_connectivity(self) -> None:
@@ -376,7 +375,7 @@ class RuntimeServices:
             status = await self.connectivity_probe(self.provider_registry, self.tmdb)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a failed probe keeps the last health, whatever failed
             logger.warning("Connectivity check failed: %s", exc)
             return
         # Without a media server, its health stays unknown and no notice shows.

@@ -32,9 +32,12 @@ OvertureDB holds are listed.
 
 Every section of the filters popup collapses, and stays as you left it. The
 item filters can also show only the titles of one **Collection**. While
-OvertureDB is on, **OvertureDB selections** lists the titles and collections
-whose selections match OvertureDB's or differ from them; only art and themes
-chosen on both sides are compared.
+OvertureDB is on, **OvertureDB poster**, **OvertureDB background** and (for
+shows) **OvertureDB season posters** under Art, and **OvertureDB theme** under
+Theme music, list the titles and collections whose choice for that slot
+matches OvertureDB's or differs from it. A choice only your library or only
+OvertureDB has is a difference, and a title OvertureDB has no entry for is
+listed by neither.
 
 ## Install as an app
 

@@ -79,21 +79,28 @@ _HELD = "https://image.tmdb.org/t/p/original/held.jpg"
     ("poster", "theme", "selections"),
     [
         # TMDB's sized rendition is the same artwork as its original.
-        ("https://image.tmdb.org/t/p/w500/held.jpg", "heldTheme01", "matching"),
-        (_HELD, None, "matching"),
-        ("https://image.tmdb.org/t/p/original/other.jpg", "heldTheme01", "different"),
-        (_HELD, "otherTheme1", "different"),
-        # Only slots selected on both sides are compared.
-        (None, None, None),
+        (
+            "https://image.tmdb.org/t/p/w500/held.jpg",
+            "heldTheme01",
+            ("matching", "matching"),
+        ),
+        (
+            "https://image.tmdb.org/t/p/original/other.jpg",
+            "heldTheme01",
+            ("different", "matching"),
+        ),
+        (_HELD, "otherTheme1", ("matching", "different")),
+        # A selection only OvertureDB has is a difference.
+        (None, None, ("different", "different")),
     ],
 )
-async def test_library_reports_whether_selections_agree_with_the_catalog(
+async def test_library_reports_how_each_selection_agrees_with_the_catalog(
     db_session: AsyncSession,
     tmp_path: Path,
     app_config: Settings,
     poster: str | None,
     theme: str | None,
-    selections: str | None,
+    selections: tuple[str, str],
 ) -> None:
     service = _library_service(
         config_dir=tmp_path,
@@ -118,7 +125,16 @@ async def test_library_reports_whether_selections_agree_with_the_catalog(
     await db_session.commit()
 
     result = await service.list_items()
-    assert result.items[0].catalog_selections == selections
+    held = result.items[0].catalog_selections
+    assert held is not None
+    poster_agrees, theme_agrees = selections
+    # The movie has no background, nor does OvertureDB, and no seasons.
+    assert (held.poster, held.background, held.season_posters, held.theme) == (
+        poster_agrees,
+        "matching",
+        None,
+        theme_agrees,
+    )
 
 
 @pytest.mark.parametrize(

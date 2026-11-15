@@ -237,6 +237,8 @@ def visited_art(
             empty.append("Local art matching: no similar artwork")
         elif offer is None:
             empty.append(miss)
+        elif on_disk and case.saved == offer:
+            return Expected(JobOutcome.SKIPPED, art_bulk.ALREADY_ON_DISK)
         elif not on_disk or overwrite:
             return Expected(
                 JobOutcome.QUEUED, f"OvertureDB artwork{replaces}", queued=offer

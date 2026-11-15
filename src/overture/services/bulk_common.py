@@ -120,9 +120,11 @@ def planned_outcome(
        a source.
     2. On a catalog-only run, a target no catalog serves is no match, or
        skipped when OvertureDB is disabled: no option would find it anything.
-    3. A saved selection is skipped unless Overwrite is on.
-    4. A target checked within the Skip recently checked window is skipped.
-    5. Everything else is visited.
+    3. A saved selection on disk that already is the catalog's offer is
+       skipped, Overwrite or not: replacing it would fetch the same art.
+    4. A saved selection is skipped unless Overwrite is on.
+    5. A target checked within the Skip recently checked window is skipped.
+    6. Everything else is visited.
     """
     kept = bool(saved) and not params.overwrite_existing
     if kept and selection_missing:
@@ -130,8 +132,11 @@ def planned_outcome(
     if catalog is not None and catalog.value is None:
         outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
         return outcome, catalog.reason
+    saved_url = saved.url if isinstance(saved, SavedArt) else saved
+    if catalog is not None and not selection_missing and saved_url == catalog.value:
+        return JobOutcome.SKIPPED, f"saved selection is already the {catalog.label}"
     if kept:
-        return JobOutcome.SKIPPED, _saved_reason(saved, catalog)
+        return JobOutcome.SKIPPED, _saved_reason(catalog)
     if checked_recently(last_checked, params):
         return (
             JobOutcome.SKIPPED,
@@ -140,12 +145,10 @@ def planned_outcome(
     return None
 
 
-def _saved_reason(saved: str | SavedArt | None, catalog: CatalogPick | None) -> str:
-    """Say why a saved selection is kept, against the catalog's offer if known."""
+def _saved_reason(catalog: CatalogPick | None) -> str:
+    """Say why a saved selection that is not the catalog's offer is kept."""
     if catalog is None:
         return SAVED_SELECTION
-    if (saved.url if isinstance(saved, SavedArt) else saved) == catalog.value:
-        return f"saved selection is already the {catalog.label}"
     return (
         f"saved selection differs from the {catalog.label}; "
         "Replace existing would replace it"

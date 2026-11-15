@@ -28,6 +28,7 @@ lazy from ...domain import (
     ArtStyle,
     ArtType,
     CollectionKind,
+    CollectionPosterStyle,
     ImageSize,
 )
 lazy from ...integrations.proxy import ProxyClientManager
@@ -37,14 +38,20 @@ lazy from ...schemas.art import (
     ArtCandidate,
     ArtMatchResponse,
     ArtSourcesResponse,
-    SaveArtRequest,
+    SaveCollectionArtRequest,
 )
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...schemas.removal import AssetRemoval
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.generated_art import render_art
-lazy from ...utils.image import fetch_image, inspect_saved_image
+lazy from ...utils.image import (
+    RATE_LIMIT_RETRIES,
+    RateLimitedError,
+    fetch_image,
+    inspect_saved_image,
+    raise_if_rate_limited,
+)
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
@@ -52,10 +59,23 @@ lazy from ..collections import COLLECTIONS_LOCK
 lazy from ..removal import NO_COLLECTION_ART_FILE, AssetRemover
 lazy from ..storage.image_cache import CachedOriginal, ImageCache
 lazy from ..storage.responses import cached_image_response
-lazy from .candidates import ArtCandidates, CandidatePolicy
+lazy from .candidates import ArtCandidates, CandidatePolicy, in_source_order
 lazy from .choice import ArtSelector, require_valid_aspect_ratio
 lazy from .matcher import ArtMatcher
 lazy from .uploads import ArtUploads
+
+
+def chosen_poster_style(
+    art_type: ArtType, candidate: ArtCandidate
+) -> CollectionPosterStyle | None:
+    """The poster style an automatic choice of *candidate* is saved with.
+
+    A link OvertureDB holds keeps its style there; any other poster is an
+    individual one.
+    """
+    if art_type is not ArtType.POSTER:
+        return None
+    return candidate.poster_style or CollectionPosterStyle.INDIVIDUAL
 
 
 def uploaded_image(row: MediaCollection, art_type: ArtType) -> ArtFileFacts | None:
@@ -179,7 +199,11 @@ class CollectionArtService:
             for style in ArtStyle
         ]
         return found.model_copy(
-            update={"sources": {**found.sources, ArtSource.GENERATED: generated}}
+            update={
+                "sources": in_source_order(
+                    {**found.sources, ArtSource.GENERATED: generated}
+                )
+            }
         )
 
     async def preview(
@@ -194,14 +218,55 @@ class CollectionArtService:
         self,
         collection_id: int,
         art_type: ArtType,
-        body: SaveArtRequest,
+        body: SaveCollectionArtRequest,
+    ) -> StatusResponse:
+        """Apply a choice someone is waiting on; refuse it while its host is paused.
+
+        Raises:
+            PublicServiceError: 503 while the link's host is paused.
+        """
+        if body.url is not None:
+            try:
+                raise_if_rate_limited(body.url)
+            except RateLimitedError as exc:
+                raise PublicServiceError(503, str(exc)) from exc
+        return await self._apply(collection_id, art_type, body, rate_limit_retries=0)
+
+    async def apply(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        body: SaveCollectionArtRequest,
+    ) -> StatusResponse:
+        """Apply a choice a background run made, waiting out a host's rate limits."""
+        return await self._apply(
+            collection_id, art_type, body, rate_limit_retries=RATE_LIMIT_RETRIES
+        )
+
+    async def _apply(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        body: SaveCollectionArtRequest,
+        *,
+        rate_limit_retries: int,
     ) -> StatusResponse:
         """Upload validated bytes and record their art slot.
 
         Art to generate is generated from the collection's title and group, kept
         like an upload, and recorded as generated so a new title generates it
         again.
+
+        Raises:
+            PublicServiceError: 422 when a poster link has no poster style, or
+                a background has one.
         """
+        if (body.poster_style is None) is (
+            art_type is ArtType.POSTER and body.url is not None
+        ):
+            raise PublicServiceError(
+                422, "A collection's poster link, and only that, has a poster style"
+            )
         generation = body.generation
         if (
             generation is not None
@@ -216,11 +281,13 @@ class CollectionArtService:
             await self._choose(
                 collection_id,
                 art_type,
-                SaveArtRequest(upload_hash=upload_hash),
+                SaveCollectionArtRequest(upload_hash=upload_hash),
                 generated=generation,
             )
         else:
-            await self._choose(collection_id, art_type, body)
+            await self._choose(
+                collection_id, art_type, body, rate_limit_retries=rate_limit_retries
+            )
         return StatusResponse(status=Status.OK)
 
     async def _generate(
@@ -236,22 +303,31 @@ class CollectionArtService:
         self,
         collection_id: int,
         art_type: ArtType,
-        body: SaveArtRequest,
+        body: SaveCollectionArtRequest,
         *,
         generated: ArtGeneration | None = None,
+        rate_limit_retries: int = 0,
     ) -> None:
-        selection = await self._selector.prepare(art_type, body)
+        """Record a choice; a link is fetched with *rate_limit_retries*."""
+        selection = await self._selector.select(art_type, body)
         if isinstance(selection.source, ArtFileFacts):
             facts = selection.source
             data, media_type = await self._uploads.read(facts.file_hash)
         else:
-            data, media_type, facts = await self._fetch(selection.source, art_type)
+            data, media_type, facts = await self._fetch(
+                selection.source, art_type, rate_limit_retries=rate_limit_retries
+            )
 
         def record(row: MediaCollection) -> None:
             if isinstance(selection.source, ArtFileFacts):
                 select_upload(row, art_type, facts.file_hash, generated=generated)
             elif selection.stored_url:
-                select_art(row, art_type, selection.stored_url)
+                select_art(
+                    row,
+                    art_type,
+                    selection.stored_url,
+                    poster_style=body.poster_style,
+                )
             else:
                 # A media-server image has no link, and a stored one names other art.
                 clear_art_selection(row, art_type)
@@ -273,7 +349,7 @@ class CollectionArtService:
             await self._choose(
                 collection_id,
                 art_type,
-                SaveArtRequest(upload_hash=upload_hash),
+                SaveCollectionArtRequest(upload_hash=upload_hash),
                 generated=generation,
             )
 
@@ -335,7 +411,7 @@ class CollectionArtService:
         )
 
     async def _fetch(
-        self, url: str, art_type: ArtType
+        self, url: str, art_type: ArtType, *, rate_limit_retries: int
     ) -> tuple[bytes, str, ArtFileFacts]:
         """Download a chosen link, keep it in the image cache and describe it.
 
@@ -348,6 +424,7 @@ class CollectionArtService:
             await self._image_clients.get_client(url),
             allow_private=trusted,
             headers=self._provider_registry.provider.get_download_headers(url),
+            rate_limit_retries=rate_limit_retries,
         )
         _, width, height = await owned_thread(inspect_saved_image, fetched.data)
         async with self._database.read_session() as db:
@@ -401,7 +478,13 @@ class CollectionArtService:
             current=version == file_hash,
         )
 
-    async def adopt(self, collection_id: int, art_type: ArtType, url: str) -> bool:
+    async def adopt(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        url: str,
+        poster_style: CollectionPosterStyle | None,
+    ) -> bool:
         """Save *url* as the selection of art the server already shows.
 
         Returns:
@@ -415,7 +498,7 @@ class CollectionArtService:
             self._database.write_session() as db,
         ):
             row = await self._require(db, collection_id, art_type)
-            select_art(row, art_type, public)
+            select_art(row, art_type, public, poster_style=poster_style)
             db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}

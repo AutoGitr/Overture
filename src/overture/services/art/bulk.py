@@ -93,6 +93,10 @@ class _Decision:
     verified: ArtFileFacts | None = None
 
 
+#: Why a run leaves a slot whose file is already the art a source chose.
+ALREADY_ON_DISK = "the saved selection on disk is already this art"
+
+
 @dataclass(slots=True, frozen=True)
 class _Notes:
     """Why sources that were tried did not decide."""
@@ -355,6 +359,10 @@ async def _act(run: _ArtRun, slot: _Slot, decision: _Decision, notes: _Notes) ->
     # A source that failed before this one decided is its own error line.
     for error in notes.errors:
         await job.report(JobOutcome.ERROR, slot.target, error, finished=False)
+    if slot.holds_selection and slot.saved and slot.saved.url == decision.url:
+        await job.report(JobOutcome.SKIPPED, slot.target, ALREADY_ON_DISK)
+        await slot.stamp(run)
+        return
     if decision.verified is None:
         if await queue_and_report(
             job,

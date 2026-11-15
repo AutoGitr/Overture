@@ -77,8 +77,10 @@ unchanged file costs one look at its size and modification time and is not
 read. To keep a file you put there yourself, clear the saved choice, or upload
 the image instead.
 
-**Replace existing** also replaces existing theme files; a downloaded file
-identical to yours is left untouched. A source image identical to your file is
+**Replace existing** only ever replaces a choice with different art: a slot
+whose file is already the art a source picks, such as OvertureDB's, is skipped
+without downloading anything. It also replaces existing theme files; a
+downloaded file identical to yours is left untouched. A source image identical to your file is
 adopted in place. OvertureDB's artwork is compared with your file as local
 image matching compares its candidates: by default only an identical file is
 taken, and a looser matching threshold also takes the same picture saved
@@ -86,6 +88,12 @@ differently, replacing your unsaved file with OvertureDB's.
 
 **Skip recently checked** skips searches within the chosen time window, also
 with Replace existing. Restoring a saved choice always runs.
+
+When an image host rate-limits Overture, as ThePosterDB often does, runs pause
+every request to that host for as long as it asks (at least a minute, doubling
+while the limits continue) and then try again, up to three times, instead of
+failing the slot. Requests to other hosts carry on meanwhile. Choosing art
+yourself while a host is paused says how long to wait instead.
 
 ## Renamer
 

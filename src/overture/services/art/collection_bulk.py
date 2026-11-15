@@ -9,6 +9,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
 lazy from ...db.art_slots import read_art_slot, saved_art
+lazy from ...db.models.art import ArtSlot
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.session import Database
 lazy from ...domain import ITEM_ART_TYPES, ArtBulkSource, ArtType
@@ -16,7 +17,7 @@ lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import BulkAssetTally
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...schemas.art import SaveArtRequest
+lazy from ...schemas.art import SaveCollectionArtRequest
 lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
@@ -29,7 +30,11 @@ lazy from ..bulk_common import (
     planned_outcome,
 )
 lazy from ..catalog.index import CatalogIndex, CatalogPick
-lazy from .collection_art import CollectionArtService, uploaded_image
+lazy from .collection_art import (
+    CollectionArtService,
+    chosen_poster_style,
+    uploaded_image,
+)
 lazy from .perfect_match import accepted_matches, comparison_threshold
 
 _ERRORS = (PublicServiceError, httpx2.HTTPError, OSError, ValueError)
@@ -76,6 +81,11 @@ def _offer(
         notes=tuple(notes),
         enabled=index.enabled or not all(s.catalog for s in params.source_order),
     )
+
+
+def _holds(slot: ArtSlot, url: str) -> bool:
+    """Whether the server already shows *url*, the slot's uploaded selection."""
+    return slot.url == url and slot.file_hash is not None
 
 
 async def _index(
@@ -141,21 +151,35 @@ async def _choose(
     *,
     art: CollectionArtService,
     index: CatalogIndex,
-) -> tuple[JobOutcome, str, SaveArtRequest | None]:
+) -> tuple[JobOutcome, str, SaveCollectionArtRequest | None]:
     """Return the outcome, its reason and the artwork to upload, if any."""
-    saved = saved_art(read_art_slot(row, art_type))
+    slot = read_art_slot(row, art_type)
+    saved = saved_art(slot)
     if saved is not None and not params.overwrite_existing:
         return (
             JobOutcome.DOWNLOADED,
             "restores the saved selection",
-            SaveArtRequest(url=saved.url, upload_hash=saved.upload_hash),
+            SaveCollectionArtRequest(
+                url=saved.url,
+                upload_hash=saved.upload_hash,
+                poster_style=slot.poster_style,
+            ),
         )
     notes: list[str] = []
     for source in params.source_order:
         if source is ArtBulkSource.OVERTUREDB:
             pick = index.collection_art(row, art_type)
+            if pick.value is not None and _holds(slot, pick.value):
+                return JobOutcome.SKIPPED, f"already uploaded: {pick.label}", None
             if pick.value is not None:
-                return JobOutcome.DOWNLOADED, pick.label, SaveArtRequest(url=pick.value)
+                return (
+                    JobOutcome.DOWNLOADED,
+                    pick.label,
+                    SaveCollectionArtRequest(
+                        url=pick.value,
+                        poster_style=index.collection_poster_style(row, art_type),
+                    ),
+                )
             notes.extend(pick.notes)
             continue
         if reason := _unmatchable(row, art_type):
@@ -165,7 +189,10 @@ async def _choose(
         result = await art.match(row.id or 0, art_type, comparison_threshold(threshold))
         matches = accepted_matches(result.matches, threshold)
         if matches:
-            if not await art.adopt(row.id or 0, art_type, matches[0].url):
+            best = matches[0]
+            if not await art.adopt(
+                row.id or 0, art_type, best.url, chosen_poster_style(art_type, best)
+            ):
                 return JobOutcome.SKIPPED, NOT_PUBLIC_ART_URL, None
             return JobOutcome.ADOPTED, "matches the server's image", None
         notes.append(f"Local art matching: {no_match_reason(result, threshold)}")
@@ -210,7 +237,7 @@ async def run_collection_art(
                         row, art_type, params, art=art, index=index
                     )
                     if chosen is not None:
-                        await art.save(row.id or 0, art_type, chosen)
+                        await art.apply(row.id or 0, art_type, chosen)
                 except _ERRORS as exc:
                     await job.report(JobOutcome.ERROR, target, str(exc))
                     continue

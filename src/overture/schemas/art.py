@@ -4,7 +4,7 @@ lazy from typing import Literal, Self
 
 lazy from pydantic import Field, model_validator
 
-lazy from ..domain import ArtGeneration, ArtStyle, ArtType
+lazy from ..domain import ArtGeneration, ArtStyle, ArtType, CollectionPosterStyle
 lazy from .base import PublicText, StrictBaseModel
 lazy from .validators import ImageHash
 
@@ -44,6 +44,21 @@ class SaveArtRequest(StrictBaseModel):
         return self
 
 
+class SaveCollectionArtRequest(SaveArtRequest):
+    """The chosen artwork for one collection slot."""
+
+    #: Which OvertureDB poster a poster link is contributed as; required with
+    #: a poster link and refused otherwise.
+    poster_style: CollectionPosterStyle | None = None
+
+    @model_validator(mode="after")
+    def validate_poster_style(self) -> Self:
+        """Allow a poster style only with a link."""
+        if self.poster_style is not None and self.url is None:
+            raise ValueError("Only a poster link has a poster style")
+        return self
+
+
 class ArtUploadResponse(StrictBaseModel):
     """An uploaded image, kept until a slot selects it."""
 
@@ -73,6 +88,8 @@ class ArtCandidate(StrictBaseModel):
     generated: ArtStyle | None = None
     #: Choosing it generates a poster with the title alone, without its group.
     title_only: bool = False
+    #: The OvertureDB poster of a collection this link is, if it is one.
+    poster_style: CollectionPosterStyle | None = None
 
     @property
     def area(self) -> int:

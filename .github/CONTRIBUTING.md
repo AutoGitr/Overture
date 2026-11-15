@@ -57,13 +57,13 @@ formatting, lint, types, tests with their coverage thresholds, and builds.
 formats and regenerates contracts. The Git hook runs the quick check of the staged
 changes, without tests or builds.
 
-| Task | Command |
-| --- | --- |
-| Lint and format Python | `uv run ruff check --fix` and `uv run ruff format` |
-| Type-check Python | `uv run python -m pyright` |
-| Backend tests | `uv run python -m pytest` |
-| Frontend checks, in `frontend/` | `bun run format:fix`, `typecheck`, `lint`, `test:unit` |
-| End-to-end tests, in `frontend/` | `bun run test:e2e`, and `test:oidc` for sign-in |
+| Task                                           | Command                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------- |
+| Lint and format Python                         | `uv run ruff check --fix` and `uv run ruff format`            |
+| Type-check Python                              | `uv run python -m pyright`                                    |
+| Backend tests                                  | `uv run python -m pytest`                                     |
+| Frontend checks, in `frontend/`                | `bun run format:fix`, `typecheck`, `lint`, `test:unit`        |
+| End-to-end tests, in `frontend/`               | `bun run test:e2e`, and `test:oidc` for sign-in               |
 | Import rules and bundle budget, in `frontend/` | `bun run lint:deps`, and `bun run check:bundle` after a build |
 
 ### Checking Overture against real media servers
@@ -188,57 +188,3 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
   [CHANGELOG.md](CHANGELOG.md), in the same commit.
 - Leave out credentials and private media details. Report vulnerabilities as
   described in [SECURITY.md](SECURITY.md).
-
-## Releases
-
-Maintainers only. Pushing a `vX.Y.Z` tag triggers the **Release** workflow,
-which qualifies the tag and publishes after the `release` environment approves
-it. Overture follows [Semantic Versioning](https://semver.org/):
-- **PATCH** (`1.0.x`): Backward-compatible fixes (`fix:`, `perf:`, `deps:`).
-- **MINOR** (`1.x.0`): Backward-compatible new features or settings (`feat:`).
-- **MAJOR** (`x.0.0`): Breaking database, API, or environment changes (`feat!:`, `BREAKING CHANGE:`).
-
-Release `main` with one command:
-
-```sh
-bash scripts/release.sh X.Y.Z
-```
-
-It checks that `main` matches `origin` and that every workflow its push started
-passed, that `X.Y.Z` is the next patch, minor or major version after the newest
-one in use, and that a ruleset still protects `v*` tags. It then starts the
-**Release check** workflow on that commit: the native Linux qualification and
-the capacity and soak validation, which CI leaves to releases. While that runs,
-it sets the version across `pyproject.toml`, `uv.lock`, `frontend/package.json`
-and `openapi/overture.json`, moves the `Unreleased` entries of
-[CHANGELOG.md](CHANGELOG.md) under `## X.Y.Z - <date>` and runs the full local
-check. Once the Release check has passed, it pushes a signed release commit and
-`vX.Y.Z` tag together.
-
-The workflow runs CI, native Linux qualification and release validation, builds
-the native archive, pushes the `amd64` and `arm64` image by digest, scans and
-signs it, attaches SBOMs and provenance, and smoke-tests both platforms. Only
-then does it add the container tags (`X.Y.Z`, `X.Y`, `X` and `latest`) and
-create the GitHub release, whose notes are the version's changelog section
-followed by the image digest.
-
-If the run fails before that, fix the workflow on `main` and run **Release**
-from `main` with the tag as input; it rebuilds the tagged source. Never move or
-reuse a published version: publish a patch release to fix a bad one.
-
-GHCR signatures go to the `ghcr.io/autogitr/overture-signatures` package. The
-workflow verifies the GHCR image and its signature without credentials, as a
-user would, so it stops when either package is private. A package created by
-the workflow can start private: make it public once and rerun the failed job.
-
-Never delete untagged versions of the `overture` package: a release is an index
-with one image and one attestation manifest per platform, and only the index is
-tagged.
-
-Repository settings: protect `main` and `v*` tags, require only the `ci-result`
-check, which passes once every CI job a change needs has passed, and keep Actions
-permissions read-only by default. CodeQL analyses only the languages a change
-touches, so it is not a required check. Repository
-labels are defined in `.github/labels.json`. Preview changes with
-`uv run --locked python -m scripts.sync_labels`; use `--apply` to reconcile them
-or `--check` to detect drift.

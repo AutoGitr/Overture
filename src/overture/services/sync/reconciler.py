@@ -413,7 +413,7 @@ class LibraryReconciler:
         """Find the row one provider item matches, then reconcile it."""
         try:
             excluded, expected = await self._match(server_item, claimed)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one item's failure is reported; the rest go on
             return _item_failure(server_item, exc)
         outcome = await self._reconcile_matched(
             server_item, excluded, expected, auto_unmonitor=auto_unmonitor
@@ -500,7 +500,7 @@ class LibraryReconciler:
                 ):
                     result.changes = (*result.changes, "saved selections downloading")
             return result
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one item's failure is reported; the rest go on
             return _item_failure(server_item, exc)
 
     async def _log_removed(

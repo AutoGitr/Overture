@@ -129,7 +129,34 @@ class ArtSelector:
         return width, height
 
     async def prepare(self, art_type: ArtType, body: SaveArtRequest) -> ArtSelection:
-        """Validate the chosen artwork before anything is recorded.
+        """Validate the chosen artwork, measuring a link, before anything is recorded.
+
+        A link is measured from its image when the request does not give its
+        size, so a misshapen one is refused before its download is queued.
+
+        Raises:
+            PublicServiceError: 422 for art to generate, which only a collection
+                has a title for; its service generates it and chooses the upload.
+        """
+        selection = await self.select(art_type, body)
+        if not isinstance(selection.source, str):
+            return selection
+        width, height = await self._resolve_art_dimensions(
+            selection.source,
+            width=body.width,
+            height=body.height,
+            trusted_media_server=self._config.is_trusted_media_server_url(
+                selection.source
+            ),
+        )
+        async with self._database.read_session() as db:
+            await require_valid_aspect_ratio(db, art_type, width, height)
+        return selection
+
+    async def select(self, art_type: ArtType, body: SaveArtRequest) -> ArtSelection:
+        """Validate the chosen artwork without fetching a link.
+
+        For a caller that downloads the link next and checks the bytes it gets.
 
         Raises:
             PublicServiceError: 422 for art to generate, which only a collection
@@ -150,17 +177,10 @@ class ArtSelector:
             target_url = canonical_art_url(remove_sensitive_url_params(body.url))
         except ValueError as exc:
             raise PublicServiceError(400, f"{exc}.") from exc
-        trusted_media_server = self._config.is_trusted_media_server_url(target_url)
-
-        await _validate_art_url(target_url, trusted_media_server=trusted_media_server)
-        width, height = await self._resolve_art_dimensions(
+        await _validate_art_url(
             target_url,
-            width=body.width,
-            height=body.height,
-            trusted_media_server=trusted_media_server,
+            trusted_media_server=self._config.is_trusted_media_server_url(target_url),
         )
-        async with self._database.read_session() as db:
-            await require_valid_aspect_ratio(db, art_type, width, height)
         return ArtSelection(
             source=target_url,
             stored_url=await public_art_url(target_url, app_config=self._config),

@@ -45,6 +45,7 @@ lazy from ..utils.collection_formats import (
     SummaryFormat,
 )
 lazy from .base import PublicText, StrictBaseModel
+lazy from .catalog import CatalogSelections
 lazy from .common import StatusResponse
 lazy from .removal import AssetRemoval
 lazy from .validators import GroupName, YouTubeId
@@ -285,6 +286,8 @@ class CollectionArtwork(StrictBaseModel):
     background_url: str | None = None
     poster_source: ArtSource | None = None
     background_source: ArtSource | None = None
+    #: The OvertureDB poster the selected poster link is contributed as.
+    poster_style: CollectionPosterStyle | None = None
     #: The cached image Overture last uploaded to the server, which views show.
     poster_hash: str | None = None
     background_hash: str | None = None
@@ -310,6 +313,7 @@ def collection_artwork(row: MediaCollection, *, backgrounds: bool) -> Collection
         {
             **flattened_art(poster, "poster"),
             **flattened_art(background, "background"),
+            "poster_style": poster.poster_style,
             "poster_status": completion.poster_status,
             "background_status": completion.background_status,
             "art_status": completion.art_status,
@@ -374,9 +378,9 @@ class CollectionRead(CollectionArtwork):
     catalog_complete: bool = False
     #: The catalog has a ThemerrDB theme for it.
     catalog_themerrdb: bool = False
-    #: Whether the selections the collection and its OvertureDB entry both hold
-    #: agree; null when no slot has a selection on both sides.
-    catalog_selections: Literal["matching", "different"] | None = None
+    #: How each selection compares with the collection's OvertureDB entry;
+    #: null without an entry.
+    catalog_selections: CatalogSelections | None = None
     #: The poster or background is outside the aspect ratio tolerance.
     has_incorrect_aspect_ratio: bool = False
     #: OvertureDB says the collection has no theme music, so none is missing.

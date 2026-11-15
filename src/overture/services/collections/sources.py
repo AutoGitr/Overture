@@ -193,7 +193,8 @@ class SourceResolver:
     ) -> str | None:
         """The description of the first list the criteria include, if it has one.
 
-        TMDB franchises and lists have overviews and people their biography.
+        TMDB franchises and lists have overviews, MDBList lists their
+        description and people their biography.
         """
         for condition in (
             found
@@ -211,6 +212,8 @@ class SourceResolver:
                 case TmdbPersonSource(person_id=identity):
                     person = await self._tmdb.get_person(identity)
                     text = person.biography if person else None
+                case MdblistSource(identifiers=[identity, *_]):
+                    text = await self._mdblist.description(identity)
                 case _:
                     continue
             if text:

@@ -216,6 +216,14 @@ class CatalogIndex:
             enabled=self.enabled,
         )
 
+    def collection_poster_style(
+        self, row: MediaCollection, art_type: ArtType
+    ) -> CollectionPosterStyle | None:
+        """The style of the poster :meth:`collection_art` offers for a slot."""
+        if art_type is not ArtType.POSTER:
+            return None
+        return self.collection_posters[row.id or 0]
+
     def has_no_theme(self, item: MediaItem | MediaCollection) -> bool:
         """Whether OvertureDB says *item* has no theme music."""
         public_item = (

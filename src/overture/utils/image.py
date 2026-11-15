@@ -64,6 +64,11 @@ class RateLimitedError(RemoteImageError):
     """Raised when an image host is rate-limiting Overture."""
 
 
+#: How often background work asks a rate-limiting host again, each time after
+#: the pause the limit started: the pause doubles, so the last wait is long.
+RATE_LIMIT_RETRIES = 3
+
+
 def _host(url: str) -> str:
     return urlsplit(url).hostname or ""
 
@@ -465,6 +470,7 @@ async def fetch_image_bytes(
     max_bytes: int = MAX_IMAGE_BYTES,
     on_progress: BytesProgress | None = None,
     transfer_slots: asyncio.Semaphore | None = SHARED_IMAGE_TRANSFERS,
+    rate_limit_retries: int = 0,
 ) -> bytes:
     """Download an image with response-type and size limits enforced."""
     return (
@@ -478,6 +484,7 @@ async def fetch_image_bytes(
             max_bytes=max_bytes,
             on_progress=on_progress,
             transfer_slots=transfer_slots,
+            rate_limit_retries=rate_limit_retries,
         )
     ).data
 
@@ -493,6 +500,7 @@ async def fetch_image(
     max_bytes: int = MAX_IMAGE_BYTES,
     on_progress: BytesProgress | None = None,
     transfer_slots: asyncio.Semaphore | None = SHARED_IMAGE_TRANSFERS,
+    rate_limit_retries: int = 0,
 ) -> FetchedImage:
     """Download and validate one bounded image payload.
 
@@ -500,7 +508,45 @@ async def fetch_image(
     which case any raster format Pillow decodes is, for images that are only
     shown or compared and never saved. The transfer waits for one of
     *transfer_slots*; a caller that bounds its own concurrency passes ``None``.
+    Background work passes *rate_limit_retries* (:data:`RATE_LIMIT_RETRIES`)
+    to wait out the pause a rate limit starts and ask again, so a slow host
+    delays its work instead of failing it.
+
+    Raises:
+        RateLimitedError: When the host still rate-limits after the retries.
     """
+    retries_left = rate_limit_retries
+    while True:
+        try:
+            return await _fetch_image_once(
+                url,
+                client,
+                allow_generic_image=allow_generic_image,
+                allow_private=allow_private,
+                headers=headers,
+                params=params,
+                max_bytes=max_bytes,
+                on_progress=on_progress,
+                transfer_slots=transfer_slots,
+            )
+        except RateLimitedError:
+            if not retries_left:
+                raise
+            retries_left -= 1
+
+
+async def _fetch_image_once(
+    url: str,
+    client: httpx2.AsyncClient,
+    *,
+    allow_generic_image: bool,
+    allow_private: bool,
+    headers: dict[str, str] | None,
+    params: dict[str, str] | None,
+    max_bytes: int,
+    on_progress: BytesProgress | None,
+    transfer_slots: asyncio.Semaphore | None,
+) -> FetchedImage:
     slot: AbstractAsyncContextManager[object] = (
         nullcontext() if transfer_slots is None else transfer_slots
     )

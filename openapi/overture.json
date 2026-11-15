@@ -1,6 +1,13 @@
 {
   "components": {
     "schemas": {
+      "Agreement": {
+        "enum": [
+          "matching",
+          "different"
+        ],
+        "type": "string"
+      },
       "ApiKeyCreate": {
         "additionalProperties": false,
         "description": "Name a new read-only API key.",
@@ -987,6 +994,16 @@
             ],
             "title": "Perfect Match"
           },
+          "poster_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "preview_url": {
             "anyOf": [
               {
@@ -1053,7 +1070,8 @@
           "hamming",
           "perfect_match",
           "generated",
-          "title_only"
+          "title_only",
+          "poster_style"
         ],
         "title": "ArtCandidate",
         "type": "object"
@@ -1128,13 +1146,13 @@
         "description": "Where selected artwork comes from.\n\n``overturedb`` when it is the OvertureDB catalog's artwork for the slot,\n``upload`` when someone uploaded it, else the name of the catalog art\nsource whose host serves it. A test keeps the hosts in step with the\ncatalog contract's art sources.",
         "enum": [
           "overturedb",
-          "upload",
-          "generated",
           "tmdb",
           "tpdb",
           "fanart",
           "tvdb",
-          "plex"
+          "plex",
+          "upload",
+          "generated"
         ],
         "title": "ArtSource",
         "type": "string"
@@ -3518,6 +3536,39 @@
         "title": "CatalogSeasonSource",
         "type": "object"
       },
+      "CatalogSelections": {
+        "additionalProperties": false,
+        "description": "How each of a title's selections compares with what OvertureDB holds.\n\nA selection only one side has is different; both having none matches.",
+        "properties": {
+          "background": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "poster": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "season_posters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agreement"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "theme": {
+            "$ref": "#/components/schemas/Agreement"
+          }
+        },
+        "required": [
+          "poster",
+          "background",
+          "season_posters",
+          "theme"
+        ],
+        "title": "CatalogSelections",
+        "type": "object"
+      },
       "CatalogSources": {
         "additionalProperties": false,
         "description": "Catalog sources response.",
@@ -4512,17 +4563,12 @@
           "catalog_selections": {
             "anyOf": [
               {
-                "enum": [
-                  "matching",
-                  "different"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/CatalogSelections"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Catalog Selections"
+            ]
           },
           "catalog_themerrdb": {
             "default": false,
@@ -4724,6 +4770,16 @@
           "poster_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
+          },
+          "poster_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "poster_url": {
             "anyOf": [
@@ -4982,6 +5038,7 @@
           "background_url",
           "poster_source",
           "background_source",
+          "poster_style",
           "poster_hash",
           "background_hash",
           "poster_phash",
@@ -6581,17 +6638,12 @@
           "catalog_selections": {
             "anyOf": [
               {
-                "enum": [
-                  "matching",
-                  "different"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/CatalogSelections"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Catalog Selections"
+            ]
           },
           "catalog_themerrdb": {
             "default": false,
@@ -6771,6 +6823,16 @@
           "poster_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
+          },
+          "poster_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "poster_url": {
             "anyOf": [
@@ -6981,6 +7043,7 @@
           "background_url",
           "poster_source",
           "background_source",
+          "poster_style",
           "poster_hash",
           "background_hash",
           "poster_phash",
@@ -10048,18 +10111,13 @@
           "catalog_selections": {
             "anyOf": [
               {
-                "enum": [
-                  "matching",
-                  "different"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/CatalogSelections"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Whether the selections the item and its OvertureDB entry both hold agree; null when no slot has a selection on both sides.",
-            "title": "Catalog Selections"
+            "description": "How each selection compares with the item's OvertureDB entry; null without an entry."
           },
           "catalog_themerrdb": {
             "default": false,
@@ -11137,6 +11195,82 @@
           }
         },
         "title": "SaveArtRequest",
+        "type": "object"
+      },
+      "SaveCollectionArtRequest": {
+        "additionalProperties": false,
+        "description": "The chosen artwork for one collection slot.",
+        "properties": {
+          "generated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "poster_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title_only": {
+            "default": false,
+            "title": "Title Only",
+            "type": "boolean"
+          },
+          "upload_hash": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageHash"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "title": "SaveCollectionArtRequest",
         "type": "object"
       },
       "SaveSelectionResponse": {
@@ -19146,7 +19280,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SaveArtRequest"
+                "$ref": "#/components/schemas/SaveCollectionArtRequest"
               }
             }
           },
@@ -25025,8 +25159,8 @@
               "default": "tmdb",
               "description": "Collection member artwork",
               "enum": [
-                "tmdb",
-                "overturedb"
+                "overturedb",
+                "tmdb"
               ],
               "title": "Artwork Source",
               "type": "string"

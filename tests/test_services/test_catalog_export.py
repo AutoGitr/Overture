@@ -12,7 +12,12 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ThemeBulkSource
+lazy from overture.domain import (
+    ArtType,
+    CollectionPosterStyle,
+    MediaType,
+    ThemeBulkSource,
+)
 lazy from overture.services.catalog.export import (
     REPORT_NAME,
     export_archive,
@@ -194,6 +199,7 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
         collection,
         ArtType.POSTER,
         PublicArtUrl("https://image.tmdb.org/t/p/w500/saga.jpg"),
+        poster_style=CollectionPosterStyle.INDIVIDUAL,
     )
     db_session.add(collection)
     await db_session.commit()
@@ -213,7 +219,7 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
 def test_export_names_art_from_a_host_overturedb_refuses() -> None:
     warning = (
         "Poster: OvertureDB won't accept art from m.media-amazon.com; it accepts "
-        "TMDB, ThePosterDB, fanart.tv, TheTVDB and Plex"
+        "TMDB, TPDb, fanart.tv, TVDB and Plex"
     )
     assert art_refusals(
         "https://m.media-amazon.com/images/M/a.jpg",

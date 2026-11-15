@@ -17,6 +17,7 @@ lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtBulkSource,
     ArtType,
+    CollectionPosterStyle,
     MediaType,
 )
 lazy from overture.jobs.kinds import JobKind
@@ -24,7 +25,11 @@ lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.jobs.runner import run_managed_job
 lazy from overture.jobs.tally import BulkAssetTally
-lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse, SaveArtRequest
+lazy from overture.schemas.art import (
+    ArtCandidate,
+    ArtMatchResponse,
+    SaveCollectionArtRequest,
+)
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.services.art.collection_art import CollectionArtService
@@ -84,7 +89,12 @@ async def test_collection_art_plans_posters_and_backgrounds_with_item_rules(
     async with database.write_session() as session:
         row = await session.get(MediaCollection, 1)
         assert row is not None
-        select_art(row, ArtType.POSTER, PublicArtUrl("https://saved.test/poster.jpg"))
+        select_art(
+            row,
+            ArtType.POSTER,
+            PublicArtUrl("https://saved.test/poster.jpg"),
+            poster_style=CollectionPosterStyle.INDIVIDUAL,
+        )
         record_art_file(
             row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1500, 1, 1)
         )
@@ -132,7 +142,9 @@ async def test_slots_no_source_can_serve_are_decided_together_while_planning(
 
 class RecordingArt(CollectionArtService):
     def __init__(self, matches: list[ArtCandidate] | None = None) -> None:
-        self.saved: list[tuple[int, ArtType, str | None]] = []
+        self.saved: list[
+            tuple[int, ArtType, str | None, CollectionPosterStyle | None]
+        ] = []
         self.adopted: list[tuple[int, ArtType, str]] = []
         self.matches = matches or []
         self.thresholds: list[int] = []
@@ -150,18 +162,24 @@ class RecordingArt(CollectionArtService):
         )
 
     @override
-    async def adopt(self, collection_id: int, art_type: ArtType, url: str) -> bool:
+    async def adopt(
+        self,
+        collection_id: int,
+        art_type: ArtType,
+        url: str,
+        poster_style: CollectionPosterStyle | None,
+    ) -> bool:
         self.adopted.append((collection_id, art_type, url))
         return True
 
     @override
-    async def save(
+    async def apply(
         self,
         collection_id: int,
         art_type: ArtType,
-        body: SaveArtRequest,
+        body: SaveCollectionArtRequest,
     ) -> StatusResponse:
-        self.saved.append((collection_id, art_type, body.url))
+        self.saved.append((collection_id, art_type, body.url, body.poster_style))
         return StatusResponse(status=Status.OK)
 
 
@@ -211,7 +229,9 @@ async def test_collection_art_run_uploads_the_catalog_art_it_finds(
 
     tally = await _run(params, art, app_config=app_config, database=database)
 
-    assert art.saved == [(1, ArtType.POSTER, CATALOG_URL)]
+    assert art.saved == [
+        (1, ArtType.POSTER, CATALOG_URL, CollectionPosterStyle.INDIVIDUAL)
+    ]
     assert tally.downloaded == 1
     async with database.read_session() as session:
         row = await session.get(MediaCollection, 1)

@@ -183,7 +183,7 @@ class CollectionSets:
             try:
                 await self._editor.withhold(row.id or 0)
                 result.withheld.append(row.id or 0)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
                 result.errors[row.title] = str(exc)
         async with self._access.database.write_session() as session:
             saved = await session.get(CollectionGroup, group.id)
@@ -360,7 +360,7 @@ class CollectionSets:
             )
             result.created.append(detail.id)
             titles.update((library_id, title) for library_id in library_ids)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
             result.errors[collection.title] = str(exc)
 
     async def _refresh(

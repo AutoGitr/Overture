@@ -2,7 +2,7 @@
 
 lazy from typing import Any
 
-lazy from ...catalog_contract.contract import entry_fields
+lazy from ...catalog_contract.contract import catalog_art_url, entry_fields
 lazy from ...db.models.catalog import CatalogCollection, CatalogItem
 lazy from ...domain import CatalogMediaType, CollectionPosterStyle
 
@@ -12,6 +12,27 @@ type Entry = dict[str, Any]
 def collection_poster_field(posters: CollectionPosterStyle) -> str:
     """The entry field that is a collection's poster, as *posters* chooses."""
     return f"poster_url_{posters.value}"
+
+
+def held_poster_style(
+    entry: CatalogCollection | None, url: str
+) -> CollectionPosterStyle | None:
+    """The style of OvertureDB's poster for the collection that *url* links to."""
+    if entry is None:
+        return None
+    try:
+        canonical = catalog_art_url(url)
+    except ValueError:
+        return None
+    held = catalog_collection_entry(entry)
+    return next(
+        (
+            style
+            for style in CollectionPosterStyle
+            if held[collection_poster_field(style)] == canonical
+        ),
+        None,
+    )
 
 
 def catalog_item_entry(item: CatalogItem, season_posters: dict[int, str]) -> Entry:

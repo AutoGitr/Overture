@@ -14,6 +14,7 @@ lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.art_urls import PublicArtUrl, public_art_url
 lazy from ...utils.image import (
+    RATE_LIMIT_RETRIES,
     RemoteImageError,
     UnsupportedImageFormatError,
     fetch_image_bytes,
@@ -80,6 +81,7 @@ class DownloadArtHandler:
                 # ART_DOWNLOAD_WORKERS bounds the art lane; a bulk match's
                 # comparisons must not hold its downloads back.
                 transfer_slots=None,
+                rate_limit_retries=RATE_LIMIT_RETRIES,
             )
         except RemoteImageError as exc:
             raise DownloadError(str(exc)) from exc

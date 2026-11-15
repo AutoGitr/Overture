@@ -8,6 +8,7 @@ lazy from overture.domain import (
     ArtType,
     AssetStatus,
     CollectionOrder,
+    CollectionPosterStyle,
     FilterField,
     MediaType,
     ServerType,
@@ -17,7 +18,7 @@ lazy from overture.routers import collections as collections_router
 lazy from overture.schemas.art import (
     ArtMatchResponse,
     ArtSourcesResponse,
-    SaveArtRequest,
+    SaveCollectionArtRequest,
 )
 lazy from overture.schemas.collections import (
     ArrTagRead,
@@ -311,7 +312,10 @@ async def test_collection_routes_delegate_to_service() -> None:
         1, ArtType.POSTER, art_service
     )
     assert art_sources.current_url is None
-    save_art = SaveArtRequest(url="https://example.com/poster.jpg")
+    save_art = SaveCollectionArtRequest(
+        url="https://example.com/poster.jpg",
+        poster_style=CollectionPosterStyle.INDIVIDUAL,
+    )
     saved_art = await collections_router.save_collection_art(
         1, ArtType.POSTER, save_art, art_service
     )

@@ -35,6 +35,7 @@ lazy from .passwords import hash_password
 lazy from .runtime import build_runtime
 lazy from .runtime_paths import FRONTEND_DIR
 lazy from .services.themes.youtube_resolver import THEME_PACKAGES, THEME_TOOLS
+lazy from .utils.file import process_owner
 lazy from .utils.logging import configure_logging
 lazy from .utils.security import sanitise_error
 lazy from .version import APP_VERSION
@@ -173,10 +174,8 @@ def verify_config_dir(config_dir: Path) -> None:
             f"Config directory does not exist: {config_dir}. Create it first."
         )
     if not (os.access(config_dir, os.W_OK) and os.access(config_dir, os.X_OK)):
-        uid = getattr(os, "getuid", lambda: -1)()
-        gid = getattr(os, "getgid", lambda: -1)()
         raise ValueError(
-            f"Config directory {config_dir} is not writable by UID={uid} GID={gid}."
+            f"Config directory {config_dir} is not writable by {process_owner()}."
         )
     with tempfile.TemporaryFile(dir=config_dir) as stream:
         stream.write(b"Overture filesystem check")

@@ -9,7 +9,7 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType
+lazy from overture.domain import ArtType, CollectionPosterStyle, MediaType
 lazy from overture.services.catalog.issue import (
     collection_issue,
     contribution_issue,
@@ -95,7 +95,12 @@ async def test_a_collection_issue_needs_its_tmdb_collection(
         )
         for key, tmdb_id in (("saga", 10), ("custom", None))
     )
-    select_art(matched, ArtType.POSTER, PublicArtUrl(POSTER))
+    select_art(
+        matched,
+        ArtType.POSTER,
+        PublicArtUrl(POSTER),
+        poster_style=CollectionPosterStyle.INDIVIDUAL,
+    )
     db_session.add_all([matched, unmatched])
     await db_session.commit()
     assert matched.id is not None

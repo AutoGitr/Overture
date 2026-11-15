@@ -275,7 +275,7 @@
   }
 
   .sort-field-label {
-    font-size: 10px;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.02em;
     color: var(--accent);
@@ -283,7 +283,7 @@
 
   .group-label {
     padding: var(--space-2) var(--space-3) var(--space-1);
-    font-size: 10px;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -297,7 +297,7 @@
 
   .sort-dir {
     margin-left: var(--space-2);
-    font-size: 10px;
+    font-size: var(--text-xs);
     color: var(--accent);
   }
 
@@ -348,7 +348,7 @@
     justify-content: center;
     padding: 1px 5px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-xs);
     color: var(--text-tertiary);
     background: var(--bg-secondary);
     border: var(--border-subtle);

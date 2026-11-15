@@ -262,7 +262,7 @@ class RuleSync:
         """
         try:
             summary = await self._sources.summary(library_criteria(row))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a summary lookup must not fail the sync
             logger.debug("Source summary failed: %s", exc)
             return
         if summary == rule.source_summary:

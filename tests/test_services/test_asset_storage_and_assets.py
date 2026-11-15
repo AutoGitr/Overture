@@ -25,204 +25,201 @@ lazy from overture.utils.assets import (
 lazy from overture.utils.path import is_within_roots
 
 
-class TestAssetStoragePath:
-    @pytest.fixture(autouse=True)
-    def _storage(self, app_config: Settings) -> None:
-        self.storage = AssetStorage(app_config=app_config)
+@pytest.fixture
+def storage(app_config: Settings) -> AssetStorage:
+    return AssetStorage(app_config=app_config)
 
-    def test_resolves_item_art_paths(self) -> None:
-        folder = "/media/Movie"
 
-        assert self.storage.resolve_art_path(folder, ArtType.POSTER, ".png") == str(
-            Path(folder) / "poster.png"
-        )
-        assert self.storage.resolve_art_path(folder, ArtType.BACKGROUND) == str(
-            Path(folder) / "background.jpg"
-        )
+def test_resolves_item_art_paths(storage: AssetStorage) -> None:
+    folder = "/media/Movie"
 
-    def test_resolves_theme_path(self) -> None:
-        folder = "/media/Movie"
-
-        assert self.storage.resolve_theme_path(folder) == str(
-            Path(folder) / "theme.mp3"
-        )
-
-    def test_resolves_server_specific_season_paths(
-        self, *, app_config: Settings
-    ) -> None:
-        app_config.MEDIA_SERVER = ServerType.PLEX
-        assert self.storage.resolve_art_path(
-            "/media/Show",
-            ArtType.SEASON_POSTER,
-            ".jpg",
-            season_folder_path="/media/Show/Season 01",
-            season_num=1,
-        ) == str(Path("/media/Show/Season 01") / "Season01.jpg")
-
-        app_config.MEDIA_SERVER = ServerType.JELLYFIN
-        assert self.storage.resolve_art_path(
-            "/media/Show",
-            ArtType.SEASON_POSTER,
-            ".jpg",
-            season_folder_path="/media/Show/Season 01",
-            season_num=1,
-        ) == str(Path("/media/Show/Season 01") / "poster.jpg")
-
-    @pytest.mark.parametrize("media_server", ["jellyfin", "emby"])
-    def test_season_art_requires_a_separate_season_folder(
-        self, media_server: str, *, app_config: Settings
-    ) -> None:
-        app_config.MEDIA_SERVER = ServerType(media_server)
-        with tempfile.TemporaryDirectory() as tmp:
-            for season_folder in (None, tmp):
-                with pytest.raises(TargetDirectoryMissingError, match="Season folder"):
-                    self.storage.resolve_art_path(
-                        tmp,
-                        ArtType.SEASON_POSTER,
-                        season_num=1,
-                        season_folder_path=season_folder,
-                    )
-
-    def test_plex_season_art_round_trips_in_the_show_root(
-        self, *, app_config: Settings
-    ) -> None:
-        app_config.MEDIA_SERVER = ServerType.PLEX
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "poster.jpg").write_bytes(b"show poster")
-            item = MediaItem(
-                id=1, title="Show", media_type=MediaType.SHOW, folder_path=tmp
-            )
-            season = Season(media_item_id=1, season_num=1)
-
-            assert (
-                self.storage.find_local_art_path(
-                    ArtType.SEASON_POSTER, item=item, season=season
-                )
-                is None
-            )
-
-            target = self.storage.resolve_art_path(
-                tmp, ArtType.SEASON_POSTER, season_num=1
-            )
-            self.storage.write_file(target, b"season poster", tmp)
-
-            assert (
-                self.storage.find_local_art_path(
-                    ArtType.SEASON_POSTER, item=item, season=season
-                )
-                == root / "Season01.jpg"
-            )
-            assert (root / "poster.jpg").read_bytes() == b"show poster"
-
-    def test_probe_season_folder_prefers_common_sonarr_names(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "Season 01").mkdir()
-            (root / "Specials").mkdir()
-
-            assert self.storage.probe_season_folder(str(root), 1) == str(
-                root / "Season 01"
-            )
-            assert self.storage.probe_season_folder(str(root), 0) == str(
-                root / "Specials"
-            )
-            assert self.storage.probe_season_folder(str(root), 2) is None
-
-    def test_write_file_requires_existing_parent_and_returns_hash(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "poster.jpg"
-            stored = self.storage.write_file(str(target), b"image-bytes", tmp)
-
-            assert target.is_file()
-            assert len(stored.file_hash) == 64
-            assert stored.size == len(b"image-bytes")
-            assert stored.mtime_ns == target.stat().st_mtime_ns
-            assert self.storage.stored_file(target) == stored
-            assert self.storage.identical_file(str(target), stored.file_hash) == stored
-            assert self.storage.identical_file(str(target), "0" * 64) is None
-
-            with pytest.raises(TargetDirectoryMissingError):
-                self.storage.write_file(
-                    str(Path(tmp) / "missing" / "poster.jpg"), b"x", tmp
-                )
-
-    def test_write_file_leaves_one_file_per_art_slot(self) -> None:
-        # Choosing a PNG where a JPEG was saved writes a different filename, so
-        # without this both survive and readback - which probes candidates in a
-        # fixed order - can hand back the replaced image.
-        with tempfile.TemporaryDirectory() as tmp:
-            folder = Path(tmp)
-            (folder / "poster.jpg").write_bytes(b"old")
-            (folder / "background.jpg").write_bytes(b"other slot")
-
-            self.storage.write_file(str(folder / "poster.png"), b"new", tmp)
-
-            assert not (folder / "poster.jpg").exists()
-            assert (folder / "poster.png").read_bytes() == b"new"
-            assert (folder / "background.jpg").is_file()
-
-    def test_write_file_keeps_non_image_slots_intact(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            folder = Path(tmp)
-            (folder / "theme.jpg").write_bytes(b"unrelated")
-
-            self.storage.write_file(str(folder / "theme.mp3"), b"audio", tmp)
-
-            assert (folder / "theme.jpg").is_file()
-
-    @pytest.mark.parametrize(
-        "operation",
-        [
-            "overture.services.storage.assets.os.replace",
-            "pathlib.Path.chmod",
-            "overture.services.storage.assets.os.fsync",
-        ],
+    assert storage.resolve_art_path(folder, ArtType.POSTER, ".png") == str(
+        Path(folder) / "poster.png"
     )
-    def test_write_file_preserves_existing_file_when_precommit_fails(
-        self, operation: str
-    ) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "poster.jpg"
-            target.write_bytes(b"old")
+    assert storage.resolve_art_path(folder, ArtType.BACKGROUND) == str(
+        Path(folder) / "background.jpg"
+    )
 
-            with (
-                patch(operation, side_effect=OSError("write failed")),
-                pytest.raises(OSError, match="write failed"),
-            ):
-                self.storage.write_file(str(target), b"new", tmp)
 
-            assert target.read_bytes() == b"old"
-            assert list(Path(tmp).glob(".poster.jpg.*.tmp")) == []
+def test_resolves_theme_path(storage: AssetStorage) -> None:
+    folder = "/media/Movie"
 
-    def test_write_file_reports_an_alternate_image_cleanup_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "poster.jpg").write_bytes(b"old")
-            target = root / "poster.png"
+    assert storage.resolve_theme_path(folder) == str(Path(folder) / "theme.mp3")
 
-            with (
-                patch.object(
-                    Path, "unlink", side_effect=PermissionError("cleanup blocked")
-                ),
-                pytest.raises(PermissionError, match="cleanup blocked"),
-            ):
-                self.storage.write_file(str(target), b"new", tmp)
 
-            assert target.read_bytes() == b"new"
-            assert (root / "poster.jpg").read_bytes() == b"old"
+def test_resolves_server_specific_season_paths(
+    storage: AssetStorage, *, app_config: Settings
+) -> None:
+    app_config.MEDIA_SERVER = ServerType.PLEX
+    assert storage.resolve_art_path(
+        "/media/Show",
+        ArtType.SEASON_POSTER,
+        ".jpg",
+        season_folder_path="/media/Show/Season 01",
+        season_num=1,
+    ) == str(Path("/media/Show/Season 01") / "Season01.jpg")
 
-    def test_write_file_rejects_an_untrusted_target(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "media"
-            outside = Path(tmp) / "outside"
-            root.mkdir()
-            outside.mkdir()
+    app_config.MEDIA_SERVER = ServerType.JELLYFIN
+    assert storage.resolve_art_path(
+        "/media/Show",
+        ArtType.SEASON_POSTER,
+        ".jpg",
+        season_folder_path="/media/Show/Season 01",
+        season_num=1,
+    ) == str(Path("/media/Show/Season 01") / "poster.jpg")
 
-            with pytest.raises(PathTraversalError):
-                self.storage.write_file(
-                    str(outside / "poster.jpg"), b"image", str(root)
+
+@pytest.mark.parametrize("media_server", ["jellyfin", "emby"])
+def test_season_art_requires_a_separate_season_folder(
+    storage: AssetStorage, media_server: str, *, app_config: Settings
+) -> None:
+    app_config.MEDIA_SERVER = ServerType(media_server)
+    with tempfile.TemporaryDirectory() as tmp:
+        for season_folder in (None, tmp):
+            with pytest.raises(TargetDirectoryMissingError, match="Season folder"):
+                storage.resolve_art_path(
+                    tmp,
+                    ArtType.SEASON_POSTER,
+                    season_num=1,
+                    season_folder_path=season_folder,
                 )
+
+
+def test_plex_season_art_round_trips_in_the_show_root(
+    storage: AssetStorage, *, app_config: Settings
+) -> None:
+    app_config.MEDIA_SERVER = ServerType.PLEX
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "poster.jpg").write_bytes(b"show poster")
+        item = MediaItem(id=1, title="Show", media_type=MediaType.SHOW, folder_path=tmp)
+        season = Season(media_item_id=1, season_num=1)
+
+        assert (
+            storage.find_local_art_path(ArtType.SEASON_POSTER, item=item, season=season)
+            is None
+        )
+
+        target = storage.resolve_art_path(tmp, ArtType.SEASON_POSTER, season_num=1)
+        storage.write_file(target, b"season poster", tmp)
+
+        assert (
+            storage.find_local_art_path(ArtType.SEASON_POSTER, item=item, season=season)
+            == root / "Season01.jpg"
+        )
+        assert (root / "poster.jpg").read_bytes() == b"show poster"
+
+
+def test_probe_season_folder_prefers_common_sonarr_names(storage: AssetStorage) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "Season 01").mkdir()
+        (root / "Specials").mkdir()
+
+        assert storage.probe_season_folder(str(root), 1) == str(root / "Season 01")
+        assert storage.probe_season_folder(str(root), 0) == str(root / "Specials")
+        assert storage.probe_season_folder(str(root), 2) is None
+
+
+def test_write_file_requires_existing_parent_and_returns_hash(
+    storage: AssetStorage,
+) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "poster.jpg"
+        stored = storage.write_file(str(target), b"image-bytes", tmp)
+
+        assert target.is_file()
+        assert len(stored.file_hash) == 64
+        assert stored.size == len(b"image-bytes")
+        assert stored.mtime_ns == target.stat().st_mtime_ns
+        assert storage.stored_file(target) == stored
+        assert storage.identical_file(str(target), stored.file_hash) == stored
+        assert storage.identical_file(str(target), "0" * 64) is None
+
+        with pytest.raises(TargetDirectoryMissingError):
+            storage.write_file(str(Path(tmp) / "missing" / "poster.jpg"), b"x", tmp)
+
+
+def test_write_file_leaves_one_file_per_art_slot(storage: AssetStorage) -> None:
+    # Choosing a PNG where a JPEG was saved writes a different filename, so
+    # without this both survive and readback - which probes candidates in a
+    # fixed order - can hand back the replaced image.
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "poster.jpg").write_bytes(b"old")
+        (folder / "background.jpg").write_bytes(b"other slot")
+
+        storage.write_file(str(folder / "poster.png"), b"new", tmp)
+
+        assert not (folder / "poster.jpg").exists()
+        assert (folder / "poster.png").read_bytes() == b"new"
+        assert (folder / "background.jpg").is_file()
+
+
+def test_write_file_keeps_non_image_slots_intact(storage: AssetStorage) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "theme.jpg").write_bytes(b"unrelated")
+
+        storage.write_file(str(folder / "theme.mp3"), b"audio", tmp)
+
+        assert (folder / "theme.jpg").is_file()
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "overture.services.storage.assets.os.replace",
+        "pathlib.Path.chmod",
+        "overture.services.storage.assets.os.fsync",
+    ],
+)
+def test_write_file_preserves_existing_file_when_precommit_fails(
+    storage: AssetStorage, operation: str
+) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "poster.jpg"
+        target.write_bytes(b"old")
+
+        with (
+            patch(operation, side_effect=OSError("write failed")),
+            pytest.raises(OSError, match="write failed"),
+        ):
+            storage.write_file(str(target), b"new", tmp)
+
+        assert target.read_bytes() == b"old"
+        assert list(Path(tmp).glob(".poster.jpg.*.tmp")) == []
+
+
+def test_write_file_reports_an_alternate_image_cleanup_failure(
+    storage: AssetStorage,
+) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "poster.jpg").write_bytes(b"old")
+        target = root / "poster.png"
+
+        with (
+            patch.object(
+                Path, "unlink", side_effect=PermissionError("cleanup blocked")
+            ),
+            pytest.raises(PermissionError, match="cleanup blocked"),
+        ):
+            storage.write_file(str(target), b"new", tmp)
+
+        assert target.read_bytes() == b"new"
+        assert (root / "poster.jpg").read_bytes() == b"old"
+
+
+def test_write_file_rejects_an_untrusted_target(storage: AssetStorage) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "media"
+        outside = Path(tmp) / "outside"
+        root.mkdir()
+        outside.mkdir()
+
+        with pytest.raises(PathTraversalError):
+            storage.write_file(str(outside / "poster.jpg"), b"image", str(root))
 
 
 class TestMediaRootAndAssetSafety:

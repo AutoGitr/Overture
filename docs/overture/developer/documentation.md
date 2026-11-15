@@ -1,7 +1,7 @@
 ---
 sidebar_position: 6
 title: Documentation
-description: How this site is built from both repositories and deployed.
+description: How this site is built from both repositories and previewed.
 ---
 
 # Documentation
@@ -48,16 +48,3 @@ bun run start        # http://localhost:3000/Overture/
 Before committing, run `bun run ci` in `docs/`: it type-checks, checks
 formatting and builds the site. The build fails on a broken link or anchor in
 either set of pages.
-
-## Deployment
-
-The **Docs** workflow in Overture builds the site on every pull request that
-touches it and deploys it on `main`. It also runs when OvertureDB's own
-**Docs** workflow dispatches it after a change to `OvertureDB/docs/`, weekly
-as a safety net, and on demand. OvertureDB builds the site on its own pull
-requests too, so a broken page is caught before it is merged on either side.
-
-For the dispatch, the OvertureDB GitHub App is installed on the Overture
-repository with contents write access; the workflow uses the same
-`OVERTUREDB_CLIENT_ID` and `OVERTUREDB_APP_PRIVATE_KEY` secrets as the
-catalog automation.

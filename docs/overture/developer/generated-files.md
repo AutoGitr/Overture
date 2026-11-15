@@ -20,8 +20,8 @@ description: What is generated, from what, and the command that regenerates it.
   run `uv run alembic revision --autogenerate -m "<summary>"`, review the
   result and add a test in `tests/test_database/test_migrations.py`.
   Migrations run when Overture starts.
-- **Brand assets.** See [Brand assets](brand-assets.md) for sources, exports
-  and the command that also updates OvertureDB.
+- **Brand assets.** The repository owner regenerates them; see
+  [MAINTAINING.md](https://github.com/AutoGitr/Overture/blob/main/.github/MAINTAINING.md#brand-assets).
 - **Agent skills.** `uv run python -m scripts.sync_skills` installs the skills
   listed in `.agents/skills.json`; skills an installed package ships are copied
   from it and git-ignored, so run it again after a dependency update.

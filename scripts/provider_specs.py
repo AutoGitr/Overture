@@ -9,6 +9,8 @@ lazy from pathlib import Path
 lazy from typing import Any, cast
 lazy from urllib.parse import urlsplit
 
+lazy from scripts.json_values import is_object
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "openapi"
 MAX_DOWNLOAD_BYTES = 8 * 1024 * 1024
@@ -67,13 +69,14 @@ def _fetch(source: ProviderSource) -> bytes:
         headers={"User-Agent": "Overture provider-contract preparation"},
     )
     with urllib.request.urlopen(request, timeout=60) as response:
-        final = urlsplit(response.url)
+        final_url: str = response.geturl()
+        final = urlsplit(final_url)
         final_host = final.hostname or ""
         trusted_host = final_host == source.host or any(
             final_host.endswith(suffix) for suffix in source.redirect_suffixes
         )
         if final.scheme != "https" or not trusted_host:
-            raise RuntimeError(f"{source.name}: unsafe redirect to {response.url}")
+            raise RuntimeError(f"{source.name}: unsafe redirect to {final_url}")
         body = response.read(MAX_DOWNLOAD_BYTES + 1)
     if len(body) > MAX_DOWNLOAD_BYTES:
         raise RuntimeError(
@@ -93,9 +96,9 @@ def _parse(source: ProviderSource, body: bytes) -> dict[str, Any]:
         document = cast("dict[str, Any]", state)["spec"]["data"]
     else:
         document = json.loads(text)
-    if not isinstance(document, dict):
+    if not is_object(document):
         raise RuntimeError(f"{source.name}: specification is not a JSON object")
-    return cast("dict[str, Any]", document)
+    return document
 
 
 def _canonical(document: dict[str, Any]) -> bytes:

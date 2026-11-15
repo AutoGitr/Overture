@@ -462,3 +462,23 @@ async def test_an_untyped_response_is_judged_by_its_bytes(
         fetched = await fetch_image("https://example.test/poster", client)
 
     assert fetched.media_type == "image/png"
+
+
+async def test_background_fetches_wait_out_rate_limits_then_ask_again(
+    pause_clock: PauseClock,
+) -> None:
+    limited = [httpx2.Response(429, headers={"Retry-After": "30"}) for _ in range(3)]
+    transport = _host_handler({"tpdb.test": limited})
+    async with httpx2.AsyncClient(transport=transport) as client:
+        with pytest.raises(RateLimitedError):
+            await fetch_image_bytes(
+                "https://tpdb.test/p.png", client, rate_limit_retries=1
+            )
+        assert (
+            await fetch_image_bytes(
+                "https://tpdb.test/p.png", client, rate_limit_retries=1
+            )
+            == PNG_DATA
+        )
+    # Each limit doubles the pause from the first minute.
+    assert pause_clock.waits == [60, 120, 240]

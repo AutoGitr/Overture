@@ -100,7 +100,6 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
 async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterdb(
     db_session: AsyncSession, tmp_path: Path, database: Database
 ) -> None:
-    await _choose(db_session, CollectionPosterStyle.OVERLAY)
     for tmdb_id, url in (
         (10, OVERLAY),
         (11, "https://assets.fanart.tv/fanart/a.jpg"),
@@ -111,7 +110,12 @@ async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterd
             youtube_id="dQw4w9WgXcQ",
             last_synced_at=utc_now(),
         )
-        select_art(row, ArtType.POSTER, PublicArtUrl(url))
+        select_art(
+            row,
+            ArtType.POSTER,
+            PublicArtUrl(url),
+            poster_style=CollectionPosterStyle.OVERLAY,
+        )
         db_session.add(row)
     await db_session.commit()
 
@@ -128,4 +132,30 @@ async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterd
     # The theme still goes; only the poster a consistent one cannot be is left out.
     assert refused["poster_url_overlay"] is None
     assert refused["youtube_id_overturedb"] == "dQw4w9WgXcQ"
-    assert "Saga 11: Poster: upload consistent posters to TMDB or ThePosterDB" in report
+    assert "Saga 11: Poster: upload consistent posters to TMDB or TPDb" in report
+
+
+async def test_a_poster_is_contributed_as_the_style_it_was_selected_as(
+    db_session: AsyncSession, tmp_path: Path, database: Database
+) -> None:
+    row = stored_collection(
+        title="Saga", tmdb_collection_id=10, last_synced_at=utc_now()
+    )
+    select_art(
+        row,
+        ArtType.POSTER,
+        PublicArtUrl(INDIVIDUAL),
+        poster_style=CollectionPosterStyle.INDIVIDUAL,
+    )
+    db_session.add(row)
+    await db_session.commit()
+    await _choose(db_session, CollectionPosterStyle.MATTE)
+
+    with ZipFile(await export_selections(database, tmp_path)) as archive:
+        entry = json.loads(archive.read("data/collections/tmdb-10.json"))
+
+    assert (
+        entry["poster_url_individual"],
+        entry["poster_url_matte"],
+        entry["poster_url_overlay"],
+    ) == (INDIVIDUAL, None, None)

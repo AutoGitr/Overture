@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ArtCandidate } from "../../generated/rest/types.gen";
-  import { candidateImageUrl } from "../utils/artDisplay";
+  import { candidateImageUrl, candidateSourceLabel } from "../utils/artDisplay";
+  import { COLLECTION_POSTER_LABELS } from "../utils/collectionPosters";
 
   let {
     art,
@@ -20,12 +21,17 @@
   }
 
   let src = $derived(candidateImageUrl(art));
-  let sourceLabel = $derived(showSource ? art.source : null);
+  let source = $derived(candidateSourceLabel(art));
+  let style = $derived(art.poster_style && COLLECTION_POSTER_LABELS[art.poster_style]);
   let resolution = $derived(formatResolution(art.width, art.height));
-  let infoBadge = $derived([sourceLabel, resolution].filter(Boolean).join(" | "));
+  let infoBadge = $derived(
+    [showSource && source, style, resolution].filter(Boolean).join(" | "),
+  );
   // The image is decorative, so the button says what it chooses.
   let label = $derived(
-    ["Use artwork", resolution, art.source && `from ${art.source}`].filter(Boolean).join(" "),
+    ["Use", style && `${style.toLowerCase()} poster`, "artwork", resolution, source && `from ${source}`]
+      .filter(Boolean)
+      .join(" "),
   );
 </script>
 

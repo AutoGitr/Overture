@@ -54,11 +54,7 @@ class ItemReconciler:
             item.server_removed_at,
         )
 
-    async def visible_item_snapshot(
-        self,
-        session: AsyncSession,
-        item: MediaItem,
-    ) -> tuple[object, ...]:
+    def visible_item_snapshot(self, item: MediaItem) -> tuple[object, ...]:
         """Return sidebar-relevant item and asset fields for change detection."""
         if item.id is None:
             return (self.visible_item_fields(item), (), (), ())
@@ -102,7 +98,7 @@ class ItemReconciler:
                 session, server_item, resolved, auto_unmonitor=auto_unmonitor
             )
 
-        before_snapshot = await self.visible_item_snapshot(session, item)
+        before_snapshot = self.visible_item_snapshot(item)
         before_fields = self.visible_item_fields(item)
         art_pulled, directors_changed = await self.update_item(
             session, item, server_item, resolved, auto_unmonitor=auto_unmonitor
@@ -123,7 +119,7 @@ class ItemReconciler:
             item_id=item.id,
             media_type=item.media_type,
             visible_changed=bool(changes)
-            or before_snapshot != await self.visible_item_snapshot(session, item),
+            or before_snapshot != self.visible_item_snapshot(item),
             changes=changes,
         )
 

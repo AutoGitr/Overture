@@ -121,7 +121,7 @@ async def _sync_groups(
             continue
         try:
             result = await groups.sync(name, library_ids=library_ids)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- one group's failure is reported; the rest go on
             await job.report(
                 JobOutcome.ERROR, f"Group {name}", str(exc), finished=False
             )

@@ -123,7 +123,7 @@ class CollectionGroups:
                             else:
                                 await self._editor.delete_locked(row)
                         result.collection_ids.append(identity)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
                         result.errors[identity] = str(exc)
             else:
                 result.collection_ids.extend(row.id or 0 for row in rows)
@@ -265,7 +265,7 @@ class CollectionGroups:
         await self._sync_rows(rows, result)
         try:
             await self._separators.apply(name)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a separator's failure is reported; the group's sync stands
             result.errors[name] = str(exc)
         return result
 
@@ -297,5 +297,5 @@ class CollectionGroups:
             try:
                 await self._rules.sync(row.id or 0)
                 result.synced += 1
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
                 result.errors[row.title] = str(exc)

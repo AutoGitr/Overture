@@ -13,6 +13,7 @@ import {
   localSeasonImageUrl,
   seasonProviderArtUrl,
 } from "../rest/urls";
+import { SELECTED_ART_SOURCE_LABELS } from "../../generated/settings";
 
 /** The rendition sized for the detail page; no size means the original image. */
 type ImageSize = NonNullable<NonNullable<ProxyCollectionImageData["query"]>["size"]>;
@@ -152,4 +153,12 @@ export function collectionArtDisplayUrl(
 /** The original poster, for opening in a new tab. */
 export function collectionPosterOriginalUrl(collection: CollectionRead | null): string | null {
   return collectionArtUrl(collection, "poster");
+}
+
+/** Where a candidate comes from, by its source's name when it is a known one. */
+export function candidateSourceLabel(art: ArtCandidate): string | null {
+  if (!art.source) return null;
+  return art.source in SELECTED_ART_SOURCE_LABELS
+    ? SELECTED_ART_SOURCE_LABELS[art.source as keyof typeof SELECTED_ART_SOURCE_LABELS]
+    : art.source;
 }

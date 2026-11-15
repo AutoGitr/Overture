@@ -376,7 +376,7 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
                 await self._run_saved(item)
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- one schedule's failure must not stop the others
                 # A failed run has logged its traceback already; this says
                 # which schedule it belonged to.
                 logger.error(

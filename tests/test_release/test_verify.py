@@ -325,7 +325,10 @@ def _args(report: Path | None, *urls: str, **servers: str) -> Any:
         sources=None,
         insecure=False,
         write=False,
-        **servers,
+        **{
+            **dict.fromkeys(("plex", "jellyfin", "emby", "radarr", "sonarr")),
+            **servers,
+        },
     )
 
 

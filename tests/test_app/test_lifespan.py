@@ -109,7 +109,7 @@ async def test_runtime_starts_and_stops_managers_in_order(
         await runtime.start(app_version="test")
     # The formatted startup line names the user the server runs as.
     assert re.search(
-        r"^Overture test starting \(Python .+, UID -?\d+, GID -?\d+, timezone ",
+        r"^Overture test starting \(Python .+, UID=\d+ GID=\d+, timezone ",
         caplog.messages[0],
     )
     assert events[:6] == [

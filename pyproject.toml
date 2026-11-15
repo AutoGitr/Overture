@@ -100,7 +100,7 @@ exclude_also = ['^\s*\.\.\.\s*$']
 directory = "htmlcov"
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "scripts", "tests"]
 exclude = [
     "**/.*",
     "**/__pycache__",
@@ -116,8 +116,11 @@ venvPath = "."
 venv = ".venv"
 strictListInference = true
 strictDictionaryInference = true
+strictSetInference = true
 reportUnnecessaryTypeIgnoreComment = "error"
 reportImplicitOverride = "error"
+reportPropertyTypeMismatch = "error"
+reportUninitializedInstanceVariable = "error"
 # Require explicit types at service injection boundaries.
 reportMissingParameterType = "error"
 
@@ -137,8 +140,10 @@ extend-exclude = ["frontend", ".agents", ".claude"]
 [tool.ruff.lint]
 select = [
     "A",      # flake8-builtins: prevent shadowing Python built-ins
+    "ARG",    # flake8-unused-arguments: parameters a function never reads
     "ASYNC",  # flake8-async: async/await hazard detection
     "B",      # flake8-bugbear: common bugs, anti-patterns, and design flaws
+    "BLE",    # flake8-blind-except: every `except Exception` names why it is a boundary
     "C4",     # flake8-comprehensions: optimal list/set/dict comprehension syntax
     "C90",    # mccabe: cyclomatic complexity check
     "DTZ",    # flake8-datetimez: enforce timezone-aware datetimes
@@ -193,7 +198,8 @@ max-complexity = 12
 
 [tool.ruff.lint.per-file-ignores]
 # Tests use assertions for validation, frequently use dummy credentials, and are not an installed package.
-"tests/**" = ["S101", "S105", "S106", "INP001"]
+# Fakes and fixtures take the arguments of the interfaces they stand in for.
+"tests/**" = ["S101", "S105", "S106", "INP001", "ARG"]
 # Command-line tools report status directly to stdout/stderr and run external processes.
 "scripts/*.py" = ["T201", "S101", "S310", "S603"]
 # The native packager runs build tools from PATH inside the image build.

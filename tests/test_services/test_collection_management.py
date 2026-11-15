@@ -33,6 +33,7 @@ lazy from overture.domain import (
     CollectionKind,
     CollectionMode,
     CollectionOrder,
+    CollectionPosterStyle,
     FilterField,
     FilterOperator,
     MediaType,
@@ -67,7 +68,11 @@ lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.repositories.collections import CollectionRepository, TermSelection
 lazy from overture.repositories.libraries import LibraryRepository
-lazy from overture.schemas.art import ArtCandidate, ArtSourcesResponse, SaveArtRequest
+lazy from overture.schemas.art import (
+    ArtCandidate,
+    ArtSourcesResponse,
+    SaveCollectionArtRequest,
+)
 lazy from overture.schemas.collections import (
     BulkCollectionOperation,
     CollectionAdoption,
@@ -426,11 +431,11 @@ class Art(CollectionArtService):
         return ArtSourcesResponse(sources=self.offered)
 
     @override
-    async def save(
+    async def apply(
         self,
         collection_id: int,
         art_type: ArtType,
-        body: SaveArtRequest,
+        body: SaveCollectionArtRequest,
     ) -> StatusResponse:
         self.selections.append(art_type)
         self.urls.append(body.url)
@@ -1084,7 +1089,12 @@ async def test_create_edit_order_and_delete_preserve_media(
     async with database.write_session() as session:
         row = await session.get(MediaCollection, identity)
         assert row is not None
-        select_art(row, ArtType.POSTER, PublicArtUrl("https://example.test/poster.jpg"))
+        select_art(
+            row,
+            ArtType.POSTER,
+            PublicArtUrl("https://example.test/poster.jpg"),
+            poster_style=CollectionPosterStyle.INDIVIDUAL,
+        )
         session.add(row)
     await manager.service.editor.delete(identity)
     assert manager.provider.deleted == ["1"]
@@ -3279,6 +3289,7 @@ async def test_collection_rows_report_art_size_source_and_shape(
             row,
             ArtType.POSTER,
             PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
+            poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
         record_art_file(
             row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1000, 1, 1)
@@ -3304,6 +3315,7 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
             row,
             ArtType.POSTER,
             PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
+            poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
         row.youtube_id = "abcdefghijk"
         session.add(row)
@@ -3639,7 +3651,12 @@ async def test_a_new_copy_receives_the_saved_art_and_theme(
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        select_art(row, ArtType.POSTER, PublicArtUrl("https://example.test/poster.jpg"))
+        select_art(
+            row,
+            ArtType.POSTER,
+            PublicArtUrl("https://example.test/poster.jpg"),
+            poster_style=CollectionPosterStyle.INDIVIDUAL,
+        )
         session.add(row)
     await manager.service.editor.save_rule(identity, spanning(manager))
 

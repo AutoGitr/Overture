@@ -130,6 +130,7 @@ lazy from overture.services.collections.plex_query import (
 )
 lazy from overture.utils.generated_art import render_art
 lazy from overture.utils.http_security import API_KEY_HEADER
+lazy from scripts.json_values import is_array, is_object
 
 #: Operands for operators that compare numbers, days or dates.
 NUMBER_VALUE = 5
@@ -231,7 +232,7 @@ def detail(response: httpx2.Response) -> str:
         body = response.json()
     except ValueError:
         return f"HTTP {response.status_code}"
-    message = body.get("detail") if isinstance(body, dict) else None
+    message = body.get("detail") if is_object(body) else None
     return str(message or f"HTTP {response.status_code}")
 
 
@@ -443,8 +444,8 @@ class Library:
                 case.note = f"{len(values)} values"
             if entry["field"] == "collection" and self.plex_smart and entry["smart"]:
                 values = [row for row in values if row["value"] in self.regular]
-            local = entry["operators"] if entry["local"] else []
-            smart = entry["smart_operators"] if self.plex_smart else []
+            local: list[str] = entry["operators"] if entry["local"] else []
+            smart: list[str] = entry["smart_operators"] if self.plex_smart else []
             for operator in dict.fromkeys([*local, *smart]):
                 value = field_value(entry["kind"], operator, values)
                 label = f"{entry['label']} {operator} {value!r}"
@@ -519,7 +520,9 @@ class Library:
     async def check_orders(self) -> None:
         """Preview every order; compare Overture's and Plex's first members."""
         regular = set(self.capabilities["orders"]) - {"custom"}
-        smart = set(self.capabilities["smart_orders"]) if self.plex_smart else set()
+        smart: set[str] = (
+            set(self.capabilities["smart_orders"]) if self.plex_smart else set()
+        )
         for order in sorted(regular | smart):
             case = self.case("order", order)
             members: dict[bool, list[str]] = {}
@@ -619,7 +622,8 @@ class Library:
             if issue["url"] is None:
                 case.note = issue["reason"]
                 continue
-            query = parse_qs(urlsplit(issue["url"]).query)
+            issue_url: str = issue["url"]
+            query = parse_qs(urlsplit(issue_url).query)
             if query.get("template") != [ISSUE_FORMS[self.media_type]]:
                 case.error = f"opens {query.get('template')}"
             elif query.get("item_title") != [item["title"]]:
@@ -712,7 +716,7 @@ class Library:
 def inventory(case: Case, overture: set[str], server: set[str], *, noun: str) -> None:
     """Report what one side holds that the other does not."""
     case.count, case.held = len(overture), len(server)
-    problems = []
+    problems: list[str] = []
     if missing := server - overture:
         problems.append(f"Overture lacks {noun} {named(missing)}")
     if extra := overture - server:
@@ -854,15 +858,17 @@ class PlexServer(Server):
     async def check_values(self, library: Library, meta: dict[str, Any]) -> None:
         """Each value Plex lists for a filter must be one Overture offers."""
         keys = plex_field_keys(MediaType(library.media_type))
+        types: list[dict[str, Any]] = meta.get("Type", [])
         own = next(
             (
                 kind
-                for kind in meta.get("Type", [])
+                for kind in types
                 if PLEX_SCOPES.get(str(kind.get("type"))) == library.media_type
             ),
-            {},
+            None,
         )
-        for entry in own.get("Filter", []):
+        filters: list[dict[str, Any]] = own.get("Filter", []) if own else []
+        for entry in filters:
             field_name = keys.get(entry["filter"])
             spec = library.fields.get(str(field_name)) if field_name else None
             if spec is None or spec["kind"] != "tag" or not entry.get("key"):
@@ -907,11 +913,7 @@ class PlexServer(Server):
         )
         tag = PLEX_TAGS.get(key, key.capitalize())
         raw = rows[0].get(tag, rows[0].get(key)) if rows else None
-        shown = (
-            ", ".join(str(tag.get("tag")) for tag in raw)
-            if isinstance(raw, list)
-            else raw
-        )
+        shown = ", ".join(str(tag.get("tag")) for tag in raw) if is_array(raw) else raw
         return f"{side} {title}; Plex holds {key}={shown!r}"
 
 
@@ -937,7 +939,7 @@ class MediaBrowserServer(Server):
             if self.server == "emby"
             else "/Library/VirtualFolders"
         )
-        rows = found["Items"] if isinstance(found, dict) else found
+        rows = found["Items"] if is_object(found) else found
         return {
             str(row.get("ItemId") or row.get("Id")): row["Name"]
             for row in rows
@@ -971,7 +973,8 @@ class MediaBrowserServer(Server):
         )
         for field_name, (param, listed) in MEDIA_BROWSER_FILTERS.items():
             spec = library.fields.get(field_name)
-            values = [str(value) for value in filters.get(listed) or []]
+            listed_values: list[Any] = filters.get(listed) or []
+            values = [str(value) for value in listed_values]
             if spec is None:
                 if values:
                     library.case(
@@ -1173,9 +1176,9 @@ async def probe(service: Server, case: Case, path: str, **params: Any) -> Any:
 
 def shape(value: Any) -> str:
     """The keys a response holds, which show what an API offers."""
-    if isinstance(value, list):
+    if is_array(value):
         value = value[0] if value else {}
-    return ", ".join(sorted(value)) if isinstance(value, dict) else type(value).__name__
+    return ", ".join(sorted(value)) if is_object(value) else type(value).__name__
 
 
 async def check_tmdb(key: str, overture: Overture | None, verify: bool) -> list[Case]:
@@ -1651,7 +1654,7 @@ def servers(
         ("jellyfin", "JELLYFIN_API_KEY"),
         ("emby", "EMBY_API_KEY"),
     ):
-        url = getattr(args, name, None)
+        url = getattr(args, name)
         if not url:
             continue
         secret = os.environ.get(variable, "")
@@ -1695,7 +1698,7 @@ async def check_services(args: argparse.Namespace, verify: bool) -> list[Case]:
             print("Checking MDBList...", flush=True)
             cases.extend(await check_mdblist(key, SAMPLE_TMDB_MOVIE, verify))
         for kind in ("radarr", "sonarr"):
-            url = getattr(args, kind, None)
+            url = getattr(args, kind)
             key = os.environ.get(f"{kind.upper()}_API_KEY", "")
             if url and not key:
                 raise SystemExit(
@@ -1710,9 +1713,11 @@ async def check_services(args: argparse.Namespace, verify: bool) -> list[Case]:
 
 
 async def run(args: argparse.Namespace) -> int:
-    extra = json.loads(args.sources.read_text()) if args.sources else []
+    extra: list[dict[str, Any]] = (
+        json.loads(args.sources.read_text()) if args.sources else []
+    )
     cases: list[Case] = []
-    verify = not getattr(args, "insecure", False)
+    verify = not args.insecure
     given = servers(args, verify)
     direct = {server.server: server for server, _, _ in given}
     try:
@@ -1741,7 +1746,7 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "urls",
         nargs="+",

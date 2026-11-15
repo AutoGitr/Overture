@@ -231,7 +231,8 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         return bool(times) and max(times) > since
 
     async def get_directors(
-        self, server_item_ids: list[str]
+        self,
+        server_item_ids: list[str],  # noqa: ARG002 -- the interface's; this server lists none
     ) -> dict[str, tuple[str, ...]]:
         """Return directors of movies listed with a ``director_etag``.
 
@@ -284,7 +285,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         art_type: ArtType,
         size: ImageSize | None,
         *,
-        current_url: str,
+        current_url: str,  # noqa: ARG002 -- the interface's; servers addressing images by path read it
     ) -> ProviderImageRequest:
         """Return request details for a collection image, scaled to *size* if given.
 

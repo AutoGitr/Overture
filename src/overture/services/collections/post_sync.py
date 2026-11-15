@@ -25,11 +25,11 @@ lazy from ...repositories.collections import (
     CollectionRepository,
     TermSelection,
 )
-lazy from ...schemas.art import SaveArtRequest
+lazy from ...schemas.art import ArtCandidate, SaveCollectionArtRequest
 lazy from ...schemas.collections import SetCollectionThemeRequest
 lazy from ...utils.collection_formats import format_arr_tag, format_member_tag
 lazy from ...utils.errors import PublicServiceError
-lazy from ..art.collection_art import CollectionArtService
+lazy from ..art.collection_art import CollectionArtService, chosen_poster_style
 lazy from .access import CollectionAccess
 lazy from .arr_requests import CollectionArr
 lazy from .member_effects import MemberEffects
@@ -117,8 +117,12 @@ class AutoAssets:
                 )
             elif saved is not None:
                 if synced.new_copies and saved.url:
-                    await self._art.save(
-                        collection_id, art_type, SaveArtRequest(url=saved.url)
+                    await self._art.apply(
+                        collection_id,
+                        art_type,
+                        SaveCollectionArtRequest(
+                            url=saved.url, poster_style=slot.poster_style
+                        ),
                     )
                 elif synced.new_copies:
                     await self._art.reupload(collection_id, art_type)
@@ -127,30 +131,45 @@ class AutoAssets:
             elif art_type is ArtType.POSTER and row.kind is CollectionKind.SEPARATOR:
                 await self._generate(synced, art_type)
             elif policy.auto_art.sources and (
-                url := await self._matched(
-                    collection_id, art_type, policy.auto_art.sources
-                )
+                found := await self._matched(synced, art_type)
             ):
-                await self._art.save(collection_id, art_type, SaveArtRequest(url=url))
+                await self._art.apply(
+                    collection_id,
+                    art_type,
+                    SaveCollectionArtRequest(
+                        url=found.url,
+                        poster_style=chosen_poster_style(art_type, found),
+                    ),
+                )
             elif policy.auto_art.generates:
                 await self._generate(synced, art_type)
         await self._theme(synced)
 
     async def _generate(self, synced: SyncedCollection, art_type: ArtType) -> None:
         """Generate the slot's art in the policy's style."""
-        await self._art.save(
+        await self._art.apply(
             synced.collection_id,
             art_type,
-            SaveArtRequest(generated=synced.policy.generated_style),
+            SaveCollectionArtRequest(generated=synced.policy.generated_style),
         )
 
     async def _matched(
-        self, collection_id: int, art_type: ArtType, order: tuple[ArtSource, ...]
-    ) -> str | None:
-        """The best art the first source in *order* that has any offers."""
-        found = (await self._art.found(collection_id, art_type)).sources
+        self, synced: SyncedCollection, art_type: ArtType
+    ) -> ArtCandidate | None:
+        """The best art the first source in the policy's order offers.
+
+        OvertureDB offers each of its posters; only the policy's style is taken.
+        """
+        found = (await self._art.found(synced.collection_id, art_type)).sources
+        posters = synced.policy.overturedb_posters
         return next(
-            (found[source][0].url for source in order if found.get(source)),
+            (
+                candidate
+                for source in synced.policy.auto_art.sources
+                for candidate in found.get(source, [])
+                if source is not ArtSource.OVERTUREDB
+                or candidate.poster_style in {None, posters}
+            ),
             None,
         )
 
@@ -384,7 +403,7 @@ class PostSync:
                 continue
             try:
                 await step.run(synced)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- one step's failure is reported; the other steps run
                 failures.append(f"{step.name} failed: {exc!s}")
         if not failures:
             return

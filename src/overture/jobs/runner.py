@@ -324,7 +324,7 @@ async def run_managed_job[TallyT: JobTally](
     except asyncio.CancelledError:
         await job.publish_terminal("stopped")
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- a job's failure ends it, whatever raised
         safe_message = (
             str(exc) if isinstance(exc, catch) else "Background operation failed"
         )

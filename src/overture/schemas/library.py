@@ -22,6 +22,7 @@ lazy from ..domain import (
 )
 lazy from ..utils.art_urls import art_preview_url
 lazy from .base import PublicText, StrictBaseModel
+lazy from .catalog import CatalogSelections
 lazy from .common import SaveSelectionResponse
 lazy from .removal import AssetRemoval
 
@@ -96,11 +97,11 @@ class MediaItemRead(StrictBaseModel):
             "null without an entry."
         ),
     )
-    catalog_selections: Literal["matching", "different"] | None = Field(
+    catalog_selections: CatalogSelections | None = Field(
         default=None,
         description=(
-            "Whether the selections the item and its OvertureDB entry both hold "
-            "agree; null when no slot has a selection on both sides."
+            "How each selection compares with the item's OvertureDB entry; "
+            "null without an entry."
         ),
     )
 
@@ -174,7 +175,7 @@ def media_item_read_from_model(
     catalog_no_theme: bool = False,
     catalog_entry_key: str | None = None,
     catalog_ids: Literal["matching", "mismatching"] | None = None,
-    catalog_selections: Literal["matching", "different"] | None = None,
+    catalog_selections: CatalogSelections | None = None,
     library_collection_id: int | None = None,
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.

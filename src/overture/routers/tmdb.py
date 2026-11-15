@@ -56,7 +56,7 @@ async def get_tmdb_collection(
     collection_id: Annotated[int, Path(gt=0, description="TMDB collection ID")],
     tmdb_items: TmdbItemsDep,
     artwork_source: Annotated[
-        Literal["tmdb", "overturedb"], Query(description="Collection member artwork")
+        Literal["overturedb", "tmdb"], Query(description="Collection member artwork")
     ] = "tmdb",
 ) -> TmdbCollectionResponse:
     """List the movies of a TMDB collection."""

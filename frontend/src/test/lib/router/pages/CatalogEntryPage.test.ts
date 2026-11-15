@@ -88,7 +88,7 @@ describe("catalog detail drafts", () => {
     );
     expect(route.pathname).toBe("/overturedb/shows/tvdb-81189/art/poster");
     await fireEvent.click(
-      await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
+      await screen.findByRole("button", { name: "Use artwork 1000x1500 from TMDB" }),
     );
     expect(await screen.findByRole("heading", { name: "OVERTUREDB" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Discard draft" })).toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("catalog detail drafts", () => {
       expect(screen.getByRole("button", { name: "Clear poster" })).toBeInTheDocument();
 
       await fireEvent.click(
-        screen.getByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
+        screen.getByRole("button", { name: "Use artwork 1000x1500 from TMDB" }),
       );
       expect(await screen.findAllByRole("heading", { name: "OVERTUREDB" })).toHaveLength(1);
       expect(screen.queryByRole("heading", { name: "CATALOG" })).toBeNull();
@@ -196,7 +196,7 @@ describe("catalog detail drafts", () => {
     const { calls } = server(catalogDetail({ library_item_id: 9 }));
     renderWithQueryClient(CatalogEntryPage);
     await fireEvent.click(
-      await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
+      await screen.findByRole("button", { name: "Use artwork 1000x1500 from TMDB" }),
     );
     expect(await screen.findByText("Draft", { selector: ".badge" })).toBeInTheDocument();
     expect(
@@ -373,7 +373,7 @@ describe("catalog detail drafts", () => {
     });
     renderWithQueryClient(CatalogEntryPage);
     await fireEvent.click(
-      await screen.findByRole("button", { name: "Use artwork 1000x1500 from tmdb" }),
+      await screen.findByRole("button", { name: "Use artwork 1000x1500 from TMDB" }),
     );
     await waitFor(() => {
       expect(finish).toBeDefined();

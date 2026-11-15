@@ -21,6 +21,7 @@ lazy from overture.domain import (
     ArtStyle,
     ArtType,
     CatalogMediaType,
+    CollectionPosterStyle,
     ImageSize,
     MediaType,
     TmdbLanguageFilter,
@@ -29,7 +30,7 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.repositories.collections import CollectionRepository
-lazy from overture.schemas.art import ArtCandidate, SaveArtRequest
+lazy from overture.schemas.art import ArtCandidate, SaveCollectionArtRequest
 lazy from overture.schemas.collections import collection_artwork
 lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art.candidates import (
@@ -55,6 +56,7 @@ lazy from tests.test_services.test_collection_management import Provider
 lazy from tests.test_services.test_collections_service import FakePublisher
 
 URL = "https://image.tmdb.org/t/p/original/collection.jpg"
+TPDB = "https://theposterdb.com/api/assets/2503"
 
 
 class Hashes(PhashService):
@@ -209,7 +211,12 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         await service.collections.save(
             1,
             ArtType.POSTER,
-            SaveArtRequest(url=URL, width=200, height=300),
+            SaveCollectionArtRequest(
+                url=URL,
+                width=200,
+                height=300,
+                poster_style=CollectionPosterStyle.INDIVIDUAL,
+            ),
         )
         assert provider.uploads == [(ArtType.POSTER, image_bytes, "image/jpeg")]
         # Its thumbnail is rendered as it is kept, as every kept original's is.
@@ -222,6 +229,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             assert row is not None
             slot = read_art_slot(row, ArtType.POSTER)
             assert slot.url == URL
+            assert slot.poster_style is CollectionPosterStyle.INDIVIDUAL
             assert slot.phash == "a" * 64
             assert (slot.width, slot.height, slot.file_size) == (
                 200,
@@ -233,12 +241,16 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             # The image route reads the path the server lists after the upload.
             assert row.thumb_url == "https://plex.test/library/metadata/box/thumb/1"
         assert publisher.broadcasts[-1] == ("collection.updated", {"collection_id": 1})
+        with pytest.raises(PublicServiceError, match="poster style"):
+            await service.collections.save(
+                1, ArtType.POSTER, SaveCollectionArtRequest(url=URL)
+            )
         # Client dimensions cannot disguise actual landscape bytes as a poster.
         with pytest.raises(PublicServiceError, match="aspect ratio"):
             await service.collections.save(
                 1,
                 ArtType.BACKGROUND,
-                SaveArtRequest(url=URL, width=1920, height=1080),
+                SaveCollectionArtRequest(url=URL, width=1920, height=1080),
             )
         assert len(provider.uploads) == 1
         # The image Overture uploaded is what the server shows, as a local
@@ -258,7 +270,13 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         with pytest.raises(PublicServiceError, match="posters and backgrounds"):
             await service.collections.sources(1, ArtType.SEASON_POSTER)
         with pytest.raises(PublicServiceError, match="Collection not found"):
-            await service.collections.save(404, ArtType.POSTER, SaveArtRequest(url=URL))
+            await service.collections.save(
+                404,
+                ArtType.POSTER,
+                SaveCollectionArtRequest(
+                    url=URL, poster_style=CollectionPosterStyle.INDIVIDUAL
+                ),
+            )
     finally:
         await images.client.aclose()
 
@@ -303,7 +321,7 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
 
     upload = await service.uploads.store(image_bytes)
     await service.collections.save(
-        1, ArtType.POSTER, SaveArtRequest(upload_hash=upload.upload_hash)
+        1, ArtType.POSTER, SaveCollectionArtRequest(upload_hash=upload.upload_hash)
     )
 
     assert provider.uploads == [(ArtType.POSTER, image_bytes, "image/png")]
@@ -362,7 +380,7 @@ async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores
         ),
     )
     await service.collections.save(
-        2, ArtType.POSTER, SaveArtRequest(generated=ArtStyle.DARK)
+        2, ArtType.POSTER, SaveCollectionArtRequest(generated=ArtStyle.DARK)
     )
 
     assert provider.uploads == []
@@ -431,13 +449,28 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
     assert disabled.by_source["overturedb"] == []
     async with database.write_session() as session:
         session.add(
-            CatalogCollection(tmdb_id=10, title="Saga", poster_url_individual=URL)
+            CatalogCollection(
+                tmdb_id=10,
+                title="Saga",
+                poster_url_individual=URL,
+                poster_url_matte=TPDB,
+            )
         )
     async with database.write_session() as session:
         await enable_catalog(session)
     policy = CandidatePolicy.of(AppSettings(skip_media_server_tmdb_urls=True))
     enabled = await candidates.gather_collection(row, ArtType.POSTER, policy)
-    assert enabled.by_source["overturedb"][0].url == URL
+    assert list(enabled.by_source) == ["tmdb", "plex", "overturedb"]
+    # Each OvertureDB poster is offered with its style, the collection's first,
+    # and a link OvertureDB holds is marked as that poster wherever it is offered.
+    assert [
+        (candidate.url, candidate.poster_style)
+        for candidate in enabled.by_source["overturedb"]
+    ] == [
+        (URL, CollectionPosterStyle.INDIVIDUAL),
+        (TPDB, CollectionPosterStyle.MATTE),
+    ]
+    assert enabled.by_source["tmdb"][0].poster_style is CollectionPosterStyle.INDIVIDUAL
     assert enabled.by_source["plex"] == []
     tmdb.fail = True
     partial = await candidates.gather_collection(row, ArtType.POSTER, policy)
@@ -503,7 +536,7 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
         await service.collections.save(
             1,
             ArtType.BACKGROUND,
-            SaveArtRequest(generated=ArtStyle.DARK, title_only=True),
+            SaveCollectionArtRequest(generated=ArtStyle.DARK, title_only=True),
         )
     # What matching compares never includes art to generate.
     assert (
@@ -516,7 +549,7 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
     assert Image.open(BytesIO(preview)).size == (1000, 1500)
 
     await service.collections.save(
-        1, ArtType.POSTER, SaveArtRequest(generated=ArtStyle.DARK)
+        1, ArtType.POSTER, SaveCollectionArtRequest(generated=ArtStyle.DARK)
     )
     assert provider.uploads == [(ArtType.POSTER, preview, "image/png")]
     async with database.read_session() as session:
@@ -611,12 +644,12 @@ async def test_generated_backgrounds_never_show_text_and_title_only_posters_stay
     await service.collections.save(
         1,
         ArtType.BACKGROUND,
-        SaveArtRequest(generated=ArtStyle.ACCENT),
+        SaveCollectionArtRequest(generated=ArtStyle.ACCENT),
     )
     await service.collections.save(
         1,
         ArtType.POSTER,
-        SaveArtRequest(generated=ArtStyle.DARK, title_only=True),
+        SaveCollectionArtRequest(generated=ArtStyle.DARK, title_only=True),
     )
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(1)

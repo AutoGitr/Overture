@@ -29,7 +29,7 @@ REGENERATE_HINT = (
 #: Placeholders shaped to satisfy validation and nothing more: this build step
 #: never talks to a media server.
 BUILD_ENVIRONMENT = frozendict(
-    {
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         "APP_PASSWORD_HASH": (
             "$argon2id$v=19$m=19456,t=2,p=1$Y96qqNb5fWisYsjxPJH7rw$"
             "tmT2xh96T8fz3H2p6jD3VzxKyFZzHeUFucJGxjvSlM0"
@@ -81,7 +81,7 @@ def _rest_client(*, check: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check", action="store_true", help="Verify the files are current."
     )

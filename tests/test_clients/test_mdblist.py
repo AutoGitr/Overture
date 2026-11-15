@@ -166,3 +166,26 @@ async def test_a_failed_list_search_says_so(app_config: Settings) -> None:
             await client.search_lists("top")
     finally:
         await client.close()
+
+
+async def test_a_list_description_is_read_from_its_list(app_config: Settings) -> None:
+    app_config.MDBLIST_API_KEY = SecretStr("private-key")
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        assert request.url.path == "/lists/user/list"
+        return httpx2.Response(200, json=[{"id": 1, "description": " Picks. "}])
+
+    factory, _transport = mock_client_factory(handle)
+    client = MDBListClient(app_config=app_config, client_factory=factory)
+    try:
+        assert await client.description("https://mdblist.com/lists/user/list") == (
+            "Picks."
+        )
+    finally:
+        await client.close()
+
+
+async def test_a_list_has_no_description_without_a_key(app_config: Settings) -> None:
+    client = MDBListClient(app_config=app_config)
+    assert await client.description("42") is None
+    await client.close()

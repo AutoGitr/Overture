@@ -18,9 +18,16 @@ import {
   type SidebarTab,
   type ThemeSource,
 } from "../utils/sidebarDomain";
+import { keysOf } from "../utils/records";
 import { readJson, writeJson } from "../utils/storage";
 import type { CollectionPosterStyle } from "../../generated/rest/types.gen";
 import { COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
+import {
+  CATALOG_SELECTION_FILTERS,
+  SELECTION_AGREEMENTS,
+  type CatalogSelectionFilter,
+  type SelectionAgreement,
+} from "../utils/catalogSelections";
 import { settingsState } from "./settingsState.svelte";
 
 export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
@@ -46,7 +53,7 @@ export interface NumberRange {
   max: number | null;
 }
 
-export interface FilterState {
+export interface FilterState extends Record<CatalogSelectionFilter, SelectionAgreement> {
   monitored: "all" | "monitored" | "unmonitored";
   collectionSize: "all" | "empty" | "below_minimum";
   collectionKind: "all" | "regular" | "smart";
@@ -59,8 +66,6 @@ export interface FilterState {
   theme: Completeness;
   overtureDb: Completeness;
   themerrDb: Completeness;
-  /** Whether selections held both here and in OvertureDB agree. */
-  catalogSelections: "all" | "matching" | "different";
   aspectRatio: "all" | "correct" | "incorrect";
   mediaServer: "all" | "present" | "missing";
   libraryIds: string[];
@@ -84,7 +89,10 @@ const DEFAULT_FILTERS: FilterState = {
   theme: "all",
   overtureDb: "all",
   themerrDb: "all",
-  catalogSelections: "all",
+  ...(Object.fromEntries(keysOf(CATALOG_SELECTION_FILTERS).map((key) => [key, "all"])) as Record<
+    CatalogSelectionFilter,
+    SelectionAgreement
+  >),
   aspectRatio: "all",
   mediaServer: "all",
   libraryIds: [],
@@ -185,11 +193,12 @@ function normalizeFilters(value: unknown): FilterState {
     theme: stringOption(source.theme, COMPLETENESS_FILTERS, defaults.theme),
     overtureDb: stringOption(source.overtureDb, COMPLETENESS_FILTERS, defaults.overtureDb),
     themerrDb: stringOption(source.themerrDb, COMPLETENESS_FILTERS, defaults.themerrDb),
-    catalogSelections: stringOption(
-      source.catalogSelections,
-      ["all", "matching", "different"] as const,
-      defaults.catalogSelections,
-    ),
+    ...(Object.fromEntries(
+      keysOf(CATALOG_SELECTION_FILTERS).map((key) => [
+        key,
+        stringOption(source[key], SELECTION_AGREEMENTS, defaults[key]),
+      ]),
+    ) as Record<CatalogSelectionFilter, SelectionAgreement>),
     aspectRatio: stringOption(source.aspectRatio, ASPECT_RATIO_FILTERS, defaults.aspectRatio),
     mediaServer: stringOption(source.mediaServer, MEDIA_SERVER_FILTERS, defaults.mediaServer),
     libraryIds: stringArray(source.libraryIds),

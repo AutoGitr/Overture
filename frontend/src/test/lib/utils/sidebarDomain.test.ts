@@ -572,7 +572,12 @@ describe("sidebar collections", () => {
         managed: true,
         sync_failed: true,
         catalog_complete: true,
-        catalog_selections: "different",
+        catalog_selections: {
+          poster: "matching",
+          background: "matching",
+          season_posters: null,
+          theme: "different",
+        },
       }),
     ];
     const titles = (filters: Partial<FilterState>, catalogEnabled = false) =>
@@ -587,8 +592,11 @@ describe("sidebar collections", () => {
     expect(titles({ collectionSync: "synced" })).toEqual(["Smart"]);
     expect(titles({ overtureDb: "complete" }, true)).toEqual(["Failing"]);
     expect(titles({ overtureDb: "complete" })).toHaveLength(3);
-    expect(titles({ catalogSelections: "different" }, true)).toEqual(["Failing"]);
-    expect(titles({ catalogSelections: "matching" }, true)).toEqual([]);
+    // Each slot is filtered on its own; a title without an entry matches none.
+    expect(titles({ catalogTheme: "different" }, true)).toEqual(["Failing"]);
+    expect(titles({ catalogPoster: "matching" }, true)).toEqual(["Failing"]);
+    expect(titles({ catalogPoster: "different" }, true)).toEqual([]);
+    expect(titles({ catalogTheme: "different" })).toHaveLength(3);
   });
 
   it("searches by the chosen field and sorts by the chosen key", () => {
@@ -790,9 +798,13 @@ describe("sidebar registry", () => {
     );
     const items = filterSections("items", options);
     expect(items.slice(items.indexOf("themeSources") + 1)).toEqual([
+      "catalogTheme",
       "collection",
       "metadataIssues",
     ]);
+    // Season posters are a show's alone.
+    expect(items).not.toContain("catalogSeasonPosters");
+    expect(filterSections("items", { ...options, tab: "show" })).toContain("catalogSeasonPosters");
     expect(FILTERS.collectionHolds.group).toBe("status");
     expect(filterSections("items", { ...options, collections: false })).not.toContain("collection");
   });

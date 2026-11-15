@@ -241,7 +241,7 @@ def _check(entries: list[tuple[str, Entry, Path]], names: set[str]) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="verify without writing")
     mode.add_argument(

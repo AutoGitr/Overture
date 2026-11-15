@@ -46,6 +46,13 @@ def compute_bytes_hash(data: bytes) -> str:
     return _blake3(data).hexdigest()
 
 
+def process_owner() -> str:
+    """Name the user and group this process writes files as, for permission errors."""
+    if os.name == "nt":
+        return "the current Windows user"
+    return f"UID={os.getuid()} GID={os.getgid()}"
+
+
 def sync_directory(path: Path) -> None:
     """Persist a completed rename on filesystems that support directory fsync."""
     if os.name == "nt":

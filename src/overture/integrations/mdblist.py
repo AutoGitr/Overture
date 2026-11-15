@@ -66,6 +66,14 @@ class MdblistList(BaseModel):
 _LIST_RESULTS: TypeAdapter[list[MdblistList]] = TypeAdapter(list[MdblistList])
 
 
+class _ListInfo(BaseModel):
+    description: str | None = None
+
+
+# MDBList answers a list lookup with a one-element array.
+_LIST_INFO: TypeAdapter[list[_ListInfo]] = TypeAdapter(list[_ListInfo])
+
+
 class MDBListClient:
     """Own the authenticated client and read bounded list pages in source order."""
 
@@ -108,6 +116,32 @@ class MDBListClient:
             return _LIST_RESULTS.validate_python(response.json())
         except (httpx2.HTTPError, ValueError, ValidationError) as exc:
             raise PublicServiceError(502, "MDBList could not search lists") from exc
+
+    async def description(self, identifier: str) -> str | None:
+        """Return a list's description, if its author wrote one and a key is set.
+
+        Raises:
+            PublicServiceError: 502 when MDBList cannot answer.
+        """
+        if not self._config.mdblist_configured:
+            return None
+        try:
+            response = await request_with_retry(
+                await self._client.get(),
+                "GET",
+                f"/lists/{mdblist_identifier(identifier)}",
+                limiter=self._limiter,
+            )
+            response.raise_for_status()
+            found = _LIST_INFO.validate_python(response.json())
+        except (httpx2.HTTPError, ValueError, ValidationError) as exc:
+            raise PublicServiceError(
+                502, "MDBList could not describe the list"
+            ) from exc
+        return (
+            next((info.description.strip() for info in found if info.description), None)
+            or None
+        )
 
     async def tmdb_ids(self, identifier: str, media_type: MediaType) -> list[int]:
         """Return a complete list or fail before destructive membership changes."""

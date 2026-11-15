@@ -16,6 +16,7 @@
   import type {
     ArtCandidate,
     ArtType,
+    CollectionPosterStyle,
     MediaItemRead,
     SaveArtRequest,
   } from "../../generated/rest/types.gen";
@@ -50,6 +51,8 @@
   import { candidateImageUrl } from "../utils/artDisplay";
   import ArtUrlEntry from "./ArtUrlEntry.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
+  import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
 
   let {
     slot,
@@ -136,6 +139,7 @@
               hamming: null,
               iso_639_1: null,
               perfect_match: null,
+              poster_style: null,
               preview_url: null,
               title: null,
               generated: null,
@@ -145,6 +149,13 @@
         : [];
     return { tmdb: available?.tmdb ?? [], overturedb: original };
   });
+  // A collection's poster link is contributed to OvertureDB as the style
+  // chosen here, starting from the style of the poster it has.
+  let choosesPosterStyle = $derived(slot.kind === "collection" && artType === "poster");
+  let posterStyle = $derived<CollectionPosterStyle>(
+    (slot.kind === "collection" && slot.posterStyle) || "individual",
+  );
+
   // Typed/pasted URL entry, shown when the clipboard cannot be read directly.
   let manualEntry = $state(false);
 
@@ -185,9 +196,14 @@
 
   /**
    * Save a choice. A candidate from the grid passes the image the grid shows,
-   * which the detail page then shows until the server has fetched the file.
+   * which the detail page then shows until the server has fetched the file,
+   * and the style OvertureDB holds it as, which a collection poster keeps.
    */
-  async function saveArt(body: SaveArtRequest, previewUrl: string | null = null) {
+  async function saveArt(
+    body: SaveArtRequest,
+    previewUrl: string | null = null,
+    heldStyle: CollectionPosterStyle | null = null,
+  ) {
     if (saving || (slot.kind === "catalog" && slot.catalog.draft.busy)) return false;
     saving = true;
     feedback.clear();
@@ -195,7 +211,10 @@
       const advanceContext = beginAutoAdvance();
       try {
         await saveCollectionRequest.mutateAsync({
-          body,
+          body:
+            choosesPosterStyle && body.url
+              ? { ...body, poster_style: heldStyle ?? posterStyle }
+              : body,
           path: { collection_id: slot.collectionId, art_type: artType },
         });
         feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()}.`);
@@ -417,7 +436,7 @@
   </ArtMatchBar>
 
   {#if match.results && match.results.length > 0}
-    {@render source("MATCHED", match.results, true)}
+    {@render source("MATCHED", match.results, true, true)}
   {/if}
 
   <DataStatus
@@ -427,6 +446,19 @@
     hasData={sourcesQuery.data !== undefined}
     onretry={() => sourcesQuery.refetch()}
   />
+  {#if choosesPosterStyle}
+    <div class="poster-style">
+      <span class="form-label">Contribute to OvertureDB as</span>
+      <SegmentedControl
+        label="Contribute to OvertureDB as"
+        options={COLLECTION_POSTER_OPTIONS}
+        bind:value={posterStyle}
+        --segmented-width="auto"
+        --segmented-margin="0"
+      />
+      <span class="text-muted">Posters OvertureDB already holds keep their own style.</span>
+    </div>
+  {/if}
   {#if slot.kind === "collection" && slot.tmdbId === null}
     <p class="text-muted">
       Set a TMDB collection ID to browse its artwork too, or paste custom artwork.
@@ -458,6 +490,7 @@
               ? { generated: art.generated, title_only: art.title_only }
               : { url: art.url, width: art.width, height: art.height },
             candidateImageUrl(art),
+            art.poster_style,
           )}
       />
     {/each}
@@ -469,5 +502,12 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .poster-style {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
   }
 </style>

@@ -115,7 +115,7 @@ class CollectionBulk:
             try:
                 await handler(collection_id, body)
                 result.collection_ids.append(collection_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
                 result.errors[collection_id] = str(exc)
         return result
 

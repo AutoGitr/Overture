@@ -98,7 +98,9 @@ which can sync every collection, chosen groups, or chosen collections under
 
 Summary templates take `{title}`, `{group}`, `{start_date}`, `{end_date}`,
 `{summary}` (the server's) and `{source_summary}`, the description of the
-first list or a person's biography. Without a template, a collection keeps its
+first source that has one: a TMDB franchise's overview, a TMDB or MDBList
+list's description (MDBList's needs `MDBLIST_API_KEY`), or a TMDB person's
+biography. Without a template, a collection keeps its
 own summary, or takes its list's description, so each TMDB franchise gets
 TMDB's overview.
 

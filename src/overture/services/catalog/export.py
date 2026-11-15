@@ -27,7 +27,6 @@ lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
-lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import PAGE_SIZE, Database
 lazy from ...domain import (
     ArtType,
@@ -43,7 +42,6 @@ lazy from ...utils.art_urls import art_refusals
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.temporary import create_operation_directory
 lazy from ...utils.threads import owned_thread
-lazy from ..collections.policy import resolve_policy
 lazy from .entries import collection_poster_field
 
 
@@ -106,19 +104,18 @@ def item_entry(item: MediaItem) -> dict[str, Any] | None:
 
 
 def collection_entry(
-    collection: MediaCollection,
-    catalog: CatalogCollection | None,
-    posters: CollectionPosterStyle,
+    collection: MediaCollection, catalog: CatalogCollection | None
 ) -> dict[str, Any] | None:
     """Return a matched collection's art and theme as a catalog entry, if any.
 
-    Its poster is the kind *posters* takes from OvertureDB. A ThemerrDB theme
-    is not OvertureDB's to take, so it is left out.
+    Its poster goes in the field of the style it was selected as. A ThemerrDB
+    theme is not OvertureDB's to take, so it is left out.
     """
     if collection.tmdb_collection_id is None:
         return None
-    poster = _catalog_art_url(read_art_slot(collection, ArtType.POSTER).url)
-    if _consistent_problem(poster, posters):
+    slot = read_art_slot(collection, ArtType.POSTER)
+    poster = _catalog_art_url(slot.url)
+    if _consistent_problem(poster, slot.poster_style):
         poster = None
     background = _catalog_art_url(read_art_slot(collection, ArtType.BACKGROUND).url)
     theme = _theme(collection)
@@ -128,7 +125,7 @@ def collection_entry(
         theme = None
     if not (poster or background or theme):
         return None
-    chosen = collection_poster_field(posters)
+    chosen = slot.poster_style and collection_poster_field(slot.poster_style)
     return {
         "media_type": CatalogMediaType.COLLECTION.value,
         "title": catalog.title if catalog else collection.title,
@@ -223,21 +220,19 @@ def _archive(directory: Path, left_out: list[str]) -> Path:
 
 
 def _consistent_problem(
-    poster: str | None, posters: CollectionPosterStyle
+    poster: str | None, style: CollectionPosterStyle | None
 ) -> str | None:
-    """Why a collection's poster cannot be the consistent one *posters* contributes."""
-    if posters is CollectionPosterStyle.INDIVIDUAL or poster is None:
+    """Why a collection's poster cannot be the consistent poster of *style*."""
+    if style in {None, CollectionPosterStyle.INDIVIDUAL} or poster is None:
         return None
     return consistent_poster_problem(poster)
 
 
-def collection_refusals(
-    collection: MediaCollection, posters: CollectionPosterStyle
-) -> list[str]:
+def collection_refusals(collection: MediaCollection) -> list[str]:
     """What OvertureDB would refuse of a collection's art and theme."""
     lines = refusals(collection.title, collection)
-    poster = _catalog_art_url(read_art_slot(collection, ArtType.POSTER).url)
-    if problem := _consistent_problem(poster, posters):
+    slot = read_art_slot(collection, ArtType.POSTER)
+    if problem := _consistent_problem(_catalog_art_url(slot.url), slot.poster_style):
         lines.append(f"{collection.title}: Poster: {problem}")
     return lines
 
@@ -310,25 +305,16 @@ async def export_selections(database: Database, directory: Path) -> Path:
         catalog = await CatalogRepository(session).collections_by_tmdb_id(
             {row.tmdb_collection_id for row in collections if row.tmdb_collection_id}
         )
-        settings = await get_app_settings(session)
-    posters = {
-        row.id: resolve_policy(settings, row.group, row.rule).overturedb_posters
-        for row in collections
-    }
     entries = [
         entry
         for row in collections
-        if (
-            entry := collection_entry(
-                row, catalog.get(row.tmdb_collection_id or 0), posters[row.id]
-            )
-        )
+        if (entry := collection_entry(row, catalog.get(row.tmdb_collection_id or 0)))
     ]
     left_out.extend(
         line
         for row in collections
         if row.tmdb_collection_id is not None
-        for line in collection_refusals(row, posters[row.id])
+        for line in collection_refusals(row)
     )
     await owned_thread(_stage_batch, directory, entries)
     return await owned_thread(_archive, directory, left_out)

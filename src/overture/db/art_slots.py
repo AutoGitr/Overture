@@ -10,7 +10,7 @@ lazy from dataclasses import asdict, dataclass, fields
 lazy from functools import cache
 lazy from operator import attrgetter
 
-lazy from ..domain import ArtGeneration, ArtSource, ArtType
+lazy from ..domain import ArtGeneration, ArtSource, ArtType, CollectionPosterStyle
 lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
 lazy from .models.art import ArtSlot
 lazy from .models.media_collection import MediaCollection
@@ -220,14 +220,23 @@ def flattened_art_names(prefix: str) -> set[str]:
 
 
 def select_art(
-    owner: MediaItem | Season | MediaCollection, art_type: ArtType, url: PublicArtUrl
+    owner: MediaItem | Season | MediaCollection,
+    art_type: ArtType,
+    url: PublicArtUrl,
+    *,
+    poster_style: CollectionPosterStyle | None = None,
 ) -> ArtSlot:
-    """Record *url* as the slot's selected artwork, leaving file facts alone."""
+    """Record *url* as the slot's selected artwork, leaving file facts alone.
+
+    A collection's poster takes *poster_style*, the OvertureDB poster it is
+    contributed as; no other slot takes one.
+    """
     slot = art_slot(owner, art_type)
     if (slot.url, slot.upload_hash) != (url, None):
         slot.selection_hash = None
     slot.url = url
     slot.upload_hash = None
+    slot.poster_style = poster_style
     slot.generated_style = None
     slot.generated_title_only = False
     return slot
@@ -249,6 +258,7 @@ def select_upload(
         slot.selection_hash = None
     slot.url = None
     slot.upload_hash = upload_hash
+    slot.poster_style = None
     slot.generated_style = generated.style if generated else None
     slot.generated_title_only = generated.title_only if generated else False
     return slot
@@ -270,6 +280,7 @@ def clear_art_selection(
         return
     slot.url = None
     slot.upload_hash = None
+    slot.poster_style = None
     slot.selection_hash = None
     slot.generated_style = None
     slot.generated_title_only = False

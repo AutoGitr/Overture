@@ -1,4 +1,4 @@
-import type { MediaItemRead } from "../../generated/rest/types.gen";
+import type { CollectionPosterStyle, MediaItemRead } from "../../generated/rest/types.gen";
 import type { CatalogContext } from "./catalogDraft";
 import { upsertLibraryItem } from "../rest/cache";
 import { beginAutoAdvance, handleFirstSelectionAdvance, type FirstSelection } from "./autoAdvance";
@@ -22,6 +22,8 @@ export type CollectionArtTarget = {
   kind: "collection";
   collectionId: number;
   tmdbId: number | null;
+  /** The OvertureDB poster the selected poster link is contributed as. */
+  posterStyle: CollectionPosterStyle | null;
 };
 
 /**

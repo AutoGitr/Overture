@@ -250,7 +250,7 @@ class TmdbItemsService:
         self,
         collection_id: int,
         *,
-        artwork_source: Literal["tmdb", "overturedb"] = "tmdb",
+        artwork_source: Literal["overturedb", "tmdb"] = "tmdb",
     ) -> TmdbCollectionResponse:
         """Return a TMDB collection's movies.
 

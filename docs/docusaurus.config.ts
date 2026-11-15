@@ -21,6 +21,25 @@ if (!fs.existsSync(path.resolve(overtureDbDocs))) {
   );
 }
 
+/** A changelog heading's anchor, as Docusaurus slugs it. */
+function anchor(heading: string): string {
+  return heading
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} -]/gu, "")
+    .replaceAll(" ", "-");
+}
+
+/**
+ * The released versions, newest first, read from the changelog the releases
+ * are cut from. The navbar names the newest and links each to its notes.
+ */
+const releases = [
+  ...fs
+    .readFileSync("../.github/CHANGELOG.md", "utf8")
+    .matchAll(/^## ((\d+\.\d+\.\d+) - (\d{4}-\d{2}-\d{2}))$/gm),
+].map(([, heading, version, date]) => ({ version, date, anchor: anchor(heading) }));
+const RELEASES_SHOWN = 5;
+
 const config: Config = {
   title: "Overture",
   tagline: "Artwork, collections & themes for Plex, Jellyfin and Emby",
@@ -109,6 +128,19 @@ const config: Config = {
           docsPluginId: "overturedb",
           position: "left",
           label: "OvertureDB",
+        },
+        {
+          type: "dropdown",
+          label: releases[0] ? `v${releases[0].version}` : "Releases",
+          position: "right",
+          items: [
+            { label: "Unreleased changes", to: "/overture/changelog#unreleased" },
+            ...releases.slice(0, RELEASES_SHOWN).map((release) => ({
+              label: `v${release.version} (${release.date})`,
+              to: `/overture/changelog#${release.anchor}`,
+            })),
+            { label: "All releases", href: "https://github.com/AutoGitr/Overture/releases" },
+          ],
         },
         {
           type: "dropdown",

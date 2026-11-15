@@ -76,10 +76,9 @@ still need selections, choose artwork and a theme, and contribute them:
 Overture checks image formats, dimensions and links against the catalog
 rules. OvertureDB takes themes 20 seconds to 10 minutes long, so contributions
 leave out a chosen theme outside that and say why. Uploads cannot be
-contributed, since the catalog takes public links only. Collection posters are
-contributed as the kind the collection's
-[OvertureDB posters](collections/art-and-themes.md#overturedb-posters) setting
-names.
+contributed, since the catalog takes public links only. A collection poster
+is contributed as the
+[style it was chosen as](collections/art-and-themes.md#which-style-a-chosen-poster-is).
 
 Review and submit the issue on GitHub; a maintainer approves it before it joins
 the catalog. Imported ThemerrDB choices are maintained upstream in ThemerrDB.

@@ -24,7 +24,11 @@ lazy from ..domain import (
     ArtStyle,
     FilterField,
 )
-lazy from ..schemas.art import ArtMatchResponse, ArtSourcesResponse, SaveArtRequest
+lazy from ..schemas.art import (
+    ArtMatchResponse,
+    ArtSourcesResponse,
+    SaveCollectionArtRequest,
+)
 lazy from ..schemas.collections import (
     ArrTagRead,
     BulkCollectionMonitorUpdate,
@@ -482,7 +486,7 @@ async def get_generated_collection_art(
 async def save_collection_art(
     collection_id: CollectionIdPath,
     art_type: ArtTypePath,
-    body: SaveArtRequest,
+    body: SaveCollectionArtRequest,
     art: CollectionArtDep,
 ) -> StatusResponse:
     """Validate and upload artwork to a collection."""

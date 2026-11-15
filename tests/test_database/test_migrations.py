@@ -1409,3 +1409,49 @@ def test_collection_poster_styles_split_into_individual_matte_and_overlay() -> N
             assert json.loads(draft_json) == _V3_COLLECTION_DRAFT
     finally:
         engine.dispose()
+
+
+def test_collection_poster_links_take_the_style_overturedb_holds_them_as() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "a4e9c2b8f517")
+            conn.exec_driver_sql(
+                "INSERT INTO catalog_collections (tmdb_id, title, "
+                "poster_url_individual, poster_url_matte, no_theme) VALUES "
+                "(10, 'Saga', 'https://image.tmdb.org/t/p/original/i.jpg', "
+                "'https://theposterdb.com/api/assets/2503', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO media_collections (id, title, tmdb_collection_id, kind, "
+                "order_type, child_count, visible_home, visible_shared, "
+                "visible_library, monitored, deselected, unsynced) VALUES "
+                "(1, 'Saga', 10, 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0), "
+                "(2, 'Other', NULL, 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (id, collection_id, art_type, url, "
+                "generated_title_only) VALUES "
+                "(1, 1, 'poster', 'https://theposterdb.com/api/assets/2503', 0), "
+                "(2, 2, 'poster', 'https://image.tmdb.org/t/p/original/o.jpg', 0), "
+                "(3, 1, 'background', 'https://image.tmdb.org/t/p/original/b.jpg', 0)"
+            )
+
+            command.upgrade(config, "b6f1d3a8e524")
+
+            assert conn.exec_driver_sql(
+                "SELECT id, poster_style FROM art_slots ORDER BY id"
+            ).all() == [(1, "matte"), (2, "individual"), (3, None)]
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "UPDATE art_slots SET poster_style = NULL WHERE id = 1"
+                )
+
+            command.downgrade(config, "a4e9c2b8f517")
+            assert "poster_style" not in {
+                column["name"] for column in inspect(conn).get_columns("art_slots")
+            }
+    finally:
+        engine.dispose()

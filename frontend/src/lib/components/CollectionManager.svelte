@@ -242,6 +242,7 @@
             kind: "collection",
             collectionId: collection.id,
             tmdbId: collection.tmdb_collection_id,
+            posterStyle: collection.poster_style,
           }}
           {artType}
           item={null}

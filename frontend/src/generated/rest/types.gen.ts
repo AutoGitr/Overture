@@ -4,6 +4,8 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type Agreement = 'matching' | 'different';
+
 /**
  * ApiKeyCreate
  *
@@ -438,6 +440,7 @@ export type ArtCandidate = {
      * Perfect Match
      */
     perfect_match: boolean | null;
+    poster_style: CollectionPosterStyle | null;
     /**
      * Preview Url
      */
@@ -504,7 +507,7 @@ export type ArtMatchResponse = {
  * source whose host serves it. A test keeps the hosts in step with the
  * catalog contract's art sources.
  */
-export type ArtSource = 'overturedb' | 'upload' | 'generated' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex';
+export type ArtSource = 'overturedb' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex' | 'upload' | 'generated';
 
 /**
  * ArtSourcesResponse
@@ -1691,6 +1694,20 @@ export type CatalogSeasonSource = {
 };
 
 /**
+ * CatalogSelections
+ *
+ * How each of a title's selections compares with what OvertureDB holds.
+ *
+ * A selection only one side has is different; both having none matches.
+ */
+export type CatalogSelections = {
+    background: Agreement;
+    poster: Agreement;
+    season_posters: Agreement | null;
+    theme: Agreement;
+};
+
+/**
  * CatalogSources
  *
  * Catalog sources response.
@@ -2083,10 +2100,7 @@ export type CollectionDetail = {
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
-    /**
-     * Catalog Selections
-     */
-    catalog_selections: 'matching' | 'different' | null;
+    catalog_selections: CatalogSelections | null;
     /**
      * Catalog Themerrdb
      */
@@ -2170,6 +2184,7 @@ export type CollectionDetail = {
     poster_phash: string | null;
     poster_source: ArtSource | null;
     poster_status: AssetStatus;
+    poster_style: CollectionPosterStyle | null;
     /**
      * Poster Url
      */
@@ -2899,10 +2914,7 @@ export type CollectionRead = {
      * Catalog No Theme
      */
     catalog_no_theme: boolean;
-    /**
-     * Catalog Selections
-     */
-    catalog_selections: 'matching' | 'different' | null;
+    catalog_selections: CatalogSelections | null;
     /**
      * Catalog Themerrdb
      */
@@ -2977,6 +2989,7 @@ export type CollectionRead = {
     poster_phash: string | null;
     poster_source: ArtSource | null;
     poster_status: AssetStatus;
+    poster_style: CollectionPosterStyle | null;
     /**
      * Poster Url
      */
@@ -4424,11 +4437,9 @@ export type MediaItemRead = {
      */
     catalog_no_theme: boolean;
     /**
-     * Catalog Selections
-     *
-     * Whether the selections the item and its OvertureDB entry both hold agree; null when no slot has a selection on both sides.
+     * How each selection compares with the item's OvertureDB entry; null without an entry.
      */
-    catalog_selections: 'matching' | 'different' | null;
+    catalog_selections: CatalogSelections | null;
     /**
      * Catalog Themerrdb
      */
@@ -4938,6 +4949,33 @@ export type SaveArtRequest = {
      * Height
      */
     height?: number | null;
+    /**
+     * Title Only
+     */
+    title_only?: boolean;
+    upload_hash?: ImageHash | null;
+    /**
+     * Url
+     */
+    url?: string | null;
+    /**
+     * Width
+     */
+    width?: number | null;
+};
+
+/**
+ * SaveCollectionArtRequest
+ *
+ * The chosen artwork for one collection slot.
+ */
+export type SaveCollectionArtRequest = {
+    generated?: ArtStyle | null;
+    /**
+     * Height
+     */
+    height?: number | null;
+    poster_style?: CollectionPosterStyle | null;
     /**
      * Title Only
      */
@@ -8782,7 +8820,7 @@ export type RemoveCollectionArtResponses = {
 export type RemoveCollectionArtResponse = RemoveCollectionArtResponses[keyof RemoveCollectionArtResponses];
 
 export type SaveCollectionArtData = {
-    body: SaveArtRequest;
+    body: SaveCollectionArtRequest;
     headers?: {
         /**
          * X-Api-Key
@@ -11426,7 +11464,7 @@ export type GetTmdbCollectionData = {
          *
          * Collection member artwork
          */
-        artwork_source?: 'tmdb' | 'overturedb';
+        artwork_source?: 'overturedb' | 'tmdb';
     };
     url: '/api/tmdb/collections/{collection_id}';
 };

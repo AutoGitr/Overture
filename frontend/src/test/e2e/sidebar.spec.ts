@@ -185,7 +185,7 @@ test("catalog browsing filters drafts and saves and discards artwork on desktop 
   await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /^(CATALOG|DRAFT)$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open in library", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Use artwork 1000x1500 from tmdb" }).click();
+  await page.getByRole("button", { name: "Use artwork 1000x1500 from TMDB" }).click();
   await expect(page.getByRole("button", { name: "Discard draft" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "OVERTUREDB", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear poster", exact: true })).toBeVisible();

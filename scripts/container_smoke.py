@@ -14,13 +14,14 @@ lazy from pathlib import Path
 lazy from typing import Any
 
 lazy from websockets.sync.client import connect
+lazy from websockets.typing import Origin
 
 lazy from overture.config import PORT, RuntimeSettings, load_configuration
 lazy from overture.migrations import versions_at_head
 lazy from overture.runtime_paths import database_path
 
 HOST = "127.0.0.1"
-ORIGIN = f"http://{HOST}:{PORT}"
+ORIGIN = Origin(f"http://{HOST}:{PORT}")
 
 
 def verify_frontend() -> None:

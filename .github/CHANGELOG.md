@@ -4,12 +4,15 @@
 
 ### Added
 
-- **Interface:** the **OvertureDB selections** filter lists the titles and collections whose selections match OvertureDB's or differ from them, comparing only the art and themes chosen on both sides.
+- **Interface:** **OvertureDB poster**, **OvertureDB background**, **OvertureDB season posters** and **OvertureDB theme** filters list the titles and collections whose choice for that slot matches OvertureDB's or differs from it; a choice only one side has is a difference.
 - **Interface:** searching TMDB keeps sorting (relevance, title or year) and filters by whether your library or OvertureDB holds a title.
 - **OvertureDB:** **Poster style** in the catalog's filters shows and edits a collection's individual, matte or overlay poster.
+- **Collections:** `{source_summary}` and collections without a summary template take an MDBList list's description too, beside TMDB franchise and list overviews and TMDB people's biographies.
+- **Collections:** **Contribute to OvertureDB as** on a collection's Poster tab picks whether the poster you choose is an individual, matte or overlay poster; OvertureDB offers all three of a collection's posters, each labelled with its style.
 
 ### Changed
 
+- **Interface:** art sources are named TPDb and TVDB on candidates, filters and messages; **Automatic art** lists the single sources before their combinations, and the art panel shows TMDB right after matched candidates and OvertureDB last.
 - **Collections:** **OvertureDB posters** offers **Individual**, **Matte** and **Overlay** collection poster styles, and Overture reads version 4 of the OvertureDB catalog (`poster_url_individual`, `poster_url_matte` and `poster_url_overlay`).
 - **OvertureDB:** the catalog's collections open at `/overturedb/collections` and are listed beside both Movies and Shows.
 - **Interface:** database record rows are named by what they hold, such as **Background**; checkbox lists fit their labels.
@@ -21,6 +24,11 @@
 - **OvertureDB:** clearing all art of a catalog movie or collection draft is saved instead of refused.
 - **Interface:** auto-advance moves through TMDB results that open as catalog entries or collections, and counts a catalog collection's poster of the shown style.
 - **Interface:** the sidebar search field shows no inner outline, and its search-by button fills the field's height.
+- **OvertureDB:** a collection poster is exported and contributed as the style it was chosen as; changing **OvertureDB posters** no longer moves every chosen poster to the new style. Posters chosen before keep the style OvertureDB holds them as, else Individual.
+- **Interface:** the sidebar's sort, group and shortcut labels and small caps headings are drawn at the type scale's smallest size instead of 10-12px, so they no longer look blocky at 100% zoom.
+- **Assets:** runs wait out an image host's rate limit, such as ThePosterDB's, and try again instead of reporting the slot as an error; collection art is fetched once, without a separate request to measure it first.
+- **Assets:** **Replace existing** skips a slot whose file is already the art a source picks instead of downloading it again and reporting it as downloaded.
+- **Artwork:** matched candidates name their source, such as TMDB or ThePosterDB, and every candidate names a known source by its name.
 
 ### Security
 

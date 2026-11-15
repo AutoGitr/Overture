@@ -7,6 +7,7 @@ import {
   UNMANAGED_GROUP,
 } from "../../generated/settings";
 import type {
+  CatalogSelections,
   CatalogEntryRow,
   CollectionRead,
   MediaItemRead,
@@ -14,6 +15,7 @@ import type {
 import type { FilterState, NumberRange } from "../stores/uiState.svelte";
 import { extractYouTubeId } from "./themeSearch";
 import { keysOf } from "./records";
+import { CATALOG_SELECTION_FILTERS, type CatalogSelectionFilter } from "./catalogSelections";
 
 export type SidebarTab = "movie" | "show";
 export type SidebarMode = "items" | "collections";
@@ -869,6 +871,27 @@ function issuesPredicate<T>(
  * Within a group the most used come first, and filters offering the same
  * choices sit together.
  */
+/**
+ * A filter on how one slot's selection compares with OvertureDB's. A title
+ * without a catalog entry has nothing to compare, so it never matches one.
+ */
+function selectionFilter(
+  key: CatalogSelectionFilter,
+  label: string,
+  group: FilterGroup,
+  order: number,
+): FilterDef {
+  const slot = CATALOG_SELECTION_FILTERS[key];
+  const predicate = (filters: FilterState, catalogEnabled: boolean) => {
+    const wanted = filters[key];
+    return catalogEnabled && wanted !== "all"
+      ? (row: { catalog_selections: CatalogSelections | null }) =>
+          row.catalog_selections?.[slot] === wanted
+      : null;
+  };
+  return { label, group, order, needsCatalog: true, library: predicate, collections: predicate };
+}
+
 export const FILTERS = {
   libraries: {
     label: "Libraries",
@@ -1008,21 +1031,13 @@ export const FILTERS = {
         ? triState(filters.themerrDb, "complete", (row) => row.catalog_themerrdb)
         : null,
   },
-  catalogSelections: {
-    label: "OvertureDB selections",
-    group: "status",
-    order: 65,
-    needsCatalog: true,
-    // Only titles with a selection on both sides compare.
-    library: (filters, catalogEnabled) =>
-      catalogEnabled && filters.catalogSelections !== "all"
-        ? (item) => item.catalog_selections === filters.catalogSelections
-        : null,
-    collections: (filters, catalogEnabled) =>
-      catalogEnabled && filters.catalogSelections !== "all"
-        ? (row) => row.catalog_selections === filters.catalogSelections
-        : null,
+  catalogPoster: selectionFilter("catalogPoster", "OvertureDB poster", "art", 220),
+  catalogBackground: selectionFilter("catalogBackground", "OvertureDB background", "art", 230),
+  catalogSeasonPosters: {
+    ...selectionFilter("catalogSeasonPosters", "OvertureDB season posters", "art", 240),
+    mediaTypes: ["show"],
   },
+  catalogTheme: selectionFilter("catalogTheme", "OvertureDB theme", "theme", 320),
   metadataIssues: {
     label: "Metadata issues",
     group: "metadata",
@@ -1220,4 +1235,16 @@ export function inCollectionGroup(
 ): boolean {
   if (!collection.managed) return group === UNMANAGED_GROUP;
   return group !== UNMANAGED_GROUP && (collection.collection_group ?? null) === group;
+}
+
+/** *filters* with every filter that reads OvertureDB back at its *defaults*. */
+export function withoutCatalogFilters(filters: FilterState, defaults: FilterState): FilterState {
+  const reset = { ...filters };
+  for (const key of keysOf(FILTERS)) {
+    const def: FilterDef = FILTERS[key];
+    if (def.needsCatalog && key in defaults) {
+      Object.assign(reset, { [key]: defaults[key as keyof FilterState] });
+    }
+  }
+  return reset;
 }

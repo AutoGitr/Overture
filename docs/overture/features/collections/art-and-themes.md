@@ -58,12 +58,28 @@ collection), chooses which poster OvertureDB gives a TMDB collection:
   hosted on TMDB or ThePosterDB.
 
 With **Matte** or **Overlay**, a collection without that poster gets no
-OvertureDB poster. Automatic art, exports and **Contribute issue** follow each
-collection's choice, so posters you pick are contributed as the same kind;
-**Matte** and **Overlay** leave out a poster from any source other than TMDB or
-ThePosterDB and say so. The catalog view shows any of the three
-([Browsing the catalog](../overturedb.md#browsing-the-catalog)); the
-OvertureDB guidelines describe the
+OvertureDB poster. Automatic art follows each collection's choice.
+
+### Which style a chosen poster is
+
+Every poster you choose for a collection remembers which of the three it is,
+and exports and **Contribute issue** contribute it as that, whatever
+**OvertureDB posters** says later:
+
+- On a collection's **Poster** tab, **Contribute to OvertureDB as** picks the
+  style of the poster you choose next, starting from the style of the one the
+  collection has. Pick it before choosing a TMDB poster or pasting a link.
+- A poster OvertureDB already holds keeps its own style, and its card says
+  which (**Individual**, **Matte** or **Overlay**). OvertureDB's section offers
+  all three of a collection's posters, the setting's style first.
+- Posters Automatic art or Assets choose take the setting's style from
+  OvertureDB, the style OvertureDB holds them as otherwise, and **Individual**
+  for any other poster.
+
+A **Matte** or **Overlay** poster from any source other than TMDB or
+ThePosterDB is left out of contributions, which say so. The catalog view shows
+any of the three ([Browsing the catalog](../overturedb.md#browsing-the-catalog));
+the OvertureDB guidelines describe the
 [consistent collection posters](/overturedb/contributing/selection-guidelines#consistent-collection-posters).
 
 ## Uploaded art and Audit
