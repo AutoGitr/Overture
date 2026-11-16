@@ -6,8 +6,8 @@ test("the ID mismatch issue shows only items whose catalog IDs differ", async ({
     request.fulfill({
       json: {
         items: [
-          mediaItem({ id: 1, title: "Mismatch", catalog_ids: "mismatching" }),
-          mediaItem({ id: 2, title: "Matching", catalog_ids: "matching" }),
+          mediaItem({ id: 1, title: "Mismatch", metadata_issues: ["id_mismatch"] }),
+          mediaItem({ id: 2, title: "Matching", metadata_issues: [] }),
         ],
         total: 2,
       },

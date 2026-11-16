@@ -32,6 +32,7 @@ lazy from overture.schemas.collections import (
     SourceCondition,
     TmdbItemSource,
 )
+lazy from overture.schemas.library_filters import LibraryFilterMatchRequest
 lazy from overture.schemas.removal import AssetRemoval, RemovalTarget
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.removal import AssetRemover
@@ -209,6 +210,14 @@ async def _recommend(bed: Bed) -> object:
     )
 
 
+async def _library_filter(bed: Bed) -> object:
+    return await bed.service.library_filters.match(
+        LibraryFilterMatchRequest(
+            media_type=MediaType.MOVIE, conditions=_LEAD.conditions
+        )
+    )
+
+
 async def _removal_options(bed: Bed) -> object:
     return await bed.remover.options(RemovalTarget(asset="art", item_ids=[1, 2, 3]))
 
@@ -220,6 +229,7 @@ OPERATIONS: dict[str, tuple[Operation, int]] = {
     "preview": (_preview, 10),
     "field values": (_actors, 3),
     "recommendation": (_recommend, 5),
+    "library filter": (_library_filter, 10),
     "collection detail": (lambda bed: bed.service.reader.get(bed.regular), 15),
     "collection list": (lambda bed: bed.service.reader.listed(), 15),
     "removal options": (_removal_options, 6),

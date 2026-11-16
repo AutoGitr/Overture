@@ -2,10 +2,11 @@ import { goToCatalog, goToCollectionsList, goToLibrary, routeScope } from "../ro
 import {
   ART_SOURCE_SLOTS,
   ART_SOURCES,
-  METADATA_ISSUES,
+  METADATA_ISSUE_FLAGS,
   THEME_SOURCES,
   defaultCatalogFilters,
   defaultTmdbFilters,
+  tmdbSearchBy,
   type CatalogFilters,
   type TmdbFilters,
   type CollectionView,
@@ -70,6 +71,8 @@ export interface FilterState extends Record<CatalogSelectionFilter, SelectionAgr
   mediaServer: "all" | "present" | "missing";
   libraryIds: string[];
   collectionId: number | null;
+  /** The saved custom filter applied to the titles, if any. */
+  customFilter: number | null;
   themeSources: ThemeSource[];
   artSource: { sources: ArtSource[]; artType: ArtSourceSlot };
   metadataIssues: { flags: MetadataIssue[]; mode: "all" | "any" };
@@ -97,6 +100,7 @@ const DEFAULT_FILTERS: FilterState = {
   mediaServer: "all",
   libraryIds: [],
   collectionId: null,
+  customFilter: null,
   themeSources: [],
   artSource: { sources: [], artType: "any" },
   metadataIssues: { flags: [], mode: "all" },
@@ -148,6 +152,11 @@ function bound(value: unknown): number | null {
 function numberRange(value: unknown): NumberRange {
   const source = record(value);
   return { min: bound(source.min), max: bound(source.max) };
+}
+
+/** A stored row's ID, or null for anything else. */
+function savedId(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
 }
 
 function normalizeFilters(value: unknown): FilterState {
@@ -202,17 +211,15 @@ function normalizeFilters(value: unknown): FilterState {
     aspectRatio: stringOption(source.aspectRatio, ASPECT_RATIO_FILTERS, defaults.aspectRatio),
     mediaServer: stringOption(source.mediaServer, MEDIA_SERVER_FILTERS, defaults.mediaServer),
     libraryIds: stringArray(source.libraryIds),
-    collectionId:
-      typeof source.collectionId === "number" && Number.isSafeInteger(source.collectionId)
-        ? source.collectionId
-        : null,
+    collectionId: savedId(source.collectionId),
+    customFilter: savedId(source.customFilter),
     themeSources: allowedValues(source.themeSources, THEME_SOURCES),
     artSource: {
       sources: allowedValues(artSource.sources, ART_SOURCES),
       artType: stringOption(artSource.artType, ART_SOURCE_ART_TYPES, defaults.artSource.artType),
     },
     metadataIssues: {
-      flags: allowedValues(metadataIssues.flags, METADATA_ISSUES),
+      flags: allowedValues(metadataIssues.flags, METADATA_ISSUE_FLAGS),
       mode: stringOption(metadataIssues.mode, METADATA_ISSUE_MODES, defaults.metadataIssues.mode),
     },
     resolution: {
@@ -306,9 +313,14 @@ class UiState {
     this.collectionGroupChange = null;
   }
 
+  /** What the search looks up on TMDB, or null while it filters the list. */
+  get tmdbSearchBy() {
+    return tmdbSearchBy(this.searchField);
+  }
+
   /** The search looks up TMDB rather than filtering the list. */
   get searchingTmdb(): boolean {
-    return this.searchField === "tmdb";
+    return this.tmdbSearchBy !== null;
   }
 
   /** Which top-level tab (movies/shows) is active, derived from the URL. */

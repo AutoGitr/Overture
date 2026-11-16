@@ -130,8 +130,8 @@ describe("catalog sidebar", () => {
       catalog_entry_key: null,
     });
     queryClient.setQueryData(
-      searchTmdbOptions({ query: { media_type: "movie", query: "alien" } }).queryKey,
-      { results: [result(348, "Alien"), result(8077, "Alien 3")] },
+      searchTmdbOptions({ query: { media_type: "movie", query: "alien", by: "title" } }).queryKey,
+      { results: [result(348, "Alien"), result(8077, "Alien 3")], matched: null },
     );
     renderWithQueryClient(Sidebar);
     await fireEvent.click(screen.getByRole("button", { name: "Choose search field" }));

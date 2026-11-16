@@ -20,10 +20,12 @@ lazy from overture.domain import (
     ArtSource,
     ArtType,
     AspectRatioTolerance,
+    MetadataIssue,
     ServerAsset,
     ServerType,
     ThemeBulkSource,
 )
+lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.http_security import (
     CSRF_COOKIE,
     CSRF_HEADER,
@@ -75,6 +77,22 @@ def render_settings_defaults() -> str:
                 {source.value for source in ArtBulkSource if source.catalog}
                 | {source.value for source in ThemeBulkSource if source.catalog}
             ),
+        ),
+        (
+            "METADATA_ISSUES",
+            {
+                issue.value: {
+                    "label": issue.label,
+                    "collections": issue.collections,
+                    "showOnly": issue.show_only,
+                    "needsCatalog": issue.needs_catalog,
+                }
+                for issue in MetadataIssue
+            },
+        ),
+        (
+            "LIBRARY_STATUS_FIELDS",
+            [field.value for field, spec in FIELDS.items() if spec.library_only],
         ),
         ("ITEM_ART_TYPES", list(ITEM_ART_TYPES)),
         ("UNMANAGED_GROUP", UNMANAGED_GROUP),

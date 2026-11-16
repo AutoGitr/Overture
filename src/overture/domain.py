@@ -169,6 +169,20 @@ class TmdbChart(StrEnum):
     ON_THE_AIR = "on_the_air"
 
 
+class TmdbSearchBy(StrEnum):
+    """What a TMDB search looks for: titles, or the titles of something else."""
+
+    TITLE = "title"
+    #: The titles a person is credited in.
+    PERSON = "person"
+    #: A company's most popular titles.
+    COMPANY = "company"
+    #: The most popular titles with a keyword.
+    KEYWORD = "keyword"
+    #: The titles on a public list.
+    LIST = "list"
+
+
 class TmdbPersonRole(StrEnum):
     """Credit roles included by a TMDB person condition."""
 
@@ -234,6 +248,27 @@ class FilterField(StrEnum):
     STREAMING = "streaming"
     SHOW_STATUS = "show_status"
     LAST_AIRED = "last_aired"
+    # The library's own status of each title, which only library filters test.
+    MONITORED = "monitored"
+    ART_STATUS = "art_status"
+    POSTER_STATUS = "poster_status"
+    BACKGROUND_STATUS = "background_status"
+    SEASON_POSTERS_STATUS = "season_posters_status"
+    POSTER_SOURCE = "poster_source"
+    BACKGROUND_SOURCE = "background_source"
+    POSTER_WIDTH = "poster_width"
+    BACKGROUND_WIDTH = "background_width"
+    INCORRECT_ASPECT_RATIO = "incorrect_aspect_ratio"
+    THEME_STATUS = "theme_status"
+    THEME_SOURCE = "theme_source"
+    THEME_LENGTH = "theme_length"
+    METADATA_ISSUE = "metadata_issue"
+    OVERTUREDB_COMPLETE = "overturedb_complete"
+    THEMERRDB_THEME = "themerrdb_theme"
+    OVERTUREDB_POSTER = "overturedb_poster"
+    OVERTUREDB_BACKGROUND = "overturedb_background"
+    OVERTUREDB_SEASON_POSTERS = "overturedb_season_posters"
+    OVERTUREDB_THEME = "overturedb_theme"
 
 
 class FieldKind(StrEnum):
@@ -481,6 +516,50 @@ class AutoArt(StrEnum):
     def generates(self) -> bool:
         """Whether it generates art when no source has any."""
         return self.value.endswith("generate")
+
+
+class MetadataIssue(StrEnum):
+    """A gap or conflict in a title's or collection's metadata."""
+
+    NO_TMDB_ID = "no_tmdb_id"
+    NO_TVDB_ID = "no_tvdb_id"
+    NO_IMDB_ID = "no_imdb_id"
+    NO_LOCAL_PATH = "no_local_path"
+    NO_YEAR = "no_year"
+    NO_SERVER_ID = "no_server_id"
+    #: An ID the title and its OvertureDB entry both carry differs.
+    ID_MISMATCH = "id_mismatch"
+
+    @property
+    def label(self) -> str:
+        """How the issue is named to people."""
+        return _METADATA_ISSUE_LABELS[self]
+
+    @property
+    def collections(self) -> bool:
+        """Whether collections can have it, as well as titles."""
+        return self in {MetadataIssue.NO_TMDB_ID, MetadataIssue.NO_SERVER_ID}
+
+    @property
+    def show_only(self) -> bool:
+        """Whether only shows can have it: TVDB identifies shows."""
+        return self is MetadataIssue.NO_TVDB_ID
+
+    @property
+    def needs_catalog(self) -> bool:
+        """Whether it is found only against an OvertureDB entry."""
+        return self is MetadataIssue.ID_MISMATCH
+
+
+_METADATA_ISSUE_LABELS = {
+    MetadataIssue.NO_TMDB_ID: "No TMDB ID",
+    MetadataIssue.NO_TVDB_ID: "No TVDB ID",
+    MetadataIssue.NO_IMDB_ID: "No IMDb ID",
+    MetadataIssue.NO_LOCAL_PATH: "No local path",
+    MetadataIssue.NO_YEAR: "No year",
+    MetadataIssue.NO_SERVER_ID: "No media server ID",
+    MetadataIssue.ID_MISMATCH: "ID mismatch",
+}
 
 
 class NotifyCompleted(StrEnum):

@@ -108,6 +108,10 @@ lazy from overture.schemas.collections import (
     TmdbPersonSource,
 )
 lazy from overture.schemas.common import Status, StatusResponse
+lazy from overture.schemas.library_filters import (
+    LibraryFilterMatchRequest,
+    SavedFilterWrite,
+)
 lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.collections.criteria import CriteriaContext, evaluate
@@ -4169,3 +4173,100 @@ async def test_collections_sets_and_schedules_follow_a_moved_library(
     async with database.read_session() as session:
         (schedule,) = (await session.exec(select(SavedSchedule))).all()
     assert schedule.payload["library_ids"] == ["new-movies", "shows"]
+
+
+async def test_a_library_filter_matches_each_condition_on_its_own(
+    manager: Manager,
+) -> None:
+    filters = manager.service.library_filters
+    first, second, manual = manager.ids
+    action = FieldCondition(
+        field=FilterField.GENRE, operator=FilterOperator.IS, value="Action"
+    )
+    named = FieldCondition(
+        field=FilterField.TITLE, operator=FilterOperator.IS_NOT, value="Manual"
+    )
+    # The show holds it, in a library of another media type.
+    animation = FieldCondition(
+        field=FilterField.GENRE, operator=FilterOperator.IS, value="Animation"
+    )
+
+    matched = await filters.match(
+        LibraryFilterMatchRequest(
+            media_type=MediaType.MOVIE, conditions=[action, named, animation]
+        )
+    )
+
+    assert matched.item_ids == [[first, second, manual], [first, second], []]
+    unarted = FieldCondition(
+        field=FilterField.ART_STATUS, operator=FilterOperator.IS, value="missing"
+    )
+    with pytest.raises(PublicServiceError, match="tested in the browser"):
+        await filters.match(
+            LibraryFilterMatchRequest(media_type=MediaType.MOVIE, conditions=[unarted])
+        )
+
+
+async def test_library_status_fields_are_library_filters_only(manager: Manager) -> None:
+    capabilities = manager.service.library_filters.capabilities(MediaType.MOVIE)
+    offered = {entry.field: entry for entry in capabilities.fields}
+    assert offered[FilterField.ART_STATUS].library_status
+    assert offered[FilterField.ART_STATUS].choices == ["complete", "partial", "missing"]
+    assert not offered[FilterField.GENRE].library_status
+    assert FilterField.OVERTUREDB_POSTER in offered
+    # Movies have no seasons.
+    assert FilterField.SEASON_POSTERS_STATUS not in offered
+    collection_fields = manager.service.discovery.capabilities(MediaType.MOVIE).fields
+    assert FilterField.ART_STATUS not in {entry.field for entry in collection_fields}
+    with pytest.raises(PublicServiceError, match="not available"):
+        await manager.service.editor.create(
+            CollectionCreate(
+                title="Unarted",
+                rule=library_rule(
+                    criteria=where(FilterField.ART_STATUS, FilterOperator.IS, "missing")
+                ),
+            )
+        )
+
+
+async def test_saved_filters_are_kept_by_name_per_media_type(manager: Manager) -> None:
+    saved = manager.service.saved_filters
+    horror = where(FilterField.GENRE, FilterOperator.IS, "Horror")
+
+    created = await saved.create(
+        SavedFilterWrite(
+            name="  Late   night ", media_type=MediaType.MOVIE, criteria=horror
+        )
+    )
+    assert created.name == "Late night"
+    await saved.create(
+        SavedFilterWrite(name="Late night", media_type=MediaType.SHOW, criteria=horror)
+    )
+    with pytest.raises(PublicServiceError, match="already named"):
+        await saved.create(
+            SavedFilterWrite(
+                name="LATE NIGHT", media_type=MediaType.MOVIE, criteria=horror
+            )
+        )
+    with pytest.raises(PublicServiceError, match="not available"):
+        await saved.create(
+            SavedFilterWrite(
+                name="Seasons",
+                media_type=MediaType.MOVIE,
+                criteria=where(
+                    FilterField.SEASON_POSTERS_STATUS, FilterOperator.IS, "missing"
+                ),
+            )
+        )
+
+    renamed = await saved.update(
+        created.id,
+        SavedFilterWrite(name="Horror", media_type=MediaType.MOVIE, criteria=horror),
+    )
+    assert [entry.name for entry in await saved.list(MediaType.MOVIE)] == ["Horror"]
+    assert renamed.criteria == horror
+
+    await saved.delete(created.id)
+    assert await saved.list(MediaType.MOVIE) == []
+    with pytest.raises(PublicServiceError, match="not found"):
+        await saved.delete(created.id)

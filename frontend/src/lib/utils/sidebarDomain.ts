@@ -1,21 +1,24 @@
-import { alphabetical } from "./alphabetical";
-import { countOf } from "./plural";
+import type {
+  CatalogEntryRow,
+  CatalogSelections,
+  CollectionRead,
+  MediaItemRead,
+  MetadataIssue,
+  TmdbSearchBy,
+} from "../../generated/rest/types.gen";
 import {
   ASPECT_RATIOS,
+  METADATA_ISSUES,
   SELECTED_ART_SOURCE_LABELS,
   UNGROUPED_GROUP,
   UNMANAGED_GROUP,
 } from "../../generated/settings";
-import type {
-  CatalogSelections,
-  CatalogEntryRow,
-  CollectionRead,
-  MediaItemRead,
-} from "../../generated/rest/types.gen";
 import type { FilterState, NumberRange } from "../stores/uiState.svelte";
-import { extractYouTubeId } from "./themeSearch";
-import { keysOf } from "./records";
+import { alphabetical } from "./alphabetical";
 import { CATALOG_SELECTION_FILTERS, type CatalogSelectionFilter } from "./catalogSelections";
+import { countOf } from "./plural";
+import { keysOf } from "./records";
+import { extractYouTubeId } from "./themeSearch";
 
 export type SidebarTab = "movie" | "show";
 export type SidebarMode = "items" | "collections";
@@ -484,8 +487,8 @@ interface SearchDef {
   library?: Matcher<MediaItemRead>;
   collections?: Matcher<CollectionRead>;
   overturedb?: Matcher<CatalogEntryRow>;
-  /** Searches TMDB on the server instead of filtering the library. */
-  tmdb?: true;
+  /** Searches TMDB on the server, for this, instead of filtering the library. */
+  tmdb?: TmdbSearchBy;
 }
 
 function textMatcher<T>(text: (row: T) => string | null): Matcher<T> {
@@ -582,11 +585,31 @@ export const SEARCHES = {
       () => null,
     ),
   },
+  // Listed under a "TMDB" heading, apart from the library fields.
   tmdb: {
-    // Listed under a "TMDB" heading, apart from the library fields.
     label: "Title or ID",
     placeholder: "Search TMDB by title or ID...",
-    tmdb: true,
+    tmdb: "title",
+  },
+  tmdbPerson: {
+    label: "Person",
+    placeholder: "A person's name, TMDB ID or link...",
+    tmdb: "person",
+  },
+  tmdbCompany: {
+    label: "Company",
+    placeholder: "A company's name, TMDB ID or link...",
+    tmdb: "company",
+  },
+  tmdbKeyword: {
+    label: "Keyword",
+    placeholder: "A keyword, TMDB ID or link...",
+    tmdb: "keyword",
+  },
+  tmdbList: {
+    label: "List",
+    placeholder: "A TMDB list's ID or link...",
+    tmdb: "list",
   },
 } as const satisfies Record<string, SearchDef>;
 export type SidebarSearchField = keyof typeof SEARCHES;
@@ -609,6 +632,11 @@ function searchEntries(
     const label = (scope === "collections" && field.collectionsLabel) || field.label;
     return { id, label, shortLabel: label };
   });
+}
+
+/** What a search field looks for on TMDB, or null for a field of the list. */
+export function tmdbSearchBy(field: SidebarSearchField): TmdbSearchBy | null {
+  return search(field)?.tmdb ?? null;
 }
 
 /** The search fields a list offers: its own first, then TMDB's in every list. */
@@ -634,8 +662,14 @@ export function searchFieldGroups(
     },
     {
       label: "TMDB",
+      // A collection list searches TMDB for collections, which only a title finds.
       fields: searchEntries(
-        fields.filter((id) => search(id)?.tmdb && tmdbConfigured),
+        fields.filter(
+          (id) =>
+            tmdbConfigured &&
+            !!search(id)?.tmdb &&
+            (mode === "items" || search(id)?.tmdb === "title"),
+        ),
         scope,
       ),
     },
@@ -694,49 +728,11 @@ export const ART_SOURCE_SLOTS = {
 } as const satisfies Record<string, readonly (keyof MediaItemRead & keyof CollectionRead)[]>;
 export type ArtSourceSlot = keyof typeof ART_SOURCE_SLOTS;
 
-export type MetadataIssue =
-  | "no_tmdb_id"
-  | "no_tvdb_id"
-  | "no_imdb_id"
-  | "no_local_path"
-  | "no_year"
-  | "no_server_id"
-  | "id_mismatch";
-
-interface MetadataIssueCheck {
-  label: string;
-  showOnly?: boolean;
-  /** Only checked while OvertureDB is enabled. */
-  needsCatalog?: boolean;
-  library: (item: MediaItemRead) => boolean;
-  /** Collections have only some of an item's metadata. */
-  collections?: (collection: CollectionRead) => boolean;
-}
-
-export const METADATA_ISSUE_CHECKS: Record<MetadataIssue, MetadataIssueCheck> = {
-  no_tmdb_id: {
-    label: "No TMDB ID",
-    library: (item) => !item.tmdb_id,
-    collections: (collection) => !collection.tmdb_collection_id,
-  },
-  no_tvdb_id: { label: "No TVDB ID", showOnly: true, library: (item) => !item.tvdb_id },
-  no_imdb_id: { label: "No IMDb ID", library: (item) => !item.imdb_id },
-  no_local_path: { label: "No local path", library: (item) => !item.folder_path },
-  no_year: { label: "No year", library: (item) => !item.year },
-  no_server_id: {
-    label: "No media server ID",
-    library: (item) => !item.server_item_id,
-    collections: (collection) => collection.withheld,
-  },
-  id_mismatch: {
-    label: "ID mismatch",
-    needsCatalog: true,
-    library: (item) => item.catalog_ids === "mismatching",
-  },
-};
-export const METADATA_ISSUES = alphabetical(
-  keysOf(METADATA_ISSUE_CHECKS),
-  (flag) => METADATA_ISSUE_CHECKS[flag].label,
+export type { MetadataIssue };
+/** Every metadata issue, by its label. */
+export const METADATA_ISSUE_FLAGS = alphabetical(
+  keysOf(METADATA_ISSUES),
+  (flag) => METADATA_ISSUES[flag].label,
 );
 
 /** Whether *flag* can be checked in the list: OvertureDB's issues need it enabled. */
@@ -745,8 +741,8 @@ function issueAvailable(
   catalogEnabled: boolean,
   mode: SidebarMode = "items",
 ): boolean {
-  const check = METADATA_ISSUE_CHECKS[flag];
-  return (catalogEnabled || !check.needsCatalog) && (mode === "items" || !!check.collections);
+  const issue = METADATA_ISSUES[flag];
+  return (catalogEnabled || !issue.needsCatalog) && (mode === "items" || issue.collections);
 }
 
 export function metadataIssuesFor(
@@ -754,9 +750,9 @@ export function metadataIssuesFor(
   catalogEnabled: boolean,
   mode: SidebarMode = "items",
 ): MetadataIssue[] {
-  return METADATA_ISSUES.filter(
+  return METADATA_ISSUE_FLAGS.filter(
     (flag) =>
-      (tab === "show" || !METADATA_ISSUE_CHECKS[flag].showOnly) &&
+      (tab === "show" || !METADATA_ISSUES[flag].showOnly) &&
       issueAvailable(flag, catalogEnabled, mode),
   );
 }
@@ -852,25 +848,22 @@ function resolutionPredicate(filters: FilterState): Predicate<Row> | null {
   return (row) => inRange(row[width], filters.resolution);
 }
 
-function issuesPredicate<T>(
+function issuesPredicate(
   filters: FilterState,
   catalogEnabled: boolean,
-  check: (flag: MetadataIssueCheck) => ((row: T) => boolean) | undefined,
-): Predicate<T> | null {
-  const checks = filters.metadataIssues.flags
-    .filter((flag) => issueAvailable(flag, catalogEnabled))
-    .flatMap((flag) => check(METADATA_ISSUE_CHECKS[flag]) ?? []);
-  if (!checks.length) return null;
+  mode: SidebarMode,
+): Predicate<{ metadata_issues: MetadataIssue[] }> | null {
+  const flags = filters.metadataIssues.flags.filter((flag) =>
+    issueAvailable(flag, catalogEnabled, mode),
+  );
+  if (!flags.length) return null;
+  const has = (row: { metadata_issues: MetadataIssue[] }, flag: MetadataIssue) =>
+    row.metadata_issues.includes(flag);
   return filters.metadataIssues.mode === "any"
-    ? (row) => checks.some((applies) => applies(row))
-    : (row) => checks.every((applies) => applies(row));
+    ? (row) => flags.some((flag) => has(row, flag))
+    : (row) => flags.every((flag) => has(row, flag));
 }
 
-/**
- * Every filter section, placed by ``order``, which follows ``FILTER_GROUPS``.
- * Within a group the most used come first, and filters offering the same
- * choices sit together.
- */
 /**
  * A filter on how one slot's selection compares with OvertureDB's. A title
  * without a catalog entry has nothing to compare, so it never matches one.
@@ -892,6 +885,11 @@ function selectionFilter(
   return { label, group, order, needsCatalog: true, library: predicate, collections: predicate };
 }
 
+/**
+ * Every filter section, placed by ``order``, which follows ``FILTER_GROUPS``.
+ * Within a group the most used come first, and filters offering the same
+ * choices sit together.
+ */
 export const FILTERS = {
   libraries: {
     label: "Libraries",
@@ -1042,10 +1040,9 @@ export const FILTERS = {
     label: "Metadata issues",
     group: "metadata",
     order: 400,
-    library: (filters, catalogEnabled) =>
-      issuesPredicate(filters, catalogEnabled, (check) => check.library),
+    library: (filters, catalogEnabled) => issuesPredicate(filters, catalogEnabled, "items"),
     collections: (filters, catalogEnabled) =>
-      issuesPredicate(filters, catalogEnabled, (check) => check.collections),
+      issuesPredicate(filters, catalogEnabled, "collections"),
   },
   collectionMembers: {
     label: "Management",
@@ -1143,7 +1140,7 @@ export function activeFilterCount(
 ): number {
   return mode === "collections"
     ? collectionPredicates(filters, catalogEnabled).length
-    : libraryPredicates(filters, catalogEnabled).length;
+    : libraryPredicates(filters, catalogEnabled).length + (filters.customFilter === null ? 0 : 1);
 }
 
 export function filterSidebarItems(options: {
@@ -1151,6 +1148,8 @@ export function filterSidebarItems(options: {
   filters: FilterState;
   catalogEnabled: boolean;
   collectionMembers?: ReadonlySet<number>;
+  /** The saved custom filter's test, when one applies. */
+  customFilter?: ((item: MediaItemRead) => boolean) | null;
   searchQuery: string;
   searchField: SidebarSearchField;
   sortField: SidebarSortField;
@@ -1161,6 +1160,7 @@ export function filterSidebarItems(options: {
     options.catalogEnabled,
     options.collectionMembers,
   );
+  if (options.customFilter) predicates.push(options.customFilter);
   const query = options.searchQuery.trim();
   const matcher = search(options.searchField)?.library;
   if (query && matcher) predicates.push(matcher(query));

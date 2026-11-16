@@ -13,9 +13,11 @@
   import { errorMessage } from "../utils/errors";
   import { filterAvailableValues, toggleSelectedValue } from "../utils/popupSelection";
   import * as sidebarDomain from "../utils/sidebarDomain";
+  import { METADATA_ISSUES } from "../../generated/settings";
   import BulkOperationsCard from "../components/BulkOperationsCard.svelte";
   import CardColumn from "../components/CardColumn.svelte";
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
+  import CustomFilterCard from "../components/CustomFilterCard.svelte";
   import CheckboxList from "../components/CheckboxList.svelte";
   import FieldRow from "../components/FieldRow.svelte";
   import PopupSection from "../components/PopupSection.svelte";
@@ -344,7 +346,7 @@
     <CheckboxList
       options={metadataIssueOptions.map((flag) => ({
         value: flag,
-        label: sidebarDomain.METADATA_ISSUE_CHECKS[flag].label,
+        label: METADATA_ISSUES[flag].label,
       }))}
       selected={draft.metadataIssues.flags}
       ontoggle={(flag) =>
@@ -411,6 +413,13 @@
       </PopupSection>
       <CatalogDraftsCard entries={catalogEntries} />
     {:else}
+      {#if uiState.sidebarMode === "items"}
+        <CustomFilterCard
+          bind:filterId={draft.customFilter}
+          mediaType={uiState.sidebarTab}
+          libraryId={libraries[0]?.id ?? ""}
+        />
+      {/if}
       {#each groupedSections as [group, keys] (group)}
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
         {#if title}

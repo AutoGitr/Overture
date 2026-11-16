@@ -18,6 +18,7 @@ lazy from .discovery import CollectionDiscovery
 lazy from .display import CollectionDisplay
 lazy from .editor import CollectionEditor
 lazy from .groups import CollectionGroups
+lazy from .library_filters import LibraryFilters
 lazy from .member_effects import MemberEffects
 lazy from .membership import Membership
 lazy from .post_sync import (
@@ -30,6 +31,7 @@ lazy from .post_sync import (
 )
 lazy from .reader import CollectionReader
 lazy from .rule_sync import RuleSync
+lazy from .saved_filters import SavedFilters
 lazy from .separators import CollectionSeparators
 lazy from .set_runner import CollectionSets
 lazy from .sources import SourceResolver
@@ -134,6 +136,13 @@ class CollectionsService:
         self.bulk = CollectionBulk(
             access=access, editor=self.editor, art=art, themes=self.themes
         )
+        self.library_filters = LibraryFilters(
+            access=access,
+            validator=validator,
+            membership=membership,
+            discovery=self.discovery,
+        )
+        self.saved_filters = SavedFilters(access=access, validator=validator)
 
     async def close(self) -> None:
         """Close the source clients."""

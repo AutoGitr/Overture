@@ -18,6 +18,7 @@ lazy from ..domain import (
     AssetStatus,
     BulkItemOperationKind,
     MediaType,
+    MetadataIssue,
     ThemeIdSource,
 )
 lazy from ..utils.art_urls import art_preview_url
@@ -97,6 +98,8 @@ class MediaItemRead(StrictBaseModel):
             "null without an entry."
         ),
     )
+    #: The gaps and conflicts in the title's metadata.
+    metadata_issues: list[MetadataIssue] = Field(default_factory=list[MetadataIssue])
     catalog_selections: CatalogSelections | None = Field(
         default=None,
         description=(
@@ -164,6 +167,23 @@ def _preview_url(slot: ArtSlot, art_type: ArtType) -> str | None:
     return slot.url and art_preview_url(slot.url, art_type)
 
 
+def item_metadata_issues(
+    item: MediaItem, catalog_ids: Literal["matching", "mismatching"] | None
+) -> list[MetadataIssue]:
+    """The gaps and conflicts in a title's metadata, in the enum's order."""
+    found = {
+        MetadataIssue.NO_TMDB_ID: not item.tmdb_id,
+        MetadataIssue.NO_TVDB_ID: item.media_type is MediaType.SHOW
+        and not item.tvdb_id,
+        MetadataIssue.NO_IMDB_ID: not item.imdb_id,
+        MetadataIssue.NO_LOCAL_PATH: not item.folder_path,
+        MetadataIssue.NO_YEAR: not item.year,
+        MetadataIssue.NO_SERVER_ID: not item.server_item_id,
+        MetadataIssue.ID_MISMATCH: catalog_ids == "mismatching",
+    }
+    return [issue for issue in MetadataIssue if found[issue]]
+
+
 def media_item_read_from_model(
     item: MediaItem,
     *,
@@ -206,6 +226,7 @@ def media_item_read_from_model(
             "library_collection_id": library_collection_id,
             "catalog_ids": catalog_ids,
             "catalog_selections": catalog_selections,
+            "metadata_issues": item_metadata_issues(item, catalog_ids),
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
     )

@@ -116,9 +116,9 @@ describe("sidebar domain helpers", () => {
 describe("sidebar item filters", () => {
   it("finds catalog ID mismatches only while OvertureDB is enabled", () => {
     const items = [
-      mediaItem({ title: "Mismatch", catalog_ids: "mismatching" }),
-      mediaItem({ id: 2, title: "Match", catalog_ids: "matching", tmdb_id: 1 }),
-      mediaItem({ id: 3, title: "Uncatalogued" }),
+      mediaItem({ title: "Mismatch", metadata_issues: ["id_mismatch"] }),
+      mediaItem({ id: 2, title: "Match", metadata_issues: [] }),
+      mediaItem({ id: 3, title: "Uncatalogued", metadata_issues: ["no_tmdb_id"] }),
     ];
     const filters = withFilters({ metadataIssues: { flags: ["id_mismatch"], mode: "all" } });
     expect(filterItems(items, { filters, catalogEnabled: true })).toEqual(["Mismatch"]);
@@ -299,25 +299,19 @@ describe("sidebar item filters", () => {
       mediaItem({
         id: 1,
         title: "Missing Both",
-        tmdb_id: null,
-        imdb_id: null,
-        folder_path: "/m/1",
+        metadata_issues: ["no_tmdb_id", "no_imdb_id"],
       }),
       mediaItem({
         id: 2,
         title: "Missing TMDB",
-        tmdb_id: null,
-        imdb_id: "tt123",
-        folder_path: "/m/2",
+        metadata_issues: ["no_tmdb_id"],
       }),
       mediaItem({
         id: 3,
         title: "Missing None",
-        tmdb_id: 456,
-        imdb_id: "tt123",
-        folder_path: "/m/3",
+        metadata_issues: [],
       }),
-      mediaItem({ id: 4, title: "No Path", tmdb_id: 7, imdb_id: "tt7", folder_path: null }),
+      mediaItem({ id: 4, title: "No Path", metadata_issues: ["no_local_path"] }),
     ];
     const metadataIssues = (mode: "all" | "any") =>
       withFilters({ metadataIssues: { flags: ["no_tmdb_id", "no_imdb_id"], mode } });
@@ -357,7 +351,14 @@ describe("sidebar item filters", () => {
       ["overturedb", "collections"],
     ] as const) {
       const groups = searchFieldGroups(source, mode, "movie", true);
-      expect(groups.at(-1)).toMatchObject({ label: "TMDB", fields: [{ id: "tmdb" }] });
+      const tmdb = groups.at(-1);
+      expect(tmdb?.label).toBe("TMDB");
+      // A collection list finds collections, which only a title search finds.
+      expect(tmdb?.fields.map((field) => field.id)).toEqual(
+        mode === "collections"
+          ? ["tmdb"]
+          : ["tmdb", "tmdbPerson", "tmdbCompany", "tmdbKeyword", "tmdbList"],
+      );
       expect(
         searchFieldGroups(source, mode, "movie", false).map((group) => group.label),
       ).not.toContain("TMDB");
@@ -531,6 +532,7 @@ describe("sidebar collections", () => {
         title: "Saga 2",
         art_status: "partial",
         withheld: true,
+        metadata_issues: ["no_tmdb_id", "no_server_id"],
         has_incorrect_aspect_ratio: true,
         poster_width: 500,
         poster_source: "tpdb",

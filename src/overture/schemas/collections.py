@@ -27,6 +27,7 @@ lazy from ..domain import (
     FilterField,
     FilterOperator,
     MediaType,
+    MetadataIssue,
     ServerType,
     SetDimension,
     SourceType,
@@ -343,6 +344,8 @@ class CollectionRead(CollectionArtwork):
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
     withheld: bool = False
+    #: The gaps in the collection's metadata.
+    metadata_issues: list[MetadataIssue] = Field(default_factory=list[MetadataIssue])
     #: Overture holds saved changes the media server does not have yet.
     unsynced: bool = False
     #: Overture maintains the members from criteria.
@@ -454,6 +457,15 @@ def _server_image_version(server_url: str | None) -> str | None:
     return hashlib.sha256(server_url.encode()).hexdigest()[:16] if server_url else None
 
 
+def collection_metadata_issues(row: MediaCollection) -> list[MetadataIssue]:
+    """The gaps in a collection's metadata: a TMDB collection and a server copy."""
+    found = {
+        MetadataIssue.NO_TMDB_ID: row.tmdb_collection_id is None,
+        MetadataIssue.NO_SERVER_ID: row.server_item_id is None,
+    }
+    return [issue for issue in MetadataIssue if found.get(issue)]
+
+
 def collection_read(
     row: MediaCollection,
     catalog: CatalogCollection | None,
@@ -489,6 +501,7 @@ def collection_read(
         active_end_mmdd=row.active_end_mmdd,
         delete_when_inactive=row.delete_when_inactive,
         withheld=row.server_item_id is None,
+        metadata_issues=collection_metadata_issues(row),
         unsynced=row.unsynced,
         managed=rule is not None,
         sync_failed=bool(rule and rule.last_error),
@@ -994,6 +1007,11 @@ class CollectionFieldRead(StrictBaseModel):
     #: Smart collections test it through labels Overture keeps on matching
     #: items, so their members change when Overture syncs, not live.
     labelled: bool = False
+    #: The library's own status of a title, which library filters test in
+    #: the browser, against the live library list.
+    library_status: bool = False
+    #: The values the field can hold, when they are a fixed set.
+    choices: list[str] = Field(default_factory=list[str])
 
 
 class CollectionSourceRead(StrictBaseModel):

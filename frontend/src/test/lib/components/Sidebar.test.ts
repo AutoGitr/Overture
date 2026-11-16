@@ -462,8 +462,9 @@ describe("Sidebar TMDB search", () => {
   beforeEach(async () => {
     client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
     client.setQueryData(
-      searchTmdbOptions({ query: { media_type: "movie", query: "matrix" } }).queryKey,
+      searchTmdbOptions({ query: { media_type: "movie", query: "matrix", by: "title" } }).queryKey,
       {
+        matched: null,
         results: [
           tmdbItem(603, "The Matrix", 1),
           tmdbItem(604, "The Matrix Reloaded"),

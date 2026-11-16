@@ -1,31 +1,23 @@
 """Fields shared by every named cron schedule's REST schemas."""
 
 lazy from datetime import datetime
-lazy from typing import Annotated, Literal
+lazy from typing import Literal
 
-lazy from pydantic import AfterValidator, BaseModel, Field
+lazy from pydantic import BaseModel, Field
 
 lazy from ..domain import ScheduleKind
 lazy from .base import StrictBaseModel
-lazy from .validators import CronExpression
+lazy from .validators import CronExpression, DisplayName
 
 #: ``queued`` waits behind another schedule of its kind; ``waiting`` has
 #: started but waits for a job slot or for the library gate.
 type ScheduleRunStatus = Literal["idle", "queued", "waiting", "running"]
 
 
-def _collapse_schedule_name(value: str) -> str:
-    """Collapse internal whitespace in a user-facing schedule name."""
-    name = " ".join(value.split())
-    if not name:
-        raise ValueError("name is required")
-    return name
-
-
 class ScheduleWrite[ConfigT: BaseModel](StrictBaseModel):
     """Create or update a saved schedule: its name, timing and what it runs."""
 
-    name: Annotated[str, Field(max_length=100), AfterValidator(_collapse_schedule_name)]
+    name: DisplayName
     enabled: bool = True
     cron_expression: CronExpression
     config: ConfigT

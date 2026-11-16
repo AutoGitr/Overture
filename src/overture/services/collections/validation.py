@@ -29,6 +29,7 @@ lazy from ...utils.collection_fields import (
     field_label,
     field_operators,
     labelled_field,
+    library_field_available,
     smart_only_dimension,
 )
 lazy from ...utils.errors import PublicServiceError
@@ -99,6 +100,31 @@ class CollectionValidator:
                     f"{condition.operator.value.replace('_', ' ')}"
                     + (" in Plex smart collections" if smart else ""),
                 )
+        self._sources_available(media_type, criteria)
+
+    def library_criteria(self, media_type: MediaType, criteria: FilterGroup) -> None:
+        """Require a library filter to test only what the library can.
+
+        Raises:
+            PublicServiceError: 422 for a field or operator the library's titles
+                cannot be tested with, or a source that is unavailable.
+        """
+        server = self._access.server_type
+        for condition in criteria.field_conditions():
+            label = field_label(condition.field, server)
+            if not library_field_available(condition.field, server, media_type):
+                raise PublicServiceError(
+                    422, f"{label} is not available for this library"
+                )
+            if condition.operator not in field_operators(condition.field, smart=False):
+                raise PublicServiceError(
+                    422,
+                    f"{label} cannot be tested with "
+                    f"{condition.operator.value.replace('_', ' ')}",
+                )
+        self._sources_available(media_type, criteria)
+
+    def _sources_available(self, media_type: MediaType, criteria: FilterGroup) -> None:
         for condition in criteria.source_conditions():
             self._sources.require(condition.source.type, media_type)
             if isinstance(condition.source, TmdbChartSource) and not chart_available(

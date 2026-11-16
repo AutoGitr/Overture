@@ -136,7 +136,7 @@ describe("SidebarControls menus", () => {
       within(tmdb)
         .getAllByRole("menuitemradio")
         .map((option) => option.textContent?.trim()),
-    ).toEqual(["Title or ID"]);
+    ).toEqual(["Title or ID", "Person", "Company", "Keyword", "List"]);
 
     // Arrow keys move across both groups.
     const menu = screen.getByRole("menu", { name: "Search by" });

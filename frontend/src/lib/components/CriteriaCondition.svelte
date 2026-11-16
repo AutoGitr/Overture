@@ -80,9 +80,15 @@
         ...(searchesTmdb && asked ? { query: asked } : {}),
       },
     }),
-    enabled: suggested && !!libraryId,
+    // A field with a fixed set of values offers them without asking.
+    enabled: suggested && !!libraryId && !field?.choices.length,
     placeholderData: (previous) => previous,
   }));
+  let known = $derived(
+    field?.choices.length
+      ? field.choices.map((value) => ({ value, count: 0 }))
+      : (values.data ?? []),
+  );
 
   /** Suggestions shown at once; a library can hold thousands of values. */
   const MAX_SUGGESTIONS = 50;
@@ -91,8 +97,8 @@
   let suggestions = $derived.by(() => {
     const lower = typed.toLocaleLowerCase();
     const matching = lower
-      ? (values.data ?? []).filter((entry) => entry.value.toLocaleLowerCase().includes(lower))
-      : (values.data ?? []);
+      ? known.filter((entry) => entry.value.toLocaleLowerCase().includes(lower))
+      : known;
     return matching.slice(0, MAX_SUGGESTIONS);
   });
 

@@ -21,7 +21,7 @@ lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..db.models.settings import get_app_settings
 lazy from ..db.session import Database
-lazy from ..domain import ArtType, CatalogMediaType, MediaType
+lazy from ..domain import ArtType, CatalogMediaType, MediaType, TmdbSearchBy
 lazy from ..integrations.tmdb import TMDBClient, TmdbDetails, TmdbTitle
 lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..repositories.seasons import SeasonRepository
@@ -35,6 +35,7 @@ lazy from ..schemas.tmdb import (
     TmdbItemPreview,
     TmdbPersonSearchResponse,
     TmdbSearchResponse,
+    TmdbSearchResult,
     tmdb_collection_response,
     tmdb_collection_result,
     tmdb_item_preview,
@@ -43,6 +44,7 @@ lazy from ..schemas.tmdb import (
 )
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
+lazy from ..utils.tmdb_links import tmdb_page_id
 lazy from .art.candidates import CandidatePolicy
 lazy from .art.service import ArtService
 lazy from .catalog.browse import CatalogBrowser
@@ -153,6 +155,44 @@ class TmdbItemsService:
             raise PublicServiceError(404, f"TMDB has no {media_type.value} {tmdb_id}.")
         return details
 
+    async def _titles_of(
+        self, media_type: MediaType, query: str, by: TmdbSearchBy
+    ) -> tuple[str | None, tuple[TmdbTitle, ...]]:
+        """The first match of a person, company, keyword or list, and its titles."""
+        tmdb_id = tmdb_page_id(query)
+        match by:
+            case TmdbSearchBy.PERSON:
+                person = (
+                    await self._tmdb.get_person(tmdb_id)
+                    if tmdb_id
+                    else next(iter(await self._tmdb.search_people(query)), None)
+                )
+                if person is None:
+                    return None, ()
+                return person.name, await self._tmdb.person_titles(
+                    person.tmdb_id, media_type
+                )
+            case TmdbSearchBy.COMPANY | TmdbSearchBy.KEYWORD:
+                kind = by.value
+                named = (
+                    await self._tmdb.get_named(kind, tmdb_id)
+                    if tmdb_id
+                    else next(iter(await self._tmdb.search_named(kind, query)), None)
+                )
+                if named is None:
+                    return None, ()
+                return named.name, await self._tmdb.discover(
+                    media_type, kind, named.tmdb_id
+                )
+            case TmdbSearchBy.LIST:
+                if tmdb_id is None:
+                    return None, ()
+                return await self._tmdb.get_list_name(tmdb_id), (
+                    await self._tmdb.list_titles(tmdb_id, media_type)
+                )
+            case TmdbSearchBy.TITLE:
+                return None, ()
+
     async def _title_search(
         self, media_type: MediaType, query: str
     ) -> tuple[tuple[TmdbTitle, ...], tuple[TmdbTitle, ...]]:
@@ -181,16 +221,29 @@ class TmdbItemsService:
             (collection.summary,) if collection else (),
         )
 
-    async def search(self, media_type: MediaType, query: str) -> TmdbSearchResponse:
-        """Search TMDB by title; a number also looks up that TMDB ID.
+    async def search(
+        self,
+        media_type: MediaType,
+        query: str,
+        by: TmdbSearchBy = TmdbSearchBy.TITLE,
+    ) -> TmdbSearchResponse:
+        """Search TMDB for titles by name, or by who or what they belong to.
 
-        A number can be an ID or a title ("1917"), so it is both: the ID's
-        matches come first. Movies also find collections.
+        A title search also looks a number up as a TMDB ID: a number can be an
+        ID or a title ("1917"), so it is both, the ID's matches first. Movies
+        also find collections. A person, company, keyword or list search takes
+        a name, a TMDB ID or a TMDB page link, and lists the titles of the
+        first match.
         """
         self._require_configured()
         query = query.strip()
         if not query:
             return TmdbSearchResponse(results=[])
+        if by is not TmdbSearchBy.TITLE:
+            matched, titles = await self._fetch(self._titles_of(media_type, query, by))
+            return TmdbSearchResponse(
+                results=await self._item_results(media_type, titles), matched=matched
+            )
         searches = [self._title_search(media_type, query)]
         if query.isdigit():
             searches.insert(0, self._id_lookup(media_type, int(query)))
@@ -205,22 +258,28 @@ class TmdbItemsService:
             for title in collections
         }
 
-        async with self._database.read_session() as db:
-            existing = await MediaItemRepository(db).ids_by_tmdb_ids(
-                media_type, set(items)
-            )
         return TmdbSearchResponse(
             results=[
-                *(
-                    tmdb_item_result(media_type, item, existing.get(item.tmdb_id))
-                    for item in items.values()
-                ),
+                *await self._item_results(media_type, tuple(items.values())),
                 *(
                     tmdb_collection_result(collection)
                     for collection in collections.values()
                 ),
             ]
         )
+
+    async def _item_results(
+        self, media_type: MediaType, titles: tuple[TmdbTitle, ...]
+    ) -> list[TmdbSearchResult]:
+        """The titles as results, each naming the library item it is, if any."""
+        async with self._database.read_session() as db:
+            existing = await MediaItemRepository(db).ids_by_tmdb_ids(
+                media_type, {title.tmdb_id for title in titles}
+            )
+        return [
+            tmdb_item_result(media_type, title, existing.get(title.tmdb_id))
+            for title in titles
+        ]
 
     async def search_people(self, query: str) -> TmdbPersonSearchResponse:
         """Search TMDB people by name or numeric person ID."""

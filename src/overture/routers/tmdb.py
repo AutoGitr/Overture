@@ -9,7 +9,7 @@ lazy from typing import Annotated, Literal
 lazy from fastapi import APIRouter, Depends, Path, Query
 
 lazy from ..dependencies import TmdbItemsDep
-lazy from ..domain import CatalogMediaType
+lazy from ..domain import CatalogMediaType, TmdbSearchBy
 lazy from ..schemas.art import ArtSourcesResponse, SaveArtRequest
 lazy from ..schemas.catalog import CatalogSources
 lazy from ..schemas.library import ItemSelectionResponse
@@ -37,9 +37,10 @@ async def search_tmdb(
     media_type: MediaTypeQuery,
     query: Annotated[str, Query(min_length=1, max_length=200)],
     tmdb_items: TmdbItemsDep,
+    by: TmdbSearchBy = TmdbSearchBy.TITLE,
 ) -> TmdbSearchResponse:
-    """Search TMDB by title; a number is also looked up as a TMDB ID."""
-    return await tmdb_items.search(media_type, query)
+    """Search TMDB by title, or for the titles of a person, company or list."""
+    return await tmdb_items.search(media_type, query, by)
 
 
 @router.get("/people/search")

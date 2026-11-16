@@ -24,11 +24,15 @@ The sidebar offers search, sorting and completeness filters. An artwork slot
 is complete when a choice is saved and its file exists; a show also needs a
 poster for every season with videos.
 
-For titles outside your library, switch the search field to **TMDB** (requires
-`TMDB_API_KEY`). Choices for these titles are saved and downloaded when a sync
-finds their media folder. TMDB results keep TMDB's order by default and sort
-by title or year; the filters then choose whether titles your library or
-OvertureDB holds are listed.
+For titles outside your library, switch the search field to one under **TMDB**
+(requires `TMDB_API_KEY`): **Title or ID**, or the titles of a **Person**
+(everything they acted in or worked on), a **Company** or a **Keyword** (their
+most popular titles), or a public **List**. Each takes a name, a TMDB ID or a
+TMDB page link; a list takes its ID or link, since TMDB cannot search lists.
+The results say whose titles they are. Choices for these titles are saved and
+downloaded when a sync finds their media folder. TMDB results keep TMDB's order
+by default and sort by title or year; the filters then choose whether titles
+your library or OvertureDB holds are listed.
 
 Every section of the filters popup collapses, and stays as you left it. The
 item filters can also show only the titles of one **Collection**. While
@@ -38,6 +42,26 @@ Theme music, list the titles and collections whose choice for that slot
 matches OvertureDB's or differs from it. A choice only your library or only
 OvertureDB has is a difference, and a title OvertureDB has no entry for is
 listed by neither.
+
+### Custom filters
+
+**Custom filter**, at the top of the movie and show filters, keeps saved
+filters of your own, like smart collections that only filter the list. Choose
+**New**, name it, and add conditions on anything Overture knows about a title:
+the same metadata collection criteria test (genre, actor, director, studio,
+resolution, HDR, codecs, ratings, runtime, keywords, streaming services and
+more), TMDB lists, people, charts and MDBList lists, and each title's status
+in the library: monitored, art, poster, background, season poster and theme
+status, art and theme source, poster and background width, aspect ratio,
+theme length, metadata issues, OvertureDB coverage and how each choice
+compares with OvertureDB's. Conditions match together (**all**) or apart
+(**any**), and groups nest for anything in between; **is not** and **does not
+contain** exclude.
+
+Pick a saved filter to apply it with the other filters; **Edit**, **Save as
+new** and **Delete** manage them. Saved filters are kept on the server, for
+each media type, so every browser sees them. Status conditions follow every
+download and choice at once; metadata conditions update after each sync.
 
 ## Install as an app
 

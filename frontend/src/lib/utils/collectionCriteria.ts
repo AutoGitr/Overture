@@ -96,7 +96,7 @@ export function defaultValue(
   if (field.kind === "boolean") return true;
   if (field.kind === "number" || operator === "in_last" || operator === "not_in_last") return 30;
   if (operator === "before" || operator === "after") return new Date().toISOString().slice(0, 10);
-  return "";
+  return field.choices[0] ?? "";
 }
 
 export function fieldCondition(field: CollectionFieldRead): ConditionInput {

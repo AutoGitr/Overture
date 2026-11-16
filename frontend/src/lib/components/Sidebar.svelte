@@ -32,6 +32,7 @@
   import { defaultFilters, uiState } from "../stores/uiState.svelte";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
+  import { CustomFilterMatch } from "../utils/customFilterMatch.svelte";
   import { collectionArtDisplayUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import type {
     SidebarSortPreference,
@@ -216,6 +217,11 @@
   let searchingTmdb = $derived(uiState.searchingTmdb);
   let libraryItems = $derived(uiState.sidebarTab === "movie" ? movies : shows);
 
+  const customFilter = new CustomFilterMatch(() =>
+    uiState.sidebarMode === "items"
+      ? { mediaType: uiState.sidebarTab, filterId: uiState.currentFilters.customFilter }
+      : null,
+  );
   const filteredCollection = new CollectionMembers(() =>
     uiState.sidebarMode === "items" ? uiState.currentFilters.collectionId : null,
   );
@@ -225,6 +231,7 @@
       filters: uiState.currentFilters,
       catalogEnabled: catalog.enabled,
       collectionMembers: filteredCollection.ids,
+      customFilter: customFilter.predicate,
       searchQuery: uiState.searchQuery,
       searchField: uiState.searchField,
       sortField: sort.field,
@@ -512,6 +519,7 @@
             collectionsOnly={uiState.sidebarMode === "collections"}
             filters={uiState.tmdbFilters}
             filterKeys={tmdbFilterKeys}
+            by={uiState.tmdbSearchBy ?? "title"}
             sortField={sort.field}
             sortDir={sort.dir}
             onOpen={openDetail}
@@ -546,6 +554,7 @@
           collectionsOnly={uiState.sidebarMode === "collections"}
           filters={uiState.tmdbFilters}
           filterKeys={tmdbFilterKeys}
+          by={uiState.tmdbSearchBy ?? "title"}
           sortField={sort.field}
           sortDir={sort.dir}
           onOpen={openDetail}

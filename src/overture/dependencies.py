@@ -25,7 +25,9 @@ lazy from .services.collections.bulk import CollectionBulk
 lazy from .services.collections.discovery import CollectionDiscovery
 lazy from .services.collections.editor import CollectionEditor
 lazy from .services.collections.groups import CollectionGroups
+lazy from .services.collections.library_filters import LibraryFilters
 lazy from .services.collections.reader import CollectionReader
+lazy from .services.collections.saved_filters import SavedFilters
 lazy from .services.collections.set_runner import CollectionSets
 lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
@@ -142,6 +144,16 @@ def get_collection_themes(runtime: RuntimeDep) -> CollectionThemes:
     return runtime.collections.themes
 
 
+def get_library_filters(runtime: RuntimeDep) -> LibraryFilters:
+    """Resolve the custom library filters component."""
+    return runtime.collections.library_filters
+
+
+def get_saved_filters(runtime: RuntimeDep) -> SavedFilters:
+    """Resolve the saved library filters component."""
+    return runtime.collections.saved_filters
+
+
 def get_collection_arr(runtime: RuntimeDep) -> CollectionArr:
     """Resolve the collections' arr component."""
     return runtime.collections.arr
@@ -234,6 +246,8 @@ CollectionSetsDep = Annotated[CollectionSets, Depends(get_collection_sets)]
 CollectionBulkDep = Annotated[CollectionBulk, Depends(get_collection_bulk)]
 CollectionThemesDep = Annotated[CollectionThemes, Depends(get_collection_themes)]
 CollectionArrDep = Annotated[CollectionArr, Depends(get_collection_arr)]
+LibraryFiltersDep = Annotated[LibraryFilters, Depends(get_library_filters)]
+SavedFiltersDep = Annotated[SavedFilters, Depends(get_saved_filters)]
 ThemesDep = Annotated[ThemesService, Depends(get_themes)]
 TmdbItemsDep = Annotated[TmdbItemsService, Depends(get_tmdb_items)]
 BackupsDep = Annotated[BackupService, Depends(get_backups)]

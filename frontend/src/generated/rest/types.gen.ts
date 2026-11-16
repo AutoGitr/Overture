@@ -1052,10 +1052,7 @@ export type BulkAssetsScheduleWrite = {
      * Enabled
      */
     enabled?: boolean;
-    /**
-     * Name
-     */
-    name: string;
+    name: DisplayName;
 };
 
 /**
@@ -2166,6 +2163,10 @@ export type CollectionDetail = {
      */
     member_ids: Array<number>;
     /**
+     * Metadata Issues
+     */
+    metadata_issues: Array<MetadataIssue>;
+    /**
      * Monitored
      */
     monitored: boolean;
@@ -2329,6 +2330,10 @@ export type CollectionDimensionRead = {
  * A criteria field as the active server offers it.
  */
 export type CollectionFieldRead = {
+    /**
+     * Choices
+     */
+    choices: Array<string>;
     field: FilterField;
     kind: FieldKind;
     /**
@@ -2339,6 +2344,10 @@ export type CollectionFieldRead = {
      * Labelled
      */
     labelled: boolean;
+    /**
+     * Library Status
+     */
+    library_status: boolean;
     /**
      * Local
      */
@@ -2970,6 +2979,10 @@ export type CollectionRead = {
      * Media Types
      */
     media_types: Array<MediaType>;
+    /**
+     * Metadata Issues
+     */
+    metadata_issues: Array<MetadataIssue>;
     /**
      * Monitored
      */
@@ -3742,6 +3755,8 @@ export type DeleteCollectionThemeResponse = {
     theme_status: AssetStatus;
 };
 
+export type DisplayName = string;
+
 /**
  * DownloadJobEvent
  *
@@ -3852,7 +3867,7 @@ export type FieldKind = 'text' | 'tag' | 'number' | 'date' | 'boolean';
  *
  * Item metadata a collection condition tests.
  */
-export type FilterField = 'title' | 'tmdb_id' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired';
+export type FilterField = 'title' | 'tmdb_id' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'audio_layout' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired' | 'monitored' | 'art_status' | 'poster_status' | 'background_status' | 'season_posters_status' | 'poster_source' | 'background_source' | 'poster_width' | 'background_width' | 'incorrect_aspect_ratio' | 'theme_status' | 'theme_source' | 'theme_length' | 'metadata_issue' | 'overturedb_complete' | 'themerrdb_theme' | 'overturedb_poster' | 'overturedb_background' | 'overturedb_season_posters' | 'overturedb_theme';
 
 /**
  * FilterGroup
@@ -4188,6 +4203,50 @@ export type KindRecommendation = {
     reason: PublicText;
 };
 
+/**
+ * LibraryFilterCapabilities
+ *
+ * The fields and sources a custom filter of the library's titles can test.
+ */
+export type LibraryFilterCapabilities = {
+    /**
+     * Fields
+     */
+    fields: Array<CollectionFieldRead>;
+    /**
+     * Sources
+     */
+    sources: Array<CollectionSourceRead>;
+};
+
+/**
+ * LibraryFilterMatch
+ *
+ * The titles each condition selects, in the order of the request's.
+ */
+export type LibraryFilterMatch = {
+    /**
+     * Item Ids
+     */
+    item_ids: Array<Array<number>>;
+};
+
+/**
+ * LibraryFilterMatchRequest
+ *
+ * A custom filter's metadata and source conditions, to test one by one.
+ *
+ * Library status conditions, and how conditions combine, are evaluated in
+ * the browser against the live library list.
+ */
+export type LibraryFilterMatchRequest = {
+    /**
+     * Conditions
+     */
+    conditions: Array<ConditionInput>;
+    media_type: MediaType;
+};
+
 export type LibraryId = string;
 
 export type LibraryIds = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
@@ -4486,6 +4545,10 @@ export type MediaItemRead = {
     library_id: string | null;
     media_type: MediaType;
     /**
+     * Metadata Issues
+     */
+    metadata_issues: Array<MetadataIssue>;
+    /**
      * Monitored
      */
     monitored: boolean;
@@ -4620,6 +4683,13 @@ export type MediaServerStatus = {
 export type MediaType = 'movie' | 'show';
 
 export type MemberTagFormat = string;
+
+/**
+ * MetadataIssue
+ *
+ * A gap or conflict in a title's or collection's metadata.
+ */
+export type MetadataIssue = 'no_tmdb_id' | 'no_tvdb_id' | 'no_imdb_id' | 'no_local_path' | 'no_year' | 'no_server_id' | 'id_mismatch';
 
 /**
  * MonitorUpdate
@@ -5008,6 +5078,32 @@ export type SaveSelectionResponse = {
      * Status
      */
     status: 'enqueued' | 'existing' | 'selected';
+};
+
+/**
+ * SavedFilterRead
+ *
+ * A saved custom filter.
+ */
+export type SavedFilterRead = {
+    criteria: FilterGroupOutput;
+    /**
+     * Id
+     */
+    id: number;
+    media_type: MediaType;
+    name: DisplayName;
+};
+
+/**
+ * SavedFilterWrite
+ *
+ * A custom filter to save under a name.
+ */
+export type SavedFilterWrite = {
+    criteria: FilterGroupInput;
+    media_type: MediaType;
+    name: DisplayName;
 };
 
 /**
@@ -5670,10 +5766,7 @@ export type SyncScheduleWrite = {
      * Enabled
      */
     enabled?: boolean;
-    /**
-     * Name
-     */
-    name: string;
+    name: DisplayName;
 };
 
 /**
@@ -6141,11 +6234,22 @@ export type TmdbPersonSourceOutput = {
 };
 
 /**
+ * TmdbSearchBy
+ *
+ * What a TMDB search looks for: titles, or the titles of something else.
+ */
+export type TmdbSearchBy = 'title' | 'person' | 'company' | 'keyword' | 'list';
+
+/**
  * TmdbSearchResponse
  *
  * TMDB search results: movies or shows first, then collections.
  */
 export type TmdbSearchResponse = {
+    /**
+     * Matched
+     */
+    matched: string | null;
     /**
      * Results
      */
@@ -9677,6 +9781,230 @@ export type ClearJobSnapshotResponses = {
 
 export type ClearJobSnapshotResponse = ClearJobSnapshotResponses[keyof ClearJobSnapshotResponses];
 
+export type GetLibraryFilterCapabilitiesData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/library/filters/capabilities';
+};
+
+export type GetLibraryFilterCapabilitiesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetLibraryFilterCapabilitiesError = GetLibraryFilterCapabilitiesErrors[keyof GetLibraryFilterCapabilitiesErrors];
+
+export type GetLibraryFilterCapabilitiesResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryFilterCapabilities;
+};
+
+export type GetLibraryFilterCapabilitiesResponse = GetLibraryFilterCapabilitiesResponses[keyof GetLibraryFilterCapabilitiesResponses];
+
+export type MatchLibraryFilterData = {
+    body: LibraryFilterMatchRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/library/filters/match';
+};
+
+export type MatchLibraryFilterErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MatchLibraryFilterError = MatchLibraryFilterErrors[keyof MatchLibraryFilterErrors];
+
+export type MatchLibraryFilterResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryFilterMatch;
+};
+
+export type MatchLibraryFilterResponse = MatchLibraryFilterResponses[keyof MatchLibraryFilterResponses];
+
+export type ListSavedFiltersData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query: {
+        /**
+         * Media type ('movie' or 'show')
+         */
+        media_type: MediaType;
+    };
+    url: '/api/library/filters/saved';
+};
+
+export type ListSavedFiltersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSavedFiltersError = ListSavedFiltersErrors[keyof ListSavedFiltersErrors];
+
+export type ListSavedFiltersResponses = {
+    /**
+     * Response List Saved Filters
+     *
+     * Successful Response
+     */
+    200: Array<SavedFilterRead>;
+};
+
+export type ListSavedFiltersResponse = ListSavedFiltersResponses[keyof ListSavedFiltersResponses];
+
+export type CreateSavedFilterData = {
+    body: SavedFilterWrite;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/library/filters/saved';
+};
+
+export type CreateSavedFilterErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateSavedFilterError = CreateSavedFilterErrors[keyof CreateSavedFilterErrors];
+
+export type CreateSavedFilterResponses = {
+    /**
+     * Successful Response
+     */
+    200: SavedFilterRead;
+};
+
+export type CreateSavedFilterResponse = CreateSavedFilterResponses[keyof CreateSavedFilterResponses];
+
+export type DeleteSavedFilterData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Filter Id
+         *
+         * Saved filter ID
+         */
+        filter_id: number;
+    };
+    query?: never;
+    url: '/api/library/filters/saved/{filter_id}';
+};
+
+export type DeleteSavedFilterErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteSavedFilterError = DeleteSavedFilterErrors[keyof DeleteSavedFilterErrors];
+
+export type DeleteSavedFilterResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type DeleteSavedFilterResponse = DeleteSavedFilterResponses[keyof DeleteSavedFilterResponses];
+
+export type UpdateSavedFilterData = {
+    body: SavedFilterWrite;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Filter Id
+         *
+         * Saved filter ID
+         */
+        filter_id: number;
+    };
+    query?: never;
+    url: '/api/library/filters/saved/{filter_id}';
+};
+
+export type UpdateSavedFilterErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateSavedFilterError = UpdateSavedFilterErrors[keyof UpdateSavedFilterErrors];
+
+export type UpdateSavedFilterResponses = {
+    /**
+     * Successful Response
+     */
+    200: SavedFilterRead;
+};
+
+export type UpdateSavedFilterResponse = UpdateSavedFilterResponses[keyof UpdateSavedFilterResponses];
+
 export type GetFolderRootsData = {
     body?: never;
     headers?: {
@@ -11545,6 +11873,7 @@ export type SearchTmdbData = {
          * Query
          */
         query: string;
+        by?: TmdbSearchBy;
     };
     url: '/api/tmdb/search';
 };

@@ -73,6 +73,7 @@ describe("uiState persisted filters", () => {
       mediaServer: "all",
       libraryIds: [],
       collectionId: null,
+      customFilter: null,
       themeSources: ["download"],
       artSource: { sources: ["tpdb"], artType: "any" },
       metadataIssues: { flags: ["no_tmdb_id"], mode: "all" },

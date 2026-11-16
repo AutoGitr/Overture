@@ -23,12 +23,15 @@ lazy from overture.domain import (
     MediaType,
     ThemeIdSource,
     TmdbLanguageFilter,
+    TmdbSearchBy,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import (
     TMDBClient,
     TmdbCollection,
     TmdbDetails,
+    TmdbNamed,
+    TmdbPerson,
     TmdbSeason,
     TmdbTitle,
 )
@@ -705,3 +708,61 @@ async def test_catalog_collection_art_uses_saved_candidate_policy(
         )
     async with database.read_session() as session:
         assert await _items(session) == []
+
+
+class FakeTmdbFinder(FakeTmdb):
+    @override
+    async def search_people(self, query: str) -> tuple[TmdbPerson, ...]:
+        self._check("search_people", query)
+        return (
+            TmdbPerson(
+                tmdb_id=6384,
+                name="Keanu Reeves",
+                known_for_department="Acting",
+                profile_url=None,
+            ),
+        )
+
+    @override
+    async def person_titles(
+        self, person_id: int, media_type: MediaType
+    ) -> tuple[TmdbTitle, ...]:
+        self._check("person_titles", person_id)
+        return (MATRIX.summary,)
+
+    @override
+    async def get_named(
+        self, kind: Literal["company", "keyword"], tmdb_id: int
+    ) -> TmdbNamed | None:
+        self._check(f"get_{kind}", tmdb_id)
+        return TmdbNamed(tmdb_id=tmdb_id, name="Village Roadshow")
+
+    @override
+    async def discover(
+        self, media_type: MediaType, by: Literal["company", "keyword"], tmdb_id: int
+    ) -> tuple[TmdbTitle, ...]:
+        self._check(f"discover_{by}", tmdb_id)
+        return (MATRIX.summary,)
+
+
+async def test_a_search_lists_the_titles_of_a_person_company_or_list(
+    tmdb_config: Settings, database: Database
+) -> None:
+    tmdb = FakeTmdbFinder()
+    service = _service(app_config=tmdb_config, database=database, tmdb=tmdb)
+
+    by_person = await service.search(MediaType.MOVIE, "keanu", TmdbSearchBy.PERSON)
+    by_company = await service.search(
+        MediaType.MOVIE,
+        "https://www.themoviedb.org/company/79-village-roadshow-pictures",
+        TmdbSearchBy.COMPANY,
+    )
+    by_list = await service.search(MediaType.MOVIE, "not a list", TmdbSearchBy.LIST)
+
+    assert by_person.matched == "Keanu Reeves"
+    assert [result.title for result in by_person.results] == ["The Matrix"]
+    assert by_company.matched == "Village Roadshow"
+    assert ("get_company", 79) in tmdb.calls
+    assert ("discover_company", 79) in tmdb.calls
+    # A list is found by its ID or link only: TMDB cannot search lists.
+    assert (by_list.matched, by_list.results) == (None, [])

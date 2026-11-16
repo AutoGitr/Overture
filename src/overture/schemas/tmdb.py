@@ -46,6 +46,9 @@ class TmdbSearchResponse(StrictBaseModel):
     """TMDB search results: movies or shows first, then collections."""
 
     results: list[TmdbSearchResult]
+    #: The person, company, keyword or list whose titles these are; none for
+    #: a title search, or when TMDB found nothing to look up.
+    matched: str | None = None
 
 
 class TmdbPersonResult(StrictBaseModel):

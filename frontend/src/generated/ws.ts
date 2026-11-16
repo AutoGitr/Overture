@@ -3,9 +3,9 @@
 // Models that also appear in openapi.json are imported from the REST bundle
 // rather than redeclared, so both generators describe one type universe.
 
-import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
-export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
 export type LifecycleStatus = "started" | "progress" | "completed" | "stopped" | "failed";
 
@@ -255,7 +255,7 @@ export interface SchedulesChangedEvent {
 }
 
 /** A tag the REST query keys carry. */
-export type ApiTag = "art" | "asset-manager" | "auth" | "backups" | "bulk" | "catalog" | "collections" | "health" | "job-snapshots" | "library" | "media-server" | "notifications" | "realtime" | "server-audit" | "settings" | "stats" | "sync" | "themes" | "tmdb";
+export type ApiTag = "art" | "asset-manager" | "auth" | "backups" | "bulk" | "catalog" | "collections" | "health" | "job-snapshots" | "library" | "library-filters" | "media-server" | "notifications" | "realtime" | "server-audit" | "settings" | "stats" | "sync" | "themes" | "tmdb";
 
 /** The prefix of each job kind's lifecycle events. */
 export const JOB_EVENT_PREFIXES = {

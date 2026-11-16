@@ -38,6 +38,7 @@ lazy from .routers.catalog import router as catalog_router
 lazy from .routers.collections import router as collections_router
 lazy from .routers.job_snapshots import router as job_snapshots_router
 lazy from .routers.library import router as library_router
+lazy from .routers.library_filters import router as library_filters_router
 lazy from .routers.media_server import router as media_server_router
 lazy from .routers.notifications import router as notifications_router
 lazy from .routers.realtime import router as realtime_router
@@ -185,6 +186,7 @@ def _register_api_routes(app: FastAPI) -> None:
         docs_router,
         health_router,
         library_router,
+        library_filters_router,
         job_snapshots_router,
         media_server_router,
         notifications_router,

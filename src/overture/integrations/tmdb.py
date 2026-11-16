@@ -49,6 +49,14 @@ class TmdbTitle:
 
 
 @dataclass(frozen=True, slots=True)
+class TmdbNamed:
+    """A TMDB company or keyword."""
+
+    tmdb_id: int
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class TmdbSeason:
     """One season of a TMDB show."""
 
@@ -441,11 +449,11 @@ class TMDBClient:
             overview=data.get("overview") or None,
         )
 
-    async def get_list_ids(
+    async def list_titles(
         self, list_id: int, media_type: MediaType
-    ) -> tuple[int, ...]:
-        """Read every public-list page, keeping the selected media type in order."""
-        ids: dict[int, None] = {}
+    ) -> tuple[TmdbTitle, ...]:
+        """Read every public-list page, keeping the media type's titles in order."""
+        found: dict[int, TmdbTitle] = {}
         page = 1
         while True:
             data = await self._cache.get_or_compute(
@@ -456,10 +464,30 @@ class TMDBClient:
             )
             for item in _records(data, "results"):
                 if item.get("media_type") == _TMDB_KIND[media_type]:
-                    ids.setdefault(int(item["id"]), None)
+                    title = _title(item)
+                    found.setdefault(title.tmdb_id, title)
             if page >= int(data["total_pages"]):
-                return tuple(ids)
+                return tuple(found.values())
             page += 1
+
+    async def get_list_ids(
+        self, list_id: int, media_type: MediaType
+    ) -> tuple[int, ...]:
+        """The TMDB IDs of the media type's titles on a public list, in order."""
+        return tuple(
+            title.tmdb_id for title in await self.list_titles(list_id, media_type)
+        )
+
+    async def get_list_name(self, list_id: int) -> str | None:
+        """A public list's name, from its first page."""
+        data = await self._cache.get_or_compute(
+            ("list", list_id, 1),
+            self._get,
+            f"https://api.themoviedb.org/4/list/{list_id}",
+            params={"page": 1},
+        )
+        name = data.get("name")
+        return name if isinstance(name, str) and name else None
 
     async def get_list_description(self, list_id: int) -> str | None:
         """The description of a public list, from its first page."""
@@ -587,6 +615,80 @@ class TMDBClient:
             params={"query": query, "include_adult": "false"},
         )
         return tuple(_person(result) for result in _records(data, "results"))
+
+    async def search_named(
+        self, kind: Literal["company", "keyword"], query: str
+    ) -> tuple[TmdbNamed, ...]:
+        """Return the first page of TMDB's company or keyword search."""
+        data = await self._cache.get_or_compute(
+            ("search", kind, query.casefold()),
+            self._get,
+            f"/search/{kind}",
+            params={"query": query},
+        )
+        return tuple(
+            TmdbNamed(tmdb_id=int(result["id"]), name=str(result.get("name") or ""))
+            for result in _records(data, "results")
+        )
+
+    async def get_named(
+        self, kind: Literal["company", "keyword"], tmdb_id: int
+    ) -> TmdbNamed | None:
+        """Return a company or keyword by its TMDB ID, or ``None``."""
+        data = await self._cache.get_or_compute(
+            (kind, tmdb_id), self._get_found, f"/{kind}/{tmdb_id}"
+        )
+        if not data:
+            return None
+        return TmdbNamed(tmdb_id=int(data["id"]), name=str(data.get("name") or ""))
+
+    async def discover(
+        self,
+        media_type: MediaType,
+        by: Literal["company", "keyword"],
+        tmdb_id: int,
+    ) -> tuple[TmdbTitle, ...]:
+        """Return the most popular titles of a company, or with a keyword."""
+        kind = _TMDB_KIND[media_type]
+        data = await self._cache.get_or_compute(
+            ("discover", kind, by, tmdb_id),
+            self._get,
+            f"/discover/{kind}",
+            params={
+                "sort_by": "popularity.desc",
+                "include_adult": "false",
+                "with_companies" if by == "company" else "with_keywords": str(tmdb_id),
+            },
+        )
+        return tuple(_title(result) for result in _records(data, "results"))
+
+    async def person_titles(
+        self, person_id: int, media_type: MediaType
+    ) -> tuple[TmdbTitle, ...]:
+        """Return every movie or show a person is credited in, newest first."""
+        endpoint = (
+            f"/person/{person_id}/movie_credits"
+            if media_type is MediaType.MOVIE
+            else f"/person/{person_id}/tv_credits"
+        )
+        data = await self._cache.get_or_compute(
+            ("person_credits", person_id, media_type.value),
+            self._get_found,
+            endpoint,
+        )
+        if not data:
+            return ()
+        found: dict[int, TmdbTitle] = {}
+        for credit in (*_records(data, "cast"), *_records(data, "crew")):
+            title = _title(credit)
+            found.setdefault(title.tmdb_id, title)
+        return tuple(
+            sorted(
+                found.values(),
+                key=lambda title: title.release_date or "",
+                reverse=True,
+            )
+        )
 
     async def search_keywords(self, query: str) -> tuple[str, ...]:
         """Return the names on the first page of TMDB's keyword search."""

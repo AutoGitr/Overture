@@ -10,6 +10,7 @@
     MediaItemRead,
     CollectionRead,
     TmdbCollectionResult,
+    TmdbSearchBy,
     TmdbItemResult,
   } from "../../generated/rest/types.gen";
   import {
@@ -56,6 +57,7 @@
     collectionsOnly = false,
     filters,
     filterKeys,
+    by,
     sortField,
     sortDir,
     onOpen,
@@ -72,6 +74,8 @@
     collectionsOnly?: boolean;
     filters: TmdbFilters;
     filterKeys: readonly TmdbFilterKey[];
+    /** What the search looks for: titles, or a person's, company's, keyword's or list's. */
+    by: TmdbSearchBy;
     sortField: SidebarSortField;
     sortDir: SidebarSortDir;
     onOpen: (navigate: () => void) => void;
@@ -79,9 +83,17 @@
 
   type Result = TmdbItemResult | TmdbCollectionResult;
 
+  const PROMPTS: Record<TmdbSearchBy, string> = {
+    title: "Search TMDB by title or ID",
+    person: "Find a person's movies and shows",
+    company: "Find a company's most popular titles",
+    keyword: "Find the most popular titles with a keyword",
+    list: "Open a public TMDB list by its ID or link",
+  };
+
   const search = debounced(() => query.trim());
   const resultsQuery = createQuery(() => ({
-    ...searchTmdbOptions({ query: { media_type: tab, query: search.current } }),
+    ...searchTmdbOptions({ query: { media_type: tab, query: search.current, by } }),
     enabled: search.current.length > 0,
   }));
   let foundGroups = $derived(
@@ -242,6 +254,9 @@
 </script>
 
 <div class="tmdb-results">
+  {#if search.current && resultsQuery.data?.matched && !collection}
+    <p class="matched">Titles of <strong>{resultsQuery.data.matched}</strong></p>
+  {/if}
   {#if search.current}
     <DataStatus
       label={collection ? "TMDB collection" : "TMDB results"}
@@ -266,9 +281,11 @@
       onback={back}
       loading={!!search.current && activeQuery.isPending}
       message={!search.current
-        ? "Search TMDB by title or ID"
+        ? PROMPTS[by]
         : activeQuery.isSuccess && !rows.length && (collection || !groups.length)
-          ? "No TMDB results"
+          ? by === "title" || resultsQuery.data?.matched
+            ? "No TMDB results"
+            : `TMDB found no ${by} for that`
           : ""}
     />
   </div>
@@ -306,6 +323,13 @@
 {/snippet}
 
 <style>
+  .matched {
+    margin: 0;
+    padding: var(--space-2) var(--space-3) 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
   .tmdb-results {
     display: flex;
     flex-direction: column;

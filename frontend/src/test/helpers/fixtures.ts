@@ -84,6 +84,7 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     catalog_themerrdb: false,
     catalog_ids: null,
     catalog_selections: null,
+    metadata_issues: [],
     season_posters_status: "missing",
     server_added_at: null,
     server_item_id: null,
@@ -180,6 +181,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     catalog_complete: false,
     catalog_themerrdb: false,
     catalog_selections: null,
+    metadata_issues: [],
     library_ids: ["1"],
     media_types: ["movie"],
     monitored: false,
@@ -290,6 +292,8 @@ export function collectionCapabilities(
         local: true,
         smart: true,
         labelled: false,
+        library_status: false,
+        choices: [],
       },
       {
         field: "genre",
@@ -300,6 +304,8 @@ export function collectionCapabilities(
         local: true,
         smart: true,
         labelled: false,
+        library_status: false,
+        choices: [],
       },
       {
         field: "year",
@@ -310,6 +316,8 @@ export function collectionCapabilities(
         local: true,
         smart: true,
         labelled: false,
+        library_status: false,
+        choices: [],
       },
       {
         field: "added",
@@ -320,6 +328,8 @@ export function collectionCapabilities(
         local: true,
         smart: true,
         labelled: false,
+        library_status: false,
+        choices: [],
       },
       {
         field: "unplayed",
@@ -330,6 +340,8 @@ export function collectionCapabilities(
         local: true,
         smart: true,
         labelled: false,
+        library_status: false,
+        choices: [],
       },
       {
         field: "hdr",
@@ -340,6 +352,8 @@ export function collectionCapabilities(
         local: false,
         smart: true,
         labelled: false,
+        library_status: false,
+        choices: [],
       },
     ],
     sources: [

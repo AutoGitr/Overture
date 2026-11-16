@@ -60,3 +60,19 @@ type GroupNames = Annotated[
 type CollectionIds = Annotated[
     UniqueList[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
 ]
+
+
+def collapse_name(value: str) -> str:
+    """Collapse internal whitespace in a name people give something.
+
+    Raises:
+        ValueError: When nothing but whitespace is left.
+    """
+    name = " ".join(value.split())
+    if not name:
+        raise ValueError("name is required")
+    return name
+
+
+#: A name someone gives a schedule or a saved filter.
+type DisplayName = Annotated[str, Field(max_length=100), AfterValidator(collapse_name)]

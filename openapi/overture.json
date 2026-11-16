@@ -2135,9 +2135,7 @@
             "type": "boolean"
           },
           "name": {
-            "maxLength": 100,
-            "title": "Name",
-            "type": "string"
+            "$ref": "#/components/schemas/DisplayName"
           }
         },
         "required": [
@@ -4715,6 +4713,13 @@
             "title": "Member Ids",
             "type": "array"
           },
+          "metadata_issues": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataIssue"
+            },
+            "title": "Metadata Issues",
+            "type": "array"
+          },
           "monitored": {
             "default": true,
             "title": "Monitored",
@@ -5069,6 +5074,7 @@
           "active_end_mmdd",
           "delete_when_inactive",
           "withheld",
+          "metadata_issues",
           "unsynced",
           "managed",
           "sync_failed",
@@ -5166,6 +5172,13 @@
         "additionalProperties": false,
         "description": "A criteria field as the active server offers it.",
         "properties": {
+          "choices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
           "field": {
             "$ref": "#/components/schemas/FilterField"
           },
@@ -5179,6 +5192,11 @@
           "labelled": {
             "default": false,
             "title": "Labelled",
+            "type": "boolean"
+          },
+          "library_status": {
+            "default": false,
+            "title": "Library Status",
             "type": "boolean"
           },
           "local": {
@@ -5212,7 +5230,9 @@
           "smart_operators",
           "local",
           "smart",
-          "labelled"
+          "labelled",
+          "library_status",
+          "choices"
         ],
         "title": "CollectionFieldRead",
         "type": "object"
@@ -6768,6 +6788,13 @@
             "title": "Media Types",
             "type": "array"
           },
+          "metadata_issues": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataIssue"
+            },
+            "title": "Metadata Issues",
+            "type": "array"
+          },
           "monitored": {
             "default": true,
             "title": "Monitored",
@@ -7074,6 +7101,7 @@
           "active_end_mmdd",
           "delete_when_inactive",
           "withheld",
+          "metadata_issues",
           "unsynced",
           "managed",
           "sync_failed",
@@ -8777,6 +8805,10 @@
         "title": "DeleteCollectionThemeResponse",
         "type": "object"
       },
+      "DisplayName": {
+        "maxLength": 100,
+        "type": "string"
+      },
       "DownloadJobEvent": {
         "additionalProperties": false,
         "description": "Download manager lifecycle event.",
@@ -9073,7 +9105,27 @@
           "company",
           "streaming",
           "show_status",
-          "last_aired"
+          "last_aired",
+          "monitored",
+          "art_status",
+          "poster_status",
+          "background_status",
+          "season_posters_status",
+          "poster_source",
+          "background_source",
+          "poster_width",
+          "background_width",
+          "incorrect_aspect_ratio",
+          "theme_status",
+          "theme_source",
+          "theme_length",
+          "metadata_issue",
+          "overturedb_complete",
+          "themerrdb_theme",
+          "overturedb_poster",
+          "overturedb_background",
+          "overturedb_season_posters",
+          "overturedb_theme"
         ],
         "title": "FilterField",
         "type": "string"
@@ -9674,6 +9726,76 @@
         "title": "KindRecommendation",
         "type": "object"
       },
+      "LibraryFilterCapabilities": {
+        "additionalProperties": false,
+        "description": "The fields and sources a custom filter of the library's titles can test.",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionFieldRead"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionSourceRead"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields",
+          "sources"
+        ],
+        "title": "LibraryFilterCapabilities",
+        "type": "object"
+      },
+      "LibraryFilterMatch": {
+        "additionalProperties": false,
+        "description": "The titles each condition selects, in the order of the request's.",
+        "properties": {
+          "item_ids": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Item Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_ids"
+        ],
+        "title": "LibraryFilterMatch",
+        "type": "object"
+      },
+      "LibraryFilterMatchRequest": {
+        "additionalProperties": false,
+        "description": "A custom filter's metadata and source conditions, to test one by one.\n\nLibrary status conditions, and how conditions combine, are evaluated in\nthe browser against the live library list.",
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition-Input"
+            },
+            "maxItems": 200,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          }
+        },
+        "required": [
+          "media_type",
+          "conditions"
+        ],
+        "title": "LibraryFilterMatchRequest",
+        "type": "object"
+      },
       "LibraryId": {
         "maxLength": 200,
         "minLength": 1,
@@ -10223,6 +10345,13 @@
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
           },
+          "metadata_issues": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataIssue"
+            },
+            "title": "Metadata Issues",
+            "type": "array"
+          },
           "monitored": {
             "default": true,
             "title": "Monitored",
@@ -10548,6 +10677,7 @@
           "catalog_complete",
           "catalog_themerrdb",
           "catalog_ids",
+          "metadata_issues",
           "catalog_selections",
           "last_synced_at",
           "last_matched_at",
@@ -10615,6 +10745,20 @@
       "MemberTagFormat": {
         "maxLength": 200,
         "minLength": 1,
+        "type": "string"
+      },
+      "MetadataIssue": {
+        "description": "A gap or conflict in a title's or collection's metadata.",
+        "enum": [
+          "no_tmdb_id",
+          "no_tvdb_id",
+          "no_imdb_id",
+          "no_local_path",
+          "no_year",
+          "no_server_id",
+          "id_mismatch"
+        ],
+        "title": "MetadataIssue",
         "type": "string"
       },
       "MonitorUpdate": {
@@ -11303,6 +11447,55 @@
           "status"
         ],
         "title": "SaveSelectionResponse",
+        "type": "object"
+      },
+      "SavedFilterRead": {
+        "additionalProperties": false,
+        "description": "A saved custom filter.",
+        "properties": {
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Output"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "name": {
+            "$ref": "#/components/schemas/DisplayName"
+          }
+        },
+        "required": [
+          "name",
+          "media_type",
+          "criteria",
+          "id"
+        ],
+        "title": "SavedFilterRead",
+        "type": "object"
+      },
+      "SavedFilterWrite": {
+        "additionalProperties": false,
+        "description": "A custom filter to save under a name.",
+        "properties": {
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Input"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "name": {
+            "$ref": "#/components/schemas/DisplayName"
+          }
+        },
+        "required": [
+          "name",
+          "media_type",
+          "criteria"
+        ],
+        "title": "SavedFilterWrite",
         "type": "object"
       },
       "ScanRequest": {
@@ -12499,9 +12692,7 @@
             "type": "boolean"
           },
           "name": {
-            "maxLength": 100,
-            "title": "Name",
-            "type": "string"
+            "$ref": "#/components/schemas/DisplayName"
           }
         },
         "required": [
@@ -13362,10 +13553,33 @@
         "title": "TmdbPersonSource",
         "type": "object"
       },
+      "TmdbSearchBy": {
+        "description": "What a TMDB search looks for: titles, or the titles of something else.",
+        "enum": [
+          "title",
+          "person",
+          "company",
+          "keyword",
+          "list"
+        ],
+        "title": "TmdbSearchBy",
+        "type": "string"
+      },
       "TmdbSearchResponse": {
         "additionalProperties": false,
         "description": "TMDB search results: movies or shows first, then collections.",
         "properties": {
+          "matched": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched"
+          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/TmdbSearchResult"
@@ -13375,7 +13589,8 @@
           }
         },
         "required": [
-          "results"
+          "results",
+          "matched"
         ],
         "title": "TmdbSearchResponse",
         "type": "object"
@@ -21140,6 +21355,525 @@
         ]
       }
     },
+    "/api/library/filters/capabilities": {
+      "get": {
+        "description": "Describe the fields and sources custom filters of the media type test.",
+        "operationId": "get_library_filter_capabilities",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryFilterCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Library Filter Capabilities",
+        "tags": [
+          "library-filters"
+        ]
+      }
+    },
+    "/api/library/filters/match": {
+      "post": {
+        "description": "Return the titles each of a custom filter's conditions selects.",
+        "operationId": "match_library_filter",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryFilterMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryFilterMatch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Match Library Filter",
+        "tags": [
+          "library-filters"
+        ],
+        "x-reads-only": true
+      }
+    },
+    "/api/library/filters/saved": {
+      "get": {
+        "description": "List the media type's saved filters by name.",
+        "operationId": "list_saved_filters",
+        "parameters": [
+          {
+            "description": "Media type ('movie' or 'show')",
+            "in": "query",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaType",
+              "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SavedFilterRead"
+                  },
+                  "title": "Response List Saved Filters",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Saved Filters",
+        "tags": [
+          "library-filters"
+        ]
+      },
+      "post": {
+        "description": "Save a custom filter under a name.",
+        "operationId": "create_saved_filter",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedFilterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedFilterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Saved Filter",
+        "tags": [
+          "library-filters"
+        ]
+      }
+    },
+    "/api/library/filters/saved/{filter_id}": {
+      "delete": {
+        "description": "Forget a saved filter.",
+        "operationId": "delete_saved_filter",
+        "parameters": [
+          {
+            "description": "Saved filter ID",
+            "in": "path",
+            "name": "filter_id",
+            "required": true,
+            "schema": {
+              "description": "Saved filter ID",
+              "minimum": 1,
+              "title": "Filter Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Saved Filter",
+        "tags": [
+          "library-filters"
+        ]
+      },
+      "put": {
+        "description": "Rename a saved filter or change its conditions.",
+        "operationId": "update_saved_filter",
+        "parameters": [
+          {
+            "description": "Saved filter ID",
+            "in": "path",
+            "name": "filter_id",
+            "required": true,
+            "schema": {
+              "description": "Saved filter ID",
+              "minimum": 1,
+              "title": "Filter Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedFilterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedFilterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Saved Filter",
+        "tags": [
+          "library-filters"
+        ]
+      }
+    },
     "/api/library/folder-roots": {
       "get": {
         "description": "Return unique root folder paths derived from media item folder values.",
@@ -25322,7 +26056,7 @@
     },
     "/api/tmdb/search": {
       "get": {
-        "description": "Search TMDB by title; a number is also looked up as a TMDB ID.",
+        "description": "Search TMDB by title, or for the titles of a person, company or list.",
         "operationId": "search_tmdb",
         "parameters": [
           {
@@ -25344,6 +26078,15 @@
               "minLength": 1,
               "title": "Query",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TmdbSearchBy",
+              "default": "title"
             }
           },
           {

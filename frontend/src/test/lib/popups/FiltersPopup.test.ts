@@ -5,6 +5,7 @@ import {
   listCatalogEntriesOptions,
   listCollectionsOptions,
   listItemsOptions,
+  listSavedFiltersOptions,
 } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import type { MediaItemListResponse } from "../../../generated/rest/types.gen";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
@@ -29,6 +30,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   beforeEach(async () => {
     await navigate("/movies", { replace: true });
     queryClient.clear();
+    // No saved custom filters, without asking.
+    for (const media_type of ["movie", "show"] as const)
+      queryClient.setQueryData(listSavedFiltersOptions({ query: { media_type } }).queryKey, []);
     mockFetch([]);
     uiState.setFilters(defaultFilters());
     uiState.searchQuery = "";

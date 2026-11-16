@@ -27,6 +27,7 @@
   import { errorMessage } from "../utils/errors";
   import { UNGROUPED_GROUP } from "../../generated/settings";
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
+  import { CustomFilterMatch } from "../utils/customFilterMatch.svelte";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PopupSection from "./PopupSection.svelte";
@@ -74,6 +75,11 @@
     enabled: uiState.sidebarMode === "collections",
   }));
 
+  const customFilter = new CustomFilterMatch(() =>
+    uiState.sidebarMode === "items"
+      ? { mediaType: uiState.sidebarTab, filterId: filters.customFilter }
+      : null,
+  );
   const filteredCollection = new CollectionMembers(() =>
     uiState.sidebarMode === "items" ? filters.collectionId : null,
   );
@@ -84,6 +90,7 @@
           filters,
           catalogEnabled,
           collectionMembers: filteredCollection.ids,
+          customFilter: customFilter.predicate,
           searchQuery: uiState.searchQuery,
           searchField: uiState.searchField,
           sortField: "title",

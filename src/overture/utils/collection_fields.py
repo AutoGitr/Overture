@@ -9,13 +9,17 @@ lazy from dataclasses import dataclass
 lazy from typing import Literal
 
 lazy from ..domain import (
+    ArtSource,
+    AssetStatus,
     CollectionOrder,
     FieldKind,
     FilterField,
     FilterOperator,
     MediaType,
+    MetadataIssue,
     ServerType,
     SetDimension,
+    ThemeIdSource,
 )
 
 type PlexFieldType = Literal["string", "tag", "integer", "float", "date", "boolean"]
@@ -72,6 +76,114 @@ def _media(
     )
 
 
+_STATUSES = tuple(status.value for status in AssetStatus)
+_AGREEMENTS = ("matching", "different")
+_ART_SOURCES = tuple(
+    source.value for source in ArtSource if source is not ArtSource.OVERTUREDB
+)
+
+#: Each library status field: its label, value kind, media types and choices.
+_LIBRARY_STATUS: dict[
+    FilterField, tuple[str, FieldKind, frozenset[MediaType], tuple[str, ...]]
+] = {
+    FilterField.MONITORED: ("Monitored", FieldKind.BOOLEAN, _ALL_MEDIA, ()),
+    FilterField.ART_STATUS: ("Art status", FieldKind.TAG, _ALL_MEDIA, _STATUSES),
+    FilterField.POSTER_STATUS: ("Poster status", FieldKind.TAG, _ALL_MEDIA, _STATUSES),
+    FilterField.BACKGROUND_STATUS: (
+        "Background status",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        _STATUSES,
+    ),
+    FilterField.SEASON_POSTERS_STATUS: (
+        "Season posters status",
+        FieldKind.TAG,
+        _SHOWS,
+        _STATUSES,
+    ),
+    FilterField.POSTER_SOURCE: (
+        "Poster source",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        _ART_SOURCES,
+    ),
+    FilterField.BACKGROUND_SOURCE: (
+        "Background source",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        _ART_SOURCES,
+    ),
+    FilterField.POSTER_WIDTH: ("Poster width", FieldKind.NUMBER, _ALL_MEDIA, ()),
+    FilterField.BACKGROUND_WIDTH: (
+        "Background width",
+        FieldKind.NUMBER,
+        _ALL_MEDIA,
+        (),
+    ),
+    FilterField.INCORRECT_ASPECT_RATIO: (
+        "Incorrect aspect ratio",
+        FieldKind.BOOLEAN,
+        _ALL_MEDIA,
+        (),
+    ),
+    FilterField.THEME_STATUS: ("Theme status", FieldKind.TAG, _ALL_MEDIA, _STATUSES),
+    FilterField.THEME_SOURCE: (
+        "Theme source",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        tuple(source.value for source in ThemeIdSource),
+    ),
+    FilterField.THEME_LENGTH: (
+        "Theme length (seconds)",
+        FieldKind.NUMBER,
+        _ALL_MEDIA,
+        (),
+    ),
+    FilterField.METADATA_ISSUE: (
+        "Metadata issue",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        tuple(issue.value for issue in MetadataIssue),
+    ),
+    FilterField.OVERTUREDB_COMPLETE: (
+        "OvertureDB complete",
+        FieldKind.BOOLEAN,
+        _ALL_MEDIA,
+        (),
+    ),
+    FilterField.THEMERRDB_THEME: (
+        "ThemerrDB has a theme",
+        FieldKind.BOOLEAN,
+        _ALL_MEDIA,
+        (),
+    ),
+    FilterField.OVERTUREDB_POSTER: (
+        "OvertureDB poster",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        _AGREEMENTS,
+    ),
+    FilterField.OVERTUREDB_BACKGROUND: (
+        "OvertureDB background",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        _AGREEMENTS,
+    ),
+    FilterField.OVERTUREDB_SEASON_POSTERS: (
+        "OvertureDB season posters",
+        FieldKind.TAG,
+        _SHOWS,
+        _AGREEMENTS,
+    ),
+    FilterField.OVERTUREDB_THEME: (
+        "OvertureDB theme",
+        FieldKind.TAG,
+        _ALL_MEDIA,
+        _AGREEMENTS,
+    ),
+}
+
+
 @dataclass(slots=True, frozen=True)
 class FieldSpec:
     """One criteria field: its value kind, media types and evaluators."""
@@ -86,6 +198,11 @@ class FieldSpec:
     integer: bool = False
     #: TMDB enrichment stores the value, which needs ``TMDB_API_KEY``.
     tmdb: bool = False
+    #: The library's own status of a title, which library filters test and
+    #: collections never do.
+    library_only: bool = False
+    #: The values the field can hold, when they are a fixed set.
+    choices: tuple[str, ...] = ()
 
 
 FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
@@ -390,6 +507,18 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
         FilterField.LAST_AIRED: FieldSpec(
             "Last aired", FieldKind.DATE, _SHOWS, _EVERY_SERVER, None, tmdb=True
         ),
+        **{
+            field: FieldSpec(
+                label,
+                kind,
+                media,
+                _NO_SERVER,
+                None,
+                library_only=True,
+                choices=choices,
+            )
+            for field, (label, kind, media, choices) in _LIBRARY_STATUS.items()
+        },
     }
 )
 
@@ -476,6 +605,16 @@ def field_available(
             local or plex_tests(field, server, media_type)
         )
     return local
+
+
+def library_field_available(
+    field: FilterField, server: ServerType, media_type: MediaType
+) -> bool:
+    """Whether a library filter can test the field: a status, or synced metadata."""
+    spec = FIELDS[field]
+    if spec.library_only:
+        return media_type in spec.media_types
+    return field_available(field, server, media_type, smart=False)
 
 
 def labelled_field(

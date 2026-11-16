@@ -1,9 +1,11 @@
-import { createQuery } from "@tanstack/svelte-query";
+import { createQuery, queryOptions } from "@tanstack/svelte-query";
 import {
   getSeasonsOptions,
   getServerWebLinksOptions,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
-import type { MediaItemRead } from "../../generated/rest/types.gen";
+import { matchLibraryFilter } from "../../generated/rest/sdk.gen";
+import type { LibraryFilterMatchRequest, MediaItemRead } from "../../generated/rest/types.gen";
+import { sdkData } from "./sdk";
 
 /**
  * Observe an item's seasons.
@@ -32,4 +34,18 @@ export function createServerLinks() {
     item: (serverId: string | null | undefined) => fill(links.data?.item, serverId),
     collection: (serverId: string | null | undefined) => fill(links.data?.collection, serverId),
   };
+}
+
+/**
+ * The titles each of a custom filter's metadata and source conditions selects.
+ *
+ * Tagged with the library, so a sync or a collection change, which can change
+ * what they select, asks again; nothing else does.
+ */
+export function libraryFilterMatchOptions(body: LibraryFilterMatchRequest) {
+  return queryOptions({
+    queryKey: [{ _id: "matchLibraryFilter", tags: ["library"], body }] as const,
+    queryFn: ({ signal }) => sdkData(matchLibraryFilter({ body, signal, throwOnError: true })),
+    staleTime: Infinity,
+  });
 }

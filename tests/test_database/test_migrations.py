@@ -1455,3 +1455,31 @@ def test_collection_poster_links_take_the_style_overturedb_holds_them_as() -> No
             }
     finally:
         engine.dispose()
+
+
+def test_saved_filters_are_kept_by_media_type_and_name() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "b6f1d3a8e524")
+            assert "saved_filters" not in inspect(conn).get_table_names()
+
+            command.upgrade(config, "c3e7a1f9b204")
+            conn.exec_driver_sql(
+                "INSERT INTO saved_filters (media_type, name, criteria, created_at, "
+                "updated_at) VALUES ('movie', 'Horror', '{}', '2026-11-16', "
+                "'2026-11-16')"
+            )
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "INSERT INTO saved_filters (media_type, name, criteria, "
+                    "created_at, updated_at) VALUES ('movie', 'Horror', '{}', "
+                    "'2026-11-16', '2026-11-16')"
+                )
+
+            command.downgrade(config, "b6f1d3a8e524")
+            assert "saved_filters" not in inspect(conn).get_table_names()
+    finally:
+        engine.dispose()
