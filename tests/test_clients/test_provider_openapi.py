@@ -166,6 +166,17 @@ async def test_media_browser_consumed_operations(
             "movie",
             "movie2",
         ]
+        # Grouping into collections would list a BoxSet in place of its titles.
+        grouping = "GroupItemsIntoCollections" if emby else "collapseBoxSetItems"
+        assert {
+            request.url.params.get(grouping)
+            for request in transport.requests
+            if request.url.params.get("ParentId" if emby else "parentId") == "library"
+            and request.url.params.get(
+                "IncludeItemTypes" if emby else "includeItemTypes"
+            )
+            == "Movie"
+        } == {"false"}
         seasons = client.iter_seasons("library")
         assert [item["Id"] async for page in seasons for item in page] == ["season"]
         assert await client.count_episodes_by_season("library") == {"season": 1}

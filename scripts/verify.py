@@ -1505,6 +1505,13 @@ class MediaBrowserServer(Server):
             IncludeItemTypes=MEDIA_BROWSER_TYPES[media_type],
             EnableImages="false",
             EnableUserData="false",
+            # Grouping into collections lists a collection in place of its
+            # titles, as Overture's sync must not see them either.
+            **(
+                {"CollapseBoxSetItems": "false"}
+                if self.server == "jellyfin"
+                else {"GroupItemsIntoCollections": "false"}
+            ),
             **params,
         )
 

@@ -24,6 +24,7 @@
 
 - **Collections:** Jellyfin 12 creates and edits collections; it refuses the way Overture read a single item with an API key.
 - **Collections:** Overture lists and syncs Jellyfin 12 collections, whose members Jellyfin shows only to a user; it asks for them as an administrator.
+- **Libraries:** a Jellyfin or Emby library set to group movies into collections no longer lists a collection as a title in place of its movies; syncing collections then deleted the collection, finding none of its movies on the server.
 - **Collections:** Plex smart collections select the members of a regular collection renamed since it was made, which Plex's list of collections still names by its first title.
 - **Collections:** syncing one collection makes again the server collection deleted on its server, instead of failing to write to it.
 - **Collections:** a collection no server holds shows no server poster or background, rather than one that fails to load.

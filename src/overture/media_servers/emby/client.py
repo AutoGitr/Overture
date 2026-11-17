@@ -27,6 +27,7 @@ class EmbyClient(JellyfinClient):
     )
     #: Emby ignores ForcedSortName in an update and takes SortName instead.
     _SORT_NAME_FIELD: ClassVar[str] = "SortName"
+    _UNGROUPED: ClassVar[dict[str, str]] = {"groupItemsIntoCollections": "false"}
     #: Emby lists an item's locked fields only when asked.
     _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines,LockedFields"
 

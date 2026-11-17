@@ -73,6 +73,10 @@ class JellyfinClient(MediaServerHttpClient):
     )
     #: The DTO field a metadata update reads the sort name from.
     _SORT_NAME_FIELD: ClassVar[str] = "ForcedSortName"
+    #: Lists a library's titles each on its own. With grouping into
+    #: collections on, Jellyfin lists a collection in place of its titles,
+    #: as if it were one of them.
+    _UNGROUPED: ClassVar[dict[str, str]] = {"collapseBoxSetItems": "false"}
     #: Item fields an update sends back beside a listing's, so it keeps them.
     _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines"
 
@@ -126,6 +130,7 @@ class JellyfinClient(MediaServerHttpClient):
             enableImageTypes="Primary,Backdrop",
             imageTypeLimit="1",
             enableUserData="false",
+            **self._UNGROUPED,
         )
 
     def _season_params(self, parent_id: str) -> dict[str, str]:
@@ -296,6 +301,7 @@ class JellyfinClient(MediaServerHttpClient):
                 fields="ProviderIds",
                 enableImages="false",
                 enableUserData="false",
+                **self._UNGROUPED,
             ),
         ):
             ids = provider_ids(metadata)
