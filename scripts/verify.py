@@ -421,6 +421,18 @@ def expected_kind(entry: dict[str, Any], operator: str) -> str:
     return "smart" if native or operator not in entry["operators"] else "regular"
 
 
+def described(group: dict[str, Any]) -> str:
+    """A criteria group as text: its conditions and nested groups."""
+    terms = [
+        f"{condition['field']} {condition['operator']} {condition['value']!r}"
+        if condition.get("kind", "field") == "field"
+        else f"{condition['source']['type']} {condition['operator']}"
+        for condition in group.get("conditions", [])
+    ]
+    terms.extend(f"({described(nested)})" for nested in group.get("groups", []))
+    return f" {group.get('mode', 'all')} ".join(terms)
+
+
 def field_conditions(group: dict[str, Any]) -> Iterator[dict[str, Any]]:
     """Every field condition in a criteria group and its nested groups."""
     for condition in group.get("conditions", []):
@@ -949,6 +961,12 @@ class Library:
             server_id,
             collection["child_count"] if len(collection["copies"]) == 1 else None,
         )
+        if case.mismatch:
+            case.note = "; ".join(
+                f"{'smart' if rule.get('smart') else 'regular'}: "
+                + described(part["criteria"])
+                for part in parts
+            )
 
     async def check_images(self, collection: dict[str, Any]) -> None:
         """Every image Overture links a collection to must load."""
@@ -1462,6 +1480,8 @@ class MediaBrowserServer(Server):
         )
         root = f"{base_url.rstrip('/')}/emby" if server == "emby" else base_url
         super().__init__(root, headers, verify=verify)
+        #: An administrator, once asked for; empty when the server has none.
+        self._administrator: dict[str, Any] | None = None
 
     async def libraries(self, media_type: str) -> dict[str, str]:
         wanted = {"movie": "movies", "show": "tvshows"}[media_type]
@@ -1524,12 +1544,12 @@ class MediaBrowserServer(Server):
     async def check_library(self, library: Library) -> None:
         """Compare what Overture lists and counts with what the server does."""
         found = await self.items(library.key, library.media_type, Fields="")
-        inventory(
-            library.case("inventory", "items"),
-            {item_copy_id(item, library.id) for item in library.items},
-            {str(row["Id"]) for row in found["Items"]},
-            noun="items",
-        )
+        ours = {item_copy_id(item, library.id) for item in library.items}
+        theirs = {str(row["Id"]) for row in found["Items"]}
+        case = library.case("inventory", "items")
+        inventory(case, ours, theirs, noun="items")
+        if extra := sorted(ours - theirs):
+            case.note = await self.unlisted(extra[0])
         filters = await self.filter_values(library)
         for field_name, (param, listed) in MEDIA_BROWSER_FILTERS.items():
             spec = library.fields.get(field_name)
@@ -1584,22 +1604,66 @@ class MediaBrowserServer(Server):
             if case.mismatch and differs:
                 case.note = differs
 
+    async def administrator(self) -> dict[str, Any] | None:
+        """A user who sees every library, fetched once."""
+        if self._administrator is None:
+            users: list[dict[str, Any]] = await self.get("/Users")
+            policies: list[dict[str, Any]] = [
+                user.get("Policy") or {} for user in users
+            ]
+            self._administrator = next(
+                (
+                    user
+                    for user, policy in zip(users, policies, strict=True)
+                    if policy.get("IsAdministrator")
+                ),
+                dict[str, Any](),
+            )
+        return self._administrator or None
+
+    async def member_count(self, collection_id: str) -> int:
+        """The members of a collection, as Overture lists them.
+
+        Jellyfin lists them only to a user, so Overture asks as an
+        administrator; Emby lists them to the API key.
+        """
+        admin = await self.administrator() if self.server == "jellyfin" else None
+        found = await self.get(
+            "/Items",
+            ParentId=collection_id,
+            Limit=0,
+            **({"UserId": admin["Id"]} if admin else {}),
+        )
+        return found["TotalRecordCount"]
+
+    async def unlisted(self, item_id: str) -> str:
+        """What the server holds under an ID its library listing leaves out."""
+        found = await self.get("/Items", Ids=item_id, Fields="Path")
+        admin = await self.administrator()
+        seen: list[dict[str, Any]] = (
+            (await self.get("/Items", Ids=item_id, UserId=admin["Id"], Fields="Path"))[
+                "Items"
+            ]
+            if admin
+            else []
+        )
+        rows: list[dict[str, Any]] = found["Items"] or seen
+        if not rows:
+            return f"{self.server} holds no item {item_id}, to the API key or a user"
+        row = rows[0]
+        to_whom = "the API key" if found["Items"] else "a user only"
+        return (
+            f"{self.server} answers {item_id} as {row.get('Name')} "
+            f"({row.get('Type')}) at {row.get('Path')}, to {to_whom}"
+        )
+
     async def members_to_a_user(self, collection_id: str) -> str:
         """How many members the server lists in a collection to an administrator.
 
         Told apart from the none it lists to the API key alone, this shows
         whether the server lists a collection's members only to a user.
         """
-        users: list[dict[str, Any]] = await self.get("/Users")
-        policies: list[dict[str, Any]] = [user.get("Policy") or {} for user in users]
-        admin = next(
-            (
-                user
-                for user, policy in zip(users, policies, strict=True)
-                if policy.get("IsAdministrator")
-            ),
-            None,
-        )
+        admin = await self.administrator()
         if admin is None:
             return f"{self.server} has no administrator to ask as"
         found = await self.get(
@@ -1743,8 +1807,7 @@ async def check_media_browser_collections(
     for key, row in listed.items():
         if (ours := mine.get(key)) is None:
             continue
-        members = await direct.get("/Items", ParentId=key, Limit=0)
-        held[key] = members["TotalRecordCount"]
+        held[key] = await direct.member_count(key)
         found = Case(direct.server, "", "inventory", f"{row['Name']} members")
         found.held = held[key]
         if len(ours["copies"]) == 1:
@@ -2245,7 +2308,10 @@ class WriteCheck:
 
     async def run(self) -> list[Case]:
         try:
-            await self.sweep()
+            # A collection found here outlived the run that deleted it, which
+            # the keys and titles that run deleted show.
+            if left := await self.sweep():
+                self.case("delete what an earlier run left").note = named(left)
             if (found := await self.movies()) is not None:
                 library, items = found
                 made = await self.step(
@@ -2498,25 +2564,32 @@ class WriteCheck:
         )
         await self.filled(check, library, collection_id, query)
 
-    async def sweep(self) -> None:
-        """Delete every collection a run made, recorded or not.
+    async def sweep(self) -> list[str]:
+        """Delete every collection a run made, recorded or not; name each one.
 
         A server can make a collection and then fail the request, so the one
         it made is found by its title.
         """
+        swept: list[str] = []
         for row in await self.provider.list_collections():
             if row.title.startswith(WRITE_PREFIX):
+                swept.append(f"{row.title!r} ({row.id}, {len(row.member_ids)} members)")
                 await self.provider.delete_collection(row.id)
                 if row.id in self.made:
                     self.made.remove(row.id)
+        return swept
 
     async def delete(self, check: Case) -> None:
+        deleted: list[str] = []
         for collection_id in list(self.made):
+            row = await self.held(collection_id)
+            title = row.get("title") or row.get("Name")
+            deleted.append(f"{title!r} ({collection_id})")
             await self.provider.delete_collection(collection_id)
             self.made.remove(collection_id)
-        await self.sweep()
+        deleted.extend(await self.sweep())
+        check.note = f"deleted {named(deleted)}"
         if isinstance(self.direct, PlexServer):
-            # Plex may keep titles filed under a collection it deleted.
             for section, key in self.filed.values():
                 page = await self.direct.container(
                     f"/library/sections/{section}/all",
@@ -2525,9 +2598,9 @@ class WriteCheck:
                     **{"X-Plex-Container-Start": 0, "X-Plex-Container-Size": 0},
                 )
                 if left := int(page.get("totalSize", page.get("size", 0))):
-                    check.note = (
-                        f"Plex still files {left} titles under the deleted "
-                        "collection; Optimize Database in Plex may clear them"
+                    check.note += (
+                        f"; Plex still files {left} titles under the deleted "
+                        f"collection's filter key {key}"
                     )
         left = [
             row.title

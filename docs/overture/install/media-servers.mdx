@@ -64,7 +64,14 @@ domain.
 3. In each library, keep local images ahead of online image fetchers.
 
 To write themes for Jellyfin collections (BoxSets), mount Jellyfin's
-collections directory into Overture and name it in `COLLECTIONS_PATH`.
+collections directory into Overture and name it in `COLLECTIONS_PATH`, such
+as `MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH=/jellyfin/config/data/collections`
+for a mount at that path. Without it, Jellyfin collections get no theme while
+other servers still do. A managed collection whose BoxSet folder has no theme
+gets its theme on its next sync.
+
+Jellyfin lists a collection's members only to a user, so Overture asks for
+them as one of its administrators; keep at least one.
 
   </TabItem>
   <TabItem value="emby" label="Emby">

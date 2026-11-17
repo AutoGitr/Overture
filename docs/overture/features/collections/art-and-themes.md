@@ -94,7 +94,8 @@ A collection's automatic theme follows the **Automatic theme** setting, in the
 same order of OvertureDB and ThemerrDB the Assets run uses. New collection IDs
 imported by a full Sync also use the catalog theme order of an enabled
 incremental schedule covering their library. On Jellyfin, BoxSet themes are
-written to the server's `COLLECTIONS_PATH`.
+written to the server's `COLLECTIONS_PATH`; a sync writes the theme again to a
+BoxSet folder without one.
 
 An inactive collection's art and theme can be chosen; the sync that puts it
 back on the server sends them.

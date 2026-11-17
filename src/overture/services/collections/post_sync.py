@@ -182,7 +182,10 @@ class AutoAssets:
     async def _theme(self, synced: SyncedCollection) -> None:
         row, policy = synced.row, synced.policy
         if row.youtube_id:
-            if synced.new_copies and self._themes.unavailable() is None:
+            # A new copy, or a Jellyfin folder without the file, such as one
+            # made before its collections path was set, lacks the theme.
+            lacking = synced.new_copies or await self._themes.folder_lacks_theme(row)
+            if lacking and self._themes.unavailable() is None:
                 await self._themes.queue(
                     synced.collection_id,
                     SetCollectionThemeRequest(youtube_id=row.youtube_id),

@@ -22,6 +22,7 @@ lazy from ..downloads.collection_theme import (
     collection_theme_source,
     collection_theme_unavailable,
     collection_themes_unavailable,
+    folder_lacks_theme,
     theme_folders,
 )
 lazy from ..downloads.queue import JobTarget
@@ -50,6 +51,10 @@ class CollectionThemes:
         return collection_themes_unavailable(
             self._access.provider_registry.collection_providers()
         )
+
+    async def folder_lacks_theme(self, row: MediaCollection) -> bool:
+        """Whether a Jellyfin folder of the collection holds no theme file."""
+        return await folder_lacks_theme(row, self._access.provider_registry)
 
     async def status(self, collection_id: int) -> CollectionThemeStatusResponse:
         """Return the current theme status for a collection."""

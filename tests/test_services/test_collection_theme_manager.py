@@ -16,6 +16,7 @@ lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.services.downloads.art import DownloadArtHandler
+lazy from overture.services.downloads.collection_theme import folder_lacks_theme
 lazy from overture.services.downloads.events import DownloadEventPublisher
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
@@ -302,3 +303,29 @@ async def test_jellyfin_collection_theme_needs_the_collections_path(
     assert job.error_message == (
         "Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH to store collection themes"
     )
+
+
+async def test_a_jellyfin_folder_without_its_theme_file_is_found(
+    tmp_path: Path,
+    db_session: AsyncSession,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    folder = tmp_path / "Star Wars [boxset]"
+    folder.mkdir()
+    configure(app_config, collections_path=tmp_path)
+    await _listed_collection(database, "/config/data/collections/Star Wars [boxset]")
+    registry = NoopProviderRegistry(
+        JellyfinProvider(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        )
+    )
+    row = await CollectionRepository(db_session).get(1)
+    assert row is not None
+
+    assert await folder_lacks_theme(row, registry)
+    (folder / "theme.mp3").write_bytes(b"mp3")
+    assert not await folder_lacks_theme(row, registry)

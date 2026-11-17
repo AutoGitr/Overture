@@ -445,6 +445,8 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     assert "recommends regular, expected smart" in text
     assert "Genre 'horror' is offered as 'Horror'" in text
     assert "| image | Scary poster from the server |" in text
+    # A collection whose count differs names the conditions it previewed.
+    assert "regular: genre is 'Horror'" in text
     assert "HTTP 502" in text
     assert "Overture lacks items m3" in text
     assert "Overture lacks collections Elsewhere (c9, 1 members)" in text
@@ -931,6 +933,14 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
                     {"Id": "u2", "Name": "admin", "Policy": {"IsAdministrator": True}},
                 ]
                 return httpx2.Response(200, json=users)
+            case "/Items" if params.get("Ids") == "hidden":
+                # Jellyfin answers the item to a user only.
+                rows = (
+                    [{"Name": "Dune", "Type": "Movie", "Path": "/m/Dune.mkv"}]
+                    if params.get("UserId") == "u2"
+                    else []
+                )
+                return httpx2.Response(200, json={"Items": rows})
             case "/Items":
                 # The members show only to a user.
                 count = 2 if params.get("UserId") == "u2" else 0
@@ -957,6 +967,8 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
     library = cast("Any", type("L", (), {"key": "1"}))
     try:
         members = await jellyfin.members_to_a_user("box")
+        counted = await jellyfin.member_count("box")
+        hidden = await jellyfin.unlisted("hidden")
         # Plex lists collection 7 under the title it was made with.
         renamed = await plex.renamed(library, {"greats": "7", "kept": "8", "gone": "9"})
     finally:
@@ -964,4 +976,9 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
         await plex.client.aclose()
 
     assert members == "jellyfin lists 2 members to admin, and none to the API key alone"
+    # Overture lists a Jellyfin collection's members as an administrator.
+    assert counted == 2
+    assert hidden == (
+        "jellyfin answers hidden as Dune (Movie) at /m/Dune.mkv, to a user only"
+    )
     assert renamed == {"greats": "BFI Greats"}

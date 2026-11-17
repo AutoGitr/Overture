@@ -99,6 +99,23 @@ async def theme_folders(
     return folders
 
 
+async def folder_lacks_theme(
+    row: MediaCollection, provider_registry: ProviderRegistry
+) -> bool:
+    """Whether a Jellyfin folder of the collection holds no theme file.
+
+    A folder Overture cannot use is reported when a theme is stored, not here.
+    """
+    try:
+        folders = await theme_folders(row, provider_registry)
+    except DownloadError:
+        return False
+    for _, _, folder in folders:
+        if not await owned_thread((folder / THEME_FILENAME).is_file):
+            return True
+    return False
+
+
 async def collection_theme_unavailable(
     row: MediaCollection, *, provider_registry: ProviderRegistry
 ) -> str | None:
