@@ -13,6 +13,7 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.domain import ArtType, MediaType
 lazy from overture.media_servers.adapters import ServerSeason
+lazy from overture.repositories.copies import CopyRepository
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.sync import season_sync as module
 lazy from overture.services.sync.season_sync import SeasonSynchronizer
@@ -99,7 +100,13 @@ async def test_returns_immediately_when_item_has_no_id(
     )
 
     await synchronizer.upsert_seasons(
-        db_session, item, [ServerSeason(num=1)], {}, only_missing_art=False
+        db_session,
+        item,
+        [ServerSeason(num=1)],
+        {},
+        server_id=1,
+        lead=True,
+        only_missing_art=False,
     )
 
     assert probe_calls == []
@@ -118,7 +125,7 @@ async def test_creates_new_seasons_and_applies_art_urls_without_filesystem_io(
         media_type=MediaType.SHOW,
         folder_path="/media/Show One",
         server_item_id="show-1",
-        library_id="lib-1",
+        library_id="1:lib-1",
     )
     db_session.add(item)
     await db_session.commit()
@@ -142,7 +149,13 @@ async def test_creates_new_seasons_and_applies_art_urls_without_filesystem_io(
     ]
 
     await synchronizer.upsert_seasons(
-        db_session, item, season_data, {}, only_missing_art=False
+        db_session,
+        item,
+        season_data,
+        {},
+        server_id=1,
+        lead=True,
+        only_missing_art=False,
     )
 
     seasons = (
@@ -155,7 +168,8 @@ async def test_creates_new_seasons_and_applies_art_urls_without_filesystem_io(
     assert by_num[0].title == "Specials"
     assert by_num[0].file_count == 2
     assert by_num[0].folder_path is None
-    assert by_num[0].server_item_id == "srv-special"
+    copies = await CopyRepository(db_session).season_copies(by_num[0].id or 0)
+    assert copies == {1: "srv-special"}
 
     assert by_num[1].title == "Season 1"
     assert by_num[1].file_count == 5
@@ -181,7 +195,7 @@ async def test_updates_existing_season_without_reprobing_when_path_still_relativ
         media_type=MediaType.SHOW,
         folder_path="/media/Show Two",
         server_item_id="show-2",
-        library_id="lib-1",
+        library_id="1:lib-1",
     )
     db_session.add(item)
     await db_session.commit()
@@ -212,13 +226,16 @@ async def test_updates_existing_season_without_reprobing_when_path_still_relativ
             )
         ],
         {},
+        server_id=1,
+        lead=True,
         only_missing_art=True,
     )
 
     await db_session.refresh(existing)
     assert existing.title == "New Title"
     assert existing.file_count == 9
-    assert existing.server_item_id == server_item_id
+    copies = await CopyRepository(db_session).season_copies(existing.id or 0)
+    assert copies.get(1) == server_item_id
     # Path was already relative to the show root, so no reprobe was needed.
     assert probe_calls == []
 
@@ -236,7 +253,7 @@ async def test_leaves_folder_inspection_to_detached_refresh(
         media_type=MediaType.SHOW,
         folder_path="/media/Show Three",
         server_item_id="show-3",
-        library_id="lib-1",
+        library_id="1:lib-1",
     )
     db_session.add(item)
     await db_session.commit()
@@ -264,6 +281,8 @@ async def test_leaves_folder_inspection_to_detached_refresh(
         item,
         [ServerSeason(num=1, file_count=3)],
         {},
+        server_id=1,
+        lead=True,
         only_missing_art=False,
     )
 
@@ -284,7 +303,7 @@ async def test_skips_probe_when_item_has_no_folder_path(
         media_type=MediaType.SHOW,
         folder_path=None,
         server_item_id="show-4",
-        library_id="lib-1",
+        library_id="1:lib-1",
     )
     db_session.add(item)
     await db_session.commit()
@@ -299,6 +318,8 @@ async def test_skips_probe_when_item_has_no_folder_path(
         item,
         [ServerSeason(num=1, file_count=1)],
         {},
+        server_id=1,
+        lead=True,
         only_missing_art=False,
     )
 
@@ -318,7 +339,7 @@ async def test_seasons_missing_from_new_data_are_zeroed_out(
         media_type=MediaType.SHOW,
         folder_path="/media/Show Five",
         server_item_id="show-5",
-        library_id="lib-1",
+        library_id="1:lib-1",
     )
     db_session.add(item)
     await db_session.commit()
@@ -345,6 +366,8 @@ async def test_seasons_missing_from_new_data_are_zeroed_out(
         item,
         [ServerSeason(num=1, file_count=4)],
         {},
+        server_id=1,
+        lead=True,
         only_missing_art=False,
     )
 

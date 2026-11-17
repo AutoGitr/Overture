@@ -8,7 +8,7 @@ lazy from itertools import batched
 lazy from typing import Any, NamedTuple, cast
 
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import col, delete, func, select, update
+lazy from sqlmodel import and_, col, delete, func, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select
 
@@ -20,24 +20,27 @@ lazy from ..db.models.media_collection import (
     MediaCollectionMember,
 )
 lazy from ..db.models.media_item import MediaItem
+lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.term import MediaItemTerm, Term
 lazy from ..db.session import CHUNK_SIZE
-lazy from ..domain import MediaType, TermKind
+lazy from ..domain import MediaType, TermKind, library_parts
 
 
 class CollectionItem(NamedTuple):
-    """What collection rules read of a stored title.
+    """What collection rules read of a stored title in one library.
 
     A whole library is read for each rule, so this holds plain column values
-    rather than an entity per title.
+    rather than an entity per title. The facts its server keeps for its own
+    copy (its ID, play state, rating, when it was added and its labels) are
+    that copy's; the rest describe the title.
     """
 
     id: int
     media_type: MediaType
     title: str
     sort_title: str | None
-    library_id: str | None
-    server_item_id: str | None
+    library_id: str
+    server_item_id: str
     tmdb_id: int | None
     tvdb_id: int | None
     imdb_id: str | None
@@ -76,9 +79,28 @@ class CollectionItem(NamedTuple):
 #: Values converted between letting other requests run, for reads of whole kinds.
 _ROWS_PER_TURN = 10_000
 
+#: The fields of a :class:`CollectionItem` each server keeps for its own copy.
+_COPY_COLUMNS = {
+    "library_id": "library_id",
+    "server_item_id": "server_item_id",
+    "user_rating": "user_rating",
+    "plays": "plays",
+    "last_played_at": "last_played_at",
+    "unplayed": "unplayed",
+    "in_progress": "in_progress",
+    "server_added_at": "added_at",
+}
+
+#: The copy's fields a title outside every library of a collection lacks.
+_COPY_KEYS = frozenset({"library_id", "server_item_id"})
+
 #: The stored columns of a :class:`CollectionItem`, in its field order.
 _ITEM_COLUMNS = [
-    col(getattr(MediaItem, name)) for name in CollectionItem._fields if name != "terms"
+    col(getattr(MediaItemCopy, _COPY_COLUMNS[name]))
+    if name in _COPY_COLUMNS
+    else col(getattr(MediaItem, name))
+    for name in CollectionItem._fields
+    if name != "terms"
 ]
 
 
@@ -104,17 +126,24 @@ class TermSelection:
 
 
 def _select_items() -> Select[Any]:
-    return cast("Select[Any]", select(*_ITEM_COLUMNS))
+    return cast("Select[Any]", select(*_ITEM_COLUMNS)).join(
+        MediaItemCopy, col(MediaItemCopy.media_item_id) == col(MediaItem.id)
+    )
 
 
 def _in_library(media_type: MediaType, library_id: str) -> list[ColumnElement[bool]]:
-    """Match the active server items of one library."""
+    """Match the listed copies of one library, joined to their titles."""
     return [
-        col(MediaItem.media_type) == media_type,
-        col(MediaItem.library_id) == library_id,
+        col(MediaItemCopy.media_type) == media_type,
+        col(MediaItemCopy.library_id) == library_id,
+        col(MediaItemCopy.removed_at).is_(None),
         col(MediaItem.server_removed_at).is_(None),
-        col(MediaItem.server_item_id).is_not(None),
     ]
+
+
+def _labels(labels: Sequence[str], wanted: frozenset[str] | None) -> list[str]:
+    """A copy's labels, only those *wanted* case-folded when it says."""
+    return [label for label in labels if wanted is None or label.casefold() in wanted]
 
 
 class CollectionRepository:
@@ -166,7 +195,9 @@ class CollectionRepository:
             ).all()
         )
 
-    async def find_server(self, server_item_id: str) -> MediaCollection | None:
+    async def find_server(
+        self, server_id: int, server_item_id: str
+    ) -> MediaCollection | None:
         """Return the collection one of whose server copies this is."""
         return (
             await self.session.exec(
@@ -175,7 +206,10 @@ class CollectionRepository:
                     CollectionLibrary,
                     col(CollectionLibrary.collection_id) == col(MediaCollection.id),
                 )
-                .where(col(CollectionLibrary.server_item_id) == server_item_id)
+                .where(
+                    col(CollectionLibrary.server_id) == server_id,
+                    col(CollectionLibrary.server_item_id) == server_item_id,
+                )
             )
         ).first()
 
@@ -248,9 +282,24 @@ class CollectionRepository:
         )
 
     async def members(self, collection_id: int) -> list[CollectionItem]:
-        """Return the visible stored items a collection holds."""
+        """Return the visible stored items a collection holds, in its libraries.
+
+        A title holds one copy in each library, so it comes once for each of
+        the collection's libraries it is in, with that copy's facts; a member
+        in none of them comes once, without them.
+        """
+        in_collection = and_(
+            col(MediaItemCopy.media_item_id) == col(MediaItem.id),
+            col(MediaItemCopy.removed_at).is_(None),
+            col(MediaItemCopy.library_id).in_(
+                select(CollectionLibrary.library_id).where(
+                    col(CollectionLibrary.collection_id) == collection_id
+                )
+            ),
+        )
         stmt = (
-            _select_items()
+            cast("Select[Any]", select(*_ITEM_COLUMNS))
+            .outerjoin(MediaItemCopy, in_collection)
             .join(
                 MediaCollectionMember,
                 col(MediaCollectionMember.media_item_id) == col(MediaItem.id),
@@ -265,7 +314,17 @@ class CollectionRepository:
             )
         )
         return [
-            CollectionItem._make((*row, {}))
+            CollectionItem._make(
+                (
+                    *(
+                        value if value is not None or name not in _COPY_KEYS else ""
+                        for name, value in zip(
+                            CollectionItem._fields, row, strict=False
+                        )
+                    ),
+                    {},
+                )
+            )
             for row in (await self.session.exec(stmt)).all()
         ]
 
@@ -341,11 +400,12 @@ class CollectionRepository:
         self,
         collection_id: int,
         timestamp: datetime,
-        server_ids: Collection[str] | None = None,
+        copies: Collection[tuple[int, str]] | None = None,
     ) -> None:
-        """Record that the server no longer holds these copies, or any of them.
+        """Record that servers no longer hold these copies, or any of them.
 
-        The collection keeps its row and the members of the copies that remain.
+        *copies* names each by ``(server, server collection ID)``. The
+        collection keeps its row and the members of the copies that remain.
         """
         row = await self.get(collection_id)
         if row is None:
@@ -354,7 +414,7 @@ class CollectionRepository:
             part.library_id
             for part in row.libraries
             if part.server_item_id
-            and (server_ids is None or part.server_item_id in server_ids)
+            and (copies is None or (part.server_id, part.server_item_id) in copies)
         }
         for part in row.libraries:
             if part.library_id in gone:
@@ -369,7 +429,13 @@ class CollectionRepository:
                 )
                 .where(
                     col(MediaCollectionMember.collection_id) == collection_id,
-                    col(MediaItem.library_id).not_in(gone),
+                    col(MediaItem.id).in_(
+                        select(MediaItemCopy.media_item_id).where(
+                            col(MediaItemCopy.library_id).in_(
+                                {part.library_id for part in row.libraries} - gone
+                            )
+                        )
+                    ),
                 )
                 .order_by(col(MediaCollectionMember.position))
             )
@@ -404,12 +470,18 @@ class CollectionRepository:
                 )
             ).all()
         )
+        server = library_parts(replacement)
         for part in parts:
             if part.collection_id in holding:
                 await self.session.delete(part)
-            else:
-                part.library_id = replacement
-                self.session.add(part)
+                continue
+            part.library_id = replacement
+            if server is not None and server[0] != part.server_id:
+                # Another server makes its own copy at its next sync.
+                part.server_id = server[0]
+                part.server_item_id = None
+                part.server_path = None
+            self.session.add(part)
         for group in await self.groups():
             ids: list[str] = (group.generator or {}).get("library_ids") or []
             if library_id in ids:
@@ -419,6 +491,39 @@ class CollectionRepository:
                     "library_ids": list(dict.fromkeys(moved)),
                 }
                 self.session.add(group)
+
+    async def forget_unmanaged_on(self, server_ids: Collection[int]) -> None:
+        """Forget servers' copies of collections Overture does not manage.
+
+        A collection left with no copy anywhere is forgotten with them.
+        """
+        unmanaged = ~col(CollectionLibrary.collection_id).in_(
+            select(CollectionRule.collection_id)
+        )
+        emptied = set(
+            (
+                await self.session.exec(
+                    select(CollectionLibrary.collection_id).where(
+                        col(CollectionLibrary.server_id).in_(server_ids), unmanaged
+                    )
+                )
+            ).all()
+        )
+        await self.session.exec(
+            delete(CollectionLibrary).where(
+                col(CollectionLibrary.server_id).in_(server_ids), unmanaged
+            )
+        )
+        remaining = set(
+            (
+                await self.session.exec(
+                    select(CollectionLibrary.collection_id).where(
+                        col(CollectionLibrary.collection_id).in_(emptied)
+                    )
+                )
+            ).all()
+        )
+        await self.delete_ids(sorted(emptied - remaining))
 
     async def delete_ids(self, collection_ids: Sequence[int]) -> None:
         """Delete collections; their members go with them."""
@@ -451,24 +556,22 @@ class CollectionRepository:
         return updated
 
     async def item_ids_by_server_id(
-        self, server_ids: Collection[str]
+        self, server_id: int, server_item_ids: Collection[str]
     ) -> dict[str, int]:
-        """Return Overture item IDs by media-server item ID."""
+        """Return Overture item IDs by one server's item IDs."""
         found: dict[str, int] = {}
-        for batch in batched(server_ids, CHUNK_SIZE, strict=False):
+        for batch in batched(server_item_ids, CHUNK_SIZE, strict=False):
             rows = await self.session.exec(
-                select(MediaItem.server_item_id, MediaItem.id).where(
-                    col(MediaItem.server_item_id).in_(batch),
+                select(MediaItemCopy.server_item_id, MediaItemCopy.media_item_id)
+                .join(MediaItem, col(MediaItem.id) == col(MediaItemCopy.media_item_id))
+                .where(
+                    col(MediaItemCopy.server_id) == server_id,
+                    col(MediaItemCopy.server_item_id).in_(batch),
+                    col(MediaItemCopy.removed_at).is_(None),
                     col(MediaItem.server_removed_at).is_(None),
                 )
             )
-            found.update(
-                {
-                    server_id: item_id
-                    for server_id, item_id in rows.all()
-                    if server_id is not None and item_id is not None
-                }
-            )
+            found.update(rows.all())
         return found
 
     async def library_items(
@@ -484,6 +587,8 @@ class CollectionRepository:
         selection = terms or TermSelection()
         library = _in_library(media_type, library_id)
         values = await self._selected_terms(library, selection)
+        if TermKind.LABEL in selection.read:
+            await self._read_labels(library, selection, values)
         blank = dict.fromkeys(selection.read, ())
         rows = await self.session.exec(
             _select_items().where(*library).order_by(col(MediaItem.id))
@@ -506,10 +611,10 @@ class CollectionRepository:
                 )
             )
             for kind, values in selection.matching.items()
-            if kind not in selection.kinds
+            if kind not in selection.kinds and kind is not TermKind.LABEL
         ]
-        if selection.kinds:
-            reads.append(col(MediaItemTerm.kind).in_(selection.kinds))
+        if kinds := selection.kinds - {TermKind.LABEL}:
+            reads.append(col(MediaItemTerm.kind).in_(kinds))
         found: dict[int, dict[TermKind, list[str]]] = {}
         for read in reads:
             rows = await self.session.exec(
@@ -517,6 +622,9 @@ class CollectionRepository:
                     col(MediaItemTerm.media_item_id), col(MediaItemTerm.kind), Term.name
                 )
                 .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
+                .join(
+                    MediaItemCopy, col(MediaItemCopy.media_item_id) == col(MediaItem.id)
+                )
                 .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
                 .where(*library, read)
                 .order_by(
@@ -531,14 +639,47 @@ class CollectionRepository:
                 await asyncio.sleep(0)
         return found
 
+    async def _read_labels(
+        self,
+        library: Iterable[ColumnElement[bool]],
+        selection: TermSelection,
+        found: dict[int, dict[TermKind, list[str]]],
+    ) -> None:
+        """Read the selected labels each copy holds on its own server."""
+        wanted = (
+            None
+            if TermKind.LABEL in selection.kinds
+            else selection.matching[TermKind.LABEL]
+        )
+        rows = await self.session.exec(
+            select(col(MediaItemCopy.media_item_id), col(MediaItemCopy.labels))
+            .join(MediaItem, col(MediaItem.id) == col(MediaItemCopy.media_item_id))
+            .where(*library)
+        )
+        for item_id, labels in rows.all():
+            if held := _labels(labels, wanted):
+                found.setdefault(item_id, {})[TermKind.LABEL] = held
+
     async def term_counts(
         self, media_type: MediaType, library_id: str, kind: TermKind
     ) -> dict[str, int]:
         """How many of a library's items hold each value of *kind*."""
+        if kind is TermKind.LABEL:
+            counts: dict[str, int] = {}
+            rows = await self.session.exec(
+                select(col(MediaItemCopy.labels))
+                .join(MediaItem, col(MediaItem.id) == col(MediaItemCopy.media_item_id))
+                .where(*_in_library(media_type, library_id))
+            )
+            for labels in rows.all():
+                for label in dict.fromkeys(labels):
+                    counts[label] = counts.get(label, 0) + 1
+            return counts
         rows = await self.session.exec(
             select(Term.name, func.count())
             .select_from(MediaItemTerm)
             .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
+            .join(MediaItemCopy, col(MediaItemCopy.media_item_id) == col(MediaItem.id))
             .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
             .where(
                 *_in_library(media_type, library_id), col(MediaItemTerm.kind) == kind
@@ -561,10 +702,12 @@ class CollectionRepository:
                 col(MediaCollection.id) == col(MediaCollectionMember.collection_id),
             )
             .join(
-                MediaItem, col(MediaItem.id) == col(MediaCollectionMember.media_item_id)
+                MediaItemCopy,
+                col(MediaItemCopy.media_item_id)
+                == col(MediaCollectionMember.media_item_id),
             )
             .where(
-                col(MediaItem.library_id) == library_id,
+                col(MediaItemCopy.library_id) == library_id,
                 col(MediaCollection.last_synced_at).is_not(None),
             )
         )

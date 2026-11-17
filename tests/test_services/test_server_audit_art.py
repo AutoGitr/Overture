@@ -33,6 +33,7 @@ lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import stored_collection
 lazy from tests.http_mock import mock_client_factory
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
@@ -69,10 +70,10 @@ class ArtProvider:
 class ArtRegistry(NoopProviderRegistry):
     @override
     async def fetch_server_active_art_url(
-        self, server_id: str, art_type: ArtType
+        self, server_id: int, server_item_id: str, art_type: ArtType
     ) -> str | None:
-        assert (server_id, art_type) == ("s1", ArtType.POSTER)
-        return self.provider.url
+        assert (server_id, server_item_id, art_type) == (1, "s1", ArtType.POSTER)
+        return self.get(server_id).url
 
 
 @pytest.fixture
@@ -99,7 +100,7 @@ async def _audit(
         (folder / "poster.jpg").write_bytes(local)
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 media_type=MediaType.MOVIE,
                 title="Alien",

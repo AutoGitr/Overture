@@ -15,24 +15,32 @@ A copy of
 [`.env.example`](https://github.com/AutoGitr/Overture/blob/main/.env.example)
 is the quickest start.
 
-## Media server and services
+## Media servers and services
 
-| Variable                    | Required        | Default | Description                                                                                                                           |
-| --------------------------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `MEDIA_SERVER`              | Yes             |         | `plex`, `jellyfin`, `emby` or `none`                                                                                                  |
-| `MEDIA_SERVER_URL`          | Unless `none`   |         | Server address with protocol, port and any base path                                                                                  |
-| `MEDIA_SERVER_API_KEY`      | Unless `none`   |         | Server token or API key                                                                                                               |
-| `MEDIA_SERVER_VERIFY_TLS`   | No              | `true`  | Set to `false` only for a self-signed certificate; keep it on for Plex                                                                |
-| `JELLYFIN_COLLECTIONS_PATH` | No              |         | Local mount of Jellyfin's collections directory, used to write BoxSet themes                                                          |
-| `TMDB_API_KEY`              | No              |         | Enables TMDB artwork and title/collection search directly in the sidebar; recommended for Plex                                        |
-| `MDBLIST_API_KEY`           | No              |         | Enables dynamic collection membership from MDBList JSON lists; kept on the backend                                                    |
-| `RADARR_URL`                | No              |         | Radarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:7878`); enables Radarr tag collection builders           |
-| `RADARR_API_KEY`            | If using Radarr |         | Radarr API key; kept on the backend                                                                                                   |
-| `RADARR_VERIFY_TLS`         | No              | `true`  | Set to `false` only for self-signed certificates                                                                                      |
-| `SONARR_URL`                | No              |         | Sonarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:8989`); enables Sonarr tag collection builders           |
-| `SONARR_API_KEY`            | If using Sonarr |         | Sonarr API key; kept on the backend                                                                                                   |
-| `SONARR_VERIFY_TLS`         | No              | `true`  | Set to `false` only for self-signed certificates                                                                                      |
-| `NOTIFY_URL`                | No              |         | Discord, Slack, Telegram, Gotify, ntfy or Apprise address that hears when runs end; see [Notifications](../features/notifications.md) |
+`<NAME>` is a name from `MEDIA_SERVERS` in capitals, so `MEDIA_SERVERS=Plex,Living_Room`
+reads `MEDIA_SERVER_PLEX_URL` and `MEDIA_SERVER_LIVING_ROOM_URL`. One server
+can instead be set with `MEDIA_SERVER` (its type), `MEDIA_SERVER_URL`,
+`MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS`, `MEDIA_SERVER_PATH_MAP` and
+`JELLYFIN_COLLECTIONS_PATH`. See [Media servers](media-servers.mdx).
+
+| Variable                               | Required        | Default | Description                                                                                                                           |
+| -------------------------------------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `MEDIA_SERVERS`                        | Yes             |         | Names of your media servers, comma-separated, the lead first; `none` for no server                                                    |
+| `MEDIA_SERVER_<NAME>_TYPE`             | For each server |         | `plex`, `jellyfin` or `emby`                                                                                                          |
+| `MEDIA_SERVER_<NAME>_URL`              | For each server |         | Server address with protocol, port and any base path                                                                                  |
+| `MEDIA_SERVER_<NAME>_API_KEY`          | For each server |         | Server token or API key                                                                                                               |
+| `MEDIA_SERVER_<NAME>_VERIFY_TLS`       | No              | `true`  | Set to `false` only for a self-signed certificate; keep it on for Plex                                                                |
+| `MEDIA_SERVER_<NAME>_PATH_MAP`         | No              |         | `server_path=local_path` pairs, comma-separated, for folders the server sees at another path                                          |
+| `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH` | No              |         | Jellyfin only: local mount of its collections directory, used to write BoxSet themes                                                  |
+| `TMDB_API_KEY`                         | No              |         | Enables TMDB artwork and title/collection search directly in the sidebar; recommended for Plex                                        |
+| `MDBLIST_API_KEY`                      | No              |         | Enables dynamic collection membership from MDBList JSON lists; kept on the backend                                                    |
+| `RADARR_URL`                           | No              |         | Radarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:7878`); enables Radarr tag collection builders           |
+| `RADARR_API_KEY`                       | If using Radarr |         | Radarr API key; kept on the backend                                                                                                   |
+| `RADARR_VERIFY_TLS`                    | No              | `true`  | Set to `false` only for self-signed certificates                                                                                      |
+| `SONARR_URL`                           | No              |         | Sonarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:8989`); enables Sonarr tag collection builders           |
+| `SONARR_API_KEY`                       | If using Sonarr |         | Sonarr API key; kept on the backend                                                                                                   |
+| `SONARR_VERIFY_TLS`                    | No              | `true`  | Set to `false` only for self-signed certificates                                                                                      |
+| `NOTIFY_URL`                           | No              |         | Discord, Slack, Telegram, Gotify, ntfy or Apprise address that hears when runs end; see [Notifications](../features/notifications.md) |
 
 ## Sign-in
 

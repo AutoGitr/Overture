@@ -11,6 +11,7 @@ lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
+lazy from tests.media_servers import configure, media_client, server_of
 lazy from tests.provider_specs import ProviderSpec
 
 
@@ -25,9 +26,9 @@ async def test_media_browser_consumed_operations(
     server_type = ServerType.EMBY if emby else ServerType.JELLYFIN
     prefix = "/reverse/emby" if emby else "/reverse"
     spec = ProviderSpec(server_type, prefix)
-    app_config.MEDIA_SERVER = server_type
-    app_config.MEDIA_SERVER_URL = "https://server.test/reverse"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("test-token")
+    configure(app_config, type=server_type)
+    configure(app_config, url="https://server.test/reverse")
+    configure(app_config, api_key=SecretStr("test-token"))
     client: JellyfinClient | EmbyClient
     library = {"ItemId": "library", "Name": "Movies", "CollectionType": "movies"}
     movie = {
@@ -133,7 +134,7 @@ async def test_media_browser_consumed_operations(
         )
 
     factory, transport = mock_client_factory(handler)
-    client = client_type(app_config=app_config, client_factory=factory)
+    client = media_client(client_type, app_config, client_factory=factory)
 
     try:
         assert await client.test_connection()
@@ -181,9 +182,9 @@ async def test_plex_consumed_operations(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
     spec = ProviderSpec("plex", "/reverse")
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = "https://server.test/reverse"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("test-token")
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url="https://server.test/reverse")
+    configure(app_config, api_key=SecretStr("test-token"))
     row = {
         "ratingKey": "1",
         "title": "Movie",
@@ -271,7 +272,9 @@ async def test_plex_consumed_operations(
         return spec.response(request, template)
 
     factory, transport = mock_client_factory(handler)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
 
     try:

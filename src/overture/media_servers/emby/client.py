@@ -33,7 +33,7 @@ class EmbyClient(JellyfinClient):
     @override
     def web_base_url(self) -> str:
         """Return the Emby server root, accepting URLs ending in ``/emby``."""
-        base = self._app_config.MEDIA_SERVER_URL.rstrip("/")
+        base = self.server.url.rstrip("/")
         return base[:-5] if base.lower().endswith("/emby") else base
 
     @property
@@ -46,9 +46,7 @@ class EmbyClient(JellyfinClient):
     @override
     def auth_headers(self) -> dict[str, str]:
         """Authenticate using Emby's API-key header."""
-        return {
-            "X-Emby-Token": self._app_config.MEDIA_SERVER_API_KEY.get_secret_value()
-        }
+        return {"X-Emby-Token": self.server.api_key.get_secret_value()}
 
     @override
     def query_params(self, **params: str) -> dict[str, str]:

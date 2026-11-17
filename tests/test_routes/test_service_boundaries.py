@@ -40,6 +40,7 @@ lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopYoutube,
@@ -96,7 +97,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         catalog=catalog,
     )
     async with database.write_session() as session:
-        item = MediaItem(
+        item = served_item(
             id=1,
             title="Bound movie",
             media_type=MediaType.MOVIE,
@@ -141,7 +142,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         sources = await client.get("/api/library/items/1/art/poster/sources")
         assert sources.status_code == 200
         assert (
-            sources.json()["sources"]["plex"][0]["url"]
+            sources.json()["sources"]["Plex"][0]["url"]
             == "https://images.test/poster.jpg"
         )
         assert (
@@ -291,7 +292,7 @@ async def test_sync_http_timezone_matches_scheduler_in_winter_and_summer(
         "name": "Nightly",
         "enabled": True,
         "cron_expression": "0 4 * * *",
-        "config": {"mode": "full", "library_ids": ["movies"]},
+        "config": {"mode": "full", "library_ids": ["1:movies"]},
     }
     async with httpx2.AsyncClient(
         transport=httpx2.ASGITransport(app=app),

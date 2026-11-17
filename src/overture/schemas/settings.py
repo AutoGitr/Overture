@@ -3,7 +3,7 @@
 lazy from datetime import datetime
 lazy from typing import Self
 
-lazy from pydantic import model_validator
+lazy from pydantic import Field, model_validator
 lazy from sqlmodel._compat import SQLModelConfig
 
 lazy from ..db.models.settings import AppSettingsBase
@@ -17,12 +17,12 @@ lazy from ..domain import (
     CollectionMode,
     CollectionOrder,
     CollectionPosterStyle,
-    ServerType,
     SyncMode,
     TmdbLanguageFilter,
     Workflow,
 )
 lazy from .base import StrictBaseModel
+lazy from .media_server import MediaServerRead
 
 
 class AppSettingsRead(AppSettingsBase):
@@ -39,22 +39,25 @@ class AppSettingsRead(AppSettingsBase):
     )
 
     updated_at: datetime | None = None
-    media_server: ServerType | None = None
+    #: The configured media servers, the lead first; none under MEDIA_SERVERS=none.
+    media_servers: list[MediaServerRead] = Field(default_factory=list[MediaServerRead])
     tmdb_configured: bool = False
     mdblist_configured: bool = False
     radarr_configured: bool = False
     sonarr_configured: bool = False
-    #: The media server has collections Overture can manage.
+    #: A configured media server has collections Overture can manage.
     collections_supported: bool = False
-    #: Why collection themes cannot be stored, when they cannot.
+    #: Why no configured server can store collection themes, when none can.
     collection_themes_unavailable: str | None = None
     art_download_workers: int = 1
     theme_download_workers: int = 1
 
 
 class ConnectivityStatusResponse(StrictBaseModel):
-    """Whether the configured media server and TMDB answer."""
+    """Whether the configured media servers and TMDB answer."""
 
+    #: Every configured media server answered; each one's own state arrives
+    #: as a status event.
     media_server: bool
     tmdb: bool
 

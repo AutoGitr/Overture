@@ -4,6 +4,7 @@ lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import CollectionFiltering, CollectionKind
 lazy from ...schemas.collections import CollectionOptions
+lazy from ...utils.collection_fields import kept_order
 lazy from ...utils.collection_formats import format_sort_title, format_summary
 lazy from ...utils.errors import PublicServiceError
 lazy from .access import CollectionAccess
@@ -176,20 +177,33 @@ class CollectionDisplay:
     async def push(
         self, row: MediaCollection, options: CollectionOptions, rule: RuleOrPolicy
     ) -> CollectionOptions:
-        """Send the effective options to every server copy and return them."""
+        """Send the effective options to every server copy and return them.
+
+        Each server keeps what it can: the order falls back to the default
+        where it cannot keep it, and only Plex copies are smart.
+        """
         effective, policy = await self._resolve(row, options, rule)
         for copy in self._access.copies(row):
             if copy.server_item_id is None:
                 continue
-            await self._access.provider().update_collection_details(
+            provider = self._access.provider(copy.server_id)
+            smart = row.kind is CollectionKind.SMART and self._access.plex(
+                copy.lead.library_id
+            )
+            await provider.update_collection_details(
                 copy.server_item_id,
                 library_id=copy.lead.library_id,
                 title=effective.title,
                 summary=effective.summary,
                 sort_title=effective.sort_title,
                 mode=options.collection_mode or policy.collection_mode,
-                order=effective.order_type,
-                smart=row.kind is CollectionKind.SMART,
+                order=kept_order(
+                    effective.order_type,
+                    provider.server_type,
+                    copy.lead.media_type,
+                    smart=smart,
+                ),
+                smart=smart,
                 visible_home=effective.visible_home,
                 visible_shared=effective.visible_shared,
                 visible_library=effective.visible_library,

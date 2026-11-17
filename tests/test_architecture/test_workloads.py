@@ -10,7 +10,6 @@ lazy from pydantic import SecretStr
 lazy from sqlalchemy.ext.asyncio import AsyncEngine
 
 lazy from overture.config import Settings
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     CollectionOrder,
@@ -39,6 +38,7 @@ lazy from overture.services.removal import AssetRemover
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import library_rule
+lazy from tests.media_servers import TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopDownloads,
@@ -92,14 +92,14 @@ class Bed:
         self.next_id += count
         async with self.database.write_session() as session:
             session.add_all(
-                MediaItem(
+                served_item(
                     id=item_id,
                     media_type=MediaType.MOVIE,
                     title=f"Title {item_id}",
                     year=2000,
                     tmdb_id=item_id,
                     server_item_id=f"server-{item_id}",
-                    library_id="movies",
+                    library_id="1:movies",
                 )
                 for item_id in range(first, first + count)
             )
@@ -145,7 +145,7 @@ async def bed(
     provider = Provider(app_config)
     async with database.write_session() as session:
         await LibraryRepository(session).record(
-            await provider.get_sections(), utc_now()
+            TEST_SERVER_ID, await provider.get_sections(), utc_now()
         )
         await session.merge(settings_row())
     remover = make_remover(provider, app_config=app_config, database=database)
@@ -200,7 +200,7 @@ async def _preview(bed: Bed) -> object:
 
 async def _actors(bed: Bed) -> object:
     return await bed.service.discovery.field_values(
-        MediaType.MOVIE, "movies", FilterField.ACTOR
+        MediaType.MOVIE, "1:movies", FilterField.ACTOR
     )
 
 
@@ -278,7 +278,7 @@ def _listing(count: int) -> list[ServerItem]:
             media_type=MediaType.MOVIE,
             poster_url=None,
             background_url=None,
-            library_id="movies",
+            library_id="1:movies",
             actors=tuple(f"Actor {index % 40 + n}" for n in range(30)),
             genres=("Drama", "Action"),
         )
@@ -300,7 +300,7 @@ async def test_resyncing_an_unchanged_title_costs_the_same_at_any_size(
     await sync_full(reconciler, large)
 
     with recording(isolated_engine) as few:
-        await sync_full(reconciler, small, library_ids=["other"])
+        await sync_full(reconciler, small, library_ids=["1:other"])
     with recording(isolated_engine) as many:
         await sync_full(reconciler, large)
 

@@ -178,7 +178,7 @@ class CollectionSets:
                 )
         for value in sorted(set(members) - set(selected)):
             row = members[value]
-            if not row.server_ids:
+            if not row.copies:
                 continue
             try:
                 await self._editor.withhold(row.id or 0)
@@ -228,8 +228,8 @@ class CollectionSets:
         with a collection in *existing* stays, for the minimum policy to
         decide. Values only Plex knows are counted by Plex.
         """
-        self._validator.generator(media_type, generator)
-        server = self._access.server_type
+        self._validator.generator(library_id, media_type, generator)
+        server = self._access.server_type(library_id)
         if smart_only_dimension(generator.dimension, server, media_type):
             counts = await self._plex_counts(media_type, generator, library_id)
         else:
@@ -283,7 +283,7 @@ class CollectionSets:
         plex = FIELDS[field].plex if field is not None else None
         if field is None or plex is None:
             raise PublicServiceError(422, "Plex cannot count this dimension")
-        provider = self._access.provider()
+        provider = self._access.library_provider(library_id)
         titles = sorted(
             {
                 plex.value_of(key, title)

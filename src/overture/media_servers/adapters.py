@@ -73,9 +73,13 @@ def video_resolution(width: int | None) -> str | None:
 class ServerSection:
     """One movie or show library on the media server."""
 
+    #: The server's own key, which only its provider uses.
     key: str
     title: str
     media_type: MediaType
+    #: Overture's ID of the library, which names the server as well; the
+    #: provider sets it from *key*.
+    library_id: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -126,7 +130,9 @@ class ServerItem:
     media_type: MediaType
     poster_url: str | None
     background_url: str | None
+    #: Overture's ID of the library listing it.
     library_id: str = ""
+    #: Where Overture sees the item's folder.
     folder_path: str | None = None
     directors: tuple[str, ...] = ()
     #: Metadata version of a movie listed without its directors; the sync
@@ -202,6 +208,8 @@ class SyncItemResult:
     created: bool = False
     #: What changed on an existing item, in words for the sync log.
     changes: tuple[str, ...] = ()
+    #: Libraries the title was held in before, which its library may succeed.
+    left_libraries: tuple[str, ...] = ()
 
 
 #: Called after the shared tally is updated, with the current item's log entry.

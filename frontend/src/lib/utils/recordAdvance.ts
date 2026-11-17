@@ -105,9 +105,9 @@ export function handleRecordSelectionAdvance(
   );
 }
 
-/** A library collection; Emby keeps no collection themes. */
+/** A library collection; it has no theme where no server keeps collection themes. */
 export function collectionRecord(row: CollectionRead): AdvanceRecord {
-  const themes = settingsState.current.media_server !== "emby";
+  const themes = settingsState.current.collection_themes_unavailable === null;
   return {
     key: collectionKey(row.id),
     slots: [

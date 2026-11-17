@@ -55,7 +55,7 @@ class RealtimeStream {
     projectRealtimeSnapshot(snapshot, continuing);
     refreshRemovedDownloadTargets(previous, this.downloads);
     storeCatalogStatus(snapshot.catalog_status);
-    mediaServerState.store(snapshot.media_server);
+    mediaServerState.storeAll(snapshot.media_servers);
     return true;
   }
 

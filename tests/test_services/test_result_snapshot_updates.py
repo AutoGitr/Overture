@@ -151,9 +151,9 @@ def test_server_audit_snapshot_marks_fix_outcomes_on_their_rows() -> None:
     patched = patch_audit_snapshot(
         payload,
         {
-            ("art", 1, None, "poster"): VERIFIED,
-            ("art", 1, None, "background"): PENDING,
-            ("theme", 2, "server-2", "theme-2"): RowFix(error="Item not found"),
+            ("art", 1, None, "poster", None): VERIFIED,
+            ("art", 1, None, "background", None): PENDING,
+            ("theme", 2, "server-2", "theme-2", None): RowFix(error="Item not found"),
         },
     )
 
@@ -199,6 +199,7 @@ async def test_server_audit_rejects_destructive_targets_not_in_the_snapshot(
                 snapshot_finished_at="finish",
                 themes=[
                     ServerAuditThemeDeleteTarget(
+                        server_id=1,
                         item_id=2,
                         server_item_id="forged-server",
                         theme_id="forged-theme",

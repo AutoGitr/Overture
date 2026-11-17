@@ -20,7 +20,6 @@ lazy from ..schemas.catalog import (
 )
 lazy from ..utils.time import utc_now
 
-SYNC_SERVER_TASK_NAME = "sync_server"
 BACKUP_TASK_NAME = "backup"
 CATALOG_TASK_NAME = "catalog"
 
@@ -30,17 +29,6 @@ DEFAULT_CATALOG_CRON = "0 0 * * *"
 
 class SchedulePayload(BaseModel):
     """Base for the JSON payload stored alongside a schedule."""
-
-
-class SyncServerPayload(SchedulePayload):
-    """The media server the saved sync schedules were written against.
-
-    This entry never runs: it has no cron. Named sync schedules carry library
-    IDs and checkpoints that only mean something on the server that issued
-    them, so sync remembers that server here to notice a switch.
-    """
-
-    last_media_server: str | None = None
 
 
 class BackupPayload(SchedulePayload):
@@ -79,7 +67,6 @@ class Schedule[PayloadT: SchedulePayload]:
     timezone: str = "UTC"
 
 
-SYNC_SERVER_SCHEDULE = ScheduleSpec(SYNC_SERVER_TASK_NAME, SyncServerPayload)
 BACKUP_SCHEDULE = ScheduleSpec(
     BACKUP_TASK_NAME, BackupPayload, DEFAULT_BACKUP_CRON, default_enabled=True
 )

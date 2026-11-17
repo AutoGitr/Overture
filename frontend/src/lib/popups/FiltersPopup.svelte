@@ -454,7 +454,7 @@
                 <CheckboxList
                   options={libraries.map((library) => ({
                     value: library.id,
-                    label: library.title,
+                    label: settingsState.libraryLabel(library),
                     count: library.count,
                   }))}
                   selected={filters.libraryIds}

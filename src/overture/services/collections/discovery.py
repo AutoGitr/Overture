@@ -1,12 +1,14 @@
 """What criteria the media server can evaluate, and what they select."""
 
 lazy from collections import Counter
+lazy from collections.abc import Iterable, Sequence
 
 lazy from ...config import Settings
 lazy from ...domain import (
     CollectionOrder,
     FilterField,
     MediaType,
+    ServerType,
     SetDimension,
     TmdbChart,
 )
@@ -56,6 +58,12 @@ def _by_label(
     return option.label.casefold()
 
 
+def _union(orders: Iterable[Sequence[CollectionOrder]]) -> list[CollectionOrder]:
+    """Every order any of the lists offers, in the order orders are declared."""
+    offered = {order for listed in orders for order in listed}
+    return [order for order in CollectionOrder if order in offered]
+
+
 class CollectionDiscovery:
     """Describe the fields, sources and sets on offer, and preview criteria."""
 
@@ -74,14 +82,27 @@ class CollectionDiscovery:
         self._sources = sources
         self._app_config = app_config
 
-    def capabilities(self, media_type: MediaType) -> CollectionCapabilities:
-        """Describe the fields, sources, orders and sets the server supports."""
-        server = self._access.server_type
-        plex = self._access.plex
+    def capabilities(
+        self, media_type: MediaType, library_ids: Sequence[str] | None = None
+    ) -> CollectionCapabilities:
+        """Describe what collections of these libraries can do on their servers.
+
+        Without libraries it describes every configured server. A collection
+        spanning several servers is offered what any of them supports; the
+        others fall back to their nearest.
+        """
+        servers = sorted(
+            self._access.server_types(library_ids)
+            if library_ids
+            else self._access.configured_types()
+        )
+        plex = ServerType.PLEX in servers
         tmdb = self._app_config.tmdb_configured
         return CollectionCapabilities(
-            server_type=server,
-            spans_libraries=self._access.spans_libraries,
+            server_types=servers,
+            spans_libraries=all(
+                self._access.spans_libraries(server) for server in servers
+            ),
             smart=plex,
             visibility=plex,
             member_labels=plex,
@@ -91,11 +112,13 @@ class CollectionDiscovery:
                 for chart in TmdbChart
                 if tmdb and chart_available(media_type, chart)
             ],
-            orders=available_orders(server, media_type, smart=False),
-            smart_orders=available_orders(server, media_type, smart=True)
+            orders=_union(
+                available_orders(server, media_type, smart=False) for server in servers
+            ),
+            smart_orders=available_orders(ServerType.PLEX, media_type, smart=True)
             if plex
             else [],
-            fields=sorted(self._fields(media_type), key=_by_label),
+            fields=sorted(self._fields(media_type, servers), key=_by_label),
             sources=sorted(
                 (
                     CollectionSourceRead(
@@ -115,13 +138,24 @@ class CollectionDiscovery:
                         dimension=dimension,
                         label=spec.label,
                         title_format=spec.title_format,
-                        smart_only=smart_only_dimension(dimension, server, media_type),
+                        smart_only=all(
+                            smart_only_dimension(dimension, server, media_type)
+                            for server in servers
+                        ),
                         strip_prefix=spec.strip_prefix,
                         strip_suffix=spec.strip_suffix,
                         order_type=spec.order_type,
                     )
                     for dimension, spec in DIMENSIONS.items()
-                    if dimension_available(dimension, server, media_type, smart=plex)
+                    if any(
+                        dimension_available(
+                            dimension,
+                            server,
+                            media_type,
+                            smart=server is ServerType.PLEX,
+                        )
+                        for server in servers
+                    )
                     and (
                         tmdb
                         or (
@@ -134,29 +168,37 @@ class CollectionDiscovery:
             ),
         )
 
-    def _fields(self, media_type: MediaType) -> list[CollectionFieldRead]:
-        """The fields collections of the media type can test on the server."""
-        server = self._access.server_type
+    def _fields(
+        self, media_type: MediaType, servers: Sequence[ServerType]
+    ) -> list[CollectionFieldRead]:
+        """The fields collections of the media type can test on any of *servers*."""
         tmdb = self._app_config.tmdb_configured
         found: list[CollectionFieldRead] = []
         for field, spec in FIELDS.items():
-            local = field_available(field, server, media_type, smart=False) and (
-                tmdb or not spec.tmdb
+            local_on = [
+                server
+                for server in servers
+                if field_available(field, server, media_type, smart=False)
+                and (tmdb or not spec.tmdb)
+            ]
+            tested = ServerType.PLEX in servers and plex_tests(
+                field, ServerType.PLEX, media_type
             )
-            tested = plex_tests(field, server, media_type)
-            smart = self._access.plex and (local or tested)
-            if not (local or smart):
+            smart = ServerType.PLEX in servers and (
+                ServerType.PLEX in local_on or tested
+            )
+            if not (local_on or smart):
                 continue
             found.append(
                 CollectionFieldRead(
                     field=field,
-                    label=field_label(field, server),
+                    label=field_label(field, next(iter(local_on or servers))),
                     kind=spec.kind,
                     operators=list(field_operators(field, smart=False)),
                     smart_operators=list(field_operators(field, smart=True))
                     if smart
                     else [],
-                    local=local,
+                    local=bool(local_on),
                     smart=smart,
                     labelled=smart and not tested,
                 )
@@ -188,7 +230,7 @@ class CollectionDiscovery:
         Plex, without counts. *query* narrows them to values containing it,
         and for TMDB keywords adds those TMDB knows that no title has yet.
         """
-        server = self._access.server_type
+        server = self._access.server_type(library_id)
         counts: Counter[str] = Counter()
         if field_available(field, server, media_type, smart=False):
             if (kind := TERM_FIELDS.get(field)) is not None:
@@ -215,11 +257,12 @@ class CollectionDiscovery:
                 or plex is None
             ):
                 raise PublicServiceError(422, "The media server cannot list this field")
+            provider = self._access.library_provider(library_id)
             counts.update(
                 dict.fromkeys(
                     (
                         plex.value_of(key, title)
-                        for key, title in await self._access.provider().filter_choices(
+                        for key, title in await provider.filter_choices(
                             library_id, media_type, plex.key_for(media_type)
                         )
                     ),
@@ -246,21 +289,26 @@ class CollectionDiscovery:
     async def recommend(self, body: CollectionKindRequest) -> KindRecommendation | None:
         """Return the collection kind that suits a rule, as it is being edited.
 
-        The kind is the collection's, so libraries that disagree give no advice.
+        The kind is the collection's, so Plex libraries that disagree give no
+        advice.
         """
         rule = body.rule
         types = await self._access.library_types(e.library_id for e in rule.libraries)
         async with self._access.database.read_session() as session:
             policy = await self._access.policy(session, None, rule)
+        # The kind matters on Plex alone: elsewhere a collection is regular.
         advice = [
             recommend_kind(
                 library.criteria,
-                self.capabilities(types[library.library_id]),
+                self.capabilities(types[library.library_id], [library.library_id]),
                 media_type=types[library.library_id],
                 order=policy.order_type,
             )
             for library in rule.libraries
+            if self._access.plex(library.library_id)
         ]
+        if not advice:
+            return None
         first = advice[0]
         return (
             first
@@ -297,8 +345,9 @@ class CollectionDiscovery:
         """Plex counts a smart collection's members; Overture any other's."""
         library_id, media_type = scope.library_id, scope.media_type
         criteria, items = scope.criteria, scope.items
-        self._validator.criteria(media_type, criteria, smart=rule.smart)
-        server = self._access.server_type
+        self._validator.criteria(library_id, media_type, criteria, smart=rule.smart)
+        server = self._access.server_type(library_id)
+        smart = rule.smart and server is ServerType.PLEX
         local = all(
             field_available(condition.field, server, media_type, smart=False)
             for condition in criteria.field_conditions()
@@ -310,8 +359,8 @@ class CollectionDiscovery:
             labelled_field(condition.field, server, media_type)
             for condition in criteria.field_conditions()
         )
-        if rule.smart and plex_native:
-            total, ids = await self._access.provider().find_matching(
+        if smart and plex_native:
+            total, ids = await self._access.library_provider(library_id).find_matching(
                 library_id,
                 media_type,
                 await self._membership.plex_filter(
@@ -325,7 +374,7 @@ class CollectionDiscovery:
                 member_count=min(total, rule.limit or total),
                 members=[by_server_id[i] for i in ids if i in by_server_id],
             )
-        if rule.smart and not local:
+        if smart and not local:
             raise PublicServiceError(
                 422,
                 "Save the collection to preview Plex filters with lists or "

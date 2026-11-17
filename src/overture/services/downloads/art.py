@@ -1,5 +1,6 @@
 """Artwork download handling."""
 
+lazy from collections.abc import Collection
 lazy from urllib.parse import urlsplit
 
 lazy import httpx2
@@ -9,6 +10,7 @@ lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
+lazy from ...domain import ServerType
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.seasons import SeasonRepository
@@ -69,7 +71,8 @@ class DownloadArtHandler:
                 "Download blocked: target URL resolves to a private address"
             )
 
-        headers = self.provider_registry.provider.get_download_headers(target_url)
+        server = self.provider_registry.for_url(target_url)
+        headers = {} if server is None else server.get_download_headers(target_url)
         await progress.enter("downloading")
         try:
             return await fetch_image_bytes(
@@ -86,9 +89,8 @@ class DownloadArtHandler:
         except RemoteImageError as exc:
             raise DownloadError(str(exc)) from exc
         except httpx2.HTTPError as exc:
-            health = self.provider_registry.health.current
-            if trusted_media_server and health.down:
-                raise DownloadError(health.message) from exc
+            if server is not None and server.health.current.down:
+                raise DownloadError(server.health.current.message) from exc
             detail = str(exc) or type(exc).__name__
             raise DownloadError(
                 f"Could not reach {urlsplit(target_url).hostname}: {detail}"
@@ -123,9 +125,16 @@ class DownloadArtHandler:
         return owner
 
     async def target(
-        self, job: DownloadJob, item: MediaItem, prepared: PreparedDownload
+        self,
+        job: DownloadJob,
+        item: MediaItem,
+        prepared: PreparedDownload,
+        naming: Collection[ServerType],
     ) -> DownloadTarget:
         """Return where *prepared* goes for the item and season as they are now.
+
+        *naming* are the kinds of server holding the item, whose file names it
+        is written under.
 
         Raises:
             DownloadError: When the item has no folder or the season is gone.
@@ -134,15 +143,16 @@ class DownloadArtHandler:
             raise DownloadError("No art type specified")
         folder_path = require_folder_path(item)
         season = await self._season(job, item)
-        path = await owned_thread(
-            self.asset_storage.resolve_art_path,
+        paths = await owned_thread(
+            self.asset_storage.resolve_art_paths,
             folder_path=folder_path,
             art_type=job.art_type,
             ext=prepared.extension,
             season_folder_path=season.folder_path if season else None,
             season_num=season.season_num if season else None,
+            naming=naming,
         )
-        return DownloadTarget(path=path, trusted_root=folder_path)
+        return DownloadTarget(paths=tuple(paths), trusted_root=folder_path)
 
     async def download(
         self,

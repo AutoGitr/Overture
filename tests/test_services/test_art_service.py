@@ -12,6 +12,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture import protocols
 lazy from overture.config import Settings
 lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.models.media_item_copy import SeasonCopy
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, ServerType
 lazy from overture.integrations.proxy import ProxyClientManager
@@ -37,6 +38,7 @@ lazy from tests.factories import (
     MediaItemFactory,
     SeasonFactory,
 )
+lazy from tests.media_servers import TEST_SERVER_ID
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
@@ -188,7 +190,7 @@ async def test_art_target_looks_up_season_for_season_poster(
     app_config: Settings,
 ) -> None:
     item = media_item_factory(
-        id=None, media_type=MediaType.SHOW, server_item_id="s1", library_id="l1"
+        id=None, media_type=MediaType.SHOW, server_item_id="s1", library_id="1:l1"
     )
     db_session.add(item)
     await db_session.commit()
@@ -253,7 +255,7 @@ async def test_clear_art_forgets_the_selection_keeps_file_facts_and_broadcasts(
     item = media_item_factory(
         id=None,
         server_item_id="s1",
-        library_id="l1",
+        library_id="1:l1",
         art={
             "poster": {
                 "url": "https://x/p.jpg",
@@ -304,7 +306,7 @@ async def test_clear_all_art_forgets_item_and_season_selections(
         id=None,
         media_type=MediaType.SHOW,
         server_item_id="s1",
-        library_id="l1",
+        library_id="1:l1",
         art={
             "poster": {"url": "https://x/p.jpg", "file_hash": "p"},
             "background": {"url": "https://x/bg.jpg", "file_hash": "b"},
@@ -395,7 +397,7 @@ async def test_match_art_updates_item_timestamp_and_broadcasts(
     *,
     app_config: Settings,
 ) -> None:
-    item = media_item_factory(id=None, server_item_id="s1", library_id="l1")
+    item = media_item_factory(id=None, server_item_id="s1", library_id="1:l1")
     db_session.add(item)
     await db_session.commit()
 
@@ -430,7 +432,7 @@ async def test_match_art_updates_season_timestamp_for_season_poster(
     app_config: Settings,
 ) -> None:
     item = media_item_factory(
-        id=None, media_type=MediaType.SHOW, server_item_id="s1", library_id="l1"
+        id=None, media_type=MediaType.SHOW, server_item_id="s1", library_id="1:l1"
     )
     db_session.add(item)
     await db_session.commit()
@@ -668,7 +670,7 @@ async def test_art_sources_fetch_independently_and_keep_successful_results(
     item = media_item_factory(
         id=None,
         server_item_id="server-1",
-        library_id="library-1",
+        library_id="1:library-1",
         media_type=MediaType.SHOW if art_type.owned_by_season else "movie",
         tmdb_id=123,
         art={"poster": {"url": saved_url}},
@@ -681,10 +683,17 @@ async def test_art_sources_fetch_independently_and_keep_successful_results(
             id=None,
             media_item_id=item.id,
             season_num=0,
-            server_item_id="server-1",
             art={"season_poster": {"url": saved_url}},
         )
         db_session.add(season)
+        await db_session.flush()
+        db_session.add(
+            SeasonCopy(
+                season_id=season.id or 0,
+                server_id=TEST_SERVER_ID,
+                server_item_id="server-1",
+            )
+        )
         await db_session.commit()
         season_id = season.id
 
@@ -742,7 +751,7 @@ async def test_art_sources_fetch_independently_and_keep_successful_results(
         if failed_source == "tmdb"
         else ["https://image.tmdb.org/t/p/original/tmdb.jpg"]
     )
-    assert [candidate.url for candidate in response.sources["plex"]] == (
+    assert [candidate.url for candidate in response.sources["Plex"]] == (
         [] if failed_source == "plex" else ["https://public.test/plex.jpg"]
     )
 
@@ -758,7 +767,7 @@ async def test_clear_season_posters_without_a_season_forgets_every_season(
         id=None,
         media_type=MediaType.SHOW,
         server_item_id="s1",
-        library_id="l1",
+        library_id="1:l1",
         art={"poster": {"url": "https://x/p.jpg", "file_hash": "p"}},
     )
     db_session.add(item)

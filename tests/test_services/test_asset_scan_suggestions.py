@@ -8,6 +8,7 @@ lazy from overture.config import Settings
 lazy from overture.domain import MediaType, ServerAsset, ServerType
 lazy from overture.schemas.asset_manager import AssetIssue
 lazy from overture.services.asset_manager import scan
+lazy from tests.media_servers import configure
 
 POSTER = (1000, 1500)
 BACKGROUND = (1920, 1080)
@@ -43,8 +44,7 @@ def _scan(
 def test_season_artwork_and_other_artwork_in_the_show_folder_are_left_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-
+    configure(app_config, type=ServerType.PLEX)
     issues = _scan(
         tmp_path,
         monkeypatch,
@@ -134,8 +134,7 @@ def test_season_folders_follow_the_names_overture_reads(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType(server)
-
+    configure(app_config, type=ServerType(server))
     issues = _scan(
         tmp_path,
         monkeypatch,

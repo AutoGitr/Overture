@@ -32,7 +32,8 @@ lazy from ...domain import (
 )
 lazy from ...jobs.kinds import INTERRUPTED_MESSAGE, DownloadStatus
 lazy from ...media_servers.errors import MediaServerError
-lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...media_servers.registry import Provider, ProviderRegistry
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...schemas.downloads import DownloadJobEvent
 lazy from ...utils.file import compute_bytes_hash
@@ -477,6 +478,7 @@ class DownloadService:
         async def progress(update: ProgressUpdate) -> None:
             await self._emit_progress(job, update, title=title)
 
+        copies: list[tuple[Provider, str]] = []
         try:
             if job.job_type is JobType.COLLECTION_THEME:
                 downloaded_collection = (
@@ -504,8 +506,14 @@ class DownloadService:
                 if current is None:
                     raise DownloadError("Media item not found")
                 item = current
+                copies = await self._copies(item)
                 target = (
-                    await self.art_handler.target(job, item, downloaded)
+                    await self.art_handler.target(
+                        job,
+                        item,
+                        downloaded,
+                        {provider.server_type for provider, _ in copies},
+                    )
                     if job.job_type is JobType.ART
                     else self.theme_handler.target(item)
                 )
@@ -516,15 +524,31 @@ class DownloadService:
             await self.fail_job(job, exc, title=title)
             return
 
-        if job.status is JobStatus.DONE and written and item.server_item_id:
+        if job.status is not JobStatus.DONE or not written:
+            return
+        for provider, server_item_id in copies:
             try:
-                await self.provider_registry.provider.refresh_item(
-                    item.server_item_id, unlock=_replaced_assets(job)
+                await provider.refresh_item(
+                    server_item_id, unlock=_replaced_assets(job)
                 )
             except MediaServerError as exc:
                 logger.warning(
-                    "Could not refresh %s on the media server: %s", item.title, exc
+                    "Could not refresh %s on %s: %s",
+                    item.title,
+                    provider.server.title,
+                    exc,
                 )
+
+    async def _copies(self, item: MediaItem) -> list[tuple[Provider, str]]:
+        """Each configured server holding the item, and its ID of it."""
+        async with self._database.read_session() as session:
+            copies = await CopyRepository(session).leads_first(
+                item.id or 0, self.provider_registry.server_ids()
+            )
+        return [
+            (self.provider_registry.get(copy.server_id), copy.server_item_id)
+            for copy in copies
+        ]
 
     async def _start_job(
         self, job_id: str
@@ -600,28 +624,32 @@ class DownloadService:
         storage = self._asset_storage
         try:
             data_hash = downloaded.file_hash or compute_bytes_hash(downloaded.data)
-            await owned_thread(
-                storage.validate_target, target.path, target.trusted_root
-            )
+            for path in target.paths:
+                await owned_thread(storage.validate_target, path, target.trusted_root)
             if not await self._is_running(job.id):
                 return False
-            stored = await owned_thread(storage.identical_file, target.path, data_hash)
-            if stored is None:
-                written = True
-                stored = await storage.write_file_async(
-                    target.path,
-                    downloaded.data,
-                    target.trusted_root,
-                    file_hash=data_hash,
-                )
-            else:
-                written = False
-                logger.debug(
-                    "Download %s is identical to %s; nothing written",
-                    job.id,
-                    target.path,
-                )
-            await self.record_job(job, downloaded.result, stored)
+            written = False
+            recorded: StoredFile | None = None
+            for path in target.paths:
+                stored = await owned_thread(storage.identical_file, path, data_hash)
+                if stored is None:
+                    written = True
+                    stored = await storage.write_file_async(
+                        path,
+                        downloaded.data,
+                        target.trusted_root,
+                        file_hash=data_hash,
+                    )
+                else:
+                    logger.debug(
+                        "Download %s is identical to %s; nothing written",
+                        job.id,
+                        path,
+                    )
+                recorded = recorded or stored
+            if recorded is None:
+                raise DownloadError("The download has nowhere to go")
+            await self.record_job(job, downloaded.result, recorded)
         except (
             DownloadError,
             PathTraversalError,
@@ -663,9 +691,8 @@ class DownloadService:
             await store_collection_theme(
                 job,
                 downloaded,
-                provider=self.provider_registry.collections,
+                provider_registry=self.provider_registry,
                 asset_storage=self._asset_storage,
-                app_config=self._app_config,
                 publisher=self._publisher,
                 database=self._database,
             )

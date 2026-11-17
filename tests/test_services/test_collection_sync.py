@@ -9,7 +9,7 @@ lazy import pytest
 lazy from pydantic import SecretStr
 lazy from sqlmodel import select
 
-lazy from overture.config import Settings
+lazy from overture.config import MediaServerConfig, Settings
 lazy from overture.db.art_slots import (
     ArtFileFacts,
     art_file_facts,
@@ -52,10 +52,28 @@ lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnric
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import managing_rule, stored_collection
+lazy from tests.media_servers import (
+    TEST_SERVER,
+    TEST_SERVER_ID,
+    configure,
+    served_item,
+    server_of,
+)
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry, unused
 
 LIFECYCLE = ManagedJobLifecycle(JobKind.SYNC)
+
+
+def _jellyfin(collections: Path) -> MediaServerConfig:
+    """A Jellyfin server whose collections folder Overture sees at *collections*."""
+    return TEST_SERVER.model_copy(
+        update={
+            "type": ServerType.JELLYFIN,
+            "name": "Jellyfin",
+            "collections_path": collections,
+        }
+    )
 
 
 def test_collection_folders_resolve_by_name_inside_the_root(tmp_path: Path) -> None:
@@ -65,14 +83,16 @@ def test_collection_folders_resolve_by_name_inside_the_root(tmp_path: Path) -> N
     outside.mkdir()
     (tmp_path / "escape").symlink_to(outside)
 
-    folder = collection_folder(tmp_path, "/jellyfin/data/collections/Saga [boxset]")
+    folder = collection_folder(
+        _jellyfin(tmp_path), "/jellyfin/data/collections/Saga [boxset]"
+    )
 
     assert folder == (tmp_path / "Saga [boxset]").resolve()
     assert inspect_theme_file(folder) is not None
     assert inspect_theme_file(tmp_path) is None
     for path in ("/x/..", "/x/missing", "/x/escape", ""):
         with pytest.raises(ValueError, match=r"collection|folder"):
-            collection_folder(tmp_path, path)
+            collection_folder(_jellyfin(tmp_path), path)
 
 
 class Server:
@@ -92,7 +112,7 @@ def _collection(
     server_id: str,
     *members: str,
     media_type: MediaType | None = MediaType.MOVIE,
-    library_id: str | None = "1",
+    library_id: str | None = "1:1",
     theme_id: str | None = None,
     tmdb_id: int | None = None,
     path: str | None = None,
@@ -112,17 +132,17 @@ def _collection(
 async def _seed_movies(database: Database) -> dict[str, int]:
     async with database.write_session() as session:
         movies = [
-            MediaItem(
+            served_item(
                 media_type=MediaType.MOVIE,
                 title=f"Movie {n}",
                 server_item_id=f"m{n}",
-                library_id="1" if n < 3 else "2",
+                library_id="1:1" if n < 3 else "1:2",
                 tmdb_collection_id=10 if n < 2 else None,
             )
             for n in range(4)
         ]
         session.add_all(movies)
-    return {movie.server_item_id or "": movie.id or 0 for movie in movies}
+    return {movie.copies[0].server_item_id: movie.id or 0 for movie in movies}
 
 
 async def _run(
@@ -133,8 +153,8 @@ async def _run(
     library_ids: list[str] | None = None,
     theme_order: IncrementalThemeOrder = IncrementalThemeOrder.OFF,
 ) -> None:
+    registry = NoopProviderRegistry(server)
     sync = CollectionSync(
-        provider_registry=NoopProviderRegistry(server),
         downloads=make_bulk_downloads(
             app_config=app_config, database=database, provider=server
         ),
@@ -145,13 +165,15 @@ async def _run(
     async with run_managed_job(
         JobProbe(lifecycle=LIFECYCLE).context, SyncTally()
     ) as job:
-        await sync.run(job, library_ids=library_ids, theme_order=theme_order)
+        await sync.run(
+            job, registry.providers(), library_ids=library_ids, theme_order=theme_order
+        )
 
 
 async def _rows(database: Database) -> dict[str, MediaCollection]:
     async with database.read_session() as session:
         rows = (await session.exec(select(MediaCollection))).all()
-    return {row.server_item_id: row for row in rows if row.server_item_id}
+    return {row.server_item_id: row for row in rows if row.server_item_id is not None}
 
 
 async def test_sync_stores_collections_with_members_and_their_tmdb_match(
@@ -239,16 +261,16 @@ async def test_a_library_scoped_sync_leaves_other_libraries_collections(
             stored_collection(
                 server_item_id="elsewhere",
                 media_type=MediaType.MOVIE,
-                library_id="2",
+                library_id="1:2",
                 last_synced_at=utc_now(),
             )
         )
 
     await _run(
-        Server(_collection("here", "m0"), _collection("there", "m3", library_id="2")),
+        Server(_collection("here", "m0"), _collection("there", "m3", library_id="1:2")),
         database,
         app_config,
-        library_ids=["1"],
+        library_ids=["1:1"],
     )
 
     assert set(await _rows(database)) == {"elsewhere", "here"}
@@ -261,7 +283,7 @@ async def test_jellyfin_collections_take_type_library_and_theme_from_disk(
     folder = tmp_path / "Saga [boxset]"
     folder.mkdir()
     (folder / "theme.mp3").write_bytes(b"mp3")
-    app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
+    configure(app_config, collections_path=tmp_path)
 
     class Jellyfin(JellyfinProvider):
         @override
@@ -279,11 +301,19 @@ async def test_jellyfin_collections_take_type_library_and_theme_from_disk(
                 )
             ]
 
-    await _run(Jellyfin(app_config=app_config), database, app_config)
+    await _run(
+        Jellyfin(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
+        database,
+        app_config,
+    )
 
     row = (await _rows(database))["box"]
     # A BoxSet stands outside the libraries, so it spans those its members are in.
-    assert (row.media_types, row.library_ids) == ([MediaType.MOVIE], ["1", "2"])
+    assert (row.media_types, row.library_ids) == ([MediaType.MOVIE], ["1:1", "1:2"])
     assert row.tmdb_collection_id == 77
     assert row.server_theme_id is None
     assert row.theme_file_hash is not None
@@ -435,7 +465,7 @@ async def test_enrichment_does_nothing_without_a_tmdb_key(
         assert await enrichment.run(job) == 0
 
 
-@pytest.mark.parametrize("library_ids", [None, ["2"]])
+@pytest.mark.parametrize("library_ids", [None, ["1:2"]])
 async def test_enrichment_reads_the_titles_in_the_sync_scope(
     library_ids: list[str] | None,
     *,
@@ -458,11 +488,11 @@ async def test_enrichment_reads_the_titles_in_the_sync_scope(
 
     async with database.write_session() as session:
         session.add_all(
-            MediaItem(
+            served_item(
                 media_type=MediaType.MOVIE,
                 title=f"Movie {n}",
                 server_item_id=f"m{n}",
-                library_id=str(n),
+                library_id=f"1:{n}",
                 tmdb_id=n,
             )
             for n in range(1, 4)
@@ -508,10 +538,19 @@ async def test_an_unavailable_jellyfin_mount_preserves_theme_facts_and_provenanc
         async def list_collections(self) -> list[ServerCollection]:
             return [_collection("box", "m0", path="/config/collections/Saga [boxset]")]
 
-    app_config.JELLYFIN_COLLECTIONS_PATH = (
-        tmp_path / unavailable_mount if unavailable_mount else None
+    configure(
+        app_config,
+        collections_path=tmp_path / unavailable_mount if unavailable_mount else None,
     )
-    await _run(Jellyfin(app_config=app_config), database, app_config)
+    await _run(
+        Jellyfin(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
+        database,
+        app_config,
+    )
     row = (await _rows(database))["box"]
     assert (row.youtube_id, row.theme_file_hash, row.theme_file_size) == (
         "JG5OsfOuEy0",
@@ -528,7 +567,7 @@ async def test_a_listed_boxset_without_local_members_preserves_manual_matching(
             stored_collection(
                 server_item_id="box",
                 media_type=MediaType.MOVIE,
-                library_id="1",
+                library_id="1:1",
                 tmdb_collection_id=99,
                 last_synced_at=utc_now(),
             )
@@ -543,7 +582,16 @@ async def test_a_listed_boxset_without_local_members_preserves_manual_matching(
                 )
             ]
 
-    await _run(Jellyfin(app_config=app_config), database, app_config, library_ids=["1"])
+    await _run(
+        Jellyfin(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
+        database,
+        app_config,
+        library_ids=["1:1"],
+    )
     row = (await _rows(database))["box"]
     assert row.tmdb_collection_id == 99
     assert row.child_count == 1
@@ -555,9 +603,9 @@ def test_boxset_marker_or_xml_is_required_and_theme_symlinks_cannot_escape(
     plain = tmp_path / "Saga"
     plain.mkdir()
     with pytest.raises(ValueError, match="BoxSet marker"):
-        collection_folder(tmp_path, "/data/Saga")
+        collection_folder(_jellyfin(tmp_path), "/data/Saga")
     (plain / "collection.xml").write_text("<Item />")
-    assert collection_folder(tmp_path, "/data/Saga") == plain
+    assert collection_folder(_jellyfin(tmp_path), "/data/Saga") == plain
     outside = tmp_path / "outside.mp3"
     outside.write_bytes(b"audio")
     (plain / "theme.mp3").symlink_to(outside)

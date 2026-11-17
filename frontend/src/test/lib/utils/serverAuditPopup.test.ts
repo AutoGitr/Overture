@@ -11,6 +11,7 @@ function artResult(
 ): SelectableServerAuditResult {
   return {
     kind: "art",
+    server_id: 1,
     item_id: 1,
     season_id: null,
     art_type: "poster",
@@ -27,6 +28,7 @@ function themeResult(
 ): SelectableServerAuditResult {
   return {
     kind: "theme",
+    server_id: 1,
     item_id: 1,
     art_type: "theme",
     server_item_id: "server-1",
@@ -66,13 +68,14 @@ describe("selectedThemeAuditResults", () => {
 });
 
 describe("auditRowKey", () => {
-  it("keys art rows by item, season and art type", () => {
-    expect(auditRowKey(artResult({ season_id: 2 }))).toBe("art:1:2:poster");
-    expect(auditRowKey(artResult())).toBe("art:1::poster");
+  it("keys art rows by item, season, art type and server", () => {
+    expect(auditRowKey(artResult({ season_id: 2 }))).toBe("art:1:2:poster:1");
+    expect(auditRowKey(artResult())).toBe("art:1::poster:1");
+    expect(auditRowKey(artResult({ server_id: 2 }))).toBe("art:1::poster:2");
   });
 
-  it("keys theme rows by item, server item and server theme", () => {
-    expect(auditRowKey(themeResult())).toBe("theme:1:server-1:theme-1");
-    expect(auditRowKey(themeResult({ server_item_id: null, theme_id: null }))).toBe("theme:1::");
+  it("keys theme rows by item, server item, server theme and server", () => {
+    expect(auditRowKey(themeResult())).toBe("theme:1:server-1:theme-1:1");
+    expect(auditRowKey(themeResult({ server_item_id: null, theme_id: null }))).toBe("theme:1:::1");
   });
 });

@@ -57,6 +57,7 @@ lazy from overture.utils.image import RATE_LIMIT_RETRIES, RateLimitedError
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -381,7 +382,9 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
             )
         )
     entered, release = asyncio.Event(), asyncio.Event()
-    provider = PlexProvider(app_config=app_config)
+    provider = PlexProvider(
+        server=server_of(app_config), server_id=TEST_SERVER_ID, app_config=app_config
+    )
 
     async def upload(_server_id: str, _data: bytes) -> str:
         entered.set()
@@ -479,7 +482,7 @@ async def test_process_art_job_downloads_writes_hashes_and_refreshes_provider(
     movie_dir = tmp_path / "Movie"
     movie_dir.mkdir()
     async with isolated_session_factory() as session:
-        item = MediaItem(
+        item = served_item(
             id=1,
             media_type=MediaType.MOVIE,
             title="Movie",
@@ -576,7 +579,7 @@ async def test_art_job_writes_only_when_the_bytes_differ(
     before = poster.stat()
     async with isolated_session_factory() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 media_type=MediaType.MOVIE,
                 title="Movie",
@@ -640,9 +643,9 @@ async def test_process_art_job_allows_trusted_private_media_server_url(
     app_config: Settings,
     database: Database,
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = "http://127.0.0.1:32400"
-    app_config.MEDIA_SERVER_VERIFY_TLS = False
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url="http://127.0.0.1:32400")
+    configure(app_config, verify_tls=False)
     provider = RefreshingProvider(headers={"X-Plex-Token": "server-token"})
     publisher = RecordingPublisher()
     phash = PhashService(app_config=app_config)
@@ -678,7 +681,7 @@ async def test_process_art_job_allows_trusted_private_media_server_url(
         "?X-Plex-Token=browser-token&tag=poster"
     )
     async with isolated_session_factory() as session:
-        item = MediaItem(
+        item = served_item(
             id=1,
             media_type=MediaType.MOVIE,
             title="Movie",
@@ -870,7 +873,7 @@ async def test_process_season_poster_job_updates_asset_and_parent_aggregates(
     show_dir = tmp_path / "Show"
     show_dir.mkdir()
     async with isolated_session_factory() as session:
-        item = MediaItem(
+        item = served_item(
             id=1,
             media_type=MediaType.SHOW,
             title="Show",
@@ -960,7 +963,7 @@ async def test_process_theme_job_writes_theme_and_updates_item(
     movie_dir = tmp_path / "Movie"
     movie_dir.mkdir()
     async with isolated_session_factory() as session:
-        item = MediaItem(
+        item = served_item(
             id=1,
             media_type=MediaType.MOVIE,
             title="Movie",
@@ -1584,11 +1587,14 @@ async def test_art_download_from_a_down_media_server_gives_its_reason(
         media_item_id=1,
         job_type=JobType.ART,
         art_type=ArtType.POSTER,
-        target_url=f"{app_config.MEDIA_SERVER_URL}/library/metadata/1/thumb",
+        target_url=f"{server_of(app_config).url}/library/metadata/1/thumb",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
-    registry = NoopProviderRegistry(RefreshingProvider())
-    registry.health.record(MediaServerState.UNREACHABLE, "Plex is not answering")
+    provider = RefreshingProvider()
+    registry = NoopProviderRegistry(provider)
+    registry.get(TEST_SERVER_ID).health.record(
+        MediaServerState.UNREACHABLE, "Plex is not answering"
+    )
     handler = DownloadArtHandler(
         provider_registry=registry,
         asset_storage=AssetStorage(app_config=app_config),

@@ -21,6 +21,7 @@ lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.audio import ThemeAudioMetadata
 lazy from overture.utils.locks import KeyedLock
+lazy from tests.media_servers import copy_ids
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import make_local_assets, row_id
 lazy from tests.sync_helpers import sync_full
@@ -59,7 +60,7 @@ def _server_item(folder: Path) -> ServerItem:
         media_type=MediaType.MOVIE,
         poster_url="https://image.tmdb.org/t/p/original/server-poster.jpg",
         background_url="https://image.tmdb.org/t/p/original/server-bg.jpg",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path=str(folder),
     )
 
@@ -119,7 +120,8 @@ async def test_adoption_keeps_the_choices_and_downloads_them(
     assert stats.tally.errors == 0
     async with isolated_session_factory() as session:
         (adopted,) = (await session.exec(select(MediaItem))).all()
-    assert (adopted.id, adopted.server_item_id) == (item_id, "plex-603")
+        ids = await copy_ids(session)
+    assert (adopted.id, ids[adopted.id or 0]) == (item_id, "plex-603")
     assert adopted.folder_path == str(folder)
     assert read_art_slot(adopted, ArtType.POSTER).url == CHOSEN
     assert bool(read_art_slot(adopted, ArtType.POSTER).file_hash) == existing_files

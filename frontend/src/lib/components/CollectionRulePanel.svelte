@@ -14,6 +14,7 @@
   import PendingButton from "./PendingButton.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
 
   let {
     editor,
@@ -29,7 +30,8 @@
   let rule = $derived(editor.rule);
 
   function libraryName(id: string) {
-    return libraries.find((library) => library.id === id)?.title ?? id;
+    const library = libraries.find((each) => each.id === id);
+    return library ? settingsState.libraryLabel(library) : id;
   }
   let entries = $derived(inLibraryOrder(libraries, rule.libraries, (entry) => entry.library_id));
   let recommendation = $derived(editor.preview.recommendation);
@@ -95,8 +97,8 @@
       <legend class="form-label">{name}</legend>
       <CriteriaEditor
         bind:group={entry.criteria}
-        fields={editor.fieldsFor(mediaType)}
-        sources={editor.options.for(mediaType).data?.sources ?? []}
+        fields={editor.fieldsFor(entry.library_id)}
+        sources={editor.options.forLibrary(entry.library_id, mediaType)?.sources ?? []}
         {mediaType}
         libraryId={entry.library_id}
         label={rule.libraries.length > 1 ? `${name} criteria` : "Criteria"}

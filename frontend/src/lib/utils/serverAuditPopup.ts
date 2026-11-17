@@ -39,11 +39,20 @@ export function selectedThemeAuditResults(
 export function auditRowKey(
   result: Pick<
     ServerAuditResult,
-    "kind" | "item_id" | "collection_id" | "season_id" | "art_type" | "server_item_id" | "theme_id"
+    | "kind"
+    | "item_id"
+    | "collection_id"
+    | "season_id"
+    | "art_type"
+    | "server_id"
+    | "server_item_id"
+    | "theme_id"
   >,
 ): string {
+  const server = result.server_id ?? "";
   if (result.kind === "theme")
-    return `theme:${result.item_id}:${result.server_item_id ?? ""}:${result.theme_id ?? ""}`;
-  if (result.collection_id) return `collection:${result.collection_id}:${result.art_type}`;
-  return `art:${result.item_id}:${result.season_id ?? ""}:${result.art_type}`;
+    return `theme:${result.item_id}:${result.server_item_id ?? ""}:${result.theme_id ?? ""}:${server}`;
+  if (result.collection_id)
+    return `collection:${result.collection_id}:${result.art_type}:${server}`;
+  return `art:${result.item_id}:${result.season_id ?? ""}:${result.art_type}:${server}`;
 }

@@ -9,9 +9,9 @@ describe("CollectionMembers", () => {
   it("groups members by library as the libraries are listed: movies, then shows", async () => {
     // The libraries come movies first, then by title, as the server lists them.
     const libraries = [
-      { id: "a", title: "Anime Films", media_type: "movie" as const, count: 1 },
-      { id: "m", title: "Movies", media_type: "movie" as const, count: 1 },
-      { id: "s", title: "Series", media_type: "show" as const, count: 1 },
+      { id: "a", title: "Anime Films", media_type: "movie" as const, server_id: 1, count: 1 },
+      { id: "m", title: "Movies", media_type: "movie" as const, server_id: 1, count: 1 },
+      { id: "s", title: "Series", media_type: "show" as const, server_id: 1, count: 1 },
     ];
     const items = [
       mediaItem({ id: 1, title: "Show", media_type: "show", library_id: "s" }),

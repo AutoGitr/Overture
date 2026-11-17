@@ -9,7 +9,7 @@ lazy import pytest
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
-lazy from overture.domain import ArtType, MediaServerState
+lazy from overture.domain import ArtType, MediaServerState, ServerType
 lazy from overture.integrations.http import request_with_retry
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.errors import MediaServerError
@@ -17,6 +17,7 @@ lazy from overture.media_servers.health import MediaServerHealth
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
+lazy from tests.media_servers import configure, server_of
 
 
 @pytest.fixture(params=[PlexClient, JellyfinClient, EmbyClient])
@@ -27,8 +28,8 @@ def provider_factory(
 ) -> Callable[
     [Callable[[httpx2.Request], httpx2.Response]], PlexClient | JellyfinClient
 ]:
-    app_config.MEDIA_SERVER_URL = "https://server.test/reverse"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("test-secret")
+    configure(app_config, url="https://server.test/reverse")
+    configure(app_config, api_key=SecretStr("test-secret"))
     monkeypatch.setattr(
         "overture.media_servers.http_client.request_with_retry",
         partial(request_with_retry, retry_delays=(0, 0)),
@@ -46,7 +47,17 @@ def provider_factory(
     ) -> PlexClient | JellyfinClient:
         nonlocal active_handler
         active_handler = handler
-        client = request.param(app_config=app_config, client_factory=factory)
+        kind = {
+            PlexClient: ServerType.PLEX,
+            JellyfinClient: ServerType.JELLYFIN,
+            EmbyClient: ServerType.EMBY,
+        }[request.param]
+        server = server_of(app_config, kind)
+        client = (
+            PlexClient(server=server, app_config=app_config, client_factory=factory)
+            if request.param is PlexClient
+            else request.param(server=server, client_factory=factory)
+        )
         if isinstance(client, PlexClient):
             monkeypatch.setattr(
                 PlexClient, "resolve_secure_url", keep_configured_plex_url
@@ -239,10 +250,11 @@ async def test_incomplete_or_malformed_snapshot_cannot_be_reconciled(
 async def test_active_art_is_absent_only_on_not_found(
     status: int, monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "https://server.test"
-
+    configure(app_config, url="https://server.test")
     factory, transport = mock_client_factory(lambda _: httpx2.Response(status))
-    client = JellyfinClient(app_config=app_config, client_factory=factory)
+    client = JellyfinClient(
+        server=server_of(app_config, ServerType.JELLYFIN), client_factory=factory
+    )
     try:
         if status == 401:
             with pytest.raises(MediaServerError):
@@ -276,9 +288,11 @@ def _plex_rows(request: httpx2.Request, total: int, size: int) -> httpx2.Respons
 async def test_plex_prefetched_pages_arrive_complete_and_in_order(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "https://server.test"
+    configure(app_config, url="https://server.test")
     factory, transport = mock_client_factory(lambda r: _plex_rows(r, 10, 3))
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         pages = [
@@ -296,14 +310,16 @@ async def test_plex_prefetched_pages_arrive_complete_and_in_order(
 async def test_plex_prefetch_rejects_a_short_page_before_the_end(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "https://server.test"
+    configure(app_config, url="https://server.test")
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         offset = int(request.url.params["X-Plex-Container-Start"])
         return _plex_rows(request, 10, 3 if offset == 0 else 2)
 
     factory, _ = mock_client_factory(handler)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         with pytest.raises(MediaServerError, match="inconsistent page size"):

@@ -40,8 +40,8 @@ server's copy, or any combination that applies.
 
 Collections take themes too. Collection themes use OvertureDB and ThemerrDB in
 the configured order; YouTube search applies to movies and shows. On Jellyfin,
-BoxSet themes are written into the collections directory named by
-`JELLYFIN_COLLECTIONS_PATH`.
+BoxSet themes are written into the collections directory named by the
+server's `COLLECTIONS_PATH`.
 
 ## Contributing themes
 

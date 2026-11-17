@@ -3,6 +3,7 @@
 lazy import asyncio
 lazy from dataclasses import replace
 lazy from pathlib import Path
+lazy from types import SimpleNamespace
 lazy from typing import Any, cast
 
 lazy import pytest
@@ -38,7 +39,7 @@ LIFECYCLE = ManagedJobLifecycle(JobKind.SERVER_AUDIT)
 def _audit_context(
     tmp_path: Path, *, app_config: Settings, database: Database, phash: PhashService
 ) -> AuditContext:
-    registry = NoopProviderRegistry(object())
+    registry = NoopProviderRegistry(SimpleNamespace())
     return AuditContext(
         config_dir=tmp_path,
         collection_art=unused(CollectionArtService),
@@ -76,7 +77,7 @@ async def test_server_audit_reports_overlapping_targets_in_plan_order(
         for _ in range(6 - target.item_id):
             await asyncio.sleep(0)
         running -= 1
-        return ServerAuditResult(
+        result = ServerAuditResult(
             kind="art",
             item_id=target.item_id,
             art_type=ServerAsset.POSTER,
@@ -84,6 +85,7 @@ async def test_server_audit_reports_overlapping_targets_in_plan_order(
             title=f"Movie {target.item_id}",
             hamming=4,
         )
+        return [result]
 
     monkeypatch.setattr(server_audit, "plan_audit", fake_plan)
     monkeypatch.setattr(server_audit, "_audit_art_one", fake_audit)
@@ -178,7 +180,9 @@ async def test_server_audit_fails_at_once_while_the_media_server_is_down(
         phash=PhashService(app_config=app_config),
     )
     registry = NoopProviderRegistry(DownProvider())
-    registry.health.record(MediaServerState.REJECTED, "check MEDIA_SERVER_API_KEY")
+    registry.get(1).health.record(
+        MediaServerState.REJECTED, "check MEDIA_SERVER_API_KEY"
+    )
     probe = JobProbe(lifecycle=LIFECYCLE)
 
     await server_audit.run_server_audit(

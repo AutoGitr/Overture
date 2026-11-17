@@ -1,5 +1,11 @@
 import { expect, logIn, test } from "./fixtures";
-import { appSettings, collectionDetail, collectionRule, mediaItem } from "../helpers/fixtures";
+import {
+  appSettings,
+  collectionDetail,
+  collectionRule,
+  mediaItem,
+  mediaServers,
+} from "../helpers/fixtures";
 
 const first = mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" });
 const second = mediaItem({ id: 2, title: "Second", library_id: "movies", server_item_id: "m2" });
@@ -8,10 +14,14 @@ test("a collection set previews and creates its collections without horizontal o
   page,
 }) => {
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/library/libraries{,?*}", (route) =>
-    route.fulfill({ json: [{ id: "movies", title: "Movies", media_type: "movie", count: 7 }] }),
+    route.fulfill({
+      json: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 7 }],
+    }),
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/collections/sets/preview", (route) =>
@@ -85,7 +95,14 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     effective_sync_mode: "append",
   });
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
+  );
+  await page.route("**/api/library/libraries{,?*}", (route) =>
+    route.fulfill({
+      json: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 }],
+    }),
   );
   await page.route("**/api/library/items?*", (route) =>
     route.fulfill({ json: { items: [first, second], total: 2 } }),
@@ -189,10 +206,14 @@ test("collection creation uses the selected library and TMDB list sources", asyn
     child_count: 1,
   });
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/library/libraries{,?*}", (route) =>
-    route.fulfill({ json: [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }] }),
+    route.fulfill({
+      json: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 }],
+    }),
   );
   await page.route("**/api/library/items?*", (route) =>
     route.fulfill({ json: { items: [first, second], total: 2 } }),
@@ -247,7 +268,9 @@ test("collection creation uses the selected library and TMDB list sources", asyn
 test("items and collections share record actions and fit a narrow viewport", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/collections/12{,?*}", (route) =>
     route.fulfill({
@@ -289,7 +312,7 @@ test("Emby collections clearly explain unsupported themes", async ({ page }) => 
   await page.route("**/api/settings", (route) =>
     route.fulfill({
       json: appSettings({
-        media_server: "emby",
+        media_servers: mediaServers("emby"),
         collections_supported: true,
         collection_themes_unavailable: "Emby does not support collection themes",
       }),
@@ -325,7 +348,9 @@ test("groups hide collections until opened, preserve browsing on asset navigatio
   const loose = collectionDetail({ id: 13, title: "Loose saga", member_ids: [second.id] });
   let candidateRequests = 0;
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped, loose] }));
   await page.route("**/api/collections/12{,?*}", (route) => route.fulfill({ json: grouped }));
@@ -358,13 +383,15 @@ test("creating again opens a fresh draft and multiple libraries require a choice
   page,
 }) => {
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/library/libraries{,?*}", (route) =>
     route.fulfill({
       json: [
-        { id: "movies", title: "Movies", media_type: "movie", count: 1 },
-        { id: "other", title: "Other", media_type: "movie", count: 1 },
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 1 },
+        { id: "other", title: "Other", media_type: "movie", server_id: 1, count: 1 },
       ],
     }),
   );
@@ -382,13 +409,15 @@ test("creating again opens a fresh draft and multiple libraries require a choice
 
 test("a franchise set shares Setup and saves its library, group and schedule", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/library/libraries{,?*}", (route) =>
     route.fulfill({
       json: [
-        { id: "movies", title: "Movies", media_type: "movie", count: 2 },
-        { id: "other", title: "Other movies", media_type: "movie", count: 3 },
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+        { id: "other", title: "Other movies", media_type: "movie", server_id: 1, count: 3 },
       ],
     }),
   );
@@ -448,11 +477,18 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
 });
 
 test("smart collections combine list sources and live criteria", async ({ page }) => {
+  await page.route("**/api/collections/recommend-kind", (route) =>
+    route.fulfill({ json: { kind: "smart", reason: "Plex filters every condition natively." } }),
+  );
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/library/libraries{,?*}", (route) =>
-    route.fulfill({ json: [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }] }),
+    route.fulfill({
+      json: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 }],
+    }),
   );
   const detail = collectionDetail({
     id: 12,
@@ -532,7 +568,9 @@ test("group management saves and sends defaults apart from an unsaved collection
   page,
 }) => {
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/collections/groups{,?*}", (route) =>
     route.fulfill({ json: ["Weekend"] }),
@@ -577,7 +615,9 @@ test("deleting a group from the groups popup asks what happens to its collection
 }) => {
   const grouped = collectionDetail({ id: 12, title: "Grouped saga", collection_group: "Weekend" });
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped] }));
   // The reserved fallback is always listed, and is where kept collections go.

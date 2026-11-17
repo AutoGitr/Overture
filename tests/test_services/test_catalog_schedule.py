@@ -27,7 +27,6 @@ lazy from overture.services.schedule_store import (
     CatalogPayload,
     Schedule,
     ScheduleSpec,
-    SyncServerPayload,
 )
 lazy from overture.services.scheduler import ScheduledJobInfo, SchedulerService
 lazy from overture.utils.cron import validate_cron_expression
@@ -150,9 +149,6 @@ class TestScheduleHelper:
 
     def test_payload_models_fill_in_defaults_for_missing_keys(self) -> None:
         """A stored payload only has to carry the fields it actually set."""
-        assert SyncServerPayload.model_validate({}).model_dump() == {
-            "last_media_server": None,
-        }
         assert BackupPayload.model_validate(
             {"retention": {"latest": 5}}
         ).model_dump() == {

@@ -161,7 +161,7 @@
   let sortFields = $derived(
     sidebarDomain.sortMenu(sortScope, {
       inGroup: groupView,
-      plex: settingsState.current.media_server === "plex",
+      plex: settingsState.hasServerType("plex"),
     }),
   );
   let chosenSort = $derived(sortByScope[sortScope][uiState.sidebarTab]);

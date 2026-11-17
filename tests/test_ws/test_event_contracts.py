@@ -168,7 +168,9 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
                 "catalog_url": "https://example.test/catalog.jsonl",
                 "timezone": "UTC",
             },
-            "media_server": {"state": "reachable", "message": ""},
+            "media_servers": [
+                {"server_id": 1, "title": "Plex", "state": "reachable", "message": ""}
+            ],
         },
         "collection.theme.updated": {
             "collection_id": 1,
@@ -196,6 +198,8 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
         },
         "schedules.changed": {"kind": "sync"},
         "media-server.status": {
+            "server_id": 1,
+            "title": "Plex",
             "state": "unreachable",
             "message": "The media server is unavailable",
         },

@@ -14,6 +14,8 @@ import type {
   CatalogEntryDetail,
   CatalogEntryRow,
   MediaItemRead,
+  MediaServerRead,
+  ServerType,
   CatalogRecord,
   CatalogRecordItem,
   CatalogRecordSeason,
@@ -46,7 +48,29 @@ export function logEntry(
   return { outcome, target, reason, at };
 }
 
-export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead {
+/** The configured media servers, numbered from 1 and named after their kind, lead first. */
+export function mediaServers(...types: (ServerType | null)[]): MediaServerRead[] {
+  const titles = { plex: "Plex", jellyfin: "Jellyfin", emby: "Emby" } as const;
+  return types
+    .filter((type): type is ServerType => type !== null)
+    .map((type, index) => ({ id: index + 1, title: titles[type], type, collections: true }));
+}
+
+/**
+ * A library title. A test names its copy on server 1 with ``library_id`` and
+ * ``server_item_id``, which replace any ``copies`` given, or passes ``copies`` itself.
+ */
+export function mediaItem(
+  overrides: Partial<MediaItemRead> & {
+    library_id?: string | null;
+    server_item_id?: string | null;
+  } = {},
+): MediaItemRead {
+  const { library_id: libraryId, server_item_id: serverItemId, ...rest } = overrides;
+  const copies =
+    serverItemId || libraryId
+      ? [{ server_id: 1, server_item_id: serverItemId ?? "", library_id: libraryId ?? "" }]
+      : (rest.copies ?? []);
   return {
     art_status: "missing",
     catalog_no_theme: false,
@@ -68,7 +92,6 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     imdb_id: null,
     last_matched_at: null,
     last_synced_at: null,
-    library_id: null,
     folder_path: null,
     media_type: "movie",
     monitored: true,
@@ -87,9 +110,7 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     metadata_issues: [],
     season_posters_status: "missing",
     server_added_at: null,
-    server_item_id: null,
     server_removed_at: null,
-    server_verified_at: null,
     studio: null,
     sort_title: null,
     title: "Test Item",
@@ -102,7 +123,8 @@ export function mediaItem(overrides: Partial<MediaItemRead> = {}): MediaItemRead
     youtube_id: null,
     youtube_id_source: null,
     youtube_title: null,
-    ...overrides,
+    ...rest,
+    copies,
   };
 }
 
@@ -122,7 +144,6 @@ export function season(overrides: Partial<SeasonRead> = {}): SeasonRead {
     poster_url: null,
     poster_width: null,
     season_num: 1,
-    server_item_id: null,
     title: null,
     ...overrides,
   };
@@ -186,6 +207,7 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     media_types: ["movie"],
     monitored: false,
     server_added_at: null,
+    server_id: null,
     server_item_id: null,
     summary: null,
     server_poster_version: null,
@@ -276,7 +298,7 @@ export function collectionCapabilities(
   ] as const;
   const numbers = ["is", "is_not", "gt", "gte", "lt", "lte"] as const;
   return {
-    server_type: "plex",
+    server_types: ["plex"],
     spans_libraries: false,
     smart: true,
     visibility: true,
@@ -537,7 +559,7 @@ export function realtimeSnapshot(overrides: Partial<RealtimeSnapshot> = {}): Rea
     jobs: [],
     downloads: [],
     catalog_status: catalogStatus(),
-    media_server: { state: "reachable", message: "" },
+    media_servers: [{ server_id: 1, title: "Plex", state: "reachable", message: "" }],
     ...overrides,
   };
 }
@@ -578,7 +600,7 @@ export function appSettings(overrides: Partial<AppSettingsRead> = {}): AppSettin
   return {
     ...DEFAULT_APP_SETTINGS,
     // Groups are optional unless a test is about requiring them.
-    media_server: "plex",
+    media_servers: mediaServers("plex"),
     tmdb_configured: false,
     mdblist_configured: false,
     radarr_configured: false,

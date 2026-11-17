@@ -244,15 +244,12 @@
             "title": "Mdblist Configured",
             "type": "boolean"
           },
-          "media_server": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ServerType"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "media_servers": {
+            "items": {
+              "$ref": "#/components/schemas/MediaServerRead"
+            },
+            "title": "Media Servers",
+            "type": "array"
           },
           "min_duration_seconds": {
             "default": 20,
@@ -426,7 +423,7 @@
           "auto_advance_skip_completed",
           "auto_unmonitor",
           "updated_at",
-          "media_server",
+          "media_servers",
           "tmdb_configured",
           "mdblist_configured",
           "radarr_configured",
@@ -3902,7 +3899,7 @@
       },
       "CollectionCapabilities": {
         "additionalProperties": false,
-        "description": "What the active media server lets collections do, for one media type.",
+        "description": "What collections of one media type can do on some media servers.\n\nA collection spanning several servers is offered what any of them\nsupports; each of the others falls back to its nearest.",
         "properties": {
           "arr": {
             "title": "Arr",
@@ -3940,8 +3937,12 @@
             "title": "Orders",
             "type": "array"
           },
-          "server_type": {
-            "$ref": "#/components/schemas/ServerType"
+          "server_types": {
+            "items": {
+              "$ref": "#/components/schemas/ServerType"
+            },
+            "title": "Server Types",
+            "type": "array"
           },
           "smart": {
             "title": "Smart",
@@ -3971,7 +3972,7 @@
           }
         },
         "required": [
-          "server_type",
+          "server_types",
           "spans_libraries",
           "smart",
           "visibility",
@@ -4840,6 +4841,17 @@
             ],
             "title": "Server Background Version"
           },
+          "server_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          },
           "server_item_id": {
             "anyOf": [
               {
@@ -5088,6 +5100,7 @@
           "library_ids",
           "server_added_at",
           "server_item_id",
+          "server_id",
           "has_theme",
           "youtube_id",
           "youtube_title",
@@ -6905,6 +6918,17 @@
             ],
             "title": "Server Background Version"
           },
+          "server_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          },
           "server_item_id": {
             "anyOf": [
               {
@@ -7115,6 +7139,7 @@
           "library_ids",
           "server_added_at",
           "server_item_id",
+          "server_id",
           "has_theme",
           "youtube_id",
           "youtube_title",
@@ -8501,7 +8526,7 @@
       },
       "ConnectivityStatusResponse": {
         "additionalProperties": false,
-        "description": "Whether the configured media server and TMDB answer.",
+        "description": "Whether the configured media servers and TMDB answer.",
         "properties": {
           "media_server": {
             "title": "Media Server",
@@ -9378,23 +9403,19 @@
       },
       "IncrementalSyncState": {
         "additionalProperties": false,
-        "description": "The checkpoint an incremental schedule polls from.",
+        "description": "Where an incremental schedule polls each server from.",
         "properties": {
-          "checkpoint": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Checkpoint"
+          "checkpoints": {
+            "additionalProperties": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "title": "Checkpoints",
+            "type": "object"
           }
         },
         "required": [
-          "checkpoint"
+          "checkpoints"
         ],
         "title": "IncrementalSyncState",
         "type": "object"
@@ -9419,6 +9440,31 @@
             "type": "string"
           }
         ]
+      },
+      "ItemCopyRead": {
+        "additionalProperties": false,
+        "description": "One media server's copy of a title, which that server lists.",
+        "properties": {
+          "library_id": {
+            "title": "Library Id",
+            "type": "string"
+          },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
+          },
+          "server_item_id": {
+            "title": "Server Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_id",
+          "server_item_id",
+          "library_id"
+        ],
+        "title": "ItemCopyRead",
+        "type": "object"
       },
       "ItemDownloadTarget": {
         "additionalProperties": false,
@@ -9820,6 +9866,10 @@
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
           },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -9829,6 +9879,7 @@
           "id",
           "title",
           "media_type",
+          "server_id",
           "count"
         ],
         "title": "LibrarySectionRead",
@@ -10246,6 +10297,13 @@
             "title": "Catalog Themerrdb",
             "type": "boolean"
           },
+          "copies": {
+            "items": {
+              "$ref": "#/components/schemas/ItemCopyRead"
+            },
+            "title": "Copies",
+            "type": "array"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -10330,17 +10388,6 @@
               }
             ],
             "title": "Library Collection Id"
-          },
-          "library_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Library Id"
           },
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
@@ -10453,17 +10500,6 @@
             ],
             "title": "Server Added At"
           },
-          "server_item_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Item Id"
-          },
           "server_removed_at": {
             "anyOf": [
               {
@@ -10475,18 +10511,6 @@
               }
             ],
             "title": "Server Removed At"
-          },
-          "server_verified_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Verified At"
           },
           "sort_title": {
             "anyOf": [
@@ -10641,9 +10665,7 @@
           "tmdb_collection_id",
           "library_collection_id",
           "folder_path",
-          "server_item_id",
-          "server_verified_at",
-          "library_id",
+          "copies",
           "monitored",
           "directors",
           "studio",
@@ -10702,6 +10724,35 @@
         "title": "MediaServerErrorResponse",
         "type": "object"
       },
+      "MediaServerRead": {
+        "additionalProperties": false,
+        "description": "One media server MEDIA_SERVERS configures, the lead first.",
+        "properties": {
+          "collections": {
+            "title": "Collections",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ServerType"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "type",
+          "collections"
+        ],
+        "title": "MediaServerRead",
+        "type": "object"
+      },
       "MediaServerState": {
         "description": "Whether the media server answered Overture's last request.",
         "enum": [
@@ -10715,18 +10766,28 @@
       },
       "MediaServerStatus": {
         "additionalProperties": false,
-        "description": "Whether the media server answered Overture's last request.",
+        "description": "Whether one media server answered Overture's last request.",
         "properties": {
           "message": {
             "$ref": "#/components/schemas/PublicText",
             "default": ""
           },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
+          },
           "state": {
             "$ref": "#/components/schemas/MediaServerState",
             "default": "unknown"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
           }
         },
         "required": [
+          "server_id",
+          "title",
           "state",
           "message"
         ],
@@ -11099,8 +11160,12 @@
             "title": "Jobs",
             "type": "array"
           },
-          "media_server": {
-            "$ref": "#/components/schemas/MediaServerStatus"
+          "media_servers": {
+            "items": {
+              "$ref": "#/components/schemas/MediaServerStatus"
+            },
+            "title": "Media Servers",
+            "type": "array"
           },
           "sequence": {
             "title": "Sequence",
@@ -11118,7 +11183,7 @@
           "jobs",
           "downloads",
           "catalog_status",
-          "media_server"
+          "media_servers"
         ],
         "title": "RealtimeSnapshot",
         "type": "object"
@@ -11703,17 +11768,6 @@
             "title": "Season Num",
             "type": "integer"
           },
-          "server_item_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Item Id"
-          },
           "title": {
             "anyOf": [
               {
@@ -11733,7 +11787,6 @@
           "title",
           "file_count",
           "folder_path",
-          "server_item_id",
           "poster_status",
           "poster_url",
           "poster_source",
@@ -11816,10 +11869,15 @@
               }
             ],
             "title": "Season Id"
+          },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
           }
         },
         "required": [
-          "art_type"
+          "art_type",
+          "server_id"
         ],
         "title": "ServerAuditRefreshTarget",
         "type": "object"
@@ -11878,6 +11936,10 @@
             "title": "Item Id",
             "type": "integer"
           },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
+          },
           "server_item_id": {
             "minLength": 1,
             "title": "Server Item Id",
@@ -11897,6 +11959,7 @@
         },
         "required": [
           "item_id",
+          "server_id",
           "server_item_id"
         ],
         "title": "ServerAuditThemeDeleteTarget",
@@ -11904,7 +11967,7 @@
       },
       "ServerLibraryRead": {
         "additionalProperties": false,
-        "description": "One movie or show library on the media server.",
+        "description": "One movie or show library on a media server.",
         "properties": {
           "key": {
             "title": "Key",
@@ -11912,6 +11975,10 @@
           },
           "media_type": {
             "$ref": "#/components/schemas/MediaType"
+          },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
           },
           "title": {
             "title": "Title",
@@ -11921,7 +11988,8 @@
         "required": [
           "key",
           "title",
-          "media_type"
+          "media_type",
+          "server_id"
         ],
         "title": "ServerLibraryRead",
         "type": "object"
@@ -11938,7 +12006,7 @@
       },
       "ServerWebLinksRead": {
         "additionalProperties": false,
-        "description": "Where the server's web app opens an item or a collection.\n\n``{id}`` in each stands for the item's or collection's server ID.",
+        "description": "Where one server's web app opens an item or a collection.\n\n``{id}`` in each stands for the item's or collection's server ID.",
         "properties": {
           "collection": {
             "title": "Collection",
@@ -11947,9 +12015,14 @@
           "item": {
             "title": "Item",
             "type": "string"
+          },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
           }
         },
         "required": [
+          "server_id",
           "item",
           "collection"
         ],
@@ -17384,7 +17457,7 @@
     },
     "/api/collections/capabilities": {
       "get": {
-        "description": "Describe the fields, sources, orders and sets the media server supports.",
+        "description": "Describe the fields, sources, orders and sets the servers support.",
         "operationId": "get_collection_capabilities",
         "parameters": [
           {
@@ -17395,6 +17468,28 @@
             "schema": {
               "$ref": "#/components/schemas/MediaType",
               "description": "Media type ('movie' or 'show')"
+            }
+          },
+          {
+            "description": "The collection's libraries; every server without them.",
+            "in": "query",
+            "name": "library_ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The collection's libraries; every server without them.",
+              "title": "Library Ids"
             }
           },
           {
@@ -23961,7 +24056,7 @@
     },
     "/api/media-server/libraries": {
       "get": {
-        "description": "List the media server's movie and show libraries, movies first.",
+        "description": "List the servers' movie and show libraries, the lead server's first.",
         "operationId": "list_server_libraries",
         "parameters": [
           {
@@ -24059,7 +24154,7 @@
     },
     "/api/media-server/links": {
       "get": {
-        "description": "Return where the server's web app opens items and collections.",
+        "description": "Return where each server's web app opens items and collections.",
         "operationId": "get_server_web_links",
         "parameters": [
           {
@@ -24108,7 +24203,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServerWebLinksRead"
+                  "items": {
+                    "$ref": "#/components/schemas/ServerWebLinksRead"
+                  },
+                  "title": "Response Get Server Web Links",
+                  "type": "array"
                 }
               }
             },

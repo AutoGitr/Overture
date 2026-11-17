@@ -26,7 +26,7 @@
 
   $effect(() => {
     if (leaving || !settings.isSuccess || !movies.isSuccess || !shows.isSuccess) return;
-    const standalone = settings.data.media_server === null;
+    const standalone = settings.data.media_servers.length === 0;
     if (standalone && !catalog.settled) return;
     // Without a media server the library holds only TMDB titles; the catalog is the start.
     const destination =

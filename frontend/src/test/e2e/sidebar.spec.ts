@@ -6,6 +6,7 @@ import {
   catalogRow,
   collection,
   mediaItem,
+  mediaServers,
 } from "../helpers/fixtures";
 
 test("sidebar row hit areas preserve selection, poster links, and badge actions", async ({
@@ -66,7 +67,9 @@ test("sidebar row hit areas preserve selection, poster links, and badge actions"
 
 test("a collection theme badge opens its theme view", async ({ page }) => {
   await page.route("**/api/settings", (route) =>
-    route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+    route.fulfill({
+      json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    }),
   );
   await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({ json: [collection({ id: 1, title: "Action" })] }),
@@ -90,6 +93,7 @@ test("a ten-thousand-item library stays virtualized and interactive", async ({ p
     media_type: "movie",
     year: 2000 + (index % 25),
     monitored: true,
+    copies: [],
   }));
   await page.route("**/api/library/items*", async (route) => {
     const url = new URL(route.request().url());

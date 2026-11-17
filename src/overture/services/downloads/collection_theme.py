@@ -1,14 +1,14 @@
 """Store collection themes through the provider's declared capability."""
 
+lazy from collections.abc import Sequence
 lazy from pathlib import Path
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
-lazy from ...config import Settings
 lazy from ...db.completion import collection_theme_status
 lazy from ...db.models.download_job import DownloadJob
-lazy from ...db.models.media_collection import MediaCollection
+lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file
 lazy from ...domain import JobStatus, ThemeBulkSource
@@ -17,7 +17,7 @@ lazy from ...media_servers.adapters import (
     NoCollectionThemes,
     UploadThemes,
 )
-lazy from ...media_servers.registry import CollectionProvider
+lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.downloads import DownloadJobRepository
@@ -30,57 +30,95 @@ lazy from ..themes.youtube_resolver import DownloadError
 lazy from .results import DownloadedCollectionTheme
 
 
-def collection_themes_unavailable(
-    provider: CollectionProvider | None, app_config: Settings
-) -> str | None:
-    """Return why this provider cannot store a collection theme."""
-    if provider is None or provider.collections is None:
-        return "The media server has no collections Overture can manage"
+def _storage_unavailable(provider: CollectionProvider) -> str | None:
+    """Why one server cannot store a collection theme, or ``None`` when it can."""
     if isinstance(provider.collections, NoCollectionThemes):
-        return "Emby does not support collection themes"
+        return f"{provider.server.title} does not support collection themes"
     if (
         isinstance(provider.collections, FolderThemes)
-        and app_config.JELLYFIN_COLLECTIONS_PATH is None
+        and provider.server.collections_path is None
     ):
-        return "Set JELLYFIN_COLLECTIONS_PATH to store collection themes"
+        setting = provider.server.variable("collections_path")
+        return f"Set {setting} to store collection themes"
     return None
 
 
-async def theme_folder(
-    collection_id: int, *, app_config: Settings, database: Database
-) -> Path:
-    """Resolve a stored collection's trusted theme folder."""
-    async with database.read_session() as session:
-        row = await CollectionRepository(session).get(collection_id)
-    if row is None:
-        raise DownloadError("Collection no longer exists")
-    try:
-        return await owned_thread(
-            collection_folder, app_config.JELLYFIN_COLLECTIONS_PATH, row.server_path
-        )
-    except ValueError as exc:
-        raise DownloadError(str(exc)) from exc
+def collection_themes_unavailable(
+    providers: Sequence[CollectionProvider],
+) -> str | None:
+    """Return why none of the servers *providers* names can store a collection theme."""
+    if not providers:
+        return "No media server has collections Overture can manage"
+    reasons = [_storage_unavailable(provider) for provider in providers]
+    return None if None in reasons else reasons[0]
+
+
+def _theme_copies(
+    row: MediaCollection, provider_registry: ProviderRegistry
+) -> list[tuple[CollectionProvider, CollectionLibrary]]:
+    """The copies a collection's theme goes to, on servers that store themes.
+
+    Plex keeps a theme with each copy; Jellyfin reads one from its BoxSet's
+    folder, which every library's part on that server names.
+    """
+    copies: list[tuple[CollectionProvider, CollectionLibrary]] = []
+    folders: set[int] = set()
+    for part in row.copies:
+        if not provider_registry.configured_server_id(part.server_id):
+            continue
+        provider = provider_registry.get(part.server_id)
+        if _storage_unavailable(provider) is not None or provider.collections is None:
+            continue
+        if isinstance(provider.collections, FolderThemes):
+            if part.server_id in folders:
+                continue
+            folders.add(part.server_id)
+        copies.append((provider, part))
+    return copies
+
+
+async def theme_folders(
+    row: MediaCollection, provider_registry: ProviderRegistry
+) -> list[tuple[CollectionProvider, CollectionLibrary, Path]]:
+    """Resolve the trusted folder each Jellyfin server keeps the collection in.
+
+    Raises:
+        DownloadError: When a server's folder cannot be used.
+    """
+    folders: list[tuple[CollectionProvider, CollectionLibrary, Path]] = []
+    for provider, part in _theme_copies(row, provider_registry):
+        if not isinstance(provider.collections, FolderThemes):
+            continue
+        try:
+            folder = await owned_thread(
+                collection_folder, provider.server, part.server_path
+            )
+        except ValueError as exc:
+            raise DownloadError(str(exc)) from exc
+        folders.append((provider, part, folder))
+    return folders
 
 
 async def collection_theme_unavailable(
-    row: MediaCollection, *, provider: CollectionProvider | None, app_config: Settings
+    row: MediaCollection, *, provider_registry: ProviderRegistry
 ) -> str | None:
-    """Check the configured capability and this collection's mounted folder.
+    """Check the servers' capability and this collection's mounted folders.
 
     An inactive collection keeps a chosen theme until a sync puts it back on
-    the server, so only the capability applies to it.
+    a server, so only the capability applies to it.
     """
-    if reason := collection_themes_unavailable(provider, app_config):
+    if reason := collection_themes_unavailable(
+        provider_registry.collection_providers()
+    ):
         return reason
     if row.server_item_id is None:
         return None
-    if provider and isinstance(provider.collections, FolderThemes):
-        try:
-            await owned_thread(
-                collection_folder, app_config.JELLYFIN_COLLECTIONS_PATH, row.server_path
-            )
-        except ValueError as exc:
-            return str(exc)
+    if not _theme_copies(row, provider_registry):
+        return "None of the servers holding the collection can store its theme"
+    try:
+        await theme_folders(row, provider_registry)
+    except DownloadError as exc:
+        return str(exc)
     return None
 
 
@@ -88,47 +126,46 @@ async def store_collection_theme(
     job: DownloadJob,
     downloaded: DownloadedCollectionTheme,
     *,
-    provider: CollectionProvider | None,
+    provider_registry: ProviderRegistry,
     asset_storage: AssetStorage,
-    app_config: Settings,
     publisher: protocols.EventPublisher,
     database: Database,
 ) -> None:
-    """Write the collection's theme, then record the file and its provenance."""
-    reason = collection_themes_unavailable(provider, app_config)
-    if provider is None or job.collection_id is None or reason is not None:
-        raise DownloadError(reason or "The job names no collection")
+    """Send the collection's theme to every server copy, then record it."""
+    if job.collection_id is None:
+        raise DownloadError("The job names no collection")
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(job.collection_id)
     if row is None:
         raise DownloadError("Collection no longer exists")
+    if reason := await collection_theme_unavailable(
+        row, provider_registry=provider_registry
+    ):
+        raise DownloadError(reason)
     if row.server_item_id is None:
         raise DownloadError("The collection is inactive and has no server copy")
-    server_theme_id = None
-    facts = None
-    if isinstance(provider.collections, UploadThemes):
-        # The first copy's ID stands for them all: each holds the same theme.
-        uploaded = [
-            await provider.upload_collection_theme(server_id, downloaded.audio_bytes)
-            for server_id in row.server_ids
-        ]
-        server_theme_id = uploaded[0]
-    else:
-        folder = await theme_folder(
-            job.collection_id, app_config=app_config, database=database
+    # The lead Plex copy's ID stands for them all: each holds the same theme.
+    uploaded = [
+        await provider.upload_collection_theme(
+            part.server_item_id or "", downloaded.audio_bytes
         )
+        for provider, part in _theme_copies(row, provider_registry)
+        if isinstance(provider.collections, UploadThemes)
+    ]
+    facts = None
+    for provider, part, folder in await theme_folders(row, provider_registry):
         stored = await asset_storage.write_file_async(
             str(folder / THEME_FILENAME), downloaded.audio_bytes, str(folder)
         )
-        facts = ThemeFileFacts(
+        facts = facts or ThemeFileFacts(
             stored.file_hash, stored.mtime_ns, stored.size, downloaded.duration
         )
-        await provider.refresh_item(row.server_item_id, unlock=())
+        await provider.refresh_item(part.server_item_id or "", unlock=())
     await record_collection_theme(
         job,
         title=downloaded.title,
         duration=downloaded.duration,
-        server_theme_id=server_theme_id,
+        server_theme_id=next(iter(uploaded), None),
         facts=facts,
         publisher=publisher,
         database=database,

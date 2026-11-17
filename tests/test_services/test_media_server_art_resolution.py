@@ -6,7 +6,8 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType
-lazy from overture.services.server_identity import resolve_server_item_id
+lazy from overture.services.server_identity import resolve_lead_owner
+lazy from tests.media_servers import copy_ids
 lazy from tests.runtime_helpers import NoopProviderRegistry, row_id
 
 
@@ -32,7 +33,7 @@ async def test_season_resolution_recovers_parent_without_tmdb(
     await db_session.commit()
     provider_registry = NoopProviderRegistry(_Provider())
 
-    server_id = await resolve_server_item_id(
+    owner = await resolve_lead_owner(
         row_id(item),
         ArtType.SEASON_POSTER,
         season.id,
@@ -40,15 +41,14 @@ async def test_season_resolution_recovers_parent_without_tmdb(
         provider_registry=provider_registry,
     )
 
-    assert server_id == "season-1"
+    assert owner is not None
+    assert owner.server_item_id == "season-1"
     assert calls == [
         ("item", 123),
         ("season", "show-1", 1),
     ]
-    await db_session.refresh(item)
-    await db_session.refresh(season)
-    assert item.server_item_id == "show-1"
-    assert season.server_item_id == "season-1"
+    # A title no sync found is looked up, not kept: its sync records it.
+    assert await copy_ids(db_session) == {}
 
 
 async def test_season_resolution_rejects_a_season_from_another_item(
@@ -70,7 +70,7 @@ async def test_season_resolution_rejects_a_season_from_another_item(
     await db_session.commit()
 
     assert (
-        await resolve_server_item_id(
+        await resolve_lead_owner(
             row_id(requested_item),
             ArtType.SEASON_POSTER,
             season.id,

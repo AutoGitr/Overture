@@ -624,6 +624,39 @@ class ServerType(StrEnum):
         return self.value.capitalize()
 
 
+#: Separates the server from its own key in a library ID.
+_LIBRARY_ID_SEPARATOR = ":"
+
+
+def library_id(server_id: int, key: str) -> str:
+    """Return Overture's ID of library *key* on server *server_id*.
+
+    A server's library keys are unique only on that server, so Overture's
+    library IDs name the server too; they stay opaque everywhere else.
+    """
+    return f"{server_id}{_LIBRARY_ID_SEPARATOR}{key}"
+
+
+def library_parts(value: str) -> tuple[int, str] | None:
+    """Return the server and the server's key a library ID names, if it is one."""
+    server, separator, key = value.partition(_LIBRARY_ID_SEPARATOR)
+    if not separator or not key or not server.isdecimal():
+        return None
+    return int(server), key
+
+
+def library_server(value: str) -> int:
+    """Return the server a library ID names.
+
+    Raises:
+        ValueError: When *value* is not a library ID.
+    """
+    parts = library_parts(value)
+    if parts is None:
+        raise ValueError(f"Library {value} names no server")
+    return parts[0]
+
+
 class JobType(StrEnum):
     """Kind of work a download job performs."""
 

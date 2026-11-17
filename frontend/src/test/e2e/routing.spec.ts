@@ -5,6 +5,7 @@ import {
   collection,
   collectionDetail,
   mediaItem,
+  mediaServers,
 } from "../helpers/fixtures";
 
 test("default redirect opens shows when no movie libraries exist", async ({ page }) => {
@@ -83,7 +84,7 @@ test("an unavailable item retains its route and can be retried while live update
   await page.route("**/api/library/items/99", async (route) => {
     await route.fulfill(
       available
-        ? { json: { id: 99, title: "Arrival", media_type: "movie", monitored: true } }
+        ? { json: mediaItem({ id: 99, title: "Arrival", media_type: "movie" }) }
         : { status: 503, json: { detail: "Item unavailable" } },
     );
   });
@@ -125,7 +126,9 @@ test.describe("path-based client routing", () => {
     page,
   }) => {
     await page.route("**/api/settings", (route) =>
-      route.fulfill({ json: appSettings({ media_server: "plex", collections_supported: true }) }),
+      route.fulfill({
+        json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+      }),
     );
     await page.route("**/api/collections/1{,?*}", (route) =>
       route.fulfill({ json: collectionDetail({ id: 1, title: "Action" }) }),

@@ -26,6 +26,7 @@ lazy from overture.domain import (
     ArtType,
     MediaType,
     RecentUnit,
+    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.integrations.tmdb import TMDBClient
@@ -298,7 +299,11 @@ class TestLibraryResponseMappers:
 
         assert MediaItemListResponse(items=[item], total=1).total == 1
         library = LibrarySectionRead(
-            id="movies", title="Movies", media_type=MediaType.MOVIE, count=5
+            id="movies",
+            title="Movies",
+            media_type=MediaType.MOVIE,
+            server_id=1,
+            count=5,
         )
         assert library.count == 5
         assert folder_roots_response({"movies": ["/movies"]}).shows == []
@@ -657,17 +662,26 @@ class TestServerAuditContract:
     def test_fix_request_preserves_both_target_lists(self) -> None:
         fix = FixAuditRequest.model_validate(
             {
-                "targets": [{"item_id": 1, "art_type": "poster"}],
-                "themes": [{"item_id": 1, "server_item_id": "s", "theme_id": "t"}],
+                "targets": [{"item_id": 1, "art_type": "poster", "server_id": 1}],
+                "themes": [
+                    {
+                        "item_id": 1,
+                        "server_id": 1,
+                        "server_item_id": "s",
+                        "theme_id": "t",
+                    }
+                ],
                 "snapshot_finished_at": "finish",
             }
         )
 
         assert fix.targets == [
-            ServerAuditRefreshTarget(item_id=1, art_type=ArtType.POSTER)
+            ServerAuditRefreshTarget(server_id=1, item_id=1, art_type=ArtType.POSTER)
         ]
         assert fix.themes == [
-            ServerAuditThemeDeleteTarget(item_id=1, server_item_id="s", theme_id="t")
+            ServerAuditThemeDeleteTarget(
+                server_id=1, item_id=1, server_item_id="s", theme_id="t"
+            )
         ]
 
     def test_fix_request_needs_a_finding(self) -> None:
@@ -710,7 +724,7 @@ class TestServerAuditContract:
         season_folder.mkdir(parents=True)
         for name in ("theme.mp3", "background.jpg", "poster.jpg"):
             (folder / name).write_bytes(b"asset")
-        poster_name = season_poster_candidates(app_config.MEDIA_SERVER or "", 1)[0]
+        poster_name = season_poster_candidates(ServerType.PLEX, 1)[0]
         (season_folder / poster_name).write_bytes(b"season")
         item = MediaItem(
             id=1, media_type=MediaType.SHOW, title="Show", folder_path=str(folder)

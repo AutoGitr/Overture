@@ -366,8 +366,10 @@ class CollectionRead(CollectionArtwork):
     library_ids: list[str]
     server_added_at: str | None = None
     #: The server copy that stands for the collection, which its link opens;
-    #: none while the server holds no copy.
+    #: none while no server holds a copy.
     server_item_id: str | None = None
+    #: The database's number of that copy's server.
+    server_id: int | None = None
     #: The media server holds a theme for the collection.
     has_theme: bool = False
     youtube_id: str | None = None
@@ -516,6 +518,7 @@ def collection_read(
         if row.server_added_at
         else None,
         server_item_id=row.server_item_id,
+        server_id=row.lead.server_id if row.lead is not None else None,
         has_theme=has_theme,
         youtube_id=row.youtube_id,
         youtube_title=row.youtube_title,
@@ -1038,10 +1041,16 @@ class CollectionDimensionRead(StrictBaseModel):
 
 
 class CollectionCapabilities(StrictBaseModel):
-    """What the active media server lets collections do, for one media type."""
+    """What collections of one media type can do on some media servers.
 
-    server_type: ServerType
-    #: One server collection can hold several libraries, of either media type.
+    A collection spanning several servers is offered what any of them
+    supports; each of the others falls back to its nearest.
+    """
+
+    #: The kinds of the servers described.
+    server_types: list[ServerType]
+    #: One server collection can hold several libraries, of either media type,
+    #: on every server described.
     spans_libraries: bool
     smart: bool
     #: Plex's visibility, Home promotion and Home order.

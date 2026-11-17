@@ -6,7 +6,7 @@ lazy from datetime import datetime
 lazy from functools import partial
 lazy from typing import ClassVar, Literal, override
 
-lazy from ...config import Settings
+lazy from ...config import MediaServerConfig, Settings
 lazy from ...domain import (
     ArtType,
     CollectionFiltering,
@@ -160,11 +160,15 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         self,
         *,
         client: PlexClient | None = None,
+        server: MediaServerConfig,
+        server_id: int,
         app_config: Settings,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         super().__init__(
-            client=client or PlexClient(app_config=app_config, health=health),
+            client=client
+            or PlexClient(server=server, app_config=app_config, health=health),
+            server_id=server_id,
             app_config=app_config,
         )
 
@@ -204,7 +208,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         metadata: PlexMetadata,
         *,
         media_type: MediaType,
-        section_key: str,
+        library_id: str,
         plex_base: str,
         in_progress: Collection[str],
     ) -> ServerItem:
@@ -229,7 +233,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             guids=_plex_guids(metadata),
             poster_url=_plex_absolute_url(metadata.get("thumb"), plex_base),
             background_url=_plex_absolute_url(metadata.get("art"), plex_base),
-            library_id=section_key,
+            library_id=library_id,
             folder_path=(
                 _plex_location_path(metadata) or _plex_movie_file_parent(metadata)
                 if movie
@@ -289,7 +293,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             item = partial(
                 self._to_server_item,
                 media_type=section.media_type,
-                section_key=section.key,
+                library_id=section.library_id,
                 plex_base=plex_base,
                 in_progress=in_progress,
             )
@@ -335,10 +339,8 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         """Return Plex web links, through plex.tv when the server is known there."""
         machine_id = await self.client.get_machine_identifier()
         return ServerWebLinks(
-            item=plex_web_link("metadata", machine_id, app_config=self._app_config),
-            collection=plex_web_link(
-                "collections", machine_id, app_config=self._app_config
-            ),
+            item=plex_web_link("metadata", machine_id, server=self.server),
+            collection=plex_web_link("collections", machine_id, server=self.server),
         )
 
     @override
@@ -425,7 +427,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             title=item.get("title") or "",
             member_ids=tuple(await self.client.get_collection_member_ids(rating_key)),
             media_type=section.media_type,
-            library_id=section.key,
+            library_id=section.library_id,
             summary=item.get("summary") or None,
             sort_title=item.get("titleSort") or None,
             smart=is_smart,
@@ -458,38 +460,49 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
 
     @override
     async def create_collection(
-        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+        self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
         item = await self.client.create_collection(
-            section_key, title, media_type, member_ids
+            self.section_key(library_id), title, media_type, member_ids
         )
-        section = ServerSection(key=section_key, title="", media_type=media_type)
-        return await self._server_collection(item, section)
+        return await self._server_collection(
+            item, self._section(library_id, media_type)
+        )
 
     @override
     async def create_smart_collection(
         self,
-        section_key: str,
+        library_id: str,
         title: str,
         media_type: MediaType,
         filter_query: str,
     ) -> ServerCollection:
         item = await self.client.create_smart_collection(
-            section_key, title, media_type, filter_query
+            self.section_key(library_id), title, media_type, filter_query
         )
-        section = ServerSection(key=section_key, title="", media_type=media_type)
-        return await self._server_collection(item, section)
+        return await self._server_collection(
+            item, self._section(library_id, media_type)
+        )
+
+    def _section(self, library_id: str, media_type: MediaType) -> ServerSection:
+        """The library a collection was just made in, as far as it is needed."""
+        return ServerSection(
+            key=self.section_key(library_id),
+            title="",
+            media_type=media_type,
+            library_id=library_id,
+        )
 
     @override
     async def update_smart_collection_filter(
         self,
         server_collection_id: str,
-        section_key: str,
+        library_id: str,
         media_type: MediaType,
         filter_query: str,
     ) -> None:
         await self.client.update_smart_collection_filter(
-            server_collection_id, section_key, media_type, filter_query
+            server_collection_id, self.section_key(library_id), media_type, filter_query
         )
 
     @override
@@ -511,28 +524,32 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
 
     @override
     async def filter_choices(
-        self, section_key: str, media_type: MediaType, field: str
+        self, library_id: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
-        return await self.client.get_filter_choices(section_key, media_type, field)
+        return await self.client.get_filter_choices(
+            self.section_key(library_id), media_type, field
+        )
 
     @override
     async def find_matching(
-        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+        self, library_id: str, media_type: MediaType, filter_query: str, size: int
     ) -> tuple[int, list[str]]:
         return await self.client.find_matching(
-            section_key, media_type, filter_query, size
+            self.section_key(library_id), media_type, filter_query, size
         )
 
     @override
     async def order_collection_hubs(
-        self, section_key: str, server_collection_ids: Sequence[str]
+        self, library_id: str, server_collection_ids: Sequence[str]
     ) -> None:
-        await self.client.order_collection_hubs(section_key, server_collection_ids)
+        await self.client.order_collection_hubs(
+            self.section_key(library_id), server_collection_ids
+        )
 
     @override
     async def sync_item_labels(
         self,
-        section_key: str,
+        library_id: str,
         media_type: MediaType,
         label: str,
         *,
@@ -540,7 +557,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         remove_ids: list[str],
     ) -> None:
         await self.client.sync_item_labels(
-            section_key,
+            self.section_key(library_id),
             media_type,
             label,
             add=add,
@@ -570,7 +587,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     ) -> None:
         await self.client.update_collection_details(
             server_collection_id,
-            library_id=library_id,
+            library_id=self.section_key(library_id),
             title=title,
             summary=summary,
             sort_title=sort_title,

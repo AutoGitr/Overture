@@ -28,11 +28,21 @@ export function createSeasonsQuery(item: () => MediaItemRead | null) {
  */
 export function createServerLinks() {
   const links = createQuery(() => getServerWebLinksOptions());
-  const fill = (template: string | undefined, serverId: string | null | undefined) =>
-    template && serverId ? template.replaceAll("{id}", encodeURIComponent(serverId)) : null;
+  const fill = (
+    kind: "item" | "collection",
+    serverId: number | null | undefined,
+    serverItemId: string | null | undefined,
+  ) => {
+    const template = links.data?.find((server) => server.server_id === serverId)?.[kind];
+    return template && serverItemId
+      ? template.replaceAll("{id}", encodeURIComponent(serverItemId))
+      : null;
+  };
   return {
-    item: (serverId: string | null | undefined) => fill(links.data?.item, serverId),
-    collection: (serverId: string | null | undefined) => fill(links.data?.collection, serverId),
+    item: (serverId: number | null | undefined, serverItemId: string | null | undefined) =>
+      fill("item", serverId, serverItemId),
+    collection: (serverId: number | null | undefined, serverItemId: string | null | undefined) =>
+      fill("collection", serverId, serverItemId),
   };
 }
 

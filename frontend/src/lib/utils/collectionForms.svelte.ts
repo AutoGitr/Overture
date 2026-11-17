@@ -262,7 +262,7 @@ function setLibrary(
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor {
   readonly defaults;
-  readonly options = new Capabilities();
+  readonly options: Capabilities;
   /** Criteria of a library just left, so swapping one for another keeps them. */
   readonly lastCriteria = new SvelteMap<MediaType, FilterGroupInput>();
   readonly creating = false;
@@ -334,15 +334,15 @@ export class CollectionEditor {
       } = saved;
       this.rule = structuredClone(rest);
     }
-    // Last: its query reads the form as soon as it is created.
+    // Last: their queries read the form as soon as they are created.
+    this.options = new Capabilities(() =>
+      this.libraryIds.map((id) => ({ id, media_type: this.typeOf(id) })),
+    );
     this.preview = new CriteriaPreview(() => this);
   }
 
   get collection() {
     return this.current();
-  }
-  get serverType() {
-    return settingsState.current.media_server;
   }
   get libraryIds() {
     return this.rule.libraries.map((entry) => entry.library_id);
@@ -375,8 +375,8 @@ export class CollectionEditor {
   get smart() {
     return !!this.rule.smart;
   }
-  fieldsFor(mediaType: MediaType) {
-    return availableFields(this.options.for(mediaType).data, this.smart);
+  fieldsFor(libraryId: string) {
+    return availableFields(this.options.forLibrary(libraryId, this.typeOf(libraryId)), this.smart);
   }
   get orders() {
     return availableOrders(this.options.shared(this.mediaTypes), this.smart);
@@ -395,9 +395,7 @@ export class CollectionEditor {
     const memberIds = new SvelteSet(this.collection.member_ids);
     return libraryItems.filter(
       (item) =>
-        !!item.library_id &&
-        this.collection.library_ids.includes(item.library_id) &&
-        item.server_item_id &&
+        item.copies.some((copy) => this.collection.library_ids.includes(copy.library_id)) &&
         !item.server_removed_at &&
         !memberIds.has(item.id) &&
         item.title.toLowerCase().includes(query),
@@ -569,7 +567,7 @@ function sameName(a: string, b: string) {
 /** An unsaved collection or collection set, created when its form is submitted. */
 export class CollectionDraft {
   readonly defaults;
-  readonly options = new Capabilities();
+  readonly options: Capabilities;
   /** Criteria of a library just left, so swapping one for another keeps them. */
   readonly lastCriteria = new SvelteMap<MediaType, FilterGroupInput>();
   readonly creating = true;
@@ -621,13 +619,13 @@ export class CollectionDraft {
         query: { name: this.collectionGroup || undefined },
       }),
     );
-    // Last: its query reads the form as soon as it is created.
+    // Last: their queries read the form as soon as they are created.
+    this.options = new Capabilities(() =>
+      this.libraryIds.map((id) => ({ id, media_type: this.typeOf(id) })),
+    );
     this.preview = new CriteriaPreview(() => this);
   }
 
-  get serverType() {
-    return settingsState.current.media_server;
-  }
   get smart() {
     return !!this.rule.smart;
   }
@@ -664,8 +662,8 @@ export class CollectionDraft {
     const seed = this.typeOf(libraryId) === "movie" ? this.seed() : null;
     setLibrary(this, libraryId, chosen, this.fallbackCriteria(seed));
   }
-  fieldsFor(mediaType: MediaType) {
-    return availableFields(this.options.for(mediaType).data, this.smart);
+  fieldsFor(libraryId: string) {
+    return availableFields(this.options.forLibrary(libraryId, this.typeOf(libraryId)), this.smart);
   }
   get orders() {
     return availableOrders(this.options.shared(this.mediaTypes), this.smart);
@@ -694,7 +692,10 @@ export class CollectionDraft {
 
   private libraryNames(ids: string[]) {
     return ids
-      .map((id) => this.libraries().find((library) => library.id === id)?.title ?? id)
+      .map((id) => {
+        const library = this.libraries().find((each) => each.id === id);
+        return library ? settingsState.libraryLabel(library) : id;
+      })
       .join(", ");
   }
 

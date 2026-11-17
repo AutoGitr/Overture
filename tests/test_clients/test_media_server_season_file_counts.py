@@ -10,6 +10,7 @@ lazy import pytest
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
+lazy from overture.domain import ServerType
 lazy from overture.media_servers.emby import EmbyProvider
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.errors import MediaServerError
@@ -18,6 +19,7 @@ lazy from overture.media_servers.jellyfin.provider import JellyfinProvider
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from tests.http_mock import mock_client_factory
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 
 
 def _complete_listing(response: httpx2.Response) -> httpx2.Response:
@@ -131,14 +133,18 @@ def _plex_handler(
 def _plex_provider(
     app_config: Settings, handler: Callable[[httpx2.Request], httpx2.Response]
 ) -> tuple[PlexProvider, list[httpx2.Request]]:
-    app_config.MEDIA_SERVER_URL = "http://plex.test:32400"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("token")
+    configure(app_config, url="http://plex.test:32400")
+    configure(app_config, api_key=SecretStr("token"))
     factory, transport = mock_client_factory(
         lambda request: _complete_listing(handler(request))
     )
     provider = PlexProvider(
+        server=server_of(app_config),
+        server_id=TEST_SERVER_ID,
         app_config=app_config,
-        client=PlexClient(app_config=app_config, client_factory=factory),
+        client=PlexClient(
+            server=server_of(app_config), app_config=app_config, client_factory=factory
+        ),
     )
     return provider, transport.requests
 
@@ -148,7 +154,9 @@ async def test_plex_reads_show_folders_and_seasons_in_one_request_per_page(
     app_config: Settings,
 ) -> None:
     provider, requests = _plex_provider(app_config, _plex_handler())
-    items = [item async for page in provider.iter_items(["2", "1"]) for item in page]
+    items = [
+        item async for page in provider.iter_items(["1:2", "1:1"]) for item in page
+    ]
 
     assert [item.id for item in items] == ["50", "100", "101"]
     movie, show, empty = items
@@ -171,7 +179,7 @@ async def test_plex_rejects_a_shortened_season_list(
     provider, _ = _plex_provider(app_config, _plex_handler(child_count=3))
 
     with pytest.raises(MediaServerError, match="incomplete season list"):
-        async for _ in provider.iter_items(["1"]):
+        async for _ in provider.iter_items(["1:1"]):
             pass
 
 
@@ -185,7 +193,7 @@ async def test_plex_poll_reads_details_of_changed_shows_only(
     since = datetime.fromtimestamp(2_000, UTC)
     items = [
         item
-        async for page in provider.iter_items_since(since, ["2", "1"])
+        async for page in provider.iter_items_since(since, ["1:2", "1:1"])
         for item in page
     ]
 
@@ -201,8 +209,8 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://jellyfin.test"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("token")
+    configure(app_config, url="http://jellyfin.test")
+    configure(app_config, api_key=SecretStr("token"))
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         path = request.url.path
@@ -320,11 +328,17 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
         lambda request: _complete_listing(handler(request))
     )
     provider = JellyfinProvider(
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
         app_config=app_config,
-        client=JellyfinClient(app_config=app_config, client_factory=factory),
+        client=JellyfinClient(
+            server=server_of(app_config, ServerType.JELLYFIN), client_factory=factory
+        ),
     )
     items = [
-        item async for page in provider.iter_items(["lib2", "lib1"]) for item in page
+        item
+        async for page in provider.iter_items(["1:lib2", "1:lib1"])
+        for item in page
     ]
 
     assert transport.called
@@ -356,7 +370,11 @@ async def test_jellyfin_poll_reads_seasons_of_changed_shows_only(
     *,
     app_config: Settings,
 ) -> None:
-    provider = JellyfinProvider(app_config=app_config)
+    provider = JellyfinProvider(
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+    )
     season_parents: list[str] = []
     count_parents: list[str] = []
 
@@ -408,8 +426,8 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://emby.test:8096"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("token")
+    configure(app_config, url="http://emby.test:8096")
+    configure(app_config, api_key=SecretStr("token"))
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         path = request.url.path
@@ -535,11 +553,17 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
         lambda request: _complete_listing(handler(request))
     )
     provider = EmbyProvider(
+        server=server_of(app_config, ServerType.EMBY),
+        server_id=TEST_SERVER_ID,
         app_config=app_config,
-        client=EmbyClient(app_config=app_config, client_factory=factory),
+        client=EmbyClient(
+            server=server_of(app_config, ServerType.EMBY), client_factory=factory
+        ),
     )
     items = [
-        item async for page in provider.iter_items(["lib2", "lib1"]) for item in page
+        item
+        async for page in provider.iter_items(["1:lib2", "1:lib1"])
+        for item in page
     ]
 
     assert transport.called
@@ -569,7 +593,7 @@ async def test_emby_uses_prefixed_api_and_real_episode_counts(
 
 
 async def test_people_lookups_keep_their_urls_short(*, app_config: Settings) -> None:
-    app_config.MEDIA_SERVER_URL = "http://jellyfin.test"
+    configure(app_config, url="http://jellyfin.test")
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         ids = request.url.params["ids"].split(",")
@@ -579,7 +603,9 @@ async def test_people_lookups_keep_their_urls_short(*, app_config: Settings) -> 
         )
 
     factory, transport = mock_client_factory(handler)
-    client = JellyfinClient(app_config=app_config, client_factory=factory)
+    client = JellyfinClient(
+        server=server_of(app_config, ServerType.JELLYFIN), client_factory=factory
+    )
     ids = [f"{index:032x}" for index in range(250)]
     try:
         items = await client.get_people(ids)

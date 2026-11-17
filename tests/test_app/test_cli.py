@@ -31,6 +31,10 @@ lazy from tests.runtime_helpers import make_runtime
 def isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in Settings.model_fields:
         monkeypatch.delenv(name, raising=False)
+    # Each media server's variables are named after it.
+    for name in list(os.environ):
+        if name.startswith("MEDIA_SERVER") or name == "JELLYFIN_COLLECTIONS_PATH":
+            monkeypatch.delenv(name)
     monkeypatch.delenv("OVERTURE_CONFIG_FILE", raising=False)
 
 
@@ -179,7 +183,7 @@ def test_setup_saves_validated_configuration(
     path = tmp_path / "configuration" / "overture.env"
     cli.main(["setup", "--config-file", str(path)])
     settings = load_configuration(Settings, path)
-    assert settings.MEDIA_SERVER_API_KEY.get_secret_value() == "private-api-key"
+    assert settings.MEDIA_SERVERS[0].api_key.get_secret_value() == "private-api-key"
     assert verify_password(
         password.encode(),
         settings.APP_PASSWORD_HASH.get_secret_value().encode(),

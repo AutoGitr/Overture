@@ -57,7 +57,7 @@ def recommend_kind(
     """
     if not capabilities.smart:
         return None
-    server = capabilities.server_type
+    server = ServerType.PLEX
     conditions = criteria.field_conditions()
     sources = criteria.source_conditions()
     plex_cannot = next(

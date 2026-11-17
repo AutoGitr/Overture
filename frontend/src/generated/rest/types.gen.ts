@@ -167,7 +167,10 @@ export type AppSettingsRead = {
      * Mdblist Configured
      */
     mdblist_configured: boolean;
-    media_server: ServerType | null;
+    /**
+     * Media Servers
+     */
+    media_servers: Array<MediaServerRead>;
     /**
      * Min Duration Seconds
      */
@@ -1878,7 +1881,10 @@ export type CollectionArrOptions = {
 /**
  * CollectionCapabilities
  *
- * What the active media server lets collections do, for one media type.
+ * What collections of one media type can do on some media servers.
+ *
+ * A collection spanning several servers is offered what any of them
+ * supports; each of the others falls back to its nearest.
  */
 export type CollectionCapabilities = {
     /**
@@ -1905,7 +1911,10 @@ export type CollectionCapabilities = {
      * Orders
      */
     orders: Array<CollectionOrder>;
-    server_type: ServerType;
+    /**
+     * Server Types
+     */
+    server_types: Array<ServerType>;
     /**
      * Smart
      */
@@ -2203,6 +2212,10 @@ export type CollectionDetail = {
      * Server Background Version
      */
     server_background_version: string | null;
+    /**
+     * Server Id
+     */
+    server_id: number | null;
     /**
      * Server Item Id
      */
@@ -3020,6 +3033,10 @@ export type CollectionRead = {
      */
     server_background_version: string | null;
     /**
+     * Server Id
+     */
+    server_id: number | null;
+    /**
      * Server Item Id
      */
     server_item_id: string | null;
@@ -3553,7 +3570,7 @@ export type ConditionOutput = ({
 /**
  * ConnectivityStatusResponse
  *
- * Whether the configured media server and TMDB answer.
+ * Whether the configured media servers and TMDB answer.
  */
 export type ConnectivityStatusResponse = {
     /**
@@ -4029,13 +4046,15 @@ export type ImageSize = 'display';
 /**
  * IncrementalSyncState
  *
- * The checkpoint an incremental schedule polls from.
+ * Where an incremental schedule polls each server from.
  */
 export type IncrementalSyncState = {
     /**
-     * Checkpoint
+     * Checkpoints
      */
-    checkpoint: string | null;
+    checkpoints: {
+        [key: string]: string;
+    };
 };
 
 /**
@@ -4046,6 +4065,26 @@ export type IncrementalSyncState = {
 export type IncrementalThemeOrder = 'off' | 'overturedb_themerrdb' | 'themerrdb_overturedb';
 
 export type ItemArtAsset = ArtType | 'art';
+
+/**
+ * ItemCopyRead
+ *
+ * One media server's copy of a title, which that server lists.
+ */
+export type ItemCopyRead = {
+    /**
+     * Library Id
+     */
+    library_id: string;
+    /**
+     * Server Id
+     */
+    server_id: number;
+    /**
+     * Server Item Id
+     */
+    server_item_id: string;
+};
 
 /**
  * ItemDownloadTarget
@@ -4266,6 +4305,10 @@ export type LibrarySectionRead = {
      */
     id: string;
     media_type: MediaType;
+    /**
+     * Server Id
+     */
+    server_id: number;
     /**
      * Title
      */
@@ -4504,6 +4547,10 @@ export type MediaItemRead = {
      */
     catalog_themerrdb: boolean;
     /**
+     * Copies
+     */
+    copies: Array<ItemCopyRead>;
+    /**
      * Created At
      */
     created_at: string | null;
@@ -4539,10 +4586,6 @@ export type MediaItemRead = {
      * Library Collection Id
      */
     library_collection_id: number | null;
-    /**
-     * Library Id
-     */
-    library_id: string | null;
     media_type: MediaType;
     /**
      * Metadata Issues
@@ -4584,17 +4627,9 @@ export type MediaItemRead = {
      */
     server_added_at: string | null;
     /**
-     * Server Item Id
-     */
-    server_item_id: string | null;
-    /**
      * Server Removed At
      */
     server_removed_at: string | null;
-    /**
-     * Server Verified At
-     */
-    server_verified_at: string | null;
     /**
      * Sort Title
      */
@@ -4659,6 +4694,27 @@ export type MediaServerErrorResponse = {
 };
 
 /**
+ * MediaServerRead
+ *
+ * One media server MEDIA_SERVERS configures, the lead first.
+ */
+export type MediaServerRead = {
+    /**
+     * Collections
+     */
+    collections: boolean;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Title
+     */
+    title: string;
+    type: ServerType;
+};
+
+/**
  * MediaServerState
  *
  * Whether the media server answered Overture's last request.
@@ -4668,11 +4724,19 @@ export type MediaServerState = 'unknown' | 'reachable' | 'unreachable' | 'reject
 /**
  * MediaServerStatus
  *
- * Whether the media server answered Overture's last request.
+ * Whether one media server answered Overture's last request.
  */
 export type MediaServerStatus = {
     message: PublicText;
+    /**
+     * Server Id
+     */
+    server_id: number;
     state: MediaServerState;
+    /**
+     * Title
+     */
+    title: string;
 };
 
 /**
@@ -4904,7 +4968,10 @@ export type RealtimeSnapshot = {
      * Jobs
      */
     jobs: Array<RealtimeJobSnapshot>;
-    media_server: MediaServerStatus;
+    /**
+     * Media Servers
+     */
+    media_servers: Array<MediaServerStatus>;
     /**
      * Sequence
      */
@@ -5208,10 +5275,6 @@ export type SeasonRead = {
      */
     season_num: number;
     /**
-     * Server Item Id
-     */
-    server_item_id: string | null;
-    /**
      * Title
      */
     title: string | null;
@@ -5259,6 +5322,10 @@ export type ServerAuditRefreshTarget = {
      * Season Id
      */
     season_id?: number | null;
+    /**
+     * Server Id
+     */
+    server_id: number;
 };
 
 /**
@@ -5304,6 +5371,10 @@ export type ServerAuditThemeDeleteTarget = {
      */
     item_id: number;
     /**
+     * Server Id
+     */
+    server_id: number;
+    /**
      * Server Item Id
      */
     server_item_id: string;
@@ -5316,7 +5387,7 @@ export type ServerAuditThemeDeleteTarget = {
 /**
  * ServerLibraryRead
  *
- * One movie or show library on the media server.
+ * One movie or show library on a media server.
  */
 export type ServerLibraryRead = {
     /**
@@ -5324,6 +5395,10 @@ export type ServerLibraryRead = {
      */
     key: string;
     media_type: MediaType;
+    /**
+     * Server Id
+     */
+    server_id: number;
     /**
      * Title
      */
@@ -5340,7 +5415,7 @@ export type ServerType = 'plex' | 'jellyfin' | 'emby';
 /**
  * ServerWebLinksRead
  *
- * Where the server's web app opens an item or a collection.
+ * Where one server's web app opens an item or a collection.
  *
  * ``{id}`` in each stands for the item's or collection's server ID.
  */
@@ -5353,6 +5428,10 @@ export type ServerWebLinksRead = {
      * Item
      */
     item: string;
+    /**
+     * Server Id
+     */
+    server_id: number;
 };
 
 /**
@@ -8058,6 +8137,12 @@ export type GetCollectionCapabilitiesData = {
          * Media type ('movie' or 'show')
          */
         media_type: MediaType;
+        /**
+         * Library Ids
+         *
+         * The collection's libraries; every server without them.
+         */
+        library_ids?: Array<string> | null;
     };
     url: '/api/collections/capabilities';
 };
@@ -11010,9 +11095,11 @@ export type GetServerWebLinksError = GetServerWebLinksErrors[keyof GetServerWebL
 
 export type GetServerWebLinksResponses = {
     /**
+     * Response Get Server Web Links
+     *
      * Successful Response
      */
-    200: ServerWebLinksRead;
+    200: Array<ServerWebLinksRead>;
 };
 
 export type GetServerWebLinksResponse = GetServerWebLinksResponses[keyof GetServerWebLinksResponses];

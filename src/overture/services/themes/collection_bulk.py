@@ -9,7 +9,6 @@ lazy from ...db.theme_file import record_theme_file, theme_file_facts
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import BulkAssetTally
-lazy from ...media_servers.adapters import FolderThemes
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...schemas.bulk import BulkThemeRequest
@@ -22,8 +21,11 @@ lazy from ..bulk_common import (
     queue_download,
 )
 lazy from ..catalog.index import NO_THEME, CatalogIndex
-lazy from ..collections.theme_files import collection_folder, inspect_theme_file
-lazy from ..downloads.collection_theme import collection_themes_unavailable
+lazy from ..collections.theme_files import inspect_theme_file
+lazy from ..downloads.collection_theme import (
+    collection_themes_unavailable,
+    theme_folders,
+)
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
@@ -77,24 +79,19 @@ async def _refresh_file(
     row: MediaCollection,
     *,
     downloads: DownloadService,
-    app_config: Settings,
     database: Database,
 ) -> MediaCollection:
-    if not isinstance(
-        downloads.provider_registry.collections.collections
-        if downloads.provider_registry.collections
-        else None,
-        FolderThemes,
-    ):
-        return row
     async with downloads.asset_locks.acquire(f"collection:{row.id}"):
         async with database.read_session() as session:
-            current = await session.get(MediaCollection, row.id)
+            current = await CollectionRepository(session).get(row.id or 0)
         if current is None:
             raise ValueError("Collection no longer exists")
-        folder = await owned_thread(
-            collection_folder, app_config.JELLYFIN_COLLECTIONS_PATH, current.server_path
-        )
+        # Each Jellyfin server's folder holds the same theme; the first stands
+        # for them.
+        folders = await theme_folders(current, downloads.provider_registry)
+        if not folders:
+            return row
+        [(_, _, folder), *_] = folders
         facts = await owned_thread(
             inspect_theme_file, folder, theme_file_facts(current)
         )
@@ -125,7 +122,7 @@ async def run_collection_themes(
 ) -> None:
     """Visit planned collection themes without searching YouTube."""
     reason = collection_themes_unavailable(
-        downloads.provider_registry.collections, app_config
+        downloads.provider_registry.collection_providers()
     )
     for batch in plan.batches():
         if job.stop_requested():
@@ -155,7 +152,7 @@ async def run_collection_themes(
                 continue
             try:
                 current = await _refresh_file(
-                    row, downloads=downloads, app_config=app_config, database=database
+                    row, downloads=downloads, database=database
                 )
             except (OSError, ValueError) as exc:
                 await job.report(JobOutcome.ERROR, row.title, str(exc))

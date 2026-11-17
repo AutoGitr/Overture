@@ -4,7 +4,7 @@ lazy from collections.abc import AsyncIterator, Collection
 lazy from datetime import datetime
 lazy from typing import ClassVar, override
 
-lazy from ...config import Settings
+lazy from ...config import MediaServerConfig, Settings
 lazy from ...domain import (
     ArtType,
     CollectionFiltering,
@@ -150,7 +150,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         metadata: MediaBrowserItem,
         *,
         media_type: MediaType,
-        section_id: str,
+        library_id: str,
     ) -> ServerItem:
         """Normalize one item, without its seasons, into a ServerItem."""
         item_id = metadata["Id"]
@@ -181,7 +181,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                 if metadata.get("BackdropImageTags", [])
                 else None
             ),
-            library_id=section_id,
+            library_id=library_id,
             folder_path=_media_browser_item_folder(metadata, media_type),
             director_etag=etag if movie else None,
             studio=studios[0].get("Name") if studios else None,
@@ -260,7 +260,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                         self._to_server_item(
                             metadata,
                             media_type=section.media_type,
-                            section_id=section.key,
+                            library_id=section.library_id,
                         )
                         for metadata in page
                     )
@@ -378,7 +378,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
 
     @override
     async def create_collection(
-        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+        self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
         collection_id = await self.client.create_collection(title, member_ids)
         metadata = await self.client.get_item(collection_id)
@@ -386,7 +386,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             id=collection_id,
             title=title,
             member_ids=tuple(member_ids),
-            library_id=section_key,
+            library_id=library_id,
             media_type=media_type,
             path=metadata.get("Path"),
         )
@@ -460,10 +460,13 @@ class JellyfinProvider(MediaBrowserProvider[JellyfinClient]):
         self,
         *,
         client: JellyfinClient | None = None,
+        server: MediaServerConfig,
+        server_id: int,
         app_config: Settings,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         super().__init__(
-            client=client or JellyfinClient(app_config=app_config, health=health),
+            client=client or JellyfinClient(server=server, health=health),
+            server_id=server_id,
             app_config=app_config,
         )

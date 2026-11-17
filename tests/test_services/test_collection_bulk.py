@@ -15,6 +15,7 @@ lazy from overture.db.session import Database
 lazy from overture.domain import (
     IncrementalThemeOrder,
     MediaType,
+    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.jobs.kinds import JobKind
@@ -40,6 +41,7 @@ lazy from overture.services.themes.collection_bulk import (
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import managing_rule, stored_collection
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 lazy from tests.runtime_helpers import JobProbe
 
 
@@ -50,7 +52,7 @@ async def _seed(database: Database, *, saved: str | None = None) -> None:
                 id=1,
                 server_item_id="opaque-server-id",
                 media_type=MediaType.MOVIE,
-                library_id="movies",
+                library_id="1:movies",
                 title="Saga",
                 tmdb_collection_id=10,
                 youtube_id=saved,
@@ -94,7 +96,11 @@ async def test_bulk_collection_scope_uses_catalog_order_and_never_searches_youtu
     downloads = make_bulk_downloads(
         app_config=app_config,
         database=database,
-        provider=PlexProvider(app_config=app_config),
+        provider=PlexProvider(
+            server=server_of(app_config),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
     )
     probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_THEME))
     with downloads.watch() as watch:
@@ -125,9 +131,9 @@ async def test_collections_run_beside_libraries_only_when_chosen(
 ) -> None:
     await _seed(database)
     for params, total in [
-        (BulkThemeRequest(library_ids=["movies"]), 0),
-        (BulkThemeRequest(library_ids=["movies"], all_collections=True), 1),
-        (BulkThemeRequest(library_ids=["elsewhere"], all_collections=True), 1),
+        (BulkThemeRequest(library_ids=["1:movies"]), 0),
+        (BulkThemeRequest(library_ids=["1:movies"], all_collections=True), 1),
+        (BulkThemeRequest(library_ids=["1:elsewhere"], all_collections=True), 1),
         (BulkThemeRequest(item_ids=[1]), 0),
     ]:
         plan = await plan_collection_themes(
@@ -143,7 +149,11 @@ async def test_incremental_fill_keeps_choices_and_deletion_cascades_jobs(
     downloads = make_bulk_downloads(
         app_config=app_config,
         database=database,
-        provider=PlexProvider(app_config=app_config),
+        provider=PlexProvider(
+            server=server_of(app_config),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
     )
     async with database.write_session() as session:
         chosen_id, _ = await downloads.queue_job(
@@ -170,7 +180,7 @@ async def test_incremental_fill_keeps_choices_and_deletion_cascades_jobs(
 
 def test_bulk_requests_take_exactly_one_scope() -> None:
     invalid: list[dict[str, Any]] = [
-        {"collection_ids": [1], "library_ids": ["movies"], "themes": {}},
+        {"collection_ids": [1], "library_ids": ["1:movies"], "themes": {}},
         {"collection_groups": ["Sagas"], "all_collections": True, "themes": {}},
         {"collection_ids": [], "themes": {}},
         {"collection_groups": [], "art": {}},
@@ -209,18 +219,22 @@ async def test_jellyfin_restores_a_missing_theme_and_keeps_a_recorded_one(
     folder.mkdir()
     if existing_file:
         (folder / "theme.mp3").write_bytes(b"replaced by another application")
-    app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
+    configure(app_config, collections_path=tmp_path)
     async with database.write_session() as session:
         row = await session.get(MediaCollection, 1)
         assert row is not None
-        row.server_path = "/config/collections/Saga [boxset]"
+        row.libraries[0].server_path = "/config/collections/Saga [boxset]"
         # Planning trusts the recorded file facts: none recorded means missing.
         row.theme_file_hash = "previous-file" if existing_file else None
         session.add(row)
     downloads = make_bulk_downloads(
         app_config=app_config,
         database=database,
-        provider=JellyfinProvider(app_config=app_config),
+        provider=JellyfinProvider(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
     )
     params = BulkThemeRequest(collection_ids=[1])
     plan = await plan_collection_themes(

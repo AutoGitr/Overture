@@ -14,16 +14,18 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtStyle, ArtType, MediaType
+lazy from overture.repositories.copies import CopyRepository
 lazy from overture.repositories.media_items import MediaItemRepository
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from tests.factories import seed_art_slot
+lazy from tests.media_servers import TEST_SERVER_ID, served_item
 lazy from tests.term_helpers import assign
 
 
 async def test_a_match_only_lookup_finds_the_row_but_refuses_its_artwork(
     db_session: AsyncSession, database: Database
 ) -> None:
-    item = MediaItem(
+    item = served_item(
         title="Movie",
         media_type=MediaType.MOVIE,
         folder_path="/media/Movie",
@@ -40,7 +42,9 @@ async def test_a_match_only_lookup_finds_the_row_but_refuses_its_artwork(
             await repo.find_by_folder_path(
                 "/media/Movie/", MediaType.MOVIE, for_update=False
             ),
-            await repo.find_by_server_id("server-1", MediaType.MOVIE, for_update=False),
+            await repo.find_by_copy(
+                TEST_SERVER_ID, "server-1", MediaType.MOVIE, for_update=False
+            ),
             await repo.find_by_external_guids(
                 {"tmdb": "603"}, MediaType.MOVIE, for_update=False
             ),
@@ -68,11 +72,11 @@ async def populated_repository(
     removed = datetime(2026, 1, 1, tzinfo=UTC)
     db_session.add_all(
         [
-            zulu := MediaItem(
+            zulu := served_item(
                 id=1,
                 title="Zulu",
                 media_type=MediaType.MOVIE,
-                library_id="movies",
+                library_id="1:movies",
                 folder_path=str(tmp_path / "movies" / "Zulu"),
                 server_item_id="one",
                 tmdb_id=10,
@@ -80,39 +84,39 @@ async def populated_repository(
                 imdb_id="tt30",
                 director_etag="v1",
             ),
-            MediaItem(
+            served_item(
                 id=2,
                 title="Alpha",
                 media_type=MediaType.MOVIE,
-                library_id="movies",
+                library_id="1:movies",
                 folder_path=str(tmp_path / "movies" / "Alpha"),
                 server_item_id="two",
                 monitored=False,
             ),
-            MediaItem(
+            served_item(
                 id=3,
                 title="Show",
                 media_type=MediaType.SHOW,
-                library_id="shows",
+                library_id="1:shows",
                 folder_path=str(tmp_path / "shows" / "Show"),
                 server_item_id="three",
                 tmdb_id=10,
             ),
-            MediaItem(
+            served_item(
                 id=4,
                 title="Removed",
                 media_type=MediaType.MOVIE,
-                library_id="movies",
+                library_id="1:movies",
                 folder_path=str(tmp_path / "movies" / "Zulu"),
-                server_item_id="one",
+                server_item_id="one-before",
                 tmdb_id=10,
                 server_removed_at=removed,
             ),
-            MediaItem(
+            served_item(
                 id=5,
                 title="No folder",
                 media_type=MediaType.MOVIE,
-                library_id="movies",
+                library_id="1:movies",
                 server_item_id="five",
                 director_etag="v2",
             ),
@@ -128,13 +132,15 @@ async def test_lookup_preference_exclusions_and_provider_priority(
     populated_repository: MediaItemRepository, tmp_path: Path
 ) -> None:
     repo = populated_repository
-    found = await repo.find_by_server_id("one", "movie")
+    found = await repo.find_by_copy(TEST_SERVER_ID, "one", "movie")
     assert found is not None
     assert found.id == 1
-    found = await repo.find_by_server_id("one", "movie", exclude_item_ids={1})
-    assert found is not None
-    assert found.id == 4
-    assert await repo.find_by_server_id("one", "show") is None
+    assert (
+        await repo.find_by_copy(TEST_SERVER_ID, "one", "movie", exclude_item_ids={1})
+        is None
+    )
+    assert await repo.find_by_copy(TEST_SERVER_ID, "one", "show") is None
+    assert await repo.find_by_copy(2, "one", "movie") is None
     found = await repo.find_by_folder_path(
         str(tmp_path / "movies" / "Zulu"), "movie", exclude_item_ids={1}
     )
@@ -147,10 +153,17 @@ async def test_lookup_preference_exclusions_and_provider_priority(
     assert found is not None
     assert found.id == 4
     found = await repo.find_by_external_guids(
-        {"tmdb": "10", "imdb": "tt30"}, "movie", server_item_id="one"
+        {"tmdb": "10", "imdb": "tt30"}, "movie", server_id=TEST_SERVER_ID
     )
     assert found is not None
     assert found.id == 1
+    # Another server's copy in another folder is another title.
+    assert (
+        await repo.find_by_external_guids(
+            {"tmdb": "10"}, "movie", server_id=2, folder_path="/elsewhere/Zulu"
+        )
+        is None
+    )
 
 
 async def test_folder_batch_preserves_requested_spelling_and_prefers_present(
@@ -170,11 +183,6 @@ async def test_identifier_and_director_maps_filter_and_prefer_present_rows(
     assert await repo.ids_by_tmdb_ids(MediaType.MOVIE, [10, 999]) == {10: 1}
     assert await repo.ids_by_tmdb_ids(MediaType.SHOW, [10, 11]) == {10: 3, 11: 6}
     assert await repo.ids_by_tmdb_ids(MediaType.MOVIE, []) == {}
-    assert await repo.directors_by_version([]) == {}
-    assert await repo.directors_by_version(["one", "two", "three", "five"]) == {
-        ("one", "v1"): ("Director", "Co-Director"),
-        ("five", "v2"): (),
-    }
 
 
 async def test_bulk_targets_apply_scope_monitoring_and_id_pagination(
@@ -184,7 +192,7 @@ async def test_bulk_targets_apply_scope_monitoring_and_id_pagination(
     assert [item.id for item in await repo.list_bulk_targets()] == [1, 3]
     assert [
         item.id
-        for item in await repo.list_bulk_targets(["movies"], include_unmonitored=True)
+        for item in await repo.list_bulk_targets(["1:movies"], include_unmonitored=True)
     ] == [2, 1]
     assert [
         item.id
@@ -215,8 +223,8 @@ async def test_visible_folder_queries_intersect_filters_and_include_unmonitored(
         item.id
         for item in await repo.list_visible_with_folder_paths(
             media_type=MediaType.MOVIE,
-            library_id="movies",
-            library_ids=["movies"],
+            library_id="1:movies",
+            library_ids=["1:movies"],
             item_ids=[1, 2, 3],
             after_id=1,
             limit=1,
@@ -225,12 +233,16 @@ async def test_visible_folder_queries_intersect_filters_and_include_unmonitored(
     assert await repo.list_visible_with_folder_paths(library_ids=[]) == []
     assert await repo.list_visible_with_folder_paths(item_ids=[]) == []
     assert [
-        identity[0]
-        for identity in await repo.server_identities(["movies"], after_id=1, limit=1)
+        identity[1]
+        for identity in await CopyRepository(repo.session).identities(
+            TEST_SERVER_ID, ["1:movies"], after_id=1, limit=1
+        )
     ] == [2]
     assert [
-        identity[0]
-        for identity in await repo.server_identities(None, after_id=0, limit=10)
+        identity[1]
+        for identity in await CopyRepository(repo.session).identities(
+            TEST_SERVER_ID, None, after_id=0, limit=10
+        )
     ] == [1, 2, 3, 5]
     assert [item.id for item in await repo.list_unconnected_tmdb_shows()] == [6]
 
@@ -273,18 +285,17 @@ async def test_stamps_only_update_the_requested_rows(
     rows = {item.id: item for item in await repo.list_visible()}
     assert {key for key, item in rows.items() if item.last_matched_at == when} == {1, 2}
     assert {key for key, item in rows.items() if item.last_synced_at == when} == {1, 3}
-    assert {key for key, item in rows.items() if item.server_verified_at == when} == {
-        1,
-        3,
-    }
 
 
 async def test_directors_by_version_keeps_each_movies_order(
     populated_repository: MediaItemRepository,
 ) -> None:
-    repo = populated_repository
-    assert await repo.directors_by_version([]) == {}
-    directors = await repo.directors_by_version(["one", "five", "unknown"])
+    copies = CopyRepository(populated_repository.session)
+    assert await copies.directors_by_version(TEST_SERVER_ID, []) == {}
+    assert await copies.directors_by_version(2, ["one"]) == {}
+    directors = await copies.directors_by_version(
+        TEST_SERVER_ID, ["one", "two", "three", "five", "unknown"]
+    )
     assert directors == {
         ("one", "v1"): ("Director", "Co-Director"),
         ("five", "v2"): (),
@@ -323,12 +334,13 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
     db_session: AsyncSession, tmp_path: Path
 ) -> None:
     def movie(identity: int, **fields: Any) -> MediaItem:
-        return MediaItem.model_validate(
-            {
+        return served_item(
+            **{
                 "id": identity,
                 "title": f"Title {identity}",
                 "media_type": MediaType.MOVIE,
-                "library_id": "movies",
+                "server_item_id": str(identity),
+                "library_id": "1:movies",
                 "folder_path": str(tmp_path / str(identity)),
             }
             | fields
@@ -337,7 +349,7 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
     on_disk = movie(1)
     not_on_disk = movie(2)
     unmonitored = movie(3, monitored=False)
-    show = movie(4, media_type=MediaType.SHOW, library_id="shows")
+    show = movie(4, media_type=MediaType.SHOW, library_id="1:shows")
     season = Season(id=1, media_item_id=4, season_num=1)
     themed = movie(5, youtube_id="video", theme_file_hash="theme")
     file_without_selection = movie(6)
@@ -379,6 +391,6 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
 
     assert await keeping() == [1, 4]
     assert await keeping(include_unmonitored=True) == [1, 3, 4]
-    assert await keeping(library_ids=["shows"]) == [4]
+    assert await keeping(library_ids=["1:shows"]) == [4]
     assert await keeping(after_id=1, limit=1) == [4]
     assert await keeping(art=False) == [5]

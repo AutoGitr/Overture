@@ -39,21 +39,38 @@
   let held = $derived(
     editor?.collection.member_ids.flatMap((id) => itemsById.get(id) ?? []) ?? [],
   );
-  let orderable = $derived(!smart && settingsState.current.media_server === "plex");
-  /** Members by library, in the libraries' order: movies first, then by title. */
-  let memberGroups = $derived.by(() => {
-    const known = new Set(libraries.map((library) => library.id));
-    const others = [...new Set(held.map((member) => member.library_id ?? ""))]
-      .filter((id) => !known.has(id))
-      .map((id) => ({ id, title: id }));
-    return [...libraries, ...others]
-      .map(({ id, title }) => ({
-        id,
-        title,
-        members: held.filter((member) => (member.library_id ?? "") === id),
+  /** The collection's libraries, as the library list names them, in its order. */
+  let collectionLibraries = $derived(
+    libraries.filter((library) => editor?.collection.library_ids.includes(library.id)),
+  );
+  // Only Plex keeps a collection's members in the order they are dragged into.
+  let orderable = $derived(
+    !smart &&
+      collectionLibraries.some(
+        (library) => settingsState.server(library.server_id)?.type === "plex",
+      ),
+  );
+  /** The first of the collection's libraries holding a member, where it is listed. */
+  function libraryOf(member: MediaItemRead): string {
+    return (
+      collectionLibraries.find((library) =>
+        member.copies.some((copy) => copy.library_id === library.id),
+      )?.id ?? ""
+    );
+  }
+  /**
+   * Members by library, in the libraries' order: movies first, then by title.
+   * A title on several servers is listed once, under the first that holds it.
+   */
+  let memberGroups = $derived(
+    [...collectionLibraries, { id: "", title: "Other libraries", server_id: 0 }]
+      .map((library) => ({
+        id: library.id,
+        title: library.id ? settingsState.libraryLabel(library) : library.title,
+        members: held.filter((member) => libraryOf(member) === library.id),
       }))
-      .filter((group) => group.members.length > 0);
-  });
+      .filter((group) => group.members.length > 0),
+  );
 
   // Plex orders each library's copy of a collection on its own.
   function moveWithin(group: MediaItemRead[], index: number, target: number) {
@@ -88,7 +105,7 @@
       title="Members"
       description={smart
         ? "Plex decides the members and their order from the smart filter."
-        : settingsState.current.media_server === "plex"
+        : orderable
           ? "Add, remove or drag members into place. The next sync sends them."
           : "Add or remove members. The next sync sends them."}
     >

@@ -50,7 +50,12 @@ class RealtimeSnapshotBuilder:
                 for job in self.jobs
                 if (snapshot := _job_snapshot(job)) is not None
             ],
-            "media_server": media_server_status(self.provider_registry.health.current),
+            "media_servers": [
+                media_server_status(
+                    provider.server_id, provider.server.title, provider.health.current
+                )
+                for provider in self.provider_registry.providers()
+            ],
         }
 
     async def gather(self) -> Mapping[str, Any]:

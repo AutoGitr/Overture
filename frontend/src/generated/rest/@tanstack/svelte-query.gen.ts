@@ -942,7 +942,7 @@ export const getCollectionCapabilitiesQueryKey = (options: Options<GetCollection
 /**
  * Get Collection Capabilities
  *
- * Describe the fields, sources, orders and sets the media server supports.
+ * Describe the fields, sources, orders and sets the servers support.
  */
 export const getCollectionCapabilitiesOptions = (options: Options<GetCollectionCapabilitiesData>) => queryOptions<GetCollectionCapabilitiesResponse, GetCollectionCapabilitiesError, GetCollectionCapabilitiesResponse, ReturnType<typeof getCollectionCapabilitiesQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -2334,7 +2334,7 @@ export const listServerLibrariesQueryKey = (options?: Options<ListServerLibrarie
 /**
  * List Server Libraries
  *
- * List the media server's movie and show libraries, movies first.
+ * List the servers' movie and show libraries, the lead server's first.
  */
 export const listServerLibrariesOptions = (options?: Options<ListServerLibrariesData>) => queryOptions<ListServerLibrariesResponse, ListServerLibrariesError, ListServerLibrariesResponse, ReturnType<typeof listServerLibrariesQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -2354,7 +2354,7 @@ export const getServerWebLinksQueryKey = (options?: Options<GetServerWebLinksDat
 /**
  * Get Server Web Links
  *
- * Return where the server's web app opens items and collections.
+ * Return where each server's web app opens items and collections.
  */
 export const getServerWebLinksOptions = (options?: Options<GetServerWebLinksData>) => queryOptions<GetServerWebLinksResponse, GetServerWebLinksError, GetServerWebLinksResponse, ReturnType<typeof getServerWebLinksQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

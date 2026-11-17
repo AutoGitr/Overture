@@ -11,6 +11,7 @@ import {
   collectionDetail,
   collectionRule,
   mediaItem,
+  mediaServers,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 import { uiState } from "../../../lib/stores/uiState.svelte";
@@ -24,8 +25,8 @@ const detail = collectionDetail({
   member_ids: [member.id],
 });
 const libraries = [
-  { id: "movies", title: "Movies", media_type: "movie", count: 1 },
-  { id: "other", title: "Other movies", media_type: "movie", count: 1 },
+  { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 1 },
+  { id: "other", title: "Other movies", media_type: "movie", server_id: 1, count: 1 },
 ];
 function mockPage(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
@@ -71,7 +72,9 @@ async function onlyLibrary(scope: Pick<typeof screen, "getByRole">, name: string
 describe("collection setup flow", () => {
   beforeEach(() => {
     queryClient.clear();
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
   });
 
   it("adapts Setup to a collection or a set, with no tab rows while new", async () => {
@@ -264,7 +267,7 @@ describe("collection setup flow", () => {
     });
     settingsState.load(
       appSettings({
-        media_server: "plex",
+        media_servers: mediaServers("plex"),
         collections_supported: true,
       }),
     );
@@ -293,10 +296,12 @@ describe("collection setup flow", () => {
   it.each(["jellyfin", "emby"] as const)(
     "offers %s only the evaluation, fields and orders it supports",
     async (server) => {
-      settingsState.load(appSettings({ media_server: server, collections_supported: true }));
+      settingsState.load(
+        appSettings({ media_servers: mediaServers(server), collections_supported: true }),
+      );
       mockPage({
         "/api/collections/capabilities": collectionCapabilities({
-          server_type: server,
+          server_types: [server],
           smart: false,
           visibility: false,
           orders: ["release.asc", "title.asc"],
@@ -361,7 +366,9 @@ describe("collection setup flow", () => {
     });
     await createPage();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Other movies" }));
-    expect(screen.getByText("One collection on the server holds them all.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("One collection on the server holds them all."),
+    ).toBeInTheDocument();
   });
 
   it("suggests the kind the criteria suit as they are edited, and switches to it", async () => {

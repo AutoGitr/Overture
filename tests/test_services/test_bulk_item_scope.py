@@ -34,7 +34,7 @@ lazy from tests.test_services.test_bulk_catalog_prefilter import visits
         {"item_ids": []},
         {"item_ids": [0]},
         {"item_ids": [-1]},
-        {"item_ids": [1], "library_ids": ["movies"]},
+        {"item_ids": [1], "library_ids": ["1:movies"]},
     ],
 )
 def test_invalid_item_scopes_are_rejected(scope: dict[str, object]) -> None:
@@ -66,7 +66,7 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
         title="Selected",
         media_type=MediaType.SHOW,
         server_item_id="selected",
-        library_id="shows",
+        library_id="1:shows",
         monitored=False,
     )
     excluded = media_item_factory(
@@ -74,7 +74,7 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
         title="Excluded",
         media_type=MediaType.SHOW,
         server_item_id="excluded",
-        library_id="shows",
+        library_id="1:shows",
         monitored=True,
     )
     removed = media_item_factory(
@@ -132,13 +132,13 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
 
     repository = MediaItemRepository(db_session)
     assert await repository.list_bulk_targets(item_ids=[]) == []
-    assert [item.id for item in await repository.list_bulk_targets(["shows"])] == [
+    assert [item.id for item in await repository.list_bulk_targets(["1:shows"])] == [
         excluded_id
     ]
     assert {
         item.id
         for item in await repository.list_bulk_targets(
-            ["shows"], include_unmonitored=True
+            ["1:shows"], include_unmonitored=True
         )
     } == {selected_id, excluded_id}
 
@@ -153,7 +153,7 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
     complete = media_item_factory(
         id=None,
         server_item_id="complete",
-        library_id="movies",
+        library_id="1:movies",
         art={
             "poster": {
                 "url": "https://saved.test/poster.jpg",
@@ -168,17 +168,17 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
     missing = media_item_factory(
         id=None,
         server_item_id="missing",
-        library_id="movies",
+        library_id="1:movies",
     )
     db_session.add_all([complete, missing])
     await db_session.commit()
     art_params = BulkMatchArtRequest(
-        library_ids=["movies"],
+        library_ids=["1:movies"],
         art_types=[ArtType.POSTER],
         source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
     )
     theme_params = BulkThemeRequest(
-        library_ids=["movies"], source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
+        library_ids=["1:movies"], source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
     )
     art = await plan_bulk_art(
         art_params, app_config=app_config, database=database, chunk=1
@@ -207,7 +207,7 @@ async def test_both_workflows_visit_movies_then_shows_by_title(
             title=title,
             media_type=media_type,
             server_item_id=title,
-            library_id="lib",
+            library_id="1:lib",
         )
         for title, media_type in (
             ("Alpha Show", MediaType.SHOW),
@@ -262,7 +262,7 @@ async def test_both_workflows_visit_movies_then_shows_by_title(
 
 def test_shared_options_reach_both_workers() -> None:
     request = BulkAssetsRequest(
-        library_ids=["movies"],
+        library_ids=["1:movies"],
         include_unmonitored=True,
         overwrite_existing=True,
         art=BulkAssetsArtConfig(),

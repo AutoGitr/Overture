@@ -7,7 +7,9 @@ description: One collection spanning several libraries, and what each server hol
 # Collections across libraries
 
 Choosing several libraries in Setup makes one collection, listed once, with
-its own criteria for each library. What the server holds depends on the
+its own criteria for each library. The libraries may be on any of your
+[media servers](../../install/media-servers.mdx#several-servers); each server
+gets its own copy of the collection. What a server holds depends on the
 server:
 
 | Server         | On the server                                                                                                      | Kept alike                                                       |
@@ -17,7 +19,11 @@ server:
 
 Settings, the group, art and theme belong to the whole collection; **Limit**
 applies to each library, and **Minimum members** to the whole. On Plex a
-smart collection is smart in every library.
+smart collection is smart in every library; on Jellyfin and Emby it is a
+regular collection of the members Overture evaluates from the same criteria.
+Visibility, collection mode, Home order and filtering apply to Plex copies
+only, and a server that cannot sort by the chosen order keeps its default
+order.
 
 A library with nothing to hold gets no server collection until it has, and a
 library taken out of a saved collection leaves the server at the next sync. A
@@ -29,9 +35,10 @@ library sync lists the others on their own.
 
 ## When libraries change
 
-When the server stops listing a library and a sync finds its titles in
-another, collections, sets and schedules move to that library, as after a
-[change of media server](../../install/media-servers.mdx#change-media-server).
+When no server lists a library any more and a sync finds its titles in
+another, collections, sets and schedules move to that library, on the same
+server or another, as after
+[replacing a server](../../install/media-servers.mdx#add-remove-or-replace-a-server).
 
 A collection without a copy on the server takes over the server's unmanaged
 collection of its title in that library instead of making a second one.

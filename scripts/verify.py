@@ -299,6 +299,24 @@ class Server:
         return response.json()
 
 
+def only_server(url: str, capabilities: dict[str, Any]) -> str:
+    """The kind of the one media server an instance uses.
+
+    Each instance is compared with one server, read directly; an instance
+    with several is checked through instances of one each.
+    """
+    match capabilities["server_types"]:
+        case [server]:
+            return server
+        case servers:
+            raise SystemExit(f"{url} uses {len(servers)} media servers; give it one")
+
+
+def server_item_id(item: dict[str, Any]) -> str:
+    """The server's ID of an instance's title, through its one copy."""
+    return next((str(copy["server_item_id"]) for copy in item["copies"]), "")
+
+
 def single(library_id: str, condition: dict[str, Any], **rule: Any) -> dict[str, Any]:
     """A rule of one condition in one library."""
     criteria = {"conditions": [condition]}
@@ -373,6 +391,8 @@ class Library:
         self.capabilities = capabilities
         self.media_type = media_type
         self.id: str = library["id"]
+        #: The server's own key of the library, which its API takes.
+        self.key: str = library["id"].partition(":")[2]
         self.name = f"{library['title']} ({media_type})"
         self.plex_smart = bool(capabilities["smart"])
         self.fields = {entry["field"]: entry for entry in capabilities["fields"]}
@@ -770,7 +790,7 @@ class PlexServer(Server):
         await self.check_inventory(library)
         meta = (
             await self.container(
-                f"/library/sections/{library.id}/all",
+                f"/library/sections/{library.key}/all",
                 type=PLEX_TYPES[library.media_type],
                 includeMeta=1,
                 **{"X-Plex-Container-Start": 0, "X-Plex-Container-Size": 0},
@@ -780,14 +800,14 @@ class PlexServer(Server):
         await self.check_values(library, meta)
 
     async def check_inventory(self, library: Library) -> None:
-        held = await self.item_ids(library.id, library.media_type)
+        held = await self.item_ids(library.key, library.media_type)
         inventory(
             library.case("inventory", "items"),
-            {str(item["server_item_id"]) for item in library.items},
+            {server_item_id(item) for item in library.items},
             held,
             noun="items",
         )
-        listed = await self.collections(library.id)
+        listed = await self.collections(library.key)
         mine = {
             str(row["server_item_id"]): row
             for row in library.collections
@@ -898,11 +918,11 @@ class PlexServer(Server):
         title, plex_holds = difference
         item = next((row for row in library.items if row["title"] == title), None)
         side = "only Plex selects" if plex_holds else "only Overture selects"
-        if item is None or not item.get("server_item_id"):
+        if item is None or not server_item_id(item):
             return f"{side} {title}"
-        rows = (
-            await self.container(f"/library/metadata/{item['server_item_id']}")
-        ).get("Metadata", [{}])
+        rows = (await self.container(f"/library/metadata/{server_item_id(item)}")).get(
+            "Metadata", [{}]
+        )
         key = next(
             (
                 plex
@@ -959,10 +979,10 @@ class MediaBrowserServer(Server):
 
     async def check_library(self, library: Library) -> None:
         """Compare what Overture lists and counts with what the server does."""
-        found = await self.items(library.id, library.media_type, Fields="")
+        found = await self.items(library.key, library.media_type, Fields="")
         inventory(
             library.case("inventory", "items"),
-            {str(item["server_item_id"]) for item in library.items},
+            {server_item_id(item) for item in library.items},
             {str(row["Id"]) for row in found["Items"]},
             noun="items",
         )
@@ -1072,7 +1092,7 @@ async def verify_instance(
             capabilities = await overture.get(
                 "/api/collections/capabilities", media_type=media_type
             )
-            server = capabilities["server_type"]
+            server = only_server(url, capabilities)
             if direct is not None and direct.server != server:
                 raise SystemExit(f"{url} uses {server}, not {direct.server}")
             collections = [
@@ -1084,7 +1104,7 @@ async def verify_instance(
                 case = Case(server, "", "inventory", f"{media_type} libraries")
                 inventory(
                     case,
-                    {str(row["id"]) for row in found},
+                    {row["id"].partition(":")[2] for row in found},
                     set(await direct.libraries(media_type)),
                     noun="libraries",
                 )
@@ -1105,7 +1125,10 @@ async def verify_instance(
                     [
                         item
                         for item in items
-                        if item["library_id"] == library["id"]
+                        if any(
+                            copy["library_id"] == library["id"]
+                            for copy in item["copies"]
+                        )
                         and item["media_type"] == media_type
                         and item["server_removed_at"] is None
                     ],
@@ -1380,8 +1403,11 @@ def write_provider(
         "MEDIA_SERVER_API_KEY": secret,
         "MEDIA_SERVER_VERIFY_TLS": verify,
     }
-    registry = ProviderRegistry(app_config=Settings(**values))
-    return registry, registry.provider
+    settings = Settings(**values)
+    registry = ProviderRegistry(app_config=settings)
+    # One server, numbered as a fresh database numbers its first.
+    registry.attach({server.key: 1 for server in settings.MEDIA_SERVERS})
+    return registry, registry.get(1)
 
 
 class WriteCheck:
@@ -1448,27 +1474,31 @@ class WriteCheck:
         return self.cases
 
     async def movies(self) -> tuple[str, list[str]] | None:
-        """A movie library and three of its movies, or ``None`` with why not."""
-        library = next(
+        """A movie library's ID and three of its movies, or ``None`` with why not.
+
+        The server is asked by its own key of the library; Overture's client
+        takes Overture's ID of it.
+        """
+        section = next(
             (
-                row.key
+                row
                 for row in await self.provider.get_sections()
                 if row.media_type is MediaType.MOVIE
             ),
             None,
         )
-        if library is None:
+        if section is None:
             self.case("find a movie library").error = "the server has no movie library"
             return None
         if isinstance(self.direct, PlexServer):
-            items = sorted(await self.direct.item_ids(library, "movie"))[:3]
+            items = sorted(await self.direct.item_ids(section.key, "movie"))[:3]
         else:
-            found = await self.direct.items(library, "movie", Limit=3)
+            found = await self.direct.items(section.key, "movie", Limit=3)
             items = [str(row["Id"]) for row in found["Items"]]
         if len(items) < 3:
             self.case("find three movies").error = "the library holds fewer than three"
             return None
-        return library, items
+        return section.library_id, items
 
     async def members(self, library: str, items: list[str]) -> str:
         """Create a collection, then replace and order its members."""
@@ -1676,9 +1706,9 @@ async def server_of(url: str, key: str, verify: bool) -> str | None:
     """The media server an instance uses, as it says."""
     overture = Overture(url, key, verify=verify)
     try:
-        return (
-            await overture.get("/api/collections/capabilities", media_type="movie")
-        )["server_type"]
+        return only_server(
+            url, await overture.get("/api/collections/capabilities", media_type="movie")
+        )
     except ApiError, httpx2.HTTPError:
         return None
     finally:

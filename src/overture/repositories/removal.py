@@ -5,16 +5,22 @@ lazy from dataclasses import dataclass
 lazy from itertools import batched
 
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import col, func, or_, select
+lazy from sqlmodel import col, exists, func, or_, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import SelectOfScalar
 
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.media_item import MediaItem
+lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.season import Season
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import ArtType
+
+
+def _held_by_a_server() -> ColumnElement[bool]:
+    """Whether any server has a copy of a title."""
+    return exists().where(col(MediaItemCopy.media_item_id) == col(MediaItem.id))
 
 
 @dataclass(slots=True, frozen=True)
@@ -86,8 +92,7 @@ class RemovalRepository:
             on_server = (
                 await self.session.exec(
                     select(func.count()).where(
-                        col(MediaItem.id).in_(batch),
-                        col(MediaItem.server_item_id).is_not(None),
+                        col(MediaItem.id).in_(batch), _held_by_a_server()
                     )
                 )
             ).one()
@@ -106,7 +111,7 @@ class RemovalRepository:
                             col(MediaItem.folder_path).is_not(None),
                             col(MediaItem.theme_file_hash).is_not(None),
                         ),
-                        func.count(col(MediaItem.server_item_id)),
+                        func.count().filter(_held_by_a_server()),
                     ).where(col(MediaItem.id).in_(batch))
                 )
             ).one()

@@ -7,7 +7,7 @@ lazy from overture.utils.http_security import API_KEY_HEADER
 
 PREVIEW = {
     "media_type": "movie",
-    "library_id": "1",
+    "library_id": "1:1",
     "rule": {
         "criteria": {
             "conditions": [
@@ -63,8 +63,7 @@ def test_a_post_that_only_reads_accepts_a_key(
 ) -> None:
     key = _create(authenticated_client, auth_headers, "Verifier")
     client.cookies.clear()
-    app_config.MEDIA_SERVER = None
-
+    app_config.MEDIA_SERVERS = ()
     response = client.post(
         "/api/collections/preview", json=PREVIEW, headers={API_KEY_HEADER: key}
     )

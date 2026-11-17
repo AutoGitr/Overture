@@ -28,7 +28,7 @@ _GENRE = {
 
 def _capabilities(server: str) -> dict[str, Any]:
     capabilities = {
-        "server_type": server,
+        "server_types": [server],
         "spans_libraries": server != "plex",
         "smart": server == "plex",
         "visibility": server == "plex",
@@ -65,7 +65,7 @@ def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
         "unsynced": False,
         "below_minimum": False,
         "child_count": 3,
-        "library_ids": ["1"],
+        "library_ids": ["1:1"],
         "media_types": ["movie"],
         "server_item_id": f"c{identity}",
         "thumb_url": f"/api/collections/{identity}/image/poster?t=1",
@@ -78,8 +78,9 @@ def _item(identity: int, title: str) -> dict[str, Any]:
         "id": identity,
         "title": title,
         "media_type": "movie",
-        "library_id": "1",
-        "server_item_id": f"m{identity}",
+        "copies": [
+            {"server_id": 1, "server_item_id": f"m{identity}", "library_id": "1:1"}
+        ],
         "server_removed_at": None,
     }
 
@@ -88,7 +89,7 @@ type Requests = list[tuple[str, str, str, dict[str, Any]]]
 
 #: What each instance answers for its movies, where the answer never varies.
 _MOVIES: dict[str, Any] = {
-    "/api/library/libraries": [{"id": "1", "title": "Movies"}],
+    "/api/library/libraries": [{"id": "1:1", "title": "Movies"}],
     "/api/collections/field-values": [{"value": "Horror", "count": 1}],
     "/api/collections/sets/preview": [{"title": "Horror", "member_count": 1}],
     "/api/collections": [
@@ -107,7 +108,7 @@ _MOVIES: dict[str, Any] = {
         "rule": {
             "libraries": [
                 {
-                    "library_id": "1",
+                    "library_id": "1:1",
                     "criteria": {
                         "conditions": [
                             {"field": "genre", "operator": "is", "value": "horror"}
@@ -480,7 +481,7 @@ class _Collections:
         return list(self.held.values())
 
     async def get_sections(self) -> list[Any]:
-        return [ServerSection("1", "Movies", MediaType.MOVIE)]
+        return [ServerSection("1", "Movies", MediaType.MOVIE, library_id="1:1")]
 
     async def create_collection(
         self, _library: str, title: str, _media: Any, members: list[str]

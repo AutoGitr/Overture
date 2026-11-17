@@ -18,6 +18,7 @@ lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient, longest_ordered_run
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
+lazy from tests.media_servers import media_client, server_of
 
 
 @pytest.mark.parametrize("client_type", [JellyfinClient, EmbyClient])
@@ -53,7 +54,7 @@ async def test_boxsets_create_diff_edit_art_and_delete(
         return httpx2.Response(200, json={"Id": "box"})
 
     factory, _transport = mock_client_factory(handle)
-    client = client_type(app_config=app_config, client_factory=factory)
+    client = media_client(client_type, app_config, client_factory=factory)
     try:
         assert await client.create_collection("New", ["keep"]) == "box"
         await client.set_collection_members("box", ["keep", "add"])
@@ -119,7 +120,9 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         )
 
     factory, _transport = mock_client_factory(handle)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         assert (await client.create_collection("1", "Saga", MediaType.MOVIE, ["keep"]))[
@@ -216,7 +219,7 @@ async def test_boxset_append_never_removes_new_remote_members(
         return httpx2.Response(200)
 
     factory, transport = mock_client_factory(handle)
-    client = client_type(app_config=app_config, client_factory=factory)
+    client = media_client(client_type, app_config, client_factory=factory)
     try:
         assert await client.set_collection_members("box", ["source"], append=True) == [
             "source",
@@ -249,7 +252,9 @@ async def test_plex_append_preserves_manual_remote_members(
         return httpx2.Response(200)
 
     factory, transport = mock_client_factory(handle)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         assert await client.set_collection_members(
@@ -267,7 +272,9 @@ async def test_plex_labels_keep_the_labels_items_already_have(
         return httpx2.Response(200)
 
     factory, transport = mock_client_factory(handle)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         await client.sync_item_labels(
@@ -318,7 +325,9 @@ async def test_plex_filter_choices_decode_the_keys_plex_encodes(
         return httpx2.Response(200, json={"MediaContainer": {"Directory": directory}})
 
     factory, transport = mock_client_factory(handle)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         choices = await client.get_filter_choices("1", MediaType.MOVIE, "studio")
@@ -370,7 +379,9 @@ async def test_plex_leaves_a_collections_hub_alone_when_its_visibility_holds(
         return httpx2.Response(200, json={"MediaContainer": {}})
 
     factory, _transport = mock_client_factory(handle)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
         for visible_home in (True, False):

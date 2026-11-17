@@ -19,7 +19,9 @@ lazy from overture.media_servers.plex.client import (
 )
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.schemas.art import ArtCandidate
+lazy from overture.utils.errors import PublicServiceError
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 
 
 def _normalised_base_url(client: httpx2.AsyncClient) -> str:
@@ -29,14 +31,13 @@ def _normalised_base_url(client: httpx2.AsyncClient) -> str:
 def test_plex_deep_links_encode_metadata_and_collection_keys(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://plex.local:32400"
-
+    configure(app_config, url="http://plex.local:32400")
     assert (
-        plex_web_link("metadata", "machine", app_config=app_config)
+        plex_web_link("metadata", "machine", server=server_of(app_config))
         == "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F{id}"
     )
     assert (
-        plex_web_link("collections", None, app_config=app_config)
+        plex_web_link("collections", None, server=server_of(app_config))
         == "http://plex.local:32400/web/index.html"
         "#!/server/details?key=%2Flibrary%2Fcollections%2F{id}"
     )
@@ -45,23 +46,37 @@ def test_plex_deep_links_encode_metadata_and_collection_keys(
 def test_plex_connection_normalization_rejects_lookalikes_and_url_content(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-
+    configure(app_config, type=ServerType.PLEX)
     assert (
-        app_config.plex_direct_origin("https://server.example.plex.direct:32400/")
+        server_of(app_config).plex_direct_origin(
+            "https://server.example.plex.direct:32400/"
+        )
         == "https://server.example.plex.direct:32400"
     )
     assert (
-        app_config.plex_direct_origin("http://server.example.plex.direct:32400") == ""
-    )
-    assert app_config.plex_direct_origin("https://plex.direct:32400") == ""
-    assert (
-        app_config.plex_direct_origin("https://server.plex.direct.attacker.test:32400")
+        server_of(app_config).plex_direct_origin(
+            "http://server.example.plex.direct:32400"
+        )
         == ""
     )
-    assert app_config.plex_direct_origin("https://server.plex.direct:32400/path") == ""
+    assert server_of(app_config).plex_direct_origin("https://plex.direct:32400") == ""
     assert (
-        app_config.plex_direct_origin("https://server.plex.direct:32400?token=x") == ""
+        server_of(app_config).plex_direct_origin(
+            "https://server.plex.direct.attacker.test:32400"
+        )
+        == ""
+    )
+    assert (
+        server_of(app_config).plex_direct_origin(
+            "https://server.plex.direct:32400/path"
+        )
+        == ""
+    )
+    assert (
+        server_of(app_config).plex_direct_origin(
+            "https://server.plex.direct:32400?token=x"
+        )
+        == ""
     )
 
 
@@ -70,9 +85,9 @@ async def test_plex_secure_origin_is_machine_verified_before_it_is_trusted(
 ) -> None:
     configured = "http://plex.test:32400"
     secure = "https://server.example.plex.direct:32400"
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = configured
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("plex-token")
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url=configured)
+    configure(app_config, api_key=SecretStr("plex-token"))
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         url = str(request.url).rstrip("/")
@@ -113,6 +128,7 @@ async def test_plex_secure_origin_is_machine_verified_before_it_is_trusted(
     factory, transport = mock_client_factory(handler)
 
     resolved = await PlexClient(
+        server=server_of(app_config),
         app_config=app_config,
         client_factory=factory,
     ).resolve_secure_url()
@@ -133,9 +149,9 @@ def _plex_identity(machine: str) -> httpx2.Response:
 
 
 def _use_plex(app_config: Settings, url: str) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = url
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("plex-token")
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url=url)
+    configure(app_config, api_key=SecretStr("plex-token"))
 
 
 async def test_plex_required_secure_connections_reach_the_owned_server_by_its_ip(
@@ -196,7 +212,9 @@ async def test_plex_required_secure_connections_reach_the_owned_server_by_its_ip
         return httpx2.Response(404)
 
     factory, _ = mock_client_factory(handler)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     try:
         assert await client.base_url() == secure
         assert await client.get_sections() == []
@@ -249,7 +267,7 @@ async def test_plex_picks_the_owned_server_listed_at_the_configured_address(
     factory, _ = mock_client_factory(handler)
 
     resolved = await PlexClient(
-        app_config=app_config, client_factory=factory
+        server=server_of(app_config), app_config=app_config, client_factory=factory
     ).resolve_secure_url()
 
     assert resolved == secure
@@ -291,7 +309,7 @@ async def test_plex_prefers_the_first_local_address_that_proves_its_identity(
     factory, _ = mock_client_factory(handler)
 
     resolved = await PlexClient(
-        app_config=app_config, client_factory=factory
+        server=server_of(app_config), app_config=app_config, client_factory=factory
     ).resolve_secure_url()
 
     assert resolved == local
@@ -302,7 +320,7 @@ async def test_plex_keeps_a_verified_https_url_without_asking_plex_tv(
 ) -> None:
     configured = "https://plex.example.com"
     _use_plex(app_config, configured)
-    app_config.MEDIA_SERVER_VERIFY_TLS = True
+    configure(app_config, verify_tls=True)
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         if str(request.url) == f"{configured}/identity":
@@ -310,7 +328,9 @@ async def test_plex_keeps_a_verified_https_url_without_asking_plex_tv(
         return httpx2.Response(404)
 
     factory, transport = mock_client_factory(handler)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
 
     assert await client.resolve_secure_url() is None
     assert await client.get_machine_identifier() == "machine-1"
@@ -333,7 +353,9 @@ async def test_plex_connects_once_a_server_that_was_down_comes_up(
         raise httpx2.ConnectError("connection refused")
 
     factory, _ = mock_client_factory(handler)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     try:
         assert not await client.test_connection()
         server_up = True
@@ -349,9 +371,9 @@ async def test_plex_secure_origin_rejects_a_machine_identity_mismatch(
 ) -> None:
     configured = "http://plex.test:32400"
     secure = "https://server.example.plex.direct:32400"
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = configured
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("plex-token")
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url=configured)
+    configure(app_config, api_key=SecretStr("plex-token"))
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         assert request.url.host != "attacker.test"
@@ -386,6 +408,7 @@ async def test_plex_secure_origin_rejects_a_machine_identity_mismatch(
 
     assert (
         await PlexClient(
+            server=server_of(app_config),
             app_config=app_config,
             client_factory=factory,
         ).resolve_secure_url()
@@ -419,10 +442,9 @@ def test_tmdb_extract_art_sorts_by_area_and_builds_preview_urls(
 async def test_jellyfin_client_builds_auth_headers(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://jellyfin.test"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("jf-token")
-
-    client = JellyfinClient(app_config=app_config)
+    configure(app_config, url="http://jellyfin.test")
+    configure(app_config, api_key=SecretStr("jf-token"))
+    client = JellyfinClient(server=server_of(app_config, ServerType.JELLYFIN))
     http_client = await client.get_client()
     try:
         assert _normalised_base_url(http_client) == "http://jellyfin.test/"
@@ -437,10 +459,9 @@ async def test_emby_client_builds_prefixed_api_url_and_auth_headers(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://emby.test:8096"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("emby-token")
-
-    client = EmbyClient(app_config=app_config)
+    configure(app_config, url="http://emby.test:8096")
+    configure(app_config, api_key=SecretStr("emby-token"))
+    client = EmbyClient(server=server_of(app_config, ServerType.EMBY))
     http_client = await client.get_client()
     try:
         assert _normalised_base_url(http_client) == "http://emby.test:8096/emby/"
@@ -450,8 +471,8 @@ async def test_emby_client_builds_prefixed_api_url_and_auth_headers(
     finally:
         await client.close()
 
-    app_config.MEDIA_SERVER_URL = "http://emby.test:8096/emby"
-    prefixed = EmbyClient(app_config=app_config)
+    configure(app_config, url="http://emby.test:8096/emby")
+    prefixed = EmbyClient(server=server_of(app_config, ServerType.EMBY))
     assert prefixed.api_base_url == "http://emby.test:8096/emby"
     assert prefixed.web_base_url == "http://emby.test:8096"
 
@@ -459,9 +480,9 @@ async def test_emby_client_builds_prefixed_api_url_and_auth_headers(
 async def test_emby_client_supports_health_art_refresh_and_themes(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.EMBY
-    app_config.MEDIA_SERVER_URL = "http://emby.test:8096"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("emby-token")
+    configure(app_config, type=ServerType.EMBY)
+    configure(app_config, url="http://emby.test:8096")
+    configure(app_config, api_key=SecretStr("emby-token"))
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         assert request.headers["X-Emby-Token"] == "emby-token"
@@ -508,7 +529,7 @@ async def test_emby_client_supports_health_art_refresh_and_themes(
     factory, transport = mock_client_factory(handler)
 
     client = EmbyClient(
-        app_config=app_config,
+        server=server_of(app_config, ServerType.EMBY),
         client_factory=factory,
     )
     try:
@@ -547,7 +568,7 @@ async def test_emby_client_supports_health_art_refresh_and_themes(
 async def test_proxy_client_reuses_and_closes_shared_client(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.JELLYFIN
+    configure(app_config, type=ServerType.JELLYFIN)
     manager = ProxyClientManager(app_config=app_config)
 
     first = await manager.get_client()
@@ -561,36 +582,54 @@ async def test_proxy_client_reuses_and_closes_shared_client(
         await manager.get_client()
 
 
-def test_active_provider_tracks_configured_media_server(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    app_config: Settings,
-) -> None:
+def _three_servers(app_config: Settings) -> ProviderRegistry:
+    app_config.MEDIA_SERVERS = tuple(
+        server_of(app_config, server_type).model_copy(
+            update={"name": f"{server_type.display_name}_{index}"}
+        )
+        for index, server_type in enumerate(ServerType, start=1)
+    )
     registry = ProviderRegistry(app_config=app_config)
+    registry.attach(
+        {server.key: index for index, server in enumerate(app_config.MEDIA_SERVERS, 1)}
+    )
+    return registry
 
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    assert isinstance(registry.provider, PlexProvider)
-    assert registry.collections is registry.provider
 
-    app_config.MEDIA_SERVER = ServerType.JELLYFIN
-    assert isinstance(registry.provider, JellyfinProvider)
-    assert registry.collections is registry.provider
+def test_registry_builds_each_configured_servers_provider_lead_first(
+    *, app_config: Settings
+) -> None:
+    registry = _three_servers(app_config)
 
-    app_config.MEDIA_SERVER = ServerType.EMBY
-    assert isinstance(registry.provider, EmbyProvider)
-    assert registry.collections is registry.provider
+    assert [type(provider) for provider in registry.providers()] == [
+        PlexProvider,
+        JellyfinProvider,
+        EmbyProvider,
+    ]
+    assert [provider.server_id for provider in registry.providers()] == [1, 2, 3]
+    assert type(registry.for_library("2:movies")) is JellyfinProvider
+    assert registry.collection_providers() == registry.providers()
+
+
+def test_registry_refuses_a_server_no_longer_configured(
+    *, app_config: Settings
+) -> None:
+    registry = _three_servers(app_config)
+
+    with pytest.raises(PublicServiceError) as refused:
+        registry.get(9)
+    assert refused.value.status_code == 409
+    with pytest.raises(PublicServiceError):
+        registry.for_library("not-a-library")
 
 
 def test_registry_reuses_one_provider_instance_per_media_server(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    app_config: Settings,
+    *, app_config: Settings
 ) -> None:
     """The registry owns its providers; callers must not get a fresh one each time."""
-    registry = ProviderRegistry(app_config=app_config)
-    app_config.MEDIA_SERVER = ServerType.PLEX
-
-    assert registry.provider is registry.provider
+    registry = _three_servers(app_config)
+    assert registry.get(2) is registry.get(2)
+    assert registry.get(1) is not registry.get(2)
 
 
 def test_provider_download_headers_are_limited_to_trusted_origins(
@@ -598,22 +637,52 @@ def test_provider_download_headers_are_limited_to_trusted_origins(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "https://media.internal:32400"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("server-token")
-
-    assert PlexProvider(app_config=app_config).get_download_headers(
-        "https://media.internal:32400/poster"
-    ) == {"X-Plex-Token": "server-token"}
-    assert JellyfinProvider(app_config=app_config).get_download_headers(
-        "https://media.internal:32400/poster"
-    ) == {"Authorization": 'MediaBrowser Token="server-token"'}
-    assert EmbyProvider(app_config=app_config).get_download_headers(
-        "https://media.internal:32400/poster"
-    ) == {"X-Emby-Token": "server-token"}
+    configure(app_config, url="https://media.internal:32400")
+    configure(app_config, api_key=SecretStr("server-token"))
+    assert PlexProvider(
+        server=server_of(app_config), server_id=TEST_SERVER_ID, app_config=app_config
+    ).get_download_headers("https://media.internal:32400/poster") == {
+        "X-Plex-Token": "server-token"
+    }
+    assert JellyfinProvider(
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+    ).get_download_headers("https://media.internal:32400/poster") == {
+        "Authorization": 'MediaBrowser Token="server-token"'
+    }
+    assert EmbyProvider(
+        server=server_of(app_config, ServerType.EMBY),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+    ).get_download_headers("https://media.internal:32400/poster") == {
+        "X-Emby-Token": "server-token"
+    }
     external = "https://example.test/?next=https://media.internal:32400/poster"
-    assert PlexProvider(app_config=app_config).get_download_headers(external) == {}
-    assert JellyfinProvider(app_config=app_config).get_download_headers(external) == {}
-    assert EmbyProvider(app_config=app_config).get_download_headers(external) == {}
+    assert (
+        PlexProvider(
+            server=server_of(app_config),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ).get_download_headers(external)
+        == {}
+    )
+    assert (
+        JellyfinProvider(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ).get_download_headers(external)
+        == {}
+    )
+    assert (
+        EmbyProvider(
+            server=server_of(app_config, ServerType.EMBY),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ).get_download_headers(external)
+        == {}
+    )
 
 
 def test_server_item_defaults_are_safe_for_mapping() -> None:
@@ -637,13 +706,13 @@ def test_server_item_defaults_are_safe_for_mapping() -> None:
 async def test_plex_client_uses_configured_headers_without_resolved_url(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://plex.test:32400"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("plex-token")
+    configure(app_config, url="http://plex.test:32400")
+    server = configure(app_config, api_key=SecretStr("plex-token"))
     async with httpx2.AsyncClient(
-        base_url=app_config.MEDIA_SERVER_URL,
+        base_url=server.url,
         headers={
             "X-Plex-Client-Identifier": "overture-server",
-            "X-Plex-Token": app_config.MEDIA_SERVER_API_KEY.get_secret_value(),
+            "X-Plex-Token": server.api_key.get_secret_value(),
             "Accept": "application/json",
         },
     ) as client:
@@ -656,9 +725,11 @@ async def test_plex_image_requests_go_through_the_transcoder_only_when_sized(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
-    app_config.MEDIA_SERVER_URL = "http://plex.local:32400"
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("server-token")
-    provider = PlexProvider(app_config=app_config)
+    configure(app_config, url="http://plex.local:32400")
+    configure(app_config, api_key=SecretStr("server-token"))
+    provider = PlexProvider(
+        server=server_of(app_config), server_id=TEST_SERVER_ID, app_config=app_config
+    )
 
     original = await provider.build_provider_art_request("7", ArtType.BACKGROUND, None)
     poster = await provider.build_provider_art_request(
@@ -700,8 +771,12 @@ async def test_plex_image_requests_go_through_the_transcoder_only_when_sized(
 async def test_media_browser_image_requests_ask_for_a_max_width_only_when_sized(
     *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://jellyfin.local:8096"
-    provider = JellyfinProvider(app_config=app_config)
+    configure(app_config, url="http://jellyfin.local:8096")
+    provider = JellyfinProvider(
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+    )
 
     original = await provider.build_provider_art_request("7", ArtType.BACKGROUND, None)
     display = await provider.build_provider_art_request(
@@ -717,16 +792,23 @@ async def test_media_browser_image_requests_ask_for_a_max_width_only_when_sized(
 async def test_plex_refresh_reads_posters_then_unlocks_only_the_fields_replaced(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://plex.local:32400"
+    configure(app_config, url="http://plex.local:32400")
     # A listing Plex has no candidates for answers 404; the refresh still runs.
     factory, transport = mock_client_factory(
         lambda request: httpx2.Response(
             404 if request.url.path == "/library/metadata/9/posters" else 200
         )
     )
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
-    provider = PlexProvider(app_config=app_config, client=client)
+    provider = PlexProvider(
+        server=server_of(app_config),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+        client=client,
+    )
 
     try:
         await provider.refresh_item("7", unlock={ServerAsset.SEASON_POSTER})
@@ -755,7 +837,7 @@ async def test_plex_refresh_reads_posters_then_unlocks_only_the_fields_replaced(
 async def test_plex_serves_a_theme_without_its_version_and_unlocks_only_collections(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://plex.local:32400"
+    configure(app_config, url="http://plex.local:32400")
     metadata = {"ratingKey": "7", "theme": "/library/metadata/7/theme/1791710511"}
     factory, transport = mock_client_factory(
         lambda request: httpx2.Response(
@@ -765,7 +847,9 @@ async def test_plex_serves_a_theme_without_its_version_and_unlocks_only_collecti
             else None,
         )
     )
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
 
     try:

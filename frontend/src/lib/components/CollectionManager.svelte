@@ -3,7 +3,6 @@
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import Settings from "@lucide/svelte/icons/settings";
   import Unlink from "@lucide/svelte/icons/unlink";
-  import { SERVER_DISPLAY_NAMES } from "../../generated/settings";
   import type {
     CollectionDetail,
     MediaItemRead,
@@ -58,7 +57,9 @@
   } = $props();
   setSectionView("collection");
   const serverLinks = createServerLinks();
-  let serverLink = $derived(serverLinks.collection(collection?.server_item_id));
+  let serverLink = $derived(
+    serverLinks.collection(collection?.server_id, collection?.server_item_id),
+  );
 
   function currentCollection(): CollectionDetail {
     if (!collection) throw new Error("The saved collection must remain mounted");
@@ -98,8 +99,8 @@
   showPoster={!!collection}
   backgroundUrl={collectionArtDisplayUrl(collection, "background")}
   posterHref={serverLink}
-  posterLinkTitle={collection && serverLink && settingsState.current.media_server
-    ? `Open in ${SERVER_DISPLAY_NAMES[settingsState.current.media_server]}`
+  posterLinkTitle={collection && serverLink && collection.server_id != null
+    ? `Open in ${settingsState.server(collection.server_id)?.title ?? "the media server"}`
     : null}
   tabs={collection && actions ? tabs : undefined}
 >

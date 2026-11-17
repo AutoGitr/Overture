@@ -50,7 +50,8 @@ class SyncedCollection:
     policy: CollectionPolicy
     members: list[CollectionItem]
     settings: AppSettings
-    plex: bool
+    #: The collection's libraries on Plex servers, which keep labels and Home rows.
+    plex_libraries: frozenset[str]
     #: The sync made a server copy the collection's saved assets are not on yet.
     new_copies: bool = False
 
@@ -60,7 +61,12 @@ class SyncedCollection:
 
     @property
     def on_server(self) -> bool:
-        return bool(self.row.server_ids)
+        return bool(self.row.copies)
+
+    @property
+    def plex(self) -> bool:
+        """Whether a Plex server holds any of the collection's libraries."""
+        return bool(self.plex_libraries)
 
     def members_of(self, media_type: MediaType) -> list[CollectionItem]:
         return [item for item in self.members if item.media_type is media_type]
@@ -215,6 +221,8 @@ class MemberLabel:
             group=synced.row.group_name,
         )
         for part in synced.row.libraries:
+            if part.library_id not in synced.plex_libraries:
+                continue
             await self._membership.sync_label(
                 part.library_id,
                 part.media_type,
@@ -341,8 +349,8 @@ class HomeOrder:
         return synced.plex and synced.policy.home_order is not None and synced.on_server
 
     async def run(self, synced: SyncedCollection) -> None:
-        for part in synced.row.libraries:
-            await self._order_library(part.library_id)
+        for library_id in synced.plex_libraries:
+            await self._order_library(library_id)
 
     async def _order_library(self, library_id: str) -> None:
         async with self._access.database.read_session() as session:
@@ -364,7 +372,7 @@ class HomeOrder:
                     row.visible_home or row.visible_shared or row.visible_library
                 ):
                     ordered.append((policy.home_order, row.title.casefold(), held))
-        await self._access.provider().order_collection_hubs(
+        await self._access.library_provider(library_id).order_collection_hubs(
             library_id, [server_id for _, _, server_id in sorted(ordered)]
         )
 
@@ -394,7 +402,12 @@ class PostSync:
                 policy=await self._access.policy(session, row.group, rule),
                 members=await repo.members(collection_id),
                 settings=await get_app_settings(session),
-                plex=self._access.plex,
+                plex_libraries=frozenset(
+                    part.library_id
+                    for part in row.libraries
+                    if self._access.configured(part.server_id)
+                    and self._access.plex(part.library_id)
+                ),
                 new_copies=new_copies,
             )
         failures: list[str] = []

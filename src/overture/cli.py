@@ -115,15 +115,19 @@ def prompt(label: str, default: str = "") -> str:
 def setup(path: Path) -> None:
     """Collect and validate all required configuration before saving it."""
     values = read_configuration(path)
-    values["MEDIA_SERVER"] = prompt(
-        "Media server (plex/jellyfin/emby)", values.get("MEDIA_SERVER", "plex")
-    )
-    values["MEDIA_SERVER_URL"] = prompt(
-        "Media server URL", values.get("MEDIA_SERVER_URL", "")
-    )
-    values["MEDIA_SERVER_API_KEY"] = saved_secret(
-        "Media server API key", values.get("MEDIA_SERVER_API_KEY", "")
-    )
+    if values.get("MEDIA_SERVERS"):
+        # Each named server has variables of its own, which the file keeps.
+        print("Media servers: MEDIA_SERVERS names them; edit the file to change them.")
+    else:
+        values["MEDIA_SERVER"] = prompt(
+            "Media server (plex/jellyfin/emby)", values.get("MEDIA_SERVER", "plex")
+        )
+        values["MEDIA_SERVER_URL"] = prompt(
+            "Media server URL", values.get("MEDIA_SERVER_URL", "")
+        )
+        values["MEDIA_SERVER_API_KEY"] = saved_secret(
+            "Media server API key", values.get("MEDIA_SERVER_API_KEY", "")
+        )
     default_auth = values.get(
         "AUTH_MODE", "oidc" if values.get("OIDC_ISSUER_URL") else "password"
     )

@@ -16,7 +16,7 @@ async def test_sync_schedule_routes_delegate(
     body = SyncScheduleWrite(
         name="Poll",
         cron_expression="*/15 * * * *",
-        config=SyncScheduleConfig(mode="incremental", library_ids=["movies"]),
+        config=SyncScheduleConfig(mode="incremental", library_ids=["1:movies"]),
     )
 
     assert await sync.list_sync_schedules(engine) == []

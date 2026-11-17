@@ -20,6 +20,7 @@ lazy from overture.schemas.auth import LoginRequest
 lazy from overture.services.auth import AuthService
 lazy from overture.services.oidc import OIDCService
 lazy from overture.utils.errors import PublicServiceError
+lazy from tests.media_servers import attach_servers
 lazy from tests.oidc_provider import TestOIDCProvider
 
 
@@ -277,9 +278,9 @@ def test_none_mode_bypasses_auth_and_csrf(
     values = app_config.model_dump(exclude={"APP_PASSWORD_HASH"})
     values["AUTH_MODE"] = "none"
     config = Settings.model_validate(values)
-    app = create_app(
-        build_runtime(app_settings=config, database=database, config_dir=tmp_path)
-    )
+    runtime = build_runtime(app_settings=config, database=database, config_dir=tmp_path)
+    attach_servers(runtime.provider_registry, config)
+    app = create_app(runtime)
 
     client = TestClient(app)
     try:

@@ -1,7 +1,7 @@
 ---
 sidebar_position: 4
 title: Media servers
-description: Connect Plex, Jellyfin or Emby, run without a server, or switch servers.
+description: Connect Plex, Jellyfin and Emby, one or several at once, or run without a server.
 ---
 
 import Tabs from "@theme/Tabs";
@@ -9,20 +9,54 @@ import TabItem from "@theme/TabItem";
 
 # Media servers
 
-Overture works with one media server at a time, chosen with `MEDIA_SERVER`.
-Give it the server's address and a token or API key, and make sure the server
-prefers local assets, so the files Overture writes beside your media are the
-ones it shows.
+Overture works with any number of Plex, Jellyfin and Emby servers at once.
+Name them in `MEDIA_SERVERS`, the lead first, and configure each with
+variables named after it:
+
+```bash
+MEDIA_SERVERS=Plex,Jellyfin
+
+MEDIA_SERVER_PLEX_TYPE=plex
+MEDIA_SERVER_PLEX_URL=https://192.0.2.10:32400
+MEDIA_SERVER_PLEX_API_KEY=<token>
+
+MEDIA_SERVER_JELLYFIN_TYPE=jellyfin
+MEDIA_SERVER_JELLYFIN_URL=http://192.0.2.11:8096
+MEDIA_SERVER_JELLYFIN_API_KEY=<key>
+```
+
+A name starts with a letter and holds letters, digits and single underscores;
+it is how the server is shown, with underscores as spaces (`Living_Room`
+shows as "Living Room"). Each server takes these variables, with
+`MEDIA_SERVER_<NAME>_` in front:
+
+| Variable           | Required | Description                                                                        |
+| ------------------ | -------- | ---------------------------------------------------------------------------------- |
+| `TYPE`             | Yes      | `plex`, `jellyfin` or `emby`                                                       |
+| `URL`              | Yes      | Server address with protocol, port and any base path                               |
+| `API_KEY`          | Yes      | Server token or API key                                                            |
+| `VERIFY_TLS`       | No       | `true` by default; set `false` only for a self-signed certificate                  |
+| `PATH_MAP`         | No       | Where Overture sees the server's media folders; see [Path maps](#path-maps)        |
+| `COLLECTIONS_PATH` | No       | Jellyfin only: its collections directory, mounted into Overture, for BoxSet themes |
+
+One server can still be set up with the single-server variables
+`MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`,
+`MEDIA_SERVER_VERIFY_TLS`, `MEDIA_SERVER_PATH_MAP` and
+`JELLYFIN_COLLECTIONS_PATH`; it is named after its type. Set
+`MEDIA_SERVERS` or `MEDIA_SERVER`, not both.
+
+Every server should prefer local assets, so the files Overture writes beside
+your media are the ones it shows.
 
 <Tabs groupId="media-server" queryString>
   <TabItem value="plex" label="Plex" default>
 
 1. Open any item in Plex Web, choose **Get Info -> View XML**, and copy the
    `X-Plex-Token` value from the address bar.
-2. Set `MEDIA_SERVER=plex`, `MEDIA_SERVER_URL=https://<server-ip>:32400` and
-   `MEDIA_SERVER_API_KEY=<token>`. Keep `MEDIA_SERVER_VERIFY_TLS=true`:
-   Overture connects through Plex's verified `*.plex.direct` address, so every
-   **Secure connections** setting works, including **Required**.
+2. Set `TYPE=plex`, `URL=https://<server-ip>:32400` and `API_KEY=<token>`.
+   Keep `VERIFY_TLS=true`: Overture connects through Plex's verified
+   `*.plex.direct` address, so every **Secure connections** setting works,
+   including **Required**.
 3. In each library's **Advanced** settings, turn on **Use local assets**.
 
 If your router's DNS rebinding protection blocks `plex.direct`, allow that
@@ -32,62 +66,103 @@ domain.
   <TabItem value="jellyfin" label="Jellyfin">
 
 1. Create a key under **Dashboard -> API Keys**.
-2. Set `MEDIA_SERVER=jellyfin`, `MEDIA_SERVER_URL=http://<server>:8096` and
-   `MEDIA_SERVER_API_KEY=<key>`.
+2. Set `TYPE=jellyfin`, `URL=http://<server>:8096` and `API_KEY=<key>`.
 3. In each library, keep local images ahead of online image fetchers.
 
 To write themes for Jellyfin collections (BoxSets), mount Jellyfin's
-collections directory into Overture and name it in
-`JELLYFIN_COLLECTIONS_PATH`.
+collections directory into Overture and name it in `COLLECTIONS_PATH`.
 
   </TabItem>
   <TabItem value="emby" label="Emby">
 
 1. Create a key under **Dashboard -> Advanced -> API Keys**.
-2. Set `MEDIA_SERVER=emby`, `MEDIA_SERVER_URL=http://<server>:8096` (include a
-   base path such as `/emby` if you use one) and `MEDIA_SERVER_API_KEY=<key>`.
+2. Set `TYPE=emby`, `URL=http://<server>:8096` (include a base path such as
+   `/emby` if you use one) and `API_KEY=<key>`.
 3. In each library, keep local images ahead of online image fetchers.
 
   </TabItem>
 </Tabs>
 
+## Path maps
+
+Overture writes artwork and themes into the media folders the servers report,
+so it must see those folders. When a server sees them at another path, for
+example in its own container, map the server's path to Overture's:
+
+```bash
+MEDIA_SERVER_JELLYFIN_PATH_MAP=/data/movies=/media/movies,/data/tv=/media/tv
+```
+
+Each entry is `server_path=local_path`, separated by commas; the longest
+matching server path wins, and Windows paths such as `D:\Movies` work too.
+Paths no entry matches are used as the server reports them.
+
+## Several servers
+
+Overture keeps one library across every server: a title several servers hold
+is one title, with one set of choices and files, and a copy on each server.
+Sync matches a server's item to a title by the copy it already knows, then by
+its folder, then by its IMDb, TMDB or TVDB ID.
+
+- **The lead server**, the first in `MEDIA_SERVERS` that lists a title, gives
+  its title, year, genres and other details. What each server holds of its
+  own, its library, labels, play state and rating, stays with its copy.
+- **Files** are written once, in the title's folder, under every name its
+  servers read, such as both `Season01.jpg` and `poster.jpg` for a season;
+  see [Files](../features/files.md).
+- **Uploads and audits** reach every server holding the title. The Server
+  audit compares each server on its own and lists the server with each
+  result.
+- **Libraries** are named after their server wherever you choose them, such
+  as "Plex · Movies". Filters, collections and schedules take libraries from
+  any server.
+- **A server that does not answer** is left out of that sync, with a notice
+  naming it; the others sync as usual, and nothing it holds is removed.
+
+### Collections on several servers
+
+A collection may span libraries on any server: each server gets its own copy,
+kept alike. Options a server cannot keep give way on that server only:
+
+- A smart collection is smart on Plex; other servers get a regular collection
+  of the members Overture evaluates from the same criteria.
+- Visibility, collection mode, Home order and filtering apply to Plex copies
+  only.
+- An order a server cannot sort by keeps that server's default order.
+
+See [Collections across libraries](../features/collections/across-libraries.md).
+
+## Add, remove or replace a server
+
+Change `MEDIA_SERVERS` and restart; Overture keeps your choices, files and
+collections throughout.
+
+- **Adding a server**: its first sync matches its items to your titles and
+  lists its libraries and collections.
+- **Removing a server**: its libraries are hidden, and titles only it held are
+  hidden with them. Collections it held that Overture does not manage are
+  forgotten; managed collections keep their settings for that server. Sync
+  schedules skip its libraries, and Server audit results are cleared.
+- **Bringing a server back**, or renaming one: a server at the same type and
+  address picks up where it left off, its libraries and copies included.
+- **Replacing a server**: remove the earlier one and add the new one. Its
+  first full sync moves collections, sets and schedules from a library no
+  server lists any more to the library its titles are now in, and a managed
+  collection takes over the new server's collection of the same title in that
+  library instead of making a second one. Sync once with every library before
+  editing collections.
+
 ## No media server
 
-Set `MEDIA_SERVER=none` to curate OvertureDB without a media server; leave
-`MEDIA_SERVER_URL` and `MEDIA_SERVER_API_KEY` unset. Sync, Audit and
-Collections are hidden, the sidebar opens on OvertureDB, and nothing reports
-the server as down.
+Set `MEDIA_SERVERS=none` to curate OvertureDB without a media server. Sync,
+Audit and Collections are hidden, the sidebar opens on OvertureDB, and nothing
+reports a server as down.
 
 | Feature                                       | With `TMDB_API_KEY` | Without |
 | --------------------------------------------- | ------------------- | ------- |
 | Browse the catalog, drafts, export and issues | Yes                 | Yes     |
 | Pasted art URLs and YouTube theme search      | Yes                 | Yes     |
 | TMDB art candidates and TMDB-only titles      | Yes                 | No      |
-
-## Change media server
-
-Point `MEDIA_SERVER`, `MEDIA_SERVER_URL` and `MEDIA_SERVER_API_KEY` at the
-other server and restart. Overture keeps your titles' choices and files, and
-your collections and groups, with their art, themes and settings; on the next
-start it lets go of what belonged to the earlier server:
-
-- Collections the earlier server held that Overture does not manage are
-  forgotten; the next sync lists the new server's own.
-- Every managed collection loses its server copies and shows **Unsynced**. Its
-  next sync makes it on the new server, or takes over the new server's
-  collection of the same title in that library, and sends it its art and
-  theme.
-- Choices the new server cannot keep go back to the defaults: Plex's
-  visibility, collection mode, filtering, Home order and member labels on
-  Jellyfin and Emby, which also make smart collections and sets regular ones
-  Overture evaluates; and orders the server cannot sort by.
-- Sync schedules sync every library, and polling starts over. Server audit
-  results are cleared.
-
-The first full sync matches each title to the new server by its IDs or folder,
-and moves collections, sets and schedules from a library the server no longer
-lists to the one its titles are now in. Sync once with every library before
-editing collections.
 
 ## How each server differs
 

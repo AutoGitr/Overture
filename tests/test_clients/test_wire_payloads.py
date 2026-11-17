@@ -8,6 +8,7 @@ lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from overture.media_servers.wire import media_browser_items
+lazy from tests.media_servers import media_client, server_of
 
 
 async def _list_items(client: PlexClient | JellyfinClient) -> None:
@@ -41,7 +42,7 @@ async def test_item_listing_rejects_malformed_envelopes(
     async def response(*_args: object, **_kwargs: object) -> object:
         return malformed
 
-    client = client_type(app_config=app_config)
+    client = media_client(client_type, app_config)
     monkeypatch.setattr(client, "_get", response)
     with pytest.raises(MediaServerError):
         await _list_items(client)
@@ -54,7 +55,7 @@ async def test_item_listing_rejects_invalid_field_types(
     *,
     app_config: Settings,
 ) -> None:
-    client = client_type(app_config=app_config)
+    client = media_client(client_type, app_config)
     payload = (
         {"MediaContainer": {"Metadata": [{"ratingKey": "1", "year": "invalid"}]}}
         if isinstance(client, PlexClient)
@@ -81,7 +82,7 @@ async def test_media_browser_listing_accepts_nullable_optional_metadata(
     async def response(*_args: object, **_kwargs: object) -> object:
         return {"Items": [metadata], "TotalRecordCount": 1}
 
-    client = client_type(app_config=app_config)
+    client = media_client(client_type, app_config)
     monkeypatch.setattr(client, "_get", response)
     pages = client.iter_section_items("1", "Movie")
     assert [item async for page in pages for item in page] == [metadata]
@@ -93,7 +94,7 @@ async def test_plex_empty_container_is_an_empty_listing(
     async def response(*_args: object, **_kwargs: object) -> object:
         return {"MediaContainer": {"size": 0, "totalSize": 0}}
 
-    client = PlexClient(app_config=app_config)
+    client = PlexClient(server=server_of(app_config), app_config=app_config)
     monkeypatch.setattr(client, "_get", response)
     pages = client.iter_section_items("1")
     assert [item async for page in pages for item in page] == []
@@ -106,7 +107,7 @@ async def test_section_listing_without_total_is_not_a_complete_snapshot(
     *,
     app_config: Settings,
 ) -> None:
-    client = client_type(app_config=app_config)
+    client = media_client(client_type, app_config)
     payload = (
         {"MediaContainer": {"Metadata": [{"ratingKey": "1"}]}}
         if isinstance(client, PlexClient)
@@ -144,7 +145,7 @@ async def test_plex_metadata_page_ignores_non_section_directory_elements(
     async def response(*_args: object, **_kwargs: object) -> object:
         return payload
 
-    client = PlexClient(app_config=app_config)
+    client = PlexClient(server=server_of(app_config), app_config=app_config)
     monkeypatch.setattr(client, "_get", response)
     items = await client.get_children("1")
     assert len(items) == 1
@@ -167,7 +168,7 @@ async def test_plex_sections_rejects_items_without_type(
     async def response(*_args: object, **_kwargs: object) -> object:
         return payload
 
-    client = PlexClient(app_config=app_config)
+    client = PlexClient(server=server_of(app_config), app_config=app_config)
     monkeypatch.setattr(client, "_get", response)
     with pytest.raises(MediaServerError):
         await client.get_sections()

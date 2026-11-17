@@ -7,13 +7,13 @@ lazy from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 lazy from sqlmodel import text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import as_writer, configure_sqlite, run_migrations
 lazy from overture.domain import MediaType, Workflow
 lazy from overture.migrations import versions_at_head
 lazy from overture.schemas.backup import BackupRetention
 lazy from overture.services.backup.files import BackupStore
+lazy from tests.media_servers import seed_test_server, served_item
 
 
 async def test_a_live_backup_restores_data_and_starts_at_schema_head(
@@ -28,6 +28,7 @@ async def test_a_live_backup_restores_data_and_starts_at_schema_head(
     try:
         async with source_engine.begin() as connection:
             await connection.run_sync(run_migrations)
+            await seed_test_server(connection, ["1"])
 
         sessions = async_sessionmaker(
             as_writer(source_engine), class_=AsyncSession, expire_on_commit=False
@@ -35,7 +36,7 @@ async def test_a_live_backup_restores_data_and_starts_at_schema_head(
         async with sessions() as session:
             session.add(AppSettings(id=1, workflow=Workflow.THEMES))
             session.add(
-                MediaItem(
+                served_item(
                     media_type=MediaType.MOVIE,
                     title="Arrival",
                     year=2016,

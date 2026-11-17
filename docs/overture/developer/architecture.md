@@ -8,7 +8,7 @@ description: How the backend and frontend are laid out, and the rules the tests 
 
 Overture is one container or service: a FastAPI backend that serves the built
 Svelte web interface, keeps its state in a SQLite database and writes artwork
-and themes into the media folders. It talks to one media server, to TMDB,
+and themes into the media folders. It talks to any number of media servers, to TMDB,
 MDBList, Radarr and Sonarr when their keys are set, and downloads the
 OvertureDB catalog from GitHub Pages.
 
@@ -56,6 +56,23 @@ when the other side cannot read a catalog change as it stands.
 Dependencies point inward: `routers` → `services` → `repositories` → `db`,
 and everything may use `domain`, `utils` and `catalog_contract`. `domain`,
 `utils`, `jobs`, `media_servers` and `repositories` never import `services`.
+
+### Media servers
+
+- `media_servers/` adapts Plex, Jellyfin and Emby behind one provider
+  interface. `ProviderRegistry` holds a provider for each server in
+  `MEDIA_SERVERS`, the lead first, and finds the one for a library.
+- The `media_servers` table numbers each server; `MediaServerRoster` matches
+  the configured servers to their rows at start, by name and by type and
+  address, so a rename or a server's return keeps its data.
+- Library IDs are `<server>:<key>`, so every library names its server. A
+  title is one `media_items` row; `media_item_copies` and `season_copies`
+  hold each server's item ID, library and own facts (labels, play state).
+  The lead copy, on the first configured server that lists the title, gives
+  the title's metadata.
+- A managed collection keeps one part per server library
+  (`collection_libraries`); what a kind of server cannot keep, such as a
+  smart filter off Plex, falls back on that server's parts only.
 
 ### Transactions and side effects
 

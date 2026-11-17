@@ -16,8 +16,9 @@ lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..db.session import Database
 lazy from ..domain import ArtType, ServerAsset
-lazy from ..media_servers.adapters import FolderThemes, NoCollectionThemes, UploadThemes
-lazy from ..media_servers.registry import ProviderRegistry
+lazy from ..media_servers.adapters import CollectionSupport, FolderThemes, UploadThemes
+lazy from ..media_servers.registry import Provider, ProviderRegistry
+lazy from ..repositories.copies import CopyRepository
 lazy from ..repositories.removal import RemovalCounts, RemovalRepository
 lazy from ..schemas.removal import (
     ItemArtAsset,
@@ -109,35 +110,68 @@ class AssetRemover:
 
     @property
     def art_deletion_unavailable(self) -> str | None:
-        """Why the media server cannot delete artwork, or ``None`` when it can."""
-        return self._providers.provider.art_deletion_unavailable
+        """Why no configured server can delete artwork, or ``None`` when one can."""
+        reasons = [
+            provider.art_deletion_unavailable
+            for provider in self._providers.providers()
+        ]
+        if not reasons or any(reason is None for reason in reasons):
+            return None
+        return reasons[0]
+
+    def _collection_supports(self) -> list[CollectionSupport]:
+        return [
+            support
+            for provider in self._providers.collection_providers()
+            if (support := provider.collections) is not None
+        ]
 
     def _collection_theme_file_unavailable(self) -> str | None:
-        support = self._providers.provider.collections
-        if isinstance(support, NoCollectionThemes):
-            return "Emby keeps no collection themes"
-        if isinstance(support, UploadThemes):
+        supports = self._collection_supports()
+        if any(isinstance(support, FolderThemes) for support in supports):
+            return None
+        if any(isinstance(support, UploadThemes) for support in supports):
             return "Plex keeps collection themes itself: delete it from the server"
-        return None
+        return "Emby keeps no collection themes"
 
     def _collection_theme_server_unavailable(self) -> str | None:
-        support = self._providers.provider.collections
-        if isinstance(support, NoCollectionThemes):
-            return "Emby keeps no collection themes"
-        if isinstance(support, FolderThemes):
+        supports = self._collection_supports()
+        if any(isinstance(support, UploadThemes) for support in supports):
+            return None
+        if any(isinstance(support, FolderThemes) for support in supports):
             return (
                 "Jellyfin plays the theme from the collection's folder: delete the file"
             )
-        return None
+        return "Emby keeps no collection themes"
 
     def require_art_deletion(self) -> None:
-        """Refuse a removal the server's API cannot carry out.
+        """Refuse a removal no configured server's API can carry out.
 
         Raises:
-            PublicServiceError: 409 when the server cannot delete artwork.
+            PublicServiceError: 409 when no server can delete artwork.
         """
         if (reason := self.art_deletion_unavailable) is not None:
             raise PublicServiceError(409, reason)
+
+    async def _item_copies(self, item_id: int) -> list[tuple[Provider, str]]:
+        """Each configured server holding a title, and its ID of it."""
+        async with self._database.read_session() as session:
+            copies = await CopyRepository(session).leads_first(
+                item_id, self._providers.server_ids()
+            )
+        return [
+            (self._providers.get(copy.server_id), copy.server_item_id)
+            for copy in copies
+        ]
+
+    async def _season_copies(self, season_id: int) -> list[tuple[Provider, str]]:
+        async with self._database.read_session() as session:
+            known = await CopyRepository(session).season_copies(season_id)
+        return [
+            (self._providers.get(server_id), server_item_id)
+            for server_id, server_item_id in known.items()
+            if self._providers.configured_server_id(server_id)
+        ]
 
     async def delete_item_art_files(
         self, item: MediaItem, owners: Sequence[MediaItem | Season], art_type: ArtType
@@ -168,58 +202,73 @@ class AssetRemover:
     async def delete_item_art_on_server(
         self, owners: Sequence[MediaItem | Season], art_type: ArtType
     ) -> None:
-        """Delete the server's image of *art_type* for each owner it holds.
+        """Delete each server's image of *art_type* for each owner it holds.
+
+        A server whose API cannot delete artwork keeps its image; the local
+        file's removal reaches it at its next refresh.
 
         Raises:
-            PublicServiceError: 409 when the server cannot delete artwork.
+            PublicServiceError: 409 when no server can delete artwork.
         """
         self.require_art_deletion()
         for owner in owners:
-            if owner.server_item_id is not None:
-                await self._providers.provider.delete_art(
-                    owner.server_item_id, art_type
-                )
+            copies = (
+                await self._season_copies(owner.id or 0)
+                if isinstance(owner, Season)
+                else await self._item_copies(owner.id or 0)
+            )
+            for provider, server_item_id in copies:
+                if provider.art_deletion_unavailable is None:
+                    await provider.delete_art(server_item_id, art_type)
 
     async def delete_item_theme_on_server(self, item: MediaItem) -> None:
-        """Delete the theme songs the server plays for the item."""
-        if (server_id := item.server_item_id) is None:
-            return
-        provider = self._providers.provider
-        for theme in await provider.get_theme_songs(server_id):
-            # Deleting a Jellyfin or Emby theme song deletes its file.
-            if theme.path is not None and not theme.path.lower().endswith(".mp3"):
-                continue
-            await provider.delete_theme(server_id, theme.id)
+        """Delete the theme songs every server plays for the item."""
+        for provider, server_item_id in await self._item_copies(item.id or 0):
+            for theme in await provider.get_theme_songs(server_item_id):
+                # Deleting a Jellyfin or Emby theme song deletes its file.
+                if theme.path is not None and not theme.path.lower().endswith(".mp3"):
+                    continue
+                await provider.delete_theme(server_item_id, theme.id)
 
     async def refresh_item(self, item: MediaItem, assets: set[ServerAsset]) -> None:
-        """Have the server read the item again after local files of *assets* went."""
-        if assets and item.server_item_id is not None:
-            await self._providers.provider.refresh_item(
-                item.server_item_id, unlock=assets
-            )
+        """Have every server read the item again after local files of *assets* went."""
+        if not assets:
+            return
+        for provider, server_item_id in await self._item_copies(item.id or 0):
+            await provider.refresh_item(server_item_id, unlock=assets)
+
+    def _collection_copies(self, row: MediaCollection) -> list[tuple[Provider, str]]:
+        """Each configured server's copies of a collection."""
+        return [
+            (self._providers.get(part.server_id), part.server_item_id or "")
+            for part in row.copies
+            if self._providers.configured_server_id(part.server_id)
+        ]
 
     async def delete_collection_art(
         self, row: MediaCollection, art_type: ArtType
     ) -> None:
-        """Delete the collection's image from every server copy.
+        """Delete the collection's image from every server copy that can.
 
         Raises:
-            PublicServiceError: 409 when the server cannot delete artwork.
+            PublicServiceError: 409 when no server can delete artwork.
         """
         self.require_art_deletion()
-        for server_id in row.server_ids:
-            await self._providers.provider.delete_art(server_id, art_type)
+        for provider, server_item_id in self._collection_copies(row):
+            if provider.art_deletion_unavailable is None:
+                await provider.delete_art(server_item_id, art_type)
 
     async def delete_collection_theme(self, row: MediaCollection) -> None:
-        """Delete the theme Plex keeps for each of the collection's copies.
+        """Delete the theme Plex keeps for each of the collection's Plex copies.
 
         Raises:
-            PublicServiceError: 409 when the server keeps no themes to delete.
+            PublicServiceError: 409 when no server keeps themes to delete.
         """
         if reason := self._collection_theme_server_unavailable():
             raise PublicServiceError(409, reason)
-        for server_id in row.server_ids:
-            await self._providers.provider.delete_collection_theme(server_id)
+        for provider, server_item_id in self._collection_copies(row):
+            if isinstance(provider.collections, UploadThemes):
+                await provider.delete_collection_theme(server_item_id)
 
     async def delete_collection_theme_file(self, folder: Path, root: Path) -> bool:
         """Delete the theme file Jellyfin plays from the collection's folder.

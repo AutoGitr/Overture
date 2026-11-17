@@ -22,6 +22,8 @@ lazy from .media_collection import (
     MediaCollectionMember,
 )
 lazy from .media_item import MediaItem
+lazy from .media_item_copy import MediaItemCopy, SeasonCopy
+lazy from .media_server import MediaServer
 lazy from .notification import NotificationRule
 lazy from .saved_schedule import SavedSchedule
 lazy from .schedule import TaskSchedule
@@ -58,10 +60,13 @@ __all__ = [
     "MediaCollection",
     "MediaCollectionMember",
     "MediaItem",
+    "MediaItemCopy",
     "MediaItemTerm",
+    "MediaServer",
     "NotificationRule",
     "SavedSchedule",
     "Season",
+    "SeasonCopy",
     "TaskSchedule",
     "Term",
     "get_app_settings",

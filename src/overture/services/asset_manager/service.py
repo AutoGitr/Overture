@@ -13,6 +13,7 @@ lazy from ...domain import ServerAsset
 lazy from ...jobs.registry import BackgroundJobRegistry
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...schemas.asset_manager import (
     AssetRenameResponse,
@@ -158,7 +159,6 @@ class _Owner:
     """The item a renamed file belongs to, if any."""
 
     item_id: int | None
-    server_item_id: str | None
     #: The file is in the item's own folder rather than a season folder.
     item_folder: bool
 
@@ -223,11 +223,11 @@ class AssetManagerService:
             )
         owners: dict[str, _Owner] = {}
         for path, folder in folders.items():
-            owner = _Owner(None, None, item_folder=False)
+            owner = _Owner(None, item_folder=False)
             for candidate in (folder, folder.parent):
                 item = items.get(str(candidate))
                 if item is not None and item.id is not None:
-                    owner = _Owner(item.id, item.server_item_id, candidate == folder)
+                    owner = _Owner(item.id, candidate == folder)
                     break
             owners[path] = owner
         return owners
@@ -242,31 +242,39 @@ class AssetManagerService:
     async def _refresh_servers(
         self, renamed: Sequence[tuple[_Owner, AssetRenameResult]]
     ) -> None:
-        """Ask the media server to reload each item whose files were renamed.
+        """Ask every server holding an item whose files were renamed to reload it.
 
         Only the item-level assets that now carry their canonical name are
         unlocked; a season poster is the season's, so it unlocks nothing on
         the item. A refresh does not prove the server adopted the file.
         """
-        assets: dict[str, set[ServerAsset]] = {}
+        assets: dict[int, set[ServerAsset]] = {}
         for owner, outcome in renamed:
-            if owner.server_item_id is None:
+            if owner.item_id is None:
                 continue
-            unlock = assets.setdefault(owner.server_item_id, set())
+            unlock = assets.setdefault(owner.item_id, set())
             stem = Path(outcome.suggested_path or "").stem
             if owner.item_folder and (asset := _ITEM_FOLDER_ASSETS.get(stem)):
                 unlock.add(asset)
-        for server_item_id, unlock in assets.items():
-            try:
-                await self._providers.provider.refresh_item(
-                    server_item_id, unlock=unlock
-                )
-            except MediaServerError as exc:
-                logger.warning(
-                    "Could not refresh server item %s after a rename: %s",
-                    server_item_id,
-                    str(exc),
-                )
+        async with self._database.read_session() as session:
+            copies = await CopyRepository(session).of_items(list(assets))
+        for item_id, unlock in assets.items():
+            for copy in copies[item_id]:
+                if (
+                    copy.removed_at is not None
+                    or not self._providers.configured_server_id(copy.server_id)
+                ):
+                    continue
+                provider = self._providers.get(copy.server_id)
+                try:
+                    await provider.refresh_item(copy.server_item_id, unlock=unlock)
+                except MediaServerError as exc:
+                    logger.warning(
+                        "Could not refresh %s item %s after a rename: %s",
+                        provider.server.title,
+                        copy.server_item_id,
+                        str(exc),
+                    )
 
     async def rename_assets(
         self,

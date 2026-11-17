@@ -5,20 +5,30 @@ lazy import logging
 
 lazy from .. import protocols
 lazy from ..media_servers.errors import MediaServerError
-lazy from ..media_servers.registry import ProviderRegistry
+lazy from ..media_servers.registry import Provider, ProviderRegistry
 lazy from ..schemas.settings import ConnectivityStatusResponse
 
 logger = logging.getLogger(__name__)
 
 
 async def check_media_server_connection(provider_registry: ProviderRegistry) -> bool:
-    """Check if the configured media server is reachable."""
+    """Check that every configured media server is reachable.
+
+    Each server's answer is recorded in its health, which tells clients.
+    """
     if not provider_registry.configured:
         return False
+    answers = await asyncio.gather(
+        *(_answers(provider) for provider in provider_registry.providers())
+    )
+    return all(answers)
+
+
+async def _answers(provider: Provider) -> bool:
     try:
-        return await provider_registry.provider.test_connection()
+        return await provider.test_connection()
     except MediaServerError as e:
-        logger.warning("Media server check failed: %s", e)
+        logger.warning("%s check failed: %s", provider.server.title, e)
         return False
 
 

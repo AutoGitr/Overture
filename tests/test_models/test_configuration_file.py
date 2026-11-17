@@ -20,6 +20,10 @@ lazy from overture.passwords import hash_password
 def isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in Settings.model_fields:
         monkeypatch.delenv(name, raising=False)
+    # Each media server's variables are named after it.
+    for name in list(os.environ):
+        if name.startswith("MEDIA_SERVER") or name == "JELLYFIN_COLLECTIONS_PATH":
+            monkeypatch.delenv(name)
     monkeypatch.delenv("OVERTURE_CONFIG_FILE", raising=False)
 
 

@@ -1483,3 +1483,103 @@ def test_saved_filters_are_kept_by_media_type_and_name() -> None:
             assert "saved_filters" not in inspect(conn).get_table_names()
     finally:
         engine.dispose()
+
+
+def test_one_servers_titles_become_copies_of_server_one_and_back() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c3e7a1f9b204")
+            for statement in (
+                (
+                    "INSERT INTO task_schedule (task_name, enabled, cron_expression, "
+                    "payload) VALUES ('sync_server', 0, '', "
+                    '\'{"last_media_server": "abc"}\')'
+                ),
+                (
+                    "INSERT INTO libraries (id, media_type, title) "
+                    "VALUES ('7', 'movie', 'Movies')"
+                ),
+                (
+                    "INSERT INTO media_items (id, media_type, title, server_item_id, "
+                    "library_id, monitored, theme_provenance_cleared, director_etag) "
+                    "VALUES (5, 'movie', 'Film', '100', '7', 1, 0, 'v1')"
+                ),
+                "INSERT INTO terms (id, kind, name) VALUES (1, 'label', 'Fav')",
+                "INSERT INTO media_item_terms VALUES (5, 'label', 0, 1)",
+                (
+                    "INSERT INTO seasons (id, media_item_id, season_num, "
+                    "server_item_id, file_count) VALUES (9, 5, 1, 's1', 0)"
+                ),
+                (
+                    "INSERT INTO media_collections (id, title, kind, order_type, "
+                    "visible_home, visible_shared, visible_library, child_count, "
+                    "monitored, deselected, unsynced, server_path) VALUES (3, 'Saga', "
+                    "'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, '/boxsets/Saga')"
+                ),
+                (
+                    "INSERT INTO collection_libraries (collection_id, library_id, "
+                    "media_type, server_item_id) VALUES (3, '7', 'movie', 'c1')"
+                ),
+                (
+                    "INSERT INTO saved_schedules (id, kind, name, cron_expression, "
+                    "enabled, payload, state, created_at, updated_at) VALUES (1, "
+                    "'sync', 'Poll', '* * * * *', 1, '{\"library_ids\": [\"7\"]}', "
+                    "'{\"checkpoint\": \"2026-01-01T00:00:00Z\"}', '2026-01-01', "
+                    "'2026-01-01')"
+                ),
+            ):
+                conn.exec_driver_sql(statement)
+
+            command.upgrade(config, "e4b1c8f2a903")
+            assert conn.exec_driver_sql(
+                "SELECT id, key, server_type, identity, removed_at IS NOT NULL "
+                "FROM media_servers"
+            ).all() == [(1, None, None, "abc", 1)]
+            assert conn.exec_driver_sql(
+                "SELECT media_item_id, server_id, server_item_id, library_id, "
+                "labels, director_etag FROM media_item_copies"
+            ).all() == [(5, 1, "100", "1:7", '["Fav"]', "v1")]
+            assert conn.exec_driver_sql("SELECT * FROM season_copies").all() == [
+                (9, 1, "s1")
+            ]
+            assert conn.exec_driver_sql(
+                "SELECT library_id, server_id, server_path FROM collection_libraries"
+            ).all() == [("1:7", 1, "/boxsets/Saga")]
+            assert conn.exec_driver_sql(
+                "SELECT payload, state FROM saved_schedules"
+            ).all() == [
+                (
+                    '{"library_ids": ["1:7"]}',
+                    '{"checkpoints": {"1": "2026-01-01T00:00:00Z"}}',
+                )
+            ]
+            assert not conn.exec_driver_sql(
+                "SELECT 1 FROM task_schedule WHERE task_name = 'sync_server'"
+            ).all()
+
+            command.downgrade(config, "c3e7a1f9b204")
+            assert conn.exec_driver_sql(
+                "SELECT server_item_id, library_id, director_etag FROM media_items"
+            ).all() == [("100", "7", "v1")]
+            assert conn.exec_driver_sql("SELECT server_item_id FROM seasons").all() == [
+                ("s1",)
+            ]
+            assert conn.exec_driver_sql(
+                "SELECT library_id FROM collection_libraries"
+            ).all() == [("7",)]
+            assert conn.exec_driver_sql(
+                "SELECT server_path FROM media_collections"
+            ).all() == [("/boxsets/Saga",)]
+            assert conn.exec_driver_sql(
+                "SELECT payload, state FROM saved_schedules"
+            ).all() == [
+                (
+                    '{"library_ids": ["7"]}',
+                    '{"checkpoint": "2026-01-01T00:00:00Z"}',
+                )
+            ]
+    finally:
+        engine.dispose()

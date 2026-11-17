@@ -25,9 +25,9 @@ lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.adapters import FolderThemes, ServerCollection
-lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
+lazy from ...media_servers.registry import CollectionProvider, Provider
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.media_items import MediaItemRepository, ServerItemFacts
+lazy from ...repositories.copies import CopyRepository, ServerItemFacts
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...schemas.sync import SyncScheduleConfig
 lazy from ...utils.collection_formats import literal_template
@@ -41,41 +41,65 @@ lazy from ..downloads.service import DownloadService
 logger = logging.getLogger(__name__)
 
 
+#: A server collection, by the database's number of its server and its own ID.
+type CopyKey = tuple[int, str]
+
+
+@dataclass(slots=True, frozen=True)
+class _Listed:
+    """One collection a server lists."""
+
+    server_id: int
+    collection: ServerCollection
+
+    @property
+    def key(self) -> CopyKey:
+        return self.server_id, self.collection.id
+
+
 @dataclass(slots=True, frozen=True)
 class _Placed:
     """A library a server collection holds members of."""
 
     library_id: str
     media_type: MediaType
+    server_id: int
     server_item_id: str
+    server_path: str | None
 
 
 def _by_row(
-    listed: Sequence[ServerCollection], rows: Sequence[MediaCollection]
-) -> list[tuple[MediaCollection | None, list[ServerCollection]]]:
+    listed: Sequence[_Listed], rows: Sequence[MediaCollection]
+) -> list[tuple[MediaCollection | None, list[_Listed]]]:
     """Group server collections by the row that owns them, lead copy first.
 
-    Plex holds a cross-library collection as one collection in each library,
-    so a row's copies are stored together; one unknown to Overture stands alone.
+    A collection across libraries or servers has a copy in each Plex library
+    and on each server, so a row's copies are stored together; one unknown to
+    Overture stands alone.
     """
-    owners = {identity: row for row in rows for identity in row.server_ids}
-    grouped: dict[int, tuple[MediaCollection, list[ServerCollection]]] = {}
-    alone: list[tuple[MediaCollection | None, list[ServerCollection]]] = []
-    for collection in listed:
-        owner = owners.get(collection.id)
+    owners = {
+        (part.server_id, part.server_item_id): row
+        for row in rows
+        for part in row.libraries
+        if part.server_item_id
+    }
+    grouped: dict[int, tuple[MediaCollection, list[_Listed]]] = {}
+    alone: list[tuple[MediaCollection | None, list[_Listed]]] = []
+    for copy in listed:
+        owner = owners.get(copy.key)
         if owner is None:
-            alone.append((None, [collection]))
+            alone.append((None, [copy]))
         else:
-            grouped.setdefault(owner.id or 0, (owner, []))[1].append(collection)
+            grouped.setdefault(owner.id or 0, (owner, []))[1].append(copy)
     for row, copies in grouped.values():
-        order = row.server_ids
-        copies.sort(key=lambda copy: order.index(copy.id))
+        order = [(part.server_id, part.server_item_id) for part in row.copies]
+        copies.sort(key=lambda copy: order.index(copy.key))
     return [*grouped.values(), *alone]
 
 
 def _placement(
-    copies: Sequence[ServerCollection],
-    items: Mapping[str, ServerItemFacts],
+    copies: Sequence[_Listed],
+    items: Mapping[CopyKey, ServerItemFacts],
     previous: MediaCollection | None,
 ) -> list[_Placed]:
     """The libraries these server collections hold members of.
@@ -84,20 +108,35 @@ def _placement(
     outside theirs, so its members say, and an emptied one stays where it was.
     """
     placed: dict[str, _Placed] = {}
-    for copy in copies:
+    for listed in copies:
+        copy = listed.collection
         if copy.library_id is not None and copy.media_type is not None:
-            placed[copy.library_id] = _Placed(copy.library_id, copy.media_type, copy.id)
+            placed[copy.library_id] = _Placed(
+                copy.library_id, copy.media_type, listed.server_id, copy.id, copy.path
+            )
             continue
         for identity in copy.member_ids:
-            if (item := items.get(identity)) is not None and item.library_id:
+            if (item := items.get((listed.server_id, identity))) is not None:
                 placed.setdefault(
                     item.library_id,
-                    _Placed(item.library_id, item.media_type, copy.id),
+                    _Placed(
+                        item.library_id,
+                        item.media_type,
+                        listed.server_id,
+                        copy.id,
+                        copy.path,
+                    ),
                 )
     if placed or previous is None:
         return list(placed.values())
     return [
-        _Placed(part.library_id, part.media_type, part.server_item_id)
+        _Placed(
+            part.library_id,
+            part.media_type,
+            part.server_id,
+            part.server_item_id,
+            part.server_path,
+        )
         for part in previous.libraries
         if part.server_item_id is not None
     ]
@@ -112,12 +151,24 @@ def _store_placement(row: MediaCollection, placement: Sequence[_Placed]) -> None
             collection_id=row.id or 0,
             library_id=placed.library_id,
             media_type=placed.media_type,
-            server_item_id=placed.server_item_id,
+            server_id=placed.server_id,
         )
         for placed in placement
     ]
     for part, placed in zip(row.libraries, placement, strict=True):
         part.server_item_id = placed.server_item_id
+        part.server_path = placed.server_path
+
+
+def _store_paths(row: MediaCollection, placement: Sequence[_Placed]) -> None:
+    """Note where each server keeps the copies of a collection Overture manages."""
+    paths = {
+        (placed.server_id, placed.server_item_id): placed.server_path
+        for placed in placement
+    }
+    for part in row.libraries:
+        if (key := (part.server_id, part.server_item_id or "")) in paths:
+            part.server_path = paths[key]
 
 
 class CollectionSync:
@@ -126,13 +177,11 @@ class CollectionSync:
     def __init__(
         self,
         *,
-        provider_registry: ProviderRegistry,
         publisher: protocols.EventPublisher,
         app_config: Settings,
         database: Database,
         downloads: DownloadService,
     ) -> None:
-        self._registry = provider_registry
         self._publisher = publisher
         self._config = app_config
         self._database = database
@@ -141,15 +190,18 @@ class CollectionSync:
     async def run(
         self,
         job: ManagedJob[SyncTally],
+        providers: Sequence[Provider],
         *,
         library_ids: list[str] | None,
         theme_order: IncrementalThemeOrder = IncrementalThemeOrder.OFF,
     ) -> None:
-        """Refresh collections, then queue catalog themes for new matches."""
-        if job.stop_requested():
-            return
-        provider = self._registry.collections
-        if provider is None or job.stop_requested():
+        """Refresh what *providers*' servers hold, then queue catalog themes.
+
+        Only those servers' copies are read; another server's copies stay as
+        the last sync of it left them.
+        """
+        providers = [provider for provider in providers if provider.collections]
+        if job.stop_requested() or not providers:
             return
         await job.progress(
             log=log_entry(
@@ -157,44 +209,70 @@ class CollectionSync:
             )
         )
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
-            listed = await provider.list_collections()
+            listed = [
+                _Listed(provider.server_id, collection)
+                for provider in providers
+                for collection in await provider.list_collections()
+            ]
+            by_server = {provider.server_id: provider for provider in providers}
             async with self._database.read_session() as session:
                 import_unmanaged = (
                     await get_app_settings(session)
                 ).collection_import_unmanaged
-                items = await MediaItemRepository(session).facts_by_server_id()
+                items = {
+                    (provider.server_id, identity): facts
+                    for provider in providers
+                    for identity, facts in (
+                        await CopyRepository(session).facts_by_server_id(
+                            provider.server_id
+                        )
+                    ).items()
+                }
                 rows = await CollectionRepository(session).list_all()
                 managed_ids = {
                     row.id
                     for row in rows
                     if row.rule is not None and row.id is not None
                 }
-            # Titles of managed collections still without a server copy, which
-            # take over the server's collection of their title when they sync.
+            # Titles of managed collections still without a copy on a server,
+            # which take over that server's collection of their title when
+            # they sync.
             awaited = {
-                row.title.casefold()
+                (part.server_id, row.title.casefold())
                 for row in rows
-                if row.rule is not None and not row.server_ids
+                if row.rule is not None
+                for part in row.libraries
+                if part.server_item_id is None
             }
-            seen = {collection.id for collection in listed}
+            seen = {copy.key for copy in listed}
             newly_identified: list[int] = []
             identified = 0
             for previous, copies in _by_row(listed, rows):
                 if job.stop_requested():
                     return
+                lead = copies[0]
                 if (
                     previous is None
                     and not import_unmanaged
-                    and copies[0].title.casefold() not in awaited
+                    and (lead.server_id, lead.collection.title.casefold())
+                    not in awaited
                 ):
                     continue
-                collection = copies[0]
-                members = [
-                    items[identity]
+                members = list(
+                    {
+                        facts.id: facts
+                        for copy in copies
+                        for identity in copy.collection.member_ids
+                        if (facts := items.get((copy.server_id, identity)))
+                    }.values()
+                )
+                # Items no sync stored yet still count, as their server's own.
+                unknown = {
+                    (copy.server_id, identity)
                     for copy in copies
-                    for identity in copy.member_ids
-                    if identity in items
-                ]
+                    for identity in copy.collection.member_ids
+                    if (copy.server_id, identity) not in items
+                }
                 placement = _placement(copies, items, previous)
                 # An empty BoxSet is in no library yet, so there is nothing to list.
                 if not placement:
@@ -206,14 +284,15 @@ class CollectionSync:
                 async with self._downloads.asset_locks.acquire(
                     f"collection:{previous.id}"
                     if previous
-                    else f"new-collection:{provider.server_type}:{collection.id}"
+                    else f"new-collection:{lead.server_id}:{lead.collection.id}"
                 ):
                     async with self._database.read_session() as session:
                         current = await CollectionRepository(session).find_server(
-                            collection.id
+                            *lead.key
                         )
+                    provider = by_server[lead.server_id]
                     facts, checked = await self._inspect_theme(
-                        provider, collection, current, previous
+                        provider, lead.collection, current, previous
                     )
                     async with self._database.write_session() as session:
                         row = await self._store(
@@ -221,6 +300,7 @@ class CollectionSync:
                             copies,
                             placement=placement,
                             members=members,
+                            unknown=len(unknown),
                             folder_themes=isinstance(
                                 provider.collections, FolderThemes
                             ),
@@ -247,7 +327,15 @@ class CollectionSync:
                     row.id: missing
                     for row in await CollectionRepository(session).list_all()
                     if row.id is not None
-                    and (missing := set(row.server_ids) - seen)
+                    and (
+                        missing := {
+                            key
+                            for part in row.copies
+                            if part.server_id in by_server
+                            and (key := (part.server_id, part.server_item_id or ""))
+                            not in seen
+                        }
+                    )
                     and (
                         not library_ids
                         or (
@@ -312,9 +400,7 @@ class CollectionSync:
             return None, not changed
         try:
             folder = await owned_thread(
-                collection_folder,
-                self._config.JELLYFIN_COLLECTIONS_PATH,
-                collection.path,
+                collection_folder, provider.server, collection.path
             )
             facts = await owned_thread(
                 inspect_theme_file,
@@ -365,10 +451,11 @@ class CollectionSync:
     @staticmethod
     async def _store(
         repository: CollectionRepository,
-        copies: Sequence[ServerCollection],
+        listed: Sequence[_Listed],
         *,
         placement: Sequence[_Placed],
         members: list[ServerItemFacts],
+        unknown: int,
         folder_themes: bool,
         facts: ThemeFileFacts | None,
         theme_checked: bool,
@@ -376,8 +463,8 @@ class CollectionSync:
         now: datetime,
     ) -> MediaCollection:
         """Store a collection from its server copies, the lead copy first."""
-        collection = copies[0]
-        row = await repository.find_server(collection.id) or MediaCollection(
+        collection = listed[0].collection
+        row = await repository.find_server(*listed[0].key) or MediaCollection(
             created_at=now,
             tmdb_collection_id=collection.tmdb_id
             if any(placed.media_type is MediaType.MOVIE for placed in placement)
@@ -400,7 +487,6 @@ class CollectionSync:
                 else CollectionKind.REGULAR,
                 "thumb_url": collection.thumb_url,
                 "art_url": collection.art_url,
-                "server_path": collection.path,
                 "server_added_at": collection.added_at,
                 "provider_tmdb_id": collection.tmdb_id,
                 "last_synced_at": now,
@@ -409,7 +495,9 @@ class CollectionSync:
         )
         # What a managed collection spans is Overture's choice; otherwise it is
         # wherever the server's members are.
-        if not managed:
+        if managed:
+            _store_paths(row, placement)
+        else:
             _store_placement(row, placement)
         # Overture owns what it manages, and its next sync sends those choices;
         # members saved in Overture and not yet synced win over the server's too.
@@ -417,7 +505,7 @@ class CollectionSync:
         if not (keep_members or managed):
             _store_choices(row, collection)
         if not keep_members:
-            row.child_count = sum(len(copy.member_ids) for copy in copies)
+            row.child_count = len(members) + unknown
         if theme_checked:
             replaced = (
                 (

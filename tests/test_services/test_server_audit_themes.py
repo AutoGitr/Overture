@@ -7,7 +7,6 @@ lazy import httpx2
 lazy import pytest
 
 lazy from overture.config import Settings
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaType
 lazy from overture.media_servers.adapters import ServerTheme
@@ -24,6 +23,7 @@ lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.file import compute_bytes_hash
 lazy from tests.http_mock import mock_client_factory
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
@@ -103,7 +103,7 @@ async def _audit(
     stat = theme.stat()
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 media_type=MediaType.MOVIE,
                 title="Movie",

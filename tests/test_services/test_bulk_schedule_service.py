@@ -11,7 +11,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtBulkSource,
@@ -48,6 +47,7 @@ lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.errors import PublicServiceError
+lazy from tests.media_servers import served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -63,7 +63,7 @@ def _assets_body(
     art: bool = True,
     enabled: bool = True,
     cron_expression: str = "0 3 * * *",
-    library_id: str = "1",
+    library_id: str = "1:1",
     themes: bool = True,
 ) -> BulkAssetsScheduleWrite:
     return BulkAssetsScheduleWrite(
@@ -234,7 +234,7 @@ async def test_stop_assets_run_keeps_downloads_owned_by_other_callers(
 
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 media_type=MediaType.MOVIE,
                 title="Movie 1",
@@ -242,7 +242,7 @@ async def test_stop_assets_run_keeps_downloads_owned_by_other_callers(
             )
         )
         session.add(
-            MediaItem(
+            served_item(
                 id=2,
                 media_type=MediaType.MOVIE,
                 title="Movie 2",
@@ -305,7 +305,7 @@ async def test_bulk_assets_schedule_crud_validates_names_and_cron(
     assert created.name == "Nightly assets"
     assert created.enabled is True
     assert created.kind == "assets"
-    assert created.config.library_ids == ["1"]
+    assert created.config.library_ids == ["1:1"]
     assert created.config.skip_recent_val == 1
     assert created.config.art is not None
     assert created.config.themes is not None
@@ -320,12 +320,12 @@ async def test_bulk_assets_schedule_crud_validates_names_and_cron(
         _assets_body("Invalid", cron_expression="not cron")
 
     updated = await service.schedules.update(
-        created.id, _assets_body("Weekend assets", enabled=False, library_id="2")
+        created.id, _assets_body("Weekend assets", enabled=False, library_id="1:2")
     )
 
     assert updated.name == "Weekend assets"
     assert updated.enabled is False
-    assert updated.config.library_ids == ["2"]
+    assert updated.config.library_ids == ["1:2"]
     assert not service.schedules.scheduler.job_info(
         f"saved_schedule:{created.id}"
     ).enabled
@@ -357,9 +357,9 @@ async def test_a_schedule_whose_commit_fails_is_not_registered(
 @pytest.mark.parametrize(
     ("art", "themes", "expected"),
     [
-        (True, False, [("art", "1")]),
-        (False, True, [("themes", "1")]),
-        (True, True, [("art", "1"), ("themes", "1")]),
+        (True, False, [("art", "1:1")]),
+        (False, True, [("themes", "1:1")]),
+        (True, True, [("art", "1:1"), ("themes", "1:1")]),
     ],
 )
 async def test_bulk_assets_schedule_runs_selected_jobs(
@@ -396,7 +396,7 @@ async def test_bulk_assets_schedule_runs_selected_jobs(
     monkeypatch.setattr(module, "run_bulk_themes", fake_run_themes)
 
     schedule = await service.schedules.create(
-        _assets_body("Assets", art=art, themes=themes, library_id="1")
+        _assets_body("Assets", art=art, themes=themes, library_id="1:1")
     )
 
     await service.schedules.run_now(schedule.id)
@@ -425,7 +425,7 @@ async def test_assets_run_now_is_refused_during_a_full_sync(
 
     with pytest.raises(PublicServiceError, match="Wait for full sync to finish"):
         service.start_run(
-            BulkAssetsRequest(library_ids=["1"], art=BulkAssetsArtConfig())
+            BulkAssetsRequest(library_ids=["1:1"], art=BulkAssetsArtConfig())
         )
 
     assert background_jobs.art_match.running is False

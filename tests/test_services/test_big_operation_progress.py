@@ -2,6 +2,7 @@
 
 lazy from collections.abc import Iterator
 lazy from pathlib import Path
+lazy from types import SimpleNamespace
 lazy from typing import Any, cast
 
 lazy import pytest
@@ -162,14 +163,14 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
     async def fake_plan(*_args: object, **_kwargs: object) -> list[AuditTarget]:
         return [AuditTarget(1, ArtType.POSTER)]
 
-    async def fake_audit(*_args: object, **_kwargs: object) -> ServerAuditResult:
-        return result
+    async def fake_audit(*_args: object, **_kwargs: object) -> list[ServerAuditResult]:
+        return [result]
 
     monkeypatch.setattr(server_audit, "plan_audit", fake_plan)
     monkeypatch.setattr(server_audit, "_audit_art_one", fake_audit)
 
     context = Context(JobKind.SERVER_AUDIT)
-    registry = NoopProviderRegistry(object())
+    registry = NoopProviderRegistry(SimpleNamespace())
     audit_context = AuditContext(
         config_dir=tmp_path,
         collection_art=unused(CollectionArtService),

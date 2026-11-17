@@ -3,10 +3,11 @@
 lazy from typing import override
 
 lazy from overture.config import Settings
-lazy from overture.domain import ArtType, MediaType
+lazy from overture.domain import ArtType, MediaType, ServerType
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.jellyfin.provider import JellyfinProvider
 lazy from overture.media_servers.wire import MediaBrowserItem
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 
 
 class Client(JellyfinClient):
@@ -33,9 +34,12 @@ class Client(JellyfinClient):
 async def test_boxsets_carry_their_folder_tmdb_collection_and_members(
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "https://jellyfin.test"
+    configure(app_config, url="https://jellyfin.test")
     provider = JellyfinProvider(
-        client=Client(app_config=app_config), app_config=app_config
+        client=Client(server=server_of(app_config, ServerType.JELLYFIN)),
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
     )
 
     saga, custom = await provider.list_collections()
@@ -66,7 +70,10 @@ async def test_created_boxset_immediately_has_its_theme_folder(
             return {"Id": item_id, "Path": "/config/data/collections/New [boxset]"}
 
     provider = JellyfinProvider(
-        client=CreatingClient(app_config=app_config), app_config=app_config
+        client=CreatingClient(server=server_of(app_config, ServerType.JELLYFIN)),
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
     )
     created = await provider.create_collection("movies", "New", MediaType.MOVIE, ["m1"])
     assert created.path == "/config/data/collections/New [boxset]"
@@ -85,9 +92,12 @@ async def test_boxset_image_url_carries_the_tag_an_upload_changes(
                 "BackdropImageTags": ["back"],
             }
 
-    app_config.MEDIA_SERVER_URL = "https://jellyfin.test"
+    configure(app_config, url="https://jellyfin.test")
     provider = JellyfinProvider(
-        client=ImageClient(app_config=app_config), app_config=app_config
+        client=ImageClient(server=server_of(app_config, ServerType.JELLYFIN)),
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
     )
 
     assert await provider.get_collection_image_url("box", ArtType.POSTER) == (

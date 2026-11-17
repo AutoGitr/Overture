@@ -14,6 +14,7 @@ lazy from dataclasses import dataclass, field
 lazy from typing import Any
 
 lazy from sqlmodel import col, select
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
@@ -32,6 +33,7 @@ lazy from ...media_servers.adapters import (
 )
 lazy from ...media_servers.base import BaseMediaServerProvider
 lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
@@ -45,7 +47,7 @@ lazy from ..downloads.service import DownloadService
 lazy from ..local_assets.service import LocalAssets
 lazy from ..storage.assets import AssetStorage
 lazy from .art_urls import resolve_provider_art_urls
-lazy from .item_sync import ItemReconciler
+lazy from .item_sync import CopyPlace, ItemReconciler
 lazy from .season_sync import SeasonSynchronizer
 lazy from .staging import StagedListing
 
@@ -70,6 +72,28 @@ def _sync_outcome(result: SyncItemResult) -> tuple[JobOutcome, str]:
     if result.changes:
         return JobOutcome.UPDATED, f"changed: {', '.join(result.changes)}"
     return JobOutcome.UNCHANGED, "matches the media server and the local files"
+
+
+@dataclass(slots=True, frozen=True)
+class ServerTurn:
+    """The server a sync reconciles, and the servers that lead before it."""
+
+    server_id: int
+    #: The configured servers before it in MEDIA_SERVERS, whose copies lead.
+    earlier: frozenset[int] = frozenset()
+
+    async def place(self, session: AsyncSession, item_id: int | None) -> CopyPlace:
+        """Where this server holds a title; it leads unless an earlier one lists it."""
+        if item_id is None or not self.earlier:
+            return CopyPlace(self.server_id, lead=True)
+        copies = await CopyRepository(session).of_item(item_id)
+        return CopyPlace(
+            self.server_id,
+            lead=not any(
+                copy.server_id in self.earlier and copy.removed_at is None
+                for copy in copies
+            ),
+        )
 
 
 @dataclass(slots=True, frozen=True)
@@ -109,19 +133,21 @@ class LibraryReconciler:
         """Return the storage whose locks guard each item's files."""
         return self.local_assets.asset_storage
 
-    async def record_libraries(self, sections: Sequence[ServerSection]) -> None:
-        """Store the libraries the server lists, which its items are filed under."""
+    async def record_libraries(
+        self, server_id: int, sections: Sequence[ServerSection]
+    ) -> None:
+        """Store the libraries a server lists, which its items are filed under."""
         async with self._database.write_session() as session:
-            await LibraryRepository(session).record(sections, utc_now())
+            await LibraryRepository(session).record(server_id, sections, utc_now())
 
     async def follow_moved_libraries(
         self, moves: Counter[tuple[str, MediaType, str]]
     ) -> list[tuple[str, str]]:
-        """Point what named a library the server no longer lists at its successor.
+        """Point what named a library no server lists any more at its successor.
 
         A library's successor is the listed library most of its titles moved
-        to, as after a change of media server, whose libraries have other IDs.
-        Returns each ``(library, successor)`` followed.
+        to, on its own server or, after a server left MEDIA_SERVERS, on
+        another. Returns each ``(library, successor)`` followed.
         """
         if not moves:
             return []
@@ -164,8 +190,8 @@ class LibraryReconciler:
         if not deferred:
             return
         async with self._database.read_session() as session:
-            stored = await MediaItemRepository(session).directors_by_version(
-                {item.id for item in deferred}
+            stored = await CopyRepository(session).directors_by_version(
+                provider.server_id, {item.id for item in deferred}
             )
         changed: list[ServerItem] = []
         for item in deferred:
@@ -186,6 +212,7 @@ class LibraryReconciler:
     async def sync_staged(
         self,
         listing: StagedListing,
+        turn: ServerTurn,
         *,
         library_ids: list[str] | None,
         tally: SyncTally,
@@ -206,6 +233,7 @@ class LibraryReconciler:
 
             if await self._reconcile_batch(
                 [item for _, item in rows],
+                turn,
                 claimed=listing.is_mapped,
                 on_reconciled=mapped,
                 stats=stats,
@@ -214,12 +242,15 @@ class LibraryReconciler:
                 stop_check=stop_check,
             ):
                 return stats
-        await self._mark_missing_staged(listing, library_ids, stats, progress_cb)
+        await self._mark_missing_staged(
+            listing, turn.server_id, library_ids, stats, progress_cb
+        )
         return stats
 
     async def _reconcile_batch(
         self,
         server_items: list[ServerItem],
+        turn: ServerTurn,
         *,
         claimed: Callable[[int], Awaitable[bool]],
         on_reconciled: Callable[[ServerItem, int], Awaitable[None]],
@@ -242,7 +273,11 @@ class LibraryReconciler:
                     stopped = True
                     break
                 outcome = await self._reconcile_one(
-                    server_item, claimed, stats=stats, auto_unmonitor=auto_unmonitor
+                    server_item,
+                    turn,
+                    claimed,
+                    stats=stats,
+                    auto_unmonitor=auto_unmonitor,
                 )
                 if isinstance(outcome, SyncItemResult) and outcome.item_id is not None:
                     synced.add(outcome.item_id)
@@ -285,7 +320,10 @@ class LibraryReconciler:
                 await MediaItemRepository(session).mark_synced(item_ids, utc_now())
 
     async def _match(
-        self, server_item: ServerItem, claimed: Callable[[int], Awaitable[bool]]
+        self,
+        server_item: ServerItem,
+        server_id: int,
+        claimed: Callable[[int], Awaitable[bool]],
     ) -> tuple[set[int], MediaItem | None]:
         """Return the claimed rows the item matched and the row it reconciles into.
 
@@ -297,7 +335,11 @@ class LibraryReconciler:
         for _ in range(500):
             async with self._database.read_session() as session:
                 candidate = await self._items.find_existing_item(
-                    session, server_item, exclude_item_ids=excluded, for_update=False
+                    session,
+                    server_id,
+                    server_item,
+                    exclude_item_ids=excluded,
+                    for_update=False,
                 )
             if candidate is None or candidate.id is None:
                 return excluded, None
@@ -309,50 +351,43 @@ class LibraryReconciler:
     async def _mark_missing_staged(
         self,
         listing: StagedListing,
+        server_id: int,
         library_ids: list[str] | None,
         stats: SyncResult,
         progress_cb: SyncProgressCallback | None,
     ) -> None:
-        """Hide missing rows only after the provider snapshot is complete."""
+        """Mark the server's copies its complete listing left out as removed.
+
+        A title is hidden once no server lists it any more.
+        """
         after_id = 0
         while True:
             async with self._database.read_session() as session:
-                current = await MediaItemRepository(session).server_identities(
-                    library_ids, after_id=after_id, limit=PAGE_SIZE
+                current = await CopyRepository(session).identities(
+                    server_id, library_ids, after_id=after_id, limit=PAGE_SIZE
                 )
             if not current:
                 return
             after_id = current[-1][0]
             listed = await listing.mappings(
-                [(media_type, server_id) for _, media_type, server_id in current]
+                [
+                    (media_type, server_item_id)
+                    for _, _, media_type, server_item_id in current
+                ]
             )
-            missing = {
-                item_id: (media_type, server_id)
-                for item_id, media_type, server_id in current
-                if (media_type, server_id) not in listed
-                or listed[media_type, server_id] not in {None, item_id}
-            }
-            removed: list[MediaItem] = []
+            missing = [
+                copy_id
+                for copy_id, item_id, media_type, server_item_id in current
+                if (media_type, server_item_id) not in listed
+                or listed[media_type, server_item_id] not in {None, item_id}
+            ]
             async with self._database.write_session() as session:
-                rows = await session.exec(
-                    select(MediaItem).where(col(MediaItem.id).in_(missing))
-                )
-                for item in rows.all():
-                    media_type, server_id = missing[item.id or 0]
-                    if (
-                        item.server_removed_at is not None
-                        or item.media_type != media_type
-                        or item.server_item_id != server_id
-                        or (
-                            library_ids is not None
-                            and item.library_id not in library_ids
-                        )
-                    ):
-                        continue
-                    item.server_removed_at = utc_now()
-                    item.last_synced_at = item.server_removed_at
-                    session.add(item)
-                    removed.append(item)
+                gone = await CopyRepository(session).mark_removed(missing, utc_now())
+                removed = (
+                    await session.exec(
+                        select(MediaItem).where(col(MediaItem.id).in_(gone))
+                    )
+                ).all()
             for item in removed:
                 await self._log_removed(stats, item.title, progress_cb)
                 if item.id is not None:
@@ -365,6 +400,7 @@ class LibraryReconciler:
     async def sync_recent(
         self,
         server_items: list[ServerItem],
+        turn: ServerTurn,
         *,
         tally: SyncTally | None = None,
         progress_cb: SyncProgressCallback | None = None,
@@ -388,6 +424,7 @@ class LibraryReconciler:
                 server_items,
                 key=lambda item: media_sort_key(item.media_type, item.title, item.id),
             ),
+            turn,
             claimed=claimed,
             on_reconciled=mark,
             stats=stats,
@@ -405,6 +442,7 @@ class LibraryReconciler:
     async def _reconcile_one(
         self,
         server_item: ServerItem,
+        turn: ServerTurn,
         claimed: Callable[[int], Awaitable[bool]],
         *,
         stats: SyncResult,
@@ -412,27 +450,23 @@ class LibraryReconciler:
     ) -> SyncItemResult | str:
         """Find the row one provider item matches, then reconcile it."""
         try:
-            excluded, expected = await self._match(server_item, claimed)
+            excluded, expected = await self._match(server_item, turn.server_id, claimed)
         except Exception as exc:  # noqa: BLE001 -- one item's failure is reported; the rest go on
             return _item_failure(server_item, exc)
         outcome = await self._reconcile_matched(
-            server_item, excluded, expected, auto_unmonitor=auto_unmonitor
+            server_item, turn, excluded, expected, auto_unmonitor=auto_unmonitor
         )
-        if (
-            isinstance(outcome, SyncItemResult)
-            and expected is not None
-            and expected.library_id
-            and server_item.library_id
-            and expected.library_id != server_item.library_id
-        ):
-            stats.library_moves[
-                expected.library_id, server_item.media_type, server_item.library_id
-            ] += 1
+        if isinstance(outcome, SyncItemResult):
+            for left in outcome.left_libraries:
+                stats.library_moves[
+                    left, server_item.media_type, server_item.library_id
+                ] += 1
         return outcome
 
     async def _reconcile_matched(
         self,
         server_item: ServerItem,
+        turn: ServerTurn,
         excluded: set[int],
         expected: MediaItem | None,
         *,
@@ -454,16 +488,19 @@ class LibraryReconciler:
                 server_item, app_config=self._app_config
             )
             expected_id = expected.id if expected is not None else None
-            lock_key = expected_id or f"sync:{server_item.media_type}:{server_item.id}"
+            lock_key = expected_id or (
+                f"sync:{turn.server_id}:{server_item.media_type}:{server_item.id}"
+            )
             async with self.asset_storage.asset_locks.acquire(lock_key):
                 async with self._database.write_session() as session:
                     current = await self._items.find_existing_item(
-                        session, server_item, exclude_item_ids=excluded
+                        session, turn.server_id, server_item, exclude_item_ids=excluded
                     )
                     if (current.id if current is not None else None) != expected_id:
                         raise RuntimeError("Media item changed during reconciliation")
                     result = await self._items.sync_item(
                         session,
+                        await turn.place(session, expected_id),
                         server_item,
                         resolved,
                         current,

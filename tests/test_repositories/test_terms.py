@@ -12,6 +12,7 @@ lazy from overture.repositories.collections import (
     TermSelection,
 )
 lazy from overture.repositories.terms import TermRepository
+lazy from tests.media_servers import served_item
 
 
 async def _terms(session: AsyncSession) -> int:
@@ -99,16 +100,18 @@ async def test_one_name_is_a_separate_term_of_each_kind_and_is_reused(
 
 
 async def _library_with_titles(session: AsyncSession) -> None:
-    session.add_all(
-        MediaItem(
+    """Two titles of a library; each copy's labels are its server's own."""
+    labels = {1: ["One", "Two"], 2: ["Two"]}
+    for item_id, held in labels.items():
+        item = served_item(
             id=item_id,
             media_type=MediaType.MOVIE,
             title=f"Title {item_id}",
-            library_id="movies",
+            library_id="1:movies",
             server_item_id=str(item_id),
         )
-        for item_id in (1, 2)
-    )
+        item.copies[0].labels = held
+        session.add(item)
     await session.flush()
     repo = TermRepository(session)
     await repo.assign(
@@ -129,7 +132,7 @@ async def test_a_library_read_selects_values_and_unread_kinds_raise(
 
     first, second = await CollectionRepository(db_session).library_items(
         MediaType.MOVIE,
-        "movies",
+        "1:movies",
         TermSelection(
             kinds=frozenset({TermKind.LABEL}),
             matching={TermKind.ACTOR: frozenset({"åsa söderström"})},
@@ -150,8 +153,12 @@ async def test_term_counts_count_each_value_across_the_librarys_titles(
     await _library_with_titles(db_session)
 
     assert await CollectionRepository(db_session).term_counts(
-        MediaType.MOVIE, "movies", TermKind.ACTOR
+        MediaType.MOVIE, "1:movies", TermKind.ACTOR
     ) == {"Åsa Söderström": 1, "Lead": 2}
+    # Labels are each server's own, as its copies hold them.
+    assert await CollectionRepository(db_session).term_counts(
+        MediaType.MOVIE, "1:movies", TermKind.LABEL
+    ) == {"One": 1, "Two": 2}
 
 
 async def test_assign_reports_only_the_kinds_that_changed(

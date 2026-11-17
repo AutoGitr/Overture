@@ -49,13 +49,17 @@ class LibraryFilters:
         self._discovery = discovery
 
     def capabilities(self, media_type: MediaType) -> LibraryFilterCapabilities:
-        """The fields and sources a custom filter of the media type can test."""
-        server = self._access.server_type
+        """The fields and sources a custom filter of the media type can test.
+
+        A filter tests the titles of every library, so it offers what any
+        configured server's titles hold.
+        """
+        servers = sorted(self._access.configured_types())
         tmdb = self._access.app_config.tmdb_configured
         fields = [
             CollectionFieldRead(
                 field=field,
-                label=field_label(field, server),
+                label=field_label(field, available[0]),
                 kind=spec.kind,
                 operators=list(field_operators(field, smart=False)),
                 smart_operators=[],
@@ -65,7 +69,13 @@ class LibraryFilters:
                 choices=list(spec.choices),
             )
             for field, spec in FIELDS.items()
-            if library_field_available(field, server, media_type)
+            if (
+                available := [
+                    server
+                    for server in servers
+                    if library_field_available(field, server, media_type)
+                ]
+            )
             and (tmdb or not spec.tmdb)
         ]
         return LibraryFilterCapabilities(
@@ -90,7 +100,9 @@ class LibraryFilters:
                 422, "Library status conditions are tested in the browser"
             )
         combined = FilterGroup(mode="any", conditions=body.conditions)
-        self._validator.library_criteria(media_type, combined)
+        self._validator.library_criteria(
+            media_type, combined, self._access.configured_types()
+        )
         async with self._access.database.read_session() as session:
             library_ids = [
                 library.id

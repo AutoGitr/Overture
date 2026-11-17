@@ -1,4 +1,4 @@
-import { appSettings } from "../../helpers/fixtures";
+import { appSettings, mediaServers } from "../../helpers/fixtures";
 import { QueryClient } from "@tanstack/svelte-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,7 +52,7 @@ describe("Sidebar", () => {
     settingsState.load(
       appSettings({
         workflow: "art",
-        media_server: null,
+        media_servers: [],
         collections_supported: false,
       }),
     );
@@ -102,7 +102,13 @@ describe("Sidebar", () => {
   ] as const)(
     "shows collection art badges, and theme badges unless on Emby (%s)",
     async (server, themes) => {
-      settingsState.load(appSettings({ media_server: server, collections_supported: true }));
+      settingsState.load(
+        appSettings({
+          media_servers: mediaServers(server),
+          collections_supported: true,
+          collection_themes_unavailable: themes ? null : "Emby keeps no collection themes",
+        }),
+      );
       client.setQueryData(listCollectionsOptions().queryKey, [
         collection({ id: 1, title: "Saga" }),
       ]);
@@ -230,7 +236,7 @@ describe("Sidebar", () => {
     settingsState.load(
       appSettings({
         workflow: "art",
-        media_server: "plex",
+        media_servers: mediaServers("plex"),
         collections_supported: true,
       }),
     );
@@ -484,7 +490,7 @@ describe("Sidebar TMDB search", () => {
       items: [tmdbItem(605, "The Matrix Revolutions")],
     });
     await navigate("/movies", { replace: true });
-    settingsState.load(appSettings({ media_server: null, collections_supported: false }));
+    settingsState.load(appSettings({ media_servers: [], collections_supported: false }));
     settingsState.current.tmdb_configured = true;
     uiState.clearFilters();
     uiState.searchField = "tmdb";

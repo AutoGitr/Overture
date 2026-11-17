@@ -185,17 +185,23 @@ class CollectionGroups:
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             group = await repo.group(name)
-            held = {
-                media_type
-                for row in (await repo.group_members(group) if group else [])
-                for media_type in row.media_types
-            }
+            members = await repo.group_members(group) if group else []
+            held = {media_type for row in members for media_type in row.media_types}
+            libraries = {library for row in members for library in row.library_ids}
         if body.generator is not None:
             held |= set(
                 (await self._access.library_types(body.generator.library_ids)).values()
             )
-        # An empty group may come to hold either, so it offers what both can use.
-        self._validator.display(body, held or tuple(MediaType), smart=False)
+            libraries |= set(body.generator.library_ids)
+        # An empty group may come to hold either, on any server, so it offers
+        # what each can use.
+        self._validator.display(
+            body,
+            held or tuple(MediaType),
+            smart=False,
+            servers=self._access.server_types(libraries)
+            or self._access.configured_types(),
+        )
         if body.generator is not None:
             if name.casefold() == UNGROUPED_GROUP.casefold():
                 raise PublicServiceError(
@@ -204,8 +210,9 @@ class CollectionGroups:
                     "so it cannot be a set",
                 )
             types = await self._access.library_types(body.generator.library_ids)
-            for media_type in set(types.values()):
-                self._validator.generator(media_type, body.generator)
+            self._validator.smart_set(types, smart=body.generator.smart)
+            for library_id, media_type in types.items():
+                self._validator.generator(library_id, media_type, body.generator)
             if body.generator.smart and body.order_type is CollectionOrder.CUSTOM:
                 raise PublicServiceError(422, SMART_CUSTOM_ORDER)
         async with (

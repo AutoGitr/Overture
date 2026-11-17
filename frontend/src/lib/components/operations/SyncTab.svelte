@@ -165,17 +165,17 @@
   });
 
   let checklistLibraries = $derived(
-    libraries.map((library) => ({ id: library.key, title: library.title })),
+    libraries.map((library) => ({ id: library.key, title: settingsState.libraryLabel(library) })),
   );
   let movieChecklistLibraries = $derived(
     libraries
       .filter((library) => library.media_type === "movie")
-      .map((library) => ({ id: library.key, title: library.title })),
+      .map((library) => ({ id: library.key, title: settingsState.libraryLabel(library) })),
   );
   let showChecklistLibraries = $derived(
     libraries
       .filter((library) => library.media_type === "show")
-      .map((library) => ({ id: library.key, title: library.title })),
+      .map((library) => ({ id: library.key, title: settingsState.libraryLabel(library) })),
   );
   let hasSelectedLibraries = $derived(
     !loading && !configurationError && selectedLibraryIds.length > 0,
@@ -435,11 +435,13 @@
             Download OvertureDB art: {schedule.config.download_overturedb_art ? "Yes" : "No"}
           </div>
           <div>Download themes: {THEME_ORDER_LABELS[schedule.config.download_themes]}</div>
-          {#if schedule.state.checkpoint}
+          {#each Object.entries(schedule.state.checkpoints) as [serverId, checkpoint] (serverId)}
             <div>
-              Checkpoint: {formatDateInTimezone(schedule.state.checkpoint, schedule.timezone)}
+              Checkpoint{settingsState.multipleServers
+                ? ` (${settingsState.server(Number(serverId))?.title ?? "removed server"})`
+                : ""}: {formatDateInTimezone(checkpoint, schedule.timezone)}
             </div>
-          {/if}
+          {/each}
         {/if}
       {/snippet}
     </Schedules>

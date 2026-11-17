@@ -11,9 +11,10 @@ lazy from ...schemas.collections import CollectionSyncResponse
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess, LibraryScope
+lazy from .copies import copy_keys
 lazy from .display import saved_options
-lazy from .editor import CollectionEditor, save_placement
-lazy from .membership import Membership, stored_ids
+lazy from .editor import CollectionEditor, Held, save_placement
+lazy from .membership import Membership
 lazy from .policy import CollectionPolicy
 lazy from .post_sync import PostSync
 lazy from .rules import criteria_of, library_criteria
@@ -64,7 +65,7 @@ class RuleSync:
                     if part.criteria is not None
                 ]
             await self._refresh_source_summary(rule, row)
-            had_copies = set(row.server_ids)
+            had_copies = set(copy_keys(row.libraries))
             await self._take_over_copies(row)
             error = None
             try:
@@ -82,11 +83,12 @@ class RuleSync:
                 await self._access.updated(collection_id)
             # A skipped server copy still lacks the changes; a collection
             # without one is withheld until it is active or large enough.
-            if not result.skipped or not row.server_ids:
+            if not result.skipped or not row.copies:
                 await self._mark_synced(collection_id)
         if not result.skipped and not result.withheld:
             await self._post_sync.run(
-                collection_id, new_copies=bool(set(row.server_ids) - had_copies)
+                collection_id,
+                new_copies=bool(set(copy_keys(row.libraries)) - had_copies),
             )
         return result
 
@@ -108,7 +110,7 @@ class RuleSync:
             return CollectionSyncResponse(skipped=True)
         await self._editor.retire_libraries(row)
         if withhold:
-            if not row.server_ids:
+            if not row.copies:
                 return CollectionSyncResponse(withheld=True)
             await self._editor.withhold_locked(row)
             return CollectionSyncResponse(withheld=True, removed=len(current))
@@ -122,14 +124,13 @@ class RuleSync:
         self, row: MediaCollection, rule: CollectionRule
     ) -> CollectionSyncResponse:
         """Keep an empty copy in each library, whatever the minimum."""
-        provider = self._access.provider()
         for copy in self._access.copies(row):
             if copy.server_item_id is None:
                 lead = copy.lead
-                server = await provider.create_collection(
+                server = await self._access.provider(copy.server_id).create_collection(
                     lead.library_id, row.title, lead.media_type, []
                 )
-                copy.place(server.id)
+                copy.place(server.id, server.path)
         await self._save_placement(row)
         await self._editor.update_locked(row, saved_options(row, rule), push=True)
         return CollectionSyncResponse()
@@ -142,10 +143,19 @@ class RuleSync:
         current: list[CollectionItem],
         scopes: list[LibraryScope],
     ) -> CollectionSyncResponse:
-        provider = self._access.provider()
+        """Have Plex evaluate its copies; Overture evaluates other servers' copies.
+
+        Only Plex keeps smart collections, so on another server the collection
+        is a regular one holding what the same criteria select.
+        """
         await self._editor.replace_kind(row, smart=True)
         by_library = {scope.library_id: scope for scope in scopes}
-        for copy in self._access.copies(row):
+        copies = self._access.copies(row)
+        smart = [copy for copy in copies if self._access.plex(copy.lead.library_id)]
+        regular = [copy for copy in copies if copy not in smart]
+        members: list[Held] = []
+        for copy in smart:
+            provider = self._access.provider(copy.server_id)
             lead = copy.lead
             query = await self._membership.smart_query(
                 by_library[lead.library_id], policy.order_type, rule.item_limit
@@ -154,35 +164,37 @@ class RuleSync:
                 server = await provider.create_smart_collection(
                     lead.library_id, row.title, lead.media_type, query
                 )
-                copy.place(server.id)
+                copy.place(server.id, server.path)
             else:
                 await provider.update_smart_collection_filter(
                     copy.server_item_id, lead.library_id, lead.media_type, query
                 )
-        row.kind = CollectionKind.SMART
-        await self._save_placement(row)
+            members += await self._editor.held(
+                copy.server_id,
+                await provider.get_collection_member_ids(copy.server_item_id or ""),
+            )
+        if regular:
+            libraries = {library for copy in regular for library in copy.library_ids}
+            wanted = await self._membership.wanted_in(
+                [scope for scope in scopes if scope.library_id in libraries],
+                order=policy.order_type,
+                limit=rule.item_limit,
+            )
+            members += await self._editor.place_members(
+                row, regular, wanted, policy.order_type
+            )
+        kind = CollectionKind.SMART if smart else CollectionKind.REGULAR
+        await self._editor.store_members(row, members, policy.order_type, kind=kind)
         await self._editor.update_locked(row, saved_options(row, rule), push=True)
-        remote_ids = [
-            identity
-            for server_id in row.server_ids
-            for identity in await provider.get_collection_member_ids(server_id)
-        ]
-        members = stored_ids(remote_ids, [i for s in scopes for i in s.items])
-        async with self._access.database.write_session() as session:
-            saved = await self._access.require(session, row.id or 0)
-            await CollectionRepository(session).replace_members(row.id or 0, members)
-            saved.kind = CollectionKind.SMART
-            saved.child_count = len(remote_ids)
-            saved.updated_at = utc_now()
-            session.add(saved)
         # Labels go unused only when criteria change, which clears the last sync.
         if rule.last_synced_at is None:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
         old_ids = {item.id for item in current}
+        titles = {member for member in members if isinstance(member, int)}
         return CollectionSyncResponse(
-            added=len(set(members) - old_ids),
-            removed=len(old_ids - set(members)),
+            added=len(titles - old_ids),
+            removed=len(old_ids - titles),
         )
 
     async def _sync_regular(
@@ -207,7 +219,7 @@ class RuleSync:
             append = False
         member_count = await self._member_count(row, wanted, append=append)
         if member_count < policy.minimum_items:
-            if policy.delete_below_minimum and row.server_ids:
+            if policy.delete_below_minimum and row.copies:
                 await self._editor.withhold_locked(row)
                 return CollectionSyncResponse(withheld=True, removed=len(current))
             return CollectionSyncResponse(skipped=True)
@@ -234,17 +246,18 @@ class RuleSync:
         *,
         append: bool,
     ) -> int:
-        """How many members the sync leaves; append keeps what the server holds."""
-        chosen = {item.server_item_id for items in wanted.values() for item in items}
+        """How many titles the sync leaves; append keeps what the servers hold."""
+        chosen: set[Held] = {item.id for items in wanted.values() for item in items}
         if not append:
             return len(chosen)
-        kept = {
-            identity
-            for server_id in row.server_ids
-            for identity in await self._access.provider().get_collection_member_ids(
-                server_id
+        kept: set[Held] = set()
+        for server_id, server_item_id in copy_keys(row.copies):
+            if not self._access.configured(server_id):
+                continue
+            held = await self._access.provider(server_id).get_collection_member_ids(
+                server_item_id
             )
-        }
+            kept.update(await self._editor.held(server_id, held))
         return len(kept | chosen)
 
     async def _save_placement(self, row: MediaCollection) -> None:
@@ -277,8 +290,8 @@ class RuleSync:
     async def _take_over_copies(self, row: MediaCollection) -> None:
         """Hold, where the collection has no copy, the server's one of its title.
 
-        A server keeps the collections Overture made on it, such as before a
-        change of media server, and a title names one collection in a library.
+        A server keeps the collections Overture made on it, such as before it
+        left MEDIA_SERVERS, and a title names one collection in a library.
         The unmanaged collection the last sync listed for it goes, so the
         server has one collection, and the sync sends it this one's choices.
         """
@@ -301,18 +314,16 @@ class RuleSync:
             ):
                 saved = await self._access.require(session, row.id or 0)
                 held = {
-                    part.library_id: part.server_item_id
+                    part.library_id: (part.server_item_id, part.server_path)
                     for part in other.libraries
                     if part.library_id in waiting and part.server_item_id
                 }
                 for part in saved.libraries:
                     if part.library_id in held:
-                        part.server_item_id = held[part.library_id]
-                saved.server_path = saved.server_path or other.server_path
+                        part.server_item_id, part.server_path = held[part.library_id]
                 session.add(saved)
                 await CollectionRepository(session).delete_ids([other.id or 0])
                 save_placement(row, saved)
-                row.server_path = saved.server_path
             waiting -= set(other.library_ids)
 
     async def _mark_synced(self, collection_id: int) -> None:

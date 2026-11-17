@@ -5,6 +5,7 @@ lazy from ..config import Settings
 lazy from ..db.models.settings import AppSettings, get_app_settings
 lazy from ..db.session import Database
 lazy from ..media_servers.registry import ProviderRegistry
+lazy from ..schemas.media_server import MediaServerRead
 lazy from ..schemas.settings import (
     AppSettingsRead,
     AppSettingsUpdate,
@@ -22,17 +23,24 @@ def _read(
     provider_registry: ProviderRegistry,
 ) -> AppSettingsRead:
     """Return the saved settings with the environment-derived extras."""
-    collections = provider_registry.collections
     return AppSettingsRead.model_validate(settings_row).model_copy(
         update={
-            "media_server": app_config.MEDIA_SERVER,
+            "media_servers": [
+                MediaServerRead(
+                    id=provider.server_id,
+                    title=provider.server.title,
+                    type=provider.server_type,
+                    collections=provider.collections is not None,
+                )
+                for provider in provider_registry.providers()
+            ],
             "tmdb_configured": app_config.tmdb_configured,
             "mdblist_configured": app_config.mdblist_configured,
             "radarr_configured": app_config.radarr_configured,
             "sonarr_configured": app_config.sonarr_configured,
-            "collections_supported": collections is not None,
+            "collections_supported": provider_registry.collections_supported,
             "collection_themes_unavailable": collection_themes_unavailable(
-                collections, app_config
+                provider_registry.collection_providers()
             ),
             "art_download_workers": app_config.ART_DOWNLOAD_WORKERS,
             "theme_download_workers": app_config.THEME_DOWNLOAD_WORKERS,

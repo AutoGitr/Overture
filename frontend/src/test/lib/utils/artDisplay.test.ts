@@ -53,7 +53,7 @@ describe("art display URLs", () => {
       ...movie,
       poster_hash: null,
       background_hash: null,
-      server_item_id: null,
+      copies: [],
     };
     expect(itemArtDisplayUrl(unmanagedItem, "poster")).toBeNull();
     expect(itemArtDisplayUrl(unmanagedItem, "background")).toBeNull();
@@ -65,7 +65,7 @@ describe("art display URLs", () => {
       folder_path: null,
       poster_hash: null,
       background_hash: null,
-      server_item_id: null,
+      copies: [],
       poster_preview_url: "https://image.test/poster-small.jpg",
     };
     // Shown by its preview everywhere, as a search result shows it; opened in full.
@@ -92,7 +92,6 @@ describe("art display URLs", () => {
       media_item_id: show.id,
       season_num: 1,
       poster_hash: "season-hash",
-      server_item_id: "plex-season-1",
       poster_url: "https://image.test/season.jpg",
     });
     const localUrls = seasonPosterUrls(show, localSeason);
@@ -107,23 +106,21 @@ describe("art display URLs", () => {
       media_item_id: show.id,
       season_num: 2,
       poster_hash: null,
-      server_item_id: "plex-season-2",
       poster_url: "https://image.test/season.jpg",
     });
     const providerUrls = seasonPosterUrls(show, providerSeason);
     expect(providerUrls.src).toContain("/api/library/seasons/21/provider-art");
     expect(providerUrls.fallbackSrc).toBeNull();
 
-    // 3. Null when neither exists (never remote URL)
+    // 3. Null when neither exists (never remote URL): no server holds the show
     const unmanagedSeason = fixtureSeason({
       id: 22,
       media_item_id: show.id,
       season_num: 3,
       poster_hash: null,
-      server_item_id: null,
       poster_url: "https://image.test/season.jpg",
     });
-    const unmanagedUrls = seasonPosterUrls(show, unmanagedSeason);
+    const unmanagedUrls = seasonPosterUrls({ ...show, copies: [] }, unmanagedSeason);
     expect(unmanagedUrls.src).toBeNull();
     expect(unmanagedUrls.fallbackSrc).toBeNull();
     expect(seasonPosterUrls(null, localSeason)).toEqual({ src: null, fallbackSrc: null });

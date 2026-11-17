@@ -109,7 +109,7 @@ class TestBackgroundJobState:
             ManagedJobLifecycle(
                 JobKind.SYNC,
                 event_job_id="sync:manual",
-                target={"library_ids": ["1"]},
+                target={"library_ids": ["1:1"]},
             ),
             publisher=publisher,
         )
@@ -137,7 +137,7 @@ class TestBackgroundJobState:
                         "kind": "sync",
                         "status": "progress",
                         "id": "sync:manual",
-                        "target": {"library_ids": ["1"]},
+                        "target": {"library_ids": ["1:1"]},
                     },
                 },
             )

@@ -23,6 +23,7 @@ import {
   collectionRule,
   mediaItem,
   artCandidate,
+  mediaServers,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
@@ -44,6 +45,7 @@ const detail = collectionDetail({
   effective_sync_mode: "append",
 });
 const capabilities = collectionCapabilities();
+const movieLibrary = { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 };
 
 /** Add a source condition to the criteria and fill in its one input. */
 async function addSource(source: string, input: string, value: string) {
@@ -69,7 +71,9 @@ async function onlyLibrary(scope: Pick<typeof screen, "getByRole">, name: string
 describe("collection management", () => {
   beforeEach(async () => {
     queryClient.clear();
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     await navigate("/collections/:collectionSlug", {
       params: { collectionSlug: "12-saga" },
     });
@@ -267,7 +271,9 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+      ],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/groups": [],
     });
@@ -282,8 +288,8 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/library/libraries": [
-        { id: "movies", title: "Movies", media_type: "movie", count: 2 },
-        { id: "other", title: "Other", media_type: "movie", count: 1 },
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+        { id: "other", title: "Other", media_type: "movie", server_id: 1, count: 1 },
       ],
       "/api/collections/groups": [],
     });
@@ -428,7 +434,9 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+      ],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": detail,
     });
@@ -476,6 +484,7 @@ describe("collection management", () => {
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": detail,
+      "/api/library/libraries": [movieLibrary],
       "/api/library/items": { items: members, total: members.length },
       "/api/collections/12/members": {
         ...detail,
@@ -500,13 +509,14 @@ describe("collection management", () => {
   });
 
   it("drops a member anywhere on another row of its library at that row's position", async () => {
-    const all = [...members, { ...third, library_id: "movies" }];
+    const all = [...members, mediaItem({ ...third, library_id: "movies", server_item_id: "m3" })];
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/collections/12": { ...detail, member_ids: all.map((member) => member.id) },
+      "/api/library/libraries": [movieLibrary],
       "/api/library/items": { items: all, total: all.length },
       "/api/collections/12/members": {
         ...detail,
@@ -547,8 +557,8 @@ describe("collection management", () => {
       "/api/collections/12": both,
       "/api/library/items": { items: held, total: 3 },
       "/api/library/libraries": [
-        { id: "movies", title: "Films", media_type: "movie", count: 2 },
-        { id: "other", title: "Classics", media_type: "movie", count: 1 },
+        { id: "movies", title: "Films", media_type: "movie", server_id: 1, count: 2 },
+        { id: "other", title: "Classics", media_type: "movie", server_id: 1, count: 1 },
       ],
     });
     renderWithQueryClient(CollectionPage);
@@ -591,8 +601,8 @@ describe("collection management", () => {
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
       "/api/library/libraries": [
-        { id: "movies", title: "Movies", media_type: "movie", count: 2 },
-        { id: "other", title: "Other", media_type: "movie", count: 1 },
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+        { id: "other", title: "Other", media_type: "movie", server_id: 1, count: 1 },
       ],
       "/api/library/items": { items: [...members, third], total: 3 },
       "/api/collections": detail,
@@ -651,7 +661,9 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+      ],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections": () =>
         ++attempts === 1
@@ -676,7 +688,9 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+      ],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
       "/api/collections/12/rule": rule,
@@ -789,7 +803,9 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/groups": [],
-      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 2 }],
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
+      ],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12": detail,
       "/api/collections/12/monitored": { monitored: true },
@@ -948,7 +964,9 @@ describe("collection management", () => {
   });
 
   it("offers a separator for a Plex group and saves it with the group", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
@@ -1072,7 +1090,7 @@ describe("collection management", () => {
   it("asks for a TMDB key rather than saying the library holds every title", async () => {
     settingsState.load(
       appSettings({
-        media_server: "plex",
+        media_servers: mediaServers("plex"),
         collections_supported: true,
         tmdb_configured: false,
       }),

@@ -53,7 +53,7 @@ describe("OperationsPopup tab navigation", () => {
   });
 
   it("offers no server operations without a media server", () => {
-    settingsState.load(appSettings({ media_server: null }));
+    settingsState.load(appSettings({ media_servers: [] }));
     renderWithQueryClient(OperationsPopup);
 
     expect(screen.getByRole("tab", { name: /Assets/ })).toBeInTheDocument();

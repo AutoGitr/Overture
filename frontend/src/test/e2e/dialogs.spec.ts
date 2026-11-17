@@ -1,5 +1,5 @@
 import { expect, logIn, test } from "./fixtures";
-import { mediaItem } from "../helpers/fixtures";
+import { appSettings, mediaItem } from "../helpers/fixtures";
 
 test("the ID mismatch issue shows only items whose catalog IDs differ", async ({ page }) => {
   await page.route("**/api/library/items?*", (request) =>
@@ -220,7 +220,7 @@ test("settings cannot be saved until their server values have loaded", async ({ 
   let available = false;
   await page.route("**/api/settings", async (route) => {
     if (!available) return route.fulfill({ status: 503, json: { detail: "Settings unavailable" } });
-    await route.fulfill({ json: { workflow: "themes", auto_match_art: false } });
+    await route.fulfill({ json: appSettings({ workflow: "themes", auto_match_art: false }) });
   });
   await logIn(page);
   await page.getByLabel("Open menu").click();

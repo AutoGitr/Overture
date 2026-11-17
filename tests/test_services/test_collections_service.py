@@ -25,6 +25,7 @@ lazy from overture.domain import (
     ImageSize,
     MediaType,
     ServerAsset,
+    ServerType,
     ThemeBulkSource,
 )
 lazy from overture.integrations.mdblist import MDBListClient
@@ -53,6 +54,7 @@ lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import disable_catalog, enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.factories import seed_art_slot
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
 
 
@@ -62,7 +64,11 @@ class FakePlex(PlexProvider):
     def __init__(
         self, *, app_config: Settings, delete_error: Exception | None = None
     ) -> None:
-        super().__init__(app_config=app_config)
+        super().__init__(
+            server=server_of(app_config),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        )
         self._delete_error = delete_error
         self.deleted_theme_for: list[str] = []
         self.image_requests: list[tuple[str, ArtType, ImageSize | None, str]] = []
@@ -328,7 +334,11 @@ async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
     service = _service(
         app_config=app_config,
         database=database,
-        provider=JellyfinProvider(app_config=app_config),
+        provider=JellyfinProvider(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
     )
 
     with pytest.raises(PublicServiceError, match="JELLYFIN_COLLECTIONS_PATH"):
@@ -457,7 +467,7 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
         ) -> None:
             refreshed.append(item_id)
 
-    app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
+    configure(app_config, collections_path=tmp_path)
     async with database.write_session() as session:
         session.add(
             stored_collection(
@@ -476,7 +486,11 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
     service = _service(
         app_config=app_config,
         database=database,
-        provider=Jellyfin(app_config=app_config),
+        provider=Jellyfin(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
     )
     detail = await service.reader.get(1)
     assert not detail.theme_writable

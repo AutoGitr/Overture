@@ -5,6 +5,7 @@ tests never depend on a local .env, real media-server credentials, or /config.
 """
 
 lazy import asyncio
+lazy import itertools
 lazy import os
 lazy import shutil
 lazy import socket
@@ -34,7 +35,6 @@ lazy from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-lazy from sqlmodel import insert
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.catalog_contract.contract import ART_HOSTS
@@ -42,7 +42,6 @@ lazy from overture.config import Settings
 lazy from overture.db import metadata
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
@@ -68,6 +67,7 @@ lazy from tests.factories import (
     SeasonFactory,
     seed_art_slot,
 )
+lazy from tests.media_servers import attach_servers, seed_test_server, served_item
 lazy from tests.pause_clock import PauseClock
 lazy from tests.runtime_helpers import TEMP_IMAGE_CACHES
 lazy from tests.workload import WRITING
@@ -213,13 +213,11 @@ async def session_token(auth_service: AuthService) -> str:
 
 @pytest.fixture
 def test_app(app_config: Settings, database: Database, tmp_path: Path) -> FastAPI:
-    return create_app(
-        build_runtime(
-            app_settings=app_config,
-            database=database,
-            config_dir=tmp_path,
-        )
+    runtime = build_runtime(
+        app_settings=app_config, database=database, config_dir=tmp_path
     )
+    attach_servers(runtime.provider_registry, app_config)
+    return create_app(runtime)
 
 
 @pytest.fixture
@@ -266,9 +264,10 @@ def media_root(tmp_path: Path) -> Path:
     return root
 
 
-#: Libraries of both types that a sync once recorded, so items and collections
-#: can be filed under them. None is listed; a test that needs the server's
-#: current libraries records its provider's sections, as a sync does.
+#: Library keys of both types that a sync of the test server once recorded,
+#: so items and collections can be filed under them. None is listed; a test
+#: that needs the server's current libraries records its provider's
+#: sections, as a sync does.
 TEST_LIBRARIES = (
     "1",
     "2",
@@ -317,19 +316,7 @@ async def isolated_engine(
 
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
-        await conn.execute(
-            insert(Library),
-            [
-                {
-                    "id": key,
-                    "media_type": media_type,
-                    "title": key,
-                    "removed_at": datetime(2020, 1, 1, tzinfo=UTC),
-                }
-                for key in TEST_LIBRARIES
-                for media_type in MediaType
-            ],
-        )
+        await seed_test_server(conn, TEST_LIBRARIES)
 
     try:
         yield engine
@@ -391,6 +378,10 @@ def _apply_art[OwnerT: MediaItem | Season](
     return owner
 
 
+#: Numbers the server items of titles a test builds without an ID.
+_unsaved_items = itertools.count(1)
+
+
 @pytest.fixture
 def media_item_factory() -> MediaItemFactory:
     def factory(
@@ -403,12 +394,16 @@ def media_item_factory() -> MediaItemFactory:
             "title": "Test Movie",
             "year": 2024,
             "folder_path": "/media/Test Movie",
-            "server_item_id": "100",
-            "library_id": "1",
+            "library_id": "1:1",
         }
         values.update(overrides)
+        # Each title is its own item on the test server.
+        values.setdefault(
+            "server_item_id",
+            str(99 + values["id"]) if values["id"] else f"new-{next(_unsaved_items)}",
+        )
         values["media_type"] = MediaType(values["media_type"])
-        return _apply_art(MediaItem(**values), art)
+        return _apply_art(served_item(**values), art)
 
     return factory
 

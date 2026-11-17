@@ -115,10 +115,18 @@ async def get_collection_defaults(
 
 @router.get("/capabilities")
 async def get_collection_capabilities(
-    discovery: CollectionDiscoveryDep, media_type: MediaTypeQuery
+    discovery: CollectionDiscoveryDep,
+    media_type: MediaTypeQuery,
+    library_ids: Annotated[
+        list[str] | None,
+        Query(
+            max_length=200,
+            description="The collection's libraries; every server without them.",
+        ),
+    ] = None,
 ) -> CollectionCapabilities:
-    """Describe the fields, sources, orders and sets the media server supports."""
-    return discovery.capabilities(media_type)
+    """Describe the fields, sources, orders and sets the servers support."""
+    return discovery.capabilities(media_type, library_ids)
 
 
 @router.post("/recommend-kind", openapi_extra=READS_ONLY)

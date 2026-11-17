@@ -51,7 +51,7 @@ function itemArtUrl(
       { t: itemVersion(item, hash), size },
     );
   }
-  if (item.server_item_id) {
+  if (item.copies.length) {
     return itemProviderArtUrl({ item_id: item.id }, { type: artType, t: itemVersion(item), size });
   }
   // Remote links are never shown in place of a file, except for an item
@@ -88,7 +88,7 @@ export function seasonPosterUrls(
   const localUrl = season.poster_hash
     ? localSeasonImageUrl({ season_id: season.id }, { t: season.poster_hash, size: "display" })
     : null;
-  const serverUrl = season.server_item_id
+  const serverUrl = item.copies.length
     ? seasonProviderArtUrl(
         { season_id: season.id },
         { t: String(season.poster_hash || item.last_synced_at || 0), size: "display" },

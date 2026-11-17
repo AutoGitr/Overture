@@ -1,19 +1,22 @@
 """Sync execution isolated from the scheduler and job lifecycle manager."""
 
 lazy import asyncio
+lazy from collections import Counter
+lazy from collections.abc import Sequence
+lazy from contextlib import AsyncExitStack
 lazy from pathlib import Path
-lazy from typing import Any
 
 lazy from ... import protocols
+lazy from ...domain import MediaType, library_parts
 lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, log_entry
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import SyncTally
-lazy from ...media_servers.base import BaseMediaServerProvider
-lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...media_servers.errors import MediaServerError
+lazy from ...media_servers.registry import Provider, ProviderRegistry
 lazy from ...schemas.collections import CollectionGroupSyncResult
 lazy from ...utils.temporary import operation_directory
 lazy from .collection_sync import CollectionSync
-lazy from .reconciler import LibraryReconciler
+lazy from .reconciler import LibraryReconciler, ServerTurn
 lazy from .staging import StagedListing
 lazy from .tmdb_enrichment import TmdbEnrichment
 lazy from .tmdb_seasons import TmdbSeasonSync
@@ -35,11 +38,13 @@ async def run_sync(
     collections: CollectionSync,
     groups: protocols.CollectionGroups,
 ) -> None:
-    """Run a full sync: reconcile the server, then TMDB seasons, facts and collections.
+    """Run a full sync: reconcile the servers, then TMDB seasons, facts and collections.
 
-    Collections are every one the server lists, or only *collection_groups*
-    and *collection_ids*; without *items* only they are synced, from what
-    earlier syncs stored.
+    Every configured server is synced, or those holding *library_ids*. A
+    server that cannot be reached is reported and left as it was, so none of
+    its titles is taken for removed. Collections are every one the servers
+    list, or only *collection_groups* and *collection_ids*; without *items*
+    only they are synced, from what earlier syncs stored.
 
     Publishes lifecycle events (started -> progress* -> completed | stopped |
     failed) through the managed job context, which also owns snapshot
@@ -50,14 +55,15 @@ async def run_sync(
         await job.started()
         if job.stop_requested():
             return
-        await provider_registry.require_reachable()
+        servers = await _reachable(job, provider_registry, library_ids)
 
         async def sync() -> None:
             if items:
                 tmdb_items = await tmdb_seasons.targets()
-                await _sync_with_provider(
+                await _sync_with_providers(
                     job,
-                    provider_registry.provider,
+                    servers,
+                    provider_registry.server_ids(),
                     reconciler,
                     library_ids=library_ids,
                     config_dir=config_dir,
@@ -67,10 +73,10 @@ async def run_sync(
             # Criteria test TMDB facts, whatever the run then syncs.
             await enrichment.run(job, library_ids=library_ids)
             if include_collections:
-                await collections.run(job, library_ids=library_ids)
-            # Having read what the server holds, make it match what Overture
+                await collections.run(job, servers, library_ids=library_ids)
+            # Having read what the servers hold, make them match what Overture
             # manages: every group, or only the chosen groups and collections.
-            if provider_registry.collections is None:
+            if not provider_registry.collections_supported:
                 return
             if include_collections or collection_groups:
                 await _sync_groups(
@@ -145,53 +151,104 @@ async def _report(
     )
 
 
-async def _sync_with_provider(
+async def _reachable(
     job: ManagedJob[SyncTally],
-    provider: BaseMediaServerProvider[Any],
+    provider_registry: ProviderRegistry,
+    library_ids: list[str] | None,
+) -> list[Provider]:
+    """The servers to sync, the lead first, reporting each one that is down.
+
+    Raises:
+        MediaServerError: When none of them can be reached.
+    """
+    wanted = (
+        None
+        if library_ids is None
+        else {
+            parts[0]
+            for library_id in library_ids
+            if (parts := library_parts(library_id))
+        }
+    )
+    reachable: list[Provider] = []
+    failure: MediaServerError | None = None
+    for provider in provider_registry.providers():
+        if wanted is not None and provider.server_id not in wanted:
+            continue
+        try:
+            await provider_registry.require_reachable(provider.server_id)
+        except MediaServerError as exc:
+            failure = exc
+            await job.report(
+                JobOutcome.ERROR, provider.server.title, exc.message, finished=False
+            )
+            continue
+        reachable.append(provider)
+    if not reachable and failure is not None:
+        raise failure
+    return reachable
+
+
+async def _sync_with_providers(
+    job: ManagedJob[SyncTally],
+    providers: Sequence[Provider],
+    server_order: Sequence[int],
     reconciler: LibraryReconciler,
     *,
     library_ids: list[str] | None,
     config_dir: Path,
     tmdb_count: int,
 ) -> None:
-    """Stage the provider's complete listing, then reconcile it.
+    """Stage every server's complete listing, then reconcile them lead first.
 
     The run counts the staged server items and planned TMDB shows, with its
     total fixed before the first item is reconciled.
     """
-    await job.progress(
-        log=log_entry(
-            JobOutcome.STARTED,
-            "Sync",
-            f"reading libraries from {provider.server_type.display_name}",
-        ),
-    )
 
     async def on_progress(entry: JobLogEntry) -> None:
         await job.progress(log=entry)
 
-    await reconciler.record_libraries(await provider.get_sections())
+    moves: Counter[tuple[str, MediaType, str]] = Counter()
     with operation_directory(config_dir) as directory:
-        async with StagedListing(directory / "provider.sqlite") as listing:
-            async for batch in provider.iter_items(library_ids=library_ids):
+        listings: list[tuple[Provider, StagedListing]] = []
+        async with AsyncExitStack() as staged:
+            for provider in providers:
+                await job.progress(
+                    log=log_entry(
+                        JobOutcome.STARTED,
+                        "Sync",
+                        f"reading libraries from {provider.server.title}",
+                    ),
+                )
+                await reconciler.record_libraries(
+                    provider.server_id, await provider.get_sections()
+                )
+                listing = await staged.enter_async_context(
+                    StagedListing(directory / f"server-{provider.server_id}.sqlite")
+                )
+                async for batch in provider.iter_items(library_ids=library_ids):
+                    if job.stop_requested():
+                        return
+                    await reconciler.fill_deferred_directors(provider, batch)
+                    await listing.append(batch)
+                listings.append((provider, listing))
+            total = sum([await listing.count() for _, listing in listings])
+            await job.planned(total + tmdb_count)
+            for provider, listing in listings:
+                position = server_order.index(provider.server_id)
+                result = await reconciler.sync_staged(
+                    listing,
+                    ServerTurn(provider.server_id, frozenset(server_order[:position])),
+                    library_ids=library_ids,
+                    tally=job.tally,
+                    progress_cb=on_progress,
+                    stop_check=job.stop_requested,
+                )
+                moves += result.library_moves
                 if job.stop_requested():
+                    # A stopped run saw only some of the moves.
                     return
-                await reconciler.fill_deferred_directors(provider, batch)
-                await listing.append(batch)
-            await job.planned(await listing.count() + tmdb_count)
-            result = await reconciler.sync_staged(
-                listing,
-                library_ids=library_ids,
-                tally=job.tally,
-                progress_cb=on_progress,
-                stop_check=job.stop_requested,
-            )
-    # A stopped run saw only some of the moves.
-    if job.stop_requested():
-        return
-    for library_id, successor in await reconciler.follow_moved_libraries(
-        result.library_moves
-    ):
+    for library_id, successor in await reconciler.follow_moved_libraries(moves):
         await job.progress(
             log=log_entry(
                 JobOutcome.STARTED,

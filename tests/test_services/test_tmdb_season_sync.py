@@ -11,6 +11,7 @@ lazy from pydantic import SecretStr
 lazy from overture.config import Settings
 lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, ServerType
@@ -27,6 +28,7 @@ lazy from overture.services.sync.runner import run_sync
 lazy from overture.services.sync.tmdb_seasons import TmdbSeasonSync
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
+lazy from tests.media_servers import TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
@@ -86,7 +88,7 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
             [
                 MediaItem(id=1, title="First", media_type=MediaType.SHOW, tmdb_id=1),
                 MediaItem(id=2, title="Second", media_type=MediaType.SHOW, tmdb_id=2),
-                MediaItem(
+                served_item(
                     id=3,
                     title="Connected",
                     media_type=MediaType.SHOW,
@@ -136,7 +138,9 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
             pass
 
         @override
-        async def record_libraries(self, sections: Sequence[ServerSection]) -> None:
+        async def record_libraries(
+            self, server_id: int, sections: Sequence[ServerSection]
+        ) -> None:
             """Record nothing; the test reconciles no database."""
 
         @override
@@ -169,7 +173,6 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
         assert seasons[1].art_slots[0].url == (
             "https://image.tmdb.org/t/p/original/chosen.jpg"
         )
-        assert all(season.server_item_id is None for season in seasons.values())
         assert all(season.file_count == 0 for season in seasons.values())
 
 
@@ -192,8 +195,16 @@ async def test_unconfigured_tmdb_and_show_linked_after_planning_are_skipped(
     async with database.write_session() as session:
         current = await session.get(MediaItem, 1)
         assert current is not None
-        current.server_item_id = "now-connected"
-        session.add(current)
+        # A sync finds the show on the server after the run planned it.
+        session.add(
+            MediaItemCopy(
+                media_item_id=1,
+                server_id=TEST_SERVER_ID,
+                media_type=MediaType.SHOW,
+                server_item_id="now-connected",
+                library_id="1:1",
+            )
+        )
     probe = JobProbe(lifecycle=LIFECYCLE)
     async with run_managed_job(probe.context, SyncTally()) as job:
         await job.started()

@@ -42,7 +42,7 @@ function schedule(overrides: Partial<Schedule> = {}): Schedule {
     run_status: "idle",
     waiting_for: null,
     config,
-    state: { checkpoint: null },
+    state: { checkpoints: {} },
     ...overrides,
   };
 }

@@ -21,6 +21,7 @@ import {
   collectionCapabilities,
   mediaItem,
   catalogStatus,
+  mediaServers,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
@@ -417,7 +418,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   ])("applies %s only to filtered collections in the open group", async (operation, expected) => {
     await navigate("/collections");
     openSidebarGroup("Weekend");
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({
         id: 1,
@@ -482,7 +485,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   it("lists collection operations and target groups alphabetically, without group actions", async () => {
     await navigate("/collections");
     openSidebarGroup("Weekend");
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Saga", collection_group: "Weekend" }),
     ]);
@@ -520,7 +525,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
   it("groups collection filters: status first, then art, theme, metadata, bulk and collection operations", async () => {
     await navigate("/collections");
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     queryClient.setQueryData(listCollectionsOptions().queryKey, []);
     mockFetchRoutes({
       "/api/library/libraries": [],
@@ -566,7 +573,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
   it("narrows items to one collection holding the tab's media type", async () => {
     await navigate("/movies");
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 6, title: "Lost", media_types: ["show"] }),
       collection({ id: 5, title: "Alien", media_types: ["movie"] }),
@@ -609,7 +618,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
   it("removes the themes of the matching collections as chosen", async () => {
     await navigate("/collections");
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     queryClient.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, youtube_id: "abcdefghijk" }),
       collection({ id: 2 }),

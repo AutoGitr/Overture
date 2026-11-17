@@ -11,6 +11,7 @@ lazy from sqlalchemy.ext.asyncio import create_async_engine
 lazy from overture.config import Settings
 lazy from overture.db import metadata
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import SeasonCopy
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database, configure_sqlite
 lazy from overture.domain import (
@@ -21,15 +22,22 @@ lazy from overture.domain import (
     TmdbLanguageFilter,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
+lazy from overture.repositories.copies import CopyRepository
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.removal import AssetRemover
-lazy from overture.services.server_identity import resolve_server_item_id
+lazy from overture.services.server_identity import resolve_art_owners
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
+lazy from tests.media_servers import (
+    TEST_SERVER_ID,
+    copy_ids,
+    seed_test_server,
+    served_item,
+)
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopTmdb,
@@ -57,6 +65,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
     database = Database("", engine=engine)
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
+        await seed_test_server(connection, ["1"])
     app_config.TMDB_API_KEY = SecretStr("test-key")
     discovery_started, discovery_release = asyncio.Event(), asyncio.Event()
     tmdb_started, server_started, candidates_release = (
@@ -105,7 +114,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
 
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 title="Movie",
                 media_type=MediaType.SHOW
@@ -116,14 +125,14 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
             )
         )
         if art_type.owned_by_season:
-            session.add(
-                Season(
-                    id=2,
-                    media_item_id=1,
-                    season_num=0,
-                    server_item_id=None if discover else "season",
+            session.add(Season(id=2, media_item_id=1, season_num=0))
+            await session.flush()
+            if not discover:
+                session.add(
+                    SeasonCopy(
+                        season_id=2, server_id=TEST_SERVER_ID, server_item_id="season"
+                    )
                 )
-            )
     registry = NoopProviderRegistry(Provider())
     service = ArtService(
         app_config=app_config,
@@ -172,12 +181,13 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
         async with database.read_session() as session:
             item = await session.get(MediaItem, 1)
             assert item is not None
-            assert item.server_item_id == "parent"
             assert item.monitored is False
+            # What a lookup finds is kept for a season of a title a server
+            # holds; a title no sync found waits for one to record it.
+            assert await copy_ids(session) == ({} if discover else {1: "parent"})
             if art_type.owned_by_season:
-                season = await session.get(Season, 2)
-                assert season is not None
-                assert season.server_item_id == "season"
+                copies = await CopyRepository(session).season_copies(2)
+                assert copies == ({} if discover else {TEST_SERVER_ID: "season"})
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -185,48 +195,54 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
 
 
 @pytest.mark.parametrize("change", ["delete", "new_identity", "unrelated"])
-async def test_discovery_rereads_before_persisting(
+async def test_a_season_id_found_by_asking_is_reread_before_it_is_kept(
     app_config: Settings, database: Database, change: str
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaItem(id=1, title="Movie", media_type=MediaType.MOVIE, tmdb_id=42)
+            served_item(
+                id=1,
+                title="Show",
+                media_type=MediaType.SHOW,
+                tmdb_id=42,
+                server_item_id="parent",
+            )
         )
+        session.add(Season(id=2, media_item_id=1, season_num=1))
 
     class Provider:
-        async def find_item_id(self, item: MediaItem) -> str:
+        async def find_season_id(self, show_id: str, season_num: int) -> str:
             # A concurrent application writer commits while the provider is awaited.
+            assert (show_id, season_num) == ("parent", 1)
             async with database.write_session() as session:
-                current = await session.get(MediaItem, 1)
+                current = await session.get(Season, 2)
                 assert current is not None
                 if change == "delete":
                     await session.delete(current)
                 elif change == "new_identity":
-                    current.server_item_id = "newer"
+                    session.add(
+                        SeasonCopy(
+                            season_id=2,
+                            server_id=TEST_SERVER_ID,
+                            server_item_id="newer",
+                        )
+                    )
                 else:
                     current.title = "Edited while discovering"
             return "discovered"
 
-    result = await asyncio.wait_for(
-        resolve_server_item_id(
+    owners = await asyncio.wait_for(
+        resolve_art_owners(
             1,
-            ArtType.POSTER,
-            None,
+            ArtType.SEASON_POSTER,
+            2,
             database=database,
             provider_registry=NoopProviderRegistry(Provider()),
         ),
         2,
     )
-    assert (
-        result
-        == {"delete": None, "new_identity": "newer", "unrelated": "discovered"}[change]
-    )
+    found = {"delete": None, "new_identity": "newer", "unrelated": "discovered"}[change]
+    assert [owner.server_item_id for owner in owners] == ([found] if found else [])
     async with database.read_session() as session:
-        item = await session.get(MediaItem, 1)
-        if change == "delete":
-            assert item is None
-        else:
-            assert item is not None
-            assert item.server_item_id == result
-            if change == "unrelated":
-                assert item.title == "Edited while discovering"
+        copies = await CopyRepository(session).season_copies(2)
+    assert copies == ({TEST_SERVER_ID: found} if found else {})

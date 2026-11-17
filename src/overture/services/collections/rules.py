@@ -5,7 +5,13 @@ lazy from collections.abc import Mapping, Sequence
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
-lazy from ...domain import FilterField, FilterOperator, MediaType, SourceType
+lazy from ...domain import (
+    FilterField,
+    FilterOperator,
+    MediaType,
+    SourceType,
+    library_server,
+)
 lazy from ...repositories.collections import CollectionItem
 lazy from ...schemas.collections import (
     CollectionGenerator,
@@ -72,6 +78,7 @@ def apply_libraries(
             collection_id=row.id or 0,
             library_id=library_id,
             media_type=types[library_id],
+            server_id=library_server(library_id),
             criteria=entry.criteria.model_dump(mode="json"),
         )
         for library_id, entry in chosen.items()

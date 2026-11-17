@@ -37,7 +37,7 @@ def _schedule_request(**overrides: Any) -> SyncScheduleWrite:
         "cron_expression": "*/15 * * * *",
         "config": {
             "mode": "incremental",
-            "library_ids": ["1", "2"],
+            "library_ids": ["1:1", "1:2"],
             "download_overturedb_art": True,
             "download_themes": "overturedb_themerrdb",
         },
@@ -85,10 +85,10 @@ def test_run_sync_returns_started_when_engine_accepts(
 ) -> None:
     engine = FakeSyncEngine(can_start=True, app_config=app_config, database=database)
 
-    result = engine.run_sync(SyncRunRequest(library_ids=["1"]))
+    result = engine.run_sync(SyncRunRequest(library_ids=["1:1"]))
 
     assert result == StatusResponse(status=Status.STARTED)
-    assert engine.started_with == SyncRunRequest(library_ids=["1"])
+    assert engine.started_with == SyncRunRequest(library_ids=["1:1"])
 
 
 def test_run_sync_returns_already_running_when_engine_declines(
@@ -112,9 +112,9 @@ async def test_sync_schedules_save_register_and_delete(
     assert created.kind == "sync"
     assert created.name == "New media"
     assert created.config.mode == "incremental"
-    assert created.config.library_ids == ["1", "2"]
+    assert created.config.library_ids == ["1:1", "1:2"]
     assert created.config.download_themes == "overturedb_themerrdb"
-    assert created.state.checkpoint is None
+    assert created.state.checkpoints == {}
     assert created.timezone == app_config.TZ
     assert created.next_run is not None
 
@@ -156,7 +156,7 @@ def test_full_sync_can_exclude_collections(
     *, app_config: Settings, database: Database
 ) -> None:
     engine = FakeSyncEngine(app_config=app_config, database=database)
-    body = SyncRunRequest(library_ids=["1"], include_collections=False)
+    body = SyncRunRequest(library_ids=["1:1"], include_collections=False)
     engine.run_sync(body)
     assert engine.started_with == body
 

@@ -8,10 +8,10 @@ lazy from sqlmodel import col, delete, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.models.library import Library
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import MediaType
 lazy from overture.media_servers.adapters import ServerSection
 lazy from overture.repositories.libraries import LibraryRepository
+lazy from tests.media_servers import TEST_SERVER_ID, served_item
 
 _FIRST = datetime(2026, 1, 1, tzinfo=UTC)
 _LATER = datetime(2026, 2, 1, tzinfo=UTC)
@@ -30,9 +30,10 @@ async def test_a_sync_adds_renames_and_marks_libraries_removed(
     await db_session.exec(delete(Library))
     repo = LibraryRepository(db_session)
     await repo.record(
+        TEST_SERVER_ID,
         [
-            ServerSection("a", "Films", MediaType.MOVIE),
-            ServerSection("b", "Series", MediaType.SHOW),
+            ServerSection("a", "Films", MediaType.MOVIE, library_id="1:a"),
+            ServerSection("b", "Series", MediaType.SHOW, library_id="1:b"),
         ],
         _FIRST,
     )
@@ -40,20 +41,21 @@ async def test_a_sync_adds_renames_and_marks_libraries_removed(
 
     # The next server lists "a" renamed, drops "b" and reuses its key for movies.
     await repo.record(
+        TEST_SERVER_ID,
         [
-            ServerSection("a", "Movies", MediaType.MOVIE),
-            ServerSection("b", "More movies", MediaType.MOVIE),
+            ServerSection("a", "Movies", MediaType.MOVIE, library_id="1:a"),
+            ServerSection("b", "More movies", MediaType.MOVIE, library_id="1:b"),
         ],
         _LATER,
     )
     await db_session.commit()
 
     assert await _libraries(db_session) == [
-        ("a", "movie", "Movies", False),
-        ("b", "movie", "More movies", False),
-        ("b", "show", "Series", True),
+        ("1:a", "movie", "Movies", False),
+        ("1:b", "movie", "More movies", False),
+        ("1:b", "show", "Series", True),
     ]
-    assert [library.id for library in await repo.listed(["b"])] == ["b"]
+    assert [library.id for library in await repo.listed(["1:b"])] == ["1:b"]
 
 
 async def test_an_item_is_filed_only_under_a_library_of_its_type(
@@ -61,11 +63,18 @@ async def test_an_item_is_filed_only_under_a_library_of_its_type(
 ) -> None:
     await db_session.exec(delete(Library))
     await LibraryRepository(db_session).record(
-        [ServerSection("films", "Films", MediaType.MOVIE)], _FIRST
+        TEST_SERVER_ID,
+        [ServerSection("films", "Films", MediaType.MOVIE, library_id="1:films")],
+        _FIRST,
     )
     await db_session.commit()
     db_session.add(
-        MediaItem(media_type=MediaType.SHOW, title="Show", library_id="films")
+        served_item(
+            media_type=MediaType.SHOW,
+            title="Show",
+            server_item_id="show",
+            library_id="1:films",
+        )
     )
     with pytest.raises(IntegrityError):
         await db_session.commit()

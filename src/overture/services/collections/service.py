@@ -96,7 +96,7 @@ class CollectionsService:
             downloads=downloads,
         )
         self.themes = CollectionThemes(
-            access=access, downloads=downloads, app_config=app_config, remover=remover
+            access=access, downloads=downloads, remover=remover
         )
         self.arr = CollectionArr(access=access, sources=self._sources, effects=effects)
         post_sync = PostSync(

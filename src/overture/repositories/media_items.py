@@ -1,14 +1,14 @@
 """Media item query helpers."""
 
-lazy from collections.abc import Collection, Iterable
+lazy from collections.abc import Collection
 lazy from datetime import datetime
 lazy from itertools import batched
 lazy from pathlib import Path
-lazy from typing import Any, NamedTuple, cast
+lazy from typing import Any, cast
 
 lazy from sqlalchemy.orm import QueryableAttribute, raiseload
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import and_, case, col, delete, or_, select, update
+lazy from sqlmodel import and_, case, col, delete, exists, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select, SelectOfScalar
 
@@ -16,27 +16,18 @@ lazy from ..catalog_contract.contract import IDENTITY_FIELDS
 lazy from ..db.completion import HOLDS_FILES
 lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.media_item import MediaItem
+lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.season import Season
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import (
     BulkItemOperationKind,
     MediaType,
-    TermKind,
     guid_int,
     guid_text,
     media_sort_key,
     text_sort_key,
 )
-lazy from .terms import TermRepository
-
-
-class ServerItemFacts(NamedTuple):
-    """What a collection needs to know about one of its member items."""
-
-    id: int
-    media_type: MediaType
-    library_id: str | None
-    tmdb_collection_id: int | None
+lazy from .copies import in_libraries, on_server
 
 
 def _matching(for_update: bool) -> SelectOfScalar[MediaItem]:
@@ -82,35 +73,45 @@ class MediaItemRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def find_by_server_id(
+    async def find_by_copy(
         self,
+        server_id: int,
         server_item_id: str,
         media_type: str,
         *,
         exclude_item_ids: set[int] | None = None,
         for_update: bool = True,
     ) -> MediaItem | None:
-        """Return a media item by media-server ID and type."""
+        """Return the title a server keeps as *server_item_id*."""
         stmt = _matching(for_update).where(
-            col(MediaItem.server_item_id) == server_item_id,
             col(MediaItem.media_type) == media_type,
+            col(MediaItem.id).in_(
+                select(MediaItemCopy.media_item_id).where(
+                    col(MediaItemCopy.server_id) == server_id,
+                    col(MediaItemCopy.server_item_id) == server_item_id,
+                )
+            ),
         )
         if exclude_item_ids:
             stmt = stmt.where(col(MediaItem.id).notin_(exclude_item_ids))
-        stmt = stmt.order_by(col(MediaItem.server_removed_at).is_(None).desc()).limit(1)
-        result = await self.session.exec(stmt)
-        return result.first()
+        return (await self.session.exec(stmt.limit(1))).first()
 
     async def find_by_external_guids(
         self,
         guids: dict[str, str],
         media_type: str,
         *,
-        server_item_id: str | None = None,
+        server_id: int | None = None,
+        folder_path: str | None = None,
         exclude_item_ids: set[int] | None = None,
         for_update: bool = True,
     ) -> MediaItem | None:
         """Return a media item by external GUIDs, preferring TMDB then TVDB.
+
+        A server's item never matches a title another server holds in another
+        folder: those are other files of the same title, each with its own
+        artwork. A title without a copy on *server_id* comes first, so each
+        server's copies spread over the titles before doubling up.
 
         ORDER BY over a CASE preserves provider priority in a single query.
         """
@@ -142,10 +143,20 @@ class MediaItemRepository:
             stmt = stmt.where(col(MediaItem.id).notin_(exclude_item_ids))
 
         order_clauses: list[ColumnElement[Any]] = []
-        if server_item_id is not None:
-            order_clauses.append(
-                (col(MediaItem.server_item_id) == server_item_id).desc()
+        if folder_path is not None and server_id is not None:
+            elsewhere = exists().where(
+                col(MediaItemCopy.media_item_id) == col(MediaItem.id),
+                col(MediaItemCopy.server_id) != server_id,
             )
+            stmt = stmt.where(
+                ~and_(
+                    col(MediaItem.folder_path).is_not(None),
+                    col(MediaItem.folder_path).notin_(_folder_variants(folder_path)),
+                    elsewhere,
+                )
+            )
+        if server_id is not None:
+            order_clauses.append(on_server(server_id).asc())
         order_clauses.extend(
             (col(MediaItem.server_removed_at).is_(None).desc(), priority)
         )
@@ -173,32 +184,6 @@ class MediaItemRepository:
             tmdb_id: item_id
             for tmdb_id, item_id in result.all()
             if tmdb_id is not None and item_id is not None
-        }
-
-    async def directors_by_version(
-        self, server_item_ids: Collection[str]
-    ) -> dict[tuple[str, str], tuple[str, ...]]:
-        """Return stored movie directors keyed by server ID and director Etag."""
-        versions: dict[int, tuple[str, str]] = {}
-        for batch in batched(server_item_ids, CHUNK_SIZE, strict=False):
-            rows = await self.session.exec(
-                select(
-                    MediaItem.id, MediaItem.server_item_id, MediaItem.director_etag
-                ).where(
-                    col(MediaItem.media_type) == MediaType.MOVIE,
-                    col(MediaItem.server_item_id).in_(batch),
-                    col(MediaItem.director_etag).is_not(None),
-                )
-            )
-            for item_id, server_item_id, etag in rows.all():
-                if item_id is not None and server_item_id is not None and etag:
-                    versions[item_id] = (server_item_id, etag)
-        directors = await TermRepository(self.session).values_by_item(
-            versions, TermKind.DIRECTOR
-        )
-        return {
-            version: tuple(directors.get(item_id, ()))
-            for item_id, version in versions.items()
         }
 
     async def find_by_folder_path(
@@ -368,60 +353,14 @@ class MediaItemRepository:
         if media_type is not None:
             stmt = stmt.where(col(MediaItem.media_type) == media_type)
         if library_id is not None:
-            stmt = stmt.where(col(MediaItem.library_id) == library_id)
+            stmt = stmt.where(in_libraries([library_id]))
         if library_ids is not None:
-            stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
+            stmt = stmt.where(in_libraries(library_ids))
         stmt = stmt.where(col(MediaItem.id) > after_id).order_by(col(MediaItem.id))
         if limit is not None:
             stmt = stmt.limit(limit)
         result = await self.session.exec(stmt)
         return list(result.all())
-
-    async def server_identities(
-        self, library_ids: list[str] | None, *, after_id: int, limit: int
-    ) -> list[tuple[int, MediaType, str]]:
-        """Return a page of visible items' IDs, media types and media-server IDs."""
-        stmt = (
-            select(
-                col(MediaItem.id),
-                col(MediaItem.media_type),
-                col(MediaItem.server_item_id),
-            )
-            .where(
-                col(MediaItem.server_item_id).is_not(None),
-                col(MediaItem.server_removed_at).is_(None),
-                col(MediaItem.id) > after_id,
-            )
-            .order_by(col(MediaItem.id))
-            .limit(limit)
-        )
-        if library_ids:
-            stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
-        return [
-            (item_id, media_type, server_id)
-            for item_id, media_type, server_id in await self.session.exec(stmt)
-            if item_id is not None and server_id is not None
-        ]
-
-    async def facts_by_server_id(self) -> dict[str, ServerItemFacts]:
-        """Return what collections need of the visible linked items, by server ID."""
-        columns: list[Any] = [
-            MediaItem.server_item_id,
-            MediaItem.id,
-            MediaItem.media_type,
-            MediaItem.library_id,
-            MediaItem.tmdb_collection_id,
-        ]
-        stmt = cast("Select[Any]", select(*columns)).where(
-            col(MediaItem.server_item_id).is_not(None),
-            col(MediaItem.server_removed_at).is_(None),
-        )
-        rows = cast("Iterable[Any]", await self.session.exec(stmt))
-        return {
-            server_id: ServerItemFacts(item_id, media_type, library_id, franchise)
-            for server_id, item_id, media_type, library_id, franchise in rows
-            if server_id is not None and item_id is not None
-        }
 
     async def visible_ids_by_identity(
         self,
@@ -470,7 +409,7 @@ class MediaItemRepository:
             ),
         )
         if library_ids:
-            stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
+            stmt = stmt.where(in_libraries(library_ids))
         if item_ids is not None:
             stmt = stmt.where(col(MediaItem.id).in_(item_ids))
         return [
@@ -486,7 +425,7 @@ class MediaItemRepository:
             .where(
                 col(MediaItem.media_type) == MediaType.SHOW,
                 col(MediaItem.tmdb_id).is_not(None),
-                col(MediaItem.server_item_id).is_(None),
+                ~exists().where(col(MediaItemCopy.media_item_id) == col(MediaItem.id)),
                 col(MediaItem.server_removed_at).is_(None),
             )
             .order_by(col(MediaItem.id))
@@ -562,13 +501,13 @@ class MediaItemRepository:
         )
 
     async def mark_synced(self, item_ids: Collection[int], when: datetime) -> None:
-        """Stamp many items as verified on and synced from the server at once."""
+        """Stamp many items as synced at once; each copy notes its own verification."""
         if not item_ids:
             return
         await self.session.exec(
             update(MediaItem)
             .where(col(MediaItem.id).in_(item_ids))
-            .values(server_verified_at=when, last_synced_at=when)
+            .values(last_synced_at=when)
         )
 
     async def bulk_operate(
@@ -666,5 +605,5 @@ def _bulk_scope[S: SelectOfScalar[Any]](
     if not include_unmonitored:
         stmt = stmt.where(col(MediaItem.monitored).is_(True))
     if library_ids:
-        stmt = stmt.where(col(MediaItem.library_id).in_(library_ids))
+        stmt = stmt.where(in_libraries(library_ids))
     return stmt.where(col(MediaItem.id) > after_id).order_by(col(MediaItem.id))

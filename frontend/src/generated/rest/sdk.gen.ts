@@ -466,7 +466,7 @@ export const bulkOperateCollections = <ThrowOnError extends boolean = false>(opt
 /**
  * Get Collection Capabilities
  *
- * Describe the fields, sources, orders and sets the media server supports.
+ * Describe the fields, sources, orders and sets the servers support.
  */
 export const getCollectionCapabilities = <ThrowOnError extends boolean = false>(options: Options<GetCollectionCapabilitiesData, ThrowOnError>): RequestResult<GetCollectionCapabilitiesResponses, GetCollectionCapabilitiesErrors, ThrowOnError> => (options.client ?? client).get<GetCollectionCapabilitiesResponses, GetCollectionCapabilitiesErrors, ThrowOnError>({ url: '/api/collections/capabilities', ...options });
 
@@ -1093,14 +1093,14 @@ export const proxySeasonProviderArt = <ThrowOnError extends boolean = false>(opt
 /**
  * List Server Libraries
  *
- * List the media server's movie and show libraries, movies first.
+ * List the servers' movie and show libraries, the lead server's first.
  */
 export const listServerLibraries = <ThrowOnError extends boolean = false>(options?: Options<ListServerLibrariesData, ThrowOnError>): RequestResult<ListServerLibrariesResponses, ListServerLibrariesErrors, ThrowOnError> => (options?.client ?? client).get<ListServerLibrariesResponses, ListServerLibrariesErrors, ThrowOnError>({ url: '/api/media-server/libraries', ...options });
 
 /**
  * Get Server Web Links
  *
- * Return where the server's web app opens items and collections.
+ * Return where each server's web app opens items and collections.
  */
 export const getServerWebLinks = <ThrowOnError extends boolean = false>(options?: Options<GetServerWebLinksData, ThrowOnError>): RequestResult<GetServerWebLinksResponses, GetServerWebLinksErrors, ThrowOnError> => (options?.client ?? client).get<GetServerWebLinksResponses, GetServerWebLinksErrors, ThrowOnError>({ url: '/api/media-server/links', ...options });
 

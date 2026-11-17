@@ -1,9 +1,11 @@
 """Application statistics service."""
 
 lazy from pathlib import Path
+lazy from typing import Any, cast
 
 lazy from sqlmodel import case, col, func, select, text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
+lazy from sqlmodel.sql.expression import Select
 
 lazy from ...db.completion import SLOT_COMPLETE, THEME_COMPLETE
 lazy from ...db.models.art import ArtSlot
@@ -304,6 +306,15 @@ class StatsService:
         if db_bytes == 0 and page_count > 0:
             db_bytes = page_count * page_size
 
+        models = table_models()
+        # One statement for every table, so a new table costs no extra query.
+        columns: list[Any] = [
+            select(func.count()).select_from(model).scalar_subquery()
+            for model in models
+        ]
+        counts: tuple[int, ...] = tuple(
+            (await session.exec(cast("Select[Any]", select(*columns)))).one()
+        )
         return DatabaseStats(
             file_size_bytes=db_bytes,
             wal_size_bytes=wal_bytes,
@@ -316,11 +327,9 @@ class StatsService:
                 DatabaseTableCount(
                     table_name=table_of(model).name,
                     description=table_description(model),
-                    row_count=(
-                        await session.exec(select(func.count()).select_from(model))
-                    ).one(),
+                    row_count=row_count,
                 )
-                for model in table_models()
+                for model, row_count in zip(models, counts, strict=True)
             ],
         )
 
