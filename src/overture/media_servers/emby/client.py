@@ -30,6 +30,11 @@ class EmbyClient(JellyfinClient):
     #: Emby lists an item's locked fields only when asked.
     _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines,LockedFields"
 
+    @override
+    async def _member_reader(self) -> dict[str, str]:
+        """Emby lists a BoxSet's items to an API key."""
+        return {}
+
     @property
     @override
     def web_base_url(self) -> str:

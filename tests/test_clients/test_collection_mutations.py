@@ -20,6 +20,12 @@ lazy from overture.media_servers.plex.client import PlexClient, longest_ordered_
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
 lazy from tests.media_servers import media_client, server_of
 
+#: A server's users, of whom an administrator sees every library.
+_USERS = [
+    {"Id": "viewer", "Policy": {"IsAdministrator": False}},
+    {"Id": "admin", "Policy": {"IsAdministrator": True}},
+]
+
 
 @pytest.mark.parametrize("client_type", [JellyfinClient, EmbyClient])
 async def test_boxsets_create_diff_edit_art_and_delete(
@@ -37,6 +43,8 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     def handle(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
         path = request.url.path.removeprefix("/emby")
+        if path == "/Users":
+            return httpx2.Response(200, json=_USERS)
         if request.method == "GET":
             if path == "/Items/box":
                 return httpx2.Response(200, json=item)
@@ -66,6 +74,17 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     finally:
         await client.close()
     mutations = [request for request in requests if request.method != "GET"]
+    # A BoxSet's items are listed to a user, and an API key has none.
+    listings = [
+        request
+        for request in requests
+        if request.url.params.get("ParentId" if emby else "parentId") == "box"
+    ]
+    assert listings
+    # Jellyfin lists a BoxSet's items only to a user; Emby to the API key.
+    assert {r.url.params.get("UserId" if emby else "userId") for r in listings} == {
+        None if emby else "admin"
+    }
     assert mutations[0].url.params.get("Name" if emby else "name") == "New"
     assert mutations[1].url.params.get("Ids" if emby else "ids") == "add"
     assert mutations[2].method == "DELETE"
@@ -211,6 +230,8 @@ async def test_boxset_append_never_removes_new_remote_members(
     client_type: type[JellyfinClient], app_config: Settings
 ) -> None:
     def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("/Users"):
+            return httpx2.Response(200, json=_USERS)
         if request.method == "GET":
             return httpx2.Response(
                 200, json={"Items": [{"Id": "manual"}], "TotalRecordCount": 1}
@@ -344,6 +365,30 @@ async def test_plex_filter_choices_decode_the_keys_plex_encodes(
     assert [
         (request.url.path, request.url.params["type"]) for request in transport.requests
     ] == [("/library/sections/1/studio", "1"), ("/library/sections/2/resolution", "4")]
+
+
+async def test_plex_names_collections_by_their_title_now_and_keys_them_by_index(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        # Plex's own list would still name collection 7 by its first title.
+        assert request.url.path == "/library/sections/1/collections"
+        rows = [
+            {"ratingKey": "c1", "title": "BFI Greats", "index": 7},
+            {"ratingKey": "c2", "title": "Unwatched", "index": 8, "smart": "1"},
+        ]
+        return httpx2.Response(200, json={"MediaContainer": {"Metadata": rows}})
+
+    factory, _transport = mock_client_factory(handle)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    try:
+        choices = await client.get_filter_choices("1", MediaType.MOVIE, "collection")
+    finally:
+        await client.close()
+    assert choices == [("7", "BFI Greats")]
 
 
 async def test_plex_names_the_filter_keys_of_the_values_an_item_holds(

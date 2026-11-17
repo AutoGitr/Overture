@@ -354,16 +354,26 @@ class TestCollectionResponseMappers:
         versions = read.server_poster_version + read.server_background_version
         assert "provider" not in versions
         # A replaced server image gets a new version; the same one keeps its version.
+        replaced = self._row(thumb_url="provider-thumb-2")
         renamed = collection_read(
-            self._row(thumb_url="provider-thumb-2"),
+            replaced,
             None,
             None,
-            copies=[],
+            copies=replaced.copies,
             trust_no_theme=True,
             backgrounds=True,
         )
+        assert renamed.server_poster_version is not None
         assert renamed.server_poster_version != read.server_poster_version
         assert renamed.server_background_version == read.server_background_version
+        # A collection no server holds has no server image to show.
+        withheld = collection_read(
+            row, None, None, copies=[], trust_no_theme=True, backgrounds=True
+        )
+        assert (withheld.server_poster_version, withheld.server_background_version) == (
+            None,
+            None,
+        )
         assert read.has_theme is True
         assert read.youtube_id == "abcDEF12345"
         assert read.monitored is False

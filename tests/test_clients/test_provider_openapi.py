@@ -67,6 +67,21 @@ async def test_media_browser_consumed_operations(
         item_path = "/Items/{Id}" if emby else "/Items/{itemId}"
         if path == "/System/Info":
             return spec.response(request, path, {"Id": "server"})
+        if path == "/Users":
+            return spec.response(
+                request,
+                path,
+                [
+                    {
+                        "Id": "admin",
+                        "Policy": {
+                            "IsAdministrator": True,
+                            "AuthenticationProviderId": "Default",
+                            "PasswordResetProviderId": "Default",
+                        },
+                    }
+                ],
+            )
         if path.startswith("/Library/"):
             return spec.response(
                 request,
@@ -164,6 +179,7 @@ async def test_media_browser_consumed_operations(
         )
         assert (await client.get_theme_songs("movie"))[0].duration == 3
         assert (await client.get_item("movie"))["Id"] == "movie"
+        assert await client.has_item("movie")
         assert [item["Id"] for item in await client.get_people(["movie"])] == ["movie"]
         assert await client.get_boxsets() == [boxset]
         assert await client.get_boxset_member_ids("boxset") == ["movie"]
@@ -296,6 +312,7 @@ async def test_plex_consumed_operations(
             {"Metadata": [{"ratingKey": "3", "index": 1, "leafCount": 4}]}
         ] * 2
         assert len(await client.get_collections("1")) == 2
+        assert await client.has_metadata("1")
         assert (
             await client.get_art_url("1", "thumb")
             == "https://server.test/reverse/library/metadata/1/thumb"

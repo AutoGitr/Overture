@@ -521,8 +521,12 @@ def collection_read(
         sync_failed=bool(rule and rule.last_error),
         last_rule_sync=rule.last_synced_at if rule else None,
         generated_value=row.generated_value,
-        server_poster_version=_server_image_version(row.thumb_url),
-        server_background_version=_server_image_version(row.art_url),
+        # Without a server copy there is no server image to show, whatever
+        # the last copy had.
+        server_poster_version=_server_image_version(row.thumb_url) if copies else None,
+        server_background_version=_server_image_version(row.art_url)
+        if copies
+        else None,
         child_count=row.child_count,
         media_types=row.media_types,
         library_ids=row.library_ids,

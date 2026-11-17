@@ -396,6 +396,10 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         await self.client.delete_item(server_collection_id)
 
     @override
+    async def has_collection(self, server_collection_id: str) -> bool:
+        return await self.client.has_item(server_collection_id)
+
+    @override
     async def update_collection_details(
         self,
         server_collection_id: str,

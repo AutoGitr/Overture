@@ -71,6 +71,7 @@ class PlexMetadata(TypedDict, total=False):
     collectionSort: int | str | None
     collectionFilterBasedOnUser: int | str | None
     year: int | None
+    #: An episode's or season's number, and a collection's key in filters.
     index: int
     thumb: str | None
     art: str | None
@@ -208,6 +209,15 @@ class PlexArtworkResponse(TypedDict):
     MediaContainer: PlexArtworkContainer
 
 
+class MediaBrowserPolicy(TypedDict, total=False):
+    IsAdministrator: bool
+
+
+class MediaBrowserUser(TypedDict, total=False):
+    Id: Required[Identifier]
+    Policy: MediaBrowserPolicy | None
+
+
 class MediaBrowserIdentity(TypedDict):
     Id: Identifier
 
@@ -261,6 +271,7 @@ MEDIA_BROWSER_SECTION_LIST = TypeAdapter(list[MediaBrowserSection])
 _REMOTE_IMAGES = TypeAdapter(RemoteImages)
 _PLEX_ARTWORK = TypeAdapter(PlexArtworkResponse)
 _MEDIA_BROWSER_IDENTITY = TypeAdapter(MediaBrowserIdentity)
+_MEDIA_BROWSER_USERS = TypeAdapter(list[MediaBrowserUser])
 _PLEX_IDENTITY = TypeAdapter(PlexIdentity)
 _PLEX_RESOURCES = TypeAdapter(list[PlexResource])
 
@@ -319,6 +330,10 @@ def plex_resources(payload: object) -> list[PlexResource]:
 
 def media_browser_server_id(payload: object) -> str:
     return parse_wire(_MEDIA_BROWSER_IDENTITY, payload)["Id"]
+
+
+def media_browser_users(payload: object) -> list[MediaBrowserUser]:
+    return parse_wire(_MEDIA_BROWSER_USERS, payload)
 
 
 def media_browser_items(payload: object) -> list[MediaBrowserItem]:

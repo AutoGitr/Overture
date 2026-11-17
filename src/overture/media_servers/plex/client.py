@@ -831,7 +831,18 @@ class PlexClient(MediaServerHttpClient):
         """List the keys and names of a field's values in a section.
 
         Show sections list the values of an ``episode.`` field among episodes.
+        Plex's list of collections keeps each under the title it was made with,
+        so collections are named by their current title, keyed by their index,
+        which is the key the list holds them under. Smart collections hold no
+        titles of their own to filter by.
         """
+        if field == "collection":
+            return [
+                (str(row["index"]), str(row.get("title") or ""))
+                for row in map(wire_object, await self.get_collections(section_key))
+                if row.get("index") is not None
+                and str(row.get("smart", "0")) not in {"1", "true", "True"}
+            ]
         episode_field = field.removeprefix("episode.")
         data = await self._get(
             f"/library/sections/{section_key}/{episode_field}",
@@ -905,6 +916,13 @@ class PlexClient(MediaServerHttpClient):
     async def delete_collection(self, collection_id: str) -> None:
         """Delete only the collection metadata."""
         await self._request("DELETE", f"/library/metadata/{collection_id}")
+
+    async def has_metadata(self, rating_key: str) -> bool:
+        """Whether Plex still holds the item, collection or season."""
+        response = await self._request(
+            "GET", f"/library/metadata/{rating_key}", allow_not_found=True
+        )
+        return response.status_code != 404
 
     async def set_collection_members(
         self,

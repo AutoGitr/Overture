@@ -23,6 +23,10 @@
 ### Fixed
 
 - **Collections:** Jellyfin 12 creates and edits collections; it refuses the way Overture read a single item with an API key.
+- **Collections:** Overture lists and syncs Jellyfin 12 collections, whose members Jellyfin shows only to a user; it asks for them as an administrator.
+- **Collections:** Plex smart collections select the members of a regular collection renamed since it was made, which Plex's list of collections still names by its first title.
+- **Collections:** syncing one collection makes again the server collection deleted on its server, instead of failing to write to it.
+- **Collections:** a collection no server holds shows no server poster or background, rather than one that fails to load.
 - **Collections:** Plex smart collections select actors and other values Plex leaves off its list of a library's values, which holds only some of its actors.
 - **Collections:** Plex smart collections whose title or other text condition holds an apostrophe sync instead of failing; Plex cannot match such text exactly, so **is** matches a text starting and ending with it, and **is not** leaves out every text containing it.
 

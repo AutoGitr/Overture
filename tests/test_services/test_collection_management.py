@@ -163,6 +163,8 @@ class Provider(PlexProvider):
         #: of the field's values can leave out.
         self.item_choices: dict[tuple[str, str], list[tuple[str, str]]] = {}
         self.fail = False
+        #: Collections someone deleted on the server behind Overture's back.
+        self.gone: set[str] = set()
         self.rejected_updates: set[str] = set()
         self.queries: list[str] = []
         self.hub_orders: list[list[str]] = []
@@ -228,6 +230,10 @@ class Provider(PlexProvider):
         self, library_id: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
         return self.choices.get(field, [])
+
+    @override
+    async def has_collection(self, server_collection_id: str) -> bool:
+        return server_collection_id not in self.gone
 
     @override
     async def item_filter_choices(
@@ -695,6 +701,21 @@ async def create(manager: Manager, ids: list[int] | None = None) -> int:
         ),
     )
     return result.id
+
+
+async def test_a_collection_deleted_on_the_server_is_made_again_by_its_own_sync(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+    first = (await manager.service.reader.get(identity)).copies[0].server_item_id
+    manager.provider.gone.add(first)
+
+    detail = await synced(manager.service, identity)
+
+    # The sync makes a new copy rather than writing to the one that is gone.
+    assert manager.provider.created == ["Saga", "Saga"]
+    assert [copy.server_item_id for copy in detail.copies] != [first]
+    assert manager.provider.members[detail.copies[0].server_item_id]
 
 
 @pytest.mark.parametrize("status", [404, 403, 500])

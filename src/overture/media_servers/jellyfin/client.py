@@ -25,6 +25,7 @@ lazy from ..wire import (
     media_browser_items,
     media_browser_page,
     media_browser_server_id,
+    media_browser_users,
     parse_wire,
     remote_images_page,
     wire_object,
@@ -208,10 +209,42 @@ class JellyfinClient(MediaServerHttpClient):
         children = await self._items(
             "/Items",
             self.query_params(
-                parentId=boxset_id, enableImages="false", enableUserData="false"
+                parentId=boxset_id,
+                **await self._member_reader(),
+                enableImages="false",
+                enableUserData="false",
             ),
         )
         return [child["Id"] for child in children]
+
+    async def _member_reader(self) -> dict[str, str]:
+        """Who a BoxSet's items are listed to.
+
+        Jellyfin 12 lists them only to a user, and an API key has none, so they
+        are asked for as an administrator, who sees every library.
+        """
+        return {"userId": await self._administrator()}
+
+    async def _administrator(self) -> str:
+        """The ID of a user who sees every library, fetched once."""
+
+        async def fetch() -> str:
+            admin = next(
+                (
+                    user
+                    for user in media_browser_users(await self._get("/Users"))
+                    if (user.get("Policy") or {}).get("IsAdministrator")
+                ),
+                None,
+            )
+            if admin is None:
+                raise MediaServerError(
+                    f"{self.server.title} has no administrator to list "
+                    "collection members as"
+                )
+            return str(admin["Id"])
+
+        return await self._cache.get_or_compute(("administrator",), fetch)
 
     async def get_people(self, item_ids: list[str]) -> list[MediaBrowserItem]:
         """Return the given items with only their credited people."""
@@ -336,6 +369,18 @@ class JellyfinClient(MediaServerHttpClient):
             ),
             idempotent=True,
         )
+
+    async def has_item(self, item_id: str) -> bool:
+        """Whether the server still holds the item."""
+        found = media_browser_items(
+            await self._get(
+                "/Items",
+                params=self.query_params(
+                    ids=item_id, enableImages="false", enableUserData="false"
+                ),
+            )
+        )
+        return any(row["Id"] == item_id for row in found)
 
     async def get_item(self, item_id: str) -> MediaBrowserItem:
         return parse_wire(_ITEM, await self._item_details(item_id))

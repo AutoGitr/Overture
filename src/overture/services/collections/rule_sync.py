@@ -65,6 +65,9 @@ class RuleSync:
                     if part.criteria is not None
                 ]
             await self._refresh_source_summary(rule, row)
+            if await self._forget_gone_copies(row):
+                async with self._access.database.read_session() as session:
+                    current = await CollectionRepository(session).members(collection_id)
             had_copies = set(copy_keys(row.libraries))
             await self._take_over_copies(row)
             error = None
@@ -286,6 +289,32 @@ class RuleSync:
             if saved is not None:
                 saved.source_summary = summary
                 session.add(saved)
+
+    async def _forget_gone_copies(self, row: MediaCollection) -> bool:
+        """Forget the copies deleted on their server, so this sync makes them anew.
+
+        A server sync forgets them too, but a collection's own sync may come
+        first. Returns whether any were gone.
+        """
+        gone = {
+            (server_id, server_item_id)
+            for server_id, server_item_id in copy_keys(row.copies)
+            if self._access.configured(server_id)
+            and not await self._access.provider(server_id).has_collection(
+                server_item_id
+            )
+        }
+        if not gone:
+            return False
+        async with self._access.database.write_session() as session:
+            await CollectionRepository(session).clear_server_copies(
+                row.id or 0, utc_now(), gone
+            )
+        for part in row.libraries:
+            if (part.server_id, part.server_item_id or "") in gone:
+                part.server_item_id = None
+                part.server_path = None
+        return True
 
     async def _take_over_copies(self, row: MediaCollection) -> None:
         """Hold, where the collection has no copy, the server's one of its title.

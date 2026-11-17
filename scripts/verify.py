@@ -1636,7 +1636,7 @@ class MediaBrowserServer(Server):
             None,
         )
         if item is None:
-            return note + ", a title Overture does not list"
+            return f"{note}, as item {row['Id']}, which no title Overture lists holds"
         record = await library.overture.get(f"/api/library/items/{item['id']}/record")
         copy = next(
             (
@@ -2206,6 +2206,8 @@ class WriteCheck:
         )
         self.cases: list[Case] = []
         self.made: list[str] = []
+        #: Each regular Plex collection made, by its section and its key in filters.
+        self.filed: dict[str, tuple[str, str]] = {}
 
     def case(self, label: str) -> Case:
         found = Case(self.direct.server, "", "writes", label)
@@ -2331,6 +2333,9 @@ class WriteCheck:
             library, f"{WRITE_PREFIX} regular", MediaType.MOVIE, [first, second]
         )
         self.made.append(created.id)
+        if isinstance(self.direct, PlexServer):
+            row = await self.held(created.id)
+            self.filed[created.id] = (library.partition(":")[2], str(row.get("index")))
         held = await self.provider.get_collection_member_ids(created.id)
         check.count, check.held = 2, len(set(held) & {first, second})
         if not held and isinstance(self.direct, MediaBrowserServer):
@@ -2510,6 +2515,20 @@ class WriteCheck:
             await self.provider.delete_collection(collection_id)
             self.made.remove(collection_id)
         await self.sweep()
+        if isinstance(self.direct, PlexServer):
+            # Plex may keep titles filed under a collection it deleted.
+            for section, key in self.filed.values():
+                page = await self.direct.container(
+                    f"/library/sections/{section}/all",
+                    type=PLEX_TYPES["movie"],
+                    collection=key,
+                    **{"X-Plex-Container-Start": 0, "X-Plex-Container-Size": 0},
+                )
+                if left := int(page.get("totalSize", page.get("size", 0))):
+                    check.note = (
+                        f"Plex still files {left} titles under the deleted "
+                        "collection; Optimize Database in Plex may clear them"
+                    )
         left = [
             row.title
             for row in await self.provider.list_collections()

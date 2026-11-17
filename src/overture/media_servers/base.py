@@ -129,6 +129,10 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """Delete a collection without deleting its media."""
         raise NotImplementedError
 
+    async def has_collection(self, server_collection_id: str) -> bool:
+        """Whether the server still holds the collection."""
+        raise NotImplementedError
+
     async def update_collection_details(
         self,
         server_collection_id: str,
