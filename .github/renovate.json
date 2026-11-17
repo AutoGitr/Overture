@@ -2,7 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "abandonments:recommended", ":configMigration"],
   "pinDigests": true,
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "rangeStrategy": "pin",
   "labels": ["deps"],
   "prConcurrentLimit": 0,
