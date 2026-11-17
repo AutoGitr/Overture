@@ -108,7 +108,7 @@ def rule_row(collection_id: int, body: CollectionRuleWrite) -> CollectionRule:
 
 def outdates_server(row: MediaCollection) -> bool:
     """A local save outdates a server copy; a seasonally withheld one has none."""
-    return row.unsynced or row.server_item_id is not None
+    return row.unsynced or bool(row.copies)
 
 
 def member_criteria(

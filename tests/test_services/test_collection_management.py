@@ -128,7 +128,7 @@ lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
-lazy from tests.collection_helpers import library_rule, stored_collection
+lazy from tests.collection_helpers import copy_id, library_rule, stored_collection
 lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -726,7 +726,7 @@ async def test_delete_from_server_preserves_configuration(
         repo = CollectionRepository(session)
         row = await repo.get(identity)
         assert row is not None
-        assert row.server_item_id is None
+        assert copy_id(row) is None
         assert row.child_count == 0
         assert await repo.rule(identity) is not None
         assert len(await repo.library_items(MediaType.MOVIE, "1:movies")) == 3
@@ -734,7 +734,7 @@ async def test_delete_from_server_preserves_configuration(
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        assert row.server_item_id is not None
+        assert copy_id(row) is not None
 
 
 @pytest.mark.parametrize("target", ["keep", "move", "orphan", "both"])
@@ -2147,7 +2147,10 @@ async def test_a_sync_that_fails_midway_keeps_its_copy_for_the_next(
     manager.provider.rejected_updates.clear()
     detail = await synced(manager.service, saved.id)
     assert (manager.provider.created, manager.provider.deleted) == (["Half made"], [])
-    assert (detail.server_item_id, detail.unsynced) == ("1", False)
+    assert ([copy.server_item_id for copy in detail.copies], detail.unsynced) == (
+        ["1"],
+        False,
+    )
 
 
 def test_source_labels_name_stable_identifiers() -> None:
@@ -3780,9 +3783,9 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     assert (separator.title, separator.group_name) == ("Sagas", "Sagas")
     assert separator.child_count == 0
     assert separator.id is not None
-    assert separator.server_item_id is not None
+    assert copy_id(separator) is not None
     # Its sort title is the group's with no title, so it sorts first.
-    assert manager.provider.sort_titles[separator.server_item_id] == "Sagas"
+    assert manager.provider.sort_titles[copy_id(separator) or ""] == "Sagas"
     assert ArtType.POSTER in manager.art.selections
     with pytest.raises(PublicServiceError, match="group keeps the separator"):
         await manager.service.editor.update(
@@ -3900,8 +3903,8 @@ async def test_a_separated_group_without_a_sort_title_still_sorts_behind_its_sep
     [separator] = [row for row in rows if row.kind is CollectionKind.SEPARATOR]
     [member] = [row for row in rows if row.kind is not CollectionKind.SEPARATOR]
     sort_titles = manager.provider.sort_titles
-    assert sort_titles[separator.server_item_id or ""] == "Sagas"
-    assert sort_titles[member.server_item_id or ""] == "Sagas Saga"
+    assert sort_titles[copy_id(separator) or ""] == "Sagas"
+    assert sort_titles[copy_id(member) or ""] == "Sagas Saga"
     assert min(title or "" for title in sort_titles.values()) == "Sagas"
     # A separator belongs to its group, which alone shows it.
     assert separator.group_name == "The Sagas"
@@ -4126,7 +4129,7 @@ async def test_a_collection_takes_over_the_server_one_of_its_title(
     detail = await synced(manager.service, saved.id)
 
     assert manager.provider.created == []
-    assert detail.server_item_id == "9"
+    assert [copy.server_item_id for copy in detail.copies] == ["9"]
     assert [row.title for row in await manager.service.reader.listed()] == ["Saga"]
 
 

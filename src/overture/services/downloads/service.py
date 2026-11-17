@@ -542,9 +542,7 @@ class DownloadService:
     async def _copies(self, item: MediaItem) -> list[tuple[Provider, str]]:
         """Each configured server holding the item, and its ID of it."""
         async with self._database.read_session() as session:
-            copies = await CopyRepository(session).leads_first(
-                item.id or 0, self.provider_registry.server_ids()
-            )
+            copies = await CopyRepository(session).leads_first(item.id or 0)
         return [
             (self.provider_registry.get(copy.server_id), copy.server_item_id)
             for copy in copies

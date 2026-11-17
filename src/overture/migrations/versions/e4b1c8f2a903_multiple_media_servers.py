@@ -128,6 +128,7 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("identity", auto_string(), nullable=False),
+        sa.Column("position", sa.Integer(), nullable=True),
         sa.Column("removed_at", sa.DateTime(), nullable=True),
         sa.CheckConstraint(
             "server_type IN ('plex', 'jellyfin', 'emby')",
@@ -362,7 +363,10 @@ def downgrade() -> None:
     _rewrite_json("state", "saved_schedules", _single_checkpoint)
     lead = (
         connection.execute(
-            sa.text("SELECT MIN(id) FROM media_servers WHERE removed_at IS NULL")
+            sa.text(
+                "SELECT id FROM media_servers WHERE position IS NOT NULL "
+                "ORDER BY position LIMIT 1"
+            )
         ).scalar()
         or _SERVER
     )

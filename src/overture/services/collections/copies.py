@@ -1,6 +1,6 @@
 """Which libraries of a collection share one collection on a media server."""
 
-lazy from collections.abc import Callable, Iterable
+lazy from collections.abc import Callable, Iterable, Sequence
 lazy from dataclasses import dataclass
 
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
@@ -57,6 +57,28 @@ class ServerCopy:
         for part in self.libraries:
             part.server_item_id = server_item_id
             part.server_path = known
+
+
+def held_copies(
+    row: MediaCollection, server_order: Sequence[int]
+) -> list[CollectionLibrary]:
+    """One part for each server copy on the servers in *server_order*, in that order.
+
+    The first is the lead copy, whose images and link stand for the collection,
+    as sync reads its images from it.
+    """
+    rank = {server_id: index for index, server_id in enumerate(server_order)}
+    return sorted(
+        (part for part in row.copies if part.server_id in rank),
+        key=lambda part: rank[part.server_id],
+    )
+
+
+def lead_part(
+    row: MediaCollection, server_order: Sequence[int]
+) -> CollectionLibrary | None:
+    """The part whose server copy stands for the collection; ``None`` if none."""
+    return next(iter(held_copies(row, server_order)), None)
 
 
 #: A server collection, by the database's number of its server and its own ID.

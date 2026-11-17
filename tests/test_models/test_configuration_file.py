@@ -22,7 +22,7 @@ def isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
     # Each media server's variables are named after it.
     for name in list(os.environ):
-        if name.startswith("MEDIA_SERVER") or name == "JELLYFIN_COLLECTIONS_PATH":
+        if name.startswith("MEDIA_SERVER"):
             monkeypatch.delenv(name)
     monkeypatch.delenv("OVERTURE_CONFIG_FILE", raising=False)
 
@@ -32,9 +32,9 @@ def test_configuration_precedence_and_literal_secrets(
 ) -> None:
     path = tmp_path / "overture.env"
     write_configuration(
-        path, {"OVERTURE_PORT": "6000", "MEDIA_SERVER_API_KEY": "a'\\${HOME}$b"}
+        path, {"OVERTURE_PORT": "6000", "MEDIA_SERVER_PLEX_API_KEY": "a'\\${HOME}$b"}
     )
-    assert read_configuration(path)["MEDIA_SERVER_API_KEY"] == "a'\\${HOME}$b"
+    assert read_configuration(path)["MEDIA_SERVER_PLEX_API_KEY"] == "a'\\${HOME}$b"
     monkeypatch.chdir(tmp_path.parent)
     assert load_configuration(RuntimeSettings, path).OVERTURE_PORT == 6000
     monkeypatch.setenv("OVERTURE_PORT", "6001")
@@ -75,9 +75,10 @@ def test_compose_secrets_fill_settings_the_environment_leaves_empty(
     (tmp_path / "app_password_hash").write_text(f"{encoded}\n")
     (tmp_path / "tmdb_api_key").write_text("from-secret")
     monkeypatch.setattr(config, "SECRETS_DIR", tmp_path)
-    monkeypatch.setenv("MEDIA_SERVER", "plex")
-    monkeypatch.setenv("MEDIA_SERVER_URL", "http://127.0.0.1:32400")
-    monkeypatch.setenv("MEDIA_SERVER_API_KEY", "test-key")
+    monkeypatch.setenv("MEDIA_SERVERS", "Plex")
+    monkeypatch.setenv("MEDIA_SERVER_PLEX_TYPE", "plex")
+    monkeypatch.setenv("MEDIA_SERVER_PLEX_URL", "http://127.0.0.1:32400")
+    monkeypatch.setenv("MEDIA_SERVER_PLEX_API_KEY", "test-key")
     # Compose passes an unset optional variable as an empty string.
     monkeypatch.setenv("APP_PASSWORD_HASH", "")
     monkeypatch.setenv("TMDB_API_KEY", "from-environment")

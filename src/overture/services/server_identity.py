@@ -56,12 +56,11 @@ async def resolve_owners(
     sync has found on any server is looked up on each by its IDs, unless
     *discover* is false.
     """
-    order = provider_registry.server_ids()
     async with database.read_session() as session:
         item = await session.get(MediaItem, item_id)
         if item is None:
             return []
-        copies = await CopyRepository(session).leads_first(item_id, order)
+        copies = await CopyRepository(session).leads_first(item_id)
         season = (
             None
             if season_id is None

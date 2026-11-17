@@ -51,7 +51,7 @@ lazy from overture.services.sync.collection_sync import CollectionSync
 lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnrichment
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
-lazy from tests.collection_helpers import managing_rule, stored_collection
+lazy from tests.collection_helpers import copy_id, managing_rule, stored_collection
 lazy from tests.media_servers import (
     TEST_SERVER,
     TEST_SERVER_ID,
@@ -173,7 +173,7 @@ async def _run(
 async def _rows(database: Database) -> dict[str, MediaCollection]:
     async with database.read_session() as session:
         rows = (await session.exec(select(MediaCollection))).all()
-    return {row.server_item_id: row for row in rows if row.server_item_id is not None}
+    return {key: row for row in rows if (key := copy_id(row)) is not None}
 
 
 async def test_sync_stores_collections_with_members_and_their_tmdb_match(
@@ -758,7 +758,7 @@ async def test_managed_collections_keep_overtures_choices_and_outlive_their_serv
         repo = CollectionRepository(session)
         kept = await repo.get(saga.id or 0)
         assert kept is not None
-        assert (kept.server_item_id, kept.child_count) == (None, 0)
+        assert (copy_id(kept), kept.child_count) == (None, 0)
         assert await repo.members(saga.id or 0) == []
         assert [row.title for row in await repo.list_all()] == ["Saga"]
 

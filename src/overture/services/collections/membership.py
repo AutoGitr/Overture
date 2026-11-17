@@ -209,7 +209,7 @@ class Membership:
             async with self._access.database.write_session() as session:
                 copies = CopyRepository(session)
                 await copies.relabel(library_id, batch, label, wanted_ids)
-                leads = await copies.leads(batch, self._access.server_order())
+                leads = await copies.leads(batch)
                 led = [
                     item_id
                     for item_id in batch

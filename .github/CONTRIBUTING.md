@@ -69,14 +69,14 @@ changes, without tests or builds.
 ### Checking Overture against real media servers
 
 Unit tests replace the media server, TMDB, MDBList, Radarr and Sonarr. To see
-how Overture behaves against the real ones, point `scripts/verify.py` at synced
-instances, one per media server, and at those servers themselves:
+how Overture behaves against the real ones, point `scripts/verify.py` at a
+synced instance with your servers in `MEDIA_SERVERS`, and at those servers
+themselves:
 
 ```sh
-OVERTURE_API_KEY=plex-key,jellyfin-key,emby-key \
+OVERTURE_API_KEY=key \
 PLEX_TOKEN=... JELLYFIN_API_KEY=... EMBY_API_KEY=... \
-  uv run python -m scripts.verify \
-  http://localhost:5885 http://localhost:5886 http://localhost:5887 \
+  uv run python -m scripts.verify http://localhost:5885 \
   --plex https://plex.local:32400 --jellyfin http://jellyfin.local:8096 \
   --emby http://emby.local:8096 --report verify.md
 ```

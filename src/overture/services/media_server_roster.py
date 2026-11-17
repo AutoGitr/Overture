@@ -23,14 +23,19 @@ _SERVER_RUNS = (JobKind.SERVER_AUDIT, JobKind.SERVER_AUDIT_FIX)
 
 
 def _claim(
-    server: MediaServerConfig, rows: list[MediaServer], *, lead: bool
+    server: MediaServerConfig,
+    rows: list[MediaServer],
+    configured: set[str],
+    *,
+    lead: bool,
 ) -> tuple[MediaServer | None, MediaServer | None]:
     """Return the row *server* is, and the row whose name it takes over, if any.
 
-    A server is the row of its name while the address there is its own. A row
-    let go of, at its address, is a renamed server or one coming back; the row
-    an upgrade found, of no known kind, goes to the server at its address, or
-    to the lead when it recorded none.
+    A server is the row of its name while the address there is its own.
+    Otherwise it is the row at its address that no server in *configured*, the
+    names in MEDIA_SERVERS, still goes by: it was renamed, or it is coming
+    back. The row an upgrade found, of no known kind, goes to the server at
+    its address, or to the lead when it recorded none.
     """
     named = next((row for row in rows if row.key == server.key), None)
     if named is not None and named.identity == server.identity:
@@ -40,8 +45,8 @@ def _claim(
             row
             for row in rows
             if row is not named
-            and row.removed_at is not None
             and row.identity == server.identity
+            and (row.removed_at is not None or row.key not in configured)
         ),
         None,
     )
@@ -76,8 +81,9 @@ class MediaServerRoster:
         async with self._database.write_session() as session:
             rows = list((await session.exec(select(MediaServer))).all())
             kept: list[MediaServer] = []
+            configured = {server.key for server in self._registry.servers}
             for index, server in enumerate(self._registry.servers):
-                row, displaced = _claim(server, rows, lead=index == 0)
+                row, displaced = _claim(server, rows, configured, lead=index == 0)
                 if displaced is not None:
                     # Another server at another address took this name.
                     displaced.key = None
@@ -93,6 +99,7 @@ class MediaServerRoster:
                 row.title = server.title
                 row.server_type = server.type
                 row.identity = server.identity
+                row.position = index
                 row.removed_at = None
                 session.add(row)
                 kept.append(row)
@@ -110,6 +117,7 @@ class MediaServerRoster:
         ids = [row.id or 0 for row in left]
         for row in left:
             row.removed_at = now
+            row.position = None
             session.add(row)
             logger.info(
                 "Media server %s is no longer in MEDIA_SERVERS; what it held is "

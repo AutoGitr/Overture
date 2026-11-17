@@ -33,7 +33,7 @@ def isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
     # Each media server's variables are named after it.
     for name in list(os.environ):
-        if name.startswith("MEDIA_SERVER") or name == "JELLYFIN_COLLECTIONS_PATH":
+        if name.startswith("MEDIA_SERVER"):
             monkeypatch.delenv(name)
     monkeypatch.delenv("OVERTURE_CONFIG_FILE", raising=False)
 
@@ -142,9 +142,10 @@ def test_password_hash_stdin_empty_rejected(
 def test_check_does_not_start_runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("MEDIA_SERVER", "plex")
-    monkeypatch.setenv("MEDIA_SERVER_URL", "http://127.0.0.1:32400")
-    monkeypatch.setenv("MEDIA_SERVER_API_KEY", "test-key")
+    monkeypatch.setenv("MEDIA_SERVERS", "Plex")
+    monkeypatch.setenv("MEDIA_SERVER_PLEX_TYPE", "plex")
+    monkeypatch.setenv("MEDIA_SERVER_PLEX_URL", "http://127.0.0.1:32400")
+    monkeypatch.setenv("MEDIA_SERVER_PLEX_API_KEY", "test-key")
     monkeypatch.setenv("APP_PASSWORD_HASH", hash_password("a long simple password"))
     called: list[Path] = []
 
@@ -252,9 +253,10 @@ def test_setup_rerun_keeps_saved_secrets_on_empty_input(
     write_configuration(
         path,
         {
-            "MEDIA_SERVER": "plex",
-            "MEDIA_SERVER_URL": "http://127.0.0.1:32400",
-            "MEDIA_SERVER_API_KEY": "saved-api-key",
+            "MEDIA_SERVERS": "Plex",
+            "MEDIA_SERVER_PLEX_TYPE": "plex",
+            "MEDIA_SERVER_PLEX_URL": "http://127.0.0.1:32400",
+            "MEDIA_SERVER_PLEX_API_KEY": "saved-api-key",
             "APP_PASSWORD_HASH": encoded,
         },
     )
@@ -266,7 +268,7 @@ def test_setup_rerun_keeps_saved_secrets_on_empty_input(
     monkeypatch.setattr(cli, "prompt_secret", accept_default)
     cli.main(["setup", "--config-file", str(path)])
     saved = read_configuration(path)
-    assert saved["MEDIA_SERVER_API_KEY"] == "saved-api-key"
+    assert saved["MEDIA_SERVER_PLEX_API_KEY"] == "saved-api-key"
     assert saved["APP_PASSWORD_HASH"] == encoded
 
 
@@ -470,7 +472,7 @@ def test_setup_switches_from_password_to_oidc(
     path = tmp_path / "overture.env"
     write_configuration(
         path,
-        {"APP_PASSWORD_HASH": hash_password("old"), "MEDIA_SERVER_API_KEY": "old-key"},
+        {"APP_PASSWORD_HASH": hash_password("old")},
     )
     answers = iter(
         [
@@ -484,7 +486,7 @@ def test_setup_switches_from_password_to_oidc(
             "",
         ]
     )
-    secrets = iter(["", "client-secret"])
+    secrets = iter(["server-key", "client-secret"])
     monkeypatch.setattr("builtins.input", Mock(side_effect=answers))
     monkeypatch.setattr(cli, "prompt_secret", Mock(side_effect=secrets))
 
@@ -494,7 +496,9 @@ def test_setup_switches_from_password_to_oidc(
     assert "APP_PASSWORD_HASH" not in saved
     assert saved["OIDC_ISSUER_URL"] == "https://issuer.test"
     assert saved["OIDC_CLIENT_SECRET"] == "client-secret"
-    assert saved["MEDIA_SERVER_API_KEY"] == "old-key"
+    assert saved["MEDIA_SERVERS"] == "Plex"
+    assert saved["MEDIA_SERVER_PLEX_TYPE"] == "plex"
+    assert saved["MEDIA_SERVER_PLEX_API_KEY"] == "server-key"
 
 
 @pytest.mark.parametrize("method", ["invalid", "password"])
@@ -502,7 +506,7 @@ def test_invalid_auth_choice_does_not_overwrite_configuration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
 ) -> None:
     path = tmp_path / "overture.env"
-    path.write_text("MEDIA_SERVER=plex\n")
+    path.write_text("OVERTURE_PORT=6000\n")
     original = path.read_bytes()
     answers = iter(["plex", "http://127.0.0.1:32400", method])
     monkeypatch.setattr("builtins.input", Mock(side_effect=answers))

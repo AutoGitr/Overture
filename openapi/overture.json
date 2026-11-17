@@ -3988,6 +3988,34 @@
         "title": "CollectionCapabilities",
         "type": "object"
       },
+      "CollectionCopyRead": {
+        "additionalProperties": false,
+        "description": "One media server's collection holding the collection's members.",
+        "properties": {
+          "library_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Library Ids",
+            "type": "array"
+          },
+          "server_id": {
+            "title": "Server Id",
+            "type": "integer"
+          },
+          "server_item_id": {
+            "title": "Server Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_id",
+          "server_item_id",
+          "library_ids"
+        ],
+        "title": "CollectionCopyRead",
+        "type": "object"
+      },
       "CollectionCreate": {
         "additionalProperties": false,
         "description": "Create a collection; its rule names the libraries and what each selects.",
@@ -4621,6 +4649,13 @@
               }
             ]
           },
+          "copies": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionCopyRead"
+            },
+            "title": "Copies",
+            "type": "array"
+          },
           "delete_when_inactive": {
             "anyOf": [
               {
@@ -4840,28 +4875,6 @@
               }
             ],
             "title": "Server Background Version"
-          },
-          "server_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Id"
-          },
-          "server_item_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Item Id"
           },
           "server_poster_version": {
             "anyOf": [
@@ -5099,8 +5112,7 @@
           "media_types",
           "library_ids",
           "server_added_at",
-          "server_item_id",
-          "server_id",
+          "copies",
           "has_theme",
           "youtube_id",
           "youtube_title",
@@ -6719,6 +6731,13 @@
               }
             ]
           },
+          "copies": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionCopyRead"
+            },
+            "title": "Copies",
+            "type": "array"
+          },
           "delete_when_inactive": {
             "anyOf": [
               {
@@ -6918,28 +6937,6 @@
             ],
             "title": "Server Background Version"
           },
-          "server_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Id"
-          },
-          "server_item_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Server Item Id"
-          },
           "server_poster_version": {
             "anyOf": [
               {
@@ -7138,8 +7135,7 @@
           "media_types",
           "library_ids",
           "server_added_at",
-          "server_item_id",
-          "server_id",
+          "copies",
           "has_theme",
           "youtube_id",
           "youtube_title",

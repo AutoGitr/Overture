@@ -44,15 +44,6 @@ class SettingsState {
     return this.servers.find((server) => server.id === id);
   }
 
-  /** The copy on the earliest configured server: the one that stands for a title. */
-  lead<T extends { server_id: number }>(copies: readonly T[]): T | undefined {
-    for (const server of this.servers) {
-      const copy = copies.find((each) => each.server_id === server.id);
-      if (copy) return copy;
-    }
-    return undefined;
-  }
-
   /**
    * How a library is named to users: after its server too when more than one
    * is configured, as libraries of several servers can share a title.

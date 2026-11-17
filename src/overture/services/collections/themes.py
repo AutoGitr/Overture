@@ -70,7 +70,7 @@ class CollectionThemes:
             raise PublicServiceError(400, reason)
         async with self._access.database.read_session() as session:
             row = await self._access.require_managed(session, collection_id)
-        if row.server_item_id is None:
+        if not row.copies:
             return await self._keep(collection_id, body.youtube_id)
         target = JobTarget.collection_theme(collection_id, row.title, body.youtube_id)
         async with self._access.asset_locks.acquire(target.slot.lock_key):

@@ -49,7 +49,7 @@ def _unmatchable(row: MediaCollection, art_type: ArtType) -> str | None:
     if row.tmdb_collection_id is None:
         return "Local art matching: the collection has no TMDB collection ID"
     if uploaded_image(row, art_type) is None and (
-        row.server_item_id is None or row.server_image_url(art_type) is None
+        not row.copies or row.server_image_url(art_type) is None
     ):
         return "Local art matching: the collection has no image to compare"
     return None

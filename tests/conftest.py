@@ -19,9 +19,10 @@ os.environ.setdefault(
     "APP_PASSWORD_HASH",
     "$argon2id$v=19$m=19456,t=2,p=1$Y96qqNb5fWisYsjxPJH7rw$tmT2xh96T8fz3H2p6jD3VzxKyFZzHeUFucJGxjvSlM0",
 )
-os.environ.setdefault("MEDIA_SERVER", "plex")
-os.environ.setdefault("MEDIA_SERVER_URL", "http://127.0.0.1:32400")
-os.environ.setdefault("MEDIA_SERVER_API_KEY", "x" * 32)
+os.environ.setdefault("MEDIA_SERVERS", "Plex")
+os.environ.setdefault("MEDIA_SERVER_PLEX_TYPE", "plex")
+os.environ.setdefault("MEDIA_SERVER_PLEX_URL", "http://127.0.0.1:32400")
+os.environ.setdefault("MEDIA_SERVER_PLEX_API_KEY", "x" * 32)
 
 lazy from collections.abc import AsyncGenerator, Callable, Generator
 lazy from pathlib import Path
@@ -82,9 +83,10 @@ def app_config() -> Settings:
             "APP_PASSWORD_HASH": (
                 "$argon2id$v=19$m=19456,t=2,p=1$Y96qqNb5fWisYsjxPJH7rw$tmT2xh96T8fz3H2p6jD3VzxKyFZzHeUFucJGxjvSlM0"
             ),
-            "MEDIA_SERVER": "plex",
-            "MEDIA_SERVER_URL": "http://127.0.0.1:32400",
-            "MEDIA_SERVER_API_KEY": "x" * 32,
+            "MEDIA_SERVERS": "Plex",
+            "MEDIA_SERVER_PLEX_TYPE": "plex",
+            "MEDIA_SERVER_PLEX_URL": "http://127.0.0.1:32400",
+            "MEDIA_SERVER_PLEX_API_KEY": "x" * 32,
         }
     )
     return Settings(**values)

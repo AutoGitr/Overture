@@ -35,6 +35,8 @@ class MediaServer(SQLModel, table=True):
     server_type: ServerType | None = Field(default=None, sa_type=enum_type(ServerType))
     #: Its kind and address, by which a renamed server is recognised.
     identity: str = Field(index=True)
+    #: Its place in MEDIA_SERVERS, the lead 0; none while it is not named there.
+    position: int | None = None
     #: When it left MEDIA_SERVERS; what it held waits for its return.
     removed_at: datetime | None = None
 

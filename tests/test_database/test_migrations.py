@@ -1534,10 +1534,11 @@ def test_one_servers_titles_become_copies_of_server_one_and_back() -> None:
                 conn.exec_driver_sql(statement)
 
             command.upgrade(config, "e4b1c8f2a903")
+            # No server has a place in MEDIA_SERVERS until Overture starts.
             assert conn.exec_driver_sql(
-                "SELECT id, key, server_type, identity, removed_at IS NOT NULL "
-                "FROM media_servers"
-            ).all() == [(1, None, None, "abc", 1)]
+                "SELECT id, key, server_type, identity, position, "
+                "removed_at IS NOT NULL FROM media_servers"
+            ).all() == [(1, None, None, "abc", None, 1)]
             assert conn.exec_driver_sql(
                 "SELECT media_item_id, server_id, server_item_id, library_id, "
                 "labels, director_etag FROM media_item_copies"

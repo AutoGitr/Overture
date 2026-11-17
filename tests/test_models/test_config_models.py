@@ -25,9 +25,10 @@ ARGON2_HASH = (
 def _settings_kwargs(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "APP_PASSWORD_HASH": ARGON2_HASH,
-        "MEDIA_SERVER": "plex",
-        "MEDIA_SERVER_URL": "http://127.0.0.1:32400",
-        "MEDIA_SERVER_API_KEY": "k" * 32,
+        "MEDIA_SERVERS": "Plex",
+        "MEDIA_SERVER_PLEX_TYPE": "plex",
+        "MEDIA_SERVER_PLEX_URL": "http://127.0.0.1:32400",
+        "MEDIA_SERVER_PLEX_API_KEY": "k" * 32,
     }
     data.update(overrides)
     return data
@@ -62,11 +63,11 @@ class TestSettingsValidation:
 
     def test_rejects_invalid_service_and_worker_settings(self) -> None:
         invalid_cases = [
-            {"MEDIA_SERVER": ""},
-            {"MEDIA_SERVER": "kodi"},
-            {"MEDIA_SERVER_URL": ""},
-            {"MEDIA_SERVER_API_KEY": ""},
-            {"MEDIA_SERVER_URL": "127.0.0.1:32400"},
+            {"MEDIA_SERVERS": ""},
+            {"MEDIA_SERVER_PLEX_TYPE": "kodi"},
+            {"MEDIA_SERVER_PLEX_URL": ""},
+            {"MEDIA_SERVER_PLEX_API_KEY": ""},
+            {"MEDIA_SERVER_PLEX_URL": "127.0.0.1:32400"},
             {"LOG_LEVEL": "verbose"},
             {"TZ": "Not/AZone"},
             {"PHASH_WORKERS": 0},
@@ -78,10 +79,10 @@ class TestSettingsValidation:
             {"SESSION_EXPIRY_DAYS": 0},
             {"APP_URL": "ftp://example.test"},
             {"TRUSTED_PROXY_CIDRS": "not-a-network"},
-            {"MEDIA_SERVER_URL": "http://user:pass@media.test"},
-            {"MEDIA_SERVER_URL": "http://media.test/path?token=secret"},
-            {"MEDIA_SERVER_URL": "http://media.test/a/../b"},
-            {"MEDIA_SERVER_URL": "http://media.test/a/%2e%2e/b"},
+            {"MEDIA_SERVER_PLEX_URL": "http://user:pass@media.test"},
+            {"MEDIA_SERVER_PLEX_URL": "http://media.test/path?token=secret"},
+            {"MEDIA_SERVER_PLEX_URL": "http://media.test/a/../b"},
+            {"MEDIA_SERVER_PLEX_URL": "http://media.test/a/%2e%2e/b"},
         ]
 
         for overrides in invalid_cases:
@@ -93,8 +94,8 @@ class TestSettingsValidation:
     ) -> None:
         configured = Settings(
             **_settings_kwargs(
-                MEDIA_SERVER_URL="https://media.internal:32400",
-                MEDIA_SERVER_VERIFY_TLS=False,
+                MEDIA_SERVER_PLEX_URL="https://media.internal:32400",
+                MEDIA_SERVER_PLEX_VERIFY_TLS=False,
             )
         )
 
@@ -139,7 +140,14 @@ class TestSettingsValidation:
         assert configured.media_server_verify_tls(f"{secure_origin}/art") is True
 
     def test_accepts_emby_as_a_media_server(self) -> None:
-        configured = Settings(**_settings_kwargs(MEDIA_SERVER="Emby"))
+        configured = Settings(
+            **_settings_kwargs(
+                MEDIA_SERVERS="Emby",
+                MEDIA_SERVER_EMBY_TYPE="emby",
+                MEDIA_SERVER_EMBY_URL="http://127.0.0.1:8096",
+                MEDIA_SERVER_EMBY_API_KEY="emby-key",
+            )
+        )
 
         [server] = configured.MEDIA_SERVERS
         assert (server.type, server.name) == (ServerType.EMBY, "Emby")
@@ -147,9 +155,6 @@ class TestSettingsValidation:
     def test_names_several_servers_with_their_own_variables(self) -> None:
         configured = Settings(
             **_settings_kwargs(
-                MEDIA_SERVER="",
-                MEDIA_SERVER_URL="",
-                MEDIA_SERVER_API_KEY="",
                 MEDIA_SERVERS="Plex, Jelly_4K",
                 MEDIA_SERVER_PLEX_TYPE="plex",
                 MEDIA_SERVER_PLEX_URL="http://plex.lan:32400/",
@@ -187,16 +192,15 @@ class TestSettingsValidation:
             ),
             ({"MEDIA_SERVERS": "plex,Plex"}, "more than once"),
             ({"MEDIA_SERVERS": "4k"}, "must start with a letter"),
-            ({"MEDIA_SERVERS": "Plex", "MEDIA_SERVER": "plex"}, "not both"),
         ],
     )
     def test_refuses_misconfigured_servers_naming_what_to_fix(
         self, variables: dict[str, str], message: str
     ) -> None:
         defaults = {
-            "MEDIA_SERVER": "",
-            "MEDIA_SERVER_URL": "",
-            "MEDIA_SERVER_API_KEY": "",
+            "MEDIA_SERVER_PLEX_TYPE": "",
+            "MEDIA_SERVER_PLEX_URL": "",
+            "MEDIA_SERVER_PLEX_API_KEY": "",
         }
         with pytest.raises(ValidationError, match=message):
             Settings(**_settings_kwargs(**(defaults | variables)))

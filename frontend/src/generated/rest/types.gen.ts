@@ -1938,6 +1938,26 @@ export type CollectionCapabilities = {
 };
 
 /**
+ * CollectionCopyRead
+ *
+ * One media server's collection holding the collection's members.
+ */
+export type CollectionCopyRead = {
+    /**
+     * Library Ids
+     */
+    library_ids: Array<string>;
+    /**
+     * Server Id
+     */
+    server_id: number;
+    /**
+     * Server Item Id
+     */
+    server_item_id: string;
+};
+
+/**
  * CollectionCreate
  *
  * Create a collection; its rule names the libraries and what each selects.
@@ -2126,6 +2146,10 @@ export type CollectionDetail = {
     collection_group: string | null;
     collection_mode: CollectionMode | null;
     /**
+     * Copies
+     */
+    copies: Array<CollectionCopyRead>;
+    /**
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
@@ -2212,14 +2236,6 @@ export type CollectionDetail = {
      * Server Background Version
      */
     server_background_version: string | null;
-    /**
-     * Server Id
-     */
-    server_id: number | null;
-    /**
-     * Server Item Id
-     */
-    server_item_id: string | null;
     /**
      * Server Poster Version
      */
@@ -2952,6 +2968,10 @@ export type CollectionRead = {
     collection_group: string | null;
     collection_mode: CollectionMode | null;
     /**
+     * Copies
+     */
+    copies: Array<CollectionCopyRead>;
+    /**
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
@@ -3032,14 +3052,6 @@ export type CollectionRead = {
      * Server Background Version
      */
     server_background_version: string | null;
-    /**
-     * Server Id
-     */
-    server_id: number | null;
-    /**
-     * Server Item Id
-     */
-    server_item_id: string | null;
     /**
      * Server Poster Version
      */

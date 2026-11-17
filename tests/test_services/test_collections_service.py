@@ -341,7 +341,9 @@ async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
         ),
     )
 
-    with pytest.raises(PublicServiceError, match="JELLYFIN_COLLECTIONS_PATH"):
+    with pytest.raises(
+        PublicServiceError, match="MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH"
+    ):
         await service.themes.queue(
             1,
             SetCollectionThemeRequest(youtube_id="a" * 11),

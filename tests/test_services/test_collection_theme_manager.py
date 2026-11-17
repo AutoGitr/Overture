@@ -300,5 +300,5 @@ async def test_jellyfin_collection_theme_needs_the_collections_path(
     job = await db_session.get(DownloadJob, job_id)
     assert job is not None
     assert job.error_message == (
-        "Set JELLYFIN_COLLECTIONS_PATH to store collection themes"
+        "Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH to store collection themes"
     )

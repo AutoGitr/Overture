@@ -39,12 +39,6 @@ shows as "Living Room"). Each server takes these variables, with
 | `PATH_MAP`         | No       | Where Overture sees the server's media folders; see [Path maps](#path-maps)        |
 | `COLLECTIONS_PATH` | No       | Jellyfin only: its collections directory, mounted into Overture, for BoxSet themes |
 
-One server can still be set up with the single-server variables
-`MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`,
-`MEDIA_SERVER_VERIFY_TLS`, `MEDIA_SERVER_PATH_MAP` and
-`JELLYFIN_COLLECTIONS_PATH`; it is named after its type. Set
-`MEDIA_SERVERS` or `MEDIA_SERVER`, not both.
-
 Every server should prefer local assets, so the files Overture writes beside
 your media are the ones it shows.
 
@@ -86,8 +80,12 @@ collections directory into Overture and name it in `COLLECTIONS_PATH`.
 ## Path maps
 
 Overture writes artwork and themes into the media folders the servers report,
-so it must see those folders. When a server sees them at another path, for
-example in its own container, map the server's path to Overture's:
+so it must see those folders at the same paths. When Overture's container
+mounts your media at the paths every server reports, as when all of them use
+`/media/movies`, `PATH_MAP` is not needed.
+
+When a server sees the folders at another path, for example in its own
+container or on Windows, map the server's path to Overture's:
 
 ```bash
 MEDIA_SERVER_JELLYFIN_PATH_MAP=/data/movies=/media/movies,/data/tv=/media/tv
@@ -95,7 +93,9 @@ MEDIA_SERVER_JELLYFIN_PATH_MAP=/data/movies=/media/movies,/data/tv=/media/tv
 
 Each entry is `server_path=local_path`, separated by commas; the longest
 matching server path wins, and Windows paths such as `D:\Movies` work too.
-Paths no entry matches are used as the server reports them.
+Paths no entry matches are used as the server reports them. Sync matches a
+title across servers by its folder as Overture sees it, so every server's
+paths must lead to the same folder once mapped.
 
 ## Several servers
 

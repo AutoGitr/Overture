@@ -695,7 +695,7 @@ class CollectionEditor:
             rule = row.rule
             if rule is None:
                 raise PublicServiceError(409, "Overture does not manage it")
-            lead = row.lead
+            lead = self._access.lead(row)
             if lead is None:
                 raise PublicServiceError(
                     409, "It is not on the media server; delete it instead"
@@ -737,12 +737,12 @@ class CollectionEditor:
             session.add(row)
 
     async def _smart_adoption_rule(self, row: MediaCollection) -> CollectionRuleWrite:
-        part = row.lead
-        if part is None or row.server_item_id is None:
+        part = self._access.lead(row)
+        if part is None or part.server_item_id is None:
             raise PublicServiceError(409, "The collection has no server copy")
         provider = self._access.provider(part.server_id)
         media_type = part.media_type
-        query = await provider.smart_collection_filter(row.server_item_id)
+        query = await provider.smart_collection_filter(part.server_item_id)
         fields = plex_field_keys(media_type)
         names: dict[str, dict[str, str]] = {}
         for name, _ in urllib.parse.parse_qsl(query):

@@ -10,7 +10,7 @@ class ProxyClientManager:
     """Lazily create bounded clients shared by outbound media workflows.
 
     One client verifies TLS and one does not, for a media server the user
-    configured with ``MEDIA_SERVER_VERIFY_TLS=false``; each URL gets the one
+    configured with ``MEDIA_SERVER_<NAME>_VERIFY_TLS=false``; each URL gets the one
     its origin's TLS policy calls for.
     """
 

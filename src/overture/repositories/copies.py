@@ -13,6 +13,7 @@ lazy from sqlmodel.sql.expression import Select
 lazy from ..db.models.library import Library
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.media_item_copy import MediaItemCopy, SeasonCopy
+lazy from ..db.models.media_server import MediaServer
 lazy from ..db.models.season import Season
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import MediaType, TermKind
@@ -71,17 +72,35 @@ class CopyRepository:
     async def listed_copies(
         self, item_ids: Collection[int]
     ) -> dict[int, list[MediaItemCopy]]:
-        """Return the copies of each title that servers list, in listed libraries."""
+        """Return the copies configured servers list of each title, in listed
+        libraries, the lead first.
+
+        The lead copy, on the earliest server in MEDIA_SERVERS, stands for the
+        title: its details are the title's.
+        """
+        return await self._configured(
+            item_ids,
+            col(MediaItemCopy.library_id).in_(
+                select(Library.id).where(col(Library.removed_at).is_(None))
+            ),
+        )
+
+    async def _configured(
+        self, item_ids: Collection[int], *where: ColumnElement[bool]
+    ) -> dict[int, list[MediaItemCopy]]:
+        """Each title's live copies on configured servers, in MEDIA_SERVERS order."""
         found: dict[int, list[MediaItemCopy]] = {}
         for batch in batched(item_ids, CHUNK_SIZE, strict=False):
             rows = await self.session.exec(
-                select(MediaItemCopy).where(
+                select(MediaItemCopy)
+                .join(MediaServer, col(MediaServer.id) == col(MediaItemCopy.server_id))
+                .where(
                     col(MediaItemCopy.media_item_id).in_(batch),
                     _live(),
-                    col(MediaItemCopy.library_id).in_(
-                        select(Library.id).where(col(Library.removed_at).is_(None))
-                    ),
+                    col(MediaServer.position).is_not(None),
+                    *where,
                 )
+                .order_by(col(MediaServer.position))
             )
             for copy in rows.all():
                 found.setdefault(copy.media_item_id, []).append(copy)
@@ -193,19 +212,9 @@ class CopyRepository:
             for item_id, version in versions.items()
         }
 
-    async def leads_first(
-        self, item_id: int, server_order: Sequence[int]
-    ) -> list[MediaItemCopy]:
+    async def leads_first(self, item_id: int) -> list[MediaItemCopy]:
         """A title's listed copies on the configured servers, the lead first."""
-        rank = {server_id: index for index, server_id in enumerate(server_order)}
-        return sorted(
-            (
-                copy
-                for copy in await self.of_item(item_id)
-                if copy.removed_at is None and copy.server_id in rank
-            ),
-            key=lambda copy: rank[copy.server_id],
-        )
+        return (await self._configured([item_id])).get(item_id, [])
 
     async def season_copies(self, season_id: int) -> dict[int, str]:
         """Each server's ID of a season, by server."""
@@ -330,18 +339,9 @@ class CopyRepository:
             )
         return [item_id for item_id in gone if item_id is not None]
 
-    async def leads(
-        self, item_ids: Collection[int], server_order: Sequence[int]
-    ) -> dict[int, MediaItemCopy]:
+    async def leads(self, item_ids: Collection[int]) -> dict[int, MediaItemCopy]:
         """Return each title's lead copy: listed, on the earliest configured server."""
-        rank = {server_id: index for index, server_id in enumerate(server_order)}
-        leads: dict[int, MediaItemCopy] = {}
-        for item_id, copies in (await self.of_items(item_ids)).items():
-            listed = [
-                copy
-                for copy in copies
-                if copy.removed_at is None and copy.server_id in rank
-            ]
-            if listed:
-                leads[item_id] = min(listed, key=lambda copy: rank[copy.server_id])
-        return leads
+        return {
+            item_id: copies[0]
+            for item_id, copies in (await self._configured(item_ids)).items()
+        }

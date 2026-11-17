@@ -331,7 +331,7 @@ jobs:
           cp .env.example .env
           docker compose config --quiet
           # Required settings may instead be supplied by mounted Docker secrets.
-          MEDIA_SERVER= MEDIA_SERVER_API_KEY= MEDIA_SERVER_URL= docker compose config --quiet
+          MEDIA_SERVER_PLEX_API_KEY= MEDIA_SERVER_PLEX_URL= docker compose config --quiet
           rm .env
 
       - name: Set up Docker Buildx
@@ -369,9 +369,10 @@ jobs:
       - name: Verify startup, authenticated boundaries, persistence, and restart
         env:
           APP_PASSWORD_HASH: $argon2id$v=19$m=19456,t=2,p=1$5PshSM2LkBARR0U/VapWcQ$Cyx+v2jMhbD55bxzEKRR07qFy3RE6MU1+PXxS/nJfK4
-          MEDIA_SERVER: plex
-          MEDIA_SERVER_URL: http://127.0.0.1:32400
-          MEDIA_SERVER_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          MEDIA_SERVERS: Plex
+          MEDIA_SERVER_PLEX_TYPE: plex
+          MEDIA_SERVER_PLEX_URL: http://127.0.0.1:32400
+          MEDIA_SERVER_PLEX_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
         run: |
           set -euo pipefail
 
@@ -403,9 +404,10 @@ jobs:
               --network "$network" \
               --volume "$volume:/config" \
               --env APP_PASSWORD_HASH \
-              --env MEDIA_SERVER \
-              --env MEDIA_SERVER_URL \
-              --env MEDIA_SERVER_API_KEY \
+              --env MEDIA_SERVERS \
+              --env MEDIA_SERVER_PLEX_TYPE \
+              --env MEDIA_SERVER_PLEX_URL \
+              --env MEDIA_SERVER_PLEX_API_KEY \
               overture:smoke >/dev/null
 
             for _ in $(seq 1 60); do

@@ -455,6 +455,7 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
         row,
         CatalogCollection(tmdb_id=10, title="Saga", no_theme=True),
         None,
+        copies=row.copies,
         trust_no_theme=True,
         backgrounds=True,
     )
@@ -462,5 +463,12 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
     assert flagged.catalog_no_theme
     assert flagged.catalog_complete
     assert (
-        collection_read(row, None, None, trust_no_theme=True, backgrounds=True)
+        collection_read(
+            row,
+            None,
+            None,
+            copies=row.copies,
+            trust_no_theme=True,
+            backgrounds=True,
+        )
     ).theme_status is AssetStatus.MISSING

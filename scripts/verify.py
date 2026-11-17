@@ -1,9 +1,11 @@
 """Check Overture end to end against its media servers, read only.
 
-Point it at one synced Overture instance per media server (Plex, Jellyfin,
-Emby), and at those media servers themselves. Overture is asked through its own
-API, so every result comes from the code users run; each media server is asked
-directly, so Overture's answers are compared with the server's own:
+Point it at one or more synced Overture instances, and at their media servers
+themselves (one each of Plex, Jellyfin and Emby). Each server an instance
+names is checked on its own, against the given server of its kind. Overture is
+asked through its own API, so every result comes from the code users run; each
+media server is asked directly, so Overture's answers are compared with the
+server's own:
 
 - **Inventory**: the libraries, every item and every collection Overture lists
   are the ones the server holds, with the members the server counts.
@@ -55,29 +57,15 @@ Create an Overture key per instance under API keys in the menu and pass
 them in the order of the addresses; give each media server's address and its
 token or API key:
 
-    Single Overture instance, one media server:
-    OVERTURE_API_KEY=plex-key \
-        PLEX_TOKEN=... \
-        RADARR_API_KEY=... \
-        SONARR_API_KEY=... \
-        uv run python -m scripts.verify \
-        https://plex.local:32400 \
-        --plex https://localhost:32400 --insecure \
-        --radarr http://localhost:7878 \
-        --sonarr http://localhost:8989 \
-        --report verify.md
-
-    Multiple Overture instances, one per media server:
-    OVERTURE_API_KEY=plex-key,jellyfin-key,emby-key \
+    One Overture instance with Plex, Jellyfin and Emby in MEDIA_SERVERS:
+    OVERTURE_API_KEY=key \
         PLEX_TOKEN=... \
         JELLYFIN_API_KEY=... \
         EMBY_API_KEY=... \
         RADARR_API_KEY=... \
         SONARR_API_KEY=... \
         uv run python -m scripts.verify \
-        https://plex.local:32400 \
-        https://jellyfin.local:8096 \
-        https://emby.local:8095 \
+        http://localhost:5885 \
         --plex https://localhost:32400 --insecure \
         --jellyfin http://localhost:8096 \
         --emby http://localhost:8095 \
@@ -85,14 +73,21 @@ token or API key:
         --sonarr http://localhost:8989 \
         --report verify.md
 
+    Several Overture instances, each with its own key:
+    OVERTURE_API_KEY=first-key,second-key \
+        PLEX_TOKEN=... \
+        uv run python -m scripts.verify \
+        http://localhost:5885 http://localhost:5886 \
+        --plex https://localhost:32400
+
 Set TMDB_API_KEY and MDBLIST_API_KEY to probe those APIs too, and pass
 --radarr and --sonarr with RADARR_API_KEY and SONARR_API_KEY to compare them.
 
-One Overture key without commas is used for every instance. An instance whose
-media server is not given is checked through Overture alone. Pass --sources
-with a JSON file of source objects (as the API takes them) to test TMDB,
-MDBList and person sources, and --insecure to skip TLS certificate
-verification.
+One Overture key without commas is used for every instance. A server that is
+not given, or one of several of its kind in an instance, is checked through
+Overture alone. Pass --sources with a JSON file of source objects (as the API
+takes them) to test TMDB, MDBList and person sources, and --insecure to skip
+TLS certificate verification.
 """
 
 lazy import argparse
@@ -299,22 +294,28 @@ class Server:
         return response.json()
 
 
-def only_server(url: str, capabilities: dict[str, Any]) -> str:
-    """The kind of the one media server an instance uses.
+def item_copy_id(item: dict[str, Any], library_id: str) -> str:
+    """The ID of a title's copy in a library, as its server knows it."""
+    return next(
+        (
+            str(copy["server_item_id"])
+            for copy in item["copies"]
+            if copy["library_id"] == library_id
+        ),
+        "",
+    )
 
-    Each instance is compared with one server, read directly; an instance
-    with several is checked through instances of one each.
-    """
-    match capabilities["server_types"]:
-        case [server]:
-            return server
-        case servers:
-            raise SystemExit(f"{url} uses {len(servers)} media servers; give it one")
 
-
-def server_item_id(item: dict[str, Any]) -> str:
-    """The server's ID of an instance's title, through its one copy."""
-    return next((str(copy["server_item_id"]) for copy in item["copies"]), "")
+def collection_copy_id(row: dict[str, Any], library_id: str) -> str:
+    """The ID of the server collection holding a collection's members in a library."""
+    return next(
+        (
+            str(copy["server_item_id"])
+            for copy in row["copies"]
+            if library_id in copy["library_ids"]
+        ),
+        "",
+    )
 
 
 def single(library_id: str, condition: dict[str, Any], **rule: Any) -> dict[str, Any]:
@@ -803,15 +804,15 @@ class PlexServer(Server):
         held = await self.item_ids(library.key, library.media_type)
         inventory(
             library.case("inventory", "items"),
-            {server_item_id(item) for item in library.items},
+            {item_copy_id(item, library.id) for item in library.items},
             held,
             noun="items",
         )
         listed = await self.collections(library.key)
         mine = {
-            str(row["server_item_id"]): row
+            key: row
             for row in library.collections
-            if row.get("server_item_id")
+            if (key := collection_copy_id(row, library.id))
         }
         inventory(
             library.case("inventory", "collections"),
@@ -918,11 +919,9 @@ class PlexServer(Server):
         title, plex_holds = difference
         item = next((row for row in library.items if row["title"] == title), None)
         side = "only Plex selects" if plex_holds else "only Overture selects"
-        if item is None or not server_item_id(item):
+        if item is None or not (key := item_copy_id(item, library.id)):
             return f"{side} {title}"
-        rows = (await self.container(f"/library/metadata/{server_item_id(item)}")).get(
-            "Metadata", [{}]
-        )
+        rows = (await self.container(f"/library/metadata/{key}")).get("Metadata", [{}])
         key = next(
             (
                 plex
@@ -982,7 +981,7 @@ class MediaBrowserServer(Server):
         found = await self.items(library.key, library.media_type, Fields="")
         inventory(
             library.case("inventory", "items"),
-            {server_item_id(item) for item in library.items},
+            {item_copy_id(item, library.id) for item in library.items},
             {str(row["Id"]) for row in found["Items"]},
             noun="items",
         )
@@ -1051,14 +1050,15 @@ def _plex_sorts() -> set[str]:
 
 
 async def check_media_browser_collections(
-    direct: MediaBrowserServer, collections: list[dict[str, Any]]
+    direct: MediaBrowserServer, server_id: int, collections: list[dict[str, Any]]
 ) -> list[Case]:
     """BoxSets live outside libraries, so they are compared once per server."""
     listed = await direct.collection_ids()
     mine = {
-        str(row["server_item_id"]): row
+        str(copy["server_item_id"]): row
         for row in collections
-        if row.get("server_item_id")
+        for copy in row["copies"]
+        if copy["server_id"] == server_id
     }
     case = Case(direct.server, "", "inventory", "collections")
     inventory(case, set(mine), set(listed), noun="collections")
@@ -1077,76 +1077,33 @@ async def verify_instance(
     url: str,
     api_key: str,
     extra_sources: list[dict[str, Any]],
-    direct: PlexServer | MediaBrowserServer | None,
+    direct: dict[str, PlexServer | MediaBrowserServer],
     *,
     verify: bool = True,
 ) -> list[Case]:
-    """Run every check against one Overture instance and its server."""
+    """Run every check against one Overture instance and each of its servers.
+
+    Each server the instance names is checked on its own, and compared with
+    the server of its kind given in *direct*, read directly. Where the
+    instance names several of one kind, which one is given cannot be told,
+    so those are checked through Overture alone.
+    """
     overture = Overture(url, api_key, verify=verify)
     cases: list[Case] = []
-    listed: list[dict[str, Any]] = []
     try:
+        servers = (await overture.get("/api/settings"))["media_servers"]
+        kinds = [server["type"] for server in servers]
         items = (await overture.get("/api/library/items"))["items"]
         everything = await overture.get("/api/collections")
-        for media_type in ("movie", "show"):
-            capabilities = await overture.get(
-                "/api/collections/capabilities", media_type=media_type
+        for server in servers:
+            paired = (
+                direct.get(server["type"]) if kinds.count(server["type"]) == 1 else None
             )
-            server = only_server(url, capabilities)
-            if direct is not None and direct.server != server:
-                raise SystemExit(f"{url} uses {server}, not {direct.server}")
-            collections = [
-                row for row in everything if row["media_types"][0] == media_type
-            ]
-            listed.extend(collections)
-            found = await overture.get("/api/library/libraries", media_type=media_type)
-            if direct is not None:
-                case = Case(server, "", "inventory", f"{media_type} libraries")
-                inventory(
-                    case,
-                    {row["id"].partition(":")[2] for row in found},
-                    set(await direct.libraries(media_type)),
-                    noun="libraries",
+            cases.extend(
+                await verify_server(
+                    overture, server, items, everything, extra_sources, paired
                 )
-                cases.append(case)
-            libraries = {
-                library["id"]: Library(
-                    overture,
-                    server,
-                    capabilities,
-                    media_type,
-                    library,
-                    {
-                        collection["title"]
-                        for collection in collections
-                        if library["id"] in collection["library_ids"]
-                        and collection["kind"] == "regular"
-                    },
-                    [
-                        item
-                        for item in items
-                        if any(
-                            copy["library_id"] == library["id"]
-                            for copy in item["copies"]
-                        )
-                        and item["media_type"] == media_type
-                        and item["server_removed_at"] is None
-                    ],
-                    [row for row in collections if library["id"] in row["library_ids"]],
-                    direct,
-                )
-                for library in found
-            }
-            for library in libraries.values():
-                print(f"Checking {server}: {library.name}...", flush=True)
-                await library.check(extra_sources)
-            for collection in collections:
-                if (library := libraries.get(collection["library_ids"][0])) is not None:
-                    await library.check_collection(collection)
-            for library in libraries.values():
-                cases.extend(library.cases)
-        if isinstance(direct, MediaBrowserServer):
-            cases.extend(await check_media_browser_collections(direct, listed))
+            )
     except ApiError as exc:
         cases.append(Case(url, "", "instance", "reach the API", error=str(exc)))
     except httpx2.HTTPError as exc:
@@ -1155,6 +1112,92 @@ async def verify_instance(
         )
     finally:
         await overture.client.aclose()
+    return cases
+
+
+async def verify_server(
+    overture: Overture,
+    server: dict[str, Any],
+    items: list[dict[str, Any]],
+    everything: list[dict[str, Any]],
+    extra_sources: list[dict[str, Any]],
+    direct: PlexServer | MediaBrowserServer | None,
+) -> list[Case]:
+    """Check the libraries and collections one of an instance's servers holds."""
+    title = server["title"]
+    cases: list[Case] = []
+    held: list[dict[str, Any]] = []
+    for media_type in ("movie", "show"):
+        found = [
+            library
+            for library in await overture.get(
+                "/api/library/libraries", media_type=media_type
+            )
+            if library["server_id"] == server["id"]
+        ]
+        if direct is not None:
+            case = Case(title, "", "inventory", f"{media_type} libraries")
+            inventory(
+                case,
+                {row["id"].partition(":")[2] for row in found},
+                set(await direct.libraries(media_type)),
+                noun="libraries",
+            )
+            cases.append(case)
+        if not found:
+            continue
+        capabilities = await overture.get(
+            "/api/collections/capabilities",
+            media_type=media_type,
+            library_ids=[library["id"] for library in found],
+        )
+        ids = {library["id"] for library in found}
+        collections = [
+            row
+            for row in everything
+            if row["media_types"][0] == media_type and ids & set(row["library_ids"])
+        ]
+        held.extend(collections)
+        libraries = {
+            library["id"]: Library(
+                overture,
+                title,
+                capabilities,
+                media_type,
+                library,
+                {
+                    collection["title"]
+                    for collection in collections
+                    if library["id"] in collection["library_ids"]
+                    and collection["kind"] == "regular"
+                },
+                [
+                    item
+                    for item in items
+                    if item_copy_id(item, library["id"])
+                    and item["media_type"] == media_type
+                    and item["server_removed_at"] is None
+                ],
+                [row for row in collections if library["id"] in row["library_ids"]],
+                direct,
+            )
+            for library in found
+        }
+        for library in libraries.values():
+            print(f"Checking {title}: {library.name}...", flush=True)
+            await library.check(extra_sources)
+        for collection in collections:
+            # A collection across several of this server's libraries is
+            # previewed once, in the first of them.
+            first = next(
+                (lid for lid in collection["library_ids"] if lid in libraries), None
+            )
+            if first is not None:
+                await libraries[first].check_collection(collection)
+        for library in libraries.values():
+            cases.extend(library.cases)
+    if isinstance(direct, MediaBrowserServer):
+        cases.extend(await check_media_browser_collections(direct, server["id"], held))
     return cases
 
 
@@ -1398,10 +1441,11 @@ def write_provider(
     }
     values |= {
         "AUTH_MODE": "none",
-        "MEDIA_SERVER": server,
-        "MEDIA_SERVER_URL": url,
-        "MEDIA_SERVER_API_KEY": secret,
-        "MEDIA_SERVER_VERIFY_TLS": verify,
+        "MEDIA_SERVERS": "Verify",
+        "MEDIA_SERVER_VERIFY_TYPE": server,
+        "MEDIA_SERVER_VERIFY_URL": url,
+        "MEDIA_SERVER_VERIFY_API_KEY": secret,
+        "MEDIA_SERVER_VERIFY_VERIFY_TLS": verify,
     }
     settings = Settings(**values)
     registry = ProviderRegistry(app_config=settings)
@@ -1702,19 +1746,6 @@ def servers(
     return found
 
 
-async def server_of(url: str, key: str, verify: bool) -> str | None:
-    """The media server an instance uses, as it says."""
-    overture = Overture(url, key, verify=verify)
-    try:
-        return only_server(
-            url, await overture.get("/api/collections/capabilities", media_type="movie")
-        )
-    except ApiError, httpx2.HTTPError:
-        return None
-    finally:
-        await overture.client.aclose()
-
-
 async def check_services(args: argparse.Namespace, verify: bool) -> list[Case]:
     """Probe each service whose credential is set, beside the first instance."""
     keys = api_keys(len(args.urls))
@@ -1752,12 +1783,7 @@ async def run(args: argparse.Namespace) -> int:
     direct = {server.server: server for server, _, _ in given}
     try:
         for url, key in zip(args.urls, api_keys(len(args.urls)), strict=True):
-            server = await server_of(url, key, verify)
-            cases.extend(
-                await verify_instance(
-                    url, key, extra, direct.get(server or ""), verify=verify
-                )
-            )
+            cases.extend(await verify_instance(url, key, extra, direct, verify=verify))
         cases.extend(await check_services(args, verify))
         if args.write:
             for server, url, secret in given:

@@ -17,11 +17,9 @@ is the quickest start.
 
 ## Media servers and services
 
-`<NAME>` is a name from `MEDIA_SERVERS` in capitals, so `MEDIA_SERVERS=Plex,Living_Room`
-reads `MEDIA_SERVER_PLEX_URL` and `MEDIA_SERVER_LIVING_ROOM_URL`. One server
-can instead be set with `MEDIA_SERVER` (its type), `MEDIA_SERVER_URL`,
-`MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS`, `MEDIA_SERVER_PATH_MAP` and
-`JELLYFIN_COLLECTIONS_PATH`. See [Media servers](media-servers.mdx).
+`<NAME>` is a name from `MEDIA_SERVERS` in capitals, so
+`MEDIA_SERVERS=Plex,Living_Room` reads `MEDIA_SERVER_PLEX_URL` and
+`MEDIA_SERVER_LIVING_ROOM_URL`. See [Media servers](media-servers.mdx).
 
 | Variable                               | Required        | Default | Description                                                                                                                           |
 | -------------------------------------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |

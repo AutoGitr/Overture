@@ -264,7 +264,7 @@ RealtimeSnapshotDep = Annotated[RealtimeSnapshotBuilder, Depends(get_realtime_sn
 
 
 def require_media_server(runtime: RuntimeDep) -> None:
-    """Refuse server-bound routes while MEDIA_SERVER=none.
+    """Refuse server-bound routes while MEDIA_SERVERS=none.
 
     Raises:
         PublicServiceError: 409 when no media server is configured.

@@ -339,8 +339,14 @@ class TestCollectionResponseMappers:
         catalog = CatalogCollection(
             tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="a" * 11
         )
+        row = self._row()
         read = collection_read(
-            self._row(), catalog, None, trust_no_theme=True, backgrounds=True
+            row,
+            catalog,
+            None,
+            copies=row.copies,
+            trust_no_theme=True,
+            backgrounds=True,
         )
 
         assert read.server_poster_version is not None
@@ -352,6 +358,7 @@ class TestCollectionResponseMappers:
             self._row(thumb_url="provider-thumb-2"),
             None,
             None,
+            copies=[],
             trust_no_theme=True,
             backgrounds=True,
         )

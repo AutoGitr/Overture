@@ -195,15 +195,15 @@ def _lowercase(value: object) -> object:
 _SERVER_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*")
 #: Every variable that configures media servers starts with this.
 _SERVER_VARIABLE_PREFIX = "MEDIA_SERVER"
-#: The variables of a server named with MEDIA_SERVER, from before MEDIA_SERVERS.
-_SINGLE_SERVER_VARIABLES = {
-    "type": "MEDIA_SERVER",
-    "url": "MEDIA_SERVER_URL",
-    "api_key": "MEDIA_SERVER_API_KEY",
-    "verify_tls": "MEDIA_SERVER_VERIFY_TLS",
-    "path_map": "MEDIA_SERVER_PATH_MAP",
-    "collections_path": "JELLYFIN_COLLECTIONS_PATH",
-}
+#: The fields each server's ``MEDIA_SERVER_<NAME>_<FIELD>`` variables set.
+_SERVER_FIELDS = (
+    "type",
+    "url",
+    "api_key",
+    "verify_tls",
+    "path_map",
+    "collections_path",
+)
 
 
 class PathMapping(NamedTuple):
@@ -257,8 +257,6 @@ class MediaServerConfig(BaseModel):
     #: Jellyfin's collections metadata folder, mounted into Overture, where it
     #: writes each collection's theme.mp3.
     collections_path: Path | None = None
-    #: The variable that sets each field, for messages that say what to fix.
-    variables: frozendict[str, str] = Field(default_factory=frozendict, repr=False)
 
     _plex_secure_origin: str | None = PrivateAttr(default=None)
 
@@ -281,9 +279,7 @@ class MediaServerConfig(BaseModel):
 
     def variable(self, field: str) -> str:
         """Return the variable that sets *field* of this server."""
-        return self.variables.get(field) or (
-            f"{_SERVER_VARIABLE_PREFIX}_{self.name.upper()}_{field.upper()}"
-        )
+        return _server_variable(self.name, field)
 
     @property
     def key(self) -> str:
@@ -364,35 +360,34 @@ def _server_value(variables: Mapping[str, str], name: str) -> str | None:
     return value or None
 
 
-def _variable_of(names: Mapping[str, str], location: tuple[int | str, ...]) -> str:
-    """Name the variable a server's validation error is about."""
-    return names.get(str(location[0]), "MEDIA_SERVERS") if location else "MEDIA_SERVERS"
+def _server_variable(name: str, field: str) -> str:
+    """Return the variable that sets *field* of the server named *name*."""
+    return f"{_SERVER_VARIABLE_PREFIX}_{name.upper()}_{field.upper()}"
 
 
-def _configured_server(
-    name: str, variables: Mapping[str, str], names: Mapping[str, str]
-) -> MediaServerConfig:
-    """Build one server from the variables *names* maps its fields to."""
+def _configured_server(name: str, variables: Mapping[str, str]) -> MediaServerConfig:
+    """Build the server named *name* from its ``MEDIA_SERVER_<NAME>_*`` variables."""
     values = {
         field: value
-        for field, variable in names.items()
-        if (value := _server_value(variables, variable)) is not None
+        for field in _SERVER_FIELDS
+        if (value := _server_value(variables, _server_variable(name, field)))
+        is not None
     }
     if "type" not in values:
         raise ValueError(
-            f"{names['type']} is required and must be 'plex', 'jellyfin' or 'emby'"
+            f"{_server_variable(name, 'type')} is required and must be 'plex', "
+            "'jellyfin' or 'emby'"
         )
     try:
-        return MediaServerConfig.model_validate(
-            {
-                "name": name,
-                "variables": frozendict(names),  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-                **values,
-            }
-        )
+        return MediaServerConfig.model_validate({"name": name, **values})
     except ValidationError as exc:
         problems = "; ".join(
-            f"{_variable_of(names, error['loc'])}: "
+            (
+                _server_variable(name, str(error["loc"][0]))
+                if error["loc"]
+                else "MEDIA_SERVERS"
+            )
+            + ": "
             + error["msg"].removeprefix("Value error, ")
             for error in exc.errors()
         )
@@ -400,29 +395,24 @@ def _configured_server(
 
 
 def parse_media_servers(variables: Mapping[str, str]) -> tuple[MediaServerConfig, ...]:
-    """Build the media servers MEDIA_SERVERS, or the single MEDIA_SERVER, names.
+    """Build the media servers MEDIA_SERVERS names, the lead first.
 
-    Each name in MEDIA_SERVERS is configured by ``MEDIA_SERVER_<NAME>_*``
-    variables; ``none`` runs without a media server.
+    Each name is configured by ``MEDIA_SERVER_<NAME>_*`` variables; ``none``
+    runs without a media server.
 
     Raises:
         ValueError: When the servers are missing, repeated or misconfigured.
     """
     listed = _server_value(variables, "MEDIA_SERVERS")
-    single = _server_value(variables, "MEDIA_SERVER")
-    if listed and single:
-        raise ValueError("Set MEDIA_SERVERS or MEDIA_SERVER, not both")
-    if not listed and not single:
+    if not listed:
         raise ValueError(
             "MEDIA_SERVERS is required: list the names of your media servers, "
+            "each configured by MEDIA_SERVER_<NAME>_TYPE, _URL and _API_KEY, "
             "or set it to 'none'"
         )
-    if (listed or single or "").strip().lower() == "none":
+    if listed.strip().lower() == "none":
         return ()
-    if single:
-        name = ServerType(_lowercase(single)).display_name
-        return (_configured_server(name, variables, _SINGLE_SERVER_VARIABLES),)
-    names = [part.strip() for part in (listed or "").split(",") if part.strip()]
+    names = [part.strip() for part in listed.split(",") if part.strip()]
     keys = [name.lower() for name in names]
     if repeated := sorted({key for key in keys if keys.count(key) > 1}):
         raise ValueError(f"MEDIA_SERVERS names {', '.join(repeated)} more than once")
@@ -433,25 +423,12 @@ def parse_media_servers(variables: Mapping[str, str]) -> tuple[MediaServerConfig
                 f"MEDIA_SERVERS name {name!r} must start with a letter and hold only "
                 "letters, digits and single underscores"
             )
-        prefix = f"{_SERVER_VARIABLE_PREFIX}_{name.upper()}_"
-        servers.append(
-            _configured_server(
-                name,
-                variables,
-                {
-                    field: f"{prefix}{field.upper()}"
-                    for field in _SINGLE_SERVER_VARIABLES
-                },
-            )
-        )
+        servers.append(_configured_server(name, variables))
     return tuple(servers)
 
 
 def _is_server_variable(name: str) -> bool:
-    return (
-        name.startswith(_SERVER_VARIABLE_PREFIX)
-        or name in _SINGLE_SERVER_VARIABLES.values()
-    )
+    return name.startswith(_SERVER_VARIABLE_PREFIX)
 
 
 class _MediaServerVariables(PydanticBaseSettingsSource):
@@ -634,14 +611,15 @@ class Settings(RuntimeSettings):
             and value != ""
         }
         listed = values.get("MEDIA_SERVERS")
-        # Servers already built stand unless variables configure them anew.
-        if listed and not isinstance(listed, str) and len(variables) == 0:
-            return values
-        return {
+        others = {
             name: value
             for name, value in values.items()
             if not _is_server_variable(name.upper())
-        } | {"MEDIA_SERVERS": parse_media_servers(variables)}
+        }
+        # Servers already built, as a dumped Settings holds them, stand as they are.
+        if listed is not None and not isinstance(listed, str):
+            return others | {"MEDIA_SERVERS": listed}
+        return others | {"MEDIA_SERVERS": parse_media_servers(variables)}
 
     @field_validator("NOTIFY_URL")
     @classmethod

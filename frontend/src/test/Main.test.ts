@@ -69,12 +69,12 @@ describe("Main", () => {
       server_id: 1,
       title: "Plex",
       state: "rejected",
-      message: "check MEDIA_SERVER_API_KEY",
+      message: "check MEDIA_SERVER_PLEX_API_KEY",
     });
     renderWithQueryClient(Main, { onLogout: vi.fn() });
 
     const pinned = notice("Plex refused Overture");
-    expect(pinned).toHaveTextContent("check MEDIA_SERVER_API_KEY");
+    expect(pinned).toHaveTextContent("check MEDIA_SERVER_PLEX_API_KEY");
     await fireEvent.click(within(pinned).getByRole("button", { name: "Check again" }));
     await waitFor(() =>
       expect(calls.some((call) => call.url.endsWith("/api/settings/connectivity"))).toBe(true),

@@ -57,9 +57,9 @@
   } = $props();
   setSectionView("collection");
   const serverLinks = createServerLinks();
-  let serverLink = $derived(
-    serverLinks.collection(collection?.server_id, collection?.server_item_id),
-  );
+  // Copies come lead first; a withheld collection has none to open.
+  let leadCopy = $derived(collection?.copies[0]);
+  let serverLink = $derived(serverLinks.collection(leadCopy));
 
   function currentCollection(): CollectionDetail {
     if (!collection) throw new Error("The saved collection must remain mounted");
@@ -99,8 +99,8 @@
   showPoster={!!collection}
   backgroundUrl={collectionArtDisplayUrl(collection, "background")}
   posterHref={serverLink}
-  posterLinkTitle={collection && serverLink && collection.server_id != null
-    ? `Open in ${settingsState.server(collection.server_id)?.title ?? "the media server"}`
+  posterLinkTitle={serverLink && leadCopy
+    ? `Open in ${settingsState.server(leadCopy.server_id)?.title ?? "the media server"}`
     : null}
   tabs={collection && actions ? tabs : undefined}
 >

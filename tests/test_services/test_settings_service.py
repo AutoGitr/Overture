@@ -279,7 +279,7 @@ async def test_settings_mapping_includes_environment_fields(
     assert result.tmdb_configured is True
     assert result.collections_supported is True
     assert result.collection_themes_unavailable == (
-        "Set JELLYFIN_COLLECTIONS_PATH to store collection themes"
+        "Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH to store collection themes"
     )
     assert (result.art_download_workers, result.theme_download_workers) == (3, 2)
 

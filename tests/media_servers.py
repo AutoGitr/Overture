@@ -20,7 +20,7 @@ lazy from overture.media_servers.registry import ProviderRegistry
 #: The database's number of the test media server.
 TEST_SERVER_ID = 1
 
-#: The media server the test configuration names (``MEDIA_SERVER=plex``).
+#: The media server the test configuration names (``MEDIA_SERVERS=Plex``).
 TEST_SERVER = MediaServerConfig(
     name="Plex",
     type=ServerType.PLEX,
@@ -75,7 +75,7 @@ def served_item(**fields: Any) -> MediaItem:
 def configure(app_config: Settings, **changes: Any) -> MediaServerConfig:
     """Change the one server *app_config* names, as its variables would.
 
-    A changed ``type`` renames the server after its kind, as MEDIA_SERVER does.
+    A changed ``type`` also renames the server after its kind.
     """
     current = server_of(app_config)
     if "type" in changes:
@@ -147,6 +147,7 @@ async def seed_test_server(
                 "title": TEST_SERVER.title,
                 "server_type": TEST_SERVER.type,
                 "identity": TEST_SERVER.identity,
+                "position": 0,
             }
         ],
     )

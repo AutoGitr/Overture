@@ -32,7 +32,7 @@ lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
 lazy from . import COLLECTIONS_LOCK
-lazy from .copies import ServerCopy, server_copies
+lazy from .copies import ServerCopy, held_copies, lead_part, server_copies
 lazy from .criteria import criteria_terms
 lazy from .policy import CollectionPolicy, RuleOrPolicy, resolve_policy
 
@@ -135,6 +135,14 @@ class CollectionAccess:
     def configured(self, server_id: int) -> bool:
         """Whether the database's server *server_id* is configured."""
         return self.provider_registry.configured_server_id(server_id)
+
+    def lead(self, row: MediaCollection) -> CollectionLibrary | None:
+        """The part whose copy, on the earliest configured server, stands for it."""
+        return lead_part(row, self.server_order())
+
+    def held_copies(self, row: MediaCollection) -> list[CollectionLibrary]:
+        """A part for each copy on the configured servers, the lead first."""
+        return held_copies(row, self.server_order())
 
     def copies(self, row: MediaCollection) -> list[ServerCopy]:
         """The server collections this collection needs on the configured servers.

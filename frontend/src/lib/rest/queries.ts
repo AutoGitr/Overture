@@ -20,29 +20,25 @@ export function createSeasonsQuery(item: () => MediaItemRead | null) {
   });
 }
 
+/** A media server's copy of a title or collection. */
+type ServerCopy = { server_id: number; server_item_id: string };
+
 /**
- * Observe where the media server's web app opens a title or collection.
+ * Observe where each media server's web app opens a title or collection.
  *
- * Each link is the server's template filled in with the server ID; there is
- * none without a server copy, or until the server answers.
+ * A link is the copy's server's template filled in with its ID; there is
+ * none without a copy, or until that server answers.
  */
 export function createServerLinks() {
   const links = createQuery(() => getServerWebLinksOptions());
-  const fill = (
-    kind: "item" | "collection",
-    serverId: number | null | undefined,
-    serverItemId: string | null | undefined,
-  ) => {
-    const template = links.data?.find((server) => server.server_id === serverId)?.[kind];
-    return template && serverItemId
-      ? template.replaceAll("{id}", encodeURIComponent(serverItemId))
-      : null;
+  const fill = (kind: "item" | "collection", copy: ServerCopy | undefined) => {
+    if (!copy?.server_item_id) return null;
+    const template = links.data?.find((server) => server.server_id === copy.server_id)?.[kind];
+    return template ? template.replaceAll("{id}", encodeURIComponent(copy.server_item_id)) : null;
   };
   return {
-    item: (serverId: number | null | undefined, serverItemId: string | null | undefined) =>
-      fill("item", serverId, serverItemId),
-    collection: (serverId: number | null | undefined, serverItemId: string | null | undefined) =>
-      fill("collection", serverId, serverItemId),
+    item: (copy: ServerCopy | undefined) => fill("item", copy),
+    collection: (copy: ServerCopy | undefined) => fill("collection", copy),
   };
 }
 

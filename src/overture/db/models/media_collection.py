@@ -144,7 +144,7 @@ class MediaCollection(ThemeColumns, table=True):
 
     @property
     def copies(self) -> list["CollectionLibrary"]:
-        """One part for each server collection holding it, the lead copy first.
+        """One part for each server collection holding it.
 
         Jellyfin and Emby hold every library's members in one collection, so
         several parts can name the same copy; the first stands for it.
@@ -159,16 +159,6 @@ class MediaCollection(ThemeColumns, table=True):
                 seen.add(key)
                 copies.append(part)
         return copies
-
-    @property
-    def server_item_id(self) -> str | None:
-        """The lead server copy, whose images and link stand for the collection."""
-        return next((part.server_item_id for part in self.copies), None)
-
-    @property
-    def lead(self) -> Optional["CollectionLibrary"]:
-        """The part whose server copy stands for the collection."""
-        return next(iter(self.copies), None)
 
     @property
     def media_types(self) -> list[MediaType]:

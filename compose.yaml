@@ -15,7 +15,8 @@ services:
     env_file: ".env"
     volumes:
       - "./config:/config"
-      # The container path must be the one your media server reports for your media.
+      # Mount media at the path your media servers report, or map it with
+      # MEDIA_SERVER_<NAME>_PATH_MAP.
       - "/path/to/media:/media"
     tmpfs:
       - "/tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777"

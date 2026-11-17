@@ -76,6 +76,7 @@ class CollectionReader:
                 row,
                 catalog.get(row.tmdb_collection_id or 0),
                 row.rule,
+                copies=self._access.held_copies(row),
                 trust_no_theme=defaults.overturedb_no_theme,
                 backgrounds=policy.backgrounds,
             ).model_copy(
@@ -150,6 +151,7 @@ class CollectionReader:
                 row,
                 entry,
                 saved,
+                copies=self._access.held_copies(row),
                 trust_no_theme=trust_no_theme,
                 backgrounds=policy.backgrounds,
             )
@@ -194,7 +196,7 @@ class CollectionReader:
             raise PublicServiceError(404, "Collection image not found")
         async with self._access.database.read_session() as session:
             row = await CollectionRepository(session).get(collection_id)
-        lead = row.lead if row is not None else None
+        lead = self._access.lead(row) if row is not None else None
         if row is None or row.last_synced_at is None or lead is None:
             raise PublicServiceError(404, "Collection not found")
         if (current_url := row.server_image_url(art_type)) is None:

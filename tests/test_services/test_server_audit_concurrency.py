@@ -181,7 +181,7 @@ async def test_server_audit_fails_at_once_while_the_media_server_is_down(
     )
     registry = NoopProviderRegistry(DownProvider())
     registry.get(1).health.record(
-        MediaServerState.REJECTED, "check MEDIA_SERVER_API_KEY"
+        MediaServerState.REJECTED, "check MEDIA_SERVER_PLEX_API_KEY"
     )
     probe = JobProbe(lifecycle=LIFECYCLE)
 
@@ -193,4 +193,4 @@ async def test_server_audit_fails_at_once_while_the_media_server_is_down(
 
     assert probe.names()[-1].endswith(".failed")
     _, payload = probe.terminal()
-    assert payload["job"]["error"]["message"] == "check MEDIA_SERVER_API_KEY"
+    assert payload["job"]["error"]["message"] == "check MEDIA_SERVER_PLEX_API_KEY"

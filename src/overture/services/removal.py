@@ -156,9 +156,7 @@ class AssetRemover:
     async def _item_copies(self, item_id: int) -> list[tuple[Provider, str]]:
         """Each configured server holding a title, and its ID of it."""
         async with self._database.read_session() as session:
-            copies = await CopyRepository(session).leads_first(
-                item_id, self._providers.server_ids()
-            )
+            copies = await CopyRepository(session).leads_first(item_id)
         return [
             (self._providers.get(copy.server_id), copy.server_item_id)
             for copy in copies

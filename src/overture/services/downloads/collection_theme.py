@@ -111,7 +111,7 @@ async def collection_theme_unavailable(
         provider_registry.collection_providers()
     ):
         return reason
-    if row.server_item_id is None:
+    if not row.copies:
         return None
     if not _theme_copies(row, provider_registry):
         return "None of the servers holding the collection can store its theme"
@@ -142,7 +142,7 @@ async def store_collection_theme(
         row, provider_registry=provider_registry
     ):
         raise DownloadError(reason)
-    if row.server_item_id is None:
+    if not row.copies:
         raise DownloadError("The collection is inactive and has no server copy")
     # The lead Plex copy's ID stands for them all: each holds the same theme.
     uploaded = [

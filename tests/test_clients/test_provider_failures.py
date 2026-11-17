@@ -329,11 +329,11 @@ async def test_plex_prefetch_rejects_a_short_page_before_the_end(
 
 
 @pytest.mark.parametrize(
-    ("status", "state", "hint"),
+    ("status", "state", "field"),
     [
-        (401, MediaServerState.REJECTED, "MEDIA_SERVER_API_KEY"),
-        (503, MediaServerState.UNREACHABLE, "MEDIA_SERVER_URL"),
-        (404, MediaServerState.REACHABLE, ""),
+        (401, MediaServerState.REJECTED, "api_key"),
+        (503, MediaServerState.UNREACHABLE, "url"),
+        (404, MediaServerState.REACHABLE, None),
     ],
 )
 async def test_each_request_records_whether_the_server_answers(
@@ -342,9 +342,11 @@ async def test_each_request_records_whether_the_server_answers(
     ],
     status: int,
     state: MediaServerState,
-    hint: str,
+    field: str | None,
 ) -> None:
     client = provider_factory(lambda request: httpx2.Response(status))
+    # Each failure names the variable of this server to check.
+    hint = client.server.variable(field) if field else ""
     changes: list[MediaServerHealth] = []
     client.health.listen(changes.append)
     try:

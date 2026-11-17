@@ -19,6 +19,11 @@ _CRITERIA = FilterGroup(
 )
 
 
+def copy_id(row: MediaCollection) -> str | None:
+    """The server's ID of a collection held on one server."""
+    return next((part.server_item_id for part in row.copies), None)
+
+
 def managing_rule(collection_id: int) -> CollectionRule:
     """A rule for *collection_id*; without one, a collection only accepts adoption."""
     return CollectionRule(collection_id=collection_id)

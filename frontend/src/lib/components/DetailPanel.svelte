@@ -72,11 +72,9 @@
   let artType = $derived(viewArtType(view));
   const seasonsQuery = createSeasonsQuery(() => item);
   const serverLinks = createServerLinks();
-  // The lead server's copy stands for the title; one no server lists has none to open.
-  let leadCopy = $derived(item ? settingsState.lead(item.copies) : undefined);
-  let serverLink = $derived(
-    leadCopy ? serverLinks.item(leadCopy.server_id, leadCopy.server_item_id) : null,
-  );
+  // Copies come lead first; one no server lists has none to open.
+  let leadCopy = $derived(item?.copies[0]);
+  let serverLink = $derived(serverLinks.item(leadCopy));
   let seasons = $derived(seasonsQuery.data ?? []);
   let drillSeason = $derived(
     view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
